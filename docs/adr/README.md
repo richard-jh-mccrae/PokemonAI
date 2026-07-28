@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0075.**
+**Next free number: 0076.**
 
 ⚠️ The index below is **incomplete**: **0067** exists on disk but has never been given a row (it
 landed on the #137 / 0a branch). 0069 and 0070 were backfilled 2026-07-26. Re-indexing 0067 is
@@ -108,3 +108,5 @@ above did not apply — first-merged kept the number.
 | [0071](0071-bench-survival-is-a-shared-budget-harvest-and-the-clock-accumulates.md) | Bench survival is a shared-budget Harvest, and the clock accumulates | Accepted (grilled 2026-07-26, `/grill-with-docs` on #163 — twelve locked decisions); build = #163, branching after #166 merges. Amends ADR-0070 §9 (amendment D) and the shipped `turns_to_ko_me`; corrects the CONTEXT.md Threat Clock promotion surcharge. *(0070 = the evolve marginal, authored on the #140/1b branch.)* |
 | [0072](0072-mid-build-swaps-are-gated-by-deterministic-instruments.md) | A mid-build decider swap is gated by deterministic instruments; the paired A/B becomes a crash-and-catastrophe tripwire | Accepted (grilled 2026-07-26, `/grill-with-docs` on #167 — five locked decisions); build = #167. Amends #136 directive 6 and promotes ADR-0069 §8's sweep to a gate |
 | [0073](0073-fetch-reach-and-fetch-deadness-are-opposite-readings-of-one-clause.md) | Fetch reach and fetch deadness are opposite readings of one clause | Accepted (grilled 2026-07-26, `/grill-with-docs` on #164); build = #164. Extends ADR-0065 / ADR-0032 / ADR-0029, companion to ADR-0068 |
+| [0074](0074-a-probability-may-weight-a-ranked-value-never-gate-a-lock.md) | A probability may WEIGHT a ranked value, never GATE a lock | Accepted (grilled 2026-07-27, `/grill-with-docs` on #175) and **IMPLEMENTED 2026-07-27**. Extends ADR-0067, amends ADR-0031 decision 3; leaves ADR-0030/0037 untouched |
+| [0075](0075-the-ko-oracle-prices-attachments-as-a-typed-budget.md) | The KO oracle prices attachments as a typed Budget, once, for every line | Accepted (grilled 2026-07-27, `/grill-with-docs` on #177 — five locked decisions); build = #177. Renumbered from 0074 on rebase (#175 merged first). Extends ADR-0067 and ADR-0074 into the five `_play_accel_extra` lines; gated by ADR-0072 |

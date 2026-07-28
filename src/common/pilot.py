@@ -1112,7 +1112,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
-                 enabler_item_composer=False, play_accel_lethal=False,
+                 enabler_item_composer=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
                  promote_retreat_value=True, doom_matched_relax=False):
@@ -1228,14 +1228,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # evolution of an in-play, this-turn-evolvable body →
                                                         # evolve → attach → KO, preferring the cheaper Item
                                                         # enabler over the scarce Supporter tutor
-        self.play_accel_lethal = play_accel_lethal      # kill-switch (armed-ON): count a PLAY-based energy
-                                                        # accelerator (a Trainer tagged energy_accel that
-                                                        # attaches a Basic on play — Crispin) as +1 attach in
-                                                        # the ko_for_prizes budget, ON TOP of the manual
-                                                        # attach. Min-bound: only when the Trainer is playable
-                                                        # NOW (Supporter needs a free slot) and a Basic Energy
-                                                        # is still fetchable. An ATTACK-based accel (a Pokemon)
-                                                        # is NEVER counted (using it IS the attack)
         self.discard_keep_value = discard_keep_value    # ADR-0065 seam-D kill-switch (default OFF): the
                                                         # card-worth equation DECIDES a forced discard in
                                                         # place of the `_DISCARD` ladder. OFF = the ladder
@@ -1376,6 +1368,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if planned is not None:                         # the below-win Goal Ladder. Refutes kept on every
             return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read, planned=planned,
+                            # The doom shadow is a per-decision DIAGNOSTIC, so it must not depend on
+                            # which branch decided. #177 made more KO lines reachable, which sent
+                            # frames like 82749168-29 down this branch for the first time and
+                            # silently blanked their shadow (`ms_doom_relax_bare_terapagos_f29`).
+                            threat_shadow=self._threat_shadow(obs, board),
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
@@ -3003,15 +3000,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                   energy: int, *, bound: str = "exact", body: dict | None = None,
                                   extra_type=None, extra_units: int = 0,
                                   boost_amount: int = 0, boost_type=None,
-                                  promote_bench_names=None, attack_p=None) -> float:
+                                  promote_bench_names=None, attack_p=None, budget=None) -> float:
         """The best KO value a hypothetical attacker reaches vs the opp Active — the KO oracle's
         ``best_affordable_ko_value`` (ADR-0052), handed the Board's ``opp_bench`` snapshot for the
-        rider tiebreaks. Signature kept for the planner/tactical call sites (``obs`` vestigial)."""
+        rider tiebreaks. Signature kept for the planner/tactical call sites (``obs`` vestigial).
+
+        ``budget`` (ADR-0075, #177) hands the oracle the typed **Attach Budget** instead of a wild
+        count; ``energy`` is then ignored. ``attack_p`` (ADR-0074, #175) weights a ranked
+        consumer's claim. Refuse-then-weight: they are separate concerns on separate parameters."""
         return self.combat.best_affordable_ko_value(
             opp, attacker_id, energy, opp_bench=board.opp_bench, bound=bound, body=body,
             extra_type=extra_type, extra_units=extra_units,
             boost_amount=boost_amount, boost_type=boost_type,
-            promote_bench_names=promote_bench_names, attack_p=attack_p)
+            promote_bench_names=promote_bench_names, attack_p=attack_p, budget=budget)
 
     def _boost_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for a damage-boost Trainer that UNLOCKS a knockout this turn — the

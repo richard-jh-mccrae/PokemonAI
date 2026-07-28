@@ -33,6 +33,7 @@ BIGATK = 701    # opponent's benched body that KOs my Mega next turn (survival t
 THREAT = 680    # opponent's Active: KO-able now (70 HP) but 210-dmg glass cannon that dooms me next turn
 WALLYS = 1229   # Wally's Compassion — clutch_heal (heals Mega ex to full, bounces Energy to hand)
 HILDA = 1225    # Hilda — Supporter that searches an Energy (+ Evolution) into hand (tutor_energy)
+_ENERGY_SEARCH = 1119   # a `tutor_energy` ITEM sibling — the generalisation test's non-Hilda tutor
 JETTING = 11    # attack id: cost 1, 120 damage
 NEBULA = 10     # attack id: cost 3, 210 damage (big attack an extra Energy unlocks)
 STARYU = 12     # Staryu's own attack: cost 1, 20 damage (can't KO)
@@ -56,18 +57,46 @@ def _stats():
                          minCostDamage=340, maxDamage=340),   # benched threat, KOs my Mega next turn
         THREAT: CardStat(THREAT, name="glass cannon", hp=70, energyType=7, minAttackCost=1,
                          minCostDamage=210, maxDamage=210),   # KO-able now, dooms my Active next turn
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
+        # cardType 5 = Basic Energy. Without it `is_typed_basic_energy` is False and the Attach
+        # Budget sees no manual-attach source at all (ADR-0075).
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),
+        # The two energy tutors need a stat as well as a tag: `_attach_contribution` rejects an
+        # unknown card BEFORE it reads tags (`stat is None -> return None`, fail-CLOSED per
+        # ADR-0067), so a tutor with no CardStat contributes nothing and its KO line vanishes.
+        HILDA: CardStat(HILDA, name="Hilda", hp=0, cardType=3),              # 3 = Supporter
+        _ENERGY_SEARCH: CardStat(_ENERGY_SEARCH, name="Energy Search", hp=0, cardType=1),  # 1 = Item
     }, attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
                 NEBULA: AttackStat(NEBULA, damage=210, cost=3),
                 STARYU: AttackStat(STARYU, damage=20, cost=1),
                 OPEN_ATK: AttackStat(OPEN_ATK, damage=30, cost=1)})
 
 
-def _pilot(functions=None, **kw):
+#: Hilda's real Effect Clause (`src/common/card_effects.json` id 1225). The Attach Budget's YIELD
+#: leg fails CLOSED without a clause row (ADR-0067), so a clause-less Pilot cannot model her deck
+#: fetch at all and every tutor-energy KO line silently vanishes. Supplied by default here so these
+#: tests exercise the same path the shipped agent does.
+#: Real deck-fetch clauses for the two tutors these tests use (Hilda's is verbatim from
+#: `src/common/card_effects.json` id 1225). The Attach Budget's YIELD leg fails CLOSED without a
+#: clause row (ADR-0067), so a clause-less Pilot cannot model the fetch at all and every
+#: tutor-energy KO line silently vanishes.
+_TUTOR_CLAUSES = {cid: [{"kind": "fetch", "target": "energy", "zone": "deck"}]
+                  for cid in (HILDA, _ENERGY_SEARCH)}
+
+
+def _pilot(functions=None, deck=None, **kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     default = CardFunctions({WALLYS: ["heal", "clutch_heal"], HILDA: ["search", "tutor_energy"]})
-    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
+    if "effects" not in kw:
+        from common.effects import CardEffects
+        kw["effects"] = CardEffects(dict(_TUTOR_CLAUSES))
+    return Pilot(strat, deck=[1] * 60 if deck is None else deck,
+                 general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=default if functions is None else functions, **kw)
+
+
+#: A deck the tutors can actually FETCH from. `deck_energy_types` is derived from the decklist, so
+#: with the default all-id-1 deck a deck-sourced clause yields nothing and the line cannot exist.
+_ENERGY_DECK = [WATER] * 8 + [1] * 52
 
 
 @pytest.mark.req("REQ-PLANNER-0001")
@@ -459,7 +488,7 @@ def test_energy_tutor_supporter_unlocks_an_otherwise_missed_ko_is_planned_and_ta
     retreat-into-Mega + that attach unlocks Jetting Blow (120) = a 1-prize KO the greedy scorer can't see
     (no single option scores it, and the enabling first step is a Supporter, not a retreat/evolve). The
     Planner recognises the ``ko_for_prizes`` line and plays Hilda now."""
-    pilot = _pilot()
+    pilot = _pilot(deck=_ENERGY_DECK)
     play_hilda = opt(PLAY, area=HAND, index=0)
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
                   opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
@@ -480,8 +509,9 @@ def test_energy_tutor_line_generalizes_to_any_tutor_energy_supporter():
     (Energy Search, Colress's Tenacity, Crispin, …). Same board, a different tutor id — the Planner
     still plays it to supply the attach that unlocks the retreat→attach→KO. Guards against a
     regression that hardcodes a single card."""
-    energy_search = 1119                               # tutor_energy sibling (Item) — not Hilda
-    pilot = _pilot(functions=CardFunctions({energy_search: ["search", "tutor_energy"]}))
+    energy_search = _ENERGY_SEARCH                     # tutor_energy sibling (Item) — not Hilda
+    pilot = _pilot(functions=CardFunctions({energy_search: ["search", "tutor_energy"]}),
+                   deck=_ENERGY_DECK)
     board = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=0, hp=330)],
                   opp_active=poke(BENCHIE, hp=100), opp_bench=[poke(BENCHIE, hp=100)],
                   hand=[energy_search], prizes=2, opp_prizes=2)   # no Energy in hand — tutor fetches it
@@ -598,7 +628,7 @@ def _snipe_stats():
         BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
         THREATB: CardStat(THREATB, name="benched glass cannon", hp=90, energyType=7,
                           minAttackCost=1, minCostDamage=340, maxDamage=340),
-        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
+        WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),  # cardType 5 = Basic Energy: without it `is_typed_basic_energy` is False and the Attach Budget sees no manual-attach source (ADR-0075)
     }
     return DictCardStatProvider(base, attacks={
         JETTING: AttackStat(JETTING, damage=120, cost=1),

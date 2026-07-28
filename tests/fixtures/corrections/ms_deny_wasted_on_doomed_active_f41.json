@@ -1,0 +1,340 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 0,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                5
+              ],
+              "energyCards": [
+                {
+                  "id": 5,
+                  "playerIndex": 0,
+                  "serial": 55
+                }
+              ],
+              "hp": 210,
+              "id": 140,
+              "maxHp": 210,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 21,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 190,
+              "id": 272,
+              "maxHp": 190,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 14,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 170,
+              "id": 1071,
+              "maxHp": 170,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 8,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 39,
+          "discard": [
+            {
+              "id": 1102,
+              "playerIndex": 0,
+              "serial": 39
+            },
+            {
+              "id": 1146,
+              "playerIndex": 0,
+              "serial": 45
+            },
+            {
+              "id": 1121,
+              "playerIndex": 0,
+              "serial": 35
+            },
+            {
+              "id": 1188,
+              "playerIndex": 0,
+              "serial": 32
+            },
+            {
+              "id": 184,
+              "playerIndex": 0,
+              "serial": 16
+            },
+            {
+              "id": 1172,
+              "playerIndex": 0,
+              "serial": 47
+            }
+          ],
+          "hand": null,
+          "handCount": 4,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                3,
+                3,
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 63
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 66
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 67
+                }
+              ],
+              "hp": 330,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 1,
+                  "serial": 80
+                }
+              ],
+              "serial": 85,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 160,
+              "id": 666,
+              "maxHp": 160,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 77,
+              "tools": []
+            },
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 330,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 1,
+                  "serial": 81
+                }
+              ],
+              "serial": 84,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 38,
+          "discard": [
+            {
+              "id": 1086,
+              "playerIndex": 1,
+              "serial": 87
+            },
+            {
+              "id": 1223,
+              "playerIndex": 1,
+              "serial": 111
+            },
+            {
+              "id": 1223,
+              "playerIndex": 1,
+              "serial": 112
+            },
+            {
+              "id": 1121,
+              "playerIndex": 1,
+              "serial": 96
+            },
+            {
+              "id": 17,
+              "playerIndex": 1,
+              "serial": 75
+            }
+          ],
+          "hand": [
+            {
+              "id": 1227,
+              "playerIndex": 1,
+              "serial": 117
+            },
+            {
+              "id": 1120,
+              "playerIndex": 1,
+              "serial": 93
+            },
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 101
+            },
+            {
+              "id": 1097,
+              "playerIndex": 1,
+              "serial": 91
+            },
+            {
+              "id": 1120,
+              "playerIndex": 1,
+              "serial": 92
+            }
+          ],
+          "handCount": 5,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [
+        {
+          "id": 1250,
+          "playerIndex": 0,
+          "serial": 51
+        }
+      ],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 6,
+      "turnActionCount": 2,
+      "yourIndex": 1
+    },
+    "logs": [
+      {
+        "cardId": 1031,
+        "cardIdTarget": 1030,
+        "playerIndex": 1,
+        "serial": 84,
+        "serialTarget": 81,
+        "type": 12
+      }
+    ],
+    "remainingOverageTime": 598.545061,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 0,
+          "type": 7
+        },
+        {
+          "index": 1,
+          "type": 7
+        },
+        {
+          "index": 2,
+          "type": 7
+        },
+        {
+          "index": 4,
+          "type": 7
+        },
+        {
+          "attackId": 1487,
+          "type": 13
+        },
+        {
+          "attackId": 1488,
+          "type": 13
+        },
+        {
+          "type": 12
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    }
+  },
+  "chosen": [
+    1
+  ],
+  "correct": [
+    0
+  ],
+  "chosen_label": "Play Crushing Hammer (Item, energy denial)",
+  "correct_label": "Play Lillie's Determination (Supporter, hand refresh)",
+  "frame_key": "85163634|1|decision|41",
+  "note": "85163634 f41 (Main, mega_starmie seat 1, turn 6). The knockout is already locked and nothing on the board can stop it: our Active Mega Starmie ex carries 3{W}, and Nebula Beam ({C}{C}{C}, 210 dmg) exactly meets Fezandipiti ex's 210 HP for 2 prizes. So the frame only asks what to do with the FREE actions before attacking. The agent played Crushing Hammer; the human ruled Lillie's Determination, because the only Energy on the opponent's board is the single {P} on the Active that is about to be knocked out -- the denial buys nothing, while the hand is thin and Lillie's digs for the Energy the benched Mega Starmie ex needs. Bench: Cinderace (Stage 2, no Energy) and a second Mega Starmie ex played THIS turn (cannot evolve, no Energy).",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ],
+      "owner": "#143",
+      "ruled": "2026-07-28",
+      "why": "HELD OUT by user ruling 2026-07-28 during #177's grill: this frame is the targeting equation's to answer, not #177's. The correction is valid -- a Crushing Hammer spent on the one Energy attached to a body we are about to knock out is a wasted resource -- and that is a DENY-valuation question, which #143 (Opponent-target unification: one marginal decides snipe/gust/deny) owns. #177 changes KO affordability and touches none of it.\n\nMEASURED, so the owner does not have to re-derive it. The correct option NEVER MOVED: option 0 scores 2207.50 both at the pinned baseline (81eac82) and on current main. Nothing regressed about the human's pick. Pre-change the frame passed only under the LENIENT shared-max rule -- correct_is_unique_top was already False with a FIVE-WAY tie at 2207.50 (options 0,1,2,3,5), because every one of them ends the turn with the same Nebula Beam OHKO and the leaf evaluates the end-of-turn board. Ties break by option order, so the leaf's real pick was index 0 both before and after; the OK verdict was a metric artifact of the tie, not a discrimination success.\n\nWhat flipped it is a SIBLING climbing, not the pick falling: option 6 (Retreat) went 144.50 -> 2231.80 (+2087.30), above the tie and into the KO band, collapsing top_tie 5 -> 1 and taking correct_rank 1 -> 2. This is ADR-0072 finding 1 exactly ('tie-reduction is not a merit metric -- here it is anti-correlated'; the frames that broke were the ones whose ties collapsed).\n\nThe retreat climb is DETERMINISTIC, not #160's RNG noise: re-scored on three independent process runs (2026-07-28), option 6 returned 2231.80 every time, correct_rank 2, top_tie 1. So it is attributable to a merged change, not a stream artifact -- the candidates are #178's 90f7185 (the develop rung may not rank on an RNG-sampled end board) and a777bd7 (a win confirmed off a shuffled deck is undetermined, not True), both of which landed between the baseline pin and 9a0a8ec and both of which touch how a retreat line's rollout is valued. A retreat scoring ABOVE an available, unstoppable 2-prize OHKO is worth the owner's attention on its own merits."
+    }
+  }
+}

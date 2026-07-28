@@ -577,19 +577,28 @@ class MySide(_SideBase):
                                            manual_spent=manual_spent, provable=provable)
 
     def attach_budget_for_card(self, card_id, *, benched: bool, manual_spent: bool = False,
-                               provable: bool = False):
+                               provable: bool = False, supporter_spent: bool = False):
         """The Budget toward a card id rather than a body in play — for a HYPOTHETICAL attacker the
         board does not carry yet (the composed KO line's evolved form, #142).
 
         This is the real primitive and :meth:`attach_budget` is the BodyView-shaped face of it: the
         Budget reads its target only through the ``CardStat`` and the area, which is exactly this
         pair. Callers that assembled the zone arguments by hand went around the memo and had to keep
-        seven kwargs in step with it; there is one assembly now."""
-        key = ("attach_budget", card_id, not benched, bool(manual_spent), bool(provable))
+        seven kwargs in step with it; there is one assembly now.
+
+        ``supporter_spent`` forces the SUPPORTER leg closed — "the Budget this body still has once
+        the turn's one Supporter is committed" (ADR-0075 decision 3). It is the quota twin of
+        ``manual_spent`` one leg over, and it exists because a KO line may play a Supporter as its
+        own ENABLING step: a `rush_evolve` Salvatore or a `tutor_energy` Hilda spends the slot, so
+        the Budget must not then also offer a Crispin play-set — two Supporters in one turn is an
+        illegal line and the phantom KO it funds would be silent. Like ``manual_spent`` it only ever
+        removes play-sets, so a caller that omits it is unchanged."""
+        key = ("attach_budget", card_id, not benched, bool(manual_spent), bool(provable),
+               bool(supporter_spent))
         return self._memoized(key, lambda: self._combat.attach_budget(
             {"id": card_id}, self.hand_ids,
             energy_attached=self.energy_attached or bool(manual_spent),
-            supporter_played=self.supporter_played,
+            supporter_played=self.supporter_played or bool(supporter_spent),
             deck_energy_types=(self.deck_energy_types_provable if provable
                                else self.deck_energy_types),
             hand_energy_types=self.hand_energy_types,

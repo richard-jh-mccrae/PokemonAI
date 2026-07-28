@@ -1530,13 +1530,12 @@ class PlannerMixin:
         if not (opp or {}).get("hp"):
             return []
         opp_player = self._opp_player(obs)
-        extra = 1 if (board.reusable_energy_in_hand and not board.energy_attached) else 0
-        # A PLAY-based accelerator (Crispin) adds +1 attach ON TOP of the manual one (min-bound, cap 1).
-        # Two reads: `accel_free` for enablers that leave the Supporter slot open (retreat / free-evolve /
-        # item / rare-candy / plain active-KO); `accel_sup` for enablers that THEMSELVES spend the slot
-        # (Salvatore rush-evolve Supporter, energy-tutor Supporter) — a Supporter accel can't also be played.
-        accel_free = self._play_accel_extra(obs, board, select, options, enabler_consumes_supporter=False)
-        accel_sup = self._play_accel_extra(obs, board, select, options, enabler_consumes_supporter=True)
+        # Every line's attach capacity is the TYPED Attach Budget built for its OWN attacker
+        # (ADR-0075) — each builder calls `_ko_line_pricing` itself, because the Budget is per target
+        # body and cannot be computed once for the menu. The retired `extra + accel_*` count and the
+        # `enabler_consumes_supporter` split it needed are both subsumed: the manual attach is a leg
+        # of the Budget, and a line that plays a Supporter as its enabling step passes
+        # `supporter_spent=True` rather than zeroing a separate accel term.
         threat = self._threat_magnitude(opp)
         lines = []
         for i, o in enumerate(options):
@@ -1545,20 +1544,19 @@ class PlannerMixin:
                                                           # tutor reaching the SAME KO; 0 = the scarce
                                                           # Supporter tutor (last), sub-prize throughout
             if o.get("type") == _RETREAT:
-                cand = self._retreat_ko_candidate(obs, board, opp, opp_player, extra + accel_free)
+                cand = self._retreat_ko_candidate(obs, board, opp, opp_player)
                 kind, cost = "retreat", _PLANNER_ENABLER_FREE   # spends no card/slot — a free enabler
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _ACTIVE:
-                cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player, extra + accel_free)
+                cand = self._evolve_ko_candidate(obs, select, board, o, opp, opp_player)
                 kind, cost = "free evolve", _PLANNER_ENABLER_FREE
             elif o.get("type") == _EVOLVE and o.get("inPlayArea") == _BENCH:
                 retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
                 cand = self._free_evolve_ko_candidate(obs, select, board, o, opp, opp_player,
-                                                      extra + accel_free, retreat_on_menu)
+                                                      retreat_on_menu)
                 kind, cost = "free evolve", _PLANNER_ENABLER_FREE
             elif o.get("type") == _PLAY and self._is_evolution_tutor(obs, select, o):
                 retreat_on_menu = any(x.get("type") == _RETREAT for x in options)
-                cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, extra + accel_sup,
-                                                       retreat_on_menu)
+                cand = self._tutor_evolve_ko_candidate(obs, board, opp, opp_player, retreat_on_menu)
                 kind = "evolution tutor"                  # a Supporter — least-preferred enabler (cost 0)
             elif (o.get("type") == _PLAY and getattr(self, "enabler_item_composer", False)
                   and self._is_item_pokemon_tutor(obs, select, o)):
@@ -1575,8 +1573,7 @@ class PlannerMixin:
                 kind, cost = "rare candy", self._item_enabler_cost(board)   # BUILD 1: a Basic->Stage2 skip
                 #                       Item — tiered like the item tutor (slot-preservation credit)
             elif o.get("type") == _PLAY:
-                cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player,
-                                                    accel=accel_sup)
+                cand = self._supporter_ko_candidate(obs, select, board, o, opp, opp_player)
                 kind = "energy tutor"
             else:
                 continue
@@ -2681,48 +2678,31 @@ class PlannerMixin:
                 return True
         return False
 
-    def _composed_budget_units(self, card_id, *, benched: bool) -> int:
-        """This turn's attach capacity toward a COMPOSED attacker — the evolved form a line is about
-        to put into play — as the **Attach Budget**'s realisable size (#142).
-
-        Replaces `_composed_extra` + `_tutor_energy_attach_available` and, at these two call sites,
-        the caller's `_play_accel_extra` term. The objection those helpers recorded — "an
-        accelerator's amount is not soundly bounded for a COMPOSED attacker (an evolved form / a
-        promoted benched body)" — is what the Budget dissolves: it is built PER TARGET BODY and
-        resolves each accel clause's target restriction against the EVOLVED card's stats, so a
-        Stage-2-only or benched-{P}-only clause funds this line or does not, by the card text.
-
-        That also retires the hardcoded manual(1) + accel(1) = 2 ceiling. More is soundly reachable
-        where the cards allow it — Rosa's Encouragement attaches *up to 2* from the discard, plus the
-        manual attach is 3 — while the shared discard-supply cap stops two such cards claiming Energy
-        the pile does not hold. The magnitude is read through ``Budget.size``, NEVER ``len(option)``:
-        options retain units that may not be jointly realisable (ADR-0067).
-
-        Fail-CLOSED at 0 without a model. Takes the POSSIBLE (fail-open) leg for REACH — a line is
-        considered whenever the fetch could land — and #175 prices the resulting depletion tail
-        separately, through :meth:`_composed_budget`'s probability rather than by narrowing this."""
-        budget = self._composed_budget(card_id, benched=benched)
-        return 0 if budget is None else int(budget.size)
-
-    def _composed_budget(self, card_id, *, benched: bool):
-        """The Attach Budget object behind :meth:`_composed_budget_units`, or None without a model.
+    def _composed_budget(self, card_id, *, benched: bool, supporter_spent: bool = False):
+        """The Attach Budget toward one KO line's attacker, or None without a model.
 
         The units answer "does this line REACH a KO"; the Budget itself answers "how likely is the
         Energy really there" (ADR-0074 decision 3) — the same oracle read twice, so reach and
-        probability can never be computed off different budgets."""
+        probability can never be computed off different budgets. It is also what ANSWERS the reach
+        question (ADR-0075 decision 1), which is the third reading of that same one Budget.
+
+        ``supporter_spent`` closes the Supporter leg for a line that plays a Supporter as its own
+        enabling step (ADR-0075 decision 3) — the successor to the retired
+        ``enabler_consumes_supporter`` split."""
         model = getattr(self, "_state_model", None)
         if model is None or card_id is None:
             return None
-        return model.mine.attach_budget_for_card(card_id, benched=benched)
+        return model.mine.attach_budget_for_card(card_id, benched=benched,
+                                                 supporter_spent=supporter_spent)
 
-    def _composed_attack_p(self, card_id, body, *, benched: bool):
+    def _composed_attack_p(self, card_id, body, *, benched: bool, supporter_spent: bool = False):
         """``attack_id -> P(the composed line's Energy is really there)`` for this candidate form,
         or None when nothing can be priced (no model / no Budget) — the caller then makes no claim
         and the line keeps its unweighted value, exactly as before #175.
 
         This is the RANKED-consumer half of ADR-0074's Leg Assignment: the `ko_for_prizes` ladder
         emits a compared scalar, so it weights; the Win Rung gates, so it never calls this."""
-        budget = self._composed_budget(card_id, benched=benched)
+        budget = self._composed_budget(card_id, benched=benched, supporter_spent=supporter_spent)
         model = getattr(self, "_state_model", None)
         if budget is None or model is None:
             return None
@@ -2732,54 +2712,24 @@ class PlannerMixin:
         return lambda aid: self.combat.attack_realising_p(
             aid, budget=budget, body=body, p_by_type=p_by_type)
 
-    def _play_accel_extra(self, obs, board, select, options, enabler_consumes_supporter: bool) -> int:
-        """MIN-BOUND: 1 iff a PLAY-based energy accelerator in MY hand can PROVABLY add ONE more attach to
-        a ``ko_for_prizes`` line this turn, else 0. The caller adds this ON TOP of the base ``extra`` — a
-        play-based accelerator's attach is INDEPENDENT of the turn's one manual attach (Crispin attaches a
-        Basic on play AND puts one in hand, so a single play yields up to manual(1) + accel(1) = 2 attaches).
+    def _ko_line_pricing(self, card_id, body, *, benched: bool, supporter_spent: bool = False):
+        """``(budget, attack_p)`` for ONE KO line's attacker — the single pricing seam EVERY
+        ``ko_for_prizes`` builder reads (ADR-0075 decision 4).
 
-        The accelerator class this counts is the DETERMINISTIC deck-search-and-attach Trainer — Crispin
-        (id 1198): "Search your deck for up to 2 Basic Energy … Attach the other to 1 of your Pokémon". Its
-        soundness anchor is that it is tagged BOTH ``energy_accel`` (attaches on play) AND ``tutor_energy``
-        (an UNCONDITIONAL deck search that puts an attachable Energy into hand). Requiring both tags on a
-        Trainer is what keeps this min-bound — it EXCLUDES the accel Trainers whose attach is NOT provably
-        available: Energy Coin (coin-flip: attaches only on double-heads), Waitress (``dig`` — attaches only
-        if a Basic sits in the TOP 6), and Wondrous Patch / Rosa's Encouragement (attach from DISCARD to a
-        restricted target, no deck-search guarantee). None of those carry ``tutor_energy``, so none count.
+        ``card_id`` names the card whose ATTACKS are read (an evolved form still in hand or deck for
+        a composed line; the body itself for a retreat line); ``body`` is the on-board dict carrying
+        the ATTACHED Energy, which for an evolve line is the PRE-evolution body the Energy carries
+        through. ``benched`` places the target for a bench-restricted clause — and since no modelled
+        accel clause requires an ACTIVE target, a retreat line takes True: "attach to the benched
+        body, then retreat, then attack" is a real sequence and a strict superset.
 
-        All must hold (else 0 — fail-closed / under-fire):
-          * the ``play_accel_lethal`` flag is on;
-          * a card in ``board.hand_ids`` is tagged BOTH ``energy_accel`` AND ``tutor_energy`` AND is a
-            TRAINER (``is_item``/``is_supporter``) — NOT a Pokemon. A Pokemon ``energy_accel`` is
-            ATTACK-based (Cinderace's Turbo Flare): using it IS your attack, so it can never stack with the
-            KO attack and is deliberately NEVER counted (the ``is_item or is_supporter`` gate drops it);
-          * if that Trainer is a SUPPORTER, the one-per-turn Supporter slot is still free this turn — not
-            already spent (``not board.supporter_played``) AND the enabling first step does not itself claim
-            the slot (``not enabler_consumes_supporter``; True for a Salvatore rush-evolve Supporter or an
-            energy-tutor Supporter enabler — Crispin can't also be played);
-          * a Basic Energy is still fetchable from my deck (``board.basic_energy_in_deck``) — the same
-            fail-open deck gate; with none fetchable the search-and-attach whiffs.
-
-        Capped at 1 (Crispin attaches exactly one). The attached Basic is priced WILD by the KO oracle (as
-        the existing ``extra`` term is), so a specific color is not asserted here; the deck-fetchable gate is
-        the sound anchor. Fail-CLOSED on unknown stats/functions."""
-        if not getattr(self, "play_accel_lethal", False):
-            return 0
-        if not board.basic_energy_in_deck:
-            return 0
-        if not (self.stats and self.functions):
-            return 0
-        for cid in board.hand_ids:
-            tags = self.functions.tags(cid)
-            if "energy_accel" not in tags or "tutor_energy" not in tags:
-                continue                                  # not the deterministic search-and-attach class
-            st = self.stats.get(cid)
-            if st is None or not (st.is_item or st.is_supporter):
-                continue                                  # a Pokemon energy_accel is ATTACK-based — skip
-            if st.is_supporter and (board.supporter_played or enabler_consumes_supporter):
-                continue                                  # the one Supporter slot is unavailable this turn
-            return 1
-        return 0
+        One Budget serves refusal and ranking both, so the two can never be computed off different
+        budgets (ADR-0075 decision 7 — separate parameters, one source)."""
+        budget = self._composed_budget(card_id, benched=benched, supporter_spent=supporter_spent)
+        if budget is None:
+            return None, None
+        return budget, self._composed_attack_p(card_id, body, benched=benched,
+                                               supporter_spent=supporter_spent)
 
     def _item_evolve_ko_candidate(self, obs, select, board, option, opp, opp_player,
                                   retreat_on_menu: bool):
@@ -2794,7 +2744,7 @@ class PlannerMixin:
         reach the Active.
 
         SOUND energy accounting: the line's attach capacity is the **Attach Budget** built for THIS
-        candidate evolved form (``_composed_budget_units``, #142) — every playable accelerator at its
+        candidate evolved form (``_ko_line_pricing``, #142/#177) — every playable accelerator at its
         clause-quantified yield, target restrictions resolved against the evolved card's stats, and no
         hardcoded manual(1) + accel(1) ceiling. Every KO goes through
         ``_best_affordable_ko_value(bound="min")`` — a coin-conditional attack floors to its min damage, so
@@ -2836,21 +2786,23 @@ class PlannerMixin:
                     continue                              # provably gone — no line to rank
                 # The Budget is PER TARGET BODY, so it is built for THIS candidate evolved form
                 # (its stats gate every accel clause's target restriction), not once for the menu.
-                units = self._composed_budget_units(cid, benched=benched)
-                attack_p = self._composed_attack_p(cid, body, benched=benched)
-                if self._best_affordable_ko_value(obs, board, opp, cid, energy + units,
-                                                  bound="min", body=body, attack_p=attack_p) <= 0:
+                budget, attack_p = self._ko_line_pricing(cid, body, benched=benched)
+                if budget is None or self._best_affordable_ko_value(
+                        obs, board, opp, cid, energy, bound="min", body=body,
+                        attack_p=attack_p, budget=budget) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
                         bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player),
                         present_p * self._composed_line_p(obs, board, opp, cid,
-                                                          energy + units, body, attack_p))
+                                                          energy, body, attack_p,
+                                                          budget=budget))
                 if best is None or _composed_rank(cand) > _composed_rank(best):
                     best = cand
         return best
 
-    def _composed_line_p(self, obs, board, opp, card_id, energy: int, body, attack_p) -> float:
+    def _composed_line_p(self, obs, board, opp, card_id, energy: int, body, attack_p,
+                         budget=None) -> float:
         """P(the composed line's KO really lands) — the weighted KO value over the unweighted one,
         i.e. the probability attached to whichever attack the weighted valuation actually picked
         (ADR-0074 decisions 3-4, #175).
@@ -2861,11 +2813,12 @@ class PlannerMixin:
         if attack_p is None:
             return 1.0
         raw = self._best_affordable_ko_value(obs, board, opp, card_id, energy,
-                                             bound="min", body=body)
+                                             bound="min", body=body, budget=budget)
         if raw <= 0:
             return 0.0
         weighted = self._best_affordable_ko_value(obs, board, opp, card_id, energy,
-                                                  bound="min", body=body, attack_p=attack_p)
+                                                  bound="min", body=body, attack_p=attack_p,
+                                                  budget=budget)
         return max(0.0, min(1.0, weighted / raw))
 
     def _is_rare_candy(self, obs, select, option) -> bool:
@@ -2919,15 +2872,16 @@ class PlannerMixin:
                     continue                              # a Stage-2 card only
                 if not self._stage2_roots_at(st, base.name):
                     continue                              # its chain must root at THIS Basic (skip Stage 1)
-                units = self._composed_budget_units(cid, benched=benched)   # per-candidate Budget
-                attack_p = self._composed_attack_p(cid, body, benched=benched)
-                if self._best_affordable_ko_value(obs, board, opp, cid, energy + units,
-                                                  bound="min", body=body, attack_p=attack_p) <= 0:
+                budget, attack_p = self._ko_line_pricing(cid, body, benched=benched)   # per-candidate
+                if budget is None or self._best_affordable_ko_value(
+                        obs, board, opp, cid, energy, bound="min", body=body,
+                        attack_p=attack_p, budget=budget) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
                         bool(my_hp) and self._survives_after_ko(cid, my_hp, opp_player),
-                        self._composed_line_p(obs, board, opp, cid, energy + units, body, attack_p))
+                        self._composed_line_p(obs, board, opp, cid, energy, body,
+                                              attack_p, budget=budget))
                 if best is None or _composed_rank(cand) > _composed_rank(best):
                     best = cand
         return best
@@ -2971,13 +2925,23 @@ class PlannerMixin:
                 return True
         return False
 
-    def _retreat_ko_candidate(self, obs, board, opp, opp_player, extra: int):
+    def _retreat_ko_candidate(self, obs, board, opp, opp_player, *, supporter_spent: bool = True):
         """``(prizes, active_survives)`` for the best benched body that KOs the opponent's Active AFTER a
         retreat plus this turn's one attach — but that does NOT already KO at its current Energy (that
         single-step case is the existing ``_retreat_to_lethal_tactical`` hook's job). Among the KO-capable
         bodies (all take the same prize off the shared target) it prefers the one that SURVIVES the
         opponent's post-KO Incoming. None when no benched body needs the attach to reach a KO. Reuses the
-        shared sound KO valuation (``_best_affordable_ko_value``: Weakness/Resistance, ex-immunity)."""
+        shared sound KO valuation (``_best_affordable_ko_value``: Weakness/Resistance, ex-immunity).
+
+        The line's attach capacity is the typed Attach Budget built for THIS benched body (ADR-0075)
+        — ``benched=True``, because the attach can be made before the retreat and no modelled accel
+        clause requires an Active target, so it is a strict superset naming a real sequence.
+        ``supporter_spent`` DEFAULTS TRUE and that is load-bearing (ADR-0075). A bare retreat spends
+        no card and is tiered ``_PLANNER_ENABLER_FREE`` for exactly that reason, so its Budget must
+        not quietly include a Supporter's yield — a KO funded by Hilda's fetch is not a free-enabler
+        KO, and crediting it as one inverts ADR-0031's rule that an enabler PRESERVING deck/slot
+        resources outranks a tutor reaching the SAME KO. Only :meth:`_supporter_ko_candidate`, whose
+        committed first step IS that Supporter, passes False."""
         me = self._my_player(obs)
         best = None                                   # (prizes, survives)
         for p in (me.get("bench") or []):
@@ -2986,16 +2950,18 @@ class PlannerMixin:
             energy = len(p.get("energies") or [])
             if self._best_affordable_ko_value(obs, board, opp, p.get("id"), energy, body=p) > 0:
                 continue                              # retreat alone already KOs — existing hook owns it
-            if not (extra and self._best_affordable_ko_value(obs, board, opp, p.get("id"),
-                                                             energy + extra, body=p) > 0):
+            budget, attack_p = self._ko_line_pricing(p.get("id"), p, benched=True,
+                                                     supporter_spent=supporter_spent)
+            if budget is None or self._best_affordable_ko_value(
+                    obs, board, opp, p.get("id"), energy, body=p,
+                    budget=budget, attack_p=attack_p) <= 0:
                 continue
             cand = (self._prize_value(opp), self._survives_after_ko(p.get("id"), p.get("hp", 0), opp_player))
             if best is None or cand > best:           # prefer more prizes, then survival (bool > bool)
                 best = cand
         return best
 
-    def _tutor_evolve_ko_candidate(self, obs, board, opp, opp_player, extra: int,
-                                   retreat_on_menu: bool):
+    def _tutor_evolve_ko_candidate(self, obs, board, opp, opp_player, retreat_on_menu: bool):
         """``(prizes, active_survives)`` if playing an **evolution-tutor Supporter** (Salvatore: evolve
         one of my in-play Pokémon straight from the deck — the ``rush_evolve`` tag) unlocks an
         otherwise-missed KO of the opponent's Active: some DIRECT, no-Ability evolution still LIKELY in
@@ -3004,13 +2970,20 @@ class PlannerMixin:
         retreat still on the menu), affords a KO with the body's Energy plus this turn's one attach.
         No closed-form hook scores a Supporter first-step, so this is net-new (the a212 shape:
         Salvatore -> Mega Starmie onto a setup Staryu -> free retreat -> attach -> Jetting Blow).
-        None when no such evolution reaches a KO."""
+        None when no such evolution reaches a KO.
+
+        The Budget is built for the FETCHED evolution (ADR-0075) — its stats gate every accel
+        clause's target restriction — over the body the Energy carries through, with
+        ``supporter_spent=True`` because Salvatore IS the Supporter this line plays."""
         me = self._my_player(obs)
-        bodies = [p for p in (me.get("active") or []) if p]
+        # (body, benched) rather than a flat list: the Budget must know where the target SITS, and a
+        # bench-restricted accel clause funds one and not the other (ADR-0075 decision 4). The flat
+        # `active + bench` this replaced lost that, silently.
+        bodies = [(p, False) for p in (me.get("active") or []) if p]
         if retreat_on_menu:
-            bodies += [p for p in (me.get("bench") or []) if p]
+            bodies += [(p, True) for p in (me.get("bench") or []) if p]
         best = None
-        for body in bodies:
+        for body, benched in bodies:
             base = self.stats.get(body.get("id")) if self.stats else None
             if base is None or not getattr(base, "name", None):
                 continue
@@ -3026,8 +2999,11 @@ class PlannerMixin:
                 present_p = board.deck_contains_probability(cid)
                 if present_p <= 0.0:
                     continue                          # provably gone — nothing to rank
-                if self._best_affordable_ko_value(obs, board, opp, cid, energy + extra,
-                                                  body=body) <= 0:
+                budget, attack_p = self._ko_line_pricing(cid, body, benched=benched,
+                                                         supporter_spent=True)
+                if budget is None or self._best_affordable_ko_value(
+                        obs, board, opp, cid, energy, body=body,
+                        budget=budget, attack_p=attack_p) <= 0:
                     continue
                 my_hp = getattr(st, "hp", 0) or 0
                 cand = (self._prize_value(opp),
@@ -3037,7 +3013,7 @@ class PlannerMixin:
                     best = cand
         return best
 
-    def _supporter_ko_candidate(self, obs, select, board, option, opp, opp_player, accel: int = 0):
+    def _supporter_ko_candidate(self, obs, select, board, option, opp, opp_player):
         """``(prizes, active_survives)`` if playing a **tutor-energy Supporter** (Hilda: search an Energy
         into hand — the ``tutor_energy`` tag) unlocks an otherwise-missed retreat→attach→KO. The Supporter
         SUPPLIES the attachable Energy the plain retreat line lacks: with that fetched Energy modelled as
@@ -3050,31 +3026,46 @@ class PlannerMixin:
             return None
         if not self._is_energy_tutor(obs, select, option):
             return None
-        # extra=1 is the fetched-Energy manual attach; ``accel`` adds a play-based accelerator's
-        # independent +1 (0 here whenever Crispin — a Supporter — would clash with THIS energy-tutor
-        # Supporter's slot, since the caller passes accel_sup with enabler_consumes_supporter=True)
-        return self._retreat_ko_candidate(obs, board, opp, opp_player, extra=1 + accel)
+        # The Supporter leg stays OPEN here, and that is the opposite of the sibling Salvatore line
+        # (`_tutor_evolve_ko_candidate`, which passes supporter_spent=True). The discriminator is
+        # whether THIS line's Supporter contributes to the Budget:
+        #   * Hilda is `tutor_energy` with a readable deck-fetch clause, so she IS the Budget's
+        #     energy source for her own line — closing the leg would delete the very yield the line
+        #     depends on and make it structurally dead (measured: her Budget is size 1 open, 0 closed).
+        #   * Salvatore is `rush_evolve` with NO accel tag, so it contributes nothing and merely
+        #     SPENDS the slot — leaving the leg open there would let the Budget assume a different
+        #     Supporter is also played, which is the illegal two-Supporter turn.
+        # Double-counting is structurally impossible either way: each Supporter is a separate
+        # alternative play-set, so a hand holding both Hilda and Crispin still yields size 1, never 2.
+        return self._retreat_ko_candidate(obs, board, opp, opp_player, supporter_spent=False)
 
-    def _evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int):
+    def _evolve_ko_candidate(self, obs, select, board, option, opp, opp_player):
         """``(prizes, active_survives)`` if EVOLVING the Active unlocks a KO of the opponent's Active this
         turn — the evolved form (the option's in-hand card) inherits the Active's Energy and, with this
         turn's one attach, its best affordable attack KOs. Evolving then attacking is legal the same turn
         (rules.md §evolution). No closed-form hook scores an evolve-unlock, so this is always net-new.
         Survival uses the evolved form's HP (closed-form approximation; the P3 engine-sim is exact).
-        None when evolving doesn't reach a KO."""
+        None when evolving doesn't reach a KO.
+
+        The Budget is built for the EVOLVED form at ``benched=False`` (ADR-0075) — this line evolves
+        the ACTIVE, so the target sits Active and a bench-restricted clause (Wondrous Patch) must NOT
+        fund it."""
         evolved_id = self._option_card_id(obs, select, option)
         if evolved_id is None:
             return None
         energy = board.my_active_energy
         ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
-        if self._best_affordable_ko_value(obs, board, opp, evolved_id, energy + extra,
-                                          body=ma) <= 0:
+        budget, attack_p = self._ko_line_pricing(evolved_id, ma, benched=False,
+                                                 supporter_spent=True)   # an EVOLVE spends none
+        if budget is None or self._best_affordable_ko_value(
+                obs, board, opp, evolved_id, energy, body=ma,
+                budget=budget, attack_p=attack_p) <= 0:
             return None
         estat = self.stats.get(evolved_id) if self.stats else None
         my_hp = getattr(estat, "hp", 0) or 0          # evolved max HP — P3 engine-sim resolves damage exactly
         return (self._prize_value(opp), self._survives_after_ko(evolved_id, my_hp, opp_player))
 
-    def _free_evolve_ko_candidate(self, obs, select, board, option, opp, opp_player, extra: int,
+    def _free_evolve_ko_candidate(self, obs, select, board, option, opp, opp_player,
                                   retreat_on_menu: bool):
         """``(prizes, active_survives)`` if a FREE direct-evolve of a BENCHED body unlocks an
         otherwise-missed KO of the opponent's Active — the CHEAPEST enabler of all: the evolved form
@@ -3084,7 +3075,11 @@ class PlannerMixin:
         Energy plus this turn's one attach and — reaching the Active via the retreat still on the menu
         — affords a KO. Mirrors ``_tutor_evolve_ko_candidate``'s benched-body + retreat modelling, but
         keyed on the in-hand evolved form the option names (not a deck fetch). None when no retreat is
-        available to promote the benched attacker, or the evolution doesn't reach a KO."""
+        available to promote the benched attacker, or the evolution doesn't reach a KO.
+
+        The Budget is built for the EVOLVED form at ``benched=True`` (ADR-0075) — the evolve happens
+        on the Bench and the retreat follows, so a bench-restricted clause legitimately funds this
+        line."""
         if not retreat_on_menu:
             return None                                   # a benched attacker needs the retreat to attack
         evolved_id = self._option_card_id(obs, select, option)
@@ -3096,8 +3091,11 @@ class PlannerMixin:
         if body is None:
             return None
         energy = len(body.get("energies") or [])
-        if self._best_affordable_ko_value(obs, board, opp, evolved_id, energy + extra,
-                                          body=body) <= 0:
+        budget, attack_p = self._ko_line_pricing(evolved_id, body, benched=True,
+                                                 supporter_spent=True)   # an EVOLVE spends none
+        if budget is None or self._best_affordable_ko_value(
+                obs, board, opp, evolved_id, energy, body=body,
+                budget=budget, attack_p=attack_p) <= 0:
             return None
         estat = self.stats.get(evolved_id) if self.stats else None
         my_hp = getattr(estat, "hp", 0) or 0
