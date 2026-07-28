@@ -161,6 +161,36 @@ the re-capture gets owned rather than passing unseen.
 Measured 91 s over 267 frames (2026-07-28); main was verified green at `7d2a656` before this landed,
 so it was not born red.
 
+### Baseline provenance
+
+`data/leaf_lab/baseline.json` was re-captured **2026-07-28 at `38ca76f`**, moving off the long-stale
+`81eac82` pin. Its precondition was met: the gate reported **0 unruled / 3 ruled** flips, which is
+exactly ADR-0072 decision 2's *"only when a swap's flips have been ruled"*.
+
+Why re-capture rather than leave it: six frames had improved `MISS → OK` since `81eac82`, and an
+improvement is **not protected until it is baselined** — with the old pin still recording them as
+`MISS`, a change undoing those wins would have compared `MISS → MISS`, produced no flip, and passed
+**silently**. Re-capturing makes them the floor.
+
+What it absorbed, recorded here because the gate will no longer re-report it. These three were
+`correct_is_top=True` under `81eac82` and are `MISS` in the new capture, so they stop appearing in
+the diff entirely (a `MISS → MISS` is not a flip):
+
+| frame | rank drift | owner |
+|---|---|---|
+| `85163634\|1\|decision\|41` | 1 → 2 | #143 |
+| `85164605\|1\|decision\|41` | 1 → 2 | #145 |
+| `86091435\|0\|decision\|13` | 1 → 4 | #189 |
+
+This is the real cost of the re-capture and it is in tension with ADR-0072 decision 4's reason for
+the always-visible `HELD OUT` section — *"a frame broken for three phases must not become scenery."*
+They remain owned by their issues and held out in the fixture ledger, and the pre-capture values stay
+in this file's git history, but they are no longer surfaced on every run. If that visibility matters
+more than protecting the six improvements, the re-capture is the thing to revert.
+
+Aggregates moved both ways and do **not** gate (ADR-0072 decision 2): shared-top 188 → 191,
+SOLE-top 36 → 35.
+
 ## Reproduce locally
 
 ```bash
