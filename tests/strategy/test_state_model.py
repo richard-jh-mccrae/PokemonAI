@@ -351,6 +351,47 @@ def test_count_triple_helper_fails_closed_on_unreadable_inputs():
     assert count_triple(2, 2, 0) == CountTriple()             # no deck left to hold anything
 
 
+def test_probability_leg_tracks_the_depletion_ramp():
+    """ADR-0074 / #175: `p_any` is the honest middle the two boolean legs collapse. Reproduces the
+    issue's own table — the SAME frames where `floor` is 0 and `possible` is True throughout, so
+    neither boolean distinguishes a free bet from a coin-flip."""
+    thin, deep = count_triple(1, 6, 40), count_triple(3, 6, 51)
+    assert (thin.floor, thin.possible) == (0, True)           # booleans: identical readings...
+    assert (deep.floor, deep.possible) == (0, True)
+    assert round(1 - deep.p_any, 4) == 0.0007                 # ...but 0.07% vs 13% whiff
+    assert round(1 - thin.p_any, 3) == 0.130
+
+
+def test_probability_leg_collapses_with_the_others_once_anchored():
+    """No consumer branches on "are we anchored?" — anchored, `p_any` is exactly 1.0, and a provably
+    empty type is exactly 0.0. The weighting is a NO-OP on every anchored frame (the #175 no-regression
+    guarantee)."""
+    assert count_triple(2, 0, 30).p_any == 1.0                # anchored: certainly present
+    assert count_triple(0, 6, 40).p_any == 0.0                # provably empty: certainly absent
+    assert count_triple(7, 6, 40).p_any == 1.0                # pigeonhole surplus: certainly present
+
+
+def test_deck_energy_p_never_resurrects_a_type_the_sound_leg_dropped():
+    """A probability sharpens the uncertain middle; it may never claim a type proven gone. Same frame
+    as the exhausted-type test above — {P} is sound-empty, so its probability must read exactly 0."""
+    m = _model(_player(active=_pult(energies=[E_P, E_P]), discard=[E_P, E_R], prize=4),
+               _player(active=_poke(RIOLU, hp=80)))
+    assert m.mine.deck_energy_p.get(PSYCHIC, 0.0) == 0.0
+    assert PSYCHIC not in m.mine.deck_energy_types            # agrees with the sound leg
+
+
+def test_deck_energy_p_is_a_projection_of_the_one_derivation():
+    """The three legs must agree by construction: a type present in the fail-open set has p > 0, one
+    absent from it has p == 0, and a provable type has p == 1."""
+    m = _model(_player(active=_pult(energies=[E_R]), hand=[CRISPIN], prize=4),
+               _player(active=_poke(RIOLU, hp=80)))
+    for t, c in m.mine.deck_energy_counts.items():
+        p = m.mine.deck_energy_p[t]
+        assert (p > 0.0) == (t in m.mine.deck_energy_types)
+        if t in m.mine.deck_energy_types_provable:
+            assert p == 1.0
+
+
 def test_unseen_counts_is_one_derivation_over_every_visible_zone():
     m = _model(_player(active=_pult(energies=[E_R]), hand=[CRISPIN], discard=[E_P], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
@@ -395,7 +436,11 @@ def test_reachable_attach_answers_for_any_body_not_just_the_active():
 
 def test_readiness_p_is_certain_when_the_budget_already_reaches_and_closed_without_an_enabler():
     m = _model(_player(active=_pult(), hand=[CRISPIN]), _player(active=_poke(RIOLU, hp=80)))
-    assert m.mine.readiness_p(m.mine.active, PHANTOM_DIVE) == 1.0
+    # ADR-0074 / #175: Crispin REACHES only through a deck fetch, so "already reaches" is not
+    # certainty — the fetch can whiff. Weighted, that reads as its real odds; the boolean oracle
+    # still says reachable, and `weighted=False` recovers the pre-#175 fail-open 1.0.
+    assert 0.0 < m.mine.readiness_p(m.mine.active, PHANTOM_DIVE) < 1.0
+    assert m.mine.readiness_p(m.mine.active, PHANTOM_DIVE, weighted=False) == 1.0
     dry = _model(_player(active=_pult()), _player(active=_poke(RIOLU, hp=80)),
                  energy_attached=True)
     assert dry.mine.readiness_p(dry.mine.active, PHANTOM_DIVE) == 0.0

@@ -21,7 +21,11 @@ jobs:
   test:
     name: tests (${{ matrix.os }}, py${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    # 20 was breached on main itself (runs 431/434 at 20.4m/22.7m, both `cancelled` with EVERY test
+    # step green — only the artifact-upload tail was lost). Runtime sat at 12-16m for days and
+    # crossed 20 within hours, so this is headroom for a real slowdown, NOT a measurement of one:
+    # the "what got ~6m slower between run 423 (15.5m) and run 431 (20.4m)" question is still open.
+    timeout-minutes: 30
     # Run every step through bash (Git Bash on Windows runners) so the commands below are
     # identical on both OSes — `mkdir -p`, `\` line-continuations, quoting all behave the same.
     defaults:

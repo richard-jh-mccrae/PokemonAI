@@ -40,6 +40,8 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 
+from common.deck_odds import p_contains          # the Probability Leg's one implementation
+
 # ── the lazy field descriptor ──────────────────────────────────────────────────────────────────
 
 class lazy:
@@ -112,14 +114,22 @@ class CountTriple:
     - :attr:`ceiling` — provably AT MOST this many; the fail-OPEN leg. 0a's shipped sound type-set
       gate is exactly ``ceiling > 0`` (not-provably-empty), so the triple subsumes it rather than
       adding a third epistemic.
+    - :attr:`p_any` — the **Probability Leg** (ADR-0074, #175): P(at least one copy is still in the
+      deck), the honest middle the two boolean legs collapse. ≈0.06% wrong at 3 unseen copies where
+      ``possible`` is nearly free, ≈13% wrong at 1 where ``floor`` is still zero. Readable ONLY by a
+      consumer whose output is a compared scalar; a consumer whose output GATES must take a sound
+      leg (see **Leg Assignment** in ``src/common/CONTEXT.md``). There is no threshold anywhere — a
+      cut-off turns the estimate back into a boolean and re-imports the error it exists to price.
 
     Two regimes, ONE interface: before the first deck-revealing search the legs diverge; once that
-    search anchors the prizes (``prizes_hidden == 0``) all three collapse to the same integer. So no
-    consumer ever branches on "are we anchored?" — the reason this shape beats a bare expectation.
+    search anchors the prizes (``prizes_hidden == 0``) all three collapse to the same integer (and
+    ``p_any`` to exactly 1.0 or 0.0). So no consumer ever branches on "are we anchored?" — the
+    reason this shape beats a bare expectation.
     """
     floor: int = 0
     expected: float = 0.0
     ceiling: int = 0
+    p_any: float = 0.0
 
     @property
     def anchored(self) -> bool:
@@ -133,12 +143,13 @@ class CountTriple:
 
 
 def count_triple(unseen: int, prizes_hidden: int, deck_count: int) -> CountTriple:
-    """The three legs for ``unseen`` copies split over ``deck_count`` deck slots and
-    ``prizes_hidden`` face-down prizes. Pure; total; never raises.
+    """The legs for ``unseen`` copies split over ``deck_count`` deck slots and ``prizes_hidden``
+    face-down prizes. Pure; total; never raises.
 
     Anchored (``prizes_hidden <= 0``) every unseen copy is in the deck, so the legs collapse. The
     floor is the pigeonhole surplus (copies that CANNOT all be prized), matching the sound step
-    ``deck_odds.p_contains`` already takes at ``u > k``.
+    ``deck_odds.p_contains`` already takes at ``u > k`` — and ``p_any`` IS that function, so the
+    boolean legs and the probability can never disagree about the same ``(u, k, d)`` (ADR-0074).
     """
     try:
         u, k, d = max(0, int(unseen)), max(0, int(prizes_hidden)), max(0, int(deck_count))
@@ -148,10 +159,11 @@ def count_triple(unseen: int, prizes_hidden: int, deck_count: int) -> CountTripl
         return CountTriple()                       # no copies unseen, or no deck left to hold them
     if k == 0:
         n = min(u, d)                              # anchored: the split is resolved
-        return CountTriple(floor=n, expected=float(n), ceiling=n)
+        return CountTriple(floor=n, expected=float(n), ceiling=n, p_any=1.0)
     return CountTriple(floor=max(0, u - k),        # pigeonhole: this many cannot all be prized
                        expected=u * d / float(d + k),
-                       ceiling=min(u, d))
+                       ceiling=min(u, d),
+                       p_any=p_contains(u, k, d))
 
 
 # ── the Carried State channel ─────────────────────────────────────────────────────────────────
@@ -502,6 +514,24 @@ class MySide(_SideBase):
         return self._narrowed(frozenset(t for t, c in self.deck_energy_counts.items()
                                         if c.floor >= 1))
 
+    @lazy
+    def deck_energy_p(self) -> dict:
+        """``{EnergyType: P(my deck still holds >=1 of it)}`` — the **Probability Leg**'s side-level
+        projection (ADR-0074, #175), the third reading of the ONE :attr:`deck_energy_counts`
+        derivation alongside :attr:`deck_energy_types` (``ceiling > 0``) and
+        :attr:`deck_energy_types_provable` (``floor >= 1``). One derivation, so the boolean legs and
+        the probability cannot disagree about the same type.
+
+        Read ONLY by a consumer whose output is a compared SCALAR — the ``ko_for_prizes`` ladder's
+        weighted prize term, the attach/promote marginals. A consumer whose output GATES (the Win
+        Rung) must take a sound leg; see **Leg Assignment** in ``src/common/CONTEXT.md``. A type the
+        sound emptiness oracle has narrowed away reads **0.0** — a probability may sharpen the
+        uncertain middle, never resurrect a type proven gone.
+        """
+        allowed = self.deck_energy_types                    # already `_narrowed`, so sound-capped
+        return {t: (c.p_any if t in allowed else 0.0)
+                for t, c in self.deck_energy_counts.items()}
+
     def _narrowed(self, types: frozenset) -> frozenset:
         """``types`` intersected with what the caller's sound emptiness oracle still allows. Both
         inputs are sound, so intersecting them stays sound on EITHER leg, and a type is dropped the
@@ -660,14 +690,20 @@ class MySide(_SideBase):
         return self._memoized(key, _make)
 
     def readiness_p(self, body: BodyView | None, attack_id=None, *, enabler_budget=None,
-                    copies: int = 0, pool: int = 0, draws: int = 0) -> float:
+                    copies: int = 0, pool: int = 0, draws: int = 0, weighted: bool = True) -> float:
         """P(``body`` is ready to use the attack this turn) — the EV variant, and the ONLY place an
-        honest probability enters the affordability family (ADR-0067's split). Fails closed at 0.0."""
+        honest probability enters the affordability family (ADR-0067's split). Fails closed at 0.0.
+
+        ``weighted`` (default True, ADR-0074 decision 6) also prices the deck-fetch leg by
+        :attr:`deck_energy_p`. This is a RANKED consumer's reading by construction — it returns a
+        compared scalar, never a gate — so the Probability Leg belongs here. Pass ``weighted=False``
+        for the pre-#175 fail-open deck leg."""
         if body is None:
             return 0.0
         return self._combat.readiness_p(body.body, attack_id, budget=self.attach_budget(body),
                                         enabler_budget=enabler_budget, copies=copies,
-                                        pool=pool, draws=draws)
+                                        pool=pool, draws=draws,
+                                        p_by_type=self.deck_energy_p if weighted else None)
 
     def turns_to_afford(self, body: BodyView | None, *, attaches_per_turn: int = 1) -> int | None:
         """**The Two Clocks**, my half (ADR-0070 §6): the earliest future turn ``body``'s line is

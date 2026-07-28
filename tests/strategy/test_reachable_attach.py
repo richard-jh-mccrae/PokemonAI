@@ -18,7 +18,8 @@ Card facts VERIFIED at source (`data/EN_Card_Data.csv`, `src/common/card_functio
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
-from common.strategy.combat import DISCARD_SUPPLY, CombatMath
+from common.strategy.combat import (DISCARD_SUPPLY, AttachUnit, Budget, CombatMath,
+                                    _can_pay)
 
 # EnergyType codes (cg.api.EnergyType)
 COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
@@ -636,3 +637,138 @@ def test_an_untagged_special_energy_provides_nothing():
     c = _special_combat({IGNITION: ["discard_eot"]})
     body = {"id": MEGA_LUC, "energies": []}
     assert c.attach_budget(body, [IGNITION]).size == 0
+
+
+# ── the Probability Leg on the Budget (ADR-0074 / #175) ───────────────────────────────────────
+
+def test_realising_p_is_1_when_the_cost_is_paid_from_certain_units():
+    """The dependency, not the pantry: a cost paid by units that are already certain scores exactly
+    1.0 even when a deck-sourced unit sits in the same option on a depleted type."""
+    certain = AttachUnit(frozenset({1}))                      # in hand / attached — no source
+    thin = AttachUnit(frozenset({2}), source="deck")          # deck-sourced, type 2 nearly gone
+    b = Budget(options=((certain, thin),))
+    assert b.realising_p((1,), {2: 0.05}) == 1.0              # slot {1} taken by the certain unit
+
+
+def test_realising_p_prices_a_deck_sourced_unit_the_cost_actually_needs():
+    thin = AttachUnit(frozenset({2}), source="deck")
+    b = Budget(options=((thin,),))
+    assert round(b.realising_p((2,), {2: 0.87}), 10) == 0.87
+
+
+def test_realising_p_prices_distinct_deck_types_once_each():
+    """Two distinct deck-sourced colours compound; the SAME colour twice is priced once (P(>=1))."""
+    r = AttachUnit(frozenset({1}), source="deck")
+    p = AttachUnit(frozenset({2}), source="deck")
+    p2 = AttachUnit(frozenset({2}), source="deck")
+    assert round(Budget(options=((r, p),)).realising_p((1, 2), {1: 0.9, 2: 0.8}), 10) == 0.72
+    assert round(Budget(options=((p, p2),)).realising_p((2, 2), {2: 0.8}), 10) == 0.8
+
+
+def test_realising_p_is_zero_when_nothing_pays():
+    """A Budget that cannot pay scores 0.0 — never a probability for an unpayable cost."""
+    unit = AttachUnit(frozenset({1}), source="deck")
+    assert Budget(options=((unit,),)).realising_p((2,), {1: 1.0, 2: 1.0}) == 0.0
+    assert Budget(options=((unit,),)).realising_p((1, 1), {1: 1.0}) == 0.0   # too few units
+
+
+def test_realising_p_takes_the_best_assignment_not_the_first():
+    """Two ways to pay a colourless slot; the maximiser must choose the certain one."""
+    certain = AttachUnit(frozenset({1}))
+    thin = AttachUnit(frozenset({1}), source="deck")
+    b = Budget(options=((thin, certain),))                    # deck unit listed FIRST
+    assert b.realising_p((0,), {1: 0.1}) == 1.0
+
+
+def test_realising_p_agrees_with_can_pay_on_feasibility():
+    """`realising_p > 0` iff the boolean matcher would have paid — one matcher, two readings."""
+    units = (AttachUnit(frozenset({1}), source="deck"), AttachUnit(frozenset({2})))
+    b = Budget(options=(units,))
+    for slots in ((1,), (2,), (1, 2), (0, 0), (1, 1), (3,)):
+        payable = _can_pay(slots, units, b.caps)
+        assert (b.realising_p(slots, {1: 0.5, 2: 1.0}) > 0.0) is bool(payable)
+
+
+def test_realising_p_of_a_free_cost_is_certain():
+    assert Budget(options=((),)).realising_p((), {}) == 1.0
+
+
+# ── #175 acceptance: the three fixture families (ADR-0074 decision 7) ─────────────────────────
+# The TAIL fixture alone cannot distinguish decision 3 (per-assignment) from the per-Budget
+# weighting the grill rejected — both discount at low `unseen`. The COMPLEMENT is what falsifies
+# the wrong design, and the DEGENERACY fixture is what discharges the no-regression claim.
+
+def _thin_deck_p(p_thin):
+    """A probability map for a deck depleted to its last {P}: {R} plentiful, {P} nearly gone."""
+    return {FIRE: 0.999, PSYCHIC: p_thin}
+
+
+def test_tail_a_deck_sourced_ko_is_discounted_at_low_unseen():
+    """FAMILY 1 (the tail): the composed line's KO rides a {P} fetch with one copy unseen, so the
+    cost's realising probability tracks the depletion ramp instead of reading 1.0."""
+    deck_r = AttachUnit(frozenset({FIRE}), source="deck")
+    deck_p = AttachUnit(frozenset({PSYCHIC}), source="deck")
+    budget = Budget(options=((deck_r, deck_p),))
+    # Phantom Dive's {R}{P}: both slots ride the deck, so both colours are priced.
+    assert round(budget.realising_p((FIRE, PSYCHIC), _thin_deck_p(0.87)), 6) == round(
+        0.999 * 0.87, 6)
+
+
+def test_complement_the_same_frame_pays_from_hand_at_full_value():
+    """FAMILY 2 (the complement) — the load-bearing one. SAME depleted deck, but the cost is paid by
+    Energy already in hand/attached. Per-assignment pricing reads exactly 1.0; the rejected
+    per-Budget weighting would have discounted this line because a thin fetch sits in the option."""
+    in_hand_r = AttachUnit(frozenset({FIRE}))                 # certain — no source
+    in_hand_p = AttachUnit(frozenset({PSYCHIC}))              # certain
+    thin_fetch = AttachUnit(frozenset({PSYCHIC}), source="deck")
+    budget = Budget(options=((in_hand_r, in_hand_p, thin_fetch),))
+    assert budget.realising_p((FIRE, PSYCHIC), _thin_deck_p(0.05)) == 1.0
+
+
+def test_degeneracy_an_anchored_deck_is_byte_identical_to_the_unweighted_read():
+    """FAMILY 3 (degeneracy): once a search anchors the prizes every `p_any` is exactly 1.0, so the
+    weighted read equals the unweighted one. This — not the tail fixture — is what discharges
+    #175's "no regression to the composed-line KO frames #142 leaves green"."""
+    deck_r = AttachUnit(frozenset({FIRE}), source="deck")
+    deck_p = AttachUnit(frozenset({PSYCHIC}), source="deck")
+    budget = Budget(options=((deck_r, deck_p),))
+    anchored = {FIRE: 1.0, PSYCHIC: 1.0}
+    assert budget.realising_p((FIRE, PSYCHIC), anchored) == 1.0
+    # and a type the sound oracle proved gone is exactly 0 — never a small positive claim
+    assert budget.realising_p((FIRE, PSYCHIC), {FIRE: 1.0, PSYCHIC: 0.0}) == 0.0
+
+
+def test_weighting_reorders_a_shaky_two_prize_line_below_a_certain_one_prize_line():
+    """ADR-0074 decision 4: the point of weighting the PRIZE term. A capped positional score could
+    never express this, which is why the hard-rung invariant had to be restated in expectation."""
+    from common.strategy.planner import _composed_rank
+    shaky_two = (2.0, False, 0.40)                            # 2 prizes, 40% to land
+    certain_one = (1.0, False, 1.0)                           # 1 prize, certain
+    assert _composed_rank(certain_one) > _composed_rank(shaky_two)
+    # …and a merely-slightly-shaky 2-prize line still beats it (no threshold anywhere)
+    assert _composed_rank((2.0, False, 0.87)) > _composed_rank(certain_one)
+
+
+# ── #175 decision-6 extension: the POKEMON-presence leg is weighted too ───────────────────────
+
+def test_pokemon_presence_weight_composes_with_the_energy_weight():
+    """A composed line can whiff two independent ways — the evolution may be prized AND the Energy
+    fetch may whiff. `_composed_rank` sees one probability, so the two must be multiplied into it,
+    not chosen between."""
+    from common.strategy.planner import _composed_rank
+    energy_only = (2.0, False, 0.87)                          # Energy 87%, Pokemon certain
+    both = (2.0, False, 0.87 * 0.90)                          # …and the evolution 90% present
+    assert _composed_rank(both) < _composed_rank(energy_only)
+    # EV, not pessimism: 2 prizes at 0.783 is worth 1.57 and still BEATS a certain 1-prize line…
+    assert _composed_rank(both) > _composed_rank((1.0, False, 1.0))
+    # …it is only once the compounded odds drop below half that the certain single prize wins.
+    assert _composed_rank((2.0, False, 0.87 * 0.50)) < _composed_rank((1.0, False, 1.0))
+
+
+def test_no_threshold_survives_anywhere_in_the_ranked_ladder():
+    """The retired `deck_contains_probability(cid) <= 0.5` cut-off is the shape ADR-0074 decision 1
+    rejects. Ranking must be strictly monotone in the odds — no cliff at any value."""
+    from common.strategy.planner import _composed_rank
+    ladder = [_composed_rank((1.0, False, p)) for p in (0.05, 0.49, 0.51, 0.75, 0.99, 1.0)]
+    assert ladder == sorted(ladder)
+    assert len(set(ladder)) == len(ladder)                    # strictly increasing: no flat cliff

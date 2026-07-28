@@ -54,9 +54,16 @@ class AttachUnit:
     kinds compose: a per-CARD group whose cap is one-per-colour realises "up to 2 Basic Energy of
     DIFFERENT types" (Crispin), and ``DISCARD_SUPPLY``, whose cap is the visible pile, stops the
     turn's discard-drawing effects from collectively claiming Energy the pile does not hold.
+
+    ``source``: the ZONE this unit is drawn from, ``"deck"`` marking the only uncertain one — the
+    hidden zone whose fetch can whiff (ADR-0074, #175). Everything else is certain at decision time
+    (an Energy in hand, a discard-sourced attach over the public pile, an Energy already attached)
+    and carries ``None``, contributing probability 1.0. Purely descriptive: no affordability check
+    reads it, so the boolean Budget is unchanged by its presence.
     """
     types: frozenset = field(default_factory=frozenset)
     groups: tuple = ()
+    source: str | None = None
 
 
 @dataclass(frozen=True)
@@ -84,6 +91,34 @@ class Budget:
         magnitude. Counting raw units would over-report: two Wondrous Patches over a single {P} in
         the discard are two units but one attach."""
         return max((self._realisable(option) for option in self.options), default=0)
+
+    def realising_p(self, slots, p_by_type: dict, attached=()) -> float:
+        """P(this Budget actually pays ``slots``) — the **Probability Leg** applied to the assignment
+        the payment really uses (ADR-0074 decision 3, #175).
+
+        Prices the DEPENDENCY, not the pantry: over every feasible assignment of units to slots
+        (``attached`` Energy first, then one Budget option), the probability is the product of
+        ``p_by_type`` over the distinct **deck-sourced** types that assignment consumes; every
+        certain unit — attached, in hand, from the public discard — contributes 1.0. The maximum
+        over assignments is returned, so a KO payable entirely from hand scores exactly 1.0 even on
+        a deck depleted of the type some *other* card in the option could have fetched. 0.0 when no
+        assignment pays at all.
+
+        Distinct TYPES, not units: two deck units of one colour are priced at P(>=1 copy), not
+        P(>=1) squared. The per-card one-per-colour cap (Crispin's "2 Basic Energy of DIFFERENT
+        types") makes same-type double demand off a single card impossible; across two fetch cards
+        it is an over-claim, stated here rather than silently modelled.
+        """
+        if not slots:
+            return 1.0
+        best = 0.0
+        for option in self.options:
+            p = _pay_best_p(tuple(slots), tuple(attached) + tuple(option), self.caps, p_by_type)
+            if p > best:
+                best = p
+                if best >= 1.0:
+                    break                          # certain — no assignment can beat it
+        return best
 
     def _realisable(self, units) -> int:
         n = len(units)
@@ -128,6 +163,60 @@ class _Contribution:
     hand_yields: tuple
     group: object = None
     cap: dict = field(default_factory=dict)
+
+
+def _pay_best_p(slots, units, caps, p_by_type: dict) -> float:
+    """Max over feasible assignments of ``units`` to ``slots`` of the product of ``p_by_type`` over
+    the distinct DECK-sourced types the assignment consumes (ADR-0074). 0.0 when nothing pays.
+
+    Mirrors :func:`_can_pay`'s matcher exactly — same slot ordering, same per-group capacity
+    charging — so an assignment this scores is one ``_can_pay`` would have accepted, and a Budget
+    that cannot pay scores 0.0 rather than a probability. Bounded identically (<=4 slots, a handful
+    of units, a few colours), with the search pruned the moment a branch cannot beat the incumbent.
+    """
+    caps = caps or {}
+    if len(units) < len(slots):
+        return 0.0
+    ordered = sorted(slots, key=lambda s: s in (0, None))
+
+    def assign(index, used, spent, taken: frozenset, running: float) -> float:
+        if running <= 0.0:
+            return 0.0
+        if index == len(ordered):
+            return running
+        want = ordered[index]
+        best = 0.0
+        for j, unit in enumerate(units):
+            if used & (1 << j):
+                continue
+            if want not in (0, None):
+                if unit.types and want not in unit.types:
+                    continue
+                choices = (want,)
+            else:
+                choices = tuple(sorted(unit.types)) or (None,)
+            for chosen in choices:
+                charged, blocked = spent, False
+                for group in unit.groups:
+                    key = (group, chosen)
+                    if charged.get(key, 0) >= caps.get(group, {}).get(chosen, 0):
+                        blocked = True
+                        break
+                    charged = {**charged, key: charged.get(key, 0) + 1}
+                if blocked:
+                    continue
+                nxt, nrun = taken, running
+                if unit.source == "deck" and chosen is not None and chosen not in taken:
+                    nxt = taken | {chosen}         # each deck TYPE priced once, not per unit
+                    nrun = running * float(p_by_type.get(chosen, 0.0))
+                got = assign(index + 1, used | (1 << j), charged, nxt, nrun)
+                if got > best:
+                    best = got
+                    if best >= 1.0:
+                        return best                # certain — cannot be beaten
+        return best
+
+    return assign(0, 0, {}, frozenset(), 1.0)
 
 
 def _can_pay(slots, units, caps=None) -> bool:
@@ -786,7 +875,7 @@ class CombatMath:
         source = clause.get("source")
         pool = self._clause_pool(ctx.source_types(source), clause.get("energy_type"))
         groups = self._unit_groups(source, group)
-        return tuple(AttachUnit(pool, groups)
+        return tuple(AttachUnit(pool, groups, source)
                      for _ in range(int(clause.get("amount") or 0))) if pool else ()
 
     def _hand_yield_units(self, clause: dict, target_stat, ctx: _AttachCtx, group: int) -> tuple:
@@ -816,7 +905,7 @@ class CombatMath:
             amount = 1
         else:
             return ()
-        return tuple(AttachUnit(pool, self._unit_groups(source, group))
+        return tuple(AttachUnit(pool, self._unit_groups(source, group), source)
                      for _ in range(amount)) if pool else ()
 
     @staticmethod
@@ -889,6 +978,43 @@ class CombatMath:
                    for slots in (self._attack_slots(aid),) if slots
                    for option in budget.options)
 
+    def reachable_attach_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
+                           p_by_type=None) -> float:
+        """The EV reading of :meth:`reachable_attach`: P(``my_body`` can really pay an attack this
+        turn), taking the BEST attack by probability (ADR-0074 decision 6, #175).
+
+        Exactly 1.0 when a payable attack needs nothing from the deck, and 0.0 whenever the boolean
+        oracle says nothing is payable at all — the two readings agree on feasibility by
+        construction, because both walk the same locks, the same attacks and the same matcher. With
+        no probability map it degenerates to ``1.0 if reachable_attach(...) else 0.0``, so an
+        unweighted caller is unchanged.
+
+        For RANKED consumers only. A gating consumer takes :meth:`reachable_attach` — see **Leg
+        Assignment** in ``src/common/CONTEXT.md``."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        grant = self._grant(my_body) or {}
+        if grant.get("self_lock"):
+            return 0.0
+        if not p_by_type:
+            return 1.0 if self.reachable_attach(my_body, attack_id, budget=budget) else 0.0
+        attack_ids = (attack_id,) if attack_id is not None else tuple(stat.attacks or ())
+        attached = self._attached_units(my_body)
+        best = 0.0
+        for aid in attack_ids:
+            if aid == grant.get("same_lock"):
+                continue
+            slots = self._attack_slots(aid)
+            if not slots:
+                continue                       # unresolvable cost makes NO claim, either direction
+            p = budget.realising_p(slots, p_by_type, attached=attached)
+            if p > best:
+                best = p
+                if best >= 1.0:
+                    break
+        return best
+
     def attach_units(self, card_id, count: int = 1) -> tuple:
         """``count`` Budget units of the Energy card ``card_id`` — the PROVISION an attach delivers.
 
@@ -938,7 +1064,7 @@ class CombatMath:
 
     def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
                     enabler_budget: Budget | None = None,
-                    copies: int = 0, pool: int = 0, draws: int = 0) -> float:
+                    copies: int = 0, pool: int = 0, draws: int = 0, p_by_type=None) -> float:
         """P(``my_body`` is READY to use the attack this turn) — the EV variant of
         :meth:`reachable_attach`, and the probabilistic MIDDLE the interim promote/retreat
         ``fetch_enables_p`` never had (it shipped a bare 1.0/0.0).
@@ -947,13 +1073,22 @@ class CombatMath:
         deck enabler WOULD reach (``enabler_budget``, the same Budget computed as though that card
         were in hand), the exact hypergeometric that the turn's remaining dig finds one:
         ``draw_hit_probability(copies, pool, draws)``. Fail-CLOSED at 0.0 — no enabler modelled, or
-        an enabler that still would not pay, is worth nothing, never its bare draw odds."""
-        if self.reachable_attach(my_body, attack_id, budget=budget):
+        an enabler that still would not pay, is worth nothing, never its bare draw odds.
+
+        ``p_by_type`` (ADR-0074 decision 6, #175) additionally prices the DECK-fetch leg inside each
+        Budget: this method priced the *draw* honestly while leaving deck presence a fail-open
+        boolean, so a line resting on the last copy of a colour read the same as one resting on
+        three. Omitted, every reading is 1.0/0.0 and the result is byte-identical to before."""
+        now = self.reachable_attach_p(my_body, attack_id, budget=budget, p_by_type=p_by_type)
+        if now >= 1.0:
             return 1.0
-        if enabler_budget is None or not self.reachable_attach(my_body, attack_id,
-                                                               budget=enabler_budget):
-            return 0.0
-        return draw_hit_probability(copies, pool, draws)
+        if enabler_budget is None:
+            return now
+        via = self.reachable_attach_p(my_body, attack_id, budget=enabler_budget,
+                                      p_by_type=p_by_type)
+        if via <= 0.0:
+            return now                             # no enabler pays -> only what I already hold
+        return max(now, via * draw_hit_probability(copies, pool, draws))
 
     # --- reachable Incoming: the opponent's next DEVELOPMENT step (ADR-0064) ----------------
     def reachable_incoming(self, my_body: dict | None, opp_bodies, *, forward_ids=None,
@@ -1343,6 +1478,18 @@ class CombatMath:
             return 0
         return min(int(opp_discard_energy.get(recur.energyType, 0)), _RECUR_RELOAD_CAP)
 
+    def attack_realising_p(self, attack_id, *, budget, body=None, p_by_type=None) -> float:
+        """P(``budget`` plus ``body``'s attached Energy really pays ``attack_id``) — the Probability
+        Leg applied to ONE attack's typed cost (ADR-0074, #175). 1.0 with no probability map (an
+        unweighted caller), and 1.0 for a cost this oracle cannot resolve — an unknown cost makes no
+        claim, so it must not manufacture a discount either."""
+        if not p_by_type:
+            return 1.0
+        slots = self._attack_slots(attack_id)
+        if not slots:
+            return 1.0
+        return budget.realising_p(slots, p_by_type, attached=self._attached_units(body))
+
     # --- KO valuation (the shared band every hypothetical attacker is priced on) ------------
     def bench_snipe_bonus(self, opp_bench, attack_id) -> float:
         """Sub-prize tiebreak (ADR-0022 #14): an attack that ALSO snipes a benched Pokémon is
@@ -1365,7 +1512,7 @@ class CombatMath:
                                  opp_bench=(), bound: str = "exact", body: dict | None = None,
                                  extra_type=None, extra_units: int = 0,
                                  boost_amount: int = 0, boost_type=None,
-                                 promote_bench_names=None) -> float:
+                                 promote_bench_names=None, attack_p=None) -> float:
         """The best KO value ``attacker_id`` (carrying ``energy`` Energy) reaches against the
         opponent's Active — KO_SCORE + prize − efficiency + bench-snipe rider, the ONE band every
         hypothetical attacker is priced on (retreat/gust/promote/attach/boost lookaheads). 0 if no
@@ -1381,7 +1528,13 @@ class CombatMath:
         ``promote_bench_names`` names the bodies that WILL sit on my Bench after the presumed
         promote/retreat — a ``requiresBench`` attack whose partner is provably benched then reads
         its printed damage rather than the does-nothing floor. ``opp_bench`` is the Board's
-        ``((cardId, hp), …)`` snapshot behind the rider tiebreaks."""
+        ``((cardId, hp), …)`` snapshot behind the rider tiebreaks.
+
+        ``attack_p`` (ADR-0074, #175) weights each candidate attack by P(the Energy it needs is
+        really there) — ``attack_p(attack_id) -> float``. It is the RANKED-consumer hook and is
+        omitted by every lock: with it absent the method is byte-identical to before. Because the
+        weight is applied per attack BEFORE the max, the winner is the attack with the best
+        *expected* value, not the best value that might not happen."""
         stat = self._card_stat(attacker_id)
         opp_hp = (opp or {}).get("hp", 0)
         if not (stat and opp_hp):
@@ -1419,5 +1572,7 @@ class CombatMath:
             if dmg >= opp_hp:
                 val = (KO_SCORE + self.prize_value(opp) - _EFFICIENCY * cost
                        + self.bench_snipe_bonus(opp_bench, aid) + self.bench_spread_bonus(opp_bench, aid))
+                if attack_p is not None:
+                    val *= max(0.0, min(1.0, float(attack_p(aid))))   # ranked consumer: EV, not claim
                 best = max(best, val)
         return best

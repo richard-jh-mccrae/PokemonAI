@@ -176,3 +176,34 @@ re-plan-on-reveal, gated by ladder A/B. Deferred beyond v1: develop-order fold-i
 the value-model leaf-eval (ADR-0007), and all multi-turn planning (`a21472`, `b464`). **Built
 2026-07-01** (`/tdd`) — the whole ladder (0)-(4), layer-on-top and behaviour-neutral by default; see the
 Status block for the as-built record and what remains deferred.
+
+## Amendment (2026-07-27, grilled — issue #175, ADR-0074 decision 4): the hard-rung invariant holds in EXPECTATION
+
+Decision 3's invariant — *a positional score can never outrank a real prize* — assumed every prize
+claim is certain. Once the `ko_for_prizes` rung's prize term is weighted by P(the line's Energy is
+really there) ([ADR-0074](0074-a-probability-may-weight-a-ranked-value-never-gate-a-lock.md)), that
+assumption no longer holds: a fetch-dependent KO can whiff, and the ladder must be able to say so.
+
+**Restated: a positional score can never outrank a REALISABLE prize.** The comparison is EV-vs-EV.
+`_leaf_value`'s prize term becomes `KO_SCORE * prizes * p` for weighted consumers, so a 2-prize line
+that is 40 % to whiff now correctly loses to a certain 1-prize line — an ordering the old invariant
+could not express, because every positional term is capped below one prize *by construction* and so
+could never overturn a phantom.
+
+Three things bound the change:
+
+- **Only the weighted rungs move.** `_WEIGHTED_GOALS` is `ko_for_prizes` / `ko_key_threat`. Every
+  other rung — stabilize-then-KO, the develop rung — carries no probability, passes `p = 1.0`, and is
+  byte-identical.
+- **The Win Rung is untouched and now stated as untouchable.** It GATES rather than ranks, so
+  ADR-0074 decision 1 forbids it a probability; it already fails closed on deck fetches
+  (`_tutor_energy_certain`, `deck_definitely_has`).
+- **Degeneracy is the regression guarantee.** At `p = 1` — every anchored frame, and every line paid
+  from hand — the term is arithmetically identical to before.
+
+The companion change is decision 5: `_commit_best`'s constant `< KO_SCORE` floor cannot survive a
+weighted prize term (a 1-prize KO at `p = 0.87` scores 870 and would be vetoed), so for the weighted
+goals it becomes a **dominance test** against the tuned/greedy pick the planner would otherwise defer
+to. Measured commensurate before adoption over 72 firing frames
+(`tools/train/probes/rung_scale.py`): tuned top 20–210 vs pool values 1009–3035, and the new test
+vetoes nothing the constant did. Non-weighted goals keep the constant floor exactly.
