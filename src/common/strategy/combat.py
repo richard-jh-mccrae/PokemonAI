@@ -1512,7 +1512,8 @@ class CombatMath:
                                  opp_bench=(), bound: str = "exact", body: dict | None = None,
                                  extra_type=None, extra_units: int = 0,
                                  boost_amount: int = 0, boost_type=None,
-                                 promote_bench_names=None, attack_p=None) -> float:
+                                 promote_bench_names=None, attack_p=None,
+                                 budget: Budget | None = None) -> float:
         """The best KO value ``attacker_id`` (carrying ``energy`` Energy) reaches against the
         opponent's Active — KO_SCORE + prize − efficiency + bench-snipe rider, the ONE band every
         hypothetical attacker is priced on (retreat/gust/promote/attach/boost lookaheads). 0 if no
@@ -1534,7 +1535,20 @@ class CombatMath:
         really there) — ``attack_p(attack_id) -> float``. It is the RANKED-consumer hook and is
         omitted by every lock: with it absent the method is byte-identical to before. Because the
         weight is applied per attack BEFORE the max, the winner is the attack with the best
-        *expected* value, not the best value that might not happen."""
+        *expected* value, not the best value that might not happen.
+
+        ``budget`` (ADR-0075, #177) replaces the COUNT with the **Attach Budget** — the typed
+        capacity toward THIS attacker. Affordability then asks the one predicate
+        :meth:`reachable_attach` asks, ``_can_pay`` per slot over each option, so a planned attach
+        pays a specific-type slot only when the cards really produce that colour. ``energy`` and
+        ``extra_units``/``extra_type`` are IGNORED on this leg — the Budget is the whole truth — and
+        the count gate is subsumed (``_can_pay`` refuses when there are fewer units than slots).
+
+        **Refusal and ranking are separate** (ADR-0075 decision 7). ``budget`` decides WHETHER the
+        KO is real: it fails CLOSED, so an attack whose slots do not resolve is skipped and makes no
+        claim, where ``attack_type_payable`` would fail open. ``attack_p`` decides what a real KO is
+        WORTH. The order is refuse-then-weight — a refused attack never reaches the multiply, so an
+        unpayable attack and a certain-but-worthless one stay distinguishable."""
         stat = self._card_stat(attacker_id)
         opp_hp = (opp or {}).get("hp", 0)
         if not (stat and opp_hp):
@@ -1551,14 +1565,25 @@ class CombatMath:
                 ctx["atk_boosts"] = ((boost_amount, boost_type, False),)
             if promote_bench_names is not None:
                 ctx["atk_bench_names"] = tuple(promote_bench_names)
+        attached = self._attached_units(body) if budget is not None else ()
         best = 0.0
         for aid in (stat.attacks or ()):
             cost = self.attack_cost(aid)
-            if cost > energy:                                   # can't afford this attack right now
-                continue
-            if body is not None and not self.attack_type_payable(
-                    aid, body, extra_type=extra_type, extra_units=extra_units, wild_units=wild):
-                continue                                        # count met, a specific-type slot is not
+            if budget is not None:
+                # TYPED leg (ADR-0075): the Budget is authoritative and exclusive — `energy` and the
+                # wild extras are not consulted. Fail-CLOSED on an unresolvable cost, matching
+                # `reachable_attach`: no slots, no claim (the fail-open `attack_type_payable` would
+                # have counted it). Verified inert on real data — no card prints a 0-cost attack.
+                slots = self._attack_slots(aid)
+                if not slots or not any(_can_pay(slots, attached + tuple(option), budget.caps)
+                                        for option in budget.options):
+                    continue
+            else:
+                if cost > energy:                               # can't afford this attack right now
+                    continue
+                if body is not None and not self.attack_type_payable(
+                        aid, body, extra_type=extra_type, extra_units=extra_units, wild_units=wild):
+                    continue                                    # count met, a specific-type slot is not
             eff_bound = bound
             if bound == "min" and promote_bench_names is not None:
                 ast = self.attack_stat(aid)                     # a requiresBench-only conditional whose
