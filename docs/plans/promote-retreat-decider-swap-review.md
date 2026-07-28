@@ -238,3 +238,73 @@ with the attack option, so it is not 1c's to change unilaterally. ADR-0073 §4's
 * **Finding B2's stay-to-develop term is NOT needed.** ADR-0073 decision 2 said to measure before
   authoring it. Measured: of the three named residual regressions, 83007714-8 now converts, and no
   frame in the sweep regresses in the B2 shape. No term authored.
+
+## The Discrimination Gate, run late (2026-07-28) — two frames, both RULED
+
+Owed "before merge, not before the sitting" per the section above, and not actually run before this
+swap merged. Diagnosed while investigating #178's follow-up (the pinned `data/leaf_lab/baseline.json`
+showed 2 unruled `OK → MISS` on `main`, both bisected to this swap's commit `e9853d8`). Neither
+frame's `correct_value` moved — a sibling option gained instead, which is exactly ADR-0072 finding 2's
+continuation-collateral shape: `_engine_leaf_value` re-runs `decide` for the greedy continuation, so a
+changed promote/retreat policy moves the leaf behind a first action the swap never touched.
+
+### `85163634|1|decision|41` (mega_starmie) — REGRESSION, ruled by the user
+
+Turn 6: Active Mega Starmie ex full HP with 3 {W} attached, opponent's only-energised body about to
+be KO'd. Human ruling: play Lillie's Determination (`[0]`), dig for energy for the second bench
+Starmie — *"we are going to KO the active, no other opp pokemon has energy, so why waste the crushing
+hammer?"* Wasting the Hammer here does nothing, since the KO sends the opponent's lone energy to
+discard for free regardless.
+
+Before this swap, `[0]` and Retreat (`[6]`) tied at 2207.5 in a 5-way tie with 3 other options. After,
+`[6]` alone rose to 2231.8 and broke the tie.
+
+Traced: **both lines reach the identical end-of-turn board** — 2 prizes banked, Active unchanged,
+hand emptied to 0 either way. The only difference is which benched body ends up holding one spare
+Energy: Cinderace (`[0]`'s line) vs. the second Mega Starmie (`[6]`'s line). `readiness()` rates an
+Energy on the second Mega above one on Cinderace, worth +24.3 — a real per-body preference, but here
+it is retreating the fully-loaded live Active in order to move one spare Energy onto a *bench* copy of
+the same attacker, immediately after the turn's own KO has already happened.
+
+**Ruled (user, 2026-07-28): retreat is not a consideration on this frame at all and should score
+NEGATIVE, not top.** `[0]` (Lillie's, then attack) is correct; recorded as a **REGRESSION**, held
+against this swap — not conformed, not re-baselined away.
+
+**A second, sharper finding the frame surfaced.** The 5-way tie it broke ({`[0]` `[1]` `[2]` `[3]`
+`[5]`}) is not merely a scoring tie — every one of those five options reaches a **byte-identical**
+end-of-turn board (same prizes, same Active, same empty hand). The frame's actual content — did you
+burn your only disruption Item, or dig for Energy you needed — leaves **no trace on the board the leaf
+scores**, because the greedy continuation always ends in Nebula Beam and empties the hand regardless
+of what got played first. `leaf_hand_value` (WP-N5b, armed OFF) would not fix this either: both
+branches end at 0 cards in hand, so a hand-quality term has nothing left to distinguish. This is a
+leaf-discrimination gap that predates this swap and that the tie was hiding — filed for #145/#165 to
+pick up, not fixed here.
+
+### `86091435|0|decision|13` (dragapult_ex) — commented on #189, not this issue's fix
+
+Turn 2 setup, no KO reachable by either side. Human ruling: Retreat (`[3]`) — *"wasted Boss's Orders
+here. doesnt really make a difference."* Before this swap `[3]` was top at 62.5 (tied with the
+correct-flagged decision); after, three siblings gained +2.70 to 64.75 and outscored it by 2.25.
+
+The DECISION is already fixed on `main`, independent of this leaf finding — a separate rung
+(`stall-gust-over-dev-when-starved` → `stall_swap_pointless`, ADR-0066) now stands down on this exact
+board (its own rationale names `ep86091435 f13` verbatim), so the agent no longer plays the gust the
+correction flagged. Full detail commented on **#189** (the gust-marginal repoint issue this frame
+touches), since that repoint does not reach this frame's KO-less gust path and should not be read as
+covering it.
+
+The residual leaf-level gap (2.25 points on a board where nothing is powered) is left **unruled** —
+plausibly below this leaf's resolution rather than a real regression, and not the shape #165's
+Maneuver layer targets either. Flagged, not fixed.
+
+### Correction to ADR-0072 amendment C's "9 frames" claim
+
+Amendment C states widening `_engine_leaf_value`'s dominant-win short-circuit from `coins`-gated to
+the full `stream` bit costs "9 corpus frames `OK → MISS`" and cites that as the reason not to do it in
+PR #184. **Re-measured 2026-07-28: it costs 0, not 7 of those 9** (the other 2 are the pair above,
+real). The 7 were an artifact of using `_rng_probe`'s `prize=True` (board) flavour on what the
+short-circuit actually asks — a VERDICT question ("did this line win?"). Under `prize=False` (the
+flavour `_engine_confirms_win` already uses, per ADR-0050: a win's verdict is invariant to which prize
+is taken) all 7 are unchanged, because a winning line always takes its prizes and that reveal alone
+was tripping the wider bit on every one of them. ADR-0072 needs a correcting note; the "widen the
+short-circuit" item can be reopened as free rather than a 9-frame cost.
