@@ -442,12 +442,22 @@ by identity, so the order decides nothing) and neither do the opponent's reveals
   was failing through.
 
 **What this deliberately does NOT change.** `_engine_leaf_value`'s dominant-win short-circuit stays
-gated on **coins** alone. Widening it to the full rule takes the Discrimination Gate from **2 unruled
-`OK → MISS` to 9** — seven frames this change would have owed a ruling for. That is a leaf change
-owing this ADR's own user ruling on its own merits, not something to smuggle in behind a flake fix, so
-the sim reports both bits and each consumer reads the one it has earned. The unwidened case is exactly
-the `_commit_best` KO-ranker treating a shuffle-blessed win as dominant; it is on the record here as
-unruled.
+gated on **coins** alone, and `stream` is left available on the sim tuple for a caller that needs the
+wider check. The sim reports both bits and each consumer reads the one it has earned.
+
+⚠️ **Correction (2026-07-28): the "9 frames" cost below was wrong — re-measure before reopening
+this.** This paragraph originally claimed widening the short-circuit to the full `stream` bit takes
+the Discrimination Gate from 2 unruled `OK → MISS` to 9, and used that 7-frame cost as the reason not
+to widen it here. Re-measured: it costs **0**, not 7. The 7 were an artefact of measuring with
+`_rng_probe`'s `prize=True` (board) flavour on what the short-circuit actually asks — a VERDICT
+question ("did this line win?"). A winning line always takes its prizes, so that flavour marks every
+simmed win as shuffle-riding and demotes all of them regardless of merit. Under `prize=False` — the
+flavour `_engine_confirms_win` already uses, per ADR-0050's own rule that a win's verdict is invariant
+to which prize is taken — all 7 are unchanged from the shipped leaf. Widening the short-circuit is
+therefore free of that cost; the two REAL frames below are unrelated to it (both are #141 promote/
+retreat continuation-collateral, ruled in `docs/plans/promote-retreat-decider-swap-review.md`). The
+unwidened case is exactly the `_commit_best` KO-ranker treating a shuffle-blessed win as dominant;
+whether to widen it is still unruled, but no longer for the reason stated here.
 
 **A separate finding the control run turned up, also unruled.** Untouched `origin/main` (`ce32206`)
 already fails this gate: **2 `OK → MISS`** (`85163634|1|decision|41` rank 1→2,
