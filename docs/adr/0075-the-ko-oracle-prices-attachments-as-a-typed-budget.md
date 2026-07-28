@@ -1,13 +1,18 @@
-# ADR-0074: The KO oracle prices attachments as a typed Budget, once, for every line
+# ADR-0075: The KO oracle prices attachments as a typed Budget, once, for every line
 
-**Status.** Accepted (grilled 2026-07-27, `/grill-with-docs` on issue #177 — four locked decisions;
-the grill continues on instruments and sequencing, and this doc is amended as they land).
-Build: #177. Extends **ADR-0067** (the Attach Budget's epistemic split) into the lethal solver;
+**Status.** Accepted (grilled 2026-07-27, `/grill-with-docs` on issue #177 — seven locked
+decisions). Build: #177. Extends **ADR-0067** (the Attach Budget's epistemic split) into the lethal
+solver; extends and **amends ADR-0074 decision 3** (the Probability Leg, #175 — see decision 7);
 constrains **ADR-0030 / ADR-0037** (the eager lethal solver) and **ADR-0052** (the one KO band);
 gated by **ADR-0072** (mid-build swaps are gated by deterministic instruments).
 
+**Renumbered 0074 → 0075 on rebase (2026-07-27).** #175's *A probability may WEIGHT a ranked value,
+never GATE a lock* merged to `main` first and keeps 0074, per the README's first-merged rule. Both
+were grilled the same day off the same #142 split; the collision was foreseen during this grill and
+resolved mechanically.
+
 **Context issues:** #177 (this build), #142 (Phase 1d — folded the composed pair and extracted
-`attach_budget_for_card`), #175 (the depletion tail — re-prices the Budget's deck leg), #136
+`attach_budget_for_card`), #175 (the depletion tail — **merged**, ADR-0074), #136
 (the Value System tracker whose directive 6 ADR-0072 rewrote).
 
 ## Context
@@ -16,15 +21,16 @@ gated by **ADR-0072** (mid-build swaps are gated by deterministic instruments).
 takes a **count** of Energy. Everything above it therefore had to answer "how much can I attach
 this turn?" as an integer, and two different answers grew:
 
-- `_play_accel_extra` (`planner.py:2556`): a min-bound flat `+1`, feeding **seven** call sites via
+- `_play_accel_extra` (`planner.py:2735`): a min-bound flat `+1`, feeding **five** call sites via
   `accel_free` / `accel_sup`. It asserts one wild unit and cannot express a target restriction.
-- `_composed_budget_units` (`planner.py:2531`, #142): builds the real **Attach Budget** for the
+- `_composed_budget_units` (`planner.py:2684`, #142): builds the real **Attach Budget** for the
   candidate attacker, then collapses it to `int(Budget.size)` so it can be added to that same count.
+  It serves the two composed builders (`_item_evolve_ko_candidate`, `_rare_candy_ko_candidate`).
 
 Both lose the same thing at the same seam: the Budget knows which *colours* it can realise, and
 `energy: int` cannot carry that. Downstream, `attack_type_payable` treats every unit beyond the
 body's attached Energy as **wild** — *"each able to cover any one specific slot (fail-open)"*
-(`combat.py:490`).
+(`combat.py:573`).
 
 While the accel term was capped at 1 the fail-open cost at most one unit. #177 removes that cap —
 which is one of the three things the fold is *for* (Rosa's Encouragement attaches up to 2 from the
@@ -33,10 +39,28 @@ holding no `{P}` at all. **The fix, done as a count, manufactures the phantom KO
 remove** — and a phantom KO is the catastrophic error in this code (ADR-0030's eager solver commits
 the turn around it).
 
-The machinery to do it properly already shipped. `CombatMath.reachable_attach` (`combat.py:864`)
+The machinery to do it properly already shipped. `CombatMath.reachable_attach` (`combat.py:953`)
 answers "can this body pay this attack this turn under this Budget" per-slot and per-option via
 `_can_pay(slots, attached + option, budget.caps)`, honouring ADR-0067's capacity groups. Nothing
 needed inventing; the lethal solver simply was not asking it.
+
+### What #175 changed under this grill, and what it did not
+
+ADR-0074 merged mid-grill. Its decision 3 states that *"`best_affordable_ko_value` gains a
+typed-`Budget` entry point beside the int one"* and that the fold *"retires an independent latent
+weakness: `_composed_budget_units` ... collapses a typed Budget to `Budget.size`."* **Neither
+description matches the shipped code**, and this ADR records the gap rather than inheriting it:
+
+- What shipped is `attack_p=None` (`combat.py:1515`) — a **probability callable**, not a typed
+  affordability entry point. The affordability test is unchanged: `cost > energy` plus
+  `attack_type_payable(..., wild_units=wild)`.
+- `_composed_budget_units` is **still present** (`planner.py:2684`, still `int(budget.size)`).
+  #175 added `_composed_budget` (the Budget object) and `_composed_attack_p` *beside* it.
+
+The effect this ADR wants nevertheless half-exists, by a side door: `Budget.realising_p` returns
+**0.0 when no assignment pays at all** (`combat.py:104`), and `val *= attack_p(aid)` then zeroes the
+KO. So typed refusal does occur — **for the two composed call sites only, and only while
+`deck_energy_p` is non-empty**. Decisions 6 and 7 close both halves of that gap.
 
 ## Decision 1 — the KO oracle takes a Budget, and affordability is typed
 
@@ -131,9 +155,8 @@ for a bench-restricted clause.
 | `_tutor_evolve_ko_candidate` | the fetched evolution | the iterated body | per body |
 | `_supporter_ko_candidate` | delegates to `_retreat_ko_candidate` | — | True |
 
-`_tutor_evolve_ko_candidate` builds `bodies = active + bench` (`planner.py:2802`) and **loses which
-is which**; it takes the `[(p, False)] + [(p, True)]` tagging `_item_evolve_ko_candidate` already
-uses (`planner.py:2698`).
+`_tutor_evolve_ko_candidate` builds `bodies = active + bench` and **loses which is which**; it takes
+the `[(p, False)] + [(p, True)]` tagging `_item_evolve_ko_candidate` already uses.
 
 `benched=True` for the retreat lines is settled by the clause data, not by judgement:
 `card_effects.json` models exactly three `accel` clauses — `any_pokemon/deck` (Crispin),
@@ -145,8 +168,82 @@ names a real sequence: attach to the benched body, then retreat, then attack.
 
 The Budget already contains the turn's manual attach (`attach_budget`'s `energy_attached` leg), so
 the fold **replaces** the caller's `extra + accel_*` term rather than stacking on it. #142's
-precedent is `planner.py:2655`, which passes the Budget's units with no `extra`. Adding them would
-double-count the manual attach.
+precedent is `_item_evolve_ko_candidate`, which passes the Budget's units with no `extra`. Adding
+them would double-count the manual attach.
+
+## Decision 5 — the Decision Gate probe is lane-precise on the emitted KO lines
+
+ADR-0072 decision 2 requires **both** deterministic gates, and #177's acceptance sketch names only
+one. All three instruments apply, since #177 is a mid-build swap (a Phase 1d spin-off):
+
+- **Decision Gate** — a new `tools/train/probes/lethal_ko_decider_sweep.py` on
+  `attach_decider_sweep.py`'s pattern: two fresh Pilots per frame, OLD vs NEW, comparing the
+  `TurnLine`s out of `_ko_for_prizes_lines` as `(goal, resolved first-step slot, prizes)`.
+  Slot-resolved `(area, position)`, **never** the raw option index — that is
+  `attach_decider_sweep.py`'s recorded lesson (frames `82523811-59`, `82750161-59`). Zero unruled
+  `REGRESSION` frames.
+- **Discrimination Gate** — `leaf_lab.py capture|diff` against the pinned
+  `data/leaf_lab/baseline.json`, verdict via `tools/train/gates.py`. Zero unruled `OK → MISS` flips.
+- **Tripwire** — `gauntlet_swap_ab.py --stage mid-build` (`paired_ab.py:mid_build_verdict`):
+  `crashes == 0 AND ci_lo >= -0.05`, graded on the post-deletion code.
+
+**Lane-precise, not whole-decision.** ADR-0072's finding 2 is the precedent and it cuts against the
+obvious reading: `evolve_decider_sweep.py` *was* lane-precise, *was* structurally blind to
+continuation collateral, and *"scored 0 REGRESSION honestly."* The remedy ADR-0072 chose was not to
+widen the sweep — it was to add the corpus-wide second gate. The two gates are designed to have
+complementary blindness, and duplicating one inside the other buys nothing.
+
+The decisive case is the one only a lane-precise sweep sees. This fold is strictly narrowing, so it
+removes KO claims that were **outranked anyway**: the line vanishes, the final pick is identical,
+and a whole-decision comparison reports SAME. That population is exactly where the silent
+target-body bugs live — the `benched` flags above and the `supporter_spent` quota — so those flips
+must reach the ruling table.
+
+**Consequence for the build shape.** Both code paths must be alive at once, so `_play_accel_extra`
+and `_composed_budget_units` survive behind a flag until a separate deletion commit — ADR-0069 §8's
+fold → sweep → delete shape, and the reason `attach_decider_sweep.py` records that *"zeroing rather
+than deleting is what lets this run BEFORE the deletion commit."*
+
+## Decision 6 — the five lines join the Probability Leg
+
+ADR-0074 decision 1 rules that a consumer whose output is a **compared scalar** weights by the
+probability. The five `_play_accel_extra` builders emit `TurnLine`s into the **same**
+`ko_for_prizes` ladder as the two composed builders — but they pass no `attack_p`, so #175 left one
+ladder ranking five unweighted lines against two weighted ones. A 2-prize retreat-KO scores full
+`KO_SCORE` while a composed 2-prize line discounted to `0.87 ×` loses to it for no reason but wiring.
+
+`_composed_attack_p` (`planner.py:2718`) generalises to serve all seven, built from the same
+per-attacker Budget decision 4 already requires. This is not scope creep onto #177 — it is the
+ranking inconsistency #175 created, and #177 is the only issue touching these five call sites.
+
+The Win Rung still never calls it (ADR-0074 decision 1: a consumer that GATES may not read a
+probability), and `_tutor_energy_certain` / `deck_definitely_has` remain its sound legs.
+
+## Decision 7 — refusal and ranking are separate concerns, on separate parameters
+
+`best_affordable_ko_value` carries **both**: `budget=` decides *whether* the KO is real (decisions 1
+and 2 — `_can_pay` per option, unconditional, fail-CLOSED), and `attack_p=` decides *what it is
+worth* (ADR-0074, weighted, ranked consumers only). An attack refused by `budget=` is **skipped**,
+never merely multiplied by zero.
+
+**This amends ADR-0074 decision 3.** The "typed-`Budget` entry point beside the int one" that
+decision describes is what this ADR actually builds; what #175 shipped under that sentence is the
+probability hook. The two documents are reconciled here rather than left to disagree.
+
+**Why the emergent refusal is not enough.** Under #175 alone, a KO claim is refused only because a
+**ranking** input happened to be populated: `attack_realising_p` returns `1.0` when `p_by_type` is
+falsy (`combat.py:1484`) and `_composed_attack_p` returns `None` in the same case, so both fall back
+to the wild fail-open path. That inverts ADR-0074's own Leg Assignment — whether an output *gates*
+is supposed to select the leg, not whether an unrelated map is non-empty. A phantom KO would
+reappear in precisely the states where the probability machinery goes quiet, which is the hardest
+failure mode to find.
+
+Separating them is also what makes the contract testable. Under one merged mechanism, "unpayable"
+and "payable but 13 % likely" are both approximately `0.0` and no test can pin which property it is
+asserting. Under two, each gets its own assertion.
+
+**Accepted cost:** the two mechanisms must not double-count. The order is refuse-then-weight — an
+attack that fails `_can_pay` never reaches the `attack_p` multiplication.
 
 ## Consequences
 
@@ -158,12 +255,15 @@ double-count the manual attach.
   the fold, not before.
 - `energy` and `budget` are mutually exclusive on `best_affordable_ko_value`. A required positional
   parameter that is ignored on one leg is a smell; the signature is settled in #177's spec.
-- **#175 is reframed.** Its acceptance sketch names "the composed-line accel priced by
-  `readiness_p`", and that accel is `_composed_budget_units`, which decision 4 deletes. The
-  `readiness_p` ruling lands on the **Budget's deck leg** (`provable=` / `deck_energy_types`, inside
-  `attach_budget_for_card`) instead — which is where #175's own scope item 4 already points ("*the
-  ruling should be made once for the class*"). Both issues now edit `attach_budget_for_card`:
-  #177 adds `supporter_spent`, #175 re-prices the deck leg.
+- **The feared #175 collision did not materialise in code, only in ADR numbering.** #175 left
+  `attach_budget_for_card` untouched (`state_model.py:579` still carries only `manual_spent` /
+  `provable`), so decision 3's `supporter_spent` lands conflict-free. #175's title named the wrong
+  instrument (`readiness_p`); its own grill corrected it to `p_contains` / `CountTriple.p_any`, and
+  the leg it re-prices is `deck_energy_p`, not the one this ADR touches.
 - ADR-0067's epistemic split is unchanged. This ADR changes *what the KO oracle is told*, not what
   the Budget believes: yield still fails closed, deck presence still fails open, and the depletion
-  tail is still #175's.
+  ramp stays priced by ADR-0074's Probability Leg.
+- Two adapters die and one generalises: `_play_accel_extra` and `_composed_budget_units` are
+  deleted; `_composed_attack_p` widens from two call sites to seven. `_composed_budget` survives as
+  the shared Budget accessor both mechanisms read, so reach, refusal and probability can never be
+  computed off different budgets.
