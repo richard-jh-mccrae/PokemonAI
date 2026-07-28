@@ -211,14 +211,23 @@ prescribes the fix — *"run the gate on `main` before the next swap, not after 
 Amendment D stands: it introduces no new gate regression. The process error was running the gate
 after the arming decision rather than before it.
 
-**Superseded by main during the rebase (2026-07-27) — the two frames are now RULED.** This amendment
-originally reported both frames as still unowned. That is no longer true: `main` has since held both
-out explicitly — `86091435|0|decision|13` to **#189** (gusting, `1120eaa`) and
-`85163634|1|decision|41` to **#143** (the targeting equation, `bc069bd`), alongside `6faee00`
+**Superseded by main during the rebase (2026-07-27) — the two frames are now RULED, and the gate
+PASSES.** This amendment originally reported both frames as still unowned. That is no longer true:
+`main` has since held both out explicitly — `86091435|0|decision|13` to **#189** (gusting, `1120eaa`)
+and `85163634|1|decision|41` to **#143** (the targeting equation, `bc069bd`), alongside `6faee00`
 ruling the two #141 reds. So the debt this amendment flagged as unowned was picked up independently
 while this branch was open, and the gate's `HELD OUT` mechanism (ADR-0072 decision 4) now carries
 them. Recorded rather than silently deleted, because the sequencing is the point: the finding was
 real when written and was resolved elsewhere, not by this branch.
+
+Re-run after the rebase, the gate now returns **`GATE: PASS` — 0 unruled `OK → MISS`, gated on 264
+frames, 3 held out** (`85163634|1|decision|41` → #143, `86091435|0|decision|13` → #189,
+`85164605|1|decision|41` → #145). So this branch's ADR-0072 standing is no longer "fails, but
+identically to main" — **both mandatory merit gates are now genuinely satisfied**: the Discrimination
+Gate passes outright, and the Decision Gate is the recorded N/A above plus `threat_sweep.py --slots`
+at 0 decision flips for both flags. The Tripwire (Amendment D) was already clear. The process
+criticism in this amendment stands regardless — the gate was still run after the arming decision
+rather than before it, and that ordering is what ADR-0072 decision 5 asks for.
 
 **Decision Gate: judged N/A, recorded here rather than left silent.** ADR-0072 names "the phase's
 `tools/train/probes/*_decider_sweep.py`", and no such sweep exists for #186 — correctly, because
