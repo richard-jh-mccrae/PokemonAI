@@ -267,3 +267,71 @@ attack that fails `_can_pay` never reaches the `attack_p` multiplication.
   deleted; `_composed_attack_p` widens from two call sites to seven. `_composed_budget` survives as
   the shared Budget accessor both mechanisms read, so reach, refusal and probability can never be
   computed off different budgets.
+
+## Build record (2026-07-28, #177)
+
+Both deterministic gates ADR-0072 decision 2 mandates were run before the deletion commit, and
+**both PASS**.
+
+**Decision Gate** — `tools/train/probes/lethal_ko_decider_sweep.py`, lane-precise on the emitted
+`ko_for_prizes` lines, OLD (`_play_accel_extra` + `_composed_budget_units`) vs NEW (typed Budget):
+
+```
+frames with a KO line: 32   agree: 31   flips: 1   errors: 0
+FIX 0 · REGRESSION 0 · NARROWED 0 · DIVERGENT 1 · unlabelled 0
+DECISION GATE: PASS  (zero unruled REGRESSION)
+```
+
+The single flip is `82749168-29` (mega_starmie, turn 6) and it is the fold working: NEW emits a
+2-prize line OLD structurally cannot see. Salvatore evolves a benched Staryu into Mega Starmie ex
+(Salvatore's printed text permits evolving a body put into play this turn) → Ignition Energy
+attaches, providing `{C}{C}{C}` on an Evolution → free retreat (Cinderace, retreat 0) → Nebula Beam
+`{C}{C}{C}` 210 ≥ Terapagos ex's 130 HP. OLD cannot reach it because `accel_sup` zeroes when
+Salvatore is itself the enabling Supporter, leaving one wild unit — enough for Jetting Blow's 120,
+ten short of the 130. **This is the "Hand Special Energy becomes visible" benefit #177 named**, and
+it is target-conditional in a way a flat `+1` cannot express: Ignition's 3-unit provision applies
+only to an Evolution, resolved against the *evolved* card's stats.
+
+The frame's `correct` label was **re-ruled** with the user during this sitting (`correct=[2]` →
+`[10]`, the Salvatore line) — the original tagging fixed the wasted Crushing Hammer but forgoed the
+knockout. The turn is aggressive-correct because the hand holds a SECOND Ignition Energy plus two
+Basic `{W}`, so spending the first (which discards at end of turn regardless) does not cost the
+follow-up.
+
+**Discrimination Gate** — `leaf_lab.py diff` against the pinned `data/leaf_lab/baseline.json`, with
+the swap ON:
+
+```
+267 frames compared · gated on 264 · held out 3
+GATE: PASS  (zero unruled OK->MISS; 0 unruled, 3 ruled)
+```
+
+The fold introduces **zero** new `OK → MISS` flips. The three held out are `main`'s own
+pre-existing reds, ruled during this sitting and encoded in the Held-out Ledger rather than
+absorbed: `85163634|1|decision|41` → **#143**, `86091435|0|decision|13` → **#189**, plus the
+inherited `85164605|1|decision|41` → #145. That run also discharged the control measurement commit
+`a127e81` asked for — *"run the gate on `main` BEFORE the next swap, not after it"* — confirming
+both reds predate #177 and are deterministic (three independent process runs each), so they are not
+#160's RNG.
+
+**Full suite:** 3925 passed, 2 skipped, 4 xfailed.
+
+**Still owed:** the mid-build **Tripwire** (`gauntlet_swap_ab.py --stage mid-build`,
+`crashes == 0 AND ci_lo >= -0.05`). ADR-0072 decision 1 grades it on the post-deletion code, so it
+runs against this commit, not before it.
+
+### What the deletion removed
+
+`_play_accel_extra` and `_composed_budget_units` are gone, and with them two flags that had nothing
+left to gate. `play_accel_lethal` had exactly one non-test consumer — `_play_accel_extra` itself.
+`ko_budget_pricing` existed only so the sweep could compare both arms before this commit; with the
+OLD path deleted there is no alternative branch, and a kill-switch that cannot switch is a lie, so
+it is removed rather than armed-ON. That is the one place this build departs from the `evolve_value`
+/ `attach_value` precedent, where OFF survives as documented *degraded mode* — here OFF would be
+unreachable code.
+
+`tests/strategy/test_play_accel_lethal.py` is deleted (it tests the retired `+1` semantics, and its
+end-to-end cases build a bare `Board` with no `StateModel`, so they cannot be ported).
+`tests/strategy/test_ko_budget_pricing.py` replaces it at the oracle seam, pinning typed refusal,
+count subsumption, fail-closed-on-unresolvable-slots, and the refuse-then-weight separation.
+`lethal_ko_decider_sweep.py` is deleted with its OLD arm — its record is this section.

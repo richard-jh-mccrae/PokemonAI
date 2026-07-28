@@ -1112,7 +1112,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  evolving_wincon_priority=True, matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
-                 enabler_item_composer=False, play_accel_lethal=False, ko_budget_pricing=False,
+                 enabler_item_composer=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
                  promote_retreat_value=True, doom_matched_relax=False):
@@ -1228,25 +1228,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # evolution of an in-play, this-turn-evolvable body →
                                                         # evolve → attach → KO, preferring the cheaper Item
                                                         # enabler over the scarce Supporter tutor
-        self.play_accel_lethal = play_accel_lethal      # kill-switch (armed-ON): count a PLAY-based energy
-                                                        # accelerator (a Trainer tagged energy_accel that
-                                                        # attaches a Basic on play — Crispin) as +1 attach in
-                                                        # the ko_for_prizes budget, ON TOP of the manual
-                                                        # attach. Min-bound: only when the Trainer is playable
-                                                        # NOW (Supporter needs a free slot) and a Basic Energy
-                                                        # is still fetchable. An ATTACK-based accel (a Pokemon)
-                                                        # is NEVER counted (using it IS the attack)
-        self.ko_budget_pricing = ko_budget_pricing      # ADR-0075 kill-switch (#177, DEFAULT OFF until the
-                                                        # Decision Gate sitting): price EVERY ko_for_prizes KO
-                                                        # line by the typed Attach Budget built for its OWN
-                                                        # attacker, instead of a wild count. ON, affordability
-                                                        # is `_can_pay` per slot over each Budget option — the
-                                                        # predicate `reachable_attach` already asks — so a
-                                                        # planned attach pays a specific-type slot only when
-                                                        # the cards really produce that colour, and the five
-                                                        # `_play_accel_extra` lines join the Probability Leg.
-                                                        # OFF is the pre-#177 path, kept ALIVE so the sweep can
-                                                        # compare both before the deletion commit (ADR-0069 §8)
         self.discard_keep_value = discard_keep_value    # ADR-0065 seam-D kill-switch (default OFF): the
                                                         # card-worth equation DECIDES a forced discard in
                                                         # place of the `_DISCARD` ladder. OFF = the ladder

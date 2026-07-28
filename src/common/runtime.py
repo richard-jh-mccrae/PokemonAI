@@ -67,14 +67,6 @@ PROFILE = {
                                     # KO/grind lines when the opponent is near deck-out (SOUND deck-out timing)
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
                                     # (Item-tutor / Rare-Candy → evolve → energy → KO; min-bound, sub-prize)
-    "play_accel_lethal": True,      # armed-ON 2026-07-14 ladder-testing: count a play-based accelerator
-                                    # (Crispin) as +1 attach in the KO budget; min-bound
-    "ko_budget_pricing": False,     # ADR-0075 (#177) DEFAULT OFF until the Decision Gate sitting rules
-                                    # its flips: price every ko_for_prizes KO line by the TYPED Attach
-                                    # Budget built for its own attacker, replacing `play_accel_lethal`'s
-                                    # wild +1 on five lines and `Budget.size` on two. OFF keeps the
-                                    # pre-#177 path alive so `lethal_ko_decider_sweep.py` can compare
-                                    # both BEFORE the deletion commit (ADR-0069 §8)
     "discard_keep_value": True,     # ADR-0065 seam-D armed-ON 2026-07-19 (ladder-testing): the
                                     # card-worth equation DECIDES the forced discard (keep_cost + pitch
                                     # term + the gates) in place of the tuned `_DISCARD` ladder.
