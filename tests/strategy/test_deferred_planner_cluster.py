@@ -333,6 +333,8 @@ def _rare_candy_call(pilot, *, turn=2, appear_this_turn=False, hand=(_RC_TOP,), 
                                     hand=[_RARE_CANDY_ID]))
     board = Board(turn=turn, hand_ids=frozenset(hand), basic_energy_in_deck=True,
                   no_supporter_in_hand=True)
+    _prime(pilot, obs)          # the line now prices by the Attach Budget, which lives on the
+                                # StateModel — without this it measures a fail-closed zero (ADR-0075)
     return pilot._rare_candy_ko_candidate(obs, obs["select"], board, obs["select"]["option"][0],
                                           {"id": 320, "hp": 190}, {}, True)
 
@@ -375,11 +377,11 @@ def test_rare_candy_line_appears_only_with_the_flag_on():
                                     opp_active=poke(320, hp=190), turn=2, hand=[_RARE_CANDY_ID]))
     board = Board(turn=2, hand_ids=frozenset({_RC_TOP}), basic_energy_in_deck=True,
                   no_supporter_in_hand=True)
-    on = _rare_candy_pilot()
+    on = _prime(_rare_candy_pilot(), obs)     # the Budget lives on the StateModel (ADR-0075)
     lines_on = on._ko_for_prizes_lines(obs, obs["select"], board, obs["select"]["option"], None)
     assert any("rare candy" in ln.rationale for ln in lines_on)
 
-    off = _rare_candy_pilot()
+    off = _prime(_rare_candy_pilot(), obs)
     off.enabler_item_composer = False
     assert off._ko_for_prizes_lines(obs, obs["select"], board, obs["select"]["option"], None) == []
 

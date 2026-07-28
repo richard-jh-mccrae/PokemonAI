@@ -123,7 +123,21 @@ PROMOTE_DECIDER_PROFILE = frozenset({
 #: bank and exactly when nobody would otherwise think to look.
 #: A leaf's simulated line re-runs my policy to end of turn, so it reaches menus WITH attaches and
 #: pays the attach decider's reads too — hence the union rather than the per-decision set alone.
-LEAF_PROFILE = PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
+#: Fields the PLANNER LEAF reads beyond the per-decision build and the two deciders — the
+#: `ko_for_prizes` KO lines' own cluster. Separate from `PER_DECISION_PROFILE` because that one is
+#: pinned with `==` against a bare Board build, which never reaches these.
+KO_LINE_PROFILE = frozenset({
+    # The Probability Leg (ADR-0074 decision 2, #175). Every `ko_for_prizes` line reads it once #177
+    # folded the five `_play_accel_extra` builders onto the typed Budget (ADR-0075 decision 6) — the
+    # five joined the two composed lines that already weighted. Admitted to the pin rather than
+    # re-measured: it is the THIRD projection of the SAME `deck_energy_counts` derivation already in
+    # `PER_DECISION_PROFILE` (`{t: c.p_any ...}` over an already-memoized map), so it is a dict
+    # comprehension, not a second walk over my zones.
+    "mine.deck_energy_p",
+})
+
+LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
+                | KO_LINE_PROFILE)
 
 
 class _Probe:

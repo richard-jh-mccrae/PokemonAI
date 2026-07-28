@@ -1368,6 +1368,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if planned is not None:                         # the below-win Goal Ladder. Refutes kept on every
             return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read, planned=planned,
+                            # The doom shadow is a per-decision DIAGNOSTIC, so it must not depend on
+                            # which branch decided. #177 made more KO lines reachable, which sent
+                            # frames like 82749168-29 down this branch for the first time and
+                            # silently blanked their shadow (`ms_doom_relax_bare_terapagos_f29`).
+                            threat_shadow=self._threat_shadow(obs, board),
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
