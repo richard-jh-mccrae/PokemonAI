@@ -7,8 +7,12 @@ committed corpus (`tune._build_pilot` — the strict retest bar; a fresh Pilot p
      and the successor rides an URGENT (full-tier, this-turn) succession slot — not the flat 20.
   2. A duplicate of a saturating-need Supporter is worth 0 (the spare fills nothing; you lose it in
      a shuffle for free).
-  3. The deny slot is valued at the disruption CARD-tier (~10), never the ADR-0062 DAMAGE swing
-     (~140) — the damage math stays on the play-side gust rungs.
+  3. A held disruption card's slot is never the ADR-0062 DAMAGE swing (~140) — the damage math
+     stays on the play-side gust rungs. Originally ruled for the `deny` slot at the disruption
+     CARD-tier (~10); since ADR-0074 a gust-tagged card routes to its own `gust_target` kind at
+     the per-body marginal instead, so the third test now pins that route. The card-tier `deny`
+     value itself is still pinned (synthetically) in `test_needs.py` and
+     `test_needs_deny_resolver.py`, which remain the deny leg's home.
 """
 import json
 import sys
@@ -100,7 +104,7 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
 
 
 @pytest.mark.req("REQ-NEEDS-0009")
-def test_deny_slot_is_valued_at_card_tier_not_the_damage_swing():
+def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     """ep83457493 f31 (Game D): the opponent's Mega Lucario ex is fully fueled; I hold Boss's Orders
     (gust). Pre-ADR-0074 this routed through `deny` at the disruption CARD-tier (~10, graded by
     turns-to-ready); ADR-0074 (armed) moves gust-tagged cards to their OWN `gust_target` kind,

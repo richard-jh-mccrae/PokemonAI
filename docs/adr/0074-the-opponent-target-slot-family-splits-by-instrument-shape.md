@@ -187,6 +187,48 @@ was left out to keep the run comparable).
 `tests/agents/test_runtime.py`'s `EXPECTED_SHIPPED`) — both mandatory mid-build gates (deterministic
 corpus check, paired-A/B tripwire) are now cleared for both.
 
+## Amendment E — the Discrimination Gate, run late; and the currency debt handed to #189 (2026-07-27, code-review)
+
+A second `/code-review` pass (Opus) after Amendment D found two things Amendment D should have
+carried, plus one design debt that is not this issue's to settle.
+
+**The Discrimination Gate was skipped before arming, and has now been run.** ADR-0072 decision 2
+makes *both* merit gates mandatory. Amendment D's arming leaned on the Tripwire plus a bespoke
+`threat_sweep.py --slots` sweep, and never ran `leaf_lab.py diff --baseline
+data/leaf_lab/baseline.json`. Run now, it reports **`GATE: FAIL` — 2 unruled `OK → MISS`**
+(`85163634|1|decision|41` rank 1→2, `86091435|0|decision|13` rank 1→4) with 5 `MISS → OK`.
+
+**Those two are NOT caused by this branch.** A control run with both flags forced OFF on the same
+tree reports the identical 2 regressions at identical ranks and the identical 5 improvements — this
+branch is **gate-identical to main**. They are the pre-existing baseline drift this very ADR's
+source already recorded: ADR-0072's own "separate finding the control run turned up, also unruled"
+names the same two frames and ranks against `data/leaf_lab/baseline.json` pinned at `81eac82`, and
+prescribes the fix — *"run the gate on `main` before the next swap, not after it"*, either
+re-capturing the baseline or ruling the two frames. That remains open, unowned, and is now
+independently confirmed at a second main commit (`9a0a8ec`, vs ADR-0072's `ce32206`). The arming in
+Amendment D stands: it introduces no new gate regression. The process error was running the gate
+after the arming decision rather than before it.
+
+**Decision Gate: judged N/A, recorded here rather than left silent.** ADR-0072 names "the phase's
+`tools/train/probes/*_decider_sweep.py`", and no such sweep exists for #186 — correctly, because
+#186 swaps no decider and deletes no rungs (the condition ADR-0069 §8's protocol is written for).
+`threat_sweep.py --slots` (0 decision flips / 331 frames, both flags, independently) is the
+stand-in. Recorded as a judgement so a later reader sees it was decided, not overlooked.
+
+**The currency debt — handed to #189, not settled here (user ruling, 2026-07-27).** Decision 1
+above prices `gust_target` by `opponent_target_value`, which is denominated in **prize-equivalents**
+(max ~3.9 for a 3-prize body with 8 survival turns bought). Every other slot kind in the same
+*summed* `_keep_slot_dp` assignment is denominated in **card-worth points** (wincon 30.0,
+`discard_eot` 30.0, `deny` 10.0, Energy 8.0). So a gust card can no longer out-compete any other
+slot kind, where at deny's 10.0 tier it competed with Energy and recycle — and `needs.py`'s own
+module docstring says slots are "valued in the ONE currency". This also overturns the WP-N8
+precedent Decision 1 cites (*the marginal is a tier; the damage magnitude stays on the play-side
+rungs*) without saying so. It is currently **latent, not firing**: 331 corpus frames show 0 decision
+flips because the general-worth floor absorbs the drop. The fix needs a *derived* prize↔worth
+conversion — inventing a scaling constant is precisely the fudge ADR-0065 forbids — so it belongs to
+**#189 (S4-gust)**, which reworks this marginal and must rule the denomination as part of its own
+grill. Flagged there rather than patched here.
+
 ## Alternatives rejected
 
 - **Flat shared value function, no DP extension for gust/forced-promo.** Simpler — one function, four

@@ -154,7 +154,7 @@ def test_deny_drops_the_doomed_active_and_grades_by_timing():
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_deny_prices_a_far_threat_below_the_cards_general_worth():
+def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     """The currency ruling on a REAL recorded board (82867148-48, mega_starmie): the held Boss's
     Orders (gust-tagged) never towers over its own general worth (4.5), whether priced through the
     pre-ADR-0074 `deny` route (a card-tier value graded down for distance) or — the armed default
@@ -185,6 +185,12 @@ def test_deny_prices_a_far_threat_below_the_cards_general_worth():
                                            rec["obs"]["select"]["option"])
     slots, _elig = pilot._resolve_needs(rec["obs"], board, rows)
     gust_target = [x for x in slots if x.kind == "gust_target"]
-    assert gust_target and max(x.value for x in gust_target) < 4.5   # well below the general floor
+    # EXACT, so the marginal's formula is pinned rather than merely bounded (the original assertion
+    # here pinned deny's `10 / 2^t` grade the same way; a loose inequality would let the value drift
+    # anywhere below the floor unnoticed). Their bench holds one gustable body: a 1-prize Dreepy
+    # whose removal buys 0 survival turns, so `prize_advance 1 + phase x 0` = exactly 1.0.
+    assert len(gust_target) == 1
+    assert gust_target[0].value == pytest.approx(1.0)
+    assert gust_target[0].value < 4.5                        # ...and so below the card's own floor
     boss = next(r for r in s["eq"] if r["cid"] == BOSS)
     assert boss["keep_v2"] == pytest.approx(4.5)             # its general floor — the strip is below it

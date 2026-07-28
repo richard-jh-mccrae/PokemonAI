@@ -7036,11 +7036,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (`_recur_shadow`) already uses; precise per-form reload TARGETING (Aura Jab feeds the
         BENCH, not itself; Archaludon any {M}) stays a further refinement, not required to make the
         relax gate fuel-aware. Returns `oa` unchanged when there's no fuel, no tag, or the discard/
-        stats are unknown — fail-open to the unaugmented read."""
-        if not (oa and self.stats):
+        stats are unknown — fail-open to the unaugmented read.
+
+        Reads the opponent discard through `_discard_energy_counts(opp)` — the SAME source
+        `_doom_recur_fueled` gates on, deliberately (the `_build_standing` / `_affords` lesson: one
+        function owns the fact, so two readings cannot drift). An earlier cut read it off
+        `_state_model.theirs` instead, which left a live hazard: had the two sources ever
+        disagreed, `fueled` could report True while this returned `oa` unaugmented, and the relax
+        would then fire on a read that never counted the fuel it stood down for."""
+        if not (oa and opp and self.stats):
             return oa
-        model = getattr(self, "_state_model", None)
-        disc = model.theirs.discard_energy_counts if model is not None else None
+        disc = self._discard_energy_counts(opp.get("discard") or [])[1]
         if not disc:
             return oa
         fuel = self.combat.discard_recur_fuel(oa, disc, forward_ids=self._forward_card_ids)

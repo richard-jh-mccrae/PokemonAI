@@ -129,3 +129,22 @@ def test_recur_fuel_stands_the_relax_down():
     s = _doom(fx, "dragapult_ex", recur=False)
     assert s["matched"] and not s["decided"]
     assert s["doom_final"] is True
+
+
+@pytest.mark.req("REQ-GEN-0078")
+def test_recur_fuel_still_stays_doomed_under_the_armed_default():
+    """The SAME Assemble-Alloy frame under the SHIPPED default (`recur_fuel_relax` ON, ADR-0074
+    Amendment D) — the coverage the sibling above stopped providing when it pinned itself to the
+    legacy path. Armed, the relax is no longer blocked outright: it IS consulted (`decided`), the
+    charged curve now counts the real {M} reload, and it reaches 220 >= my 90 HP — so the frame
+    still ends DOOMED. The safety property the boolean guard bought crudely survives the
+    quantification; arming narrowed WHEN the relax is allowed to run, never what it concludes on
+    this frame. Without this test the shipped path on the Assemble-Alloy hole is untested."""
+    fx = copy.deepcopy(_fixture("dp_doom_relax_archaludon_0e_f30"))
+    state = fx["obs"]["current"]
+    opp = state["players"][1 - state["yourIndex"]]
+    opp["discard"] = list(opp.get("discard") or []) + [
+        {"id": METAL, "playerIndex": 1 - state["yourIndex"], "serial": 900 + i} for i in range(2)]
+    s = _doom(fx, "dragapult_ex")                    # no override — the shipped PROFILE default
+    assert s["matched"] and s["decided"]             # armed: the quantified relax IS consulted
+    assert s["doom_final"] is True                   # ...and still refuses to relax this threat

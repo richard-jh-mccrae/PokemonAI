@@ -30,9 +30,9 @@ def _setup(*, recur_fuel_relax: bool, fuel_energy_count: int):
     and by design the synthetic `AttackStat` sets no `energyTypes`, so `attack_type_payable` is a
     trivial pass-through (`combat.py`: "True whenever the attack record doesn't resolve") — only the
     plain COUNT check (`attached + wild + burst >= cost`) gates, keeping the scenario about the FUEL
-    AMOUNT, not per-type composition. `fuel_energy_count` drives BOTH data paths a real decision
-    keeps in sync: `opp["discard"]` (`_doom_recur_fueled`'s own possibility check) and the stashed
-    `_state_model.theirs.discard_energy_counts` (`_recur_fueled_oa`'s augmentation amount)."""
+    AMOUNT, not per-type composition. `fuel_energy_count` populates `opp["discard"]` — the ONE
+    source both `_doom_recur_fueled` (the possibility gate) and `_recur_fueled_oa` (the
+    augmentation amount) read, so the two cannot disagree about how much fuel there is."""
     stats = DictCardStatProvider({
         MY_ID: CardStat(MY_ID, name="My Active", hp=150),
         REFUEL: CardStat(REFUEL, name="Refueler", hp=100, energyType=FIGHTING,
@@ -44,8 +44,6 @@ def _setup(*, recur_fuel_relax: bool, fuel_energy_count: int):
                   stats=stats, functions=funcs, doom_matched_relax=True,
                   recur_fuel_relax=recur_fuel_relax)
     pilot._incoming_budget = {"base_attach": 1, "burst_on_evo": 0}   # any truthy γ-matched value
-    pilot._state_model = types.SimpleNamespace(
-        theirs=types.SimpleNamespace(discard_energy_counts={FIGHTING: fuel_energy_count}))
     ma = {"id": MY_ID, "hp": 150, "energies": []}
     oa = {"id": REFUEL, "hp": 100, "energies": []}
     opp = {"discard": [{"id": BASIC_F}] * fuel_energy_count}
