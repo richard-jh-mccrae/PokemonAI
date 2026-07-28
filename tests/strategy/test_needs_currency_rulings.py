@@ -102,15 +102,17 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_deny_slot_is_valued_at_card_tier_not_the_damage_swing():
     """ep83457493 f31 (Game D): the opponent's Mega Lucario ex is fully fueled; I hold Boss's Orders
-    (gust). The deny slot is valued at the disruption CARD-tier (~10, graded by turns-to-ready), NOT
-    the ADR-0062 DAMAGE swing (~140) — so Boss's is a good card, never a whole-hand anchor. The
-    damage math stays on the play side; the correction plays Harlequin (the deny no longer towers)."""
+    (gust). Pre-ADR-0074 this routed through `deny` at the disruption CARD-tier (~10, graded by
+    turns-to-ready); ADR-0074 (armed) moves gust-tagged cards to their OWN `gust_target` kind,
+    valued by the real per-body removal marginal (prize-equivalents, ~1-3) — either way, NEVER the
+    ADR-0062 DAMAGE swing (~140), so Boss's is a good card, never a whole-hand anchor. The damage
+    math stays on the play side; the correction plays Harlequin either way (the slot never towers)."""
     pilot = _shipped_pilot("mega_starmie")
     obs = _corpus_frame("83457493", 31)["obs"]
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)
-    deny = [s for s in slots if s.kind == "deny"]
-    assert deny, "a fueled opponent body opens a deny slot"
-    # every deny slot is card-tier magnitude (≤ the gust tier 10, graded down), never the ~140 swing
-    assert max(s.value for s in deny) <= 10.0
+    gust_target = [s for s in slots if s.kind == "gust_target"]
+    assert gust_target, "a fueled opponent bench opens gust_target slots (armed default, ADR-0074)"
+    # every gust_target slot is prize-equivalent magnitude, nowhere near the ~140 damage swing
+    assert max(s.value for s in gust_target) <= 3.0
     d = pilot.explain(obs)
     assert 4 in d.chosen                                        # plays Harlequin (correction [4])

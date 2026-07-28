@@ -155,13 +155,14 @@ def test_deny_drops_the_doomed_active_and_grades_by_timing():
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_deny_prices_a_far_threat_below_the_cards_general_worth():
-    """The currency ruling on a REAL recorded board (82867148-48, mega_starmie: the opponent's Active
-    is a developing Dreepy banking 1 Energy — two turns from ready): the resolver emits a card-tier
-    deny slot GRADED down for the distance (10 / 2² = 2.5), which sits BELOW the held Boss's Orders'
-    own general worth (4.5) — so a far-off threat's strip does NOT tower over the card; the Boss's
-    prices at its general floor and the DECIDED pick is unmoved (the discard corpus stays 12/12).
-    Under the old damage-denominated value the same board priced the deny at 35/4 ≈ 8.8 and lifted
-    the Boss's above everything — the exact over-pricing the ruling retired."""
+    """The currency ruling on a REAL recorded board (82867148-48, mega_starmie): the held Boss's
+    Orders (gust-tagged) never towers over its own general worth (4.5), whether priced through the
+    pre-ADR-0074 `deny` route (a card-tier value graded down for distance) or — the armed default
+    now — its own `gust_target` slot (the real per-body marginal, ADR-0074): either way the
+    DECIDED pick stays unmoved (the discard corpus stays 12/12; `keep_v2` is unchanged at 4.5,
+    its general floor). Under the pre-ruling damage-denominated value the same board priced the
+    strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
+    original ruling retired, and the ADR-0074 migration does not reopen."""
     rec = None
     for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
         for line in jf.read_text(encoding="utf-8").splitlines():
@@ -183,7 +184,7 @@ def test_deny_prices_a_far_threat_below_the_cards_general_worth():
     rows, _ = pilot._discard_equation_rows(rec["obs"], rec["obs"]["select"], board,
                                            rec["obs"]["select"]["option"])
     slots, _elig = pilot._resolve_needs(rec["obs"], board, rows)
-    deny = [x for x in slots if x.kind == "deny"]
-    assert deny and max(x.value for x in deny) == pytest.approx(TAG_TIER["gust"] / 4.0)  # 10 / 2²
+    gust_target = [x for x in slots if x.kind == "gust_target"]
+    assert gust_target and max(x.value for x in gust_target) < 4.5   # well below the general floor
     boss = next(r for r in s["eq"] if r["cid"] == BOSS)
-    assert boss["keep_v2"] == pytest.approx(4.5)             # its general floor — the far deny is below it
+    assert boss["keep_v2"] == pytest.approx(4.5)             # its general floor — the strip is below it

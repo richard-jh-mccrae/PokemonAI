@@ -49,12 +49,14 @@ def _fixture(name):
     return json.loads((REPO / "tests" / "fixtures" / "corrections" / f"{name}.json").read_text(encoding="utf-8"))
 
 
-def _doom(fx, deck, *, relax=None):
-    """Replay the fixture through a FRESH shipped Pilot (optionally forcing the kill-switch) and
+def _doom(fx, deck, *, relax=None, recur=None):
+    """Replay the fixture through a FRESH shipped Pilot (optionally forcing either kill-switch) and
     return its threat shadow — `doom_final` is the live `Board.active_doomed` consumers saw."""
     pilot = _pilot(deck)
     if relax is not None:
         pilot.doom_matched_relax = relax
+    if recur is not None:
+        pilot.recur_fuel_relax = recur
     shadow = pilot.explain(fx["obs"]).threat_shadow
     assert shadow is not None
     return shadow
@@ -112,15 +114,18 @@ def test_kill_switch_off_reproduces_the_incumbent():
 
 @pytest.mark.req("REQ-GEN-0078")
 def test_recur_fuel_stands_the_relax_down():
-    """The Assemble-Alloy hole: the 0-Energy Archaludon ex frame relaxes on an EMPTY opponent
-    discard, but with Basic {M} Energy visibly in that discard the `discard_energy_recur` guard
-    refuses the relax (evolving re-attaches the fuel the charged budget can't see) and the
-    worst-case oracle decides again."""
+    """The Assemble-Alloy hole, `recur_fuel_relax` OFF (ADR-0074's pre-quantification guard,
+    `_doom_recur_fueled`, still a real code path even though the flag now ships ON by default):
+    the 0-Energy Archaludon ex frame relaxes on an EMPTY opponent discard, but with Basic {M}
+    Energy visibly in that discard the `discard_energy_recur` guard refuses the relax entirely
+    (evolving re-attaches fuel the charged budget can't see) and the worst-case oracle decides
+    again. The ARMED behavior (the SAME fuel, quantified rather than blocked outright) is pinned
+    separately in `test_recur_fuel_relax.py`."""
     fx = copy.deepcopy(_fixture("dp_doom_relax_archaludon_0e_f30"))
     state = fx["obs"]["current"]
     opp = state["players"][1 - state["yourIndex"]]
     opp["discard"] = list(opp.get("discard") or []) + [
         {"id": METAL, "playerIndex": 1 - state["yourIndex"], "serial": 900 + i} for i in range(2)]
-    s = _doom(fx, "dragapult_ex")
+    s = _doom(fx, "dragapult_ex", recur=False)
     assert s["matched"] and not s["decided"]
     assert s["doom_final"] is True

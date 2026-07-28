@@ -158,6 +158,35 @@ a `threat_sweep.py --slots` clean run is evidence toward that bar, not the bar i
 run is real, uncommitted follow-up work (not scoped into #186's spec, and not run here given its
 cost), so both flags ship OFF on that basis — corrected in both PROFILE comments.
 
+## Amendment D — the gauntlet ran; both flags armed ON (2026-07-27, follow-up)
+
+Amendment C's deferred gauntlet run was completed the same day, closing the gap it named.
+
+**Instrument choice.** `gauntlet_swap_ab.py --stage mid-build` (directive 6's example command) A/Bs
+two *builds* via staged bundles — the right tool once a swap deletes what a flag used to fall back
+to. Neither `recur_fuel_relax` nor `gust_target_slots` deletes anything (both are pure additive
+kill-switches; the OFF path is fully intact) — so `gauntlet_ab.py`, the same-code flag-overlay A/B
+(`--overlay {"params": {"<flag>": true}}`), is the mechanically correct fit, not a substitution for
+the swap tool. That script's own baked-in verdict line applies the ORIGINAL Tier-5 rule
+(`delta >= 0 AND CI-lo >= -1%`) predating ADR-0072's mid-build re-scoping — its printed "FLIP: False"
+was disregarded and the actual ADR-0072 mid-build Tripwire (`crashes == 0 AND CI-lo >= -5%`, no delta
+clause) applied by hand to the raw aggregate instead. Run at `-n 200` across the three
+historically-calibrated agents (dragapult_ex, mega_lucario, mega_starmie — matching directive 6's own
+"~2400 games" sizing; `grimmsnarl_ex` also exists but wasn't part of that original calibration and
+was left out to keep the run comparable).
+
+**Results, both clearing the Tripwire:**
+- `recur_fuel_relax`: aggregate delta +2.4%, 95% CI [-1.1%, +5.9%], 0 crashes / 2400 games.
+- `gust_target_slots`: aggregate delta -0.75%, 95% CI [-4.3%, +2.8%], 0 crashes / 2400 games — one
+  individual matchup (mega_lucario vs mega_starmie) swung -11.5pp. The Tripwire screens catastrophes,
+  not regressions (directive 6: "not a claim of non-regression"), so this single-matchup wobble is
+  flagged for the ladder-corrections loop to watch rather than treated as disqualifying — the
+  aggregate clears the bound the gate actually sets.
+
+**Decision: both flags armed ON** in `runtime.py`'s `PROFILE` (and mirrored in
+`tests/agents/test_runtime.py`'s `EXPECTED_SHIPPED`) — both mandatory mid-build gates (deterministic
+corpus check, paired-A/B tripwire) are now cleared for both.
+
 ## Alternatives rejected
 
 - **Flat shared value function, no DP extension for gust/forced-promo.** Simpler — one function, four
