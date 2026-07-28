@@ -111,18 +111,35 @@ beside `manual_spent` / `provable` and passed down as
 (`playsets = [items] + ([] if supporter_played else [items + [s] for s in supporters])`), so this is
 a pass-through on the `StateModel` face — no clause-interpreter change.
 
-It is **required**, not a convenience. Two of the five folded builders play a Supporter *as their
-enabling step* — `_tutor_evolve_ko_candidate` (Salvatore, `rush_evolve`) and
-`_supporter_ko_candidate` (Hilda, `tutor_energy`) — which is precisely what
-`_play_accel_extra`'s `enabler_consumes_supporter=True` encoded. `attach_budget_for_card` reads
-`supporter_played` off the *board*, so without this kwarg the Budget offers Crispin's Supporter
-play-set alongside Hilda's: two Supporters in one turn, an illegal line, a phantom KO, and silent.
+It is **required**, not a convenience — but the rule for WHICH lines set it was corrected during
+the build, and the shipped rule is narrower than this decision first stated.
 
-The shape mirrors `manual_spent` one quota over, and inherits its property — it only ever removes
-play-sets, so every existing caller is unchanged and the memo stays exact. The rejected alternatives
-were filtering Supporters out of `hand_ids` (unreachable through the primitive without
-reintroducing the hand-assembled-kwargs pattern #142's review pass deleted) and post-filtering
-`Budget.options` (not viable — an option is a tuple of `AttachUnit` and carries no provenance).
+**Ship rule: the Supporter leg is CLOSED unless this line's committed FIRST STEP is that
+Supporter, and that Supporter is itself the Budget's energy source.**
+
+| line | `supporter_spent` | why |
+|---|---|---|
+| retreat · evolve-the-Active · free-evolve | **True** | tiered free-or-cheap *because* they spend no card; their Budget must not include a Supporter's yield |
+| `_supporter_ko_candidate` (Hilda, `tutor_energy`) | **False** | Hilda IS the line's energy source — measured on real cards, her Budget is size 1 with the leg open and **0** with it closed, so closing it makes the line structurally dead |
+| `_tutor_evolve_ko_candidate` (Salvatore, `rush_evolve`) | **True** | no accel tag, so it contributes nothing to the Budget and merely SPENDS the slot |
+
+The first row is what the build got wrong initially, and `planner_4298` (frame `83053965-28`)
+caught it: with the leg open on the retreat line, a KO funded by Hilda's deck fetch was claimed by
+`_retreat_ko_candidate` while tiered `_PLANNER_ENABLER_FREE` — "spends no card/slot" — so the plan
+committed Retreat instead of the human-ruled Hilda. **That inverts ADR-0031's rule that an enabler
+PRESERVING deck/slot resources outranks a tutor reaching the SAME KO**, and it is a hazard the fold
+creates generically: the typed Budget enumerates every playable accel/tutor in hand, Supporters
+included, so *every* line becomes potentially Supporter-funded unless told otherwise.
+
+Double-counting is structurally impossible in the open case: each Supporter is a separate
+alternative play-set, so a hand holding both Hilda and Crispin still yields size 1, never 2
+(measured). `_retreat_ko_candidate`'s kwarg is keyword-only and **defaults True**, so the safe
+reading is the one a new caller gets without thinking about it.
+
+The rejected alternatives were filtering Supporters out of `hand_ids` (unreachable through the
+primitive without reintroducing the hand-assembled-kwargs pattern #142's review pass deleted) and
+post-filtering `Budget.options` (not viable — an option is a tuple of `AttachUnit` and carries no
+provenance).
 
 ## Decision 4 — one pricing path for all seven KO lines; both adapters are deleted
 
