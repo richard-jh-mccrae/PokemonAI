@@ -16,7 +16,9 @@ The argument (or the current context) names the subject. Figure out which it is:
 
 - **A GitHub issue / PR** — a number like `42`, `#42`, or a phrase like "the issue at hand", "this
   PR". Fetch it via the GitHub MCP tools (`mcp__github__issue_read`, `mcp__github__pull_request_read`)
-  on `richard-jh-mccrae/PokemonAI`. Read the body and the discussion, not just the title.
+  on `richard-jh-mccrae/PokemonAI`. Read the body and the discussion, not just the title. Once you
+  know which it is, refer to it as **Issue #42** or **PR #42** in your explanation, never a bare
+  `#42` (per `CLAUDE.md`).
 - **A file, function, or bit of code** — read it before explaining it.
 - **A concept, rule, or card mechanic** — a Pokémon TCG rule, a strategy term, an ADR, part of the
   pipeline.

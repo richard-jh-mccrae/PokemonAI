@@ -29,7 +29,8 @@ requests; `/triage` reads this flag.)_ While `no`, PRs are not part of the triag
 with `pull_request_read` only when explicitly asked.
 
 Note: GitHub shares one number space across issues and PRs, so a bare `#42` may be either — try
-`issue_read` first and fall back to `pull_request_read`.
+`issue_read` first and fall back to `pull_request_read`. Once you know which it is, say so: refer to
+it in prose as **Issue #42** or **PR #42**, never as a bare `#42` (per `CLAUDE.md`).
 
 ## Progress-tracking status ladder
 
