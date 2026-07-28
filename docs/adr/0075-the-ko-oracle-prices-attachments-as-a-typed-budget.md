@@ -314,11 +314,49 @@ inherited `85164605|1|decision|41` → #145. That run also discharged the contro
 both reds predate #177 and are deterministic (three independent process runs each), so they are not
 #160's RNG.
 
-**Full suite:** 3925 passed, 2 skipped, 4 xfailed.
+Re-run on the FINAL post-deletion code it reads the same, and one more frame improved:
+`82749168|1|decision|29` joins as `MISS → OK` — the frame whose label this sitting re-ruled, now
+scored correct — for **6** improvements against 0 unruled regressions.
+
+**Full suite:** 3920 passed, 2 skipped, 4 xfailed.
+
+### The deletion exposed three latent defects, fixed here
+
+Named because two would have stayed hidden indefinitely:
+
+1. **`threat_shadow` was branch-dependent.** `explain`'s planner branch never emitted it; the
+   non-planner branch always did. Invisible until the planner commits a line on a *pinned* frame —
+   which this fold caused at `82749168-29`, blanking the shadow
+   (`ms_doom_relax_bare_terapagos_f29`). A per-decision diagnostic must not depend on which branch
+   decided, so the branch is fixed rather than the test.
+2. **The enabler-cost tier was inverted by the fold**, caught by `planner_4298` (frame
+   `83053965-28`). The Budget enumerates every playable accel/tutor in hand, Supporters included,
+   so `_retreat_ko_candidate` could claim a KO funded by Hilda's fetch while tiered
+   `_PLANNER_ENABLER_FREE` — "spends no card/slot". The plan then committed Retreat instead of the
+   human-ruled Hilda. **The Supporter leg is now open only for the line whose committed FIRST STEP
+   is that Supporter**: closed for retreat/evolve/free-evolve (tiered free-or-cheap precisely
+   because they spend no card), open for `_supporter_ko_candidate` (Hilda IS its energy source —
+   measured: her Budget is size 1 open, 0 closed), closed for `_tutor_evolve_ko_candidate`
+   (Salvatore spends the slot and contributes no Energy). This restores ADR-0031's rule that an
+   enabler PRESERVING deck/slot resources outranks a tutor reaching the SAME KO.
+3. **Two energy-tutor tests were passing against a tutor that contributed nothing** — a Function
+   Tag with no `CardStat`, and `_attach_contribution` rejects an unknown card *before* it reads
+   tags (fail-CLOSED, ADR-0067). Their deck also held no Energy for a deck-sourced fetch to find.
+
+Defect 2 is the one worth carrying forward: the Decision Gate did **not** catch it, because the
+sweep compares only the KO-line frames in `data/corrections` and `planner_4298` is a fixture. A
+lane-precise sweep bounded by the corrections corpus has that blind spot by construction.
 
 **Still owed:** the mid-build **Tripwire** (`gauntlet_swap_ab.py --stage mid-build`,
 `crashes == 0 AND ci_lo >= -0.05`). ADR-0072 decision 1 grades it on the post-deletion code, so it
-runs against this commit, not before it.
+runs against this commit range, not before it.
+
+**One pin admitted rather than measured.** `mine.deck_energy_p` entered the leaf profile as a new
+`KO_LINE_PROFILE` set on the argument that it is the THIRD projection of the same
+`deck_energy_counts` derivation already pinned — a dict comprehension over an already-memoized map,
+not a second walk over my zones. `test_the_leaf_profile_is_bounded_as_the_145_tripwire`'s own
+message asks for a measurement against the 2-vCPU grader bank before re-pinning; that measurement
+was argued, not taken, and the reasoning is recorded at the constant.
 
 ### What the deletion removed
 
