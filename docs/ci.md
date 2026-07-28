@@ -1,5 +1,12 @@
 # Continuous Integration
 
+Two workflows:
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| [`ci.yml`](../.github/workflows/ci.yml) | push to `main`, PR, dispatch | the test suite (everything below) |
+| [`leaf-gate-main.yml`](../.github/workflows/leaf-gate-main.yml) | **push to `main` only**, dispatch | ADR-0072's **Discrimination Gate**, watching main — see [Main watchdog](#main-watchdog-the-discrimination-gate) |
+
 `.github/workflows/ci.yml` runs the test suite on every push to `main`, every pull
 request, and on manual dispatch (`workflow_dispatch`). It runs on `ubuntu-latest` at
 Python **3.12** (the most recent; the dev box runs 3.11). Every step runs under `bash`
@@ -118,6 +125,42 @@ invocation — the full `pytest tests/` or a selective `pytest tests/arena tests
 JUnit XML and (when the coverage gate runs) `coverage.xml` upload as build artifacts named
 `reports-<os>-py<version>`.
 
+## Main watchdog: the Discrimination Gate
+
+[`leaf-gate-main.yml`](../.github/workflows/leaf-gate-main.yml) runs
+`tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json` on **every push to `main`**
+and fails the run on any unruled `OK → MISS` frame flip. It is ADR-0072's Discrimination Gate,
+pointed at main rather than at a branch.
+
+**Why it exists.** The gate was only ever run by whoever happened to be doing a swap, so drift
+accumulated unattributed. ADR-0072 recorded two `OK → MISS` frames on *untouched* main and could not
+say whether they were real regressions landed unmeasured or a baseline needing re-capture; #186 then
+hit the same false-red weeks later on an unrelated branch. That ADR's own prescription is *"run the
+gate on `main` before the next swap, not after it"* — this workflow is that sentence as CI. A red is
+attributable to the merge that triggered the run, while the diff is one commit wide.
+
+**It never writes the baseline, by design.** Auto-recapturing on merge would redefine the "before"
+picture to whatever just landed, so every regression would bless itself and the gate would pass
+forever by construction. The baseline is a *ruling record*, not a cache. Re-capture is deliberate:
+
+```bash
+python tools/train/leaf_lab.py capture --out data/leaf_lab/baseline.json
+```
+
+and only after the flips it would absorb have been **ruled** with the user.
+
+**When it goes red**, the fix is a ruling, not a re-capture. Per frame, decide whether the new
+ranking is wrong (fix the code) or right (hold the frame out via its fixture's `frame_key` +
+Decision-Claim `owner`, ADR-0072 decision 4 — a reviewable claim in a diff, not a workflow flag).
+The gate report uploads as the `leaf-gate-main` artifact.
+
+**A shifted corpus warns, it does not fail.** The verdict is per-frame flips only, but
+`CORPUS SHIFTED` means the two captures are no longer comparable — the run emits a `::warning::` so
+the re-capture gets owned rather than passing unseen.
+
+Measured 91 s over 267 frames (2026-07-28); main was verified green at `7d2a656` before this landed,
+so it was not born red.
+
 ## Reproduce locally
 
 ```bash
@@ -139,8 +182,10 @@ itself is reproduced by the `filters:` + *Determine test plan* blocks in `ci.yml
 
 ## Scope & extending
 
-CI is **tests only** — the global Doxygen / Sphinx / GitHub Pages / PDF steps are omitted
-until those toolchains exist in the repo (see `CLAUDE.md`).
+CI is **tests, plus the one main-watchdog gate above** — the global Doxygen / Sphinx / GitHub Pages
+/ PDF steps are still omitted until those toolchains exist in the repo (see `CLAUDE.md`). The
+watchdog is a deliberate, narrow widening of "tests only" (2026-07-28): it runs an existing
+deterministic instrument the repo already owed on main, not a new toolchain.
 
 - **Add a new subsystem?** Add a filter to `.github/filters.yml` and a matching
   `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any
