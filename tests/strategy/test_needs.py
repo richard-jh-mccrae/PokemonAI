@@ -137,7 +137,7 @@ def test_deny_slot_value_grades_by_their_closeness():
 
 @pytest.mark.req("REQ-NEEDS-0010")
 def test_gust_target_slot_carries_the_real_per_body_value_at_a_this_turn_deadline():
-    """ADR-0074: `gust_target` is a SEPARATE instrument from `deny` — its value is whatever the
+    """ADR-0076: `gust_target` is a SEPARATE instrument from `deny` — its value is whatever the
     caller computed via the two-term `opponent_target_value` marginal (not a flat disruption tier),
     and it always carries deadline 0 (no ruled timing discount for this instrument, unlike deny's
     turns-to-ready halving) — an un-graded value passes through unchanged."""
@@ -149,7 +149,7 @@ def test_gust_target_slot_carries_the_real_per_body_value_at_a_this_turn_deadlin
 
 @pytest.mark.req("REQ-NEEDS-0010")
 def test_gust_tag_supplies_both_deny_and_gust_target_kinds():
-    """The SUPPLIES schema change (ADR-0074 Amendment): `gust` names BOTH kinds it could ever fill —
+    """The SUPPLIES schema change (ADR-0076 Amendment): `gust` names BOTH kinds it could ever fill —
     which one is actually LIVE for a decision is the Pilot's kill-switched call, not this module's;
     the coverage lint only needs ≥1 real kind, and this asserts both are present and real."""
     assert needs.SUPPLIES["gust"] == ("deny", "gust_target")

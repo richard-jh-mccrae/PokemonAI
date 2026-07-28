@@ -157,12 +157,12 @@ def test_deny_drops_the_doomed_active_and_grades_by_timing():
 def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     """The currency ruling on a REAL recorded board (82867148-48, mega_starmie): the held Boss's
     Orders (gust-tagged) never towers over its own general worth (4.5), whether priced through the
-    pre-ADR-0074 `deny` route (a card-tier value graded down for distance) or — the armed default
-    now — its own `gust_target` slot (the real per-body marginal, ADR-0074): either way the
+    pre-ADR-0076 `deny` route (a card-tier value graded down for distance) or — the armed default
+    now — its own `gust_target` slot (the real per-body marginal, ADR-0076): either way the
     DECIDED pick stays unmoved (the discard corpus stays 12/12; `keep_v2` is unchanged at 4.5,
     its general floor). Under the pre-ruling damage-denominated value the same board priced the
     strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
-    original ruling retired, and the ADR-0074 migration does not reopen."""
+    original ruling retired, and the ADR-0076 migration does not reopen."""
     rec = None
     for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
         for line in jf.read_text(encoding="utf-8").splitlines():

@@ -143,7 +143,7 @@ PROFILE = {
                                     # (Hammer-lanche density, ×2-weak Mind Bend, 1e Metal Defender)
                                     # stays doomed. Unmatched → byte-identical worst-case (ADR-0064
                                     # §4: never relax on a guess)
-    "recur_fuel_relax": True,       # ADR-0074 (#186), armed-ON 2026-07-27: quantifies
+    "recur_fuel_relax": True,       # ADR-0076 (#186), armed-ON 2026-07-27: quantifies
                                     # `_doom_recur_fueled`'s all-or-nothing relax-block — augments a
                                     # possible refueler's Energy with its real discard-recur reload
                                     # before the CHARGED relax check runs, instead of always standing
@@ -155,7 +155,7 @@ PROFILE = {
                                     # `gauntlet_swap_ab.py`): aggregate delta +2.4%, 95% CI
                                     # [-1.1%, +5.9%], 0 crashes/2400 games — comfortably clears the
                                     # crashes==0 AND CI-lo>=-5% Tripwire (no delta clause mid-build).
-    "gust_target_slots": True,      # ADR-0074 (#186), armed-ON 2026-07-27: generalizes `deny_slot`
+    "gust_target_slots": True,      # ADR-0076 (#186), armed-ON 2026-07-27: generalizes `deny_slot`
                                     # to a `gust_target` kind — held gust-effect Trainer cards
                                     # keep-price against the real per-body `opponent_target_value`
                                     # instead of the flat `deny` disruption tier. Corpus-swept clean

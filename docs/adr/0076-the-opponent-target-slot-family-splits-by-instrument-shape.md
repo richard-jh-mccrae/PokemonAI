@@ -1,8 +1,12 @@
-# ADR-0074 — The opponent-target slot family splits by instrument shape: held-card keep pricing extends the Needs assignment; target-ranking reads the marginal directly
+# ADR-0076 — The opponent-target slot family splits by instrument shape: held-card keep pricing extends the Needs assignment; target-ranking reads the marginal directly
 
 **Status:** Accepted (grilled 2026-07-27, `/grill-with-docs` on #186 — three locked decisions). Build
 = #186 (S2 + S3b), consumed by #187 (S4-deny), #188 (S4-snipe), #189 (S4-gust), #190 (S5). #186 is one
 of five sub-issues split from #143 (tracker #136) — see #143's closing comment.
+
+**Renumbered from 0074 → 0076 on rebase (2026-07-27).** Three open branches each authored an ADR-0074;
+first-merged keeps the number (the 0071/#163 precedent), so #175 KEEPS 0074, #177 took 0075, and this
+one took 0076. Every in-repo reference was moved with it; main's #175 references were left alone.
 
 **Context issues:** #186 (this grill), #143 (the un-split original, closed), #136 (the Value System
 build tracker), `docs/plans/opponent-value-equation-unification.md` (the design this ADR turns into a
@@ -203,11 +207,18 @@ tree reports the identical 2 regressions at identical ranks and the identical 5 
 branch is **gate-identical to main**. They are the pre-existing baseline drift this very ADR's
 source already recorded: ADR-0072's own "separate finding the control run turned up, also unruled"
 names the same two frames and ranks against `data/leaf_lab/baseline.json` pinned at `81eac82`, and
-prescribes the fix — *"run the gate on `main` before the next swap, not after it"*, either
-re-capturing the baseline or ruling the two frames. That remains open, unowned, and is now
-independently confirmed at a second main commit (`9a0a8ec`, vs ADR-0072's `ce32206`). The arming in
+prescribes the fix — *"run the gate on `main` before the next swap, not after it."* The arming in
 Amendment D stands: it introduces no new gate regression. The process error was running the gate
 after the arming decision rather than before it.
+
+**Superseded by main during the rebase (2026-07-27) — the two frames are now RULED.** This amendment
+originally reported both frames as still unowned. That is no longer true: `main` has since held both
+out explicitly — `86091435|0|decision|13` to **#189** (gusting, `1120eaa`) and
+`85163634|1|decision|41` to **#143** (the targeting equation, `bc069bd`), alongside `6faee00`
+ruling the two #141 reds. So the debt this amendment flagged as unowned was picked up independently
+while this branch was open, and the gate's `HELD OUT` mechanism (ADR-0072 decision 4) now carries
+them. Recorded rather than silently deleted, because the sequencing is the point: the finding was
+real when written and was resolved elsewhere, not by this branch.
 
 **Decision Gate: judged N/A, recorded here rather than left silent.** ADR-0072 names "the phase's
 `tools/train/probes/*_decider_sweep.py`", and no such sweep exists for #186 — correctly, because

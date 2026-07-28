@@ -41,7 +41,7 @@ SLOT_KINDS = frozenset({
     "deny",           # strip THEIR resource (value from the ADR-0062 oracle, deadline from their
                       # turns-to-ready — the graded Hammer, 86091435-68)
     "gust_target",    # a held gust-effect Trainer card (Guzma/Boss's-Orders-class), valued by the
-                      # two-term opponent-target marginal (ADR-0074) — NOT the flat disruption tier
+                      # two-term opponent-target marginal (ADR-0076) — NOT the flat disruption tier
                       # `deny` still uses for true energy-denial cards
     "general",        # a held card's LATENT board worth where it fills no specific need — its role
                       # tier discounted (the readiness leaf's `contribution` for the HAND; WP-N5)
@@ -242,7 +242,7 @@ def opponent_target_value(*, prize_advance: float, survival_shift: int, phase: f
 
 
 def gust_target_slot(key: str, *, value: float) -> Slot:
-    """The held gust-effect Trainer card (Guzma/Boss's-Orders-class) as a KEEP-priced slot (ADR-0074,
+    """The held gust-effect Trainer card (Guzma/Boss's-Orders-class) as a KEEP-priced slot (ADR-0076,
     generalizing `deny_slot` to a second instrument): unlike deny, this instrument's value is the
     real per-body ``opponent_target_value`` (prize_advance + phase-scaled survival_shift), not the
     flat disruption card-tier — a gust card doesn't strip Energy, so pricing it through the `deny`
@@ -272,7 +272,7 @@ SUPPLIES: dict = {
     # TAG_TIER tags
     "discard_eot":        ("fund_attack",),
     "clutch_heal":        ("answer_doom",),
-    # ADR-0074: gust supplies BOTH kinds it could ever fill (the coverage lint just needs ≥1 real
+    # ADR-0076: gust supplies BOTH kinds it could ever fill (the coverage lint just needs ≥1 real
     # kind named). WHICH kind is actually live for a given decision is the Pilot's call, gated by the
     # `gust_target_slots` kill-switch: OFF = today's `deny`-only routing (byte-identical); ON = gust
     # rows route to `gust_target` INSTEAD of `deny` (never both — `_resolve_needs` excludes gust from

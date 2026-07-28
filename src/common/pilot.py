@@ -1283,7 +1283,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # burst_on_evo=2: Ignition on an Evolution). RELAX-ONLY:
                                                         # it clears phantom doom, never adds one. Unmatched/
                                                         # fueled/OFF = byte-identical worst-case (ADR-0064 §2)
-        self.recur_fuel_relax = recur_fuel_relax        # ADR-0074 kill-switch (S2 live, survival-only):
+        self.recur_fuel_relax = recur_fuel_relax        # ADR-0076 kill-switch (S2 live, survival-only):
                                                         # refines `_doom_recur_fueled`'s all-or-nothing
                                                         # relax-block into a QUANTIFIED one — instead of
                                                         # always standing down whenever a recur-fueled line
@@ -1292,7 +1292,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # curve decide. OFF = today's behavior exactly (the
                                                         # boolean block fires); ON only ever narrows when
                                                         # relax is allowed (fail-scared preserved either way)
-        self.gust_target_slots = gust_target_slots      # ADR-0074 kill-switch: generalizes `deny_slot` to
+        self.gust_target_slots = gust_target_slots      # ADR-0076 kill-switch: generalizes `deny_slot` to
                                                         # a second instrument — held gust-effect Trainer
                                                         # cards (Guzma/Boss's-Orders-class) keep-price
                                                         # against the real per-body `opponent_target_value`
@@ -3700,7 +3700,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # gust tier (`TAG_TIER["gust"]`, ~10) — NOT each denier's global worth (a role-less Hammer
         # stays worth 0 globally; only its live-strip DENY slot earns the band), so the leaf and
         # every other worth site are untouched.
-        # ADR-0074: gust ALWAYS supplies both "deny" and "gust_target" kinds (`needs.SUPPLIES`), but
+        # ADR-0076: gust ALWAYS supplies both "deny" and "gust_target" kinds (`needs.SUPPLIES`), but
         # only ONE is ever LIVE for a given decision — armed, gust rows route to their own instrument
         # instead of riding the flat deny tier (a Boss's Orders doesn't strip Energy; pricing it
         # through `deny`'s oracle-value/timing-grade shape never matched what it actually does). OFF
@@ -3728,7 +3728,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         continue               # unknown stats — fail closed, no deny slot
                     _emit(needs.deny_slot(f"deny:{area}{bi}:{p.get('id')}",
                                           oracle_value=deny_tier, turns_to_ready=t), deniers)
-        # GUST-TARGET SLOTS (ADR-0074, kill-switched): held gust-effect Trainer cards keep-priced
+        # GUST-TARGET SLOTS (ADR-0076, kill-switched): held gust-effect Trainer cards keep-priced
         # against the REAL per-body removal value (`_opponent_target_rows`) — reads the per-decision
         # cache `_board()` stashes when one exists (shared with the S3a shadow, never recomputed
         # twice per decision), falling back to a fresh compute for a hand-built `board` that never
@@ -5972,7 +5972,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
         board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
-        # ADR-0074: the shared per-body opponent-target value, resolved ONCE per `_board()` call and
+        # ADR-0076: the shared per-body opponent-target value, resolved ONCE per `_board()` call and
         # cached (the `_opp_attack_context` stash precedent) — both the S3a diagnostic shadow and the
         # live `gust_target` slot emission read this SAME cache rather than each re-running the
         # per-body `turns_to_ko_me` simulation from scratch.
@@ -7031,7 +7031,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return bool(self._discard_energy_counts(opp.get("discard") or [])[1])
 
     def _recur_fueled_oa(self, oa: dict | None, opp: dict | None) -> dict | None:
-        """ADR-0074 S2 live (survival-only): augments `oa`'s energies with its discard-recur reload
+        """ADR-0076 S2 live (survival-only): augments `oa`'s energies with its discard-recur reload
         for the CHARGED relax read — the same current-form-energyType proxy the S2 shadow
         (`_recur_shadow`) already uses; precise per-form reload TARGETING (Aura Jab feeds the
         BENCH, not itself; Archaludon any {M}) stays a further refinement, not required to make the
@@ -7076,7 +7076,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         mirroring `_incoming_budget`):
 
         - **Matched Read** (`doom_matched_relax` ON + `_incoming_budget` populated + no discard-recur
-          fuel, OR fuel present but quantified via `recur_fuel_relax`, ADR-0074 S2): RELAX-ONLY
+          fuel, OR fuel present but quantified via `recur_fuel_relax`, ADR-0076 S2): RELAX-ONLY
           conjunction — a doom the worst-case oracle cries stands only if the CHARGED Threat-Clock
           curve confirms it (`doomed_incoming` under `_DOOM_CHARGED`: per-attack typed affordability
           at manual + one supporter-accel attach, Ignition burst on Evolutions, PLUS the recur reload
@@ -7185,7 +7185,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return {"bodies": rows} if rows else None
 
     def _opponent_target_rows(self, obs: dict, board) -> tuple | None:
-        """S3 opponent-target value, the SHARED per-body computation (ADR-0074): `prize_advance +
+        """S3 opponent-target value, the SHARED per-body computation (ADR-0076): `prize_advance +
         phase × survival_shift` (`needs.opponent_target_value`) for every opponent in-play body —
         the ONE place both the S3a diagnostic (`_opponent_target_shadow`) and the live
         `gust_target` slot emission (`_resolve_needs`) read it, so they cannot drift apart.
@@ -7238,7 +7238,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Option B): the sweep compares `_opponent_target_rows`' per-body ranking to the shipped snipe
         / gust / deny picks — the evidence for the Option-B assignment. Deciding NOTHING.
 
-        Reads the per-decision cache `_board()` stashes (ADR-0074) when one exists, so a real
+        Reads the per-decision cache `_board()` stashes (ADR-0076) when one exists, so a real
         decision computes the per-body simulation once and shares it with the live `gust_target`
         slot emission; falls back to a fresh compute when called directly (off a hand-built `board`
         that never went through `_board()`, as the existing shadow tests do) — `_board()` always

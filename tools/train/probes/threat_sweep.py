@@ -13,7 +13,7 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
     clock (turns_to_afford) and the incoming to my Active.
   * TARGET   (S3a, `opp_target_shadow`) — the two-term removal value per opponent body (prize +
     phase × survival), the Option-B currency, for eyeballing vs the shipped snipe/gust/deny pick.
-  * SLOTS    (S3b/S2 live, ADR-0074) — for every frame, replays the SAME decision through a shipped
+  * SLOTS    (S3b/S2 live, ADR-0076) — for every frame, replays the SAME decision through a shipped
     pilot (both new flags OFF, today's default) and two forced-ON variants — `gust_target_slots`
     (the generalized `needs.py` slot family) and `recur_fuel_relax` (the quantified doom-relax
     refinement) — and flags any frame where either forced variant's DECIDED pick differs from the

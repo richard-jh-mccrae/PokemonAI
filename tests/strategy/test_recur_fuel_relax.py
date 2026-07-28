@@ -1,4 +1,4 @@
-"""S2 discard-recur fuel — the doom-relax REFINEMENT (ADR-0074).
+"""S2 discard-recur fuel — the doom-relax REFINEMENT (ADR-0076).
 
 `Pilot._doom_recur_fueled` already ships an all-or-nothing guard: whenever an opponent's Active is a
 POSSIBLE discard-recur refueler, the matched-Read relax stands down entirely, regardless of whether

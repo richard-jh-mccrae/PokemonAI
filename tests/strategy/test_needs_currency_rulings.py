@@ -9,7 +9,7 @@ committed corpus (`tune._build_pilot` — the strict retest bar; a fresh Pilot p
      a shuffle for free).
   3. A held disruption card's slot is never the ADR-0062 DAMAGE swing (~140) — the damage math
      stays on the play-side gust rungs. Originally ruled for the `deny` slot at the disruption
-     CARD-tier (~10); since ADR-0074 a gust-tagged card routes to its own `gust_target` kind at
+     CARD-tier (~10); since ADR-0076 a gust-tagged card routes to its own `gust_target` kind at
      the per-body marginal instead, so the third test now pins that route. The card-tier `deny`
      value itself is still pinned (synthetically) in `test_needs.py` and
      `test_needs_deny_resolver.py`, which remain the deny leg's home.
@@ -106,8 +106,8 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     """ep83457493 f31 (Game D): the opponent's Mega Lucario ex is fully fueled; I hold Boss's Orders
-    (gust). Pre-ADR-0074 this routed through `deny` at the disruption CARD-tier (~10, graded by
-    turns-to-ready); ADR-0074 (armed) moves gust-tagged cards to their OWN `gust_target` kind,
+    (gust). Pre-ADR-0076 this routed through `deny` at the disruption CARD-tier (~10, graded by
+    turns-to-ready); ADR-0076 (armed) moves gust-tagged cards to their OWN `gust_target` kind,
     valued by the real per-body removal marginal (prize-equivalents, ~1-3) — either way, NEVER the
     ADR-0062 DAMAGE swing (~140), so Boss's is a good card, never a whole-hand anchor. The damage
     math stays on the play side; the correction plays Harlequin either way (the slot never towers)."""
@@ -115,7 +115,7 @@ def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     obs = _corpus_frame("83457493", 31)["obs"]
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)
     gust_target = [s for s in slots if s.kind == "gust_target"]
-    assert gust_target, "a fueled opponent bench opens gust_target slots (armed default, ADR-0074)"
+    assert gust_target, "a fueled opponent bench opens gust_target slots (armed default, ADR-0076)"
     # every gust_target slot is prize-equivalent magnitude, nowhere near the ~140 damage swing
     assert max(s.value for s in gust_target) <= 3.0
     d = pilot.explain(obs)

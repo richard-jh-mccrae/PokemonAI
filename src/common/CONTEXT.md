@@ -323,7 +323,7 @@ marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives
 deadline" and dissolves per the ledger. `pilot._needs_v2` resolves the live board into slots;
 v2 now DECIDES the forced discard (`Pilot.needs_keep_value` armed ON, superseding v1 — the
 duplicate-pair naivety flipped without a new gate), while the gamble/refresh keep-value sites and
-the gate stack stay live pending their own swaps. **Built and ARMED (ADR-0074, #186, 2026-07-27):**
+the gate stack stay live pending their own swaps. **Built and ARMED (ADR-0076, #186, 2026-07-27):**
 `deny_slot` generalized to an opponent-target slot FAMILY — a `gust_target` kind (held gust-effect
 Trainer cards, bench-only per `doctrine_gust.py`) keep-prices against the real per-body
 `opponent_target_value` / `phase_scale` marginal instead of the flat disruption tier `deny` still

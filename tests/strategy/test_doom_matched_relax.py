@@ -114,7 +114,7 @@ def test_kill_switch_off_reproduces_the_incumbent():
 
 @pytest.mark.req("REQ-GEN-0078")
 def test_recur_fuel_stands_the_relax_down():
-    """The Assemble-Alloy hole, `recur_fuel_relax` OFF (ADR-0074's pre-quantification guard,
+    """The Assemble-Alloy hole, `recur_fuel_relax` OFF (ADR-0076's pre-quantification guard,
     `_doom_recur_fueled`, still a real code path even though the flag now ships ON by default):
     the 0-Energy Archaludon ex frame relaxes on an EMPTY opponent discard, but with Basic {M}
     Energy visibly in that discard the `discard_energy_recur` guard refuses the relax entirely
@@ -133,7 +133,7 @@ def test_recur_fuel_stands_the_relax_down():
 
 @pytest.mark.req("REQ-GEN-0078")
 def test_recur_fuel_still_stays_doomed_under_the_armed_default():
-    """The SAME Assemble-Alloy frame under the SHIPPED default (`recur_fuel_relax` ON, ADR-0074
+    """The SAME Assemble-Alloy frame under the SHIPPED default (`recur_fuel_relax` ON, ADR-0076
     Amendment D) — the coverage the sibling above stopped providing when it pinned itself to the
     legacy path. Armed, the relax is no longer blocked outright: it IS consulted (`decided`), the
     charged curve now counts the real {M} reload, and it reaches 220 >= my 90 HP — so the frame

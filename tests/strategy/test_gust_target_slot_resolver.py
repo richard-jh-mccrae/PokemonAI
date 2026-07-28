@@ -1,4 +1,4 @@
-"""The GUST-TARGET slot leg of the resolver (ADR-0074, generalizing `deny_slot` to a second held-card
+"""The GUST-TARGET slot leg of the resolver (ADR-0076, generalizing `deny_slot` to a second held-card
 instrument).
 
 `pilot._resolve_needs` emits `gust_target` slots for the opponent's BENCH bodies (verified at source,
@@ -61,7 +61,7 @@ def _slots(pilot, obs):
 def test_off_routes_gust_through_deny_exactly_as_shipped():
     """The kill-switch OFF (default): a held Boss's Orders (`gust`-tagged) still opens ONLY a `deny`
     slot at the flat disruption tier — no `gust_target` slot exists at all, byte-identical to the
-    pre-ADR-0074 behavior `test_needs_deny_resolver.py` already pins."""
+    pre-ADR-0076 behavior `test_needs_deny_resolver.py` already pins."""
     pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
                         gust_target_slots=False)
     _rows, _slots_, _elig, denys, gusts = _slots(pilot, obs)
@@ -104,7 +104,7 @@ def test_on_opens_no_gust_target_slot_with_no_gust_supplier_held():
 
 @pytest.mark.req("REQ-NEEDS-0012")
 def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
-    """ADR-0074: `_board()` resolves `_opponent_target_rows` ONCE per decision and caches it
+    """ADR-0076: `_board()` resolves `_opponent_target_rows` ONCE per decision and caches it
     (`_opponent_target_cache`) — the gust_target emission and the S3a diagnostic shadow both read
     that cache rather than each re-running the per-body `turns_to_ko_me` simulation from scratch."""
     pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],

@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0076.**
+**Next free number: 0077.**
 
 ⚠️ The index below is **incomplete**: **0067** exists on disk but has never been given a row (it
 landed on the #137 / 0a branch). 0069 and 0070 were backfilled 2026-07-26. Re-indexing 0067 is
@@ -29,6 +29,15 @@ unowned work — see #167's grill notes.
 Harvest* merged to `main` first and KEEPS 0071; #167's *mid-build swaps are gated by deterministic
 instruments* renumbered to **0072** on rebase. Both are strategy ADRs, so the tooling-moves-first rule
 above did not apply — first-merged kept the number.
+
+**0074 was claimed three times and resolved 2026-07-27.** Three branches were open at once and each
+authored an ADR numbered 0074. Resolved by the same first-merged-keeps-it rule: #175's *a probability
+may weight a ranked value* merged first and KEEPS 0074; #177's *the KO oracle prices attachments as a
+typed Budget* renumbered to **0075**; #186's *the opponent-target slot family splits by instrument
+shape* renumbered to **0076** on rebase. All three are strategy ADRs, so the tooling-moves-first rule
+did not apply to any of them. ⚠️ The lesson is now recurring (0071, then 0074 ×3): the number is
+claimed at grill time but only settled at merge time, so a long-lived branch should expect to
+renumber and should keep its ADR references greppable for exactly that reason.
 
 ## Index
 
@@ -110,3 +119,4 @@ above did not apply — first-merged kept the number.
 | [0073](0073-fetch-reach-and-fetch-deadness-are-opposite-readings-of-one-clause.md) | Fetch reach and fetch deadness are opposite readings of one clause | Accepted (grilled 2026-07-26, `/grill-with-docs` on #164); build = #164. Extends ADR-0065 / ADR-0032 / ADR-0029, companion to ADR-0068 |
 | [0074](0074-a-probability-may-weight-a-ranked-value-never-gate-a-lock.md) | A probability may WEIGHT a ranked value, never GATE a lock | Accepted (grilled 2026-07-27, `/grill-with-docs` on #175) and **IMPLEMENTED 2026-07-27**. Extends ADR-0067, amends ADR-0031 decision 3; leaves ADR-0030/0037 untouched |
 | [0075](0075-the-ko-oracle-prices-attachments-as-a-typed-budget.md) | The KO oracle prices attachments as a typed Budget, once, for every line | Accepted (grilled 2026-07-27, `/grill-with-docs` on #177 — five locked decisions); build = #177. Renumbered from 0074 on rebase (#175 merged first). Extends ADR-0067 and ADR-0074 into the five `_play_accel_extra` lines; gated by ADR-0072 |
+| [0076](0076-the-opponent-target-slot-family-splits-by-instrument-shape.md) | The opponent-target slot family splits by instrument shape: held-card keep pricing extends the Needs assignment; target-ranking reads the marginal directly | Accepted (grilled 2026-07-27, `/grill-with-docs` on #186 — three locked decisions); build = #186, consumed by #187/#188/#189/#190. Renumbered from 0074 on rebase (#175 merged first, #177 took 0075). Extends ADR-0065's Needs/`keep_v2`; gated by ADR-0072. Amendments A–F |
