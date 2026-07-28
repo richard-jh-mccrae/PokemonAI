@@ -2925,7 +2925,7 @@ class PlannerMixin:
                 return True
         return False
 
-    def _retreat_ko_candidate(self, obs, board, opp, opp_player, supporter_spent: bool = False):
+    def _retreat_ko_candidate(self, obs, board, opp, opp_player, *, supporter_spent: bool = True):
         """``(prizes, active_survives)`` for the best benched body that KOs the opponent's Active AFTER a
         retreat plus this turn's one attach — but that does NOT already KO at its current Energy (that
         single-step case is the existing ``_retreat_to_lethal_tactical`` hook's job). Among the KO-capable
@@ -2936,8 +2936,12 @@ class PlannerMixin:
         The line's attach capacity is the typed Attach Budget built for THIS benched body (ADR-0075)
         — ``benched=True``, because the attach can be made before the retreat and no modelled accel
         clause requires an Active target, so it is a strict superset naming a real sequence.
-        ``supporter_spent`` is passed through by :meth:`_supporter_ko_candidate`, whose own enabling
-        step is a Supporter."""
+        ``supporter_spent`` DEFAULTS TRUE and that is load-bearing (ADR-0075). A bare retreat spends
+        no card and is tiered ``_PLANNER_ENABLER_FREE`` for exactly that reason, so its Budget must
+        not quietly include a Supporter's yield — a KO funded by Hilda's fetch is not a free-enabler
+        KO, and crediting it as one inverts ADR-0031's rule that an enabler PRESERVING deck/slot
+        resources outranks a tutor reaching the SAME KO. Only :meth:`_supporter_ko_candidate`, whose
+        committed first step IS that Supporter, passes False."""
         me = self._my_player(obs)
         best = None                                   # (prizes, survives)
         for p in (me.get("bench") or []):
@@ -3033,7 +3037,7 @@ class PlannerMixin:
         #     Supporter is also played, which is the illegal two-Supporter turn.
         # Double-counting is structurally impossible either way: each Supporter is a separate
         # alternative play-set, so a hand holding both Hilda and Crispin still yields size 1, never 2.
-        return self._retreat_ko_candidate(obs, board, opp, opp_player)
+        return self._retreat_ko_candidate(obs, board, opp, opp_player, supporter_spent=False)
 
     def _evolve_ko_candidate(self, obs, select, board, option, opp, opp_player):
         """``(prizes, active_survives)`` if EVOLVING the Active unlocks a KO of the opponent's Active this
@@ -3051,7 +3055,8 @@ class PlannerMixin:
             return None
         energy = board.my_active_energy
         ma = next((p for p in (self._my_player(obs).get("active") or []) if p), None)
-        budget, attack_p = self._ko_line_pricing(evolved_id, ma, benched=False)
+        budget, attack_p = self._ko_line_pricing(evolved_id, ma, benched=False,
+                                                 supporter_spent=True)   # an EVOLVE spends none
         if budget is None or self._best_affordable_ko_value(
                 obs, board, opp, evolved_id, energy, body=ma,
                 budget=budget, attack_p=attack_p) <= 0:
@@ -3086,7 +3091,8 @@ class PlannerMixin:
         if body is None:
             return None
         energy = len(body.get("energies") or [])
-        budget, attack_p = self._ko_line_pricing(evolved_id, body, benched=True)
+        budget, attack_p = self._ko_line_pricing(evolved_id, body, benched=True,
+                                                 supporter_spent=True)   # an EVOLVE spends none
         if budget is None or self._best_affordable_ko_value(
                 obs, board, opp, evolved_id, energy, body=body,
                 budget=budget, attack_p=attack_p) <= 0:
