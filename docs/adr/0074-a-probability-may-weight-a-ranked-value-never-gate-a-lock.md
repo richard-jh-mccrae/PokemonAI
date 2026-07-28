@@ -268,3 +268,26 @@ UNCHANGED — they gate, so decision 1 forbids them a probability. That asymmetr
 were previously suppressed outright, plus every sub-0.5 fetch), so it moves more frames than
 decisions 3-5 did. Decision 7's Decision Gate sweep covers it, and the widening is deliberate — a
 line that is 45 % to land is worth ranking at 45 %, not at zero.
+
+## Amendment (2026-07-28, grilled — Issue #172, [ADR-0077](0077-a-ranked-count-consumer-reads-expected-not-the-probability-leg.md) decision 1): the ranked branch splits by the QUESTION
+
+Decision 1's gate-vs-ranked split stands. Its **ranked branch is not one instrument**, and read
+literally it points a count consumer at the wrong one.
+
+`Pilot._deck_basic_energy_fuel` (ADR-0061's rider-fuel read) is a compared scalar, so this ADR's
+ranked branch says it "weights by `p_any`". But `p_any` answers *is there at least one?*, and that
+consumer asks *how many will I get?* — a graded quantity feeding `min(recoverN, fuel, need)`.
+Weighting a full count of 3 by P(≥1) = 0.9975 claims "99.75 % chance of all three" where the honest
+answer is `expected` = 2.5. Within the ranked branch, therefore: a **presence** question whose output
+multiplies weights by `p_any` (decisions 3-4, unchanged); a **count** question reads `expected`.
+
+Decision 6's "second instrument" objection is also **resolved for `expected`, not overridden**. It
+forbids an untyped union beside the per-type projection. Because every type's leg shares the same
+`(d, k)`, `Σₜ expectedₜ = (Σₜ nₜ)·d/(d+k) = expected(Σₜ nₜ)` — the union is exactly the aggregate, so
+no second derivation exists. `p_any` has no such identity (hence this ADR's conservative `∏`), so the
+untyped union stays forbidden on `p_any` and is licensed on `expected` alone.
+
+Scope note: decision 6 bounded this ADR to "every consumer already ON the Budget", which left
+`_deck_basic_energy_fuel` — the last hand-rolled pigeonhole floor outside the `CountTriple`
+derivation — outside the seam. ADR-0077 decision 3 retires it, so decision 2's "one derivation,
+readings that cannot disagree" holds codebase-wide rather than Budget-wide.

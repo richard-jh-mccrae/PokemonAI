@@ -953,8 +953,9 @@ there" leg — 0a's sound type-set gate is exactly `ceiling > 0`), and **`p_any`
 Leg**: P(at least one copy is still in the deck), `deck_odds.p_contains` over the same `(unseen,
 prizes_hidden, deck_count)` the other legs read (#175). It is the honest middle the two boolean legs
 collapse: ≈0.06% wrong at 3 unseen copies where `ceiling > 0` is nearly free, ≈13% wrong at 1 where
-`floor` is still zero. A RANKED consumer (one whose output is a compared scalar) weights by it; a
-LOCK consumer (one whose output gates) may never read it — see **Leg Assignment**. Reached through
+`floor` is still zero. A RANKED consumer weights by it *when its question is presence* ("is there at
+least one?"); a ranked consumer asking a COUNT ("how many?") reads `expected` instead (ADR-0077); a
+LOCK consumer (one whose output gates) may never read either — see **Leg Assignment**. Reached through
 `MySide.deck_energy_p` (per EnergyType) and applied by `Budget.realising_p` /
 `CombatMath.reachable_attach_p`, which price the assignment a payment REALLY uses rather than the
 whole Budget — so a KO paid from hand stays at 1.0 on a deck depleted of some other colour. Two regimes, one interface: PRE-ANCHOR
@@ -964,9 +965,14 @@ on "are we anchored?", and a consumer must NAME the epistemic it reads (`.floor`
 making the estimate-smuggled-into-sound-math mistake (ADR-0067's contamination) ungrammatical rather
 than merely discouraged. The pre-anchor window is short (turns 1–2) but is exactly where the famine
 misreads live (f70; ADR-0067's pre-anchor ruling).
+`expected` alone composes ADDITIVELY across types — every leg shares one `(d, k)`, so
+`Σₜ expectedₜ == expected(Σₜ nₜ)` exactly, which licenses the untyped union an untyped rider (Turbo
+Flare, Energy Gift) needs. `p_any` has NO such identity (its joint needs a conservative `∏`), so the
+untyped union is licensed on `expected` and forbidden on `p_any` (ADR-0077).
 _Avoid_: expected count alone (that's ONE leg — a bare expectation invites `1.6 >= 1` on a deck that
-holds zero), deck tracker (the SOUND per-card ledger the triple's anchored regime reads from),
-count triple (as a claim of exactly three legs — `p_any` is the fourth)
+holds zero; the caution is against comparing an expectation to a COST, not against feeding one into a
+`min()` or a score term — ADR-0077), deck tracker (the SOUND per-card ledger the triple's anchored
+regime reads from), count triple (as a claim of exactly three legs — `p_any` is the fourth)
 
 **Leg Assignment**:
 The rule deciding WHICH **Count Triple** leg a consumer reads, extended by #175 from "what is
@@ -974,8 +980,13 @@ uncertain" (ADR-0067's yield-vs-deck split) through "who is asking" (its 2026-07
 **what the consumer's output IS**: a consumer whose output GATES — a boolean a lock turns on, where
 being wrong is catastrophic and unrecoverable — takes a sound leg (`floor`, or the fail-open
 `ceiling` where a false stand-down is the costly error) and may never read `p_any`. A consumer whose
-output is a SCALAR COMPARED against sibling options weights by `p_any`, because a mis-ranked option
-costs a turn, not the match. The Win Rung (`planner._win_line`, ADR-0030/0037) is the canonical lock
+output is a SCALAR COMPARED against sibling options reads an estimate, because a mis-ranked option
+costs a turn, not the match — and **which** estimate is set by the question it asks (ADR-0077): a
+PRESENCE question ("is there at least one?") whose output multiplies weights by `p_any`; a COUNT
+question ("how many?") whose output is compared or bounded reads `expected`. Pointing a count
+consumer at `p_any` claims "P(≥1) chance of ALL of them" — the error that left
+`_deck_basic_energy_fuel` reading 0 fuel on a deck 99.75% certain to hold it.
+The Win Rung (`planner._win_line`, ADR-0030/0037) is the canonical lock
 and already fails closed on deck fetches (`_tutor_energy_certain`, `deck_definitely_has`); the
 `ko_for_prizes` ladder is the canonical ranked consumer (`_WEIGHTED_GOALS`), and its floor moves
 with it: a weighted goal is vetoed by DOMINANCE against the tuned pick it would otherwise defer to
