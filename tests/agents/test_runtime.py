@@ -68,6 +68,10 @@ EXPECTED_SHIPPED = {
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
     "play_accel_lethal": True,      # armed-ON 2026-07-14 (ladder-testing): play-based accel (Crispin) +1 KO attach
+    "ko_budget_pricing": False,     # ADR-0075 (#177) DEFAULT OFF until the Decision Gate sitting rules its
+                                    # flips: price every ko_for_prizes KO line by the TYPED Attach Budget.
+                                    # OFF keeps the pre-#177 path alive so lethal_ko_decider_sweep.py can
+                                    # compare both arms BEFORE the deletion commit (ADR-0069 §8)
     "discard_keep_value": True,     # ADR-0065 seam-D armed-ON 2026-07-19 (ladder-testing): the card-worth
                                     # equation decides a forced discard, replacing the `_DISCARD` ladder
     "needs_keep_value": True,       # ADR-0065 WP-N4 armed-ON 2026-07-20 (dev-window): the keep-value v2
