@@ -146,7 +146,38 @@ retired as vacuous (finding 3). `85164131-22` is handed to Issue #188 as a snipe
 Coverage for the KO-gated target pick must be **authored**, not harvested — the same conclusion
 ADR-0080 reached about its own worked examples, and for the same reason.
 
-<!-- Decisions 2+ land as the grill rules them. -->
+**2. On surface (c), the shared survival leg is the SUB-LETHAL RESIDUAL. `_gust_target_denial` keeps
+the lethal case at its prize denomination, and gust adopts the shared PRIMITIVE without the shared
+COMPOSITE.**
+
+The two terms make different claims about the same removal, and the conflict is not a denomination
+mismatch to be converted away — it is a lethality boundary:
+
+| | `_gust_target_denial` (`doctrine_gust.py:227`) | shared survival leg (`needs.py:251`) |
+|---|---|---|
+| fires when | target carries Energy **and** its weakness-doubled best attack ≥ my Active's HP | any Δ in `combat.turns_to_ko_me` from removing the body |
+| returns | my Active's **full prize value, up to 3.0** | `min(_SURVIVAL_CAP 0.9, shift × phase × 0.5)` |
+| claim | *prizes I do not lose* | *turns of tempo I gain* |
+
+`_SURVIVAL_CAP` is documented as *"breaks ties among prize outcomes, never overrides a real prize
+difference."* ADR-0022's ruling that `_gust_target_denial` exists to enforce is the exact inverse —
+*"a live attacker that would take my win-condition outranks a bigger but INERT prize; prizes-first is a
+trap."* So capping the lethal term at 0.9 would **overturn ADR-0022**, and summing the two terms would
+double-count one physical fact under two denominations (the `_PRIZE_UNIT` failure mode in miniature).
+
+Ruled instead: `_gust_target_denial` is unchanged and owns the lethal case; `phase × survival_shift` is
+added **gated on `_gust_target_denial == 0`**, so the two are mutually exclusive by construction. This
+extends **ADR-0073**'s seam (*"the promote/retreat equation is the sub-lethal residual in damage"*) to
+the gust instrument — the same lethal/sub-lethal split, already this codebase's idiom rather than a new
+invention.
+
+The consequence for ADR-0078 decision 1 is precise: gust adopts the shared **primitives**
+(`combat.turns_to_ko_me` Δ, `needs.phase_scale`) and declines the shared **composite**
+(`needs.opponent_target_value`). The six gust-specific terms are untouched, so no existing corpus
+ruling is re-opened. It is a genuine behaviour change on (c) — so it needs authored fixtures (there are
+none today, finding 3) and both ADR-0072 merit gates before arming, not a byte-identical claim.
+
+<!-- Decisions 3+ land as the grill rules them. -->
 
 ## Consequences
 
