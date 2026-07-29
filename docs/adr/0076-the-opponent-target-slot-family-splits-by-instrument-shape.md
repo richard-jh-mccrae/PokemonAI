@@ -249,6 +249,36 @@ conversion — inventing a scaling constant is precisely the fudge ADR-0065 forb
 **#189 (S4-gust)**, which reworks this marginal and must rule the denomination as part of its own
 grill. Flagged there rather than patched here.
 
+## Amendment F — the currency debt is SUPERSEDED: it moves to a shared-layer prerequisite, not #189 (2026-07-28, #187 grill)
+
+Amendment E handed the prize↔worth denomination question to **#189 (S4-gust)**, on the reading that
+#189 "reworks this marginal and must rule the denomination as part of its own grill", and recorded the
+debt as *"latent, not firing — 331 corpus frames show 0 decision flips because the general-worth floor
+absorbs the drop."*
+
+Grilling #187 found that reasoning sound for gust and **wrong for deny**, for one concrete reason: a
+Crushing/Enhanced Hammer carries only the `energy_denial` tag, which is in neither `ROLE_TIER` nor
+`TAG_TIER`, so `_role_value` → 0.0 and it gets **no general-worth slot at all** (`pilot.py:3786`;
+`needs.py:285-288` states it outright). The floor that absorbed gust's drop does not exist for deny,
+and deny's slice is survival-only (`_SURVIVAL_CAP` 0.9 vs gust's 3.9) — so the same repoint that was
+latent for gust is a ~11× collapse of a Hammer's *only* keep price. Amendment E's "0 decision flips"
+was therefore evidence about gust's floor, not about the debt.
+
+Two further findings made the debt bigger than a denomination: there are **three** scales, not two
+(card-worth, damage/tactical, prize-equivalents — with two shipped constant-pairs implying rates ~9×
+apart), and `_opponent_target_rows` computes only the **removal** Δ, so deny has no slice to read at
+all until a per-instrument (strip) Δ is built.
+
+**Consequently the denomination ruling does NOT land in #189.** It lands in a new **S3c** prerequisite
+issue ahead of all three S4 swaps, per **ADR-0077** — which also honours this ADR's own Decision 3
+(centralize the shared-value adjudication rather than letting each S4 issue re-litigate it through one
+instrument's lens). S3c additionally absorbs Decision 0's deferred `discard_recur_fuel` adoption on
+`turns_to_afford`, which Decision 0 assigned to #187: it changes the shared clock every instrument's
+marginal is built on, so it belongs beside the rest of the shared layer.
+
+This does not overturn any of Decisions 0–3 or Amendments A–E; it relocates one hand-off recorded in
+Amendment E and explains why the 0-flip measurement did not generalize.
+
 ## Alternatives rejected
 
 - **Flat shared value function, no DP extension for gust/forced-promo.** Simpler — one function, four
