@@ -753,7 +753,7 @@ Any damage that can land on ONE benched opponent body this turn — the max of a
 rider and a DISTRIBUTABLE spread total (*"in any way you like"*, so all of it may fall on one body).
 The input to `combat.bench_ko_indices`, which names WHICH benched bodies die and from which
 `snipe_ko_prizes` now derives, so the bench Knock Out rule (HP within reach, Weakness/Resistance
-ignored per ADR-0022, Tera bodies immune while benched) is stated once. Introduced by #199 for **Deny
+ignored per ADR-0022, Tera bodies immune while benched) is stated once. Introduced by Issue #199 for **Deny
 Relevance**'s redundancy gate, which needs the body's identity rather than an aggregate prize.
 Reading only the snipe rider left that gate blind on Dragapult ex, whose Phantom Dive is a 6-counter
 spread and not a snipe — i.e. blind on one of our own three decks.

@@ -1,6 +1,6 @@
-"""**Deny Relevance** — the read that replaced deny's magnitude (`deny_relevance`, ADR-0079 / #199).
+"""**Deny Relevance** — the read that replaced deny's magnitude (`deny_relevance`, ADR-0079 / Issue #199).
 
-#199's grill measured the Worth Damage Rate **underivable**: the corpus-wide DISCARD sweep found 12
+Issue #199's grill measured the Worth Damage Rate **underivable**: the corpus-wide DISCARD sweep found 12
 `Discard`-context frames, exactly one holding a Hammer (`86091435-68`), and on that board the strip
 prices 0.000 under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle — so the rate divides
 out of `m × PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE` and no Δ policy rescues it. The user's doctrine
@@ -13,7 +13,7 @@ then reframed deny entirely, as a liveness gate, a redundancy gate and a **relev
        energy type? or is it energy on a supporting pokemon we want gone?
 
 Asserted here at the SEAM a consumer reads (`Pilot._opponent_target_rows`), not against the pure
-scorer — the failure mode that bit #199 twice was never bad arithmetic, it was correct arithmetic
+scorer — the failure mode that bit Issue #199 twice was never bad arithmetic, it was correct arithmetic
 answering the wrong question on a real board, which a pure-function test passes and a row-level test
 does not.
 
@@ -136,7 +136,7 @@ def test_an_active_we_are_about_to_ko_denies_nothing():
 def test_a_benched_body_we_can_snipe_ko_denies_nothing():
     """Doctrine step 2's bench clause — *"or maybe its a benched pokemon that we can snipe and KO.
     same thing, no hammer on that specific pokemon."* Needs the identity of the sniped body, which
-    the aggregate prize read cannot give, hence `combat.bench_ko_indices` (#199).
+    the aggregate prize read cannot give, hence `combat.bench_ko_indices` (Issue #199).
 
     My Active is Dragapult ex holding `{R}{P}`: Phantom Dive is affordable and puts 6 damage counters
     (60) on the bench, which finishes a 50-HP body but not a 200-HP one.
@@ -256,22 +256,74 @@ def test_a_special_energy_is_resolved_by_type_not_by_card_id():
     """The trap this must not fall into. Attached Energy is a list of CARD IDS, and for Basic Energy
     the id coincides with the `EnergyType` code (Basic `{F}` is card 6, FIGHTING is 6) — a
     coincidence in the data, not an identity. **Ignition Energy is card id 17**, a Special Energy
-    that pays colourless slots only, so it is never on a specific-type critical path and must score
-    0 — where a card-id-as-type reading would look up EnergyType 17, find nothing, and only score 0
-    by luck. Asserted alongside a real `{F}` on the same body so the contrast is the subject."""
+    that pays colourless slots only, so it is never on a specific-type critical path.
+
+    The discriminating case is `[IGNITION, PSYCHIC]` on a Mega Lucario ex, whose costs are `{F}` and
+    `{F}{F}`. A card-id-as-type reading would treat Ignition's id 17 as a type and the `{P}` card 5
+    as PSYCHIC — neither matching FIGHTING — and land on 0 by luck. The Provider-resolved reading
+    reaches the same 0 for a REASON, and the two separate the moment a real `{F}` is added: only a
+    correct reading picks index 2. Both halves are asserted, since a test that its own bug would
+    pass is not a test."""
     p = _pilot()
-    rows = _rows(p, _obs(active=(MEGA_LUCARIO, [IGNITION])))
-    assert next(r for r in rows if r["id"] == MEGA_LUCARIO)["relevance"] == 0.0
-    rows = _rows(p, _obs(active=(MEGA_LUCARIO, [IGNITION, FIGHTING])))
-    row = next(r for r in rows if r["id"] == MEGA_LUCARIO)
-    assert row["relevance"] > 0.0 and row["relevance_energy"] == 1, "the {F}, not the Ignition"
+    row = next(r for r in _rows(p, _obs(active=(MEGA_LUCARIO, [IGNITION, PSYCHIC])))
+               if r["id"] == MEGA_LUCARIO)
+    assert row["relevance"] == 0.0, "neither a colourless Special nor an off-type {P} is on the path"
+    row = next(r for r in _rows(p, _obs(active=(MEGA_LUCARIO, [IGNITION, PSYCHIC, FIGHTING])))
+               if r["id"] == MEGA_LUCARIO)
+    assert row["relevance"] > 0.0 and row["relevance_energy"] == 2, \
+        "the {F} at index 2 — not the Ignition at 0, not the {P} at 1"
+
+
+@pytest.mark.req("REQ-DENYREL-0016")
+def test_the_binding_count_catches_a_typed_attack_the_body_is_exactly_paying_for():
+    """The second way a strip sets an attack back: every specific-type slot is already covered and
+    the body sits exactly on the total cost, so losing ANY Energy drops it under.
+
+    Hariyama's Wild Press is `{F}{F}{F}` — three specific slots — so a Makuhita line holding two
+    `{F}` is short on the type and the typed clause already fires. The clause that needs its own
+    test is the guard on it: a body still MISSING a colour is bound by the type, not the count, so
+    the off-type Energy stays irrelevant. Dragapult ex holding `{D}` + `{R}` against Phantom Dive
+    `{R}{P}` sits exactly on the 2-Energy total, and the `{D}` must still score 0 — the user's
+    *"ignore the darkness"*. Without the type-ready guard a plain total-count rule flags both."""
+    p = _pilot("dragapult_ex")
+    row = next(r for r in _rows(p, _obs(active=(DRAGAPULT_EX, [DARKNESS, FIRE])))
+               if r["id"] == DRAGAPULT_EX)
+    assert row["relevance_energy"] == 1, "exactly on total cost, but the {P} is missing — type binds"
+
+
+@pytest.mark.req("REQ-DENYREL-0017")
+def test_a_brief_named_threat_is_sharpened_but_a_whiff_is_never_promoted():
+    """ADR-0079 decision 2: a matched Brief's `threats` MULTIPLY the derived rank, never source it.
+    So a named body outranks the same body unnamed — and, because the boost is a multiplier, it can
+    never make an irrelevant Energy worth taking (`0 x anything == 0`). That is the same discipline
+    `_DENIAL_UNFAVORED` follows: *"a booster must scale the oracle, never add to it"* (ADR-0063)."""
+    p = _pilot()
+    obs = _obs(bench=[(SOLROCK, [FIGHTING]), (MEOWTH_EX, [FIGHTING])])
+    plain = _rel(p, obs)
+    boosted = _rel(p, obs, types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3,
+                                                 active_can_ko=False,
+                                                 brief_threat_ids=frozenset({SOLROCK, MEOWTH_EX})))
+    assert boosted[SOLROCK] > plain[SOLROCK], "the Brief sharpens a body that already reads"
+    assert boosted[MEOWTH_EX] == plain[MEOWTH_EX] == 0.0, "a Brief cannot promote a whiff"
+
+
+@pytest.mark.req("REQ-DENYREL-0018")
+def test_the_forward_contribution_is_reported_separately():
+    """The forward-potential leg is the scan's SCOPE rather than a separate addend, so it stays
+    inspectable via `relevance_forward` — otherwise a surprising ranking could not be diagnosed
+    without a debugger. A Riolu's whole claim comes from Mega Lucario ex, which it is not yet; a
+    Solrock has no forward form at all, so its claim is entirely its own."""
+    p = _pilot()
+    rows = {r["id"]: r for r in _rows(p, _obs(bench=[(RIOLU, [FIGHTING]), (SOLROCK, [FIGHTING])]))}
+    assert rows[RIOLU]["relevance_forward"] > 0, "Riolu's claim is Mega Lucario ex's Mega Brave"
+    assert rows[SOLROCK]["relevance_forward"] == 0, "Solrock evolves into nothing"
 
 
 # ── the kill-switch ──────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0013")
 def test_the_switch_off_path_emits_nothing_at_all():
     """Ships OFF and byte-identical (ADR-0079 decision 4 / the `deny_strip_delta` precedent): no
-    field emitted, and the redundancy gate not even computed. Nothing reads these yet — #187 is the
+    field emitted, and the redundancy gate not even computed. Nothing reads these yet — Issue #187 is the
     consumer — so ON must change no decision either."""
     off = _rows(_pilot(on=False), _obs(active=(MEGA_LUCARIO, [FIGHTING])))
     assert all("relevance" not in r for r in off)

@@ -146,7 +146,7 @@ def test_bench_rider_prize_math():
 
 @pytest.mark.req("REQ-COMBAT-0005")
 def test_bench_ko_indices_names_the_bodies_and_the_prize_read_derives_from_it():
-    """#199 (ADR-0079): the Deny Relevance redundancy gate needs to know WHICH benched body dies —
+    """Issue #199 (ADR-0079): the Deny Relevance redundancy gate needs to know WHICH benched body dies —
     *"no hammer on that specific pokemon"* — which the aggregate prize read cannot say. The bench
     Knock Out rule is therefore stated ONCE here, and `snipe_ko_prizes` is derived from it, so the
     two cannot drift (the `_build_standing` / `_affords` one-function-owns-the-fact lesson)."""
