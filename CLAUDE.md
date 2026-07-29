@@ -59,6 +59,16 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
   which already retired "pin" in favor of those more precise names and reserves "test" for the
   pytest suite specifically — that glossary remains authoritative as written.
 
+## Pull requests
+
+- **Template:** `.github/pull_request_template.md`. Title always states the issue number
+  (`Issue #145: ...`). Body is a brief human-readable **Summary** (what/why/how) followed by a
+  **Technical details** section written in caveman mode (terse fragments, no fluff — files/functions
+  touched, edge cases, tests).
+- **Always rebase onto `main` first.** Whenever asked to open or update a PR: fetch and rebase the
+  branch onto the latest `main` before pushing, and resolve any conflicts that surface. Do this
+  every time, not just on the first PR for a branch — do not push straight from a stale base.
+
 ## Secrets
 
 `kaggle_api_token/` holds a real Kaggle API token (`instructions.txt`). **Never commit it or paste the token into code, configs, or chat.** A root `.gitignore` already excludes `kaggle_api_token/`, `data/meta/`, and `reports/`; the Kaggle CLI reads the token from `KAGGLE_API_TOKEN` or `%USERPROFILE%\.kaggle\access_token` (preferred for the scheduled task).
