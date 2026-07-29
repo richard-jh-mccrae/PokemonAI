@@ -92,7 +92,7 @@ def test_evolve_corpus_claims(agent, fixture):
 # `f40` (income-ON one-shot burst) was PROMOTED to a regression test when the decider landed
 # (Issue #140) — its xfail(strict) XPASSed, which is what forced the move.
 #
-# `dp_open_utility_over_fragile_line_base_f2` LEFT this file 2026-07-28 (ADR-0077, Issue #161). It was
+# `dp_open_utility_over_fragile_line_base_f2` LEFT this file 2026-07-28 (ADR-0078, Issue #161). It was
 # never an evolve target: it is a `_SETUP_ACTIVE` placement decision, so this equation never runs on
 # it, and a strict tripwire aimed at the wrong code path made this file dishonest about what it
 # covers. ADR-0070 §4 re-ruled it out of scope; it now lives — PASSING, not xfail — in

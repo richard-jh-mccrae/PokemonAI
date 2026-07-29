@@ -1,10 +1,12 @@
-# ADR-0077 — The Set-Up Active pick is one deck declaration, not a pile of derived rungs
+# ADR-0078 — The Set-Up Active pick is one deck declaration, not a pile of derived rungs
 
 **Status:** Accepted (grilled 2026-07-28, `/grill-with-docs` on Issue #161 — nine locked decisions).
-Build: Issue #161. **Authored as 0075, renumbered to 0077 on rebase (2026-07-29)** — ADR-0075 (the
-KO oracle's typed Budget) and ADR-0076 (the opponent-target slot family) reached `main` first; both are
-strategy ADRs, so the README's tooling-moves-first rule did not apply and the 0071/0072 precedent
-governed — first-merged keeps the number. **Overturns** the 2026-07-15 evolve grill's Ruling 5
+Build: Issue #161. **Authored as 0075, renumbered 0075 → 0077 → 0078 across two rebases
+(2026-07-29)** — ADR-0075 (the KO oracle's typed Budget), ADR-0076 (the opponent-target slot family)
+and ADR-0077 (a ranked count consumer reads `expected`) each reached `main` while this branch was
+open. All are strategy ADRs, so the README's tooling-moves-first rule never applied and the 0071/0072
+precedent governed each time — first-merged keeps the number. The commit history and the Issue #161
+comments therefore say 0075; this file is the same ADR. **Overturns** the 2026-07-15 evolve grill's Ruling 5
 (`docs/plans/evolve-valuation-grill-spec.md`) in its remaining half, and completes
 **ADR-0070 §4**, which re-ruled `f2` out of the evolve decider's scope and parked it as "a placement
 follow-up". Applies **ADR-0034** (deck rules fold general when the vocabulary is general) and

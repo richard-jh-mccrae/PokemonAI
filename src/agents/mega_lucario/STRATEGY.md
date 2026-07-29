@@ -969,12 +969,12 @@ lines  = [ Line(path=[RIOLU, MEGA_LUCARIO_EX], payoff=MEGA_LUCARIO_EX, role="win
 params = { "setup_energy_target": 2, "search_budget": 0 }   # 2 = FF for the first Mega Brave
 ```
 
-> **ADR-0077 migration (2026-07-28).** The Set-Up ACTIVE seam is now ONE deck declaration —
+> **ADR-0078 migration (2026-07-28).** The Set-Up ACTIVE seam is now ONE deck declaration —
 > `Strategy.starter_priority` in this deck's `strategy.py`, read by the general
 > `open-the-declared-starter`. Rows above naming `open-the-accelerator`,
 > `open-the-item-lock-starter`, `dont-open-multiprize-active`, `dont-open-with-the-engine`,
 > `start-solrock-over-lunatone` or the `starter` Role are **history** — all are deleted. See
-> [ADR-0077](../../../docs/adr/0077-the-setup-active-pick-is-one-deck-declaration.md).
+> [ADR-0078](../../../docs/adr/0078-the-setup-active-pick-is-one-deck-declaration.md).
 
 ## 8 · Open questions / deferred
 

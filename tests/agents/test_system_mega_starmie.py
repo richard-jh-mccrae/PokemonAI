@@ -73,7 +73,7 @@ def test_deck_declarations_drive_role_keyed_general_rules_over_a_match():
     # Deck ships ZERO Hypotheses; its Roles/params opt in to role-keyed General Strategy.
     p = _pilot()
     fired = set().union(*(_fired(p, o) for o in (_open_active(), _play_search(), _attack())))
-    # `open-the-declared-starter` is DECLARATION-keyed rather than Role-keyed since ADR-0077 (it
+    # `open-the-declared-starter` is DECLARATION-keyed rather than Role-keyed since ADR-0078 (it
     # replaced `open-the-accelerator`), but it belongs in this set for the same reason the others do:
     # it fires only because THIS deck opted in, via `Strategy.starter_priority` instead of a Role.
     role_keyed = {"open-the-declared-starter", "advance-the-accel-pieces",

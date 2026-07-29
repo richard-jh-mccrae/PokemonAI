@@ -30,7 +30,7 @@ deck-specific:
 This file holds only the deck overlay: Roles, the Line, params, and the genuinely deck-bound
 Hypotheses. Pure data: no engine, no control flow. Weights are seeds (status="assumed") —
 ladder-tuned (ADR-0009). The 2026-07-09 re-author's NEW gaps (`use-the-draw-engine-ability`,
-`open-the-item-lock-starter` [DELETED 2026-07-28 by ADR-0077 — Budew's opening rank is now this
+`open-the-item-lock-starter` [DELETED 2026-07-28 by ADR-0078 — Budew's opening rank is now this
 deck's `starter_priority`] + `item_lock` tag on Budew, `energy_accel` tag on Rosa's,
 `dont-strand-the-evolving-engine`) are GENERAL and have SHIPPED into common (deck-align 2026-07-15):
 baseline_sequencing.py / baseline_opening.py / doctrine_fetch.py + the two tags in card_functions.json.
@@ -58,7 +58,7 @@ ROLES = {
     # Budew (235): the SACRIFICIAL item-lock starter (30 HP, free retreat, 0-cost Itchy Pollen) — open
     #   it Active, spend it (soak a hit for one prize: `interpose`/`promote-the-staller`), never fund
     #   it (free attack → `attach_target_needs` False). Its `starter` ROLE was RETIRED 2026-07-28
-    #   (ADR-0077: the Role drove nothing — a hand holding any Basic never reaches the mulligan prompt,
+    #   (ADR-0078: the Role drove nothing — a hand holding any Basic never reaches the mulligan prompt,
     #   so `_hand_startable` never read it for a Basic). Opening it is now `starter_priority` rank 1.
     MUNKIDORI:    ["counter_mover"],               # Adrena-Brain: relay ≤3 counters ours→theirs each turn —
     #   spreads extra damage to assemble multi-KO Phantom Dive turns AND heals our own (peel counters
@@ -67,7 +67,7 @@ ROLES = {
     #   its {P} on top of the {D} fuel (Mind Bend 60 + Confusion) once the benched line is fed.
     # Meowth ex (1071): NO Role — the general `supporter_tutor` TAG + `bench-the-supporter-tutor`
     #   + `grab-a-gust-supporter-for-the-ko` drive it (a `tutor` Role would misfire as a WINCON dig).
-    # Budew (235): its OPENING rank is `starter_priority` (ADR-0077, which deleted the
+    # Budew (235): its OPENING rank is `starter_priority` (ADR-0078, which deleted the
     #   `open-the-item-lock-starter` rung this line used to name); the `item_lock` TAG still drives the
     #   fetch-side reads. Rosa's (1240): `energy_accel` TAG -> `use-acceleration`
     #   (NOT the `accel_source` Role — it would mis-boost the comeback accel at setup). Both pending.
@@ -118,7 +118,7 @@ STRATEGY = Strategy(
                 role="win_condition", ready=Ready(energy=2))],
     roles=ROLES,
     # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this deck's
-    # startable bodies (ADR-0077; order USER-RULED 2026-07-28). Read by the general
+    # startable bodies (ADR-0078; order USER-RULED 2026-07-28). Read by the general
     # `open-the-declared-starter`; the ids live here, never in a trigger.
     #   Budew (30 HP) — the free item-lock. Itchy Pollen costs nothing and taxes an Item-heavy setup
     #     engine while our line assembles; `preferred_start="second"` exists so it fires T1. Was

@@ -36,7 +36,7 @@ def _engine_pilot(deck, **kw):
         fns = CardFunctions({})
     # attack facts flow through the provider's audit-overridden table (ADR-0051).
     #
-    # `starter_priority` is DECLARED rather than left bare (ADR-0077): these drives play whole games,
+    # `starter_priority` is DECLARED rather than left bare (ADR-0078): these drives play whole games,
     # so the pregame Active pick sets the trajectory every later assertion rides on. Until 2026-07-28
     # this pilot opened Cinderace by ACCIDENT — `open-the-accelerator` fired off a DERIVED
     # `accel_source` (`_derived_accel_body_ids`), so a bare `Strategy()` still got an opener. That rung

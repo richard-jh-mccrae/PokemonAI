@@ -5,14 +5,14 @@ Card facts (data/EN_Card_Data.csv id 235, verified): 30 HP, free retreat, Itchy 
 10 damage, opponent can't play Items next turn. The identity decomposes across surfaces that are
 ALREADY built and one declaration that had drifted:
 
-  * opener      — rank 1 of the deck's `starter_priority` (ADR-0077; was `open-the-item-lock-starter`
+  * opener      — rank 1 of the deck's `starter_priority` (ADR-0078; was `open-the-item-lock-starter`
                   +35, keyed on the `item_lock` tag, until that rung was deleted);
   * sacrificial — worth 0 (no worth tier prices it): the lock body is
                   MEANT to be spent — soak a hit for one prize (`interpose`, `promote-the-staller`);
   * no funding  — Itchy Pollen is free, so `attach_target_needs` is False and no energy rung ever
                   prices an attach onto Budew (the line eats the Energy — the 86091728-19 priority);
   * startable   — the deck's declared rank-1 OPENER. Was the `starter` Role (declared in STRATEGY.md
-                  §7, wired 2026-07-19); ADR-0077 retired that Role and moved the declaration to
+                  §7, wired 2026-07-19); ADR-0078 retired that Role and moved the declaration to
                   `Strategy.starter_priority`, where it actually drives the Set-Up Active pick.
 
 The opener BEHAVIOUR (Budew takes the Active Spot over the rest of the field) is asserted in
@@ -45,7 +45,7 @@ def pilot():
 @pytest.mark.req("REQ-WORTH-0003")
 def test_budew_is_the_decks_declared_rank_one_opener(pilot):
     """STRATEGY.md §7 declares Budew the item-lock starter; the executable overlay must agree. Since
-    ADR-0077 that declaration is `Strategy.starter_priority` rank 1 rather than a `starter` Role —
+    ADR-0078 that declaration is `Strategy.starter_priority` rank 1 rather than a `starter` Role —
     the Role was retired because it drove nothing, and this is the form that does.
 
     `_hand_startable` is deliberately NOT asserted here any more: it now reads only the `opener` Tag
@@ -56,7 +56,7 @@ def test_budew_is_the_decks_declared_rank_one_opener(pilot):
     assert pilot.strategy.starter_priority[:1] == [_BUDEW], (
         f"Budew must be the declared rank-1 opener; got {pilot.strategy.starter_priority[:1]}")
     assert "starter" not in pilot.strategy.roles.get(_BUDEW, []), (
-        "the `starter` Role was retired by ADR-0077 — the declaration is starter_priority")
+        "the `starter` Role was retired by ADR-0078 — the declaration is starter_priority")
 
 
 @pytest.mark.req("REQ-WORTH-0003")

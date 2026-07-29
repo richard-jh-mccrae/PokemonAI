@@ -67,13 +67,13 @@ evidence (rule ids, commits, files). Three axes:
   fields or Function Tags exist; unwired opt-in surfaces (`params` like `my_archetype` /
   `preferred_start` / `search_budget`, `fetch_priority`, `starter_priority`, Matchup-Brief coverage,
   new Roles).
-  - **Named check — the opening pick (ADR-0077).** A deck with **≥2 startable bodies** (Basics, plus
+  - **Named check — the opening pick (ADR-0078).** A deck with **≥2 startable bodies** (Basics, plus
     `opener`-tagged cards) and **no `starter_priority`**, or one whose declaration does not rank
     *every* startable body, is a **drift finding** — not a nice-to-have. It is the only rule at the
     Set-Up Active seam, so an undeclared or partial deck loses that decision to the engine's option
     index (the dragapult f2 / mega_lucario f1 bug). Also flag any surviving deck Hypothesis gated on
     `_SETUP_ACTIVE`: it is a fold candidate into the declaration by construction, and if it reads a
-    `card_id` it is the card-id reflex ADR-0077 removed.
+    `card_id` it is the card-id reflex ADR-0078 removed.
 - **Docs + hygiene**: STRATEGY.md dispositions naming renamed/moved rules; stale fold-table rows;
   stale migration NOTEs; `tuned.json` keys matching no live Hypothesis id (breaks
   `test_tuned_wiring`); `weight_overrides` entries whose underlying general seed has drifted

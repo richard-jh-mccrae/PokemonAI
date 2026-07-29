@@ -109,7 +109,7 @@ HYPOTHESES = [
     # a partnerless Solrock, and fetch toward EXACTLY one of each in play. Replaces `fetch-the-engine-
     # first` (its `not line_ready` gate + blanket-engine grab caused f41/f12/f26).
     # (start-solrock-over-lunatone RETIRED 2026-07-28 — FOLDED into the deck's `starter_priority`
-    #  declaration below + the general `open-the-declared-starter` (baseline_opening, +40), ADR-0077.
+    #  declaration below + the general `open-the-declared-starter` (baseline_opening, +40), ADR-0078.
     #  It was gated on `card_id == SOLROCK` — the card-id reflex, shipped. The whole ml f1 finding
     #  ("both score 0, so the option-index tie-break opened Lunatone") is now the ORDER of the
     #  declaration: Solrock outranks Lunatone, and the general rule reads only the resolved
@@ -361,12 +361,12 @@ STRATEGY = Strategy(
     # Lunatone (attach Ruling 6) — the value-side complement of the `skip-partnerless-solrock` rung.
     partners={SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
     # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this deck's
-    # startable bodies (ADR-0077). Read by the general `open-the-declared-starter`; the ids live here,
+    # startable bodies (ADR-0078). Read by the general `open-the-declared-starter`; the ids live here,
     # never in a trigger. Transcribed from the doctrine it replaces:
     #   Solrock (110 HP, Cosmic Beam 70 for one {F}) — the attacker half of the pair; was
     #     `start-solrock-over-lunatone` (+12, ml f1 CRITICAL).
     #   Riolu (80 HP, Accelerating Stab {F} 30) — ONE hop from Mega Lucario ex (340 HP, Aura Jab 130)
-    #     and it can attack now. The constraint ADR-0077 is written around: open-Riolu must survive,
+    #     and it can attack now. The constraint ADR-0078 is written around: open-Riolu must survive,
     #     and it does here as a LINE-SHAPE read, not a card-id gate.
     #   Makuhita (80 HP, {F} 10) — the secondary-line base; a body, not a plan.
     #   Lunatone (110 HP) — the DRAW ENGINE. Belongs on the Bench powering Lunar Cycle; was
