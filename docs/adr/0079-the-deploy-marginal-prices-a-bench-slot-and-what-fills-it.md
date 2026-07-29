@@ -87,4 +87,42 @@ Gate against `data/leaf_lab/baseline.json` run BEFORE the arming decision, and t
 Tripwire A/B), its own glossary entries, and a sequencing decision against the in-flight
 Issue #199 → Issue #187/#188/#189 chain.
 
+**2. The slot cost is an EXACT ASSIGNMENT over deck-reachable suppliers — never a constant, never a
+binary gate.** *(User ruling, 2026-07-29.)*
+
+The Bench is five deadline-tagged slots in the `needs.py` slot family (ADR-0065's DP, as extended to a
+second family by ADR-0076). The **supplier set** is the deployable bodies in hand **plus** the bodies
+reachable from deck, read through `fetch_closure`'s **reach** direction (ADR-0073) and weighted by
+Deck-Content Odds. The marginal is a difference of assignment values —
+
+```
+deploy_marginal(X) ⊃ − [ assignment_value(suppliers) − assignment_value(suppliers, X pinned) ]
+```
+
+— so the cost of the 5th slot is **emergent**: exactly the contribution of the supplier it displaces.
+Zero on an empty Bench, steep on a full one with live candidates, and it needs no tuned constant. The
+`my_bench < _BENCH_MAX` binary gate and `Board.bench_full` as a decision input both retire (the engine
+still won't offer an illegal placement; that is the engine's job, not a weight's).
+
+The deck leg is load-bearing rather than incidental. On the motivating frame the displaced body is
+**Makuhita, in the deck** — reachable via the Ultra Ball in hand — and the human's recorded reason is
+literally *"clogs the bench needed for the Makuhita→Hariyama line."* A hand-only supplier set prices
+f51's last slot at ~0 and would leave the slot term untested by the only evidence there is for it.
+
+Alternatives rejected, and why the frame does not settle it by itself: **f51 admits two independent
+diagnoses.** The 2nd Solrock is also *redundant* (Solrock + Lunatone already in play; the readiness
+leaf's `_READINESS_SATURATED` prices a duplicate utility body at 0.1×), so a body-side-only equation
+(*option 3: no slot term*) and a hand-only assignment (*option 2*) BOTH land the right answer on that
+board — for a reason the human did not give. That is the weight-coincidence pattern ADR-0069 catalogues
+(the desperation attach that lived at `+15 − 12 = +3`). Only the displacement reading generalizes to
+the case the user raised — filling every Bench slot with a *suboptimal combination* — because a bad
+combination is one where every body looked fine individually and the SET was wrong, and only an
+assignment sees sets.
+
+Costs accepted with the ruling: the term reads a hidden zone, so it owes ADR-0077 **Leg Assignment**
+discipline (this is a RANKED consumer, so a count question reads `expected` and a presence question
+reads `p_any`; it may never read either as a gate); it adds a `fetch_closure` reach query to the
+deploy path; and the supplier set needs an explicit cap, since the DP is `_MAX_KEEP_SLOTS`-bounded
+at 16.
+
 *(Further decisions appended as they lock.)*
