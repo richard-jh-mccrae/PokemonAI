@@ -157,5 +157,19 @@ both readings.
 
 **Consequence for the frame's role.** f29 is now **two** anchors at once: the dead-Hammer anchor this
 ADR derives its bench weight from, and a missed-KO anchor for the *"a positive-scoring free Item is
-tiered ahead of an available Knock Out"* family (`_finish_turn_last`) — which remains live and unowned,
-and which ADR-0082 explicitly declines to charter.
+tiered ahead of an available Knock Out"* family (`_finish_turn_last`). ADR-0082 declined to charter that
+family; it was **split and filed 2026-07-29** once measured, because it turned out to be two problems:
+
+- **The frame half → Issue #165.** Of the five frames Issue #199's gate-1 note listed as live instances,
+  **three now HIT** on HEAD (`83053965-28`, `83455356-11`, `85046350-32`) and `86091435-68` is
+  refuted-as-labelled — so exactly **one** genuine miss survives, `83664340-24`, whose own rationale
+  names the Turn Planner. ⚠️ That frame's *embedded agent trace is stale*: it shows
+  `disrupt-when-unfavored +18` on the Hammer, a rung whose `energy_denial` half **this ADR's amendment
+  retired**. At HEAD the Hammer prices `+7.88` as a pure tactical — a **bench** strip via
+  `_DENIAL_BENCH`, which ADR-0063's `active_can_ko` guard deliberately does not zero. So the frame is a
+  **doctrine conflict with a passing test of ours**
+  (`test_the_hammer_still_hits_the_BENCH_on_a_turn_i_knock_out_their_active`), not a tuning gap.
+- **The structural half → Issue #212.** `_DENIAL_ITEM_COST` prices *keeping* an Item for `energy_denial`
+  and nothing else (`_denial_play_tactical` returns 0.0 otherwise), so no other free Item in the pool
+  has a finite-resource hold price at all — the defect this ADR named, still unfixed for everything that
+  is not a Hammer.
