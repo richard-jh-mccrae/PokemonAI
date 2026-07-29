@@ -209,7 +209,63 @@ Three things are explicitly preserved:
 (`:447`) both still say *"the two positional weights"*. There are five. The count grew without either
 line updating, and the deletion above makes it four.
 
-<!-- Decisions 4+ land as the grill rules them. -->
+**4. On surface (a), the keep price needs gust's LIVENESS, not gust's magnitude. It is the incumbent
+tier scaled by a bounded scalar: `TAG_TIER["gust"] 10.0 × liveness`, `liveness ∈ [0,1]`.**
+
+This is the one surface that crosses a scale boundary (decision 1), and the bridge it would need — the
+Worth Damage Rate — was measured **underivable** by ADR-0080, whose guard test in `common/currency.py`
+fails anyone who adds it without a derivation. The resolution is that the crossing does not need a
+magnitude at all. The discard question is not *"how many prizes is this gust worth"* but *"is this
+Boss's Orders doing real work on this board, or is it dead weight?"* — and that is answerable inside the
+card-worth scale.
+
+```
+liveness = best_bench_target_value / (max_prize_value + _SURVIVAL_CAP)      # = 3.0 + 0.9 = 3.9
+gust_target_slot.value = TAG_TIER["gust"] × liveness                       # 2.6 … 10.0
+```
+
+**The normalizer is derived, not invented.** `max_prize_value` is **3** — Mega Evolution Pokémon *ex*,
+`docs/rules.md` §6, tagged `[RULE: L333]` and `[PROJECT-VERIFIED: "Mega-ex=2" refuted]` — and
+`_SURVIVAL_CAP` is a shipped ruled constant. So the bound is read off existing facts, exactly as
+ADR-0080 Amendment A derived `MAX_ATTACK_DAMAGE = 350` from the CSV and recorded that *"it maps damage
+into [0,1] and is not an exchange rate."* **Zero new constants**, and the one constant retained is the
+incumbent, already-tested `10.0` — the same argument ADR-0080 decision 3 used to reject a bucketed enum.
+
+This **fixes finding 4**: a gust card now keeps for 2.6 (a lone 1-prize target) up to 10.0 (a 3-prize
+Mega ex with survival bought), so it clears the 4.5 general-worth floor when the board earns it and
+sinks below it when the board offers nothing. The armed slot becomes reachable for a first copy.
+
+**This NARROWS ADR-0080's consequence rather than contradicting it.** ADR-0080 recorded that gust *"has
+no escape route of deny's kind — a gust card's value genuinely is a magnitude (it drags a body into the
+Active slot)."* That is true — on surfaces (b) and (c). It over-generalised because it had not split
+gust's surfaces: the magnitude lives where no scale is crossed, and the crossing happens where only
+liveness is needed. ADR-0080's decision 4 hand-back to this issue is therefore **answered, not
+deferred**, and answered without the rate it predicted would be needed.
+
+**5. Corpus ownership, ruled frame by frame with the user (2026-07-29).**
+
+- **`85164131-22` → Issue #188.** Rationale confirmed correct by the user. The read-out shows
+  `context Damage — pick the Pokémon to deal damage to (a snipe target)`, and the two options are a
+  snipe pick between the opponent's benched Cinderace (260 HP with Hero's Cape) and Staryu (70 HP, the
+  future Mega Starmie ex). `_gust_target_tactical` gates on `context != _SWITCH`, so gust cannot reach
+  this frame at all. Committed as `ms_snipe_evolving_wincon_over_promotion_stack_f22.json`.
+- **`86089120-14` is ALREADY FIXED on `main` and belongs to NO S4 issue.** Re-measured with
+  `tools/train/retest_one.py dragapult_ex 86089120-14`: `chosen(after now) = [1]`, matching the ruling,
+  `FIXED = True`. Two facts kill both candidate owners:
+  - **It was never a gust-value defect.** The gust option scores `0.0` with `fired: []` — every one of
+    the five rungs correctly declines (no KO is available, and `active_doomed` is false because
+    Makuhita's Confront `{F}{F}` 30 cannot threaten a 70 HP no-weakness Dreepy). So there was no gust
+    endorsement for a marginal to fix, and this ADR's earlier proposal to hand it to Issue #190 as a
+    `return_threat` bad-trade was **wrong on the evidence**: `return_threat` subtracts from a value that
+    was never positive.
+  - **The defect was the develop-rollout planner.** The recorded trace shows
+    `planned {'step': [0], 'ranked': 'engine', 'diverged': True, 'value': 15.0}` with all three
+    `plan_candidates` tied at `15.0`, so the planner committed to a `0.0`-scored option over a
+    `24.0`-scored one. On `main` that override is gone (`planned after = None`).
+
+  The frame passes and needs no owner. What it *does* expose is decision 6's question, below.
+
+<!-- Decisions 6+ land as the grill rules them. -->
 
 ## Consequences
 
