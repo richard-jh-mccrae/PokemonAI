@@ -346,6 +346,49 @@ retained**, not residue. Issue #136's standing directive #1 ("no dead rungs left
 for the target half only, on the record above. Relevance-informed counter placement is a real future
 extension and is logged as such, not silently dropped.
 
+**6. `my_route = max( 1/⌈hp_remaining / max_rider_snipe⌉ , min(1, prize_value / my_prizes_remaining) )`
+— ungated, with NO membership boolean and NO floor constant.** Two alternative reasons a body helps
+*me*: my repeatable rider can finish it cheaply alongside my real attacks (**reach** — the arithmetic
+`snipe_prize_reach` already computes at `objectives.py:424`), or its prizes are a large share of what I
+still need (**share**). `max` because they are alternative claims about one subject, per decision 2.
+
+The ADR-0040 Prize-Path machinery is **not** abandoned: `target_prize_redundant` is derived from the
+path and is still doing gate work inside `their_plan` (decision 4). What is dropped is the separate
+`target_on_path` **boolean** as a route leg, because it measured no better than the two derived legs
+alone and cost a floor constant.
+
+### The full prototype, measured — decisions 1–6 reach the shipped record
+
+Assembling decisions 1–6 (with `snipe-for-the-ko` as the structural dominator decision 1 keeps outside
+the scalar, and the Tera ordered last), over all 19 frames:
+
+| `my_route` shape | agreement | extra misses beyond the two non-targets |
+|---|---|---|
+| `1.0` (no route factor) | 15/19 | `82523811-41`, `85164131-22` |
+| `on_path ? 1.0 : 0.5` | 15/19 | same |
+| `share` alone | 15/19 | same |
+| `reach` alone | 16/19 | `82756021-57` |
+| `on_path ? reach : 0.5×reach` | 16/19 | `82756021-57` |
+| `on_path ? max(reach, share) : 0.5×…` | 17/19 | — |
+| **`max(reach, share)` (decision 6)** | **17/19** | **—** |
+
+**17/19 with the only two misses being `81905522-75` (the transposition, design-doc R3) and
+`82749168-38` (the refuted label)** — i.e. the prototype reaches the shipped record exactly, on the two
+frames the design doc already rules out of scope, while introducing **zero tunable constants**. The
+KO-dominator line is load-bearing: without it the same model scores 10–11/19, and all five of the
+missing frames are the five where `board.snipe_ko_available` is True.
+
+**Overfitting risk, stated rather than buried.** The route shape was selected by trying eight variants
+against the same 19 frames used to validate it. With n = 19 that is shape-selection on the validation
+set, so *"matches on the 19"* must NOT be the acceptance bar for the build — see the acceptance
+decision. The prototype is evidence that the design is *expressible*, not that it generalises.
+
+**Policy note (owed, not yet ruled).** The prototype read the curve at `incoming(t=1, charged=None)` —
+the **ceiling** policy — and reached 17/19 there. The design doc's per-consumer conservatism table
+(ruling 2) specifies something more specific for this consumer: snipe-prep is *"existence-gated ceiling
+on the THREAT, slow on the INVESTMENT."* Pinning that split is an open ruling for the build, not
+settled by the prototype's default.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
