@@ -113,8 +113,19 @@ re-pinned as a *deploy-now* test. It is also directional, so it bounds the rate 
 
 Absent that anchor, any value for the rate is exactly the magic-number fudge ADR-0065 forbids. S3c
 therefore **captures the anchor first**: re-adjudicate `86091435-68` as a deny-valuation target, and
-sweep the (gitignored) corrections corpus for DISCARD-context frames holding a Hammer, adjudicating any
-that discriminate.
+sweep the corrections corpus for DISCARD-context frames holding a Hammer, adjudicating any that
+discriminate.
+
+**Corpus availability — correcting a claim repeated throughout the design doc.**
+`docs/plans/opponent-value-equation-unification.md` describes the corrections corpus as *"gitignored"*
+in four places (the S2/S3a sweep bullets, the S1b next-step, the `opp_target_shadow` note), and this
+ADR inherited that phrasing. **It is wrong.** `data/corrections/` is **tracked** — 33 files across 30
+agent/commit directories, `corrections.jsonl` per directory — and the root `.gitignore` excludes only
+`kaggle_api_token/`, `data/meta/`, `data/probe/`, `reports/`, raw replays and the raw strategy sources.
+The ADR-0062 Hammer frames are in `data/corrections/mega_starmie_20260630_b7e483a/` (the commit ADR-0062
+itself names as the recording point). **Consequence: gate 1 needs no corpus that this repo lacks** — it
+needs the strip-Δ (build-shape step 5) and a probe, both ordinary work. The go/no-go is reachable
+without waiting on anything external, which the "gitignored" framing implied otherwise.
 
 **4. The shared-layer work splits out as S3c, a prerequisite to all three S4 swaps.** ADR-0076
 Decision 3 already established the principle — centralize the shared-value adjudication *"rather than
