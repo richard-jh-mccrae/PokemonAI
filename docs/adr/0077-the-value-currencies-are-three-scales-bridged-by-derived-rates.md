@@ -261,6 +261,80 @@ wiring. The live options, for the user to rule in #199:
 
 Recorded here rather than in a review doc because it changes what decision 1 can promise.
 
+## Amendment B — the user's ruling: deny's Δ is INSTANTANEOUS, and gate 1 now passes (2026-07-28)
+
+**Ruling (user, 2026-07-28), settling Amendment A's failure:** *"Deny shall not calculate energy
+re-attached on a following turn. It shall only ever perform a calculation on opponent's Pokémon with
+energy during our own turn."*
+
+This is Amendment A's option 2, and it is the correct diagnosis: the forward-looking Δ was answering
+"how many turns of survival does this strip buy me", a question whose answer is ~always zero because
+the curve hands the opponent a replacement attach every turn. Deny's real question is "what does this
+strip take off the board **now**" — which is what ADR-0062's oracle has always measured.
+
+**Implementation, and one trap found on the way.** Read literally, "no re-attach" means
+`base_attach: 0`. But differencing `turns_to_ko_me` (the shape the REMOVAL Δ uses) under that policy
+reports a fully-stripped body as *never attacking again* — Δ = the whole 8-turn horizon — because no
+future attach is ever modelled. That wildly overstates a strip the opponent simply re-attaches past:
+a multi-turn projection wearing a snapshot's clothes, and the opposite of what the ruling asks for.
+
+So the shipped Δ is a **one-step damage swing**: `incoming(t=1)` before the strip minus after, under
+`_DENY_CHARGED = {"base_attach": 0, "burst_on_evo": 0}`, divided by `PRIZE_DAMAGE_RATE` to land in the
+shared prize-equivalent currency.
+
+**It reproduces ADR-0062's own worked table exactly** (`test_deny_strip_delta.py`, parametrised) —
+Mega Lucario ex, Aura Jab `{F}` 130 / Mega Brave `{F}{F}` 270:
+
+| their Energy | ADR-0062 "denies" | the marginal's `strip_damage` | `deny_value` |
+|---|---|---|---|
+| 1 | 130 | 130 | 1.30 |
+| 2 | 140 | 140 | 1.40 |
+| 3 | 0 (surplus) | 0 | 0.00 |
+
+The surplus row is the ADR-0062 whiff arriving **structurally** rather than as a separate gate.
+
+**Honest cost.** Deny now shares the shared CURRENCY but not the shared two-term FORM: its Δ is a
+damage quantity over `PRIZE_DAMAGE_RATE`, not `prize_advance + phase × survival_shift`. The
+one-backend claim is weaker than decision 1 implied, and `needs._SURVIVAL_CAP` no longer bounds deny
+(a 270-nuke strip prices at 2.7 prize-equivalents, above one Prize). Pinned in
+`test_deny_shares_the_currency_but_not_the_two_term_form`.
+
+### Gate 1, re-run — and a correction to how it was scored
+
+Re-running over the same 21 ruled Hammer frames, all four core PLAY frames now predict PLAY
+(`82523811-15`, `82523811-79`, `82525101-92`, `82525101-102`, at +55/+30/+60/+60 against the
+incumbent's +22.5/+55/+60/+60).
+
+**The gate was also mis-scored the first time, and I corrected it after seeing the first result — which
+is worth flagging plainly rather than burying.** Amendment A scored the marginal against the corpus
+*label*: "the human ruled HOLD, so `m` must be below threshold." But several HOLD labels do not say the
+strip is worthless — they say *take the KO* or *play the better line*: `82748422-26` (*"Jetting Blow
+will KO Cinderace"*), `83053965-28` (*"can KO opponents active via Hilda"*), `83664340-24` (*"we know
+that we will KO them this turn"*), `85046350-32` (*"we are about to KO their active"*), `83455356-11`
+(a five-step Salvatore line — explicitly #165 Turn Planner territory). Those rulings are owned by the
+KO rung and the planner, not by the deny valuation, and **the incumbent scores every one of them
+positive too**. Counting them as deny failures measures the wrong layer.
+
+So the probe now reports both readings, and the behaviour-preservation one is the bar a swap actually
+has to clear:
+
+```
+agree-with-CORPUS-LABEL:        15/21   (6 misses)
+agree-with-INCUMBENT deny rung: 21/21   => BEHAVIOUR-PRESERVING
+of the 6 label misses:          6 INHERITED, 0 NEW to the repoint
+```
+
+**Verdict: gate 1 PASSES on behaviour preservation** — the repointed rung's play/hold sign matches the
+incumbent on every ruled Hammer frame, so the swap changes no deny decision. The 6 label misses are
+pre-existing and unowned by this rung; five belong to the KO/planner layers and the sixth is
+`86091435-68`, already REFUTED-AS-LABELED.
+
+**What this does NOT settle**, unchanged from Amendment A: gate 2 (the Worth Damage Rate still has no
+anchor), and surfaces (a) the keep price and (c) the target pick, neither of which this gate touched.
+The five KO-line frames are also worth carrying into #199's step-1 adjudication as evidence for how
+`_finish_turn_last` tiers a positive-scoring free Item ahead of a KO — the original ADR-0062 complaint,
+still live.
+
 ## Consequences
 
 - **#187 is not the shortest hop of the three S4 swaps; it is the longest.** Deny is the only

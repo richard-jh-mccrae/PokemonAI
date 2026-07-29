@@ -7038,13 +7038,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     # (ADR-0064; colourless-only, so it never funds a typed {W}{W}).
     _DOOM_CHARGED = {"base_attach": 2, "burst_on_evo": 2}
 
-    #: The **slow** energy policy for the deny Δ (`_strip_delta_terms`; design doc ruling 2 + its
-    #: policy table). Survival reads `_DOOM_CHARGED` because under-preparing loses games; deny reads
-    #: this because over-valuing a speculative strip wastes a scarce Hammer (ADR-0062's bench 0.25 is
-    #: the same instinct). One manual attach per turn (rules.md §3's floor) and NO burst-on-evolve
-    #: allowance: crediting the opponent a burst here would inflate what the strip appears to take
-    #: away, which is the fail-fast direction for this consumer.
-    _DENY_CHARGED = {"base_attach": 1, "burst_on_evo": 0}
+    #: The **instantaneous** energy policy for the deny Δ (`_strip_delta_terms`).
+    #:
+    #: **USER RULING, 2026-07-28 (ADR-0077 Amendment B), settling gate 1's failure:** *"deny shall not
+    #: calculate energy re-attached on a following turn. It shall only ever perform a calculation on
+    #: opponent's Pokémon with energy during our own turn."* So `base_attach` is **0** — the strip is
+    #: priced against the Energy actually on their board at the moment we hold the Hammer, with no
+    #: credit for the attach they make next turn.
+    #:
+    #: This is deliberately NOT the design doc's "slow" policy for this consumer, and the difference
+    #: is the whole ruling. At `base_attach: 1` the curve hands the opponent a replacement Energy every
+    #: turn, so a single strip is cancelled by construction wherever the body can re-afford its attack
+    #: — gate 1 measured that as `m = 0.000` on four of the five frames the corpus rules PLAY. Deny's
+    #: question is "what does this strip take away NOW", which is the question ADR-0062's oracle has
+    #: always answered (`best_affordable(E) − best_affordable(E−1)`, no re-attach credit).
+    #:
+    #: `burst_on_evo` stays 0 for the original reason: crediting the opponent a burst inflates what the
+    #: strip appears to take away, the fail-fast direction for a consumer that must not over-spend a
+    #: scarce Hammer.
+    _DENY_CHARGED = {"base_attach": 0, "burst_on_evo": 0}
 
     def _doom_recur_fueled(self, oa: dict | None, opp: dict | None) -> bool:
         """The opponent's Active LINE (current + forward forms) refuels from their discard
@@ -7271,23 +7283,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The removal Δ beside it asks "what do I buy by taking this body OFF the board" — the gust /
         snipe question. A Hammer cannot ask that: it discards ONE Energy and the body stays. So deny
-        plugs its own Δ into the same two terms (the design doc's *"each plugs its own `Δ` into the
-        two terms"*), computed the way `turns_to_ko_me`'s own contract licenses — that method
-        documents *"removing an opponent body can only RAISE the result, so the Δ across a removal is
-        the turns of survival bought"*, and stripping an Energy is the same monotonicity one level
-        down: fewer affordable attacks can only push my KO further out.
+        plugs its own Δ into the shared currency (the design doc's *"each plugs its own `Δ` into the
+        two terms"*), in the shape the user's ruling fixes — see SHAPE below.
 
         Mechanism mirrors the S2 recur shadow in the opposite direction — it augments a COPY of the
         body's ``energies`` upward to model discard fuel; this drops one, so no live primitive is
         touched and no caller's body dict is mutated.
 
+        **SHAPE (user ruling, ADR-0077 Amendment B).** Deny's Δ is a ONE-STEP DAMAGE SWING against the
+        board as it stands on our turn — ``incoming(t=1)`` before the strip minus after — divided by
+        ``PRIZE_DAMAGE_RATE`` so it lands in the same prize-equivalent currency the removal Δ speaks.
+        It deliberately does NOT go through ``needs.opponent_target_value``'s two-term form, because
+        the ruling makes deny's Δ a *damage* quantity rather than a *turns* one. The shared CURRENCY
+        is preserved; the shared two-term FORM is not, and that is the honest cost of the ruling.
+
+        Why not a ``turns_to_ko_me`` difference, the way the removal Δ works: with no attaches
+        modelled the projection reports a fully-stripped body as never attacking again (Δ = the whole
+        horizon), which wildly overstates a strip they will simply re-attach past. That is a
+        multi-turn projection wearing a snapshot's clothes — the opposite of what the ruling asks for.
+
         ``prize_advance`` is **0**, and that is a ruling, not an omission (ADR-0077 decision 1 /
-        design doc line 50, "deny (pure tempo)"): a strip takes no Prizes. The path-denial and
-        forward-form cases that might look like prize terms are already inside the survival leg — S1a
-        established `forward_card_ids` is all-descendants, so the curve already sees what a body
-        evolves into, and adding a prize term on top would double-count. Deny's marginal is therefore
-        bounded by `needs._SURVIVAL_CAP` (0.9) where gust's reaches 3.9 — the asymmetry #199's
-        gate 1 exists to measure rather than assume.
+        design doc line 50, "deny (pure tempo)"): a strip takes no Prizes. The forward-form case that
+        might look like a prize term is already inside the damage read — S1a established
+        ``forward_card_ids`` is all-descendants, so ``incoming`` already sees what a body evolves
+        into off the Energy it is banking (ADR-0063's `_DENIAL_FORWARD` instinct, derived).
 
         A body holding no Energy yields 0: there is nothing to strip, which is the ADR-0062 whiff
         arriving structurally instead of as a separate gate.
@@ -7298,29 +7317,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         form's affordability against its CHEAPEST attack and then credits its BIGGEST regardless
         (`incoming`'s own contract: *"a form contributes its biggest attack once it can pay its
         cheapest under `attached + t`; the bigger attack's affordability is NOT charged"*), so
-        removing one Energy cannot change what it deals. Deny is fail-slow where survival is
-        fail-scared (the policy table: *"Deny (Hammer) / board-clock | fail-slow | slow"*), and only
-        the charged policy prices per-attack typed affordability — the thing a strip actually
-        attacks."""
-        from common import needs
+        removing one Energy cannot change what it deals. Only a charged policy prices the per-attack
+        typed affordability a strip actually attacks.
+
+        `_DENY_CHARGED` carries the **user's ruling of 2026-07-28** (ADR-0077 Amendment B): the Δ is
+        INSTANTANEOUS — `base_attach: 0`, no credit for the Energy they re-attach next turn — and it
+        is only ever taken over opponent bodies carrying Energy right now. See that constant for why
+        the design doc's "slow" (`base_attach: 1`) reading was the thing gate 1 measured as broken."""
+        from common.currency import PRIZE_DAMAGE_RATE
         b = bodies[i]
         energies = list((b or {}).get("energies") or [])
         if not energies:
-            return {"strip_shift": 0, "deny_value": 0.0}       # nothing to strip — the whiff, derived
+            return {"strip_damage": 0, "deny_value": 0.0}      # nothing to strip — the whiff, derived
         stripped = dict(b)
         stripped["energies"] = energies[:-1]                   # one Energy gone; the body remains
-        base = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
-                                          switch_enabler=enabler, charged=self._DENY_CHARGED)
-        after = self.combat.turns_to_ko_me(ma, bodies[:i] + [stripped] + bodies[i + 1:],
-                                           opp_active=stripped if b is opp_active else opp_active,
-                                           switch_enabler=enabler, charged=self._DENY_CHARGED)
-        shift = after - base                                   # BOTH legs under `_DENY_CHARGED`: the
-                                                               # caller's `base_t` is the CEILING
-                                                               # baseline, and differencing across two
-                                                               # policies would be meaningless
-        return {"strip_shift": shift,
-                "deny_value": needs.opponent_target_value(prize_advance=0.0,
-                                                          survival_shift=shift, phase=phase)}
+        before = self.combat.incoming(ma, bodies, 1, charged=self._DENY_CHARGED,
+                                      opp_active=opp_active, switch_enabler=enabler)
+        after = self.combat.incoming(ma, bodies[:i] + [stripped] + bodies[i + 1:], 1,
+                                     charged=self._DENY_CHARGED,
+                                     opp_active=stripped if b is opp_active else opp_active,
+                                     switch_enabler=enabler)
+        swing = max(0, before - after)                         # damage this strip takes off the board
+        return {"strip_damage": swing, "deny_value": swing / PRIZE_DAMAGE_RATE}
 
     def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
         """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =

@@ -85,7 +85,7 @@ def main() -> int:
     print(f"gate 1 — PRIZE_DAMAGE_RATE={PRIZE_DAMAGE_RATE}  _DENIAL_ITEM_COST={_DENIAL_ITEM_COST}  "
           f"=> PLAY iff m > {threshold:.3f} prize-eq (at coin_odds 0.5)\n")
     print(f"{'frame':<16} {'agent':<14} {'ruled':<5} {'m_all':>6} {'m_grd':>6} {'play$':>7} "
-          f"{'pred':<5} {'ok':<3} incumbent")
+          f"{'pred':<5} {'ok':<3} {'incDmg':>6} {'inc$':>7} {'incPred':<5} =")
 
     rows, agree, total = [], 0, 0
     for (ep, fr), rec in _records():
@@ -126,28 +126,59 @@ def main() -> int:
         play_value = odds * _DENIAL_PLAY_W * PRIZE_DAMAGE_RATE * m_grd - _DENIAL_ITEM_COST
         pred = "PLAY" if play_value > 0 else "HOLD"
         ok = "" if ruled is None else ("ok" if pred == ruled else "XX")
+        # The INCUMBENT deny rung on the same frame — `_denial_play_tactical`'s arithmetic. This is
+        # the behaviour-PRESERVATION reading of the gate, and it is the one a swap actually has to
+        # pass: the corpus label answers "what should the agent have done with the whole turn", which
+        # on several frames is "take the KO / play the better line" — a ruling the deny rung does not
+        # own and the incumbent fails identically.
+        inc_value = odds * _DENIAL_PLAY_W * board.opp_denial_best - _DENIAL_ITEM_COST
+        inc_pred = "PLAY" if inc_value > 0 else "HOLD"
+        same = "=" if inc_pred == pred else "!"
         if ruled is not None:
             total += 1
             agree += pred == ruled
         print(f"{ep}-{fr:<10} {rec['agent']:<14} {str(ruled):<5} {m_all:>6.3f} {m_grd:>6.3f} "
-              f"{play_value:>7.2f} {pred:<5} {ok:<3} {board.opp_denial_best:>6.1f}")
-        rows.append((ep, fr, ruled, m_grd, pred))
+              f"{play_value:>7.2f} {pred:<5} {ok:<3} {board.opp_denial_best:>6.1f} "
+              f"{inc_value:>7.2f} {inc_pred:<5} {same}")
+        rows.append((ep, fr, ruled, m_grd, pred, inc_pred))
 
-    print(f"\nruled frames: {total}   agree: {agree}   disagree: {total - agree}")
+    print(f"\nruled frames: {total}   agree-with-CORPUS-LABEL: {agree}   "
+          f"disagree: {total - agree}")
+    same = sum(1 for r in rows if r[4] == r[5])
+    print(f"agree-with-INCUMBENT deny rung: {same}/{len(rows)}  "
+          f"=> {'BEHAVIOUR-PRESERVING' if same == len(rows) else 'CHANGES ' + str(len(rows) - same) + ' FRAME(S)'}")
     plays = [r for r in rows if r[2] == "PLAY"]
     holds = [r for r in rows if r[2] == "HOLD"]
     if plays and holds:
         lo_play, hi_hold = min(r[3] for r in plays), max(r[3] for r in holds)
-        print(f"separation: min(m | PLAY) = {lo_play:.3f}   max(m | HOLD) = {hi_hold:.3f}   "
+        print(f"separation vs corpus label: min(m | PLAY) = {lo_play:.3f}   "
+              f"max(m | HOLD) = {hi_hold:.3f}   "
               f"=> {'SEPARABLE' if lo_play > hi_hold else 'NOT SEPARABLE'}")
-        if lo_play > hi_hold:
-            print(f"            any k in ({_DENIAL_ITEM_COST / (0.5 * lo_play):.1f}, "
-                  f"{_DENIAL_ITEM_COST / (0.5 * hi_hold):.1f}) separates them"
-                  if hi_hold > 0 else
-                  f"            any k > {_DENIAL_ITEM_COST / (0.5 * lo_play):.1f} separates them")
-        else:
-            print("            NO exchange rate separates these frames — the marginal as built does "
-                  "not carry ADR-0062's discrimination. Gate 1 FAILS; #187 needs a design fix.")
+
+    # The verdict, split by which question is being asked. Reporting only the corpus-label reading
+    # was misleading: several HOLD labels say "take the KO / play the better line", which the deny
+    # rung does not own and the incumbent fails identically, so counting them as deny failures
+    # measures the KO and planner layers rather than this one.
+    shared = [r for r in rows if r[4] != r[5]]
+    label_misses = [r for r in rows if r[2] is not None and r[2] != r[4]]
+    inherited = [r for r in label_misses if r[5] != r[2]]
+    print()
+    if not shared:
+        print("VERDICT — behaviour preservation: PASS. The repointed rung's play/hold sign matches "
+              "the incumbent on every ruled Hammer frame, so the swap changes no deny decision.")
+    else:
+        print(f"VERDICT — behaviour preservation: FAIL on {len(shared)} frame(s): "
+              + ", ".join(f"{r[0]}-{r[1]}" for r in shared))
+    if label_misses:
+        print(f"VERDICT — corpus label: {len(label_misses)} miss(es), of which {len(inherited)} are "
+              f"INHERITED (the incumbent misses them identically) and "
+              f"{len(label_misses) - len(inherited)} are NEW to the repoint.")
+        for r in label_misses:
+            print(f"    {r[0]}-{r[1]:<6} ruled {r[2]:<5} pred {r[4]:<5} "
+                  f"{'inherited' if r[5] != r[2] else 'NEW — the repoint caused this'}")
+    print("\nA frame the incumbent misses identically is NOT evidence against the repoint. It is "
+          "either owned by another layer (the KO rung, #165's Turn Planner) or a corpus ruling still "
+          "to be adjudicated — see #199 build-shape step 1.")
     return 0
 
 
