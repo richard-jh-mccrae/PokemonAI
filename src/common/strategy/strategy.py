@@ -89,7 +89,7 @@ class Strategy:
                                                         # fetch importance (ADR-0023); empty for most decks
     starter_priority: list = field(default_factory=list)  # the deck's ordered opening bodies (cardIds,
                                                         # highest first) for the pregame Set-Up ACTIVE pick
-                                                        # (ADR-0078). Deck-declared data read by the
+                                                        # (ADR-0079). Deck-declared data read by the
                                                         # card-name-free general `open-the-declared-starter`
                                                         # -- the ids live HERE, never in a trigger (ADR-0034),
                                                         # exactly as `fetch_priority` / `partners` do. The

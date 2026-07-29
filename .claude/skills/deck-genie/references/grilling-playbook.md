@@ -75,7 +75,7 @@ generic behaviour the tags already trigger.
 Ask this **once, over the whole set** — never per card. The deliverable is a **total order**, and a
 per-card "is this a decent opener?" pass structurally cannot produce one: you get five independent
 yes-votes and no ranking, which is exactly the all-options-score-0.0 state that made the engine's
-option index choose the opener (dragapult f2, mega_lucario f1). Per ADR-0078 the Set-Up Active seam
+option index choose the opener (dragapult f2, mega_lucario f1). Per ADR-0079 the Set-Up Active seam
 has ONE rule reading ONE deck declaration, so this ranking *is* the deck's opening doctrine.
 
 - **Enumerate first (mechanical, from the dump).** Every card that can legally take the Active Spot
@@ -97,7 +97,7 @@ has ONE rule reading ONE deck declaration, so this ranking *is* the deck's openi
 - **Does the order flip going first vs second?** The player going first cannot attack or play a
   Supporter on turn 1. If a deck genuinely wants a *different* opener on each side of the coin toss,
   say so — `starter_priority` is a flat list today, and a real case is what earns the conditional
-  form (ADR-0078 decision 3).
+  form (ADR-0079 decision 3).
 - **Multi-prize liability in that slot?** An ex/Mega-ex Active hands over 2–3 prizes. Ranking one
   first is allowed and nothing subtracts from it — but say why.
 - **If your #1 is not in the opening hand, is #2 genuinely next** — or is it a different plan?

@@ -17,7 +17,7 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 ROLES = {
     MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
     CINDERACE: ["accel_source"],                # Explosiveness opener + Turbo Flare
-    # (the `starter` Role was retired by ADR-0078; the openers are STRATEGY.starter_priority below)
+    # (the `starter` Role was retired by ADR-0079; the openers are STRATEGY.starter_priority below)
     IGNITION_ENERGY: ["accel_source"],           # CCC on an Evolution = one-attach Nebula Beam
     MEGA_SIGNAL: ["tutor"], SALVATORE: ["tutor"], HILDA: ["tutor"],
     BUDDY_POFFIN: ["tutor"], ULTRA_BALL: ["tutor"],
@@ -30,7 +30,7 @@ STRATEGY = Strategy(
     lines=[Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX,
                 role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
-    # The deck's ordered opening bodies (ADR-0078) — mirrors the shipped agent so this fixture keeps
+    # The deck's ordered opening bodies (ADR-0079) — mirrors the shipped agent so this fixture keeps
     # exercising the declaration-keyed `open-the-declared-starter` at the Set-Up Active pick.
     starter_priority=[CINDERACE, STARYU],
     params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority

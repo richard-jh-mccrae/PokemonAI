@@ -1,7 +1,7 @@
 """BASELINE cluster: OPENING — opening-hand / mulligan / game-start decisions (ADR-0025). Don't
 redraw a hand you can already start; open with the body your deck declared. Pure data, no Mixin.
 
-**The Set-Up ACTIVE pick is ONE rule reading ONE deck declaration (ADR-0078).** It used to be five
+**The Set-Up ACTIVE pick is ONE rule reading ONE deck declaration (ADR-0079).** It used to be five
 rungs across two layers — `open-the-accelerator` (+40, `accel_source` Role), `open-the-item-lock-
 starter` (+35, `item_lock` Tag), `dont-open-multiprize-active` (−15), `dont-open-with-the-engine`
 (−12), and mega_lucario's card-id-gated `start-solrock-over-lunatone` (+12). All five are DELETED.
@@ -52,7 +52,7 @@ HYPOTHESES = [
         rationale="At the pregame Set-Up Active pick, open with the highest-ranked body the deck "
                   "DECLARED it wants there (`Strategy.starter_priority`, highest first) among those "
                   "actually on offer. The one rule at this seam, and the successor to all five it "
-                  "replaced (ADR-0078). Card-name-free: the ids live in the deck's declaration, and "
+                  "replaced (ADR-0079). Card-name-free: the ids live in the deck's declaration, and "
                   "this trigger reads only the resolved `board.top_starter_id` — the same shape as "
                   "`fetch-deck-priority` over `Strategy.fetch_priority`. Deck-keyed opt-in, so it is "
                   "silent for a deck that has not declared (a pre-doctrine agent); every AUTHORED "

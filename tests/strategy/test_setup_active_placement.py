@@ -1,4 +1,4 @@
-"""The pregame Set-Up ACTIVE pick: one rule reading one deck declaration (ADR-0078).
+"""The pregame Set-Up ACTIVE pick: one rule reading one deck declaration (ADR-0079).
 
 This file OWNS the `_SETUP_ACTIVE` seam. It replaces `test_setup_active_multiprize.py` (the
 `dont-open-multiprize-active` demotion, REQ-OPEN-0002) and `test_budew_sacrificial_starter.py`'s
@@ -13,7 +13,7 @@ plus the general `open-the-declared-starter` do the whole job.
 
 **These are OUTCOME tests, never score tests.** What is asserted is which body ends up Active — the
 behaviour the retired rungs bought — so the assertions survive a reweighting or another currency
-change. The two seams (ADR-0078 / the /to-spec seam sketch):
+change. The two seams (ADR-0079 / the /to-spec seam sketch):
 
   * behaviour  -> the Pilot's public decision entry point (`decide` / `explain`);
   * declaration-> each agent's loaded `Strategy`, for the completeness invariant, which has no
@@ -74,7 +74,7 @@ def _deck_strategy(agent: str):
 
 
 def _authored_agents() -> list[str]:
-    """Agents with a doctrine — a `STRATEGY.md` is the marker deck-genie has been run (ADR-0078
+    """Agents with a doctrine — a `STRATEGY.md` is the marker deck-genie has been run (ADR-0079
     amendment A). Pre-doctrine decks are exempt from the completeness invariant; `_exempt_agents`
     asserts exactly which, so a new agent cannot silently opt out."""
     return sorted(d.name for d in AGENTS.iterdir()
@@ -106,7 +106,7 @@ def test_f2_opens_the_utility_body_over_the_fragile_line_base():
     """dragapult f2 (86091728|0|decision|2), from its recorded observation.
 
     Was `xfail(strict)` in the EVOLVE corpus since 2026-07-15, labelled "exposure / opener", waiting
-    on an equation that never runs on this path — ADR-0070 §4 re-ruled it out of scope and ADR-0078
+    on an equation that never runs on this path — ADR-0070 §4 re-ruled it out of scope and ADR-0079
     addressed it here. It was never mis-scored: all three options returned 0.0 with NO rule firing,
     so the engine's option index opened the 70-HP Line base. Munkidori (110 HP, Mind Bend 60) is
     rank 2 in the declaration; Dreepy is rank 5, deliberately below both ex's, because the Line base
@@ -121,7 +121,7 @@ def test_ml_f1_opens_the_attacker_over_the_draw_engine():
     """mega_lucario f1 (CRITICAL): Solrock (110 HP, Cosmic Beam 70 for one {F}) over Lunatone, the
     benched draw engine. The identical root cause as f2 — "both score 0, so the option-index
     tie-break opened Lunatone" — and until 2026-07-28 it was fixed by a rung gated on
-    `card_id == SOLROCK`, the exact card-id reflex ADR-0078 removes. Order-independent."""
+    `card_id == SOLROCK`, the exact card-id reflex ADR-0079 removes. Order-independent."""
     pilot = _pilot("mega_lucario")
     assert pilot.decide(_setup_active_obs([LUNATONE, SOLROCK])) == [1]
     assert pilot.decide(_setup_active_obs([SOLROCK, LUNATONE])) == [0]
@@ -206,7 +206,7 @@ def test_the_highest_ranked_body_PRESENT_wins_not_merely_rank_one():
     """`board.top_starter_id` resolves against what is actually on offer, so the whole ordering
     collapses into one boolean losslessly: with Budew absent, dragapult's rank-2 Munkidori leads;
     with Munkidori also absent, rank-3 Dunsparce does. This is the property that makes a boolean
-    equivalent to a rank scale under a COMPLETE list (ADR-0078 decision 5)."""
+    equivalent to a rank scale under a COMPLETE list (ADR-0079 decision 5)."""
     pilot = _pilot("dragapult_ex")
     assert pilot.decide(_setup_active_obs([DREEPY, MUNKIDORI])) == [1]
     assert pilot.decide(_setup_active_obs([DREEPY, DUNSPARCE, MUNKIDORI])) == [2]
@@ -216,7 +216,7 @@ def test_the_highest_ranked_body_PRESENT_wins_not_merely_rank_one():
 # ── The declaration invariant (the seam's SOLE guarantee) ────────────────────────────────────────
 
 def test_every_authored_agent_declares_a_starter_priority():
-    """ADR-0078 decision 5, the presence half. With the five old rungs deleted, a deck that declares
+    """ADR-0079 decision 5, the presence half. With the five old rungs deleted, a deck that declares
     nothing has NOTHING scoring its Set-Up Active pick and falls back to the engine's option-index
     order — which is precisely the f2 / ml f1 bug. Non-negotiable for an authored agent."""
     for agent in _authored_agents():
@@ -226,7 +226,7 @@ def test_every_authored_agent_declares_a_starter_priority():
 
 
 def test_every_declaration_ranks_every_startable_body_in_the_deck():
-    """ADR-0078 decision 5, the completeness half — the invariant that makes the single-winner read
+    """ADR-0079 decision 5, the completeness half — the invariant that makes the single-winner read
     EXACT rather than merely usually right. If a startable body were unranked it could be offered
     while nothing scores, re-creating the tie-break bug; and a partial list would let a low-ranked
     body inherit the full weight of a rank-1 opener.
@@ -253,7 +253,7 @@ def test_every_declaration_ranks_every_startable_body_in_the_deck():
 
 
 def test_the_exempt_agents_are_exactly_the_pre_doctrine_ones():
-    """The exemption is asserted EXPLICITLY (ADR-0078 amendment A), so adding an agent cannot
+    """The exemption is asserted EXPLICITLY (ADR-0079 amendment A), so adding an agent cannot
     silently opt out of the invariant above — a new deck either gains a STRATEGY.md and a declaration
     or it fails here. `grimmsnarl_ex` (strategy.py but no doctrine) and `slowking` (a decklist only)
     are the two known pre-doctrine decks; both are /deck-genie's job, and /deck-align's

@@ -293,7 +293,7 @@ class Board:
                                        # PRESENT among the options, by deck's Strategy.starter_priority
                                        # (None off that select / no list / none present). The whole
                                        # ordering collapses into this one id because SETUP_ACTIVE is a
-                                       # forced single pick — argmax reads only the winner (ADR-0078).
+                                       # forced single pick — argmax reads only the winner (ADR-0079).
                                        # Twin of `top_fetch_priority_id`; gates `open-the-declared-starter`
     line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
                                        # play — so there's something a rush-evolve tutor can evolve
@@ -788,14 +788,14 @@ class Context:
     card_is_utility_body: bool = False  # this option's card is a body that draws/tutors/stalls and never
                                        # attacks (`Pilot._is_utility_body`) — the card-side read of
                                        # `attach_target_is_utility_body`. (Backed `dont-open-with-the-engine`
-                                       # until ADR-0078 deleted it; the attach-side readers remain.)
+                                       # until ADR-0079 deleted it; the attach-side readers remain.)
     card_is_top_fetch_priority: bool = False  # this candidate IS deck's highest-priority fetch
                                        # target present (== board.top_fetch_priority_id) — Tier-3
                                        # explicit-list grab override (`fetch-deck-priority`)
     card_is_top_starter: bool = False  # at the pregame SETUP_ACTIVE pick, this option IS the deck's
                                        # highest-ranked startable body on offer (== board.top_starter_id)
                                        # — the sole scorer at that seam, gating the general
-                                       # `open-the-declared-starter` (ADR-0078). The card-side twin of
+                                       # `open-the-declared-starter` (ADR-0079). The card-side twin of
                                        # `card_is_top_fetch_priority`
     card_is_redundant: bool = False    # this option's card duplicates a Pokémon already in play (its
                                        # need is met) — lowest keep-value, preferred at a forced
@@ -3047,7 +3047,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ``best_affordable_ko_value`` (ADR-0052), handed the Board's ``opp_bench`` snapshot for the
         rider tiebreaks. Signature kept for the planner/tactical call sites (``obs`` vestigial).
 
-        ``budget`` (ADR-0078, #177) hands the oracle the typed **Attach Budget** instead of a wild
+        ``budget`` (ADR-0079, #177) hands the oracle the typed **Attach Budget** instead of a wild
         count; ``energy`` is then ignored. ``attack_p`` (ADR-0074, #175) weights a ranked
         consumer's claim. Refuse-then-weight: they are separate concerns on separate parameters."""
         return self.combat.best_affordable_ko_value(
@@ -6249,7 +6249,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (`_derived_accel_body_ids` — Turbo Flare / Aura Jab class). Derivation-first, declaration as
         the confirm/override (Round 9): a new deck fielding Cinderace gets the whole accel rung
         family (develop-the-accel-recipient, feed-the-accelerator, promote — `open-the-accelerator`
-        was deleted by ADR-0078; the pregame Active pick is `Strategy.starter_priority` now)
+        was deleted by ADR-0079; the pregame Active pick is `Strategy.starter_priority` now)
         with NO Role declaration; for the existing agents the union is a no-op (both declare it)."""
         if cid is None:
             return []
@@ -7640,7 +7640,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `_is_startable_body`, which is why it reads `_opens_from_hand` rather than calling it — the
         Basic half would make this trivially true on a hand that cannot mulligan anyway.
 
-        The deck `starter` Role was a second accepted signal here until ADR-0078 retired it: every
+        The deck `starter` Role was a second accepted signal here until ADR-0079 retired it: every
         declaration in the repo was either a Basic (moot per the rule above) or Cinderace, which
         carries the `opener` Tag anyway — so it never changed this answer. Naming a deck's openers is
         now `Strategy.starter_priority`'s job, at the Set-Up ACTIVE pick rather than the mulligan."""
@@ -7649,7 +7649,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _is_startable_body(self, cid: int | None) -> bool:
         """True iff this card can legally take the Active Spot at the pregame Set-Up pick — a Basic
         Pokémon, or one that `_opens_from_hand`. This is the universe `Strategy.starter_priority` must
-        rank COMPLETELY (ADR-0078 decision 5).
+        rank COMPLETELY (ADR-0079 decision 5).
 
         Lives here, on the runtime, rather than in the test that consumes it: the completeness
         invariant is only worth anything if it measures the declaration against what the ENGINE can
@@ -7671,7 +7671,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         One id, not a rank, because SETUP_ACTIVE is a forced single pick (minCount/maxCount 1): argmax
         reads only the winner, so under a COMPLETE list this collapses the whole ordering losslessly
-        (ADR-0078 decision 5). Exact twin of `_top_fetch_priority_id`."""
+        (ADR-0079 decision 5). Exact twin of `_top_fetch_priority_id`."""
         sp = getattr(self.strategy, "starter_priority", None)
         if not sp or not select or select.get("context") != _SETUP_ACTIVE:
             return None

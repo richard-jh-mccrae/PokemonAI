@@ -147,7 +147,7 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
     assert by_tag.decide(mull) == [1]
     assert "keep-a-startable-hand" in _fired(by_tag.explain(mull).options[0])
 
-    # (The `starter` Role was a second accepted signal here until ADR-0078 retired it. It never
+    # (The `starter` Role was a second accepted signal here until ADR-0079 retired it. It never
     #  changed an outcome: it was only ever declared on Basics, and a hand holding any Basic never
     #  reaches this prompt at all -- `docs/rulebook.txt` L224. The `opener` Tag above is the real one.)
 
@@ -158,7 +158,7 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
 
 @pytest.mark.req("REQ-GEN-0056")
 def test_open_the_declared_starter_prefers_the_decks_ranked_opener_at_setup_active():
-    # Re-pointed from the deleted `open-the-accelerator` (ADR-0078). Same requirement — the deck gets
+    # Re-pointed from the deleted `open-the-accelerator` (ADR-0079). Same requirement — the deck gets
     # the body it wants in the Active Spot — through a declaration instead of an `accel_source` Role,
     # so the deck orders its WHOLE field rather than tripping one rung. Deck-keyed opt-in, and
     # card-name-free: the ids live in Strategy.starter_priority, the trigger reads only the resolved

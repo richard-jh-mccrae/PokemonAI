@@ -41,12 +41,12 @@ not the 3 of Nebula Beam.
 
 **Reads:** at a `MULLIGAN` select (no Basic in hand → "redraw?"), penalises the **redraw** option
 when the hand holds an `opener`-tagged card (Explosiveness — [card-functions.md](card-functions.md)).
-A `starter`-Role branch was a second signal until ADR-0078 retired that Role; it never changed an
+A `starter`-Role branch was a second signal until ADR-0079 retired that Role; it never changed an
 outcome, because it was only ever declared on Basics and a hand holding any Basic never reaches this
 prompt (`docs/rulebook.txt` L224). **Source:** F7 — Rulebook (the mulligan rule); the card's own
 Ability text.
 
-### `open-the-declared-starter` · weight 40 · status: assumed *(ADR-0078, 2026-07-28)*
+### `open-the-declared-starter` · weight 40 · status: assumed *(ADR-0079, 2026-07-28)*
 > At the Set-Up Active pick, open with the highest-ranked body the deck DECLARED it wants there.
 
 **Reads:** `SETUP_ACTIVE` select + `Context.card_is_top_starter` — the Pilot resolves the
