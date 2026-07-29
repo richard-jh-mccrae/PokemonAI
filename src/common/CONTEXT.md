@@ -413,17 +413,48 @@ _Avoid_: Function Tag (universal/mechanical; a Role is per-deck/intentional), jo
 
 **Starter Priority**:
 A deck's ordered list of the bodies it wants in the **Active Spot** at the pregame Set-Up pick,
-highest first (`Strategy.starter_priority`, card ids). Deck-declared data read by a card-id-free
-general rule — the Pilot resolves the highest-ranked id *present* among the `_SETUP_ACTIVE` options
-into `board.top_starter_id`, and `open-the-declared-starter` scores that one option. The sibling of
+highest first (`Strategy.starter_priority`, card ids, optionally **Pin**-wrapped). Deck-declared data
+read by a card-id-free general rule — the Pilot resolves the **Effective Starter Order** against the
+opening hand, takes the highest-ranked id *present* among the `_SETUP_ACTIVE` options into
+`board.top_starter_id`, and `open-the-declared-starter` scores that one option. The sibling of
 **Fetch Priority** (`Strategy.fetch_priority`) and `Strategy.partners` in shape and in spirit
 (ADR-0034: the ids live in the declaration, never in a trigger). Must be **complete** — every
 startable body in the deck (a Basic, or an `opener`-tagged card) is ranked — which is what makes the
 single-winner read exact; CI enforces it, because an undeclared or partial list drops the pick back
 to the engine's option-index order. Covers the Active Spot ONLY; the pregame Bench is a separate
-seam. See ADR-0079.
+seam. Declares what the DECK contains; what THIS HAND contains is the Opener Marginal's business
+(ADR-0080). See ADR-0079, ADR-0080.
 _Avoid_: starter Role (retired), opener (that's the Function Tag for an Ability that puts its own
 card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulligan decision)
+
+**Opener Marginal**:
+The turn-0 reading of the **evolve marginal** (ADR-0070) that makes the opener hand-conditional: for
+a body on offer, `maxDamage(payoff) − maxDamage(body)` in **damage** when some card in
+`board.hand_ids` evolves from it, and **0** otherwise. Deliberately **silent by default** — it has no
+opinion on which body is better, and detects only a *payoff stranded in hand*, which is the one thing
+a ranking authored before the hand is dealt cannot carry. That silence is what lets the declaration
+keep every frame it already gets right *by construction* rather than by tuning, and is why the design
+needs no override threshold. Reads the **hand only**: at turn 0 the deck carries no frame-specific
+information, so deck odds would be a per-deck constant the ranking already encodes. See ADR-0080.
+_Avoid_: opener equation / opener value (too broad — it prices no tempo or readiness, only a stranded
+payoff), tie-break (it REORDERS; a tie-break cannot reach the inversion it exists for)
+
+**Pin** / **Effective Starter Order**:
+A **Pin** marks one Starter Priority entry as immovable (`Pin(BUDEW)`, a frozen dataclass in
+`common.strategy.strategy`); the **Effective Starter Order** is what the Pilot actually resolves —
+pinned entries hold their declared slot, unpinned entries re-sort among the remaining slots by
+(Opener Marginal desc, declared rank asc). Because a Pin holds a *slot* rather than winning outright,
+it expresses a **demotion pin** as naturally as a rank-1 one: `Pin(DREEPY)` at rank 5 means "Dreepy
+stays fifth, do not promote it", which dragapult needs to preserve its ADR-0079 ruling that an Active
+Line base is *misplaced*. Pins are **derived first, declared as the override** (ADR-0079 Amendment
+F's pattern): `_route_only_at_setup` pins any body whose only route into play is the setup pick — an
+`opener`-tagged card whose `evolvesFrom` name is absent from `Pilot.deck`, i.e. Cinderace in a deck
+running no Raboot — with no author input, and lifts by itself if the deck later runs the line.
+Reordering is **structural**, never additive: it changes what the declaration *says*, not what
+anything *scores*, so the seam keeps one rule and one boolean and the override cannot be disarmed by
+a learned weight. See ADR-0080.
+_Avoid_: a separate `starter_pinned` field (rejected — two declarations that must agree per card),
+lock (reserve for the win-condition sense), tie-break
 
 **Hypothesis**:
 A named, testable claim in a Strategy that biases scoring — carrying a rationale, a
