@@ -706,7 +706,7 @@ committed deny fixture is a play/hold frame, none a DISCARD select). Until that 
 adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0073's own
 `_PRIZE_UNIT = 12` — wrong by ~8×, and it endorsed feeding a 3-prize body to save a 40-point band — is
 the standing example of what guessing it costs.
-**MOOT for deny since ADR-0079 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
+**MOOT for deny since ADR-0080 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
 pending.** The corpus-wide DISCARD sweep found 12 `Discard` frames, exactly one holding a Hammer
 (`86091435-68`), and that one is DEGENERATE rather than merely directional: the strip prices `0.000`
 under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate DIVIDES OUT of
@@ -722,7 +722,7 @@ rate that converts it), calibration (a value chosen to preserve an incumbent is 
 
 **Deny Relevance**:
 Deny's value, and the answer to *"is this Energy doing important work for the opponent's plan?"* — a
-**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0079,
+**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0080,
 Issue #199, user doctrine 2026-07-29). 0 = dead (an Energy on a Meowth ex, whose Ability needs none and
 whose Tuck Tail is `●●●` for 60), 1 = critical (the `{M}` on an Archaludon ex that Metal Defender
 `{M}{M}{M}` needs). Two hard gates force it to 0 — **no Energy on their board at all**, and **this

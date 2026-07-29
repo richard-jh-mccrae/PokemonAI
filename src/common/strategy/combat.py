@@ -419,7 +419,7 @@ class CombatMath:
         so all of it may land on one). The rule does not care which produced it, and naming it
         ``reach`` rather than ``rider`` keeps that honest.
 
-        Added by #199 (ADR-0079) for the Deny Relevance redundancy gate, which needs the IDENTITY of
+        Added by #199 (ADR-0080) for the Deny Relevance redundancy gate, which needs the IDENTITY of
         the bodies that die — the doctrine's *"or maybe its a benched pokemon that we can snipe and
         KO, same thing, no hammer on that specific pokemon"* — where the aggregate prize read alone
         cannot say which body it meant."""

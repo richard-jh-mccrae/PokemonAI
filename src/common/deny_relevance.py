@@ -1,4 +1,4 @@
-"""Deny Relevance — *is this Energy doing important work for the opponent's plan?* (ADR-0079, Issue #199).
+"""Deny Relevance — *is this Energy doing important work for the opponent's plan?* (ADR-0080, Issue #199).
 
 The deny instrument's value, and **not a magnitude on the damage scale**. ADR-0078 tried to price a
 strip through the shared prize-denominated marginal and needed a Worth Damage Rate to get the answer
@@ -6,7 +6,7 @@ back into the Needs DP's card-worth currency; Issue #199's grill measured that r
 (the corpus-wide DISCARD sweep found 12 `Discard` frames, exactly one holding a Hammer, and that one
 prices 0.000 under *both* instruments, so the rate divides out). The user's doctrine then reframed
 the question entirely: deny is a **liveness gate, a redundancy gate, and a relevance read**, none of
-which crosses a scale boundary — so no bridge is needed and none ships (ADR-0079 decision 1).
+which crosses a scale boundary — so no bridge is needed and none ships (ADR-0080 decision 1).
 
 The read is a scalar in ``[0, 1]`` per ``(body, Energy)`` pair (decision 3), scaling the incumbent
 constants rather than introducing a scale of its own. This module owns the **scoring**; the Pilot
@@ -97,7 +97,7 @@ import math
 #: `tests/strategy/test_deny_relevance.py` RECOMPUTES it from the CSV rather than pinning the literal,
 #: so a future set re-derives it instead of inheriting it. Its only job is to map a damage setback
 #: into the ``[0, 1]`` band decision 3 fixes — it is NOT an exchange rate and must never be used as
-#: one (that is the Worth Damage Rate, which ADR-0079 rules moot for deny).
+#: one (that is the Worth Damage Rate, which ADR-0080 rules moot for deny).
 MAX_ATTACK_DAMAGE = 350.0
 
 

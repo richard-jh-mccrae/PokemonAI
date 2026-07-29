@@ -1,12 +1,15 @@
-# ADR-0079 — Deny is a CATEGORICAL RELEVANCE instrument, not a magnitude one: the Worth Damage Rate is not needed, it is MOOT
+# ADR-0080 — Deny is a CATEGORICAL RELEVANCE instrument, not a magnitude one: the Worth Damage Rate is not needed, it is MOOT
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #199 — five locked decisions).
 Supersedes ADR-0078 decision 1 for the deny instrument and **withdraws** its one-backend claim for
 deny. Builds in Issue #187 (recharted); Issue #199 closes as the shared layer, reduced.
 
-**Number is a rebase artifact — cite the issue alongside it** ("ADR-0079, Issue #199"). The
-`docs/adr/README.md` lesson is now recurring across 0071, 0074 ×3, 0076, 0077: the grill-time number
-is a claim, not a reservation.
+**Renumbered 0079 → 0080 on rebase (2026-07-29).** The number was claimed at grill time and collided,
+exactly as `docs/adr/README.md` predicts. Issue #161's *the Set-Up Active pick is one deck
+declaration* merged first and KEEPS 0079 under the standing first-merged rule — itself already
+renumbered 0075→0077→0078→0079 across three earlier rebases, which is the whole lesson in one
+document. **Fifth collision in four days.** Cite the issue alongside the number
+("ADR-0080, Issue #199"); the number is a rebase artifact, not an identifier.
 
 **Context issues:** Issue #199 (this grill, S3c), Issue #187 (S4-deny, rechartered by decision 4),
 Issue #188 (S4-snipe, unblocked), Issue #189 (S4-gust, re-inherits the Amendment E debt),

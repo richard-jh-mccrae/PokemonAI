@@ -1,4 +1,4 @@
-"""**Deny Relevance** — the read that replaced deny's magnitude (`deny_relevance`, ADR-0079 / Issue #199).
+"""**Deny Relevance** — the read that replaced deny's magnitude (`deny_relevance`, ADR-0080 / Issue #199).
 
 Issue #199's grill measured the Worth Damage Rate **underivable**: the corpus-wide DISCARD sweep found 12
 `Discard`-context frames, exactly one holding a Hammer (`86091435-68`), and on that board the strip
@@ -17,7 +17,7 @@ scorer — the failure mode that bit Issue #199 twice was never bad arithmetic, 
 answering the wrong question on a real board, which a pure-function test passes and a row-level test
 does not.
 
-Assertions are **rankings, not magnitudes** (ADR-0079 decision 3): the doctrine is a set of orderings
+Assertions are **rankings, not magnitudes** (ADR-0080 decision 3): the doctrine is a set of orderings
 and the scale was deliberately left free to re-shape, so pinning scalars would make an honest
 recalibration look like a regression.
 
@@ -195,7 +195,7 @@ def test_the_ability_fuel_outranks_the_attack_cost_on_the_same_body():
     Adrena-Brain fires *"if this Pokémon has any {D} Energy attached"*; Mind Bend costs `{P}●`. So
     the `{P}` pays a real 60-damage attack slot and the `{D}` pays none — yet the `{D}` is the strip,
     because muting the Ability is the larger loss. This is a WITHIN-body ruling, which is why the
-    mute leg is scored to dominate its own body and no further (ADR-0079; valuing it at a flat 1.0
+    mute leg is scored to dominate its own body and no further (ADR-0080; valuing it at a flat 1.0
     would rank this Munkidori above a nuke-ready attacker, which the doctrine never claimed)."""
     p = _pilot("dragapult_ex")
     rows = _rows(p, _obs(bench=[(MUNKIDORI, [DARKNESS, PSYCHIC])], active=(DRAGAPULT_EX, [FIRE])))
@@ -293,7 +293,7 @@ def test_the_binding_count_catches_a_typed_attack_the_body_is_exactly_paying_for
 
 @pytest.mark.req("REQ-DENYREL-0017")
 def test_a_brief_named_threat_is_sharpened_but_a_whiff_is_never_promoted():
-    """ADR-0079 decision 2: a matched Brief's `threats` MULTIPLY the derived rank, never source it.
+    """ADR-0080 decision 2: a matched Brief's `threats` MULTIPLY the derived rank, never source it.
     So a named body outranks the same body unnamed — and, because the boost is a multiplier, it can
     never make an irrelevant Energy worth taking (`0 x anything == 0`). That is the same discipline
     `_DENIAL_UNFAVORED` follows: *"a booster must scale the oracle, never add to it"* (ADR-0063)."""
@@ -322,7 +322,7 @@ def test_the_forward_contribution_is_reported_separately():
 # ── the kill-switch ──────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DENYREL-0013")
 def test_the_switch_off_path_emits_nothing_at_all():
-    """Ships OFF and byte-identical (ADR-0079 decision 4 / the `deny_strip_delta` precedent): no
+    """Ships OFF and byte-identical (ADR-0080 decision 4 / the `deny_strip_delta` precedent): no
     field emitted, and the redundancy gate not even computed. Nothing reads these yet — Issue #187 is the
     consumer — so ON must change no decision either."""
     off = _rows(_pilot(on=False), _obs(active=(MEGA_LUCARIO, [FIGHTING])))

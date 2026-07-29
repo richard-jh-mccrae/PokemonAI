@@ -100,7 +100,7 @@ EXPECTED_SHIPPED = {
     "deny_strip_delta": False,      # ADR-0078 / #199 (S3c): compute-only strip delta, ships OFF —
                                     # nothing reads it yet (#187 is the consumer, itself blocked on
                                     # #199's gate 1), so ON would only cost compute
-    "deny_relevance": False,        # ADR-0079 / Issue #199 (S3c): compute-only **Deny Relevance** read —
+    "deny_relevance": False,        # ADR-0080 / Issue #199 (S3c): compute-only **Deny Relevance** read —
                                     # the value that REPLACED deny's damage magnitude once the grill
                                     # measured the Worth Damage Rate underivable. Ships OFF; Issue #187 is
                                     # the consumer and recharters to build the instrument on it, so
