@@ -25,6 +25,7 @@ from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
+from common.needs import SUPPLIES as needs_SUPPLIES
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 from common.strategy.objectives import ObjectivesMixin
@@ -1211,7 +1212,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False, attach_value=True, evolve_value=True,
+                 leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
@@ -1355,6 +1356,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # a rollback — the four rungs it replaced are
                                                         # deleted, so OFF silences evolve endorsements
                                                         # and only the _PLAY-side Gate speaks.
+        self.deploy_value = deploy_value            # the DEPLOY DECIDER's emergency lever
+                                                    # (ADR-0081, Issue #197). Ctor default OFF
+                                                    # keeps the raw-scoring substrate neutral;
+                                                    # `make_agent` resolves the shipped ON from
+                                                    # PROFILE, like every other switch.
         self.attach_value = attach_value                # the ATTACH DECIDER's emergency lever (ADR-0069 §9,
                                                         # shipped ON): the axes-sum marginal (`_attach_value`)
                                                         # IS the energy-attach decision, scaled into the rung
@@ -4644,6 +4650,182 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not getattr(self, "attach_value", False):
             return None
         return self._attach_value(obs, select, board, option)
+
+    # ── the DEPLOY decider (ADR-0081, Issue #197) ────────────────────────────────────────────────
+
+    def _deploy_supplier_rows(self, obs: dict, board: Board) -> list:
+        """The bodies competing for my free Bench slots: Pokémon in HAND plus Pokémon still
+        REACHABLE IN DECK (ADR-0081 decision 2).
+
+        The deck leg is load-bearing rather than incidental. On the motivating frame the displaced
+        body is Makuhita, in the DECK behind the Ultra Ball in hand, and the human's recorded reason
+        is literally "clogs the bench needed for the Makuhita->Hariyama line" — a hand-only supplier
+        set prices that last slot at ~0 and reproduces the ruling for a reason the human did not give.
+
+        Only POKÉMON rows: capacity here is BENCH capacity, and a Trainer covering a draw need costs
+        no Bench slot. Deck rows carry the same ``deploy`` gate factor the resolver already consumes
+        per row, so an unreachable line is discounted rather than counted as a live rival.
+
+        Row ``i`` is the index into this list, which is what `needs.deploy_marginal` indexes."""
+        from collections import Counter
+        me = self._my_player(obs)
+        counts = board.deck_known_counts
+        if not counts:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+
+        def _is_body(cid) -> bool:
+            st = self.stats.get(cid) if (self.stats and cid is not None) else None
+            return bool(st is not None and getattr(st, "is_pokemon", False))
+
+        rows, seen = [], set()
+        for c in (me.get("hand") or []):
+            cid = (c or {}).get("id")
+            if cid is None or not _is_body(cid):
+                continue
+            rows.append({"i": len(rows), "cid": cid, "zone": "hand",
+                         "worth": round(self._role_value(cid), 1),
+                         "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        for cid in sorted(counts):
+            if cid in seen or not _is_body(cid):
+                continue
+            seen.add(cid)
+            rows.append({"i": len(rows), "cid": cid, "zone": "deck",
+                         "worth": round(self._role_value(cid), 1),
+                         "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        return rows
+
+    def _last_ditch_spent(self, me: dict) -> bool:
+        """Has a "Last-Ditch" Ability already fired this turn?
+
+        Read SOUNDLY off the board rather than tracked: the card's own text caps it at one per turn
+        ("You can't use more than 1 Ability that has 'Last-Ditch' in its name each turn"), and the
+        Ability fires on the bench-drop — so a `supporter_tutor` body that ``appearThisTurn`` IS the
+        spent use. Same field `_deploy_now_ids` reads for evolution eligibility."""
+        for b in (me.get("bench") or []):
+            if not b or not b.get("appearThisTurn"):
+                continue
+            tags = set(self.functions.tags(b.get("id"))) if self.functions else set()
+            if "supporter_tutor" in tags:
+                return True
+        return False
+
+    def _deploy_decision(self, obs: dict, select: dict, board: Board, option: dict):
+        """Price ONE candidate Bench deployment — the Pilot half of ADR-0081: resolve board facts
+        into `DeployInputs` and delegate. None when the switch is off or the option is not a body
+        reaching my Bench."""
+        if not getattr(self, "deploy_value", False):
+            return None
+        ctx = select.get("context")
+        if ctx not in (_MAIN, _SETUP_BENCH, _TO_BENCH):
+            return None
+        if ctx == _MAIN and option.get("type") != _PLAY:
+            return None
+        cid = self._option_card_id(obs, select, option)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if stat is None or not getattr(stat, "is_pokemon", False):
+            return None
+
+        from common import needs
+        from common.deploy_value import DeployInputs, deploy_value
+
+        me = self._my_player(obs)
+        rows = self._deploy_supplier_rows(obs, board)
+        index = next((r["i"] for r in rows if r["cid"] == cid and r["zone"] == "hand"),
+                     next((r["i"] for r in rows if r["cid"] == cid), None))
+        if index is None:
+            return None
+        slots, elig = self._resolve_needs(obs, board, rows, include_general=False)
+        resupply = [0.0] * len(slots)
+        capacity = max(0, _BENCH_MAX - int(board.my_bench or 0))
+        assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity)
+
+        tags = set(self.functions.tags(cid)) if self.functions else set()
+        # Set Up precedes the first turn, so "once during your turn" is unsatisfiable there — the
+        # pregame zero is DERIVED, which is what makes the old -15 veto deletable (decision 3).
+        can_fire = ("supporter_tutor" in tags and ctx != _SETUP_BENCH
+                    and not self._last_ditch_spent(me))
+        ability_marginal, ability_odds = 0.0, 0.0
+        if can_fire:
+            ability_marginal, ability_odds = self._supporter_fetch_need(obs, board, slots, elig)
+
+        inp = DeployInputs(
+            assignment_marginal=assignment,
+            ability_marginal=ability_marginal,
+            ability_odds=ability_odds,
+            ability_can_fire=can_fire,
+            supporter_quota_spent=bool((obs.get("current") or {}).get("supporterPlayed")),
+            accel_unlock=self._deploy_accel_unlock(obs, board, cid),
+            exposure_prizes=self._bench_path_delta(obs, select, option, stat, board),
+            phase=self._needs_phase_scale(board),
+        )
+        value = deploy_value(inp)
+        return {"cid": cid, "capacity": capacity, **value.working()}
+
+    def _supporter_fetch_need(self, obs: dict, board: Board, slots: list, elig: list):
+        """``(worth marginal, odds)`` for a bench-drop Supporter tutor — decision 3's Ability leg.
+
+        WHAT the fetch is worth is the best need a Supporter can fill that nothing held already
+        covers (`draw_engine` / `supply_wincon`, the kinds `supporter_tutor` supplies). WHETHER it
+        lands is the Deck-Content Odds that such a Supporter is still in deck. Both are RANKED
+        reads, so they weight the leg and never gate it (ADR-0074).
+
+        This is what makes "bench it only when we need a SPECIFIC Supporter" arithmetic: a position
+        whose draw need is met leaves no slot, so the marginal is 0 however certainly the deck holds
+        one."""
+        covered = {j for e in elig for j in e}
+        kinds = set(needs_SUPPLIES.get("supporter_tutor", ()))
+        best = max((s.value for j, s in enumerate(slots)
+                    if s.kind in kinds and j not in covered), default=0.0)
+        if best <= 0:
+            return 0.0, 0.0
+        odds = 0.0
+        for cid, n in (board.deck_known_counts or {}).items():
+            st = self.stats.get(cid) if self.stats else None
+            if st is not None and getattr(st, "is_supporter", False) and n > 0:
+                odds = max(odds, board.deck_contains_probability(cid)
+                           if hasattr(board, "deck_contains_probability") else 1.0)
+        return float(best), float(max(0.0, min(1.0, odds)))
+
+    def _needs_phase_scale(self, board: Board) -> float:
+        """`needs.phase_scale` off the live board — the prize-proximity sharpener the exposure leg
+        rides. Neutral (1.0) when the race read is unavailable, so a missing signal never inflates
+        or deletes the term."""
+        from common import needs
+        try:
+            return float(needs.phase_scale(
+                race_ahead=getattr(board, "race_ahead", None),
+                opp_prizes_remaining=int(getattr(board, "opp_prizes_remaining", 0) or 0)))
+        except Exception:
+            return 1.0
+
+    def _deploy_accel_unlock(self, obs: dict, board: Board, cid) -> float:
+        """Decision 8's accel-unlock leg: the Attach Budget that becomes realisable because a legal
+        landing spot now exists.
+
+        **NOT YET WIRED — returns 0.0.** The leg needs ADR-0069's `this_turn` counterfactual
+        evaluated against a HYPOTHETICAL board (the candidate already benched), and the Budget is a
+        per-body typed assignment; running it on a board that does not exist yet is the piece this
+        build has not done. Zero is the fail-closed answer the rest of the equation is built on (an
+        unmodelled effect contributes nothing, never a guess — ADR-0069 decision 5), so the decider
+        UNDER-credits an acceleration recipient rather than inventing a number for it.
+
+        Consequence to carry into the Decision Gate: `develop-the-accel-recipient` (+20) must NOT be
+        deleted until this returns a real value, or mega_starmie's Turbo Flare recipient loses its
+        only endorsement. Tracked as the one incomplete leg of ADR-0081 decision 8."""
+        return 0.0
+
+    def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,
+        shipped ON). 0 when the switch is OFF — DEGRADED MODE, not a rollback: the rungs this
+        replaced are deleted, so OFF means bench endorsements go silent and the surviving structure
+        decides alone.
+
+        Signed, and allowed to go NEGATIVE — that is what lets the decider price a body below ending
+        the turn, which is how the optional-select take-fewer decline refuses a pregame placement."""
+        row = self._deploy_decision(obs, select, board, option)
+        return 0.0 if row is None else float(row["total"])
 
     def _attach_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The ATTACH decider's contribution to an option's score (kill-switch `attach_value`,
