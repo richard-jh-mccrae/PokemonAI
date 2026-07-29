@@ -316,6 +316,36 @@ Two implementation constraints, both verified at source and both easy to lose in
   start reaching mirage bodies through the forward leg. The asymmetry (positive stands down, negative
   never does) is load-bearing and must survive.
 
+**5. Scope: the fold takes the SIX target rungs plus the MatchupPlan steer. The three counter rungs
+stay, deliberately.** The charter names *"6 target rungs + 3 counter rungs"*; the counter half is
+excluded on three independently verified grounds:
+
+| surface | select context | corpus frames |
+|---|---|---|
+| the 6 target rungs | `DAMAGE` 15 | **23** |
+| `place-counter-to-convert` | `DAMAGE_COUNTER` 13 / `_ANY` 14 | **0** |
+| `move-counters-off-the-damaged` | `REMOVE_DAMAGE_COUNTER` 16 | **0** |
+| `move-max-counters` | `..._COUNT` 40 | **0** |
+
+1. **The defect cannot occur there.** Contexts 13/14/16/40 are disjoint from 15, so no counter rung
+   ever co-fires with a target rung — the additive stack this fold exists to delete cannot form.
+2. **There is no hand-seeded stack to collapse.** Their value already comes from derived knapsack reads
+   (`board.best_counter_slot`, `best_counter_source_slot`, `is_max_counter_move`).
+3. **Zero corpus frames**, so any rewrite would be unbenched and unfalsifiable — the *"isolated
+   hand-built probes manufacture phantom misplays"* trap `turn-planner-snipe-and-gust-scenarios.md`
+   warns about.
+
+`_snipe_matchup_tactical` (ADR-0051) **does** fold: it is already a Brief-shaped multiplier carrying
+exactly decision 2's stand-down semantics, so it becomes the Brief factor on `their_plan` instead of an
+additive tactical term. Leaving it additive beside the graded scalar would be the "bolts on beside"
+the standing discipline forbids.
+
+**Consequence to state plainly rather than let a later reader infer:** `baseline_snipe.py` is NOT
+deleted — it survives holding the three counter Hypotheses, which are **live and deliberately
+retained**, not residue. Issue #136's standing directive #1 ("no dead rungs left behind") is satisfied
+for the target half only, on the record above. Relevance-informed counter placement is a real future
+extension and is logged as such, not silently dropped.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
