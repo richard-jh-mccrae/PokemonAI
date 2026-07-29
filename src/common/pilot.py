@@ -8,6 +8,8 @@ engine passes, so the fast unit suite needs no native lib.
 """
 from __future__ import annotations
 
+import copy
+
 from collections import Counter
 from dataclasses import dataclass, field, replace
 
@@ -4843,20 +4845,51 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 1.0
 
     def _deploy_accel_unlock(self, obs: dict, board: Board, cid) -> float:
-        """Decision 8's accel-unlock leg: the Attach Budget that becomes realisable because a legal
+        """Decision 8's accel-unlock leg: the DAMAGE the Attach Budget realises because a legal
         landing spot now exists.
 
-        **NOT YET WIRED — returns 0.0.** The leg needs ADR-0069's `this_turn` counterfactual
-        evaluated against a HYPOTHETICAL board (the candidate already benched), and the Budget is a
-        per-body typed assignment; running it on a board that does not exist yet is the piece this
-        build has not done. Zero is the fail-closed answer the rest of the equation is built on (an
-        unmodelled effect contributes nothing, never a guess — ADR-0069 decision 5), so the decider
-        UNDER-credits an acceleration recipient rather than inventing a number for it.
+        The value belongs to the ACCELERATOR's stranded Energy, not to the recipient's own role —
+        which is why this is not a tier bump on the body's line slot. `_recover_units` already prices
+        a rider's real yield under three bounds (printed ceiling, matching fuel in the source zone,
+        and the recipients' remaining NEED), and its need bound is exactly what makes a bench-targeted
+        rider credit 0 on an empty Bench. So the counterfactual is that same function evaluated on the
+        board WITH the candidate benched, which is ADR-0069's `this_turn` shape applied to a deploy.
 
-        Consequence to carry into the Decision Gate: `develop-the-accel-recipient` (+20) must NOT be
-        deleted until this returns a real value, or mega_starmie's Turbo Flare recipient loses its
-        only endorsement. Tracked as the one incomplete leg of ADR-0081 decision 8."""
-        return 0.0
+        Three behaviours fall out instead of being asserted, and they are the flat +20 rung's
+        hand-written stand-down conditions:
+
+        * 0 when the accelerator is not Active (`accel_recipient_missing` is False — nothing stranded);
+        * 0 when a recipient is already benched (same signal — the Energy already lands);
+        * PROPORTIONAL to the rider's real yield, so a 3-Energy Aura Jab pays more than a 1-Energy
+          trickle, which the flat rung could not express at all.
+
+        Priced per Energy at `ENERGY_RECOVER` — the shipped, DERIVED median damage-per-Energy over
+        every attack costing >= 2 (`160/3`, ADR-0078 via Issue #172) — rather than a constant invented
+        for this leg. Damage-denominated already, so it does NOT ride the deploy band."""
+        if not board.accel_recipient_missing or not self.stats or cid is None:
+            return 0.0
+        stat = self.stats.get(cid)
+        if stat is None or not getattr(stat, "is_pokemon", False):
+            return 0.0
+        if cid not in self._line_member_set():        # only a Line member receives (the glossary term)
+            return 0.0
+        active = self._my_active(obs)
+        aid, best = None, 0.0
+        for candidate in (getattr(self.stats.get((active or {}).get("id")), "attacks", None) or ()):
+            st = self._attack_stat(candidate)
+            if st is not None and getattr(st, "recoverN", 0) > 0:
+                aid = candidate
+                break
+        if aid is None:
+            return 0.0
+        # The hypothetical board: the candidate is on the Bench, so the rider has somewhere to land.
+        hypo = copy.deepcopy(obs)
+        me = hypo["current"]["players"][hypo["current"].get("yourIndex", 0)]
+        me["bench"] = list(me.get("bench") or []) + [{"id": cid, "hp": getattr(stat, "hp", 0),
+                                                      "energies": [], "appearThisTurn": True}]
+        units = self._recover_units(aid, {}, board, hypo)   # dmg_ctx unused by the fuel/need bounds
+        best = max(0.0, float(units)) * ENERGY_RECOVER
+        return best
 
     def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,

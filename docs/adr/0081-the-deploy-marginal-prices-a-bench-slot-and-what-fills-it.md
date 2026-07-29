@@ -693,6 +693,23 @@ eligible slot of the candidate. The DP is a bitmask over ≤16 slots and ~10 car
 but it is a real multiplier on the deploy path and feeds the **Leaf Profile** re-measure the ADR
 already owes.
 
+## Build note — the accel-unlock leg is now real (2026-07-29)
+
+Decision 8 shipped as `0.0` in the first Pilot-delegation commit, flagged rather than faked. It is now
+implemented as the counterfactual the decision describes: `_recover_units` — which already bounds a
+rider's yield by its printed ceiling, the matching fuel in its source zone, and the recipients'
+remaining NEED — evaluated on the board WITH the candidate benched. Priced per Energy at the shipped,
+derived `ENERGY_RECOVER` (`160/3`), so no constant is invented for the leg, and damage-denominated
+already, so it does not ride the deploy band.
+
+The rung's two hand-written stand-downs are now derived: no accelerator Active, or a recipient already
+benched, both collapse to `accel_recipient_missing` being False. And the yield is PROPORTIONAL — a
+3-Energy Aura Jab pays more than a 1-Energy trickle, which the flat +20 could not express.
+
+**Consequence for the deletion list:** the exclusion recorded in the delegation commit is LIFTED —
+`develop-the-accel-recipient` (+20) may now be deleted with the other eight, because the leg that
+replaces it returns a real value.
+
 ## Open, deliberately not ruled here
 
 - Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a

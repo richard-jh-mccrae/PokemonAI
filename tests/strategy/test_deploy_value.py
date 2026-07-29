@@ -166,3 +166,44 @@ def test_the_result_reports_every_leg_so_a_disagreement_is_diagnosable():
     assert v.total == pytest.approx(
         currency.DEPLOY_BAND * (v.assignment_relevance + v.ability_relevance)
         + v.accel_unlock - v.exposure)
+
+
+# ── the accel-unlock leg (decision 8) — Pilot-side, so it needs a Pilot ──────────────────────────
+
+
+@pytest.mark.req("REQ-DEPLOY-0005")
+def test_accel_unlock_credits_the_energy_a_landing_spot_realises():
+    """ADR-0081 decision 8, and the leg's whole point: benching an Acceleration Recipient is worth
+    the Energy the accelerator can now ACTUALLY place — not a flat bonus for being a line piece.
+
+    The rider is Aura Jab ("attach up to 3 Basic {F} Energy from your discard pile to your Benched
+    Pokémon"). With no Line member benched it fires blanks (`accel_recipient_missing`), so the
+    counterfactual is exactly what the deploy buys: `_recover_units` on the board WITH the candidate
+    benched. Priced at the shipped, DERIVED `ENERGY_RECOVER` (median damage-per-Energy over every
+    attack costing >= 2, `160/3`) rather than a constant invented for this leg.
+
+    Zero when the accelerator is not Active or a recipient already exists — the rule's hand-written
+    stand-down conditions, now derived."""
+    from common.strategy.context import ENERGY_RECOVER
+    from tests.strategy._accel_fixture import accel_pilot, accel_obs   # noqa: F401
+
+    pilot, obs, option = accel_pilot()
+    board = pilot._board(obs, obs["select"])
+    assert board.accel_recipient_missing is True
+    riolu = pilot._option_card_id(obs, obs["select"], option)
+    unlocked = pilot._deploy_accel_unlock(obs, board, riolu)
+    assert unlocked > 0
+    assert unlocked == pytest.approx(2 * ENERGY_RECOVER)     # Riolu->Mega Brave {F}{F}, 3 in discard
+
+
+@pytest.mark.req("REQ-DEPLOY-0005")
+def test_accel_unlock_is_zero_without_a_stranded_accelerator():
+    """The two stand-downs the flat +20 rung wrote by hand, both derived here: no accelerator Active
+    means nothing is stranded, and a recipient already benched means the Energy already lands."""
+    from tests.strategy._accel_fixture import accel_pilot
+
+    pilot, obs, option = accel_pilot(recipient_benched=True)
+    board = pilot._board(obs, obs["select"])
+    assert board.accel_recipient_missing is False
+    assert pilot._deploy_accel_unlock(obs, board,
+                                      pilot._option_card_id(obs, obs["select"], option)) == 0.0
