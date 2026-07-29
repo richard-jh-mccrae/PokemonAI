@@ -23,6 +23,10 @@ REPO = Path(__file__).resolve().parents[2]
 MEGA = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
 
 
+# Cinderace (Explosiveness opener + Turbo Flare accel) / Staryu (the wincon Line base).
+CINDERACE, STARYU = 666, 1030
+
+
 def _deck():
     return [int(x) for x in (MEGA / "deck.csv").read_text(encoding="utf-8").split("\n")[:60]]
 
@@ -32,8 +36,16 @@ def _engine_pilot(deck, **kw):
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
-    # attack facts flow through the provider's audit-overridden table (ADR-0051)
-    return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
+    # attack facts flow through the provider's audit-overridden table (ADR-0051).
+    #
+    # `starter_priority` is DECLARED rather than left bare (ADR-0077), for the same reason as in
+    # `test_lethal_engine.py`: these drives play whole games, so the pregame Active pick sets the
+    # trajectory. Until 2026-07-28 a bare `Strategy()` opened Cinderace by ACCIDENT, via a DERIVED
+    # `accel_source` feeding the now-deleted `open-the-accelerator`; the declaration-keyed successor
+    # is silent on an undeclared pilot, which would drop the pick to the engine's option index and
+    # make every drive below wander. Declaring it keeps the trajectory AND states it outright.
+    return Pilot(Strategy(starter_priority=[CINDERACE, STARYU]), deck,
+                 general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
                  functions=fns, **kw)
 
 

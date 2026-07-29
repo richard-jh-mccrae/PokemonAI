@@ -249,6 +249,32 @@ your #1 is not in the opening hand.
 >
 > Net: **score-equal on every reachable frame, with the single intended exception.**
 
+> **Amendment F (build, 2026-07-29) — the undeclared-deck gap is WIDER than amendment A said, because
+> `open-the-accelerator` was DERIVATION-backed.** Amendment A framed the loss as `grimmsnarl_ex` only.
+> That was wrong. `open-the-accelerator` triggered on `"accel_source" in c.roles`, and the Pilot
+> *derives* that Role when a deck fields an accelerator body (`_derived_accel_body_ids` —
+> "derivation-first, declaration as the confirm/override"). So the rule fired for decks that declared
+> **nothing**, and its declaration-keyed successor does not.
+>
+> Measured, not reasoned: driving 24 `_SETUP_ACTIVE` frames with a bare `Strategy()` on the
+> mega_starmie fixture deck, `open-the-accelerator` fires on `main` and **no rule fires** on this
+> branch — the pick drops to the engine's option index and opens Staryu roughly half the time
+> instead of Cinderace.
+>
+> This surfaced as a **CI determinism-backstop failure** (run 30430142964, repeat 6 of 15):
+> `test_lethal_engine.py::test_live_wiring_engine_refutes_a_phantom_direct_lock` drives whole games
+> from a bare-`Strategy()` pilot, so the changed opening moved it into a frame where the planner
+> proposed a `kind="evolve"` win. That exposed a **pre-existing hole in the test**, not a defect in
+> this decision: its retry guard skipped a frame only when `planned.verified` was truthy, but
+> `verified=None` is a legitimate verdict for a win lock (True-or-None, ADR-0037), so an unverified
+> non-direct rung tripped an assertion meant for the *direct* phantom. Both engine-drive tests now
+> DECLARE `starter_priority` — restoring the trajectory and stating outright what was previously an
+> accident of derivation — and the guard skips any win that is not `kind="direct"`.
+>
+> The decision stands: an undeclared deck getting nothing is the intended consequence of decision 2,
+> and decision 5's invariant is what makes it safe *for authored agents*. What changes is the honest
+> scope of the carried cost — it is every pilot without a declaration, not one deck.
+
 ## Consequences
 
 - The Set-Up Active seam goes from five rules across two layers to **one rule plus one declaration

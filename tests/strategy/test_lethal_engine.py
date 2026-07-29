@@ -21,6 +21,10 @@ REPO = Path(__file__).resolve().parents[2]
 MEGA = REPO / "tests" / "fixtures" / "agents" / "mega_starmie"
 
 
+# Cinderace (Explosiveness opener + Turbo Flare accel) / Staryu (the wincon Line base).
+CINDERACE, STARYU = 666, 1030
+
+
 def _deck():
     return [int(x) for x in (MEGA / "deck.csv").read_text(encoding="utf-8").split("\n")[:60]]
 
@@ -30,8 +34,18 @@ def _engine_pilot(deck, **kw):
         fns = CardFunctions.load()
     except Exception:
         fns = CardFunctions({})
-    # attack facts flow through the provider's audit-overridden table (ADR-0051)
-    return Pilot(Strategy(), deck, general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
+    # attack facts flow through the provider's audit-overridden table (ADR-0051).
+    #
+    # `starter_priority` is DECLARED rather than left bare (ADR-0077): these drives play whole games,
+    # so the pregame Active pick sets the trajectory every later assertion rides on. Until 2026-07-28
+    # this pilot opened Cinderace by ACCIDENT — `open-the-accelerator` fired off a DERIVED
+    # `accel_source` (`_derived_accel_body_ids`), so a bare `Strategy()` still got an opener. That rung
+    # is deleted and the successor is declaration-keyed, so an undeclared pilot now scores the pick at
+    # 0.0 and falls to the engine's option index — opening Staryu ~half the time and wandering into a
+    # different game. Declaring it restores the old trajectory AND makes it explicit instead of a
+    # side-effect of derivation.
+    return Pilot(Strategy(starter_priority=[CINDERACE, STARYU]), deck,
+                 general_strategy=GENERAL_STRATEGY, stats=EngineCardStatProvider(),
                  functions=fns, **kw)
 
 
@@ -63,8 +77,16 @@ def test_live_wiring_engine_refutes_a_phantom_direct_lock():
                         and obs.get("search_begin_input")
                         and any(o.get("type") == 13 for o in (sel.get("option") or []))):  # an ATTACK option
                     d = pilot.explain(obs)
-                    if d.planned is not None and d.planned.goal == "win" and d.planned.verified:
-                        break                         # a real engine-confirmed donk, not a phantom — retry
+                    # Retry this frame unless the planned win is the DIRECT phantom under test.
+                    # Two ways it is not: (a) the engine CONFIRMED it — a genuine donk; (b) it is a
+                    # different win rung (`kind` "evolve"/"unlock" — a develop that enables the KO),
+                    # which the closed-form `_attack_wins` lie does not manufacture and which the
+                    # verifier legitimately leaves `verified=None` (True-or-None, ADR-0037 — see the
+                    # sibling test below). Guarding only on `verified` treated (b) as a failure: an
+                    # unverified `kind="evolve"` line tripped the assert on CI run 30430142964.
+                    if d.planned is not None and d.planned.goal == "win" and (
+                            d.planned.verified or d.planned.kind != "direct"):
+                        break
                     assert d.planned is None or d.planned.goal != "win"   # phantom candidate refuted
                     assert d.lethal_refuted >= 1
                     refuted = True
