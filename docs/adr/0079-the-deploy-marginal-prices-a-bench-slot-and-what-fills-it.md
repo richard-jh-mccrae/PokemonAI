@@ -271,4 +271,49 @@ decision 3's odds read is at its widest. Covered by the standing fail-closed dis
 decision 5): a term that cannot be computed contributes **ZERO**, never a guess. The consequence to
 expect is that the pregame decision is carried almost entirely by decisions 2 and 3, with 5 ≈ 0.
 
+**7. The empty-Bench guard does NOT fold into the marginal — it is a SOUND RUNG above it, scoped to
+POST-SETUP contexts only.** *(User ruling, 2026-07-29, with the post-setup scoping as the user's own
+refinement.)*
+
+`keep-a-bench` (+60) is the one rule in the deletion list that guards a **win condition** rather than
+expressing a preference: `docs/rules.md` §7 case 2 — *"Opponent has no Pokémon in play to replace a
+KO'd Active."* An empty Bench under a KO'd Active is not a bad position, it is the game.
+
+It therefore becomes an `empty_bench` **dominance rung** in the sound tier — Bench empty and a legal
+Pokémon deploy available ⇒ that deploy is taken; the Deploy Marginal ranks only WHICH body. Two
+independent arguments, the second structural:
+
+- **Soundness discipline.** The repo is categorical: the Lethal Solver *"preempts every heuristic Turn
+  Goal — no positional value can outrank it"*, and *"a phantom win loses the game."* The mirror
+  obligation on the loss side has the same shape, and a weight cannot carry it because a weight can
+  always be out-bid.
+- **The band invariant.** `_LINE_CAP`'s comment records the design: *"max positional (readiness 300 +
+  survival 50 + threat 100 + value 40 + line 100) = 590 < 1000 = KO_SCORE, so no path term can lift a
+  positional board over a real prize."* A loss-avoidance value cannot be simultaneously bounded under
+  1000 AND un-outbiddable, so it cannot live inside a bounded positional marginal — arithmetic, not
+  taste.
+
+**Scope: post-setup only. The rung does NOT fire at `_SETUP_BENCH`.** Verified at source
+(`docs/rules.md` §2): the player going FIRST cannot attack on turn 1 (`rulebook.txt` L152,
+PROJECT-VERIFIED ep81903490 f5), and the player going SECOND acts only after that turn — so in either
+seat **my first turn precedes the first legal attack of the game**. Declining every pregame placement
+cannot lose the game before I get a turn to bench. The converse is what makes the scoping mandatory
+rather than merely safe: an unscoped rung fires at `setup_bench_decline_f3` — bench `[]`, Meowth ex
+the sole option — and forces exactly the placement decision 3 derives us out of, overturning a ruled
+corpus frame.
+
+**Placement obligation:** today's rule scores a `_PLAY` option, but the sound claim is about the TURN.
+The rung must also prevent `_finish_turn_last` from ending a post-setup turn with an empty Bench while
+a deploy was available — one guard covering both the option score and the turn-end sequencing.
+
+**Honest consequence for this ADR's scope claim:** the Deploy Marginal replaces **nine of the ten**
+rules in the bench table, not all of them. The tenth is promoted, not deleted.
+
+Rejected: folding the loss at ~6 × `PRIZE_DAMAGE_RATE` = 600 inside the marginal (sits INSIDE the
+positional band, so a large readiness or exposure term out-bids it; raising it to compensate breaks
+the <1000 invariant and lets a positional board outrank a real prize); and deleting it outright on the
+theory that an empty Bench makes every deploy attractive anyway (unsound in the case that matters — a
+3-prize body whose decision-5 exposure prices negative can still lose to `End`, ending the turn with
+an empty Bench).
+
 *(Further decisions appended as they lock.)*
