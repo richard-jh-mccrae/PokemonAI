@@ -1,0 +1,191 @@
+# ADR-0082 — Gust is a THREE-surface instrument, and only ONE of its surfaces crosses a scale boundary
+
+**Status:** Accepted (grilling 2026-07-29, `/grill-with-docs` on Issue #189 — decisions land as they
+are ruled; this document is authored during the grill, not after it).
+
+**Expect to renumber.** 0082 is claimed at grill time per `docs/adr/README.md`'s *Next free number*
+and is settled only at merge. There have been **five** collisions in four days (0071, 0074×3, 0076,
+0077, 0079), and #161's ADR was renumbered three times in its own life. Cite the issue alongside the
+number ("ADR-0082, Issue #189"); the number is a rebase artifact, not an identifier. When renumbering,
+change **only this branch's references**.
+
+**Context issues:** Issue #189 (this grill, S4-gust), Issue #136 (the Value System tracker),
+Issue #187 (S4-deny, `status:2-spec`), Issue #188 (S4-snipe, `status:1-grilling`), Issue #190 (S5,
+which owns `return_threat`), Issue #165 (the Turn Planner, which now owns `86091435-13`).
+**ADRs:** ADR-0022 (the gust doctrine), ADR-0066 (the rider-aware gust baseline and marginal denial),
+ADR-0076 (the opponent-target slot family split — Amendment E raised the currency debt, Amendment F
+moved it away, and this ADR receives it back), ADR-0078 (the three scales; its decision 1 one-backend
+claim is at issue here), ADR-0080 (deny is categorical — withdrew the one-backend claim for deny and
+re-inherited the debt to this issue), ADR-0072 (the two merit gates and the three Claim shapes),
+ADR-0065 (the no-fudge discipline).
+
+## Context
+
+Issue #189's charter describes a **behavior-preserving repoint of one surface**: lift the merged
+`doctrine_gust._gust_target_tactical` sum into the shared assignment as the gust instrument's marginal,
+*"not a new calculation, since the merged gust value is already prize-denominated."* Its acceptance
+criterion is that four named bench frames hold unchanged.
+
+Read at source on `main` before any build, both halves of that premise fail. The findings below are
+recorded first because they are what the scope ruling rests on.
+
+### Finding 1 — gust is three surfaces, not one
+
+The same correction ADR-0077 made to Issue #187's charter applies here:
+
+| | surface | question | where | value today |
+|---|---|---|---|---|
+| (a) | keep price | is a held Boss's Orders worth KEEPING? | `needs.gust_target_slot`, emitted `pilot.py:3791` | `opponent_target_value`, **prize-equivalents 0–3.9**, deadline 0 |
+| (b) | fire now | do I PLAY it this turn? | `_gust_tactical` (KO_SCORE) + **5** `HYPOTHESES` | gate-shaped: prize-count comparisons inside `when`, then a flat positional weight (50 / 50 / 95 / 20 / 10) |
+| (c) | which body | which benched body do I DRAG UP? | `_gust_target_tactical` (KO-gated) **and** `_gust_stall_target_tactical` (the non-KO strand path) | 8-term sum on a `KO_SCORE` offset; the strand path is `retreatCost + _STALL_EX_BONUS` |
+
+Surface (a) is **live and armed ON** today (`runtime.py:158`, `gust_target_slots: True`, ADR-0076).
+Surface (c) has a **second, non-KO path** the charter does not mention at all.
+
+### Finding 2 — the "already prize-denominated, behavior-preserving" premise does not hold
+
+`_gust_target_tactical` is an **eight**-term sum; `needs.opponent_target_value` is **two** terms. Only
+one pair maps cleanly.
+
+| `_gust_target_tactical` term | magnitude | maps to the shared marginal? |
+|---|---|---|
+| `KO_SCORE` | 1000 | no — a dominance-band offset, not a value |
+| `prize_value(target)` | 1 – 3 | **yes** → `prize_advance` |
+| `_gust_target_denial` | **my Active's full prize value, up to 3.0** | *conflicts* — the shared survival leg caps at `_SURVIVAL_CAP` **0.9** |
+| `_gust_forward_denial` | 0.5 | no |
+| `_gust_matchup_priority` | ≤ 0.4 (γ-scaled) | no |
+| `_gust_wincon_denial` | ~1.5 (γ-scaled) | no |
+| `_gust_energy_denial` | ≤ 0.8 | no |
+| `_gust_snipe_synergy` | +1 – 3 (a **second** body's prize) | no — the shared marginal is strictly per-body |
+
+So the repoint as chartered is not a lift. It would either discard six terms or bolt them beside the
+marginal, and it silently demotes `_gust_target_denial` from up to 3.0 to at most 0.9 — a ~3.3×
+reduction in the one term ADR-0022's *"prizes-first is a trap"* ruling exists to defend.
+
+### Finding 3 — none of the four charter bench frames reach `_gust_target_tactical`
+
+Read from `data/corrections/*/corrections.jsonl`:
+
+| frame | agent | select context | what actually decides it |
+|---|---|---|---|
+| `85785067-41` | mega_lucario | **Switch** | **not** `_gust_target_tactical`: my Active is Makuhita **10/80 with zero Energy**, so `can_pay_cheapest` fails and `_gust_can_ko` is false on every option. Decided by `_gust_stall_target_tactical` (correct pick Meowth ex — `_STALL_EX_BONUS`). |
+| `85163079-30` | mega_starmie | **Main** | surface (b) — the `gust-for-the-loaded-equal-ko` rung, which cites this frame by name |
+| `86089120-14` | dragapult_ex | **Main** | surface (b) — a don't-play ruling (*"gusting up their main attacker only helps them"*) |
+| `85164131-22` | mega_starmie | **Damage** | a **snipe** frame — `_gust_target_tactical` gates on `context != _SWITCH`. Committed as `tests/fixtures/corrections/ms_snipe_evolving_wincon_over_promotion_stack_f22.json`; it belongs to Issue #188. |
+
+Zero of the four exercise the KO-gated target pick the charter is written about. Two exercise the play
+rungs, one the non-KO strand path, one is another issue's. **The acceptance criterion is therefore
+vacuous as written** — those frames would hold unchanged whatever the repoint did to (c). Only one of
+the four is a committed pytest fixture, and it is the one belonging to #188.
+
+### Finding 4 — the live keep-side slot is arithmetically unreachable for a first copy
+
+ADR-0076 Amendment E recorded the currency debt as *"latent, not firing — the general-worth floor
+absorbs it."* Measured, it is stronger than that:
+
+```
+gust_target slot ceiling   = opponent_target_value max          = 3.9   (prize-equivalents)
+Boss's Orders general slot = TAG_TIER["gust"] 10.0 × 0.45        = 4.5   (card-worth points)
+                             (_GENERAL_WORTH_W, pilot.py:87; × deploy × liq)
+```
+
+`3.9 < 4.5` unconditionally, and `_keep_slot_dp` assigns each card to its single best eligible slot, so
+copy 1 of a gust card takes `general` **every time**. The `general` slot is de-duplicated per `cid`
+(`pilot.py:3812`), so `gust_target` can only ever win an assignment for a **second held copy** of a
+gust card. The slot ADR-0076 shipped and armed is not merely absorbed — for the common case it is dead
+on arrival. (`liq < 1` can lower the floor, so this is *near*-total, not total.)
+
+### Finding 5 — `return_threat` is confirmed out of scope
+
+Grill agenda item 1, verified: **no `return_threat` term exists anywhere in `src/`.** It appears only
+as design prose in `docs/plans/opponent-value-equation-unification.md:300-303`, which itself states the
+shorthand `KO_prizes + tempo − return_threat` was *"the design description; the built code has the
+positive terms but not the `return_threat`."* Issue #190 (S5) owns it. Nothing to reconfirm at build
+time.
+
+### Finding 6 — one charter frame has already left this issue
+
+`86091435-13` — the frame both of this issue's first two comments are about — was **moved to Issue #165
+by user ruling 2026-07-29** (`tests/fixtures/corrections/dp_gust_wasted_over_item_lock_retreat_f13.json`):
+*"we already ruled that f21 is a turn planner issue… not our business."* The gust reading is retired
+there because the shipped agent no longer plays Boss's Orders on that board (it returns `[0]` Ultra
+Ball). Those two issue comments are stale and should not be read as scope.
+
+## Decision
+
+**1. Issue #189 is RECHARTERED from a one-surface repoint to a three-surface audit with a
+per-surface currency ruling. A scale boundary is crossed on exactly ONE surface.**
+
+The charter's single behavior-preserving lift is withdrawn on findings 1–3. In its place, each of the
+three surfaces is ruled on its own, and the currency question — the debt ADR-0076 Amendment E raised,
+Amendment F moved away, and ADR-0080 decision 4 sent back — is asked only where a value actually has to
+meet a differently-denominated one:
+
+- **(c) which body — NO exchange rate is needed.** Every option at a `_SWITCH` select carries the same
+  `KO_SCORE` offset, so the eight terms function purely as an **ordering within one `OptionType` lane**.
+  That is an ADR-0072 **Axis Claim** (*"ordering within one lane, resolved by body slot… ordering
+  survives a currency re-banding"*), which is precisely the shape that does not need a rate. This is
+  structurally the same answer ADR-0080 decision 3 gave deny's surface (c) — `argmax`, not a magnitude —
+  reached by different reasoning: deny's ranking is categorical, gust's is a genuine prize magnitude
+  that happens never to be compared against another scale.
+- **(b) fire now — the rate needed already EXISTS and is DERIVED.** This surface writes to `score` on
+  the damage/tactical scale, and `currency.PRIZE_DAMAGE_RATE = 100.0` with `currency.prize_to_damage`
+  is exactly the prize↔damage bridge, derived from the card set (median HP-per-prize over 1061 bodies)
+  and recomputed rather than pinned by `tests/strategy/test_currency.py`. Nothing underivable is
+  required here.
+- **(a) keep price — this is the ONLY scale crossing, and it is the underivable leg.** A
+  prize-denominated value entering the card-worth-summing `_keep_slot_dp` needs the **Worth Damage
+  Rate**, which ADR-0080 measured underivable from the corpus as it stands and deliberately did not
+  ship. Gust has no escape of deny's kind: ADR-0080's Consequences say so outright, and finding 2
+  confirms it — dragging a body into the Active Spot is a real prize magnitude, not a relevance read.
+
+**Consequently the acceptance criteria are rebuilt.** "The four bench frames hold unchanged" is
+retired as vacuous (finding 3). `85164131-22` is handed to Issue #188 as a snipe frame.
+`85785067-41` is retained but **re-labelled** as a surface-(c) *non-KO strand* frame, not a
+`_gust_target_tactical` one. `85163079-30` and `86089120-14` are retained as surface-(b) frames.
+Coverage for the KO-gated target pick must be **authored**, not harvested — the same conclusion
+ADR-0080 reached about its own worked examples, and for the same reason.
+
+<!-- Decisions 2+ land as the grill rules them. -->
+
+## Consequences
+
+- **ADR-0078 decision 1's one-backend claim now fails for a second instrument, for the opposite
+  reason.** Deny left the shared backend because its value is *not a magnitude at all* (ADR-0080).
+  Gust's relationship to it is the inverse: gust's value is a magnitude four times richer than the
+  two-term backend. Whether that means gust reads the backend, extends it, or keeps its own composite
+  is the next ruling, but "one backend feeds all three" is already not what shipped.
+- **A live, armed defect is now named** (finding 4): `gust_target_slots` has been ON since 2026-07-27
+  while its slot cannot win an assignment for a first copy. ADR-0076 Amendment E's *"0 decision flips
+  across 331 corpus frames"* is fully explained by that, and is an instance of tracker directive #9 —
+  *record what made the sweep clean* — with the sharper answer that nothing absorbed it; it never fired.
+- **The Discrimination Gate baseline is unaffected by findings alone.** No code has changed; these are
+  readings. The gate must still be run **before** any arming decision (ADR-0072 decision 5), which is
+  the ordering ADR-0076 Amendment E got wrong.
+- **Two of the four charter frames were never this issue's**, and one more (`86091435-13`) left for
+  Issue #165 (finding 6). Issue #189's real corpus footprint is smaller than its charter implies and
+  must be grown by authoring.
+
+## Alternatives rejected
+
+- **Keep the one-surface charter** (repoint `_gust_target_tactical`, leave (a) and (b)). Literal
+  compliance with the issue, and the smallest change. Rejected on findings 2–3: it must either discard
+  six terms or duplicate them beside the seam, its acceptance criterion cannot detect either outcome,
+  and it leaves the armed dead slot from finding 4 in place. Small blast radius is not a virtue when
+  the narrow change is the one that bypasses the seam.
+- **Keep-slot only** — disarm `gust_target_slots` back to `deny` routing at 10.0 and defer (b)/(c) to a
+  new issue. Attacks the one live defect directly and is genuinely tempting. Rejected because it
+  abandons the S4-gust charter mid-family and leaves Issue #190 without gust's half of the
+  decline-a-prize gate, which is the one thing #189 is recorded as blocking.
+- **Port ADR-0080's relevance shape to gust** — rebuild gust as a `[0,1]` scalar scaling incumbent
+  constants. Attractive symmetry, and both instruments would then share one design language. Rejected
+  on ADR-0080's own pre-emptive finding: gust *"has no escape route of deny's kind — a gust card's
+  value genuinely is a magnitude (it drags a body into the Active slot)."* Compressing prize counts and
+  a second body's snipe prize into `[0,1]` discards information the KO terms are built on.
+- **Promote gust's 8-term sum to BE the shared backend** that snipe also reads. Inverts the repoint
+  rather than abandoning it, and would honour ADR-0078 decision 1's spirit. Rejected as circular:
+  `_gust_snipe_synergy` already calls into the snipe rider oracle, so a snipe read of a gust-shaped
+  backend would close a loop, and it would drag MatchupPlan γ-scaling into surfaces that do not want it.
+- **Extend `needs.opponent_target_value` with the six missing terms** so the backend stays single.
+  Rejected: six gust-specific terms inside a function three instruments read is not a shared backend,
+  it is gust's function with other callers.
