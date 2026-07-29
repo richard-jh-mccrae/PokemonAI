@@ -1,15 +1,15 @@
 {
-  "git_rev": "38ca76f",
+  "git_rev": "fa86dcb",
   "agent": null,
   "n": 276,
   "scorable": 267,
   "unscorable": 9,
   "skipped_agent": 1,
-  "leaf_correct": 191,
-  "leaf_correct_rate": 0.7153558052434457,
-  "leaf_correct_strict": 35,
-  "leaf_correct_strict_rate": 0.13108614232209737,
-  "avg_top_tie": 3.093632958801498,
+  "leaf_correct": 192,
+  "leaf_correct_rate": 0.7191011235955056,
+  "leaf_correct_strict": 36,
+  "leaf_correct_strict_rate": 0.1348314606741573,
+  "avg_top_tie": 3.0898876404494384,
   "rows": [
     {
       "key": "83686860|1|decision|13",
@@ -193,7 +193,7 @@
       "episode_id": 85046350,
       "agent": "dragapult_ex",
       "correct": [
-        2
+        1
       ],
       "values": [
         10.025,
@@ -206,12 +206,12 @@
       "scored": 6,
       "n_options": 6,
       "unscorable": false,
-      "correct_value": 10.025,
+      "correct_value": 12.5,
       "top_value": 12.5,
-      "correct_is_top": false,
-      "correct_is_unique_top": false,
-      "correct_rank": 3,
-      "outscored_by": 2,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
       "top_tie": 1
     },
     {
@@ -729,7 +729,7 @@
       "values": [
         64.75,
         64.75,
-        64.75,
+        62.5,
         62.5,
         60.025
       ],
@@ -740,9 +740,9 @@
       "top_value": 64.75,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 4,
-      "outscored_by": 3,
-      "top_tie": 3
+      "correct_rank": 3,
+      "outscored_by": 2,
+      "top_tie": 2
     },
     {
       "key": "86091435|0|decision|20",

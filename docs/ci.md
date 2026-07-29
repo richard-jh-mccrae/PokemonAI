@@ -163,9 +163,22 @@ so it was not born red.
 
 ### Baseline provenance
 
-`data/leaf_lab/baseline.json` was re-captured **2026-07-28 at `38ca76f`**, moving off the long-stale
-`81eac82` pin. Its precondition was met: the gate reported **0 unruled / 3 ruled** flips, which is
-exactly ADR-0072 decision 2's *"only when a swap's flips have been ruled"*.
+`data/leaf_lab/baseline.json` is currently pinned at **`fa86dcb` (2026-07-29)**. Two deliberate
+re-captures, each with its flips ruled first — the ADR-0072 decision 2 precondition, *"only when a
+swap's flips have been ruled"*:
+
+| capture | rev | absorbed | why |
+|---|---|---|---|
+| 2026-07-28 | `38ca76f` | 6 × `MISS → OK`, 3 × `OK → MISS` | move off the long-stale `81eac82` pin (details below) |
+| 2026-07-29 | `fa86dcb` | 1 × `MISS → OK` (`85046350\|0\|decision\|21`) | the user re-ruling of that frame's `correct` (`[2] → [1]`) |
+
+The second is the smaller story: re-ruling `85046350-21`'s `correct` to the Active Dreepy changed
+what `leaf_lab` scores that frame against, so its verdict became `OK`. Aggregates moved with it —
+shared-top 191 → 192, SOLE-top 35 → 36. Note what that is and is not: the leaf did not improve, the
+**label** moved to match what the leaf already preferred. Baselining it protects the frame, since an
+un-baselined `OK` would let a later regression back to `MISS` pass as a silent `MISS → MISS`.
+
+The first re-capture's reasoning follows.
 
 Why re-capture rather than leave it: six frames had improved `MISS → OK` since `81eac82`, and an
 improvement is **not protected until it is baselined** — with the old pin still recording them as
