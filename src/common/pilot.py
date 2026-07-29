@@ -1549,6 +1549,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         by_score = self._prefer_soonest_arming_evolve(by_score, options, traces)
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
+        # The empty-Bench guard runs LAST, above the sequencer: it is a soundness FILTER, so
+        # nothing downstream may re-order a deploy back below End (ADR-0081 decision 7).
+        order = self._empty_bench_forced(obs, select, board, options, order)
         # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
         # trace reader doesn't misread "top-score not chosen" as a scoring bug. `reordered` = attack-last
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
@@ -1690,6 +1693,43 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     out[slot] = opt
             i = j + 1
         return out
+
+    def _empty_bench_forced(self, obs: dict, select: dict, board: Board, options: list,
+                            order: list) -> list:
+        """The post-setup EMPTY-BENCH guard (ADR-0081 decision 7): with nothing to promote, a single
+        Knock-Out ends the match on the spot (`docs/rules.md` §7 case 2), so a legal Pokémon deploy is
+        TAKEN rather than ranked.
+
+        A FILTER on the option order, never a score. `keep-a-bench` was the one rule in the bench
+        table guarding a WIN CONDITION rather than a preference, and `_LINE_CAP`'s band invariant is
+        why it cannot stay a weight: max positional (readiness 300 + survival 50 + threat 100 + value
+        40 + line 100) = 590 < 1000 = KO_SCORE, deliberately, so no positional term can outrank a real
+        prize — and a loss-avoidance value cannot be simultaneously bounded under that band AND
+        un-outbiddable. A filter is the only shape that is both.
+
+        It ranks WHICH body, never WHETHER: the surviving order is the Deploy Marginal's, restricted
+        to the deploys.
+
+        **Post-setup only, and that scoping is required rather than merely safe.** Verified at source
+        (`docs/rules.md` §2): the player going first cannot attack on turn 1 and the player going
+        second acts only after that turn, so in either seat my first turn precedes the first legal
+        attack — declining every pregame placement cannot lose the game before I can bench. The
+        converse is what makes the scoping mandatory: an unscoped guard fires at `_SETUP_BENCH` on
+        `setup_bench_decline_f3` (bench empty, Meowth ex the sole option) and forces exactly the
+        placement decision 3 derives us out of, burning Last-Ditch Catch.
+
+        Silent unless it has something to force, so an empty Bench with no legal body on the menu
+        leaves the order untouched."""
+        if select.get("context") != _MAIN or int(board.my_bench or 0) > 0 or not self.stats:
+            return order
+        deploys = [i for i in order
+                   if options[i].get("type") == _PLAY
+                   and getattr(self.stats.get(self._option_card_id(obs, select, options[i])),
+                               "is_pokemon", False)]
+        if not deploys:
+            return order
+        seen = set(deploys)
+        return deploys + [i for i in order if i not in seen]
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
