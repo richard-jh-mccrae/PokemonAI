@@ -413,17 +413,60 @@ _Avoid_: Function Tag (universal/mechanical; a Role is per-deck/intentional), jo
 
 **Starter Priority**:
 A deck's ordered list of the bodies it wants in the **Active Spot** at the pregame Set-Up pick,
-highest first (`Strategy.starter_priority`, card ids). Deck-declared data read by a card-id-free
-general rule — the Pilot resolves the highest-ranked id *present* among the `_SETUP_ACTIVE` options
-into `board.top_starter_id`, and `open-the-declared-starter` scores that one option. The sibling of
+highest first (`Strategy.starter_priority`, card ids). Deck-declared data
+read by a card-id-free general rule — the Pilot resolves the **Effective Starter Order** against the
+opening hand, takes the highest-ranked id *present* among the `_SETUP_ACTIVE` options into
+`board.top_starter_id`, and `open-the-declared-starter` scores that one option. The sibling of
 **Fetch Priority** (`Strategy.fetch_priority`) and `Strategy.partners` in shape and in spirit
 (ADR-0034: the ids live in the declaration, never in a trigger). Must be **complete** — every
 startable body in the deck (a Basic, or an `opener`-tagged card) is ranked — which is what makes the
 single-winner read exact; CI enforces it, because an undeclared or partial list drops the pick back
 to the engine's option-index order. Covers the Active Spot ONLY; the pregame Bench is a separate
-seam. See ADR-0079.
+seam. Declares what the DECK contains; what THIS HAND contains is the Opener Marginal's business
+(ADR-0081). See ADR-0079, ADR-0081.
 _Avoid_: starter Role (retired), opener (that's the Function Tag for an Ability that puts its own
 card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulligan decision)
+
+**Opener Marginal**:
+The turn-0 reading of the **evolve marginal** (ADR-0070) that makes the opener hand-conditional: for
+a body on offer, `maxDamage(payoff) − maxDamage(body)` in **damage** when some card in
+`board.hand_ids` evolves from it **and that card is the `payoff` of a declared `Line`** — the deck's
+stated win condition — and **0** otherwise. The Line clause is load-bearing, not a refinement:
+without it the marginal fires on 5 promotable bodies across the three authored decks and only 1
+firing is wanted, and suppressing the rest re-buys the guard pile ADR-0079 deleted (a mid-line
+stepping stone like Drakloak, or a draw engine like Dudunsparce, would otherwise promote its base).
+With it, the marginal changes exactly one decision in the repo. Deliberately **silent by default** — it has no
+opinion on which body is better, and detects only a *payoff stranded in hand*, which is the one thing
+a ranking authored before the hand is dealt cannot carry. That silence is what lets the declaration
+keep every frame it already gets right *by construction* rather than by tuning, and is why the design
+needs no override threshold. Reads the **hand only**: at turn 0 the deck carries no frame-specific
+information, so deck odds would be a per-deck constant the ranking already encodes. See ADR-0081.
+_Avoid_: opener equation / opener value (too broad — it prices no tempo or readiness, only a stranded
+payoff), tie-break (it REORDERS; a tie-break cannot reach the inversion it exists for)
+
+**Pin** / **Effective Starter Order**:
+A **Pin** marks one Starter Priority entry as immovable, so the **Opener Marginal** may not move it.
+Pins today are **derived only**: `_route_only_at_setup` pins any body whose only route into play is
+the pregame Set-Up pick — an `opener`-tagged Evolution whose `evolvesFrom` name is absent from the
+deck list, i.e. Cinderace in a deck running no Raboot — because skipping it forfeits the card
+permanently. Derived from the DECKLIST rather than declared, so it needs no author input and lifts by
+itself if the deck later runs the line; it **fails closed** (pins when it cannot tell), deliberately
+the opposite of `_is_startable_body`, since a missing pin forfeits a card while a spurious one merely
+opens suboptimally.
+
+The **Effective Starter Order** is the declaration as resolved against THIS hand: pinned entries hold
+their declared slot, unpinned entries re-sort among the slots left over by (Opener Marginal desc,
+declared rank asc). Reordering is **structural**, never additive — it changes what the declaration
+*says*, not what anything *scores* — so the seam keeps one rule and one boolean (ADR-0079 decision 5)
+and the override cannot be disarmed by a learned weight.
+
+⚠️ A **declared** Pin — a deck marking one of its own ranks immovable, which would also express a
+*demotion* pin ("this body stays fifth, do not promote it") — is **decided in shape but NOT built and
+has no code**: the Line clause silences every would-be demotion structurally, leaving it zero
+consumers, so it awaits a frame (ADR-0081 Amendment A). `Strategy.starter_priority` is therefore
+still a plain list of card ids. See ADR-0081.
+_Avoid_: a separate `starter_pinned` field (rejected — two declarations that must agree per card),
+lock (reserve for the win-condition sense), tie-break
 
 **Hypothesis**:
 A named, testable claim in a Strategy that biases scoring — carrying a rationale, a
@@ -706,7 +749,7 @@ committed deny fixture is a play/hold frame, none a DISCARD select). Until that 
 adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0073's own
 `_PRIZE_UNIT = 12` — wrong by ~8×, and it endorsed feeding a 3-prize body to save a 40-point band — is
 the standing example of what guessing it costs.
-**MOOT for deny since ADR-0080 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
+**MOOT for deny since ADR-0081 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
 pending.** The corpus-wide DISCARD sweep found 12 `Discard` frames, exactly one holding a Hammer
 (`86091435-68`), and that one is DEGENERATE rather than merely directional: the strip prices `0.000`
 under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate DIVIDES OUT of
@@ -722,7 +765,7 @@ rate that converts it), calibration (a value chosen to preserve an incumbent is 
 
 **Deny Relevance**:
 Deny's value, and the answer to *"is this Energy doing important work for the opponent's plan?"* — a
-**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0080,
+**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0081,
 Issue #199, user doctrine 2026-07-29). 0 = dead (an Energy on a Meowth ex, whose Ability needs none and
 whose Tuck Tail is `●●●` for 60), 1 = critical (the `{M}` on an Archaludon ex that Metal Defender
 `{M}{M}{M}` needs). Two hard gates force it to 0 — **no Energy on their board at all**, and **this
