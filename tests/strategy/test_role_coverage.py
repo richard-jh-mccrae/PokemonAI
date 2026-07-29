@@ -21,9 +21,11 @@ REPO = Path(__file__).resolve().parents[2]
 AGENTS = ["mega_lucario", "mega_starmie", "dragapult_ex"]
 
 # Behavioural (NON-worth) roles: they route tag/context rungs (the gust doctrine, retreat-tool
-# selection, disruption/recovery/starter reads), NOT the worth oracle, so `role_value` prices them 0
+# selection, disruption/recovery reads), NOT the worth oracle, so `role_value` prices them 0
 # by design. Listed here so a NEW role string that is really a TYPO of a worth tier fails the lint.
-BEHAVIOURAL_ROLES = frozenset({"gust", "retreat_tool", "disruption", "recovery", "starter"})
+# `starter` was REMOVED 2026-07-28 (ADR-0075 retired the Role — a deck names its openers with
+# `Strategy.starter_priority`). Keeping it in this allowlist would let it be re-added and lint clean.
+BEHAVIOURAL_ROLES = frozenset({"gust", "retreat_tool", "disruption", "recovery"})
 
 
 def _shipped_pilot(agent):

@@ -5,8 +5,9 @@ Card facts (data/EN_Card_Data.csv id 235, verified): 30 HP, free retreat, Itchy 
 10 damage, opponent can't play Items next turn. The identity decomposes across surfaces that are
 ALREADY built and one declaration that had drifted:
 
-  * opener      — `open-the-item-lock-starter` (+35) keys the `item_lock` tag at the pregame pick;
-  * sacrificial — worth 0 (the `starter` role is behavioural, never a worth tier): the lock body is
+  * opener      — rank 1 of the deck's `starter_priority` (ADR-0075; was `open-the-item-lock-starter`
+                  +35, keyed on the `item_lock` tag, until that rung was deleted);
+  * sacrificial — worth 0 (no worth tier prices it): the lock body is
                   MEANT to be spent — soak a hit for one prize (`interpose`, `promote-the-staller`);
   * no funding  — Itchy Pollen is free, so `attach_target_needs` is False and no energy rung ever
                   prices an attach onto Budew (the line eats the Energy — the 86091728-19 priority);

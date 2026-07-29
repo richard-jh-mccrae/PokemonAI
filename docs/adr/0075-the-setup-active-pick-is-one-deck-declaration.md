@@ -117,8 +117,7 @@ winner, and under a complete list boolean and any monotone rank scale choose **i
 scaling's one genuine merit — graceful degradation when only a low-ranked starter is present, where
 "top present" promotes it to full weight — exists only under an *incomplete* list. The cheaper fix is
 to forbid that state: a test asserts, for every agent, that `starter_priority` is **non-empty** and
-**ranks every startable body** in the deck list (a Basic, or an `opener`-tagged card — computed by
-the same predicate `_hand_startable` uses, so the two cannot drift). Rank scaling would also demand
+**ranks every startable body** in the deck list (a Basic, or an `opener`-tagged card). Rank scaling would also demand
 either N Hypothesis ids or the `tactical` computed-term lane, i.e. a second scoring mechanism at the
 seam this ADR reduces to one.
 
@@ -126,6 +125,23 @@ With decision 2, this invariant is the **sole** guarantee for the whole seam: an
 nothing at `_SETUP_ACTIVE` and falls straight back to the index tie-break — the `f2` bug, for every
 deck.
 
+> **Amendment E (build, 2026-07-28) — how the invariant is actually drift-proofed.** The pre-build
+> wording above claimed the completeness predicate is "the same predicate `_hand_startable` uses". As
+> built that is not true and could not be: `_hand_startable` answers a deliberately NARROWER question
+> (can this hand start *without* a Basic — the only case the mulligan prompt can reach), while the
+> invariant needs the full Basic-or-`opener` universe. Shipping one predicate for both would have made
+> `_hand_startable` trivially true on any hand containing a Basic.
+>
+> The drift-proofing that does exist, and is the one that matters: the **Ability route** into the
+> Active Spot is defined exactly once, in `Pilot._opens_from_hand`, and both readers derive from it —
+> `_hand_startable` is that predicate alone, `_is_startable_body` is "a Basic, or that". And
+> `_is_startable_body` lives on the **runtime**, not in the test that consumes it, because the
+> invariant is only worth anything if it measures the declaration against what the engine can
+> actually offer; a re-implementation inside the test would be free to drift, which is the failure
+> the invariant exists to prevent. It returns False on unknown stats, so the test additionally asserts
+> a non-empty startable set — otherwise a stats-loading failure would satisfy the subset checks
+> vacuously and the invariant would go green while measuring nothing.
+>
 > **Amendment A (build, 2026-07-28) — the invariant scopes to AUTHORED agents.** It applies to every
 > agent carrying a `STRATEGY.md`, the marker of a deck-genie'd doctrine. `grimmsnarl_ex` (no
 > STRATEGY.md, no `aligned.json`, no `tuned.json`) and `slowking` (a decklist only) are pre-doctrine
@@ -240,7 +256,11 @@ your #1 is not in the opening hand.
 - `tests/fixtures/agents/mega_starmie/tuned.json` carries a **learned** `"open-the-accelerator": 45.0`;
   deleting the id fails `test_tuned_wiring`, so it migrates to the successor id or drops.
 - Other call sites to update: `test_general_strategy.py`, `test_baseline_clusters.py`,
-  `test_system_mega_starmie.py`, `test_submit_brief.py`, and `docs/general-strategy.md` — whose claim
+  `test_system_mega_starmie.py` (its `role_keyed` set — the successor is *declaration*-keyed but opts
+  in the same way), `test_submit_brief.py` (which uses the id only as a stand-in for the manifest
+  machinery), `tests/fixtures/agents/mega_starmie/strategy.py`, `tests/strategy/test_role_coverage.py`
+  (dropping `starter` from `BEHAVIOURAL_ROLES`, else the retired Role could be re-added and lint
+  clean), and `docs/general-strategy.md` — whose claim
   that `open-the-accelerator` is *"The only rule in the system at the Set-Up Active pick"* is already
   stale and becomes true again, of a different rule.
 - **Accepted cost:** opening doctrine is now split across two vocabularies — a declaration for the

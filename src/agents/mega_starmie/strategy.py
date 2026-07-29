@@ -10,6 +10,10 @@ below — Roles / Lines / params — so any deck making the same declarations in
 
     deck rule (historical)          -> general rule                          (home)
     open-cinderace                  -> open-the-accelerator                  baseline_opening
+                                       (SUPERSEDED 2026-07-28, ADR-0075: that rung was deleted
+                                       with the rest of the Set-Up Active seam; the opening pick
+                                       is now `starter_priority` below + the general
+                                       `open-the-declared-starter`)
     accel-into-main                 -> advance-the-accel-pieces              baseline_energy
     develop-turbo-flare-recipient   -> develop-the-accel-recipient           baseline_bench
     tutor-the-wincon                -> play-a-tutor-for-the-unfound-wincon   doctrine_fetch

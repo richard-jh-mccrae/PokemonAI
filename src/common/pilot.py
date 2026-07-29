@@ -787,7 +787,8 @@ class Context:
                                        # `fetch-the-support` grab rung. Derived off CardStat + tags.
     card_is_utility_body: bool = False  # this option's card is a body that draws/tutors/stalls and never
                                        # attacks (`Pilot._is_utility_body`) — the card-side read of
-                                       # `attach_target_is_utility_body`. Backs `dont-open-with-the-engine`
+                                       # `attach_target_is_utility_body`. (Backed `dont-open-with-the-engine`
+                                       # until ADR-0075 deleted it; the attach-side readers remain.)
     card_is_top_fetch_priority: bool = False  # this candidate IS deck's highest-priority fetch
                                        # target present (== board.top_fetch_priority_id) — Tier-3
                                        # explicit-list grab override (`fetch-deck-priority`)
@@ -6247,7 +6248,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `accel_source` for a body whose attack carries a bench-target accel rider
         (`_derived_accel_body_ids` — Turbo Flare / Aura Jab class). Derivation-first, declaration as
         the confirm/override (Round 9): a new deck fielding Cinderace gets the whole accel rung
-        family (open-the-accelerator, develop-the-accel-recipient, feed-the-accelerator, promote)
+        family (develop-the-accel-recipient, feed-the-accelerator, promote — `open-the-accelerator`
+        was deleted by ADR-0075; the pregame Active pick is `Strategy.starter_priority` now)
         with NO Role declaration; for the existing agents the union is a no-op (both declare it)."""
         if cid is None:
             return []
@@ -7623,35 +7625,44 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 if cid is not None:
                     counts[cid] += 1
 
+    def _opens_from_hand(self, cid: int | None) -> bool:
+        """This card's own Ability puts it into the Active Spot straight from hand — the `opener`
+        Function Tag (Cinderace's Explosiveness: "if this Pokémon is in your hand when you are setting
+        up to play, you may put it face down in the Active Spot"). The ONE definition of the
+        Ability route into the Active Spot; both readers below derive from it so they cannot drift."""
+        return bool(self.functions) and cid is not None and _OPENER_TAG in self.functions.tags(cid)
+
     def _hand_startable(self, hand: list) -> bool:
-        """True if a card in hand can take the Active Spot WITHOUT being a Basic — a Pokémon with the
-        `opener` Function Tag (Cinderace's Explosiveness: "if this Pokémon is in your hand when you
-        are setting up to play, you may put it face down in the Active Spot"). Scoped to the mulligan
-        keep, where it is the only interesting case: a hand holding any Basic never reaches the prompt
-        (rulebook L224 — "if either player has no Basic Pokémon in their opening hand, that player
-        must take a mulligan").
+        """True if a card in hand can take the Active Spot WITHOUT being a Basic — i.e. by the Ability
+        route. Scoped to the mulligan keep, where that is the only interesting case: a hand holding
+        any Basic never reaches the prompt (rulebook L224 — "if either player has no Basic Pokémon in
+        their opening hand, that player must take a mulligan"). Deliberately NARROWER than
+        `_is_startable_body`, which is why it reads `_opens_from_hand` rather than calling it — the
+        Basic half would make this trivially true on a hand that cannot mulligan anyway.
 
         The deck `starter` Role was a second accepted signal here until ADR-0075 retired it: every
         declaration in the repo was either a Basic (moot per the rule above) or Cinderace, which
         carries the `opener` Tag anyway — so it never changed this answer. Naming a deck's openers is
         now `Strategy.starter_priority`'s job, at the Set-Up ACTIVE pick rather than the mulligan."""
-        if not self.functions:
-            return False
-        return any(_OPENER_TAG in self.functions.tags(c["id"])
-                   for c in hand if c and c.get("id") is not None)
+        return any(self._opens_from_hand(c.get("id")) for c in hand if c)
 
     def _is_startable_body(self, cid: int | None) -> bool:
         """True iff this card can legally take the Active Spot at the pregame Set-Up pick — a Basic
-        Pokémon, or a card whose Ability puts it there from hand (`opener` Tag). The universe
-        `Strategy.starter_priority` must rank COMPLETELY (ADR-0075 decision 5); the one definition,
-        so the declaration's completeness test cannot drift from what the engine can actually offer."""
+        Pokémon, or one that `_opens_from_hand`. This is the universe `Strategy.starter_priority` must
+        rank COMPLETELY (ADR-0075 decision 5).
+
+        Lives here, on the runtime, rather than in the test that consumes it: the completeness
+        invariant is only worth anything if it measures the declaration against what the ENGINE can
+        actually offer, and a re-implementation in the test would be free to drift from it — which is
+        the failure the invariant exists to prevent. Returns False on unknown stats, so a caller that
+        needs the answer to be MEANINGFUL must first establish that stats loaded (the test asserts a
+        non-empty startable set for exactly this reason)."""
         if cid is None or not self.stats:
             return False
         st = self.stats.get(cid)
         if not st or not st.is_pokemon:
             return False
-        return not st.evolvesFrom or (
-            bool(self.functions) and _OPENER_TAG in self.functions.tags(cid))
+        return not st.evolvesFrom or self._opens_from_hand(cid)
 
     def _top_starter_id(self, obs: dict, select: dict | None) -> int | None:
         """The body the deck most wants Active among the ones actually on offer — the first id in

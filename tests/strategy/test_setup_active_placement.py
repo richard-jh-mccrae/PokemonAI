@@ -239,6 +239,12 @@ def test_every_declaration_ranks_every_startable_body_in_the_deck():
         deck_ids = {int(line) for line in
                     (AGENTS / agent / "deck.csv").read_text(encoding="utf-8").split() if line.strip()}
         startable = {cid for cid in deck_ids if pilot._is_startable_body(cid)}
+        # Fail CLOSED. `_is_startable_body` returns False for every card when stats fail to load, and
+        # an empty `startable` would satisfy the subset checks below vacuously — the invariant would
+        # go green while measuring nothing. Every real deck has at least two startable bodies.
+        assert len(startable) >= 2, (
+            f"{agent}: only {len(startable)} startable bodies resolved from {len(deck_ids)} deck ids — "
+            f"card stats almost certainly failed to load, so this invariant would pass vacuously")
         declared = set(_deck_strategy(agent).starter_priority)
         assert not (startable - declared), (
             f"{agent}: startable bodies missing from starter_priority: {sorted(startable - declared)}")
