@@ -174,7 +174,7 @@ Then grill the cross-card structure that wins games:
 - **Starter order (REQUIRED — produces `Strategy.starter_priority`)** — the deck's COMPLETE ranking
   of every body that can legally take the Active Spot at setup (each Basic, plus anything with the
   `opener` Tag). Ask it **once over the whole set**, never per card: it is a total order, and a
-  per-card pass cannot produce one. Since ADR-0075 this ranking is the ONLY thing scoring the Set-Up
+  per-card pass cannot produce one. Since ADR-0077 this ranking is the ONLY thing scoring the Set-Up
   Active pick — a deck that ships without it loses that decision to the engine's option index — so
   it is a Phase-4 disposition row and a Phase-6 proposal like any other gap, not an optional note.
   Question bank: [references/grilling-playbook.md](references/grilling-playbook.md) §Opening placement.

@@ -94,7 +94,7 @@ _METAL = 8                 # EnergyType.METAL — the predicate Archaludon's boa
 _BENCH_MAX = 5             # full Bench holds 5 — bench-filler places nothing once you're here
 _THIN_BENCH = 2            # below this many benched Pokémon board's underdeveloped — a starter need
 _OPENER_TAG = "opener"     # Function Tag: card whose Ability opens Active Spot (Explosiveness)
-# (_STARTER_ROLE "starter" RETIRED 2026-07-28, ADR-0075: it drove nothing. Its only consumer was
+# (_STARTER_ROLE "starter" RETIRED 2026-07-28, ADR-0077: it drove nothing. Its only consumer was
 #  `_hand_startable`, which the mulligan rule reads -- and a hand holding any Basic never reaches
 #  that prompt (rulebook L224), so the Role mattered only for a non-Basic starter, i.e. Cinderace,
 #  which carries the `opener` TAG anyway. Naming a deck's openers is now `Strategy.starter_priority`.)

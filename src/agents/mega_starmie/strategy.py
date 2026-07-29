@@ -10,7 +10,7 @@ below — Roles / Lines / params — so any deck making the same declarations in
 
     deck rule (historical)          -> general rule                          (home)
     open-cinderace                  -> open-the-accelerator                  baseline_opening
-                                       (SUPERSEDED 2026-07-28, ADR-0075: that rung was deleted
+                                       (SUPERSEDED 2026-07-28, ADR-0077: that rung was deleted
                                        with the rest of the Set-Up Active seam; the opening pick
                                        is now `starter_priority` below + the general
                                        `open-the-declared-starter`)
@@ -42,7 +42,7 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 ROLES = {
     MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
     CINDERACE: ["accel_source"],                # Explosiveness opener + Turbo Flare
-    # (the `starter` Role on Cinderace + Staryu RETIRED 2026-07-28, ADR-0075 — it drove nothing
+    # (the `starter` Role on Cinderace + Staryu RETIRED 2026-07-28, ADR-0077 — it drove nothing
     #  and naming the openers is now `starter_priority` below. Cinderace keeps `accel_source`,
     #  which the ATTACH/develop rules read; Staryu is carried by the Line.)
     IGNITION_ENERGY: ["accel_source"],           # CCC on an Evolution = one-attach Nebula Beam
@@ -58,7 +58,7 @@ STRATEGY = Strategy(
                 role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
     # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this
-    # deck's startable bodies (ADR-0075). Read by the general `open-the-declared-starter`.
+    # deck's startable bodies (ADR-0077). Read by the general `open-the-declared-starter`.
     #   Cinderace (160 HP) — the opener AND the accel engine: Explosiveness puts it in the Active
     #     Spot straight from hand, then Turbo Flare (50) loads the Bench. Was `open-cinderace`,
     #     folded to `open-the-accelerator` (+40) — the exemplar `docs/weights.md` cites for the

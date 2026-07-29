@@ -846,7 +846,7 @@ HYPOTHESES = [
                   "redundant base or an evolution that only stacks on the Active. It is the sacrificial "
                   "disruptor STARTER: it fills the empty Bench (survival), buys a tempo turn, and is the wall "
                   "you hide the fragile win-condition line behind while it develops. The FETCH-seam sibling of "
-                  "the deck's `starter_priority` opening rank (the pregame Active pick, ADR-0075 — this "
+                  "the deck's `starter_priority` opening rank (the pregame Active pick, ADR-0077 — this "
                   "rationale predates it and named the deleted `open-the-item-lock-starter`); keyed on the `item_lock` tag so it is "
                   "silent for decks without such an opener. +30 clears the (breadth-stood-down) line-piece and "
                   "support grabs so the ideal starter wins the empty-Bench develop (dragapult f14: grab Budew, "

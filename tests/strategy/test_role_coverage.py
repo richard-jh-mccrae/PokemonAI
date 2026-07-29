@@ -23,7 +23,7 @@ AGENTS = ["mega_lucario", "mega_starmie", "dragapult_ex"]
 # Behavioural (NON-worth) roles: they route tag/context rungs (the gust doctrine, retreat-tool
 # selection, disruption/recovery reads), NOT the worth oracle, so `role_value` prices them 0
 # by design. Listed here so a NEW role string that is really a TYPO of a worth tier fails the lint.
-# `starter` was REMOVED 2026-07-28 (ADR-0075 retired the Role — a deck names its openers with
+# `starter` was REMOVED 2026-07-28 (ADR-0077 retired the Role — a deck names its openers with
 # `Strategy.starter_priority`). Keeping it in this allowlist would let it be re-added and lint clean.
 BEHAVIOURAL_ROLES = frozenset({"gust", "retreat_tool", "disruption", "recovery"})
 

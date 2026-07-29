@@ -407,7 +407,7 @@ _Avoid_: doctrine (reserve that for the archetype+Mixin files), module (too gene
 A deck's purpose-label assigned to one of its cards/lines (`win_condition`,
 `primary_attacker`, `accel_source`, `gust`, …) — the per-deck overlay on the universal
 Function Tag. Drawn from a closed, shared vocabulary (extended by process) so roles stay
-comparable across decks. (`starter` was retired 2026-07-28 by ADR-0075 — it drove nothing, and
+comparable across decks. (`starter` was retired 2026-07-28 by ADR-0077 — it drove nothing, and
 naming a deck's openers is now the **Starter Priority**'s job.)
 _Avoid_: Function Tag (universal/mechanical; a Role is per-deck/intentional), job, slot
 
@@ -421,7 +421,7 @@ into `board.top_starter_id`, and `open-the-declared-starter` scores that one opt
 startable body in the deck (a Basic, or an `opener`-tagged card) is ranked — which is what makes the
 single-winner read exact; CI enforces it, because an undeclared or partial list drops the pick back
 to the engine's option-index order. Covers the Active Spot ONLY; the pregame Bench is a separate
-seam. See ADR-0075.
+seam. See ADR-0077.
 _Avoid_: starter Role (retired), opener (that's the Function Tag for an Ability that puts its own
 card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulligan decision)
 
