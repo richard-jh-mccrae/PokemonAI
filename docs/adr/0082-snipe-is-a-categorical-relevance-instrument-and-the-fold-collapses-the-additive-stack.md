@@ -416,6 +416,24 @@ against itself. Five bars:
 `81905522-75` (transposition) and `82749168-38` (refuted label) stay **recorded misses**; a build that
 "fixes" either has almost certainly overfitted.
 
+**8. The policy SPLITS across the two curve calls, per design ruling 2's snipe-prep row.**
+*Fail-scared on the threat, fail-slow on the investment:*
+
+| call | policy | why |
+|---|---|---|
+| `incoming(t=1, charged=None)` — how HARD they can hit | **ceiling**, no affordability discount | under-counting their reach feeds them the wincon (ADR-0064's hidden-burst lesson) |
+| `turns_to_afford(body, attaches_per_turn=1)` — how SOON | **slow**: the `rules.md §3` floor of one manual attach per turn, crediting no acceleration | over-counting their speed merely wastes a rider |
+
+**Measured, and the corpus is SILENT: ceiling 17/19, slow 17/19 on the incoming leg.** So this is ruled
+on the fail-direction asymmetry the design doc states (*"over-counting their reach costs a nudge;
+under-counting feeds them the wincon"*), not on evidence — recorded that way so it is never cited as
+measured.
+
+The prototype already used exactly this pairing, but **by parameter default rather than by choice**.
+Ratifying it makes it a decision instead of an accident: a later reader finding an unexplained
+`charged=None` would otherwise be free to "fix" it. The split must be stated in the code, or the next
+refactor will collapse it.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
