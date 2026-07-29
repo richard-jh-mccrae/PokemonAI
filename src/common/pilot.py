@@ -7325,26 +7325,38 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        for b in (me.get("bench") or []))
         if not has_lock:
             return False
-        # The f21 ENERGIZED-LINE guard is DELETED (user ruling, 2026-07-28). It read "a wincon Line
-        # body is already being energized -> develop it, don't retreat for the lock", and it was an
-        # over-reach: the `f21` it cited (`dragapult_dont_feed_draw_engine_f21`) is an ATTACH frame
-        # — put the off-type {D} into Dreepy rather than the Dunsparce draw engine — and says
-        # nothing about retreating. It generalised "develop the line" from a WHERE-to-attach ruling
-        # into a blanket veto on a different decision.
+        line_ids = self._line_preevo_set() | self._wincon_set()
+        in_play = [p for p in (me.get("active") or []) if p] + [b for b in (me.get("bench") or []) if b]
+        if any((p.get("energies") or []) for p in in_play if p.get("id") in line_ids):
+            return False                                  # a wincon Line body is already being energized
+                                                          # -> develop it, don't retreat for the lock (f21)
+        # ^ RETAINED DELIBERATELY, and known to be doctrinally wrong (user rulings 2026-07-28/29).
+        # It was deleted on this branch and the deletion was REVERTED here, on evidence:
         #
-        # The ruling that retired it (86091435-13, turn 2, dragapult_ex): Dreepy Active on one {R},
-        # Budew benched, we are severely behind. Correct play is to protect the Dreepy while slowing
-        # the opponent — retreat into Budew, Ultra Ball a Drakloak, evolve, Recon Directive, then
-        # Itchy Pollen. One partial Energy on a line body does not mean the line is being developed
-        # faster than the lock is worth; a boolean cannot express "behind, so protection plus
-        # disruption beats one more development step". Measured: removing this guard flips exactly
-        # ONE frame across all 331 replayable corrections — that one — from [0] to the human's [3].
+        #   * The doctrine says it is too strict. On 86091435-13 the correct play is to retreat the
+        #     Dreepy into Budew while severely behind, and this guard forbids it purely because the
+        #     line carries one partial Energy. A boolean cannot say "behind, so protection plus
+        #     disruption beats one more development step". That ruling stands.
+        #   * But deleting it LOSES GAMES. The ADR-0072 mid-build paired A/B over 2400 games
+        #     (`gauntlet_swap_ab.py --stage mid-build`, build-vs-build because there is no flag to
+        #     overlay) returned delta -4.75%, 95% CI [-8.22%, -1.28%], 0 crashes — CI-lo through the
+        #     -5% floor, and all SIX directed matchups negative at +-3.5% precision, so not noise.
+        #     The per-frame gates were clean (1 corpus flip, that fix; Discrimination Gate PASS), so
+        #     this is exactly the effect only the A/B can see.
+        #   * WHY it costs more than the one frame it fixes: this gate feeds TWO rungs, and the
+        #     heavier one is not the retreat. `retreat-to-wall-the-line` (w30) is the retreat;
+        #     `feed-the-line-for-disruptor-lock` (w55, baseline_energy) is the ATTACH that funds it.
+        #     Ungated, the attach rung diverts the turn's Energy into paying a retreat on boards
+        #     where the line was already being built — which is the diversion `f21` actually ruled
+        #     on, so the guard's own citation is apt for the attach even though it over-reaches on
+        #     the retreat.
         #
-        # The judgement it was standing in for is a VALUE question (what a tempo/protection turn is
-        # worth against the race) composed across a multi-step turn, so it belongs to the value
-        # equation (#145) and the Turn Planner (#165), NOT to a boolean here. Until those land, the
-        # maneuver is gated only by the structural guards that remain (eligible Active, a benched
-        # item_lock, a reachable retreat, and not wasting a body that could KO instead).
+        # The real fix is NOT a better boolean here: it is the value question (what a
+        # protection/disruption turn is worth against the race) composed across a multi-step turn.
+        # Owned by #165 (Turn Planner) with #145's currency work; both frames are recorded there.
+        # Until one of those lands, this crude guard is measurably earning its keep, so it stays.
+        # An untested middle option is on the record if anyone wants it: keep the guard on the w55
+        # attach rung and drop it only for the w30 retreat rung, then re-run the same A/B.
         if ma_stat is None or getattr(ma_stat, "retreatCost", 0) > len(ma.get("energies") or []) + 1:
             return False                                  # the retreat must be reachable this turn
         return not self._active_maxed_kos(ma, oa)         # don't waste a body that could KO instead
