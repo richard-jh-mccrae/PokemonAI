@@ -28,6 +28,11 @@ For **each** question, structure it like this, in ordinary markdown:
 4. **Your reasoning** — a sentence or two on *why* option 1 is your recommendation: what it
    optimises for, what it gives up, and what about this repo/issue makes it the right call. Pick
    option 1 by the criteria below, not by convenience.
+5. **A one-line call-to-action**, always the last line of the question: **"Reply `option 1` to
+   accept the recommendation, or tell me which option / what instead."** Claude Code has no
+   mechanism to pre-fill the developer's input box — there is no hook, tool, or SDK feature for
+   it — so this explicit line is the closest substitute: it turns "accept the recommendation"
+   into a one-word reply instead of the developer having to reconstruct it.
 
 ## What "recommended" means (ranking criteria — not negotiable)
 
