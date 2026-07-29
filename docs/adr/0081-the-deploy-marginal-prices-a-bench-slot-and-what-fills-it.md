@@ -2,7 +2,9 @@
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #197 — **eight locked
 decisions**). **Nothing here is built.** The build is a new Value-System phase (tracker Issue #136),
-filed **blocked-by Issue #199** — decision 4. **Renumbered 0079 -> 0081 on rebase (2026-07-29)** — the SIXTH collision in the series (#136
+originally filed **blocked-by Issue #199**; that issue has since MERGED **without deriving the
+Worth Damage Rate** (ADR-0080 ruled it moot for deny), so **decision 4 is RE-OPENED** and the phase is
+blocked on it — see **Amendment A**. Decisions 1-3 and 5-8 stand. **Renumbered 0079 -> 0081 on rebase (2026-07-29)** — the SIXTH collision in the series (#136
 directive 8). Issue #161's *the Set-Up Active pick is one deck declaration* merged first and KEEPS
 0079 under the standing first-merged rule; Issue #199's *deny is a categorical relevance instrument*
 took 0080. Cite the issue alongside the number ("ADR-0081, Issue #197") — the number is a rebase
@@ -403,6 +405,65 @@ Items 3 and 4 (the two-vocabulary cost and the shared completeness invariant wit
 superseded by decision 1: the Bench gets an equation, not a declaration, so the asymmetry with
 `starter_priority` is deliberate and there is no shared universe to invariant over. The BUILD is a new
 Value-System tracker phase, filed **blocked-by Issue #199** (decision 4).
+
+## Amendment A — decision 4 is RE-OPENED: the deploy seam cannot anchor the Worth Damage Rate, structurally (2026-07-29)
+
+**Trigger.** Issue #199 merged, and it did **not** derive the Worth Damage Rate. ADR-0080 ran
+ADR-0078's gate 2, found the corpus holds 12 `Discard`-context frames of which exactly one holds a
+Hammer, measured that frame at `deny_value = 0.000` on both instruments — so `m = 0` makes the rate
+divide out — and then ruled the rate **MOOT for deny** by reformulating deny as a *categorical
+relevance* instrument that never crosses a scale boundary. The guard test asserting
+`not hasattr(currency, "WORTH_DAMAGE_RATE")` **stays**, and ADR-0080 decision 1 makes the constant's
+absence by design rather than pending.
+
+Decision 4 said "consume Issue #199's rate". There is no rate to consume, it is not scheduled, and
+adding one would require deleting a test that exists to prevent exactly that.
+
+**The measurement.** ADR-0078 decision 3 noted the deploy seam is natively play-side, which is the
+shape deny lacked, so decision 4 committed this seam's corpus to the anchor hunt. That sweep is now
+built and run — `tools/train/probes/deploy_anchor_sweep.py`, offline and read-only:
+
+- 508 ruled records; **11** deploy-involved frames in the tracked `data/corrections/` corpus (19
+  counting the `tests/fixtures/corrections/` duplicates); **2** cross-scale candidates, both from
+  episode 83661652.
+- **Both sides price NONZERO** — Riolu carries `win_condition_base` → `ROLE_TIER` **20.0**, against
+  Lunatone's Power Gem **50**. So this is NOT deny's failure mode; the rate does not divide out, and
+  the resulting `rate > 2.50` would even discriminate (it excludes the trainer pair at ~1.0 and is
+  consistent with the derived energy pair at ~6.7).
+- **But the rulings are SEQUENCING claims, not exclusive choices.** f33: *"should have played solrock,
+  riolu, **then** attached to riolu."* f44: *"Pilot resisting to play basics to bench … and **just
+  attack**."* Benching Basics is unlimited and any-order and only the attack ends the turn
+  (`docs/rulebook.txt` L120–122), so "play Riolu **and** attack" is ONE legal turn. Each is therefore
+  an ADR-0072 **Endorsement Claim** asserting only `deploy_value > 0` — which every positive rate
+  satisfies. This is ADR-0080's degenerate outcome reached by a different route.
+- **Zero upper bounds.** No ruling anywhere in the corpus puts an attack over a deploy.
+
+**The structural finding, which is the load-bearing part.** This is not a corpus gap and no amount of
+further capture can close it: **a deploy is never exclusive with a damage-denominated option.**
+Benching consumes no attach, no Supporter slot, and does not end the turn, so it cannot TRADE against
+an attack or an attach. The only genuine competitor for a Bench slot is another deploy, and that
+comparison is worth-versus-worth, carrying no rate information. **The same commutativity that let
+decision 6 rule out a set-level planner is what closes this seam as a rate anchor** — one fact,
+two consequences, pulling opposite ways.
+
+**Status of the decisions.** Decisions 1, 2, 3, 5, 6, 7 and 8 STAND — none depends on the currency
+route. **Decision 4 is re-opened** and needs its own grill. Options as they stand, none ruled:
+
+1. **Reformulate the Worth-denominated legs as relevance reads**, following ADR-0080's pattern — a
+   scalar in `[0,1]` scaling an incumbent constant, adding no new scale. The **ability yield** looks
+   amenable ("is there a Supporter my deck holds that this position actually needs?" is a relevance
+   question). **Slot displacement is the hard case** — "how much value does the displaced body carry"
+   is a magnitude by construction. ADR-0080's move was to notice deny's question had been *mis-framed*;
+   whether ours has been is exactly what the grill must settle.
+2. **Ship only the damage-native legs** (exposure, accel unlock). Rejected on sight here: it violates
+   #136 directive 1's no-shadow rule and drops the two legs that fix the Meowth defect this issue was
+   opened for. Recorded so it is not re-proposed as a compromise.
+3. **Anchor the rate from another seam entirely.** Out of this issue's scope, and after ADR-0080 there
+   is no consumer left asking for it — which is itself an argument that the rate may never be built.
+
+**Consequence for the build.** The phase stays parked, but the blocker CHANGES: it is no longer
+"waiting on Issue #199" (that issue is closed) but "decision 4 has no answer". Issue #197 returns to
+`status:1-grilling`.
 
 ## Open, deliberately not ruled here
 
