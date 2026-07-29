@@ -125,4 +125,72 @@ reads `p_any`; it may never read either as a gate); it adds a `fetch_closure` re
 deploy path; and the supplier set needs an explicit cap, since the DP is `_MAX_KEEP_SLOTS`-bounded
 at 16.
 
+**3. A bench-drop Ability is valued as its NEED-MATCHED fetch yield — odds-weighted, quota-aware, and
+structurally zero where the trigger cannot fire.** *(User ruling, 2026-07-29.)*
+
+`supporter_tutor` joins `needs.SUPPLIES`, and the drop's Ability leg is
+
+```
+ability_yield = max over Supporter classes reachable in deck of
+                  [ needs marginal of that class into the LIVE assignment ] × P(class still in deck)
+```
+
+— reusing the `fetch_closure` **reach** query and Deck-Content Odds decision 2 already brings in. The
+downstream *which Supporter* pick is NOT this equation's: Meowth ex is tagged `["search",
+"supporter_tutor"]` and the resulting `_TO_HAND` select is already owned by the Fetch Doctrine. The
+deploy marginal owes only the ESTIMATE at drop time — the same shape as ADR-0069 decision 2's
+`this_turn` counterfactual.
+
+Three riders fall out as arithmetic instead of gates:
+
+- **Quota-aware.** One Supporter per turn (`rulebook.txt` L133), so a fetch made after
+  `supporterPlayed` banks for NEXT turn and takes the standard one-turn discount. This is the
+  precision `board.no_supporter_in_hand` structurally cannot express — it is silenced by ANY Supporter
+  in hand, so today the agent can never dig for the *specific* one.
+- **"You can't use more than 1 Ability that has 'Last-Ditch' in its name each turn"** is a card fact
+  the equation reads: a second Meowth dropped the same turn credits ZERO Ability yield and is judged
+  purely as a 2-prize body eating a slot.
+- **Zero at `_SETUP_BENCH` by DERIVATION.** Set Up precedes the first turn, so "once during your turn"
+  is unsatisfiable and the yield term is 0 there. This is what makes
+  `dont-pre-bench-the-supporter-tutor` (−15) *deletable* rather than replaced: the existing
+  `setup_bench_decline_f3` test re-passes as a consequence of the equation, not of a hand-placed
+  weight.
+
+The live defect this repairs, beyond the pregame case: `bench-the-supporter-tutor` is gated on `not
+board.line_ready` — SETUP only — so the agent **cannot** bench Meowth mid-game to dig out the
+Boss's Orders that wins the turn, however badly it needs it.
+
+Cost accepted: this is the most expensive read in the equation (a closure query plus a needs
+re-assignment per candidate Supporter class, several times a turn). It wants memoisation on the
+`SideState` per ADR-0068's lazy-field pattern, and it will move the **Leaf Profile** field-set pin —
+which is exactly what that pin exists to force.
+
+**4. The Worth→damage conversion is Issue #199's shared rate. This phase is a CONSUMER of S3c and is
+sequenced behind it; it does not mint its own.** *(User ruling, 2026-07-29.)*
+
+Decisions 2 and 3 both yield **Worth**-denominated quantities (`needs.py` assignment values in
+`ROLE_TIER` / `TAG_TIER` / `ENERGY_TIER`), while the Deploy Marginal must compete on the **damage**
+scale — against `_finish_turn_last`'s floor, against the attach and evolve marginals, under
+`KO_SCORE`. That is one crossing of the scale boundary ADR-0078 governs, so the **Worth Damage Rate**
+is imported from `common/currency.py` (the home ADR-0078 decision 2 creates), and this phase joins
+Issue #187 / #188 / #189 as a fourth consumer of S3c.
+
+Rejected: a deploy-local rate (mints a rival for the same conversion — the exact incoherence ADR-0078
+found and refused to guess past, with ADR-0073's `_PRIZE_UNIT = 12`, wrong by ~8×, as the standing
+example of the cost), and routing the assignment through the damage-native readiness leaf instead of
+the Worth scale (it prices the slot-displacement leg cleanly but leaves decision 3's Ability leg
+homeless — pricing a HAND card through a board-evaluation leaf is the mismatch `needs.general_worth_slot`
+was created to fix, WP-N5).
+
+**Contribution, not just consumption.** ADR-0078 decision 3 records that S3c's blocker is an anchor:
+every committed deny fixture is a `context = 0` play/hold frame and **not one is a DISCARD select**,
+which is why deny cannot anchor itself. The deploy seam's frames are natively play-side, so its
+corpus joins S3c's anchor sweep. Whether any of them DISCRIMINATE the rate is a measurement to run,
+not a claim made here.
+
+**Schedule consequence, accepted:** the build does not start until Issue #199 lands, and Issue #199's
+own step 1 is an adjudication session with the user rather than a computation. Per #136 directive 2,
+ladder-performance risk is accepted. **Issue #197 therefore becomes the grill record, not the build
+ticket** — the build is a new tracker phase filed blocked-by Issue #199.
+
 *(Further decisions appended as they lock.)*
