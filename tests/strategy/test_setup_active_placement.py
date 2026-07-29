@@ -51,10 +51,13 @@ AGENTS = REPO / "src" / "agents"
 
 # dragapult_ex
 DREEPY, MUNKIDORI, DUNSPARCE, FEZANDIPITI_EX, BUDEW = 119, 112, 305, 140, 235
+DRAKLOAK, DUDUNSPARCE = 120, 66      # the payoffs ADR-0080's Line clause must stay SILENT on
 # mega_lucario
 SOLROCK, RIOLU, MAKUHITA, LUNATONE = 676, 677, 673, 675
+MEGA_LUCARIO_EX, HARIYAMA = 678, 674  # the declared Line payoff, and a non-Line payoff
 # mega_starmie
 CINDERACE, STARYU = 666, 1030
+MEGA_STARMIE_EX = 1031
 MEOWTH_EX = 1071   # in both dragapult_ex and mega_lucario
 
 
@@ -90,11 +93,22 @@ def _exempt_agents() -> list[str]:
                   if (d / "deck.csv").exists() and not (d / "STRATEGY.md").exists())
 
 
-def _setup_active_obs(hand_ids):
-    """A minimal SETUP_ACTIVE select (minCount 1, maxCount 1) offering each hand card as the Active.
-    Carried over verbatim from the retired `test_setup_active_multiprize.py` so the REQ-OPEN-0002
-    assertions below are exercised through exactly the shape they were written against."""
-    opts = [{"type": "Card", "area": 2, "index": i, "playerIndex": 0} for i in range(len(hand_ids))]
+def _setup_active_obs(hand_ids, offer_ids=None):
+    """A minimal SETUP_ACTIVE select (minCount 1, maxCount 1) offering hand cards as the Active.
+
+    Carried over from the retired `test_setup_active_multiprize.py` so the REQ-OPEN-0002 assertions
+    below are exercised through exactly the shape they were written against — with `offer_ids`
+    defaulting to "offer everything", option index `i` still maps to `hand_ids[i]` and every
+    pre-ADR-0080 call is byte-for-byte unchanged.
+
+    `offer_ids` exists because the hand-conditional opener (ADR-0080) cannot be expressed without it:
+    the thing that flips the pick is an EVOLUTION held in hand, and an evolution is never a startable
+    body, so it is in hand and never on offer. Offering it anyway would test a board the engine
+    cannot produce. Options are still real hand indices, so the Pilot resolves them exactly as it
+    resolves the engine's."""
+    hand_ids = list(hand_ids)
+    idxs = range(len(hand_ids)) if offer_ids is None else [hand_ids.index(c) for c in offer_ids]
+    opts = [{"type": "Card", "area": 2, "index": i, "playerIndex": 0} for i in idxs]
     return {"current": {"players": [{"active": [None], "bench": [], "hand": [{"id": c} for c in hand_ids]},
                                     {"active": [None], "bench": []}], "yourIndex": 0, "turn": 0},
             "select": {"context": _SETUP_ACTIVE, "minCount": 1, "maxCount": 1, "option": opts}}
@@ -213,6 +227,176 @@ def test_the_highest_ranked_body_PRESENT_wins_not_merely_rank_one():
     assert pilot.decide(_setup_active_obs([DREEPY, DUNSPARCE])) == [1]
 
 
+# ── ADR-0080: the opener is HAND-CONDITIONAL ─────────────────────────────────────────────────────
+#
+# The declaration is authored before any hand is dealt, so it cannot know what is IN that hand. The
+# Opener Marginal supplies exactly that and nothing else: `maxDamage(payoff) - maxDamage(body)` when
+# a card in hand evolves from the offered body AND that card is the deck's declared `Line` payoff.
+# Otherwise ZERO — so on every frame below except the first, the declaration decides untouched.
+#
+# The Line clause is load-bearing, not a refinement (ADR-0080 amendment A): without it the marginal
+# fires on FIVE promotable bodies across these three decks and only ONE firing is wanted, and
+# suppressing the other four would rebuild the guard pile ADR-0079 deleted. Each silence test below
+# is one of those four.
+
+
+def test_the_line_base_beats_rank_one_when_its_wincon_payoff_is_in_hand():
+    """ADR-0080's motivating frame, case 1. mega_lucario ranks Solrock 1st and Riolu 2nd, and that is
+    right on most hands — but Cosmic Beam {F} 70 "does nothing" without a benched Lunatone, while
+    Riolu is one hop and one {F} from Aura Jab 130. Holding Mega Lucario ex is what flips it.
+
+    Mega Lucario ex is a Stage 1, so it is NEVER a startable body: it sits in hand and is never on
+    offer. That is the whole point — the flip is driven by a card the seam could not previously see.
+
+    Read together with the case-2 test below, which is the SAME two bodies on offer. Only the hand
+    differs, which is why this is an inversion rather than a tie-break."""
+    pilot = _pilot("mega_lucario")
+    obs = _setup_active_obs([SOLROCK, RIOLU, MEGA_LUCARIO_EX], offer_ids=[SOLROCK, RIOLU])
+    assert pilot.decide(obs) == [1], "should open Riolu — the Mega in hand makes it a 2-turn 130"
+    flipped = _setup_active_obs([RIOLU, SOLROCK, MEGA_LUCARIO_EX], offer_ids=[RIOLU, SOLROCK])
+    assert pilot.decide(flipped) == [0], "order-independent"
+
+
+def test_rank_one_holds_when_the_payoff_is_not_in_hand():
+    """Case 2 — the regression guard that gives case 1 its meaning. Identical bodies on offer; the
+    hand holds Makuhita instead of the Mega, so Riolu's Marginal is 0 and Solrock's declared rank 1
+    stands. A general 2-turn readiness equation gets this WRONG (Solrock reads 0 partnerless against
+    Riolu's 30) and would need an underivable threshold to rescue it — ADR-0080 decision 4."""
+    pilot = _pilot("mega_lucario")
+    obs = _setup_active_obs([SOLROCK, RIOLU, MAKUHITA], offer_ids=[SOLROCK, RIOLU])
+    assert pilot.decide(obs) == [0], "no payoff in hand — the declaration decides, untouched"
+    flipped = _setup_active_obs([RIOLU, SOLROCK, MAKUHITA], offer_ids=[RIOLU, SOLROCK])
+    assert pilot.decide(flipped) == [1], "order-independent"
+
+
+def test_a_mid_line_payoff_does_not_promote_the_line_base():
+    """SILENCE 1/4. Holding Drakloak does NOT promote Dreepy: dragapult's declared Line payoff is
+    Dragapult **ex**, and Drakloak is a stepping stone toward it, not the win condition. Preserves
+    the user ruling ADR-0079 amendment B records — Dreepy is 5th, BELOW a 2-prize Fezandipiti ex,
+    because an Active Line base is a line that is not being built.
+
+    Without the Line clause this frame promotes Dreepy above Dunsparce and overturns that ruling."""
+    pilot = _pilot("dragapult_ex")
+    obs = _setup_active_obs([DREEPY, DUNSPARCE, DRAKLOAK], offer_ids=[DREEPY, DUNSPARCE])
+    assert pilot.decide(obs) == [1], "Dunsparce (rank 3) still outranks Dreepy (rank 5)"
+
+
+def test_a_non_line_payoff_does_not_promote_the_draw_engine():
+    """SILENCE 2/4. Holding Dudunsparce does NOT promote Dunsparce. Dudunsparce is the Run Away Draw
+    engine (`dragapult_ex/STRATEGY.md`: "bench Dunsparce ... -> evolve -> Run Away Draw"), not a Line
+    payoff. Without the Line clause this is the deleted `dont-open-with-the-engine` (-12) failure
+    arriving back verbatim — ADR-0079 removed that guard because the ranking subsumed it, which is
+    true only while the ranking is STATIC."""
+    pilot = _pilot("dragapult_ex")
+    obs = _setup_active_obs([DUNSPARCE, MUNKIDORI, DUDUNSPARCE], offer_ids=[DUNSPARCE, MUNKIDORI])
+    assert pilot.decide(obs) == [1], "Munkidori (rank 2) still outranks Dunsparce (rank 3)"
+
+
+def test_a_secondary_attacker_line_payoff_does_not_promote_its_base():
+    """SILENCE 3/4, and the one that caught a real defect during the build. Hariyama hits for 210 —
+    more than Mega Lucario ex's Aura Jab — and mega_lucario DOES declare a Makuhita -> Hariyama Line.
+    But it declares it `role="secondary_attacker"` (ADR-0048, a cheap prize wall), not a win
+    condition, and its own comment says the win-condition machinery ignores it.
+
+    The first implementation read every declared Line and promoted Makuhita over a declared rank-1
+    Solrock on the strength of raw damage — exactly the "big number wins" reasoning ADR-0080
+    amendment A rejected. The gate is `_wincon_lines`, the same role filter the rest of the
+    win-condition machinery uses, so being the declared WIN CONDITION is what counts, not damage."""
+    pilot = _pilot("mega_lucario")
+    obs = _setup_active_obs([SOLROCK, MAKUHITA, HARIYAMA], offer_ids=[SOLROCK, MAKUHITA])
+    assert pilot.decide(obs) == [0], "Solrock's rank 1 holds — Hariyama is not the Line payoff"
+
+
+def test_the_setup_only_body_still_opens_against_a_large_in_line_payoff():
+    """SILENCE 4/4, and the one the derived PIN exists for. Mega Starmie ex IS a declared Line
+    payoff, so Staryu's Marginal is a genuine +190 — the largest in the repo. It still must not win:
+    mega_starmie runs 4x Cinderace and ZERO Raboot, so the Set-Up pick is Cinderace's only route into
+    play and skipping it forfeits all four permanently.
+
+    Cinderace is pinned (opener-tagged, evolves from Raboot, no Raboot in the deck) and holds slot 0,
+    so the reorder can only move Staryu among the slots left over."""
+    pilot = _pilot("mega_starmie")
+    obs = _setup_active_obs([STARYU, CINDERACE, MEGA_STARMIE_EX], offer_ids=[STARYU, CINDERACE])
+    assert pilot.decide(obs) == [1], "Cinderace opens — a +190 Marginal must not cost us the card"
+
+
+# ── The derived pin tracks DECK COMPOSITION, not the card ────────────────────────────────────────
+
+_OPENER, _BASE, _PAYOFF, _PRE = 9001, 9002, 9003, 9004
+
+_SYNTH_STATS = {
+    _OPENER: CardStat(_OPENER, name="Opener", hp=160, evolvesFrom="Pre", maxDamage=50),
+    _BASE:   CardStat(_BASE, name="Base", hp=70, maxDamage=20),
+    _PAYOFF: CardStat(_PAYOFF, name="Payoff", hp=210, evolvesFrom="Base", maxDamage=210),
+    _PRE:    CardStat(_PRE, name="Pre", hp=90, maxDamage=30),
+}
+
+
+_UNSET = object()
+
+
+def _synth_pilot(deck_ids, *, stats=_SYNTH_STATS, functions=_UNSET):
+    """A two-body deck whose rank-1 is opener-tagged and evolves from "Pre". Whether "Pre" is IN the
+    deck is the only thing that varies between the first two tests below."""
+    from common.strategy.strategy import Line
+    if functions is _UNSET:
+        functions = CardFunctions({_OPENER: ["opener"]})
+    strategy = Strategy(starter_priority=[_OPENER, _BASE],
+                        lines=[Line(path=[_BASE, _PAYOFF], payoff=_PAYOFF)])
+    return Pilot(strategy, deck=list(deck_ids), general_strategy=GENERAL_STRATEGY,
+                 stats=stats, functions=functions)
+
+
+def test_the_derived_pin_fires_when_the_deck_omits_the_evolution_route():
+    """ADR-0080 decision 1: "is the Set-Up pick this body's only route into play?" — computed from
+    the DECKLIST, not declared. With no "Pre" in the deck the opener-tagged body is pinned, so it
+    holds rank 1 against a +190 Marginal on the other body. This is Cinderace's protection, derived."""
+    pilot = _synth_pilot([_OPENER] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [1] * 48)
+    obs = _setup_active_obs([_BASE, _OPENER, _PAYOFF], offer_ids=[_BASE, _OPENER])
+    assert pilot.decide(obs) == [1], "route-restricted body is pinned at rank 1"
+
+
+def test_the_derived_pin_LIFTS_when_the_deck_runs_the_evolution_route():
+    """The other half, and why the pin is derived rather than declared: add "Pre" to the deck and the
+    body is no longer route-restricted — it can be evolved into normally — so the pin lifts BY ITSELF
+    and the Marginal is free to reorder. A declared pin would go stale here and silently keep
+    protecting a body that no longer needs it."""
+    pilot = _synth_pilot([_OPENER] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [_PRE] * 4 + [1] * 44)
+    obs = _setup_active_obs([_BASE, _OPENER, _PAYOFF], offer_ids=[_BASE, _OPENER])
+    assert pilot.decide(obs) == [0], "pin lifted — the payoff in hand promotes the Line base"
+
+
+def test_the_pin_fails_CLOSED_when_it_cannot_tell():
+    """ADR-0080 decision 1's fail direction, deliberately the OPPOSITE of `_is_startable_body`'s.
+    Justified by consequence rather than symmetry: a MISSING pin permanently forfeits a card, while a
+    spurious one merely opens suboptimally.
+
+    Card FUNCTIONS are withheld while stats are kept, so the Marginal still computes a real +190 and
+    the reorder genuinely wants to fire — but the Pilot can no longer tell which bodies are
+    route-restricted, so it pins everything and the declared order stands. Withholding stats instead
+    would prove nothing: the Marginal would be 0 and the reorder would be skipped for an unrelated
+    reason, so the test would pass without the pin existing at all.
+
+    The deck here RUNS "Pre", so the previous test proves this same frame reorders when the pin can
+    be evaluated. The only difference is the missing function table."""
+    pilot = _synth_pilot([_OPENER] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [_PRE] * 4 + [1] * 44,
+                         functions=None)
+    obs = _setup_active_obs([_BASE, _OPENER, _PAYOFF], offer_ids=[_BASE, _OPENER])
+    assert pilot.decide(obs) == [1], "cannot evaluate the pin -> pin everything -> declaration stands"
+
+
+def test_a_deck_with_no_declared_line_is_untouched():
+    """The Marginal reads `Strategy.lines[].payoff`, so a deck that declares no Line gets no equation
+    at all — fail-closed, and the reason the invariant below is owed."""
+    from common.strategy.strategy import Line  # noqa: F401  (asserting the ABSENCE of one)
+    strategy = Strategy(starter_priority=[_OPENER, _BASE])
+    pilot = Pilot(strategy, deck=[_OPENER] * 4 + [_BASE] * 4 + [_PRE] * 4 + [1] * 48,
+                  general_strategy=GENERAL_STRATEGY, stats=_SYNTH_STATS,
+                  functions=CardFunctions({_OPENER: ["opener"]}))
+    obs = _setup_active_obs([_BASE, _OPENER, _PAYOFF], offer_ids=[_BASE, _OPENER])
+    assert pilot.decide(obs) == [1], "no Line declared -> no Marginal -> the declaration decides"
+
+
 # ── The declaration invariant (the seam's SOLE guarantee) ────────────────────────────────────────
 
 def test_every_authored_agent_declares_a_starter_priority():
@@ -250,6 +434,21 @@ def test_every_declaration_ranks_every_startable_body_in_the_deck():
             f"{agent}: startable bodies missing from starter_priority: {sorted(startable - declared)}")
         assert not (declared - startable), (
             f"{agent}: starter_priority ranks cards that cannot open: {sorted(declared - startable)}")
+
+
+def test_every_authored_agent_declares_a_win_condition_line():
+    """ADR-0080's new dependency, guarded. The Opener Marginal reads `Strategy.lines[].payoff`, so a
+    deck that declares no Line silently gets no equation — the pick still works, it just stops being
+    hand-conditional. That is a SILENT no-op rather than a wrong answer, which is exactly why it
+    needs an invariant: `starter_priority` has had one since ADR-0079 decision 5 and `lines` had
+    none, so an unrelated edit could disable the opener fix with nothing failing."""
+    for agent in _authored_agents():
+        lines = _deck_strategy(agent).lines
+        assert lines, (
+            f"{agent}: authored deck (has STRATEGY.md) declares no win-condition Line — its Opener "
+            f"Marginal can never fire, so its Set-Up Active pick silently stops being hand-conditional")
+        assert all(getattr(ln, "payoff", None) for ln in lines), (
+            f"{agent}: a declared Line has no payoff — the Marginal gates on it")
 
 
 def test_the_exempt_agents_are_exactly_the_pre_doctrine_ones():
