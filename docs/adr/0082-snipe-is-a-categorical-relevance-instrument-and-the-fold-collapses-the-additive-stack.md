@@ -501,6 +501,63 @@ clause changes no outcome under the new instrument — not on the corpus, and no
 the fixture written to pin it** ("the energized ex, at 6 prizes remaining"). Its fate is the last open
 ruling.
 
+**10. The forced-promotion leg is GRADED on the promoted body's own curve threat, with NO imminence
+discount.** `forced_leg = normalize(incoming(my_active, [body], t=1, ceiling))` when
+`ctx.target_is_forced_promotion`, else 0. The imminence discount is deliberately **omitted** — a forced
+promotion *is* the timing claim (the body attacks next turn by definition), so applying
+`turns_to_afford` on top would double-count what the ADR-0044 read already establishes. That asymmetry
+is the leg's entire content and must be stated in code or a later reader will "restore" the missing
+discount.
+
+This **fixes the `f75` defect**: with the prototype's flat `1.0` the model took card **676 Solrock**
+(the forced promotion, saturating the leg); graded, it takes card **677 Riolu** — the developing
+Mega Lucario ex line, which is the fixture's ruling and the shipped `snipe-the-evolving-threat` (45) >
+`snipe-the-forced-promotion` (40) ordering. Held-out fixtures go **3/4 → 4/4**.
+
+*(A second, separate error was in the measurement rather than the design: `f75` offers **two** Riolu and
+its own test matches by CARD ID, not index — `test_snipe_the_real_attacker.py`'s `by_card_id=True`
+parameter says so. The probe compared indices. Both errors are recorded because only the first was a
+design fault.)*
+
+**11. The route's damage leg is the TURNS-TO-KO DELTA over a two-chip window, not a rider-reach count.
+This AMENDS decision 6** (user ruling, 2026-07-29):
+
+> *"if i snipe a benched mega lucario with 50dmg such that it now has not 340 HP but 290HP, that does
+> nothing to help — ill still need two turns from mega starmie Nebula Beam to take it down. thus we must
+> consider the amount of dmg we will do to the body once it moves into active and how many turns until
+> we can KO it. if sniping it once or twice reduces the number of turns itll sit active, thats a real
+> win, otherwise we are just wasting our snipes."*
+
+```
+ko_delta(b) = ( turns_to_ko(b) − turns_to_ko(b after 2 chips) ) / turns_to_ko(b)
+```
+
+via `combat.turns_to_ko(my_active_id, my_energy, body)` — which prices the body **as an Active** against
+my real attack (W/R and riders per the oracle), which is precisely the "once it moves into active" the
+ruling asks for. Derived; no constants. Decision 6's `reach` measured *how many rider hits finish it*,
+a genuinely different question that is blind to threshold crossings.
+
+**Card facts verified at source:** Mega Lucario ex (678) Stage 1, **340 HP**, evolves from Riolu (single
+hop); Mega Starmie ex (1031) Jetting Blow `{W}` **120**, Nebula Beam `●●●` **210**.
+
+**The two-chip window is load-bearing, and the corpus proves it:**
+
+| frame | body | `turns_to_ko` | 1 chip | 2 chips | human picks it |
+|---|---|---|---|---|---|
+| `82756021-57` | Mega Lucario ex, 340 HP | 3 | **0 saved** | **1 saved** (0.33) | yes |
+| `82756664-103` | Mega Lucario ex, 290 HP | 3 | **1 saved** (0.33) | 1 saved | yes |
+
+A one-chip-only read scores the `57` Mega at **0** on this leg and loses the frame; the "once or twice"
+horizon the ruling names is what rescues it. (On `57` my Active could afford only Jetting Blow 120, not
+Nebula Beam 210 — hence 3 turns rather than the 2 the worked example assumes. The oracle is the
+authority over hand-arithmetic here, and it changes the number without changing the ruling.)
+
+**Measured — the corpus does NOT discriminate the route leg:** `reach+share`, `kodelta1+share`,
+`kodelta2+share` and `kodelta2+reach+share` all score **17/19 on the corpus and 4/4 on the held-out
+fixtures**. Decision 11 is therefore adopted on *reasoning* — it answers the question the instrument is
+actually asking, and it is the design doc's threshold-race (ruling 4, *"the one live snipe gap"*) —
+**not** on a measured advantage. Recorded that way so it is never cited as measured.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
