@@ -756,9 +756,15 @@ under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate 
 `m × PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE` and no Δ policy rescues it; both cards the endorsed ruling
 pitches price `0.0` themselves, so even a nonzero `m` would only assert *worth > 0*. Deny no longer
 needs the rate at all (it became a **Deny Relevance** instrument), so this leg is unbuilt by DESIGN,
-not by backlog. It remains genuinely owed to **gust**, whose `gust_target_slot` still feeds a
-prize-equivalent straight into the worth-summing DP with no conversion — latent only because Boss's
-Orders' `TAG_TIER["gust"]` floor absorbs it (ADR-0076 Amendment E, returned to Issue #189).
+not by backlog.
+**MOOT for gust too since ADR-0082 (Issue #189 grill, 2026-07-29) — so it is moot everywhere it was
+owed, and NO consumer is waiting on it.** ADR-0080 left the leg *"genuinely owed to gust"*, whose
+`gust_target_slot` fed a prize-equivalent straight into the worth-summing DP. Splitting gust's three
+surfaces dissolved that: only the KEEP price crosses the boundary, and it needs **Gust Liveness** (below)
+rather than a magnitude — the *target pick* is an ordering inside one lane (no rate), and the *play rung*
+crosses only prizes↔damage, where `PRIZE_DAMAGE_RATE` already exists and is derived. So the magnitude
+lives where nothing is crossed and the crossing needs no magnitude. This also retires the last standing
+reason to capture a keep-side DISCARD anchor.
 _Avoid_: Prize Damage Rate (the prizes↔damage leg — this is the worth leg), Worth (the scale, not the
 rate that converts it), calibration (a value chosen to preserve an incumbent is not a derivation),
 "pending"/"not yet derived" for the deny case (it is moot there — say moot)
@@ -790,6 +796,29 @@ the consumer. The **relevance normalizer** `MAX_ATTACK_DAMAGE = 350` is DERIVED 
 damage in the set — and recomputed from the CSV by its test, never pinned; it is a `[0,1]` mapping,
 NOT an exchange rate. Known gap, recorded: Okidogi's static +100 HP / +100 damage buff makes its mute
 worth more than its own attacks imply, so the ability leg under-rates it — out of pool, so latent.)_
+
+**Gust Liveness**:
+Gust's KEEP price, and the answer to *"is this Boss's Orders doing real work on this board, or is it dead
+weight?"* — a **scalar in [0,1]**, NOT a prize magnitude (ADR-0082, Issue #189). The keep slot is the one
+gust surface that crosses a scale boundary (a prize-denominated value entering the worth-summing Needs
+DP), and it crosses it needing only liveness, which is why gust escapes the **Worth Damage Rate** the
+same way deny did without sharing deny's reason. `liveness = best_bench_target_value /
+(max_prize_value + _SURVIVAL_CAP)`, so the keep price is `TAG_TIER["gust"] 10.0 × liveness` — the
+incumbent tier scaled, exactly **Deny Relevance**'s shape on the same surface. The normalizer `3.9` is
+DERIVED, not pinned: `max_prize_value` is **3** (Mega Evolution Pokémon *ex*, `docs/rules.md` §6,
+`[RULE: L333]`) and `_SURVIVAL_CAP` is already ruled — a `[0,1]` mapping, NOT an exchange rate, the same
+discipline as `MAX_ATTACK_DAMAGE = 350`. Bench-only: a gust forces a switch of a BENCHED Pokémon, so the
+opponent's Active never opens a slot (unlike deny, which strips either area).
+_Avoid_: opponent-target marginal / `opponent_target_value` (the prize-denominated COMPOSITE — liveness
+is derived from it but is not it, and feeding it raw is the ADR-0076 Amendment E defect), Deny Relevance
+(the same *shape* on the same surface, a different instrument and a different question — relevance asks
+what the Energy DOES, liveness asks what the gust would BUY), Worth Damage Rate (liveness exists so this
+is not needed — it is not an approximation of it)
+_(The defect it fixes, measured: `gust_target` topped out at **3.9** prize-equivalents against Boss's
+Orders' own **4.5** general-worth floor (`TAG_TIER["gust"] 10.0 × _GENERAL_WORTH_W 0.45`), and `general`
+is de-duplicated per `cid` — so the slot armed since 2026-07-27 could only ever win an assignment for a
+**second** held copy. ADR-0076 Amendment E's "0 decision flips / 331 frames" is explained by the slot
+never firing, not by the floor absorbing it — tracker directive #9 with a sharper answer.)_
 
 **Bench Reach**:
 Any damage that can land on ONE benched opponent body this turn — the max of a single-target snipe

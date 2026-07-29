@@ -265,7 +265,83 @@ deferred**, and answered without the rate it predicted would be needed.
 
   The frame passes and needs no owner. What it *does* expose is decision 6's question, below.
 
-<!-- Decisions 6+ land as the grill rules them. -->
+**6. Gust gains an explicit play-side OPPORTUNITY COST, so a valueless gust scores NEGATIVE. The cost
+is PINNED for preservation and must never be cited as derived.**
+
+`86089120-14` (decision 5) shows why `0.0` is not good enough: it is the **absence of a yes**, not a no.
+Nothing endorsed the gust and nothing objected, which is precisely how a rollout tie-break walked into
+it at build `32530b9`. The user's ruling on re-reading that board (2026-07-29) was a **hard no** on
+gusting there, not merely a preference for a different target.
+
+Deny already prices this and gust does not:
+
+| | deny | gust |
+|---|---|---|
+| play-side opportunity cost | **`_DENIAL_ITEM_COST = 10`** (`pilot.py:122`), subtracted at `:4972` | **none** |
+| Supporter / Item economy | priced into the rung | a boolean damping clause inside `when` |
+
+The board also shows the gap is general rather than incidental: `stall_target_exists` is **true** there
+(Lunatone retreat 1, Solrock 1, Riolu 2 — all energyless, all ≥ `_STALL_RETREAT`). The stall rungs
+declined only because `active_doomed` is false. So the reason is not "nothing to gust"; it is *gusting
+buys nothing when we are not under threat and cannot KO*, and nothing in the doctrine writes that down.
+
+Ruled: a Supporter-economy cost is subtracted on surface (b). Combined with decision 3's graded value, a
+no-KO board yields `prize_to_damage(0) − cost` = **negative**, so the gust loses to `End` (0.0) and to a
+develop option *by construction* rather than by tie-break.
+
+**The constant is a preservation choice, not a derivation, and its code comment must say so** — the
+exact discipline ADR-0080 decision 3 set for its `K` (*"must be pinned to the incumbent's observed range
+so the swap starts behaviour-preserving, and recorded as a preservation choice, never dressed as a
+derivation"*). This is not pedantry: the tempting shortcut is to reuse the card's keep price as its play
+cost, which would silently assert a worth↔damage rate of ≈1 — and that pair
+(`TAG_TIER["gust"] 10.0` vs `_DENIAL_ITEM_COST 10`) is one of the two `common/currency.py:47` names as
+disagreeing by ~6.7×. Pinning it honestly is what keeps it from becoming the next `_PRIZE_UNIT`.
+
+**Rejected alternatives:** a boolean `gust_pointless` stand-down mirroring ADR-0066's
+`_stall_swap_pointless` — expresses the hard no but cannot compose, since a gust that buys *something*
+would then be gated rather than weighed, against ADR-0065's fold-into-magnitude discipline; **both** the
+cost and the gate — the gate is dead code the moment the cost works, the shape standing directive #1
+forbids; and **leaving `0.0`** — nothing is actively broken on `main` today, but silence is not a
+decision and the next rollout or tie-break change can walk into it again.
+
+## Acceptance and gates
+
+The charter's *"the four bench frames hold unchanged"* is retired (decision 1). What replaces it:
+
+**Corpus footprint after decision 5.** Of the four charter frames, `85164131-22` is Issue #188's and
+`86089120-14` passes and is owned by nobody; `86091435-13` left for Issue #165 before this grill
+(finding 6). Two remain, and neither exercises the KO-gated target pick:
+`85163079-30` (surface (b), the rung this ADR deletes) and `85785067-41` (surface (c)'s **non-KO strand**
+path). **Coverage for the KO-gated pick must be AUTHORED**, as ADR-0080 concluded for its own worked
+examples and for the same reason — the corpus does not contain it.
+
+**Owed fixtures**, one per ruled behaviour:
+
+- decision 2 — the sub-lethal seam: a frame where `_gust_target_denial` fires (a lethal bench threat)
+  and one where it does not but `survival_shift > 0`, asserting the two never both contribute.
+- decision 3 — an **Axis Claim** that a 3-prize gust outranks a 1-prize gust (impossible to state under
+  flat weights), plus `85163079-30` re-expressed as an **Endorsement Claim** now that its rung is gone.
+- decision 4 — `liveness` bounds (0 on a board with no bench target; 1.0 on a 3-prize Mega ex with
+  survival bought), and the finding-4 regression: a **first** copy of a gust card clearing the 4.5
+  general-worth floor.
+- decision 6 — `86089120-14` as an Endorsement Claim asserting `score < 0` on the gust option. This is
+  the fixture that would have caught the original blunder, and #189's first authored one.
+
+**Both ADR-0072 merit gates are mandatory and neither is N/A here** — this issue deletes a rung
+(decision 3) and swaps deciders on all three surfaces, so the ADR-0069 §8 condition that made #186's
+Decision Gate an N/A does not apply:
+
+- **Decision Gate** — zero unruled `REGRESSION` frames on the phase's sweep, every flip ruled with the
+  user *before* the deletion commit.
+- **Discrimination Gate** — `leaf_lab.py diff --baseline data/leaf_lab/baseline.json`, zero unruled
+  `OK → MISS`. **Run BEFORE the arming decision, not after** (ADR-0072 decision 5 — the ordering
+  ADR-0076 Amendment E got wrong).
+- **Tripwire** — the mid-build paired A/B: `crashes == 0` and `ci_lo >= −5 pp`, `--stage mid-build`
+  REQUIRED. `delta >= 0` does **not** gate mid-build. Note the instrument choice (ADR-0072, #186): a
+  swap that DELETES its fallback needs `gauntlet_swap_ab.py`, not the flag-overlay — and decision 3
+  deletes a rung, so this is the swap-AB case.
+
+Kill-switches ship per surface so a single revert lever does not conflate three independent swaps.
 
 ## Consequences
 
@@ -284,6 +360,30 @@ deferred**, and answered without the rate it predicted would be needed.
 - **Two of the four charter frames were never this issue's**, and one more (`86091435-13`) left for
   Issue #165 (finding 6). Issue #189's real corpus footprint is smaller than its charter implies and
   must be grown by authoring.
+- **The Worth Damage Rate is now MOOT for gust as well as deny, so it is moot everywhere it was owed.**
+  ADR-0080 left the leg *"genuinely owed to gust"* (and `src/common/CONTEXT.md` said so). Decision 4
+  closes that: the only gust surface that crosses the boundary needs liveness, not magnitude. The absent
+  constant and its guard test in `common/currency.py` are now unbuilt **by design on both counts**, and
+  the comment there should name this ADR alongside ADR-0080. No consumer is left waiting on it — which
+  also removes the last standing reason to capture a keep-side DISCARD anchor.
+- **A second instrument's play rung gains a pinned constant.** ADR-0080 flagged deny's `K` so it could
+  not later be cited as measured; decision 6's Supporter cost is the same shape and carries the same
+  warning. Two pinned constants in the opponent-target family is a pattern worth watching, not yet a
+  problem — both exist because the worth↔damage bridge does not.
+- **Issue #190 (S5) inherits a sharpened charter, and one thing it does NOT inherit.** It gains the
+  repositioning-Δ primitive (from decision 3's rejected alternative) as shared machinery with
+  `return_threat`. It does **not** gain `86089120-14` — decision 5 shows `return_threat` would subtract
+  from a value that was never positive there.
+- **A rung is deleted, so this issue cannot claim #186's Decision-Gate N/A.** Both merit gates apply in
+  full, and the swap-AB instrument (not the flag overlay) is the correct Tripwire.
+- **Inherited debris, NOT this issue's to fix but recorded so it is not lost:** nine references to
+  **Deny Relevance** cite `ADR-0081`, which is the *opener* ADR — deny's is **ADR-0080**. Seven are in
+  `src/common/pilot.py` (`:126`, `:1336`, `:7298`, `:7330`, `:7360`, `:7365`, `:7378`) and two in
+  `src/common/CONTEXT.md` (`:752`, `:768`). The other `ADR-0081` references in those files, and all of
+  `tests/strategy/test_setup_active_placement.py`, are correct. This is tracker directive #8's warning
+  realised exactly — *"a blanket find-and-replace corrupts the references of whichever ADR legitimately
+  owns the number you vacated"* — from Issue #203's `0080 → 0081` rebase catching Issue #199's
+  already-renumbered references. Owner: Issue #199 / Issue #203 follow-up.
 
 ## Alternatives rejected
 
