@@ -32,7 +32,7 @@ def test_lane_constants_match_the_engine_enums():
     `planner.py` keeps its engine import lazy. So the lane constants are written literally there and
     PINNED here: this test is what makes them sourced rather than remembered, and it fails the moment
     one drifts."""
-    from cg.api import OptionType, SelectContext
+    from cg.api import AreaType, OptionType, SelectContext
     assert gates.OPTION_TYPE_EVOLVE == int(OptionType.EVOLVE)
     assert gates.OPTION_TYPE_ATTACH == int(OptionType.ATTACH)
     assert gates.OPTION_TYPE_CARD == int(OptionType.CARD)
@@ -44,6 +44,99 @@ def test_lane_constants_match_the_engine_enums():
     assert gates.SELECT_CONTEXT_TO_ACTIVE == int(SelectContext.TO_ACTIVE)
     assert gates.PROMOTE_LANE == ((int(OptionType.CARD), int(SelectContext.SWITCH)),
                                   (int(OptionType.CARD), int(SelectContext.TO_ACTIVE)))
+    assert gates.OPTION_TYPE_PLAY == int(OptionType.PLAY)
+    assert gates.SELECT_CONTEXT_SETUP_BENCH == int(SelectContext.SETUP_BENCH_POKEMON)
+    assert gates.SELECT_CONTEXT_TO_BENCH == int(SelectContext.TO_BENCH)
+    assert gates.AREA_HAND == int(AreaType.HAND)
+    assert gates.DEPLOY_LANE == ((int(OptionType.PLAY), None),
+                                 (int(OptionType.CARD), int(SelectContext.SETUP_BENCH_POKEMON)),
+                                 (int(OptionType.CARD), int(SelectContext.TO_BENCH)))
+
+
+# ── deploy option IDENTITY (ADR-0081, Issue #197) ────────────────────────────────────────────────
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_option_slot_resolves_a_hand_play_to_its_card_id():
+    """The case that forced the extension: a mid-game bench play is `OptionType.PLAY` with a BARE
+    hand index and NO `area` (`strategy/context.py`: "play card from hand (bare hand `index`, no
+    `area`)"), so the positional resolver returns None for exactly the options the Deploy Marginal
+    ranks. Given the frame it resolves to the CARD, because "play Solrock" is one decision however
+    the engine happens to order the menu."""
+    frame = {"current": {"yourIndex": 0,
+                         "players": [{"hand": [{"id": 1227}, {"id": 1121}, {"id": 676}]}, {}]}}
+    assert option_slot({"type": 7, "index": 2}, frame) == ("card", 676)
+    assert option_slot({"type": 7, "index": 0}, frame) == ("card", 1227)
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_option_slot_resolves_a_setup_bench_hand_card_to_the_same_identity():
+    """The pregame Bench places with `OptionType.CARD` + `area = HAND` rather than PLAY
+    (`setup_bench_decline_f3`), and `_TO_BENCH` fetches straight onto the Bench. All three deploy
+    entry points must resolve to the SAME identity or the lane compares apples to oranges."""
+    frame = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 1071}]}, {}]}}
+    assert option_slot({"type": 3, "area": 2, "index": 0}, frame) == ("card", 1071)
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_option_slot_is_byte_identical_without_a_frame():
+    """Back-compat is what lets the three existing sweeps keep their meaning with no edit: with no
+    frame the resolver is exactly the positional one it has always been, so a hand option falls back
+    to `(area, index)` and a bare PLAY stays None."""
+    assert option_slot({"type": 7, "index": 2}) is None
+    assert option_slot({"type": 3, "area": 2, "index": 0}) == (2, 0)
+    assert option_slot({"type": 14}) is None
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_option_slot_prefers_the_board_slot_over_card_identity():
+    """A BODY option keeps resolving to its board slot even when a frame is available — evolve,
+    attach-from and promote all compare bodies, and re-pointing them at a card id would silently
+    re-base three shipped sweeps and every committed Axis Claim (all of which name `(4, n)` /
+    `(5, n)` board slots)."""
+    frame = {"current": {"yourIndex": 0, "players": [{"hand": [{"id": 676}],
+                                                      "bench": [{"id": 678}]}, {}]}}
+    assert option_slot({"type": 9, "area": 5, "index": 0,
+                        "inPlayArea": 5, "inPlayIndex": 0}, frame) == (5, 0)
+    assert option_slot({"type": 3, "area": 4, "index": 2}, frame) == (4, 2)
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_option_slot_falls_back_when_the_frame_cannot_resolve_the_card():
+    """Fail-soft, never crash: an out-of-range index, a face-down (None) hand entry, or a frame
+    without the asked seat leaves the positional answer rather than raising — a probe reads whatever
+    the corpus recorded, including truncated frames."""
+    frame = {"current": {"yourIndex": 0, "players": [{"hand": [None]}, {}]}}
+    assert option_slot({"type": 7, "index": 9}, frame) is None       # out of range
+    assert option_slot({"type": 7, "index": 0}, frame) is None       # face-down entry
+    assert option_slot({"type": 3, "area": 2, "index": 9}, frame) == (2, 9)
+    assert option_slot({"type": 7, "index": 0}, {"current": {}}) is None
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_option_slot_reads_the_option_owner_not_always_the_asked_seat():
+    """`playerIndex` names whose zone the option indexes. A deploy is always our own, but the
+    resolver must not hardcode the asked seat or it would mis-resolve an opponent-owned card option
+    the moment one enters a lane."""
+    frame = {"current": {"yourIndex": 0,
+                         "players": [{"hand": [{"id": 1}]}, {"hand": [{"id": 2}]}]}}
+    assert option_slot({"type": 3, "area": 2, "index": 0, "playerIndex": 1}, frame) == ("card", 2)
+
+
+@pytest.mark.req("REQ-TRAIN-0041")
+def test_lane_slots_forwards_the_frame_so_a_deploy_lane_compares_cards():
+    """`lane_slots` is what the sweeps and Axis Claims actually call, so the frame has to reach the
+    resolver through it — otherwise the deploy lane would compare menu positions and two identical
+    Solrock plays at different indices would read as different decisions."""
+    options = [{"type": 7, "index": 0},                       # play Lillie's
+               {"type": 7, "index": 2},                       # play Solrock
+               {"type": 14}]                                  # end
+    frame = {"current": {"yourIndex": 0,
+                         "players": [{"hand": [{"id": 1227}, {"id": 1121}, {"id": 676}]}, {}]}}
+    assert lane_slots([1], options, lane=gates.DEPLOY_LANE, select_context=0,
+                      frame=frame) == {("card", 676)}
+    assert lane_slots([0, 2], options, lane=gates.DEPLOY_LANE, select_context=0,
+                      frame=frame) == {("card", 1227)}       # END is outside the lane
 
 
 @pytest.mark.req("REQ-TRAIN-0040")
