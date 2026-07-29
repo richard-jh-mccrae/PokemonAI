@@ -197,10 +197,25 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
             # deploy identities would score that frame "unlabelled" and hide a real regression — which
             # is exactly f51's shape (correct = play Lillie's, a Supporter).
             if correct:
-                new_hit = (new_slots == correct_slots if correct_slots
-                           else not new_slots and set(dec_new.chosen or []) & set(correct))
-                old_hit = (old_slots == correct_slots if correct_slots
-                           else not old_slots and set(dec_old.chosen or []) & set(correct))
+                # A frame may record ALTERNATIVES: a set of picks the human ruled equally correct.
+                # f29's ruling is the case — "bench Riolu, Makuhita, and Solrock, ordering doesn't
+                # matter, just don't play ultra ball" — where the single `correct` list
+                # over-specifies, because the rationale distinguishes a basic from the Ultra Ball
+                # and not one basic from another. Without this the sweep scores a REGRESSION for
+                # picking a body the human explicitly called correct.
+                accepted = rec.get("correct_alternatives") or [correct]
+
+                def _hit(chosen, slots) -> bool:
+                    for alt in accepted:
+                        alt_slots = lane_slots(alt, options, lane=DEPLOY_LANE,
+                                               select_context=ctx, frame=obs)
+                        if slots == alt_slots if alt_slots else (
+                                not slots and set(chosen or []) & set(alt)):
+                            return True
+                    return False
+
+                new_hit = _hit(dec_new.chosen, new_slots)
+                old_hit = _hit(dec_old.chosen, old_slots)
                 verdict = ("FIX" if new_hit and not old_hit
                            else "REGRESSION" if old_hit and not new_hit else "DIVERGENT")
             else:
