@@ -67,12 +67,22 @@ _MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active
 
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
-ENERGY_RECOVER = 75        # per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X}
-                           # from discard") on a NON-KO turn — chip-scale, so fueled Aura Jab beats bare
-                           # Mega Brave. Lives HERE rather than in `pilot` because the promote/retreat
-                           # equation reads it too (ADR-0073 §3b: retreating INTO Cinderace must credit
-                           # what attacking WITH Cinderace credits), and `pilot` imports that equation —
-                           # so one leaf owner is what keeps the two readings from drifting apart.
+#: Per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X} from discard") on a
+#: NON-KO turn. **DERIVED, not tuned** (ADR-0073 §3: every term is damage at a derived rate) — the
+#: MEDIAN damage-per-Energy over the 305 attacks in `data/EN_Card_Data.csv` costing >= 2 Energy,
+#: exactly `160/3`. Cost >= 2 is the population an accel rider funds: a rider dumping 3 Energy pays
+#: for multi-Energy attackers, and `_recover_recipient_need` already measures need against the
+#: recipient's FORWARD form. A test recomputes it from the CSV, so a future set re-derives it.
+#:
+#: It shipped as a tuned 75 — reverse-engineered from ONE side ("chip-scale, so fueled Aura Jab beats
+#: bare Mega Brave") with nothing holding the top, and ~6% over it. Two human rulings bracket the
+#: rate at `46.63 < E < 70.85`: ADR-0061's Aura Jab line from below, and ep81904064 f44 from above
+#: (at 75 the agent retreated into Cinderace for a 50-damage Turbo Flare rather than attack for 210).
+#:
+#: Lives HERE rather than in `pilot` because the promote/retreat equation reads it too (ADR-0073 §3b:
+#: retreating INTO Cinderace must credit what attacking WITH Cinderace credits), and `pilot` imports
+#: that equation — so one leaf owner is what keeps the two readings from drifting apart.
+ENERGY_RECOVER = 160 / 3
 _SUPPORTER = 3             # CardType.SUPPORTER — gust on this card costs the one-per-turn Supporter slot
 _TOOL_CARD = 2             # CardType.TOOL — a Pokémon Tool. Arrives as OptionType.ATTACH exactly like an
                            # Energy, so the Energy hypotheses must test `attach_is_energy` (ml f87)

@@ -39,21 +39,30 @@ def _fired(t):
 def _pilot(hand_ids=(), energy=20):
     # Every attacker's cheapest attack is a real record (the card-level minCostDamage KO
     # fallback is retired, ADR-0052) — same damage/cost the fallback used to read.
-    A_MEGA, A_STAR, A_CIND = 31, 32, 33
+    A_MEGA, A_STAR, A_CIND, A_NEBULA = 31, 32, 33, 34
     stats = DictCardStatProvider({
         3: CardStat(3, name="Water Energy", cardType=5, energyType=3),
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
                        minCostDamage=120, maxDamageCost=3, evolvesFrom="Staryu",
-                       attacks=(A_MEGA,)),
+                       attacks=(A_MEGA, A_NEBULA)),
         STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, minCostDamage=20,
                          attacks=(A_STAR,)),
         CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50,
                             attacks=(A_CIND,)),
         678: CardStat(678, name="Mega Lucario ex", hp=340, megaEx=True),
-    }, attacks={A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),
-                A_STAR: AttackStat(A_STAR, damage=20, cost=1),
-                # Turbo Flare as PRINTED — the rider the accel dividend is measured from.
-                A_CIND: AttackStat(A_CIND, damage=50, cost=1, recoverN=3, recoverSource="deck")})
+        # Both of Mega Starmie ex's attacks are recorded, not just the cheap one. The DEARER attack is
+        # load-bearing: `_recover_recipient_need` measures a recipient against `max(costs)` over its own
+        # and its FORWARD form's attacks, so omitting Nebula Beam made a bare Staryu (whose forward Mega
+        # needs {C}{C}{C}) report a need of 1 instead of 3 — and the accel dividend it gates was
+        # measuring a different claim than the one these frames are about.
+    }, attacks={A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),        # Jetting Blow {W}
+                A_NEBULA: AttackStat(A_NEBULA, damage=210, cost=3),    # Nebula Beam {C}{C}{C}
+                A_STAR: AttackStat(A_STAR, damage=20, cost=1),         # Water Gun {W}
+                # Turbo Flare as PRINTED (`data/EN_Card_Data.csv`): "Search your deck for up to 3 Basic
+                # Energy cards and attach them to your BENCHED Pokémon" — the target scope is part of
+                # the record, and the need gate reads it.
+                A_CIND: AttackStat(A_CIND, damage=50, cost=1, recoverN=3, recoverSource="deck",
+                                   recoverTarget="bench")})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
                      roles={MEGA: ["win_condition", "primary_attacker"],
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})

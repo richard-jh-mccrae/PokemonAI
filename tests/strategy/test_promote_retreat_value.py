@@ -13,6 +13,7 @@ assertion below is a RELATION — this beats that, this is bounded by that, this
 from __future__ import annotations
 
 import csv
+import re
 import statistics
 from dataclasses import replace
 from pathlib import Path
@@ -22,6 +23,7 @@ import pytest
 from common.grading import HORIZON
 from common.promote_retreat_value import (PRIZE_DAMAGE_RATE, PromoteBody, PromoteRetreatInputs,
                                           RetreatSide, promote_value)
+from common.strategy.combat import _EFFICIENCY
 from common.strategy.context import ENERGY_RECOVER, KO_SCORE
 
 REPO = Path(__file__).resolve().parents[2]
@@ -75,6 +77,50 @@ def test_prize_damage_rate_recomputes_from_the_card_set():
                 bodies[row["Card ID"]] = hp / prizes[(row.get("Rule") or "n/a").strip()]
     assert len(bodies) == 1061                            # the population ADR-0073 measured
     assert statistics.median(bodies.values()) == PRIZE_DAMAGE_RATE
+
+
+def test_energy_recover_recomputes_from_the_card_set():
+    """§3 again, for the OTHER exchange rate. `ENERGY_RECOVER` shipped as a tuned band constant (75,
+    chosen so fueled Aura Jab would beat bare Mega Brave) — tuned-by-another-name, the exact thing
+    the Prize Damage Rate exists to refuse. It is now DERIVED the same way: the median
+    damage-per-Energy over the attacks an accel rider actually funds.
+
+    Cost >= 2 is the population, not every attack: a rider dumping 3 Energy exists to pay for
+    multi-Energy attackers, and `_recover_recipient_need` already measures need against a
+    recipient's FORWARD form (a Riolu counts the {F}{F} its Mega Brave costs, not the {F} of Quick
+    Attack). The 634 cost-1 chip attacks are not what accel buys."""
+    rates = []
+    with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            cost_txt, dmg_txt = (row.get("Cost") or "").strip(), (row.get("Damage") or "").strip()
+            if cost_txt in ("", "n/a") or dmg_txt in ("", "n/a"):
+                continue
+            cost = len(re.findall(r"\{[A-Z]\}", cost_txt))
+            printed = re.match(r"^(\d+)", dmg_txt)
+            if cost < 2 or not printed or int(printed.group(1)) <= 0:
+                continue
+            rates.append(int(printed.group(1)) / cost)
+    assert len(rates) == 305                              # the population this rate is measured over
+    assert statistics.median(rates) == ENERGY_RECOVER
+
+
+def test_energy_recover_sits_inside_the_bracket_two_rulings_impose():
+    """What makes the rate FALSIFIABLE rather than merely derived: two independent human rulings
+    bound it from opposite sides, and the shipped 75 sat outside the top.
+
+    * LOWER — ADR-0061 (mega_lucario): fueled Aura Jab (130, `{F}`) + 3 accel must out-score bare
+      Mega Brave (270, `{F}{F}`). Card facts from `data/EN_Card_Data.csv`.
+    * UPPER — ep81904064 f44 (mega_starmie, ruled 2026-07-29): after Lillie's Determination, Nebula
+      Beam (210) must out-score retreating into Cinderace for Turbo Flare (50 + 3 accel). Measured
+      on that board the retreat option scores `3 x ENERGY_RECOVER - 37.84` against the attack's
+      174.70, so the ruling holds iff the rate is below 70.85.
+
+    75 broke the upper bound by ~6%, and that overshoot alone made the agent trade a 210-damage
+    attack for a 50-damage one."""
+    lower = ((270 - _EFFICIENCY * 2) - (130 - _EFFICIENCY * 1)) / 3
+    assert lower == pytest.approx(46.633, abs=0.001)
+    assert ENERGY_RECOVER > lower                          # ADR-0061's Aura Jab line survives
+    assert ENERGY_RECOVER < (174.70 + 37.84) / 3           # ep81904064 f44's attack-over-accel line
 
 
 def test_a_prize_is_worth_a_hundred_damage_not_twelve():

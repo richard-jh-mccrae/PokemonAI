@@ -164,3 +164,11 @@ A/B.
 - Part (ii) of Issue #172 — that no decision-time read can see fuel a LATER STEP puts back
   (Harlequin) — is **out of scope by construction**. It is a property of step ORDER and remains
   Issue #165's.
+- **Correcting the read exposed a second, masked defect and it is fixed alongside** (see the
+  2026-07-29 amendment to [ADR-0073](0073-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md)).
+  `ENERGY_RECOVER` was a tuned band constant at 75, ~6 % above the bracket two human rulings impose,
+  and the retired pigeonhole floor had been under-counting the units it multiplies — an over-valued
+  rate and an under-counted quantity cancelling. With the read honest, the rate showed: on
+  ep81904064 f44 the agent retreated into Cinderace for a 50-damage Turbo Flare rather than attack
+  for 210. The rate is now derived from the card set (`160/3`), and only with BOTH fixed do the
+  Discrimination Gate and all three decider sweeps pass with zero unruled flips.
