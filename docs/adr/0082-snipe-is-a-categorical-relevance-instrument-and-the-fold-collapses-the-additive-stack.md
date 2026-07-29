@@ -558,6 +558,38 @@ fixtures**. Decision 11 is therefore adopted on *reasoning* — it answers the q
 actually asking, and it is the design doc's threshold-race (ruling 4, *"the one live snipe gap"*) —
 **not** on a measured advantage. Recorded that way so it is never cited as measured.
 
+**12. `share` STAYS. `my_route = max( ko_delta₂ , reach , share )`.** Decision 12 was first taken as
+*"drop `share`; a route leg must describe what the chip achieves, and `share` is a property of the
+target"* — the strict reading of decision 11's ruling — and was then **reverted by the user after
+measurement refuted it** (2026-07-29). Recorded rather than deleted, because the reasoning is the
+useful part.
+
+| shape | corpus | held-out fixtures |
+|---|---|---|
+| `max(ko_delta₂, reach)` — share dropped | 16/19 (loses `82756021-57`) | 4/4 |
+| `max(ko_delta₂, reach × share)` — prize-weighted reach | 16/19 (loses `85164131-22`) | 4/4 |
+| **`max(ko_delta₂, reach, share)`** | **17/19** | **4/4** |
+
+**The decisive detail cuts against the argument for dropping it.** On `82756021-57` the 340-HP Mega
+Lucario ex scores `ko_delta₂ = 0.33`, `reach = 0.14`, `share = 0.50` — so **`share` is what selects the
+Mega, and the human selects the Mega.** What pulls the model away is Makuhita's `reach = 0.50` (an
+80-HP body two riders finish). On the single corpus frame where `share` is decisive, the human sides
+with `share`.
+
+Two things blunt the "share can reward a wasted chip" worry that motivated dropping it:
+
+- `share` is **multiplied by `their_plan`**, so it can only act on a body that already matters to the
+  opponent's plan — a gated body (redundant / mirage / Tera) scores 0 however many prizes it carries.
+- Decision 11's principle is carried by **`ko_delta` existing as a leg at all**, which is the change
+  that matters. Removing `share` does not strengthen it; it merely lets an 80-HP 1-prize small outrank
+  a 3-prize win-condition whose Active clock I can genuinely shorten.
+
+**Method note, recorded as a caution for the build.** Roughly a dozen route shapes were measured against
+the same 19 frames across this grill. That is well past the point where a shape difference of one frame
+is meaningful evidence, and it is exactly the overfitting decision 7's acceptance bar exists to catch.
+`share`'s retention rests on the *mechanism* above — it is bounded by `their_plan` and it decides the
+one frame in the human's favour — not on 17 beating 16.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
