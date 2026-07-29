@@ -828,6 +828,32 @@ on both instruments. Known gaps, recorded: Okidogi's static +100 HP / +100 damag
 worth more than its own attacks imply, so the ability leg under-rates it (out of pool, latent); and a
 rainbow-class Special Energy reads untyped, so it scores 0 even on a body exactly paying a `●●●` cost.)_
 
+**Snipe Relevance**:
+Snipe's value, and the answer to *"does damaging this body actually matter to their plan and to my
+prize route?"* — a **scalar in [0,1]** per offered target, NOT a magnitude (ADR-0082, Issue #188,
+2026-07-29). The **second** instrument to reach ADR-0062's wall (*"no monotone pricing of magnitude
+alone can separate them"*) and take **Deny Relevance**'s shape for the same structural reason: a
+snipe target, like a stripped body, **survives** — so what matters is whether it *matters*, not how
+big it is. The proof is a corpus PAIR with identical magnitudes and opposite rulings: `82756021-57`
+and `83667237-107` both offer an 80-HP 1-prize Makuhita (2 rider hits) against a 340-HP 3-prize Mega
+Lucario ex (7 rider hits), and the human takes the Mega on one and the Makuhita on the other — the
+only difference being categorical (`target_prize_redundant`, ADR-0044's body-identity Prize-Path read,
+fires on `107`'s *second* Mega). Hard gates force it to 0 above the scalar rather than competing
+inside it: the **Tera** card fact (a benched Tera takes NO damage, `rules.md §185`) and the ADR-0044
+redundancy reads (`target_prize_redundant` / `target_promotion_mirage`); `snipe-for-the-ko` and
+`_snipe_tera_veto` stay structural dominators outside it. Replaces — deletes — `baseline_snipe.py`'s
+six ADDITIVE target weights (60/45/40/30/20/12), whose summing is a documented blunder class in their
+own rationales (`30+40+45 = 115` on an un-KO-able Grookey beating `60` on the KO-able Applin,
+`82754241-45`; and the Tera veto had to be retired from being a weight because `+12` from
+`snipe-on-the-path` defeated it).
+_Avoid_: the opponent-target marginal / `opponent_target_value` (the prize-equivalent read — its
+`prize_advance` is the **if-KO'd** term and the snipe rider KOs nothing in 14 of 19 corpus frames, so
+it pays 3.0 prizes to chip a 340-HP body; it stays gust's currency, not snipe's), threshold-race as a
+RATE (the refuted magnitude successor — 11/19 vs the rungs' 17/19), normalizing the six weights into
+[0,1] (six undetermined constants where the scalar keeps one), Prize-Redundant Target / Forced-Promotion
+Read (ADR-0044 *reads* — these are legs and gates the scalar consumes, not the scalar itself)
+_(NOT BUILT — ADR-0082 decision 1 only. Issue #188 is the build.)_
+
 **Bench Reach**:
 Any damage that can land on ONE benched opponent body this turn — the max of a single-target snipe
 rider and a DISTRIBUTABLE spread total (*"in any way you like"*, so all of it may fall on one body).
