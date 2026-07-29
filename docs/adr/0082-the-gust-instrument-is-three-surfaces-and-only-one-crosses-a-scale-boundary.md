@@ -376,14 +376,27 @@ Kill-switches ship per surface so a single revert lever does not conflate three 
   from a value that was never positive there.
 - **A rung is deleted, so this issue cannot claim #186's Decision-Gate N/A.** Both merit gates apply in
   full, and the swap-AB instrument (not the flag overlay) is the correct Tripwire.
-- **Inherited debris, NOT this issue's to fix but recorded so it is not lost:** nine references to
-  **Deny Relevance** cite `ADR-0081`, which is the *opener* ADR — deny's is **ADR-0080**. Seven are in
-  `src/common/pilot.py` (`:126`, `:1336`, `:7298`, `:7330`, `:7360`, `:7365`, `:7378`) and two in
-  `src/common/CONTEXT.md` (`:752`, `:768`). The other `ADR-0081` references in those files, and all of
-  `tests/strategy/test_setup_active_placement.py`, are correct. This is tracker directive #8's warning
-  realised exactly — *"a blanket find-and-replace corrupts the references of whichever ADR legitimately
-  owns the number you vacated"* — from Issue #203's `0080 → 0081` rebase catching Issue #199's
-  already-renumbered references. Owner: Issue #199 / Issue #203 follow-up.
+- **Inherited debris, FIXED here on the user's instruction (2026-07-29):** nine references to **Deny
+  Relevance** cited `ADR-0081`, which is the *opener* ADR — deny's is **ADR-0080**. Seven were in
+  `src/common/pilot.py` (`_BRIEF_THREAT_BOOST`, the `deny_relevance` switch comment, the redundancy-gate
+  comment, `_bench_doomed_by_me`, and three in `_relevance_terms`) and two in `src/common/CONTEXT.md`
+  (the **Worth Damage Rate** moot-for-deny line and the **Deny Relevance** term's own citation).
+  This is tracker directive #8's warning realised exactly — *"a blanket find-and-replace corrupts the
+  references of whichever ADR legitimately owns the number you vacated"* — from Issue #203's
+  `0080 → 0081` rebase.
+
+  **The blast pattern confirms the mechanism and is worth keeping.** `src/common/deny_relevance.py` and
+  `tests/strategy/test_deny_relevance.py` cite `ADR-0080` **correctly**, and always did. The corruption
+  landed in exactly the two files Issue #203's branch also edited for its own work — so it was collateral
+  from a whole-file replace, not a mistaken belief about the number. Files that branch never touched kept
+  the right reference.
+
+  The fix was applied reference-by-reference rather than by replace, because a blanket
+  `s/ADR-0081/ADR-0080/` over these two files would have corrupted the **twelve** references that
+  legitimately mean the opener (nine in `pilot.py`'s `_line_payoff_ids` / Opener-Marginal /
+  `starter_priority` block, three in `CONTEXT.md`) — the identical error, mirrored. All twelve were
+  verified to still read `ADR-0081` afterwards, and all of
+  `tests/strategy/test_setup_active_placement.py` was left untouched.
 
 ## Alternatives rejected
 

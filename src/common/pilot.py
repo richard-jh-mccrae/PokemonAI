@@ -123,7 +123,7 @@ _DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite,
                            # ahead of everything by `_finish_turn_last` — so a purely positive term could
                            # never decline one: any score above zero gets it played. The strip must beat
                            # the hold (ms f29: "wasted crushing hammer").
-_BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0081 decision 2, Issue #199): a body
+_BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0080 decision 2, Issue #199): a body
                            # the matched Matchup Brief names among its `threats` is scored up, then
                            # clipped back into [0,1]. A MULTIPLIER, never a source — authored scouting
                            # sharpens a read that already works without it, which is what keeps the
@@ -1333,7 +1333,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `turns_to_ko_me` per ENERGIZED opponent body.
                                                         # OFF by default so live play pays nothing until
                                                         # #199's gate 1 rules the read admissible
-        self.deny_relevance = deny_relevance            # ADR-0081 / Issue #199 COMPUTE-ONLY switch: emits
+        self.deny_relevance = deny_relevance            # ADR-0080 / Issue #199 COMPUTE-ONLY switch: emits
                                                         # the **Deny Relevance** read (the value that
                                                         # REPLACED deny's damage magnitude — see
                                                         # `common/deny_relevance.py`) on
@@ -7295,7 +7295,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         enabler = self._opp_switch_enabler()
         base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
                                             switch_enabler=enabler)
-        # Deny Relevance's REDUNDANCY gate (ADR-0081 step 2), resolved once for the whole decision
+        # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once for the whole decision
         # rather than per body: which opponent bodies die to our Knock Out this turn, and so deny
         # nothing. Keyed by the row's own (area, bi) convention. Only built when the read is armed.
         doomed_ids = frozenset()
@@ -7327,7 +7327,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _bench_doomed_by_me(self, ma: dict | None, bench_list) -> frozenset:
         """Indices into ``bench_list`` of benched opponent bodies MY Active can Knock Out this turn.
 
-        The bench half of the Deny Relevance redundancy gate (ADR-0081 decision 1, step 2): *"or
+        The bench half of the Deny Relevance redundancy gate (ADR-0080 decision 1, step 2): *"or
         maybe its a benched pokemon that we can snipe and KO. same thing, no hammer on that specific
         pokemon."* The Active half is `board.active_can_ko` (ADR-0063's drop, which ADR-0078's
         re-audit ruled NOT subsumed and required to survive any swap).
@@ -7357,12 +7357,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _relevance_terms(self, b, *, doomed: frozenset, area: str, bi: int, brief_ids=()) -> dict:
         """The DENY instrument's value — **Deny Relevance**, the read that replaced the magnitude
-        (ADR-0081, Issue #199 grill; `common/deny_relevance.py` owns the scoring, this owns the plumbing).
+        (ADR-0080, Issue #199 grill; `common/deny_relevance.py` owns the scoring, this owns the plumbing).
 
         Emits, per opponent body: the best relevance achievable against it, WHICH attached Energy
         achieves it (by index into the body's ``energies``, so a consumer acts rather than
         re-derives), and the per-leg components for diagnosis. Compute-only behind `deny_relevance`
-        — nothing reads these yet, Issue #187 is the consumer (ADR-0081 decision 4).
+        — nothing reads these yet, Issue #187 is the consumer (ADR-0080 decision 4).
 
         The two gates come first and force 0 before any leg is scored:
           * **liveness** — no attached Energy, which also delivers ADR-0062's whiff structurally;
@@ -7375,7 +7375,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         A colourless/special Energy therefore scores 0 on the typed leg, which is correct — it pays
         no specific-type slot and so is never on a plan's critical path.
 
-        A matched Brief's ``threats`` MULTIPLY the derived rank, never source it (ADR-0081
+        A matched Brief's ``threats`` MULTIPLY the derived rank, never source it (ADR-0080
         decision 2): authored scouting sharpens a read that already works without it. The Brief-free
         path deliberately does NOT fall back to `Scout._target_role`, which orders `prize_liability`
         (any *ex* body) above `attacker` and so would top an unbriefed board with exactly the
