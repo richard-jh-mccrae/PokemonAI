@@ -4702,20 +4702,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     # ── the DEPLOY decider (ADR-0081, Issue #197) ────────────────────────────────────────────────
 
-    def _deploy_supplier_rows(self, obs: dict, board: Board) -> list:
-        """The bodies competing for my free Bench slots: Pokémon in HAND plus Pokémon still
-        REACHABLE IN DECK (ADR-0081 decision 2).
+    def _deploy_supplier_rows(self, obs: dict, board: Board):
+        """``(hand_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by ZONE
+        because the two are not interchangeable (ADR-0081 decision 2).
 
-        The deck leg is load-bearing rather than incidental. On the motivating frame the displaced
-        body is Makuhita, in the DECK behind the Ultra Ball in hand, and the human's recorded reason
-        is literally "clogs the bench needed for the Makuhita->Hariyama line" — a hand-only supplier
-        set prices that last slot at ~0 and reproduces the ruling for a reason the human did not give.
+        Only POKÉMON: capacity here is BENCH capacity, and a Trainer covering a draw need costs no
+        Bench slot.
 
-        Only POKÉMON rows: capacity here is BENCH capacity, and a Trainer covering a draw need costs
-        no Bench slot. Deck rows carry the same ``deploy`` gate factor the resolver already consumes
-        per row, so an unreachable line is discounted rather than counted as a live rival.
+        **The split is the whole point, and the first build got it wrong.** Deck-reachable bodies
+        were handed to the assignment as full rival SUPPLIERS, so every hand copy had a deck twin
+        covering the same slot — and a body whose slot a sibling already covers prices 0 (the
+        sets-not-sums rule, working exactly as designed). With the deck always holding a twin, that
+        zeroed nearly every deploy in the corpus and the sweep read `(no-deploy)` on frames the agent
+        obviously should bench.
 
-        Row ``i`` is the index into this list, which is what `needs.deploy_marginal` indexes."""
+        A deck copy is NOT a substitute for one in hand: you have to draw it. So the deck leg enters
+        as slot **RESUPPLY** — the odds the closure re-fills that slot anyway, which discounts the
+        held copy to ``v × (1 − r)`` — which is what `resupply` exists for and what decision 2's
+        "weighted by Deck-Content Odds" describes."""
         from collections import Counter
         me = self._my_player(obs)
         counts = board.deck_known_counts
@@ -4728,22 +4732,45 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             st = self.stats.get(cid) if (self.stats and cid is not None) else None
             return bool(st is not None and getattr(st, "is_pokemon", False))
 
-        rows, seen = [], set()
+        hand_rows = []
         for c in (me.get("hand") or []):
             cid = (c or {}).get("id")
-            if cid is None or not _is_body(cid):
+            if cid is not None and _is_body(cid):
+                hand_rows.append({"i": len(hand_rows), "cid": cid, "zone": "hand",
+                                  "worth": round(self._role_value(cid), 1),
+                                  "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        deck_rows = []
+        for cid in sorted(c for c in counts if _is_body(c)):
+            deck_rows.append({"i": len(hand_rows) + len(deck_rows), "cid": cid, "zone": "deck",
+                              "worth": round(self._role_value(cid), 1),
+                              "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        return hand_rows, deck_rows
+
+    def _deploy_resupply(self, board: Board, slots: list, elig_all: list, hand_n: int,
+                         deck_rows: list) -> list:
+        """Per-slot RESUPPLY from the deck leg: how likely the closure re-fills each slot without
+        spending a Bench slot on a held body now.
+
+        The odds a deck body actually arrives, not merely that it exists: its Deck-Content Odds
+        (`deck_contains_probability` — could it be prized?) times the `deploy` gate the resolver
+        already applies per row (a dead evolution re-supplies nothing). A RANKED read, so it weights
+        the marginal and never gates it (ADR-0074)."""
+        resupply = [0.0] * len(slots)
+        for k, row in enumerate(deck_rows):
+            j_set = elig_all[hand_n + k] if hand_n + k < len(elig_all) else ()
+            if not j_set:
                 continue
-            rows.append({"i": len(rows), "cid": cid, "zone": "hand",
-                         "worth": round(self._role_value(cid), 1),
-                         "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
-        for cid in sorted(counts):
-            if cid in seen or not _is_body(cid):
-                continue
-            seen.add(cid)
-            rows.append({"i": len(rows), "cid": cid, "zone": "deck",
-                         "worth": round(self._role_value(cid), 1),
-                         "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
-        return rows
+            p = 1.0
+            if hasattr(board, "deck_contains_probability"):
+                try:
+                    p = float(board.deck_contains_probability(row["cid"]))
+                except Exception:
+                    p = 1.0
+            odds = max(0.0, min(1.0, p * float(row.get("deploy", 1.0))))
+            for j in j_set:
+                if 0 <= j < len(resupply):
+                    resupply[j] = max(resupply[j], odds)
+        return resupply
 
     def _last_ditch_spent(self, me: dict) -> bool:
         """Has a "Last-Ditch" Ability already fired this turn?
@@ -4780,13 +4807,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         from common.deploy_value import DeployInputs, deploy_value
 
         me = self._my_player(obs)
-        rows = self._deploy_supplier_rows(obs, board)
-        index = next((r["i"] for r in rows if r["cid"] == cid and r["zone"] == "hand"),
-                     next((r["i"] for r in rows if r["cid"] == cid), None))
+        hand_rows, deck_rows = self._deploy_supplier_rows(obs, board)
+        index = next((r["i"] for r in hand_rows if r["cid"] == cid), None)
         if index is None:
             return None
-        slots, elig = self._resolve_needs(obs, board, rows, include_general=False)
-        resupply = [0.0] * len(slots)
+        # One resolve over BOTH zones so the slot indices line up, then the hand rows are the
+        # SUPPLIERS and the deck rows become per-slot RESUPPLY (they are not substitutes — you have
+        # to draw a deck copy).
+        slots, elig_all = self._resolve_needs(obs, board, hand_rows + deck_rows,
+                                              include_general=False)
+        elig = elig_all[:len(hand_rows)]
+        resupply = self._deploy_resupply(board, slots, elig_all, len(hand_rows), deck_rows)
         capacity = max(0, _BENCH_MAX - int(board.my_bench or 0))
         assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity)
 
