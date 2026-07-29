@@ -285,9 +285,16 @@ enumeration falsified in minutes. The decklists were available the whole time.
   **closed** (pin when unknown), the opposite of `_is_startable_body`'s fail-open, because the cost
   of a missing pin is a permanently forfeited card and the cost of a spurious one is a suboptimal
   open.
-- `/deck-genie` and `/deck-align`'s opener banks (ADR-0079 decision 10) gain a question they do not
-  ask today: *which of your ranks are pins, and which are demotion pins?* Without it the hazard in
-  Context finding 5 recurs for every newly-authored deck.
+- ~~`/deck-genie` and `/deck-align`'s opener banks gain a *"which ranks are pins"* question.~~
+  **Superseded by Amendment A** — with the declared `Pin` deferred there is nothing to ask. What the
+  banks (ADR-0079 decision 10) *do* now owe is a **`Line` payoff check**, because the Opener Marginal
+  reads `Strategy.lines[].payoff`: a deck that declares no Line, or names the wrong payoff, silently
+  gets no equation at all.
+- **New dependency, and it is unguarded.** ADR-0079 decision 5 gives `starter_priority` a CI
+  completeness invariant; `Strategy.lines` has **no equivalent** (no `tests/strategy/` test asserts a
+  deck declares one). The marginal fails **closed** when it is missing, so this is a silent-no-op
+  risk rather than a wrong-answer risk — but it means the opener fix can be disabled by an unrelated
+  edit to `lines` with nothing failing. Worth an invariant when this builds.
 
 ## Alternatives rejected
 
