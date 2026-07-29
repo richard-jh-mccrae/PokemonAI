@@ -2,9 +2,11 @@
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #197 — **eight locked
 decisions**). **Nothing here is built.** The build is a new Value-System phase (tracker Issue #136),
-originally filed **blocked-by Issue #199**; that issue has since MERGED **without deriving the
-Worth Damage Rate** (ADR-0080 ruled it moot for deny), so **decision 4 is RE-OPENED** and the phase is
-blocked on it — see **Amendment A**. Decisions 1-3 and 5-8 stand. **Renumbered 0079 -> 0081 on rebase (2026-07-29)** — the SIXTH collision in the series (#136
+originally filed blocked-by Issue #199; that issue MERGED **without deriving the Worth Damage Rate**
+(ADR-0080 ruled it moot for deny), which re-opened decision 4 (**Amendment A**). Decision 4 was then
+**re-ruled** — the Worth legs are dimensionless RATIOS, so no rate is needed (**Amendment B**), with a
+fixed yardstick and a preservation-pinned band (**Amendment C**). **The phase is UNBLOCKED.**
+Decisions 1-3 and 5-8 stand as originally ruled. **Renumbered 0079 -> 0081 on rebase (2026-07-29)** — the SIXTH collision in the series (#136
 directive 8). Issue #161's *the Set-Up Active pick is one deck declaration* merged first and KEEPS
 0079 under the standing first-merged rule; Issue #199's *deny is a categorical relevance instrument*
 took 0080. Cite the issue alongside the number ("ADR-0081, Issue #197") — the number is a rebase
@@ -358,15 +360,22 @@ standing in for a quantity ADR-0067 already computes.
 hypothetical board change*:
 
 ```
-deploy_marginal(X) =   supplier_contribution(X)          # decision 2, via the Needs assignment
-                     − slot_displacement(X)              # decision 2, the displaced supplier
-                     + ability_yield(X)                  # decision 3, the need-matched fetch
-                     + accel_unlock(X)                   # decision 8, the realised Attach Budget
-                     − exposure(X)                       # decision 5, the Prize-Path delta
+deploy_marginal(X) =   BAND × ( net_assignment_relevance(X)   # decisions 2 + 4B, ONE netted marginal
+                              + ability_relevance(X) )     # decision 3, the need-matched fetch
+                     + accel_unlock(X)                     # decision 8, the realised Attach Budget
+                     − exposure(X)                         # decision 5, the Prize-Path delta
+
+  where  net_assignment_relevance(X) = [ V(suppliers ∪ {X deployed}) − V(suppliers) ] / D
+         ability_relevance(X)        = [ best fetchable Supporter's slot marginal ] / D
+         D    = max(ROLE_TIER) = 30.0            # fixed yardstick, board-independent (Amendment C)
+         BAND = preservation-pinned to the incumbent rung range (+12…+25), NEVER a derivation
 ```
 
-with the Worth-denominated legs converted once through Issue #199's **Worth Damage Rate** (decision 4),
-and the prize-denominated leg through `PRIZE_DAMAGE_RATE`. Scored at all three Bench entry points
+**FOUR legs, not five** (Amendment B): the Needs DP over five bench slots already prices scarcity, so
+one marginal nets a body's contribution against what it displaces. The two Worth legs are
+**dimensionless ratios** — the Worth scale never escapes the assignment (Amendment B), so no
+`WORTH_DAMAGE_RATE` is referenced and `test_currency.py`'s guard stands. The prize-denominated leg
+converts through `PRIZE_DAMAGE_RATE`. Scored at all three Bench entry points
 (decision 6). Above it, outside the equation, sits the post-setup `empty_bench` sound rung
 (decision 7).
 
@@ -526,6 +535,56 @@ better bodies fill every slot, a candidate's marginal is ~0 automatically — so
 `V(assignment | X deployed) − V(assignment | X not deployed)` **nets contribution against displacement
 in one quantity**. The Consequences section's five-leg form is corrected to four:
 `net_assignment_relevance · ability_relevance · accel_unlock · exposure`.
+
+## Amendment C — the normalizer is a FIXED yardstick and `BAND` is preservation-pinned; the seam owns one honestly-labelled local rate (2026-07-29)
+
+*(User ruling, 2026-07-29, closing the Amendment-A/B grill. Decision 4 is now fully re-ruled and the
+phase is UNBLOCKED.)*
+
+**The constraint that settles it.** The deploy marginal competes against `End` (0) and against attacks
+(damage), so `relevance` must mean the same thing on EVERY board. A within-decision normalizer
+(`D = max over candidates at this decision`) is therefore **rejected on correctness**: the best
+available deploy would read 1.0 whether it is excellent or merely least-bad, so a board on which every
+deploy is mediocre would still score a full band and the agent would deploy every turn.
+
+**Ruling.**
+
+- `D = max(ROLE_TIER) = 30.0` — a **fixed, board-independent** yardstick, and a shipped tier rather
+  than an invented figure: it is the ceiling on any single card's assignment contribution.
+- The SAME `D` normalizes both Worth legs. Two ratios divided by different yardsticks would not be
+  comparable to each other, and they are summed.
+- `BAND` is **pinned** so the resulting scores reproduce the incumbent rung range (+12…+25) across the
+  deploy corpus, and is **recorded as a preservation choice, never dressed as a derivation** —
+  ADR-0080 decision 3's discipline for its `K`, applied verbatim. The `deploy_decider_sweep` Decision
+  Gate is what VERIFIES the pin actually preserved behaviour; that is the check ADR-0073's
+  `_PRIZE_UNIT = 12` never had, and the reason this is a difference in discipline rather than a repeat
+  of the same mistake.
+
+**Stated plainly, because the ADR must not hide it: `BAND / D` has units of damage-per-worth-point.
+It IS a Worth Damage Rate, scoped to one seam.** Amendment B did not make the rate unnecessary — it
+made it *local, small, and honestly labelled* instead of universal, large, and claimed-derived. This
+is a **third** entry in ADR-0078's catalogue of seam-scoped worth↔damage constants (trainer ≈ 1.0,
+energy ≈ 6.7, deploy ≈ `BAND/30`).
+
+The one honest mitigation, not oversold: ADR-0078's complaint was that two constants priced **the same
+object** differently. Nothing else in the codebase prices a bench deployment, so this constant
+contradicts nothing today.
+
+**Reconciliation debt, recorded here so it is not discovered later:** if a general Worth Damage Rate
+is ever derived, `BAND / D` becomes a thing to reconcile against it — and a disagreement would be
+evidence about one of the two, not automatically about this one.
+
+**Accepted consequence:** a ratio discards absolute magnitude — "20 of 100" and "2 of 10" both read
+0.2. Deny accepted the identical trade under ADR-0080. Consequence to watch for at the Decision Gate:
+a board whose whole supplier field is weak will price its best deploy the same as a board whose field
+is strong but crowded.
+
+Rejected: **making both Worth legs damage-native** (price the displaced body through readiness and the
+fetched Supporter through what it *enables*) — the only option that adds nothing to the constants
+catalogue, and it is genuinely cleaner on the currency axis. It loses on robustness and verifiability:
+"what does this Supporter enable" is a per-Supporter-class lookahead on an already-heavy path, close to
+re-implementing a mini turn-planner inside a marginal, and a much larger surface to get wrong than one
+pinned scalar that a gate can prove. It also re-imports the WP-N5 hand-card mismatch.
 
 ## Open, deliberately not ruled here
 
