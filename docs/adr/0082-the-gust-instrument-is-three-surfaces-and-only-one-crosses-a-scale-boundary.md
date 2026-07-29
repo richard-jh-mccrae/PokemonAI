@@ -177,7 +177,39 @@ The consequence for ADR-0078 decision 1 is precise: gust adopts the shared **pri
 ruling is re-opened. It is a genuine behaviour change on (c) — so it needs authored fixtures (there are
 none today, finding 3) and both ADR-0072 merit gates before arming, not a byte-identical claim.
 
-<!-- Decisions 3+ land as the grill rules them. -->
+**3. On surface (b), the KO rungs become a MAGNITUDE read off surface (c)'s own value;
+`gust-for-the-loaded-equal-ko` is DELETED as subsumed; the three stall rungs stay GATE-shaped.**
+
+Today all five `HYPOTHESES` contribute **flat** weights — `gust-for-the-ko` 50,
+`gust-for-the-loaded-equal-ko` 50, `gust-for-the-stall` 10, `stall-gust-over-dev-when-starved` 95,
+`gust-to-strand-the-key-attacker` 20 — while their `when` clauses compare prize *counts*. So a gust
+taking 1 prize and a gust taking 3 score identically, and the play surface cannot agree with the target
+pick even though `doctrine_gust.py`'s own docstring claims *"ONE oracle feeds both decisions, so the
+play-reason and the picked target agree by construction."*
+
+Ruled: the play value becomes `prize_to_damage(max over targets of the (c) value) − the Supporter cost`,
+compared against the same menu baseline as today. That is the ADR-0065 fold with the rate it needs
+already **derived** (`currency.PRIZE_DAMAGE_RATE`, recomputed from the CSV by
+`tests/strategy/test_currency.py`), and it makes the docstring's claim true instead of aspirational.
+
+Three things are explicitly preserved:
+
+- **`_gust_tactical`'s lethal `KO_SCORE` band stays ungraded.** A game-winning gust must dominate, not
+  compete.
+- **Every guard stays a guard** — the menu-total comparison, the ADR-0066 threat-forfeit premium, the
+  Supporter-economy damping, and `opp_active_condition_gift`. Grading the *value* does not convert a
+  gate into a magnitude.
+- **`gust-for-the-loaded-equal-ko` is deleted, not suppressed** (tracker standing directive #1). Its
+  entire content is `gust_ko_energy_swing >= _LOADED_KO_SWING` (2), and `_gust_energy_denial` already
+  prices sunk Energy continuously inside (c)'s sum — so a graded value expresses the threshold as the
+  magnitude it always was. `ep85163079 f30` is re-validated as an ADR-0072 **Endorsement Claim** rather
+  than a rung-presence check.
+
+**Hygiene owed with this change:** the module docstring (`doctrine_gust.py:7`) and the section comment
+(`:447`) both still say *"the two positional weights"*. There are five. The count grew without either
+line updating, and the deletion above makes it four.
+
+<!-- Decisions 4+ land as the grill rules them. -->
 
 ## Consequences
 
@@ -220,3 +252,31 @@ none today, finding 3) and both ADR-0072 merit gates before arming, not a byte-i
 - **Extend `needs.opponent_target_value` with the six missing terms** so the backend stays single.
   Rejected: six gust-specific terms inside a function three instruments read is not a shared backend,
   it is gust's function with other callers.
+- **Grade all five play rungs, stall rungs included** (decision 3's live alternative — raised in the
+  grill and argued on the merits rather than waved off). The mechanism is **more available than it first
+  appears, and the first draft of this rejection was wrong about that**: a stall gust genuinely does buy
+  survival turns, `combat.turns_to_ko_me` already takes `opp_active=` so the clock can be re-read with
+  the gusted body forced Active, `phase_scale` converts turns → prize-equivalents, and
+  `_strip_delta_terms` (behind `deny_strip_delta`, ADR-0080 Amendment A) is a shipped precedent for the
+  mutate-and-re-read seam. No invented constant is required. Rejected on four other grounds:
+  1. **The famine rungs are PRECEDENCE claims, not magnitude claims.**
+     `stall-gust-over-dev-when-starved` has seven conjuncts and six describe *my* inability to act
+     (`active_doomed`, `active_famine`, `gust_best_ko_prizes == 0`, `active_ko_prizes == 0`). That is a
+     last-resort tier — "when nothing else helps, do this" — and which rung wins under famine is a
+     user-ruled doctrine ordering (`ep83457493 f20`, Boss's ≻ Salvatore), not a quantity.
+  2. **`_SURVIVAL_CAP` would cap a stall at ≈90.** `prize_to_damage(0.9) = 90` against a weight
+     deliberately set to **95** so it outranks a tutor's dig stack under the famine gate. Suggestive
+     rather than conclusive — positional weights add to tactical score rather than replacing it — but
+     the direction is wrong and it risks `ep83457493 f20` for no gain.
+  3. **Stall marginality has ALREADY been ruled, as a gate, on this issue's own frame.** ADR-0066
+     shipped `_stall_swap_pointless` — *"stall value is with-vs-without the swap, never a flat strand
+     bounty"* — decided on `ep86091435 f13`. Re-litigating it as a magnitude overturns ADR-0066 with no
+     new evidence.
+  4. **Blast radius against an empty evidence base.** It puts ~6 rulings at risk (`ep83457493 f20`,
+     `ep82751468 f57`, `85785067-41`, `dragapult f10`, `ml f19`, `dp f70`) in an issue with zero
+     authored fixtures of its own (finding 3), spending the whole risk budget on the surface with the
+     least to gain.
+
+  **Where it should go instead:** the repositioning Δ this needs is the same primitive `return_threat`
+  needs — *what promotes back after the gust, and can it hurt me?* That is **Issue #190 (S5)**, which
+  already owns the bad-trade gate. Build the Δ once, there, with both consumers present.
