@@ -209,6 +209,75 @@ carries Energy, not because the model understands either the scaler or the lock.
 the pick reverses with it. Right answer, wrong reason, is a latent regression waiting for an unseen
 board.
 
+**3. `their_plan` is sourced from the THREAT CLOCK CURVE, not from `_body_threat_rank`.** The magnitude
+and the imminence both come from the machinery that already models them:
+`combat.incoming(my_active, [body], t, policy)` for the damage a body's line can actually land, and
+`combat.turns_to_afford(body)` for how soon. This is ADR-0045's own thesis — it names
+`_body_threat_rank` among the six scattered reads the Threat Clock exists to unify — and the design
+doc's policy table already specifies this exact query: *"`strongest_threat_rank` (snipe imminence) | the
+curve's earliest-KO-turn / slope per body | prep policy."*
+
+Won for free, rather than re-derived: `nextTurnSelfLock` (honoured at `combat.py:693,992,1018,1238`),
+typed affordability, Weakness/Resistance, `AttackStat.handSizeDamage`, and the 59 already-parsed
+`scaleVar` attacks — i.e. **both blindnesses above become non-bugs by construction** rather than needing
+their own patches. The missing combined-bench scaler family is still owed as a one-regex addition with
+its test.
+
+**`_ENERGIZED_SNIPE_TIER = 100000` retires as SUBSUMED, not re-expressed** — the standing discipline
+(*a graded term REPLACES its guard family*). This also dissolves the tier-vs-factor question rather than
+answering it: imminence stops being a separate structure and becomes `turns_to_afford`.
+
+### Gate: does the curve actually subsume the tier? — RUN, and it PASSES
+
+The subsumption claim was a prediction, so it was measured before being accepted (two earlier
+predictions in this same grill were refuted by their own measurements). Over the **9 MIXED frames** —
+both energized and bare bodies on offer, the only frames that discriminate a tier — scoring
+`gates × normalize(incoming(t=1)) × imminence(turns_to_afford)`:
+
+| shape | MIXED frames | all 19 |
+|---|---|---|
+| product, half-life `1/2**tta` (the `deny_slot` grade idiom) | **8/9** | 10/19 |
+| product, reciprocal `1/(1+tta)` | **8/9** | 10/19 |
+| lexicographic (gate, then soonest, then biggest) | **8/9** | 10/19 |
+| the curve with NO gates at all, ceiling argmax | 5/9 | 8/19 |
+| **Tera as the only gate** (ADR-0044 reads dropped) | 6–7/9 | 8–10/19 |
+
+Three findings, in order of how load-bearing they are:
+
+1. **The tier is genuinely unnecessary.** All six frames where the human takes the energized body are
+   reproduced by `turns_to_afford` alone; no 100000 constant is required. Decision 3 stands.
+2. **Product and lexicographic are indistinguishable on this evidence** (8/9 each). So decision 2's
+   product shape is unrefuted for this leg, and is kept on its own composition grounds rather than on a
+   measured advantage — recorded so it is not later cited as measured.
+3. **The ADR-0044 reads are doing real work as gates.** Dropping them to Tera-only costs 1–2 mixed
+   frames, so they are not merely a suppression that the graded curve subsumes.
+
+The `10/19` figure is a **floor from a deliberately partial model** — `their_plan` + gates only, with no
+`my_route` factor built — not a verdict on the design.
+
+### The fork the gate exposed: gate SCOPE (open at time of writing)
+
+Decision 1 says the ADR-0044 reads *"force it to 0"* on the whole target. **The shipped rungs do not do
+that**, and the corpus sides with the shipped rungs. Read at source in `baseline_snipe.py`, the guards
+are attached to exactly two rungs:
+
+| rung | `target_prize_redundant` | `target_promotion_mirage` |
+|---|---|---|
+| `snipe-the-top-threat` | guards | guards |
+| `snipe-the-threat` | guards | guards |
+| `snipe-the-evolving-threat` | — | — |
+| `snipe-the-forced-promotion` | — | — (rationale: *"its mirages are suppressed"*) |
+| `snipe-on-the-path` | — | — |
+| `snipe-for-the-ko` | — | — |
+
+So they suppress the **threat-rank / imminence** reads specifically, not the target. And three corpus
+frames — `81905522-75`, `82523811-41`, `85164131-22` — have the human picking a body that carries
+`target_promotion_mirage`, which a whole-target gate makes **unreachable**. Under decision 1 as written
+those three frames cannot be won at all.
+
+Decision 1's gate list is therefore too coarse and needs amending; which way is the next locked
+decision, not assumed here.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
