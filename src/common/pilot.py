@@ -4837,7 +4837,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             ability_can_fire=can_fire,
             supporter_quota_spent=bool((obs.get("current") or {}).get("supporterPlayed")),
             accel_unlock=self._deploy_accel_unlock(obs, board, cid),
-            exposure_prizes=self._bench_path_delta(obs, select, option, stat, board),
+            exposure_prizes=self._deploy_exposure_prizes(obs, select, board, option, stat),
             phase=self._needs_phase_scale(board),
         )
         value = deploy_value(inp)
@@ -4926,6 +4926,38 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         units = self._recover_units(aid, {}, board, hypo)   # dmg_ctx unused by the fuel/need bounds
         best = max(0.0, float(units)) * ENERGY_RECOVER
         return best
+
+    def _deploy_exposure_prizes(self, obs: dict, select: dict, board: Board, option: dict,
+                                stat) -> float:
+        """The exposure leg's prize-equivalents (decision 5), with the FALLBACK the first sweep run
+        proved necessary.
+
+        Preferred read: the Prize-Path DELTA — how much benching this body shortens the opponent's
+        cheapest route (`_bench_path_delta`). Sharp, board-aware, and zero against a body they cannot
+        reach.
+
+        But the Path is not always READABLE. At `_SETUP_BENCH` the opponent's Active is face down, so
+        `_their_turns_to_ko` answers None for every body and the delta collapses to 0 — and a zero
+        exposure is what let the equation bench Meowth ex during Set Up on `setup_bench_decline_f3`:
+        the optional-select take-fewer drops only `score < 0`, so a derived-zero Ability leg plus a
+        zero exposure lands at exactly 0.0 and the placement survives. Decision 3's derived zero is
+        correct and is not sufficient on its own.
+
+        So where the Path cannot be read at all, the leg falls back to the body's OWN prize liability
+        — the EXCESS over a 1-prize body, because benching *something* is unavoidable and only the
+        surplus is a gift. Meowth ex (2 prizes) therefore carries 1 prize-equivalent of exposure at
+        Set Up, which is the fold of `dont-bench-multiprize` (−15) into the equation rather than a
+        special case for the pregame.
+
+        Never both: a readable Path already prices the liability in the currency that matters, so the
+        fallback applies only when the Path is silent."""
+        delta = self._bench_path_delta(obs, select, option, stat, board)
+        if delta > 0.0:
+            return delta
+        if board.their_path_turns is not None:
+            return 0.0                     # the Path IS readable and says this body gifts nothing
+        prizes = self._prize_value({"id": self._option_card_id(obs, select, option)})
+        return float(max(0, int(prizes or 1) - 1))
 
     def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,
