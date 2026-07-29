@@ -37,7 +37,12 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
   (Python 3.12), and that is **deliberate**, not a gap. Windows is covered by developing on
   it, so cross-platform discipline is upheld by the local run and review rather than by a
   second CI job. Widening the matrix is a one-line change (`docs/ci.md`) if that ever changes.
-- **CI runs tests only.** The rest of the global CI spec (Doxygen / Sphinx / GitHub Pages /
+- **CI runs tests, plus one main-watchdog gate.** `ci.yml` is the suite; `leaf-gate-main.yml`
+  runs ADR-0072's **Discrimination Gate** on every push to `main` and fails on an unruled
+  `OK → MISS` leaf flip (added 2026-07-28 — a narrow, deliberate widening of the old
+  "tests only" rule, because the gate was owed on main and nothing ran it there). It **never**
+  re-captures `data/leaf_lab/baseline.json`: the baseline is a ruling record, and auto-recapture
+  would make the gate vacuous. The rest of the global CI spec (Doxygen / Sphinx / GitHub Pages /
   PDF) stays out until those toolchains exist here. Run locally: `python -m pytest tests/ -q`.
   Details: `docs/ci.md`.
 - **Reference issues and PRs by kind, never a bare number.** In prose — chat, commit messages,

@@ -1,0 +1,116 @@
+# ADR-0072's Discrimination Gate, watching MAIN — not a PR gate.
+#
+# WHY THIS EXISTS. The gate compares the develop rung's leaf ranking against a committed baseline
+# (`data/leaf_lab/baseline.json`) and fails on any unruled `OK -> MISS` frame flip. Nothing ran it
+# on main, so drift accumulated silently: ADR-0072 itself recorded two `OK -> MISS` frames on
+# UNTOUCHED main (`85163634|1|decision|41`, `86091435|0|decision|13`) and could not say whether
+# they were real regressions someone landed unmeasured or a baseline that needed re-capturing.
+# Both possibilities have the same first step, which that ADR states outright and #186 then
+# rediscovered the hard way: **"run the gate on `main` before the next swap, not after it."**
+# This job is that sentence as CI. It pins a red to the merge that caused it, while the diff is
+# one commit wide, instead of ambushing an unrelated branch weeks later.
+#
+# WHY IT NEVER WRITES THE BASELINE. The obvious automation — recapture on every merge — would make
+# the gate vacuous: the "before" picture would always be redefined to whatever just landed, so
+# every regression would silently bless itself and this job would pass forever by construction.
+# The baseline is a RULING RECORD, not a cache (ADR-0072 decision 2: re-captured "only when a
+# swap's flips have been ruled"). Re-capture stays a deliberate human act:
+#     python tools/train/leaf_lab.py capture --out data/leaf_lab/baseline.json
+# run only after the flips it would absorb have been ruled with the user.
+#
+# WHY IT GATES rather than reporting. ci.yml's cgpy-arm comment makes the call this repo keeps
+# making: "a non-gating step is one nobody reads... If it can go red without anyone caring, it is
+# not worth the minutes." Verified green on main at 7d2a656 before this landed, so it is not born
+# red. A frame that legitimately cannot pass is held out through the Held-out Ledger (a fixture's
+# `frame_key` + Decision-Claim `owner`, ADR-0072 decision 4) — a reviewable claim in a diff, not a
+# workflow flag.
+name: Leaf gate (main)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# NOT cancel-in-progress (ci.yml is, deliberately differently): the whole point is per-merge
+# attribution. Cancelling an in-flight run on the next push discards the verdict for the commit
+# that may have caused the red, which is the one fact this job exists to capture.
+concurrency:
+  group: leaf-gate-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"          # match ci.yml — card names carry é, ™, …
+
+jobs:
+  discrimination-gate:
+    name: Discrimination Gate (ADR-0072) on main
+    runs-on: ubuntu-latest
+    # The gate itself measured 91s over 267 frames locally (2026-07-28, py3.11); the rest is pip
+    # install + engine check. 20 is headroom for corpus growth, NOT a measurement of a slow gate —
+    # if this ever approaches it, the frame count grew and the number deserves re-measuring.
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # The gate SCORES through cgpy, but it builds each agent's real Pilot via `tune._build_pilot`,
+      # which constructs the engine-backed CardStat provider — so the committed native library still
+      # has to load. Same fail-fast check ci.yml runs, for the same reason.
+      - name: Verify native engine loads
+        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
+
+      # Every input is committed — the baseline, data/corrections, and the fixture Held-out Ledger —
+      # so this is reproducible offline with no extra fetch. Non-zero exit == unruled OK -> MISS.
+      - name: Discrimination Gate
+        id: gate
+        run: |
+          mkdir -p reports
+          # `set +e` is LOAD-BEARING, not tidiness. GitHub runs `shell: bash` as
+          # `bash --noprofile --norc -eo pipefail {0}`, so errexit would abort this step the instant
+          # the gate exits non-zero — skipping the capture of `$?`, the corpus-shift warning, and
+          # (via the step's early death) leaving the failure unexplained. We want the red, but we
+          # want it AFTER the diagnostics run. pipefail stays on so `| tee` cannot mask the exit code.
+          set +e
+          python tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json \
+            2>&1 | tee reports/leaf-gate-main.txt
+          rc=$?
+          set -e
+          # A shifted corpus does NOT fail the gate (the verdict is per-frame flips only), but it
+          # must not pass unseen either: it means the two captures are no longer comparable, and
+          # `_print_diff` says so precisely because "a diff that quietly skips frames reads green
+          # for the wrong reason". Surface it as a warning so the re-capture gets owned.
+          if grep -q "CORPUS SHIFTED" reports/leaf-gate-main.txt; then
+            echo "::warning::The corrections corpus has moved since data/leaf_lab/baseline.json was captured (git_rev in the artifact). The gate's comparison is narrowing. Re-capture DELIBERATELY once any flips it would absorb have been ruled: python tools/train/leaf_lab.py capture --out data/leaf_lab/baseline.json"
+          fi
+          exit $rc
+
+      - name: Explain a red gate
+        if: failure() && steps.gate.outcome == 'failure'
+        run: |
+          echo "::error::main is RED on the ADR-0072 Discrimination Gate: at least one frame flipped OK -> MISS and is not held out. This is attributable to the merge that triggered this run. Next step is a RULING, not a re-capture: read reports/leaf-gate-main.txt (uploaded as an artifact), decide per frame whether the new ranking is wrong (fix it) or right (hold it out via the fixture's frame_key + Decision-Claim owner, ADR-0072 decision 4). Re-capturing the baseline to clear this would erase the evidence."
+
+      - name: Upload gate report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: leaf-gate-main
+          path: reports/leaf-gate-main.txt
+          if-no-files-found: warn

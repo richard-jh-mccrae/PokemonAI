@@ -1,15 +1,15 @@
 {
-  "git_rev": "81eac82",
+  "git_rev": "e4c46ca",
   "agent": null,
   "n": 276,
   "scorable": 267,
   "unscorable": 9,
   "skipped_agent": 1,
-  "leaf_correct": 188,
-  "leaf_correct_rate": 0.704119850187266,
-  "leaf_correct_strict": 36,
-  "leaf_correct_strict_rate": 0.1348314606741573,
-  "avg_top_tie": 3.1048689138576777,
+  "leaf_correct": 193,
+  "leaf_correct_rate": 0.7228464419475655,
+  "leaf_correct_strict": 37,
+  "leaf_correct_strict_rate": 0.13857677902621723,
+  "avg_top_tie": 3.093632958801498,
   "rows": [
     {
       "key": "83686860|1|decision|13",
@@ -98,18 +98,18 @@
         2
       ],
       "values": [
-        10.025,
-        10.025,
-        10.025,
-        10.025,
-        10.025,
+        12.5,
+        12.5,
+        12.5,
+        12.5,
+        12.5,
         0.0
       ],
       "scored": 6,
       "n_options": 6,
       "unscorable": false,
-      "correct_value": 10.025,
-      "top_value": 10.025,
+      "correct_value": 12.5,
+      "top_value": 12.5,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
@@ -125,20 +125,20 @@
       ],
       "values": [
         10.025,
-        10.025,
-        10.025,
+        12.5,
+        12.5,
         0.0
       ],
       "scored": 4,
       "n_options": 4,
       "unscorable": false,
-      "correct_value": 10.025,
-      "top_value": 10.025,
+      "correct_value": 12.5,
+      "top_value": 12.5,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 3
+      "top_tie": 2
     },
     {
       "key": "85045840|0|decision|12",
@@ -149,19 +149,19 @@
       ],
       "values": [
         10.025,
-        10.025,
+        12.5,
         0.0
       ],
       "scored": 3,
       "n_options": 3,
       "unscorable": false,
-      "correct_value": 10.025,
-      "top_value": 10.025,
+      "correct_value": 12.5,
+      "top_value": 12.5,
       "correct_is_top": true,
-      "correct_is_unique_top": false,
+      "correct_is_unique_top": true,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 2
+      "top_tie": 1
     },
     {
       "key": "85045840|0|decision|8",
@@ -171,17 +171,17 @@
         1
       ],
       "values": [
-        10.025,
-        10.025,
-        10.025,
-        10.025,
+        12.5,
+        12.5,
+        12.5,
+        12.5,
         0.0
       ],
       "scored": 5,
       "n_options": 5,
       "unscorable": false,
-      "correct_value": 10.025,
-      "top_value": 10.025,
+      "correct_value": 12.5,
+      "top_value": 12.5,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
@@ -193,11 +193,11 @@
       "episode_id": 85046350,
       "agent": "dragapult_ex",
       "correct": [
-        2
+        1
       ],
       "values": [
         10.025,
-        10.025,
+        12.5,
         10.025,
         10.025,
         12.05,
@@ -206,12 +206,12 @@
       "scored": 6,
       "n_options": 6,
       "unscorable": false,
-      "correct_value": 10.025,
-      "top_value": 12.05,
-      "correct_is_top": false,
-      "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_value": 12.5,
+      "top_value": 12.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
       "top_tie": 1
     },
     {
@@ -250,7 +250,7 @@
       "values": [
         14.75,
         77.75,
-        75.05,
+        77.75,
         77.75,
         12.05
       ],
@@ -263,7 +263,7 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 2
+      "top_tie": 3
     },
     {
       "key": "85046350|0|decision|79",
@@ -280,7 +280,7 @@
         1140.025,
         140.025,
         1140.025,
-        118.0,
+        115.525,
         140.025
       ],
       "scored": 9,
@@ -307,7 +307,7 @@
         1140.025,
         140.025,
         1140.025,
-        118.0,
+        115.525,
         140.025
       ],
       "scored": 7,
@@ -337,7 +337,7 @@
         1152.175,
         152.175,
         1152.175,
-        97.05,
+        124.275,
         152.175
       ],
       "scored": 10,
@@ -386,24 +386,24 @@
         0
       ],
       "values": [
-        55.025,
+        57.5,
         55.025,
         55.025,
         55.025,
         57.05,
-        55.025,
+        57.5,
         55.025
       ],
       "scored": 7,
       "n_options": 7,
       "unscorable": false,
-      "correct_value": 55.025,
-      "top_value": 57.05,
-      "correct_is_top": false,
+      "correct_value": 57.5,
+      "top_value": 57.5,
+      "correct_is_top": true,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
-      "top_tie": 1
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
     },
     {
       "key": "85786096|0|turn|2",
@@ -413,7 +413,7 @@
         0
       ],
       "values": [
-        55.025,
+        57.5,
         55.025,
         55.025,
         55.025,
@@ -423,12 +423,12 @@
       "scored": 6,
       "n_options": 6,
       "unscorable": false,
-      "correct_value": 55.025,
-      "top_value": 57.05,
-      "correct_is_top": false,
-      "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_value": 57.5,
+      "top_value": 57.5,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
       "top_tie": 1
     },
     {
@@ -439,8 +439,8 @@
         0
       ],
       "values": [
-        138.5,
-        138.5,
+        136.025,
+        136.025,
         102.5,
         136.025,
         102.5
@@ -448,13 +448,13 @@
       "scored": 5,
       "n_options": 5,
       "unscorable": false,
-      "correct_value": 138.5,
-      "top_value": 138.5,
+      "correct_value": 136.025,
+      "top_value": 136.025,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 2
+      "top_tie": 3
     },
     {
       "key": "85786096|0|decision|70",
@@ -464,20 +464,20 @@
         2
       ],
       "values": [
-        77.75,
+        121.0,
         1116.0,
-        141.0,
+        105.0,
         53.0
       ],
       "scored": 4,
       "n_options": 4,
       "unscorable": false,
-      "correct_value": 141.0,
+      "correct_value": 105.0,
       "top_value": 1116.0,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_rank": 3,
+      "outscored_by": 2,
       "top_tie": 1
     },
     {
@@ -544,25 +544,25 @@
         0
       ],
       "values": [
-        10.025,
+        12.5,
         10.025,
         10.025,
         10.025,
         12.05,
-        10.025,
+        12.5,
         10.025,
         10.025
       ],
       "scored": 8,
       "n_options": 8,
       "unscorable": false,
-      "correct_value": 10.025,
-      "top_value": 12.05,
-      "correct_is_top": false,
+      "correct_value": 12.5,
+      "top_value": 12.5,
+      "correct_is_top": true,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
-      "top_tie": 1
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
     },
     {
       "key": "86090164|1|decision|40",
@@ -595,29 +595,29 @@
         1
       ],
       "values": [
-        257.525,
-        242.025,
-        1134.925,
+        1217.025,
+        1242.025,
+        1120.2775,
         6000,
-        257.525,
-        349.525,
+        1217.025,
+        329.5,
         242.025,
         242.025,
-        302.275,
-        322.525,
+        307.0,
+        1422.025,
         242.025,
-        349.525,
+        329.5,
         242.025,
         242.025,
-        302.275,
-        322.525,
+        307.0,
+        1422.025,
         242.025,
-        302.275,
+        307.0,
         321.175,
-        302.275,
-        302.275,
-        322.525,
-        302.275,
+        321.175,
+        307.0,
+        329.5,
+        315.505,
         242.025,
         1055.025,
         242.025,
@@ -626,12 +626,12 @@
       "scored": 27,
       "n_options": 27,
       "unscorable": false,
-      "correct_value": 242.025,
+      "correct_value": 1242.025,
       "top_value": 6000,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 18,
-      "outscored_by": 17,
+      "correct_rank": 4,
+      "outscored_by": 3,
       "top_tie": 1
     },
     {
@@ -645,9 +645,9 @@
         169.275,
         217.025,
         217.025,
-        111.275,
-        136.025,
-        217.025,
+        116.0,
+        138.5,
+        219.5,
         1059.2775,
         217.025,
         59.277499999999996
@@ -659,8 +659,8 @@
       "top_value": 1059.2775,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_rank": 3,
+      "outscored_by": 2,
       "top_tie": 1
     },
     {
@@ -727,9 +727,9 @@
         3
       ],
       "values": [
-        62.05,
-        62.05,
-        62.05,
+        64.75,
+        64.75,
+        64.75,
         62.5,
         60.025
       ],
@@ -737,12 +737,12 @@
       "n_options": 5,
       "unscorable": false,
       "correct_value": 62.5,
-      "top_value": 62.5,
-      "correct_is_top": true,
-      "correct_is_unique_top": true,
-      "correct_rank": 1,
-      "outscored_by": 0,
-      "top_tie": 1
+      "top_value": 64.75,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 4,
+      "outscored_by": 3,
+      "top_tie": 3
     },
     {
       "key": "86091435|0|decision|20",
@@ -774,20 +774,20 @@
         0
       ],
       "values": [
-        123.025,
+        125.5,
         125.5,
         105.025
       ],
       "scored": 3,
       "n_options": 3,
       "unscorable": false,
-      "correct_value": 123.025,
+      "correct_value": 125.5,
       "top_value": 125.5,
-      "correct_is_top": false,
+      "correct_is_top": true,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
-      "top_tie": 1
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
     },
     {
       "key": "86091435|0|decision|35",
@@ -797,22 +797,22 @@
         1
       ],
       "values": [
-        105.025,
-        186.025,
-        123.025,
+        78.25,
+        159.25,
+        96.25,
         159.25,
         105.025
       ],
       "scored": 5,
       "n_options": 5,
       "unscorable": false,
-      "correct_value": 186.025,
-      "top_value": 186.025,
+      "correct_value": 159.25,
+      "top_value": 159.25,
       "correct_is_top": true,
-      "correct_is_unique_top": true,
+      "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 1
+      "top_tie": 2
     },
     {
       "key": "86091435|0|turn|8",
@@ -844,7 +844,7 @@
       "values": [
         204.025,
         226.525,
-        231.025,
+        211.0,
         206.275,
         206.275,
         226.525,
@@ -856,12 +856,12 @@
       "scored": 10,
       "n_options": 10,
       "unscorable": false,
-      "correct_value": 231.025,
+      "correct_value": 211.0,
       "top_value": 240.025,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_rank": 5,
+      "outscored_by": 4,
       "top_tie": 1
     },
     {
@@ -873,15 +873,15 @@
       ],
       "values": [
         2316.025,
-        271.025,
-        271.025,
-        271.025,
-        271.025,
-        273.05,
-        271.025,
-        271.025,
+        244.25,
+        244.25,
+        244.25,
+        244.25,
+        246.27499999999998,
+        244.25,
+        244.25,
         235.025,
-        240.2,
+        244.25,
         235.025
       ],
       "scored": 11,
@@ -911,7 +911,7 @@
         2273.275,
         249.2,
         1249.2,
-        228.275,
+        208.25,
         249.2
       ],
       "scored": 10,
@@ -1045,12 +1045,12 @@
         3
       ],
       "values": [
-        141.75,
-        141.75,
-        141.75,
-        141.75,
-        140.175,
-        141.75,
+        157.5,
+        157.5,
+        157.5,
+        157.5,
+        157.5,
+        157.5,
         93.0,
         141.75,
         93.0
@@ -1058,8 +1058,8 @@
       "scored": 9,
       "n_options": 9,
       "unscorable": false,
-      "correct_value": 141.75,
-      "top_value": 141.75,
+      "correct_value": 157.5,
+      "top_value": 157.5,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
@@ -1120,10 +1120,10 @@
       "episode_id": 83966336,
       "agent": "mega_lucario",
       "correct": [
-        1
+        0
       ],
       "values": [
-        115.175,
+        1225.925,
         1210.925,
         1198.925,
         53.0
@@ -1131,8 +1131,8 @@
       "scored": 4,
       "n_options": 4,
       "unscorable": false,
-      "correct_value": 1210.925,
-      "top_value": 1210.925,
+      "correct_value": 1225.925,
+      "top_value": 1225.925,
       "correct_is_top": true,
       "correct_is_unique_top": true,
       "correct_rank": 1,
@@ -1282,9 +1282,9 @@
         5
       ],
       "values": [
-        71.675,
-        104.675,
-        104.675,
+        7000,
+        122.0,
+        122.0,
         162.0,
         90.5,
         122.0,
@@ -1303,9 +1303,9 @@
       "top_value": 7000,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 5,
-      "outscored_by": 4,
-      "top_tie": 3
+      "correct_rank": 6,
+      "outscored_by": 5,
+      "top_tie": 4
     },
     {
       "key": "84889539|1|decision|30",
@@ -1316,7 +1316,7 @@
       ],
       "values": [
         -4.0,
-        0.0,
+        8.0,
         8.0
       ],
       "scored": 3,
@@ -1325,10 +1325,10 @@
       "correct_value": 8.0,
       "top_value": 8.0,
       "correct_is_top": true,
-      "correct_is_unique_top": true,
+      "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 1
+      "top_tie": 2
     },
     {
       "key": "84889539|1|decision|48",
@@ -1643,7 +1643,7 @@
         2
       ],
       "values": [
-        59.175,
+        67.175,
         53.0,
         84.5
       ],
@@ -1771,8 +1771,8 @@
         1
       ],
       "values": [
-        1139.8375,
-        1151.8375,
+        1205.925,
+        1217.925,
         134.5125,
         134.5125,
         134.5125,
@@ -1783,8 +1783,8 @@
       "scored": 8,
       "n_options": 8,
       "unscorable": false,
-      "correct_value": 1151.8375,
-      "top_value": 1151.8375,
+      "correct_value": 1217.925,
+      "top_value": 1217.925,
       "correct_is_top": true,
       "correct_is_unique_top": true,
       "correct_rank": 1,
@@ -1799,7 +1799,7 @@
         0
       ],
       "values": [
-        1151.8375,
+        1219.5,
         134.5125,
         134.5125,
         134.5125,
@@ -1810,8 +1810,8 @@
       "scored": 7,
       "n_options": 7,
       "unscorable": false,
-      "correct_value": 1151.8375,
-      "top_value": 1151.8375,
+      "correct_value": 1219.5,
+      "top_value": 1219.5,
       "correct_is_top": true,
       "correct_is_unique_top": true,
       "correct_rank": 1,
@@ -1923,9 +1923,9 @@
       "agent": "mega_lucario",
       "correct": [],
       "values": [
-        86.0,
+        36.0,
         8.0,
-        98.0,
+        48.0,
         0.0
       ],
       "scored": 4,
@@ -2006,7 +2006,7 @@
         126.0,
         126.0,
         114.0,
-        100.175,
+        101.0,
         -1000.0
       ],
       "scored": 8,
@@ -2065,7 +2065,7 @@
         1167.5,
         150.175,
         1136.0,
-        1136.0,
+        1167.5,
         103.0
       ],
       "scored": 18,
@@ -2216,8 +2216,8 @@
         1167.0,
         110.25,
         1167.0,
-        79.2,
-        79.2,
+        95.4,
+        95.4,
         63.0,
         1167.0,
         110.25,
@@ -2638,7 +2638,7 @@
         1127.5,
         1136.005,
         1063.0,
-        1172.08,
+        1142.5149999999999,
         63.0
       ],
       "scored": 12,
@@ -2650,7 +2650,7 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 4
+      "top_tie": 3
     },
     {
       "key": "81904451|0|decision|50",
@@ -2716,7 +2716,7 @@
         1206.8,
         1231.8,
         1063.0,
-        1231.8,
+        1209.525,
         63.0
       ],
       "scored": 18,
@@ -2728,7 +2728,7 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 7
+      "top_tie": 6
     },
     {
       "key": "81904451|0|decision|58",
@@ -2755,7 +2755,7 @@
         1231.8,
         1231.8,
         1063.0,
-        1231.8,
+        1209.525,
         63.0
       ],
       "scored": 19,
@@ -2767,7 +2767,7 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 8
+      "top_tie": 7
     },
     {
       "key": "81905063|1|decision|10",
@@ -2849,7 +2849,7 @@
       "values": [
         1167.0,
         1167.0,
-        95.4,
+        110.25,
         1167.0,
         63.0,
         110.25,
@@ -2874,22 +2874,22 @@
         5
       ],
       "values": [
-        176.0,
-        176.0,
-        176.0,
-        167.0,
-        176.0,
-        191.3,
-        191.3,
-        176.0,
-        137.0,
-        137.0,
-        107.30000000000001,
-        107.30000000000001,
-        167.0,
-        176.0,
-        191.3,
-        191.3,
+        138.6,
+        138.6,
+        138.6,
+        134.55,
+        138.6,
+        138.6,
+        138.6,
+        1231.8,
+        104.55000000000001,
+        104.54999999999998,
+        104.55000000000001,
+        104.55000000000001,
+        134.55,
+        138.6,
+        138.6,
+        138.6,
         124.83000000000001,
         1176.0,
         90.0
@@ -2897,12 +2897,12 @@
       "scored": 19,
       "n_options": 19,
       "unscorable": false,
-      "correct_value": 191.3,
-      "top_value": 1176.0,
+      "correct_value": 138.6,
+      "top_value": 1231.8,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_rank": 3,
+      "outscored_by": 2,
       "top_tie": 1
     },
     {
@@ -3207,7 +3207,7 @@
         1126.8,
         1102.5,
         102.5,
-        74.825,
+        100.525,
         102.5
       ],
       "scored": 10,
@@ -3236,7 +3236,7 @@
         1112.0,
         1102.5,
         4000,
-        32.3,
+        1154.525,
         102.5
       ],
       "scored": 9,
@@ -3284,7 +3284,7 @@
       "values": [
         207.5,
         207.5,
-        177.5,
+        135.65,
         177.5,
         207.5,
         207.5,
@@ -4207,7 +4207,7 @@
         3000,
         256.1,
         3000,
-        215.60000000000002,
+        212.9,
         256.1
       ],
       "scored": 11,
@@ -5084,20 +5084,20 @@
       "episode_id": 82749168,
       "agent": "mega_starmie",
       "correct": [
-        2
+        10
       ],
       "values": [
         110.25,
-        167.0,
+        124.83000000000001,
         124.83000000000001,
         80.25,
         2177.5,
         80.25,
         110.25,
-        167.0,
         124.83000000000001,
-        167.0,
-        167.0,
+        124.83000000000001,
+        2207.5,
+        2207.5,
         80.25,
         2177.5,
         80.25,
@@ -5108,13 +5108,13 @@
       "scored": 17,
       "n_options": 17,
       "unscorable": false,
-      "correct_value": 124.83000000000001,
+      "correct_value": 2207.5,
       "top_value": 2207.5,
-      "correct_is_top": false,
+      "correct_is_top": true,
       "correct_is_unique_top": false,
-      "correct_rank": 8,
-      "outscored_by": 7,
-      "top_tie": 1
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 3
     },
     {
       "key": "82749168|1|decision|61",
@@ -5583,7 +5583,7 @@
         56.80000000000001,
         176.8,
         176.8,
-        140.35,
+        110.65,
         176.8
       ],
       "scored": 17,
@@ -5613,7 +5613,7 @@
         201.1,
         176.8,
         176.8,
-        154.525,
+        164.64999999999998,
         176.8
       ],
       "scored": 10,
@@ -5752,18 +5752,18 @@
         1151.8,
         1181.8,
         181.8,
-        1200.3,
+        152.775,
         181.8
       ],
       "scored": 11,
       "n_options": 11,
       "unscorable": false,
       "correct_value": 1185.85,
-      "top_value": 1200.3,
-      "correct_is_top": false,
-      "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "top_value": 1185.85,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
       "top_tie": 1
     },
     {
@@ -6067,7 +6067,7 @@
       "values": [
         1214.88,
         1214.88,
-        1214.88,
+        1209.93,
         1189.88,
         1214.88,
         167.35500000000002,
@@ -6083,7 +6083,7 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 5
+      "top_tie": 4
     },
     {
       "key": "82756664|1|decision|37",
@@ -6121,7 +6121,7 @@
         165.60000000000002,
         165.60000000000002,
         101.88,
-        111.6,
+        138.6,
         81.6,
         81.6,
         81.6,
@@ -6140,12 +6140,12 @@
       "scored": 18,
       "n_options": 18,
       "unscorable": false,
-      "correct_value": 111.6,
+      "correct_value": 138.6,
       "top_value": 165.60000000000002,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 9,
-      "outscored_by": 8,
+      "correct_rank": 5,
+      "outscored_by": 4,
       "top_tie": 4
     },
     {
@@ -6365,25 +6365,25 @@
         7
       ],
       "values": [
-        164.32500000000002,
-        194.32500000000002,
-        194.32500000000002,
+        214.32500000000005,
+        165.3,
         244.32500000000005,
-        222.05,
-        104.32500000000002,
-        164.32500000000002,
-        224.32500000000002,
+        244.32500000000005,
+        244.32500000000005,
+        154.32500000000005,
+        214.32500000000005,
+        274.32500000000005,
         177.07500000000002
       ],
       "scored": 9,
       "n_options": 9,
       "unscorable": false,
-      "correct_value": 224.32500000000002,
-      "top_value": 244.32500000000005,
-      "correct_is_top": false,
-      "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
+      "correct_value": 274.32500000000005,
+      "top_value": 274.32500000000005,
+      "correct_is_top": true,
+      "correct_is_unique_top": true,
+      "correct_rank": 1,
+      "outscored_by": 0,
       "top_tie": 1
     },
     {
@@ -6988,9 +6988,9 @@
         3
       ],
       "values": [
-        63.0,
-        63.0,
-        63.0,
+        110.25,
+        110.25,
+        110.25,
         110.25,
         63.0,
         63.0
@@ -7001,10 +7001,10 @@
       "correct_value": 110.25,
       "top_value": 110.25,
       "correct_is_top": true,
-      "correct_is_unique_top": true,
+      "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 1
+      "top_tie": 4
     },
     {
       "key": "83665798|1|decision|12",
@@ -7075,9 +7075,9 @@
       ],
       "values": [
         -905.5,
-        72.5,
+        2.299999999999997,
         117.08,
-        72.5,
+        2.299999999999997,
         -905.5,
         -905.5,
         -905.5
@@ -7528,7 +7528,7 @@
       "values": [
         97.5,
         157.5,
-        126.0,
+        110.25,
         126.0,
         110.25,
         126.0
@@ -7586,19 +7586,19 @@
         2207.5,
         207.5,
         2207.5,
-        144.5,
+        2231.8,
         207.5
       ],
       "scored": 8,
       "n_options": 8,
       "unscorable": false,
       "correct_value": 2207.5,
-      "top_value": 2207.5,
-      "correct_is_top": true,
+      "top_value": 2231.8,
+      "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 1,
-      "outscored_by": 0,
-      "top_tie": 5
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
     },
     {
       "key": "85164131|1|decision|31",
@@ -7657,7 +7657,7 @@
       ],
       "values": [
         2207.5,
-        2207.5,
+        2222.08,
         2207.5,
         2207.5,
         2207.5,
@@ -7672,12 +7672,12 @@
       "n_options": 11,
       "unscorable": false,
       "correct_value": 2207.5,
-      "top_value": 2207.5,
-      "correct_is_top": true,
+      "top_value": 2222.08,
+      "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 1,
-      "outscored_by": 0,
-      "top_tie": 9
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
     },
     {
       "key": "85164605|1|decision|64",

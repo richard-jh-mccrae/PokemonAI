@@ -1,5 +1,12 @@
 # Continuous Integration
 
+Two workflows:
+
+| Workflow | Trigger | What it does |
+|---|---|---|
+| [`ci.yml`](../.github/workflows/ci.yml) | push to `main`, PR, dispatch | the test suite (everything below) |
+| [`leaf-gate-main.yml`](../.github/workflows/leaf-gate-main.yml) | **push to `main` only**, dispatch | ADR-0072's **Discrimination Gate**, watching main — see [Main watchdog](#main-watchdog-the-discrimination-gate) |
+
 `.github/workflows/ci.yml` runs the test suite on every push to `main`, every pull
 request, and on manual dispatch (`workflow_dispatch`). It runs on `ubuntu-latest` at
 Python **3.12** (the most recent; the dev box runs 3.11). Every step runs under `bash`
@@ -118,6 +125,91 @@ invocation — the full `pytest tests/` or a selective `pytest tests/arena tests
 JUnit XML and (when the coverage gate runs) `coverage.xml` upload as build artifacts named
 `reports-<os>-py<version>`.
 
+## Main watchdog: the Discrimination Gate
+
+[`leaf-gate-main.yml`](../.github/workflows/leaf-gate-main.yml) runs
+`tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json` on **every push to `main`**
+and fails the run on any unruled `OK → MISS` frame flip. It is ADR-0072's Discrimination Gate,
+pointed at main rather than at a branch.
+
+**Why it exists.** The gate was only ever run by whoever happened to be doing a swap, so drift
+accumulated unattributed. ADR-0072 recorded two `OK → MISS` frames on *untouched* main and could not
+say whether they were real regressions landed unmeasured or a baseline needing re-capture; #186 then
+hit the same false-red weeks later on an unrelated branch. That ADR's own prescription is *"run the
+gate on `main` before the next swap, not after it"* — this workflow is that sentence as CI. A red is
+attributable to the merge that triggered the run, while the diff is one commit wide.
+
+**It never writes the baseline, by design.** Auto-recapturing on merge would redefine the "before"
+picture to whatever just landed, so every regression would bless itself and the gate would pass
+forever by construction. The baseline is a *ruling record*, not a cache. Re-capture is deliberate:
+
+```bash
+python tools/train/leaf_lab.py capture --out data/leaf_lab/baseline.json
+```
+
+and only after the flips it would absorb have been **ruled** with the user.
+
+**When it goes red**, the fix is a ruling, not a re-capture. Per frame, decide whether the new
+ranking is wrong (fix the code) or right (hold the frame out via its fixture's `frame_key` +
+Decision-Claim `owner`, ADR-0072 decision 4 — a reviewable claim in a diff, not a workflow flag).
+The gate report uploads as the `leaf-gate-main` artifact.
+
+**A shifted corpus warns, it does not fail.** The verdict is per-frame flips only, but
+`CORPUS SHIFTED` means the two captures are no longer comparable — the run emits a `::warning::` so
+the re-capture gets owned rather than passing unseen.
+
+Measured 91 s over 267 frames (2026-07-28); main was verified green at `7d2a656` before this landed,
+so it was not born red.
+
+### Baseline provenance
+
+`data/leaf_lab/baseline.json` is currently pinned at **`e4c46ca` (2026-07-29)**. Three deliberate
+re-captures, each taken only with **zero unruled `OK → MISS`** outstanding — the ADR-0072 decision 2
+precondition, *"only when a swap's flips have been ruled"*:
+
+| capture | rev | absorbed | why |
+|---|---|---|---|
+| 2026-07-28 | `38ca76f` | 6 × `MISS → OK`, 3 × `OK → MISS` | move off the long-stale `81eac82` pin (details below) |
+| 2026-07-29 | `fa86dcb` | 1 × `MISS → OK` (`85046350\|0\|decision\|21`) | the user re-ruling of that frame's `correct` (`[2] → [1]`) |
+| 2026-07-29 | `e4c46ca` | 1 × `MISS → OK` (`82752604\|0\|decision\|88`) | rebase onto `96da320`; the gain is **main's** (Issue #172's `ENERGY_RECOVER` work), absorbed so it is protected |
+
+Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
+same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to
+`MISS` would compare `MISS → MISS` and pass silently. Absorbing an *improvement* needs no ruling;
+only an `OK → MISS` does, and there were none.
+
+The second is the smaller story: re-ruling `85046350-21`'s `correct` to the Active Dreepy changed
+what `leaf_lab` scores that frame against, so its verdict became `OK`. Aggregates moved with it —
+shared-top 191 → 192, SOLE-top 35 → 36. Note what that is and is not: the leaf did not improve, the
+**label** moved to match what the leaf already preferred. Baselining it protects the frame, since an
+un-baselined `OK` would let a later regression back to `MISS` pass as a silent `MISS → MISS`.
+
+The first re-capture's reasoning follows.
+
+Why re-capture rather than leave it: six frames had improved `MISS → OK` since `81eac82`, and an
+improvement is **not protected until it is baselined** — with the old pin still recording them as
+`MISS`, a change undoing those wins would have compared `MISS → MISS`, produced no flip, and passed
+**silently**. Re-capturing makes them the floor.
+
+What it absorbed, recorded here because the gate will no longer re-report it. These three were
+`correct_is_top=True` under `81eac82` and are `MISS` in the new capture, so they stop appearing in
+the diff entirely (a `MISS → MISS` is not a flip):
+
+| frame | rank drift | owner |
+|---|---|---|
+| `85163634\|1\|decision\|41` | 1 → 2 | #143 |
+| `85164605\|1\|decision\|41` | 1 → 2 | #145 |
+| `86091435\|0\|decision\|13` | 1 → 4 | #189 |
+
+This is the real cost of the re-capture and it is in tension with ADR-0072 decision 4's reason for
+the always-visible `HELD OUT` section — *"a frame broken for three phases must not become scenery."*
+They remain owned by their issues and held out in the fixture ledger, and the pre-capture values stay
+in this file's git history, but they are no longer surfaced on every run. If that visibility matters
+more than protecting the six improvements, the re-capture is the thing to revert.
+
+Aggregates moved both ways and do **not** gate (ADR-0072 decision 2): shared-top 188 → 191,
+SOLE-top 36 → 35.
+
 ## Reproduce locally
 
 ```bash
@@ -139,8 +231,10 @@ itself is reproduced by the `filters:` + *Determine test plan* blocks in `ci.yml
 
 ## Scope & extending
 
-CI is **tests only** — the global Doxygen / Sphinx / GitHub Pages / PDF steps are omitted
-until those toolchains exist in the repo (see `CLAUDE.md`).
+CI is **tests, plus the one main-watchdog gate above** — the global Doxygen / Sphinx / GitHub Pages
+/ PDF steps are still omitted until those toolchains exist in the repo (see `CLAUDE.md`). The
+watchdog is a deliberate, narrow widening of "tests only" (2026-07-28): it runs an existing
+deterministic instrument the repo already owed on main, not a new toolchain.
 
 - **Add a new subsystem?** Add a filter to `.github/filters.yml` and a matching
   `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any

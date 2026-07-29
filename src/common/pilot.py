@@ -7330,6 +7330,33 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if any((p.get("energies") or []) for p in in_play if p.get("id") in line_ids):
             return False                                  # a wincon Line body is already being energized
                                                           # -> develop it, don't retreat for the lock (f21)
+        # ^ RETAINED DELIBERATELY, and known to be doctrinally wrong (user rulings 2026-07-28/29).
+        # It was deleted on this branch and the deletion was REVERTED here, on evidence:
+        #
+        #   * The doctrine says it is too strict. On 86091435-13 the correct play is to retreat the
+        #     Dreepy into Budew while severely behind, and this guard forbids it purely because the
+        #     line carries one partial Energy. A boolean cannot say "behind, so protection plus
+        #     disruption beats one more development step". That ruling stands.
+        #   * But deleting it LOSES GAMES. The ADR-0072 mid-build paired A/B over 2400 games
+        #     (`gauntlet_swap_ab.py --stage mid-build`, build-vs-build because there is no flag to
+        #     overlay) returned delta -4.75%, 95% CI [-8.22%, -1.28%], 0 crashes — CI-lo through the
+        #     -5% floor, and all SIX directed matchups negative at +-3.5% precision, so not noise.
+        #     The per-frame gates were clean (1 corpus flip, that fix; Discrimination Gate PASS), so
+        #     this is exactly the effect only the A/B can see.
+        #   * WHY it costs more than the one frame it fixes: this gate feeds TWO rungs, and the
+        #     heavier one is not the retreat. `retreat-to-wall-the-line` (w30) is the retreat;
+        #     `feed-the-line-for-disruptor-lock` (w55, baseline_energy) is the ATTACH that funds it.
+        #     Ungated, the attach rung diverts the turn's Energy into paying a retreat on boards
+        #     where the line was already being built — which is the diversion `f21` actually ruled
+        #     on, so the guard's own citation is apt for the attach even though it over-reaches on
+        #     the retreat.
+        #
+        # The real fix is NOT a better boolean here: it is the value question (what a
+        # protection/disruption turn is worth against the race) composed across a multi-step turn.
+        # Owned by #165 (Turn Planner) with #145's currency work; both frames are recorded there.
+        # Until one of those lands, this crude guard is measurably earning its keep, so it stays.
+        # An untested middle option is on the record if anyone wants it: keep the guard on the w55
+        # attach rung and drop it only for the w30 retreat rung, then re-run the same A/B.
         if ma_stat is None or getattr(ma_stat, "retreatCost", 0) > len(ma.get("energies") or []) + 1:
             return False                                  # the retreat must be reachable this turn
         return not self._active_maxed_kos(ma, oa)         # don't waste a body that could KO instead
