@@ -285,9 +285,9 @@
     4
   ],
   "correct": [
-    2
+    1
   ],
   "chosen_label": "Attach Basic {D} Energy → Dunsparce (bench 3 · 70/70)",
-  "correct_label": "Attach Basic {D} Energy → Dreepy (bench 1 · 70/70 · 1⚡)",
-  "note": "f21 Main ATTACH (CRITICAL): only energy available is {D} (off-type for the F/P Dragapult line, the Munkidori fuel). power-up-attacker (+15) fires on Dunsparce (a Colorless-cost attack makes {D} 'payable') so the agent sinks {D} into the Dunsparce->Dudunsparce DRAW ENGINE. Human: the Dunsparce/Dudunsparce line is a draw engine, don't power it up. Correct=[2] Dreepy (on-line body)."
+  "correct_label": "Attach Basic {D} Energy → Dreepy (active · 70/70)",
+  "note": "f21 Main ATTACH (CRITICAL): only energy available is {D} (off-type for the F/P Dragapult line, the Munkidori fuel). power-up-attacker (+15) fires on Dunsparce (a Colorless-cost attack makes {D} 'payable') so the agent sinks {D} into the Dunsparce->Dudunsparce DRAW ENGINE. Human: the Dunsparce/Dudunsparce line is a draw engine, don't power it up. Correct=[2] Dreepy (on-line body).  RE-RULED 2026-07-29 (user): correct moves [2] -> [1], the ACTIVE Dreepy, not the benched one. The don't-feed-the-draw-engine ruling is unchanged; WHICH Dreepy changes. Line: attach {D} to the Active Dreepy -> retreat into Budew (the retreat DISCARDS that {D}, rules.md L89) -> evolve Drakloak onto the benched Dreepy holding the {R} -> Itchy Pollen. {D} pays no typed cost in this deck (Bite/Dragon Headbutt/Phantom Dive are {R}{P}; Mind Bend {P}+colourless), so it is the one fungible Energy and the right card to burn on a retreat. Engine-verified unpunished: retreat does not trigger the in-play Risky Ruins — cgpy calls `_after_benched` only from the play-from-hand / put-from-deck paths, never `_do_switch`. Owner #165: the attach is individually worthless ({D} advances neither of the Active Dreepy's attacks) and pays only as step 1 of attach->retreat->promote->lock, i.e. a Maneuver. This is the frame the deleted f21 energized-line guard was named after, so the re-ruling undercuts that guard at its own source."
 }
