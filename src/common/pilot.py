@@ -7806,8 +7806,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         return not st.evolvesFrom or self._opens_from_hand(cid)
 
-    def _line_payoff_ids(self) -> frozenset:
-        """The deck's declared WIN-CONDITION payoffs. The gate on the Opener Marginal (ADR-0080
+    def _wincon_payoff_ids(self) -> frozenset:
+        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0080
         amendment A) — an evolution in hand only reorders the opener when it is what the deck is
         actually trying to build.
 
@@ -7816,11 +7816,43 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         here, not incidental: mega_lucario declares `Line(MAKUHITA -> HARIYAMA,
         role='secondary_attacker')` for a 210-damage prize wall, and reading it as a payoff would
         promote Makuhita over a declared rank-1 Solrock on the strength of raw damage — the very
-        "big number wins" reasoning amendment A rejected."""
-        return frozenset(p for p in (getattr(ln, "payoff", None) for ln in self._wincon_lines())
-                         if p is not None)
+        "big number wins" reasoning amendment A rejected.
 
-    def _opener_marginal(self, cid, hand_ids) -> float:
+        **Deliberately NOT `_wincon_set`**, whose first clause is identical. That set additionally
+        unions in every card carrying a `win_condition` / `primary_attacker` ROLE, which is a strictly
+        broader concept: it would let a role-tagged body that is on no declared Line act as an opener
+        payoff, widening the gate past what ADR-0080 decision 4 specifies (*"the `payoff` of one of the
+        deck's declared win-condition Lines"*). The two sets coincide for all three authored decks
+        today — which is exactly why the distinction has to be written down rather than discovered
+        later by a deck that separates them.
+
+        Deck-fixed and match-invariant, so memoised in the same shape as `_wincon_set`."""
+        cached = getattr(self, "_wincon_payoff_cache", None)
+        if cached is not None:
+            return cached
+        payoffs = frozenset(p for p in (getattr(ln, "payoff", None) for ln in self._wincon_lines())
+                            if p is not None)
+        self._wincon_payoff_cache = payoffs
+        return payoffs
+
+    def _deck_body_names(self) -> frozenset:
+        """Every card NAME in this deck's list. NAMES rather than ids because an evolution identifies
+        its previous stage by name (`CardStat.evolvesFrom`) and reprints share a name across ids —
+        Raboot is both 152 and 665 — so an id-keyed test would miss the reprint.
+
+        Deck-fixed and match-invariant, so memoised like `_wincon_set` / `_derived_accel_body_ids`
+        rather than rebuilt per call: `_route_only_at_setup` is consulted once per declared starter,
+        and rebuilding a 60-card set inside that loop is the kind of quiet quadratic the neighbouring
+        derived sets already avoid."""
+        cached = getattr(self, "_deck_body_names_cache", None)
+        if cached is not None:
+            return cached
+        names = frozenset(s.name for s in (self.stats.get(c) for c in set(self.deck or ()))
+                          if s and s.name) if self.stats else frozenset()
+        self._deck_body_names_cache = names
+        return names
+
+    def _opener_marginal(self, cid: int | None, hand_ids) -> float:
         """**Opener Marginal** (ADR-0080 decision 4): ADR-0070's body-substituted evolve delta, in
         DAMAGE, read at turn 0. Non-zero only when a card in hand evolves from `cid` AND that card is
         a declared Line payoff; then `maxDamage(payoff) - maxDamage(cid)`. Zero otherwise.
@@ -7841,7 +7873,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         st = self.stats.get(cid)
         if not st or not st.name:
             return 0.0
-        payoffs = self._line_payoff_ids()
+        payoffs = self._wincon_payoff_ids()
         if not payoffs:
             return 0.0
         best = 0.0
@@ -7853,7 +7885,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 best = max(best, float(hst.maxDamage - st.maxDamage))
         return best
 
-    def _route_only_at_setup(self, cid) -> bool:
+    def _route_only_at_setup(self, cid: int | None) -> bool:
         """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0080
         decision 1) — true for an `opener`-tagged Evolution whose previous stage is absent from this
         deck, i.e. Cinderace in a deck running no Raboot. Skipping such a body forfeits it
@@ -7879,8 +7911,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return True                                  # opener-tagged but unknown -> pin
         if not st.evolvesFrom:
             return False                                 # a Basic can always be benched instead
-        names = {s.name for s in (self.stats.get(c) for c in set(self.deck)) if s and s.name}
-        return st.evolvesFrom not in names
+        return st.evolvesFrom not in self._deck_body_names()
 
     def _effective_starter_order(self, obs: dict, sp: list) -> list:
         """**Effective Starter Order** (ADR-0080 decision 5): the declaration as resolved against THIS

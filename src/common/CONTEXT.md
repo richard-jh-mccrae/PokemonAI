@@ -413,7 +413,7 @@ _Avoid_: Function Tag (universal/mechanical; a Role is per-deck/intentional), jo
 
 **Starter Priority**:
 A deck's ordered list of the bodies it wants in the **Active Spot** at the pregame Set-Up pick,
-highest first (`Strategy.starter_priority`, card ids, optionally **Pin**-wrapped). Deck-declared data
+highest first (`Strategy.starter_priority`, card ids). Deck-declared data
 read by a card-id-free general rule — the Pilot resolves the **Effective Starter Order** against the
 opening hand, takes the highest-ranked id *present* among the `_SETUP_ACTIVE` options into
 `board.top_starter_id`, and `open-the-declared-starter` scores that one option. The sibling of
@@ -445,23 +445,26 @@ _Avoid_: opener equation / opener value (too broad — it prices no tempo or rea
 payoff), tie-break (it REORDERS; a tie-break cannot reach the inversion it exists for)
 
 **Pin** / **Effective Starter Order**:
-A **Pin** marks one Starter Priority entry as immovable (`Pin(BUDEW)`, a frozen dataclass in
-`common.strategy.strategy`) — ⚠️ **the DECLARED Pin is deferred, not built**: the Opener Marginal's
-Line clause leaves it with zero consumers, so it is a decided shape awaiting a frame (ADR-0080
-Amendment A). The *derived* pin below is live and essential. The **Effective Starter Order** is what
-the Pilot actually resolves —
-pinned entries hold their declared slot, unpinned entries re-sort among the remaining slots by
-(Opener Marginal desc, declared rank asc). Because a Pin holds a *slot* rather than winning outright,
-it would express a **demotion pin** as naturally as a rank-1 one — `Pin(DREEPY)` at rank 5 meaning
-"Dreepy stays fifth, do not promote it". No deck needs that today: the Line clause silences every
-would-be demotion structurally, which is exactly why the declared form is deferred. Pins are
-**derived first, declared as the override** (ADR-0079 Amendment
-F's pattern): `_route_only_at_setup` pins any body whose only route into play is the setup pick — an
-`opener`-tagged card whose `evolvesFrom` name is absent from `Pilot.deck`, i.e. Cinderace in a deck
-running no Raboot — with no author input, and lifts by itself if the deck later runs the line.
-Reordering is **structural**, never additive: it changes what the declaration *says*, not what
-anything *scores*, so the seam keeps one rule and one boolean and the override cannot be disarmed by
-a learned weight. See ADR-0080.
+A **Pin** marks one Starter Priority entry as immovable, so the **Opener Marginal** may not move it.
+Pins today are **derived only**: `_route_only_at_setup` pins any body whose only route into play is
+the pregame Set-Up pick — an `opener`-tagged Evolution whose `evolvesFrom` name is absent from the
+deck list, i.e. Cinderace in a deck running no Raboot — because skipping it forfeits the card
+permanently. Derived from the DECKLIST rather than declared, so it needs no author input and lifts by
+itself if the deck later runs the line; it **fails closed** (pins when it cannot tell), deliberately
+the opposite of `_is_startable_body`, since a missing pin forfeits a card while a spurious one merely
+opens suboptimally.
+
+The **Effective Starter Order** is the declaration as resolved against THIS hand: pinned entries hold
+their declared slot, unpinned entries re-sort among the slots left over by (Opener Marginal desc,
+declared rank asc). Reordering is **structural**, never additive — it changes what the declaration
+*says*, not what anything *scores* — so the seam keeps one rule and one boolean (ADR-0079 decision 5)
+and the override cannot be disarmed by a learned weight.
+
+⚠️ A **declared** Pin — a deck marking one of its own ranks immovable, which would also express a
+*demotion* pin ("this body stays fifth, do not promote it") — is **decided in shape but NOT built and
+has no code**: the Line clause silences every would-be demotion structurally, leaving it zero
+consumers, so it awaits a frame (ADR-0080 Amendment A). `Strategy.starter_priority` is therefore
+still a plain list of card ids. See ADR-0080.
 _Avoid_: a separate `starter_pinned` field (rejected — two declarations that must agree per card),
 lock (reserve for the win-condition sense), tie-break
 

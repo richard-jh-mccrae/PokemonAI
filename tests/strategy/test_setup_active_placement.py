@@ -444,11 +444,18 @@ def test_every_authored_agent_declares_a_win_condition_line():
     none, so an unrelated edit could disable the opener fix with nothing failing."""
     for agent in _authored_agents():
         lines = _deck_strategy(agent).lines
-        assert lines, (
-            f"{agent}: authored deck (has STRATEGY.md) declares no win-condition Line — its Opener "
-            f"Marginal can never fire, so its Set-Up Active pick silently stops being hand-conditional")
-        assert all(getattr(ln, "payoff", None) for ln in lines), (
-            f"{agent}: a declared Line has no payoff — the Marginal gates on it")
+        # The ROLE filter is the point, not a detail. The Marginal reads `_wincon_payoff_ids`, which
+        # goes through `_wincon_lines` and drops `secondary_attacker` Lines (ADR-0048) — so asserting
+        # merely that SOME Line exists would pass for a deck declaring only a secondary-attacker Line
+        # while the Marginal stayed permanently silent, which is the exact no-op this guards.
+        # mega_lucario already declares such a Line (Makuhita -> Hariyama), so this is a live shape.
+        wincon = [ln for ln in lines if getattr(ln, "role", "win_condition") == "win_condition"]
+        assert wincon, (
+            f"{agent}: authored deck (has STRATEGY.md) declares no WIN-CONDITION Line — it may declare "
+            f"other roles, but the Opener Marginal reads only win-condition payoffs, so its Set-Up "
+            f"Active pick silently stops being hand-conditional")
+        assert all(getattr(ln, "payoff", None) for ln in wincon), (
+            f"{agent}: a declared win-condition Line has no payoff — the Marginal gates on it")
 
 
 def test_the_exempt_agents_are_exactly_the_pre_doctrine_ones():
