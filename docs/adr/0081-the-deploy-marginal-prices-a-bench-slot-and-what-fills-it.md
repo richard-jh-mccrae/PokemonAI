@@ -465,6 +465,68 @@ route. **Decision 4 is re-opened** and needs its own grill. Options as they stan
 "waiting on Issue #199" (that issue is closed) but "decision 4 has no answer". Issue #197 returns to
 `status:1-grilling`.
 
+## Amendment B — decision 4 RE-RULED: the Worth legs are dimensionless RATIOS, and the Worth scale never escapes the assignment (2026-07-29)
+
+*(User ruling, 2026-07-29, the Amendment-A grill.)*
+
+**Decision 4 was mis-framed, in the same way ADR-0080 found deny's charter mis-framed.** It asked how
+to *convert* a Worth magnitude into damage. The answer is that no magnitude ever needs to cross:
+
+```
+displacement_relevance(X) = [ V(suppliers) − V(suppliers | X pinned) ] / D          ∈ [0,1]
+ability_relevance(X)      = [ best fetchable Supporter's slot marginal ] / D'       ∈ [0,1]
+deploy_marginal(X)        = BAND × ( … the relevance terms … )
+                            + accel_unlock(X) − exposure(X)        # already damage-native
+```
+
+`V` is `needs.assignment_value`, and the numerator is exactly `keep_v2`'s existing shape
+(`V(all) − V(all − index)`). **A ratio of two assignment values is dimensionless — the Worth points
+cancel.** The Worth tiers keep doing all the ranking work; they simply do it *inside* the assignment
+and never leave it. `WORTH_DAMAGE_RATE` is never referenced, so `test_currency.py`'s guard and
+ADR-0080's "absent by design" both stand untouched.
+
+This is structurally the object ADR-0080 decision 3 shipped for deny — a scalar in `[0,1]` scaling an
+incumbent constant, adding no new scale — except **derived from the existing DP arithmetic rather than
+authored**.
+
+**The band exists and is already damage-denominated.** Two candidates: the readiness leaf's per-body
+contribution (`_READINESS_BODY_CAP` 120.0, `_READINESS_BENCH_DISCOUNT` 0.45, `_READINESS_SATURATED`
+0.1 — readiness IS scaled damage, `_READINESS_ATTACK_W` 0.45), and the incumbent rung weights this
+equation deletes (`develop-a-basic-in-setup` +12, `pre-position-attacker` +25,
+`develop-the-accel-recipient` +20, `bench-the-supporter-tutor` +25, `dont-bench-multiprize` −15),
+which already compete in `score` against attacks.
+
+**Evidence this is the right reading, not a workaround.** Amendment A's anchor hunt found that no
+ruled comparison in the corpus puts a Worth magnitude against a damage magnitude — because a deploy is
+never exclusive with a damage-denominated option. If the magnitude is never *compared*, it was never
+the thing being decided. The failed anchor is evidence about the model, not just about the corpus.
+
+Rejected: running the assignment over **readiness** values instead of Worth tiers (single currency,
+no ratio, no band — but decision 3's ability yield is a HAND-card question, and pricing a hand card
+through a board-evaluation leaf is the WP-N5 mismatch `needs.general_worth_slot` exists to fix, so it
+fixes displacement and orphans the Meowth leg this issue was opened for); and deriving the rate from
+some other seam (after ADR-0080 there is no consumer left asking for it, which inverts ADR-0076
+decision 3's rationale for centralising shared adjudications).
+
+**Costs accepted with the ruling, and carried forward as open sub-decisions:**
+
+- **The normalizer `D` is its own decision**, with a real failure mode: dividing by `V(suppliers)`
+  makes a thin board inflate every displacement. It must also keep scores comparable ACROSS boards,
+  since the marginal competes against `End` (0) and against attacks — which rules out a
+  within-decision normalization.
+- **A ratio discards absolute magnitude.** "20 of 100" and "2 of 10" both read 0.2. Deny accepted
+  exactly this trade; whether the deploy seam can is not yet ruled.
+- **`BAND` is a PRESERVATION CHOICE, never a derivation** — ADR-0080 decision 3's discipline for its
+  `K`, verbatim: *"pinned to the incumbent's observed range so the swap starts behaviour-preserving,
+  and recorded as a preservation choice, never dressed as a derivation"* (ADR-0065).
+
+**Also exposed by the reformulation, and folded here:** decision 2's `supplier_contribution` and
+`slot_displacement` are NOT two legs. The Needs DP over five bench slots already prices scarcity — if
+better bodies fill every slot, a candidate's marginal is ~0 automatically — so
+`V(assignment | X deployed) − V(assignment | X not deployed)` **nets contribution against displacement
+in one quantity**. The Consequences section's five-leg form is corrected to four:
+`net_assignment_relevance · ability_relevance · accel_unlock · exposure`.
+
 ## Open, deliberately not ruled here
 
 - Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a
