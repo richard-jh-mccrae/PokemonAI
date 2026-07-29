@@ -123,6 +123,15 @@ _DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite,
                            # ahead of everything by `_finish_turn_last` — so a purely positive term could
                            # never decline one: any score above zero gets it played. The strip must beat
                            # the hold (ms f29: "wasted crushing hammer").
+_BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0080 decision 2, Issue #199): a body
+                           # the matched Matchup Brief names among its `threats` is scored up, then
+                           # clipped back into [0,1]. A MULTIPLIER, never a source — authored scouting
+                           # sharpens a read that already works without it, which is what keeps the
+                           # instrument correct against the unbriefed decks the Kaggle grader is made
+                           # of (only 8 Briefs exist). It cannot promote a whiff: 0 x anything is 0,
+                           # so a Brief can never make an irrelevant Energy worth taking — the same
+                           # discipline `_DENIAL_UNFAVORED` follows below ("a booster must scale the
+                           # oracle, never add to it", ADR-0063).
 _DENIAL_TARGET_W = 1.0     # points per damage-point denied, at the DISCARD_ENERGY select. Ranks the
                            # Hammer's TARGET once its coin comes up heads; nothing scored that select
                            # before, so a won flip stripped option [0] — the OLDEST-attached Energy.
@@ -1129,7 +1138,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
-                 deny_strip_delta=False):
+                 deny_strip_delta=False, deny_relevance=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1324,6 +1333,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `turns_to_ko_me` per ENERGIZED opponent body.
                                                         # OFF by default so live play pays nothing until
                                                         # #199's gate 1 rules the read admissible
+        self.deny_relevance = deny_relevance            # ADR-0080 / Issue #199 COMPUTE-ONLY switch: emits
+                                                        # the **Deny Relevance** read (the value that
+                                                        # REPLACED deny's damage magnitude — see
+                                                        # `common/deny_relevance.py`) on
+                                                        # `_opponent_target_rows`. Nothing reads it
+                                                        # yet (Issue #187 is the consumer), so ON changes
+                                                        # no decision; OFF emits no fields at all and
+                                                        # is byte-identical to today
         self._phase_prev = None                         # Carried State (ADR-0068): the phase
                                                         # hysteresis memory (Schmitt trigger) — read
                                                         # via `carried()`, never mutated by a
@@ -7278,6 +7295,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         enabler = self._opp_switch_enabler()
         base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
                                             switch_enabler=enabler)
+        # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once for the whole decision
+        # rather than per body: which opponent bodies die to our Knock Out this turn, and so deny
+        # nothing. Keyed by the row's own (area, bi) convention. Only built when the read is armed.
+        doomed_ids = frozenset()
+        if self.deny_relevance:
+            doomed_ids = (frozenset({("active", 0)} if getattr(board, "active_can_ko", False)
+                                    else ())
+                          | frozenset(("bench", j)
+                                      for j in self._bench_doomed_by_me(ma, bench_list)))
         rows = []
         for i, b in enumerate(bodies):
             shift = self.combat.turns_to_ko_me(ma, bodies[:i] + bodies[i + 1:],
@@ -7291,8 +7317,124 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if self.deny_strip_delta:
                 row.update(self._strip_delta_terms(ma, bodies, i, phase,
                                                    opp_active=opp_active, enabler=enabler))
+            if self.deny_relevance:
+                row.update(self._relevance_terms(
+                    b, doomed=doomed_ids, area=area, bi=bi,
+                    brief_ids=getattr(board, "brief_threat_ids", ()) or ()))
             rows.append(row)
         return phase, rows
+
+    def _bench_doomed_by_me(self, ma: dict | None, bench_list) -> frozenset:
+        """Indices into ``bench_list`` of benched opponent bodies MY Active can Knock Out this turn.
+
+        The bench half of the Deny Relevance redundancy gate (ADR-0080 decision 1, step 2): *"or
+        maybe its a benched pokemon that we can snipe and KO. same thing, no hammer on that specific
+        pokemon."* The Active half is `board.active_can_ko` (ADR-0063's drop, which ADR-0078's
+        re-audit ruled NOT subsumed and required to survive any swap).
+
+        Reads the biggest bench REACH among the attacks my Active can currently AFFORD — the same
+        `attack_cost(aid) <= attached` affordability test `can_ko_affordable` uses, and the same
+        instantaneous framing as the rest of deny (the user's ruling of 2026-07-28): what we can do
+        with the board as it stands, crediting no attach of our own.
+
+        Reach is the max of the single-target snipe rider and the DISTRIBUTABLE spread total, because
+        a spread reads *"in any way you like"* and so may land entirely on one body. Covering only
+        the snipe rider would have left the gate blind on Dragapult ex — whose Phantom Dive is a
+        6-counter spread, not a snipe — i.e. blind on one of our own three decks.
+
+        Fail-open to the empty set without stats: an unknown attacker is not evidence that a body is
+        dying, and this gate SUPPRESSES relevance, so failing open keeps the Hammer's value rather
+        than inventing a corpse."""
+        st = self.stats.get(ma.get("id")) if (ma and self.stats) else None
+        if not st:
+            return frozenset()
+        attached = len((ma.get("energies") or []))
+        reach = max((max(self.combat.rider_snipe(aid), self.combat.rider_spread(aid))
+                     for aid in (getattr(st, "attacks", ()) or ())
+                     if self.combat.attack_cost(aid) <= attached), default=0)
+        bench = [(b.get("id"), b.get("hp", 0)) for b in bench_list]
+        return self.combat.bench_ko_indices(bench, reach)
+
+    def _relevance_terms(self, b, *, doomed: frozenset, area: str, bi: int, brief_ids=()) -> dict:
+        """The DENY instrument's value — **Deny Relevance**, the read that replaced the magnitude
+        (ADR-0080, Issue #199 grill; `common/deny_relevance.py` owns the scoring, this owns the plumbing).
+
+        Emits, per opponent body: the best relevance achievable against it, WHICH attached Energy
+        achieves it (by index into the body's ``energies``, so a consumer acts rather than
+        re-derives), and the per-leg components for diagnosis. Compute-only behind `deny_relevance`
+        — nothing reads these yet, Issue #187 is the consumer (ADR-0080 decision 4).
+
+        The two gates come first and force 0 before any leg is scored:
+          * **liveness** — no attached Energy, which also delivers ADR-0062's whiff structurally;
+          * **redundancy** — this body dies to our Knock Out this turn (`active_can_ko` for the
+            Active, `_bench_doomed_by_me` for the bench), so we never spend a Hammer on a corpse.
+
+        The Energy's TYPE is resolved through the Stat Provider, never inferred from its card id:
+        the two coincide for Basic Energy (Basic ``{F}`` is card 6 and FIGHTING is 6) but that is a
+        coincidence in the data, and Ignition Energy is card id 17 with a colourless contribution.
+        A colourless/special Energy therefore scores 0 on the typed leg, which is correct — it pays
+        no specific-type slot and so is never on a plan's critical path.
+
+        A matched Brief's ``threats`` MULTIPLY the derived rank, never source it (ADR-0080
+        decision 2): authored scouting sharpens a read that already works without it. The Brief-free
+        path deliberately does NOT fall back to `Scout._target_role`, which orders `prize_liability`
+        (any *ex* body) above `attacker` and so would top an unbriefed board with exactly the
+        Meowth ex the doctrine says to ignore."""
+        from common import deny_relevance as dr
+        blank = {"relevance": 0.0, "relevance_energy": None, "relevance_attack_leg": 0.0,
+                 "relevance_ability_leg": 0.0, "relevance_setback": 0, "relevance_forward": 0}
+        energies = list((b or {}).get("energies") or [])
+        if not energies or (area, bi) in doomed:
+            return blank
+        line_attacks, ability_types = self._line_attack_costs(b.get("id"))
+        counts = self.combat.attached_type_counts(b)
+        best = dict(blank)
+        for j, eid in enumerate(energies):
+            est = self.stats.get(eid) if self.stats else None
+            etype = getattr(est, "energyType", None) if est else None
+            got = dr.strip_relevance(energy_type=etype, type_count=counts.get(etype, 0),
+                                     line_attacks=line_attacks, ability_types=ability_types,
+                                     total_attached=len(energies), attached_counts=counts)
+            if best["relevance_energy"] is None or got["relevance"] > best["relevance"]:
+                best = {"relevance": got["relevance"], "relevance_energy": j,
+                        "relevance_attack_leg": got["attack_leg"],
+                        "relevance_ability_leg": got["ability_leg"],
+                        "relevance_setback": got["setback_damage"],
+                        "relevance_forward": got["forward_setback"]}
+        if b.get("id") in (brief_ids or ()):
+            best = dict(best, relevance=min(1.0, best["relevance"] * _BRIEF_THREAT_BOOST))
+        return best
+
+    def _line_attack_costs(self, card_id) -> tuple:
+        """Every attack of every form in an opponent body's LINE, as
+        ``([(damage, {EnergyType: slots}, total_cost, is_forward), …], ability_fuel_types)``.
+
+        The line is the body plus all its forward forms (`combat.forward_card_ids`, all-descendants
+        since S1a) because attached Energy carries THROUGH an evolution — which is what lets an
+        Energy on a Riolu be priced by Mega Lucario ex's Mega Brave rather than by Riolu's own
+        30-damage poke. Colourless slots are dropped: they are payable by anything, so no specific
+        Energy is ever on their critical path (this is why an Energy on a Meowth ex, whose Tuck Tail
+        costs ``●●●``, scores 0 — the doctrine's *"ignore it"*).
+
+        ``ability_fuel_types`` unions `CardStat.abilityEnergyTypes` over the line — the shipped
+        ADR-0032 parse (Munkidori's Adrena-Brain *"if this Pokémon has any {D} Energy attached"*),
+        read here rather than re-derived so deny and the attach marginal (Issue #139) cannot drift."""
+        from collections import Counter
+        if not self.stats:
+            return (), frozenset()
+        forward = set(self.combat.forward_card_ids(card_id))
+        attacks, fuels = [], set()
+        for cid in {card_id} | forward:
+            st = self.stats.get(cid) if cid is not None else None
+            if not st:
+                continue
+            fuels.update(t for t in (getattr(st, "abilityEnergyTypes", ()) or ()) if t not in (0, None))
+            for aid in (getattr(st, "attacks", ()) or ()):
+                ast = self.combat.attack_stat(aid)
+                need = Counter(t for t in (getattr(ast, "energyTypes", ()) or ()) if t not in (0, None))
+                attacks.append((self.combat.attack_damage(aid), dict(need),
+                                self.combat.attack_cost(aid, default=0), cid in forward))
+        return tuple(attacks), frozenset(fuels)
 
     def _strip_delta_terms(self, ma, bodies, i, phase, *, opp_active, enabler) -> dict:
         """The DENY instrument's slice of the shared marginal (ADR-0078 decision 1; built by #199).

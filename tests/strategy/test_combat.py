@@ -145,6 +145,25 @@ def test_bench_rider_prize_math():
 
 
 @pytest.mark.req("REQ-COMBAT-0005")
+def test_bench_ko_indices_names_the_bodies_and_the_prize_read_derives_from_it():
+    """Issue #199 (ADR-0080): the Deny Relevance redundancy gate needs to know WHICH benched body dies —
+    *"no hammer on that specific pokemon"* — which the aggregate prize read cannot say. The bench
+    Knock Out rule is therefore stated ONCE here, and `snipe_ko_prizes` is derived from it, so the
+    two cannot drift (the `_build_standing` / `_affords` one-function-owns-the-fact lesson)."""
+    o = _oracle()
+    bench = ((CINDERACE, 50), (STARMIE, 40))
+    assert o.bench_ko_indices(bench, 50) == frozenset({0, 1})
+    assert o.bench_ko_indices(bench, 40) == frozenset({1})     # only the 40-HP body is in reach
+    assert o.bench_ko_indices(bench, 30) == frozenset()
+    assert o.bench_ko_indices(bench, 0) == frozenset()         # no reach, no claim
+    # the aggregate agrees with the per-body read at every reach — that is what "derived" means
+    for reach in (0, 30, 40, 50, 999):
+        idx = o.bench_ko_indices(bench, reach)
+        expected = max((o.prize_value({"id": bench[i][0]}) for i in idx), default=0)
+        assert o.snipe_ko_prizes(bench, reach) == expected
+
+
+@pytest.mark.req("REQ-COMBAT-0005")
 def test_attack_type_payable_suppresses_only_provable_shortfalls():
     typed = 15
     stats = DictCardStatProvider(

@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0080.**
+**Next free number: 0081.**
 
 ⚠️ The index below is **incomplete**: **0067** exists on disk but has never been given a row (it
 landed on the #137 / 0a branch). 0069 and 0070 were backfilled 2026-07-26. Re-indexing 0067 is
@@ -52,6 +52,13 @@ Fourth collision in four days, and the second time a single ADR has been renumbe
 life. Treat the number as a rebase artifact rather than an identifier: **cite the issue alongside it**
 ("ADR-0078, Issue #187") so a rename can be applied to one branch's references without corrupting
 another's.
+
+**0079 was claimed twice and resolved 2026-07-29.** Issue #161's *the Set-Up Active pick is one deck
+declaration* (itself already renumbered 0075→0077→0078→0079 across three rebases) merged first and
+KEEPS 0079; Issue #199's *deny is a categorical relevance instrument* renumbered to **0080** on
+rebase. **Fifth collision in four days**, and the second ADR in the series to be renumbered more than
+once in its own life. The lesson is no longer "expect to renumber" but "the number is not the
+identifier": cite the issue alongside it ("ADR-0080, Issue #199").
 
 ## Index
 
@@ -137,3 +144,4 @@ another's.
 | [0077](0077-a-ranked-count-consumer-reads-expected-not-the-probability-leg.md) | A ranked consumer asking HOW MANY reads `expected`, not the Probability Leg | Accepted (grilled 2026-07-28, `/grill-with-docs` on Issue #172 — four locked decisions); build = Issue #172. **Amends ADR-0074 decision 1** (the ranked branch splits by the question asked) and resolves its decision-6 untyped-union objection for `expected`; retires ADR-0061's hand-rolled `_deck_basic_energy_fuel` floor; gated by ADR-0072 |
 | [0078](0078-the-value-currencies-are-three-scales-bridged-by-derived-rates.md) | The value currencies are three scales bridged by DERIVED rates, and building the bridge is a shared-layer prerequisite, not an instrument swap | Accepted (grilled 2026-07-28, `/grill-with-docs` on Issue #187 — six locked decisions); build = Issue #199 (S3c), consumed by Issue #187/#188/#189. Renumbered from 0077 on rebase (Issue #172 merged first). Hoists ADR-0073's `PRIZE_DAMAGE_RATE` to `common/currency.py` and names the still-underived Worth Damage Rate; supersedes ADR-0076 Amendment E's hand-off of the currency debt to Issue #189; overturns the WP-N8 play-side ruling. Amendments A–C record gate 1 failing, the user's instantaneous-deny ruling, and its passing |
 | [0079](0079-the-setup-active-pick-is-one-deck-declaration.md) | The Set-Up Active pick is one deck declaration, not a pile of derived rungs | Accepted (grilled 2026-07-28, `/grill-with-docs` on #161 — nine locked decisions); build = #161. Completes ADR-0070 §4 and overturns the 2026-07-15 evolve grill's Ruling 5; applies ADR-0034 / ADR-0046. *(authored as 0075, renumbered 0075→0077→0078→0079 across three rebases — each of 0075/0076/0077/0078 merged first)*. Bench sibling split to #197 |
+| [0080](0080-deny-is-a-categorical-relevance-instrument-not-a-magnitude-one.md) | Deny is a CATEGORICAL RELEVANCE instrument, not a magnitude one: the Worth Damage Rate is not needed, it is MOOT | Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #199 — five locked decisions); builds in Issue #187 (rechartered), Issue #199 closes as the shared layer reduced, Issue #188 unblocked, Issue #189 re-inherits the gust currency debt. Supersedes ADR-0078 decision 1 for deny and withdraws its one-backend claim for deny; answers gate 2 MOOT (the DISCARD sweep found the sole anchor degenerate — it prices 0.000 under both instruments, so the rate divides out) *(authored as 0079, renumbered 0079→0080 on rebase — Issue #161's Set-Up Active pick merged first)* |

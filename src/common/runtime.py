@@ -175,6 +175,20 @@ PROFILE = {
                                     # extra `turns_to_ko_me` per ENERGIZED opponent body per
                                     # decision. OFF until #199's gate 1 rules the read admissible;
                                     # `deny_gate1.py` forces it ON to run that measurement.
+    "deny_relevance": False,        # ADR-0080 / Issue #199 (S3c), COMPUTE-ONLY, ships OFF: emits the
+                                    # **Deny Relevance** read — *is this Energy doing important work
+                                    # for the opponent's plan?* — on `_opponent_target_rows`. The
+                                    # read that REPLACED deny's magnitude: Issue #199's grill measured the
+                                    # Worth Damage Rate underivable (the sole DISCARD-context Hammer
+                                    # frame prices 0.000 under BOTH instruments, so the rate divides
+                                    # out) and the user's doctrine reframed deny as a liveness gate,
+                                    # a redundancy gate and a relevance read — none of which crosses
+                                    # a scale boundary, so no bridge is needed. Nothing reads the
+                                    # new fields — Issue #187 is the consumer and recharters to build the
+                                    # instrument on top of this — so ON changes no decision; it
+                                    # costs one line-attack scan per ENERGIZED opponent body per
+                                    # decision, resolved once behind `_opponent_target_cache`.
+                                    # OFF is byte-identical: no fields emitted, no gate computed.
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one
