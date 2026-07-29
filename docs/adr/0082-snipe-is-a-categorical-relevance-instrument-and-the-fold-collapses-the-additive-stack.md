@@ -1,7 +1,11 @@
 # ADR-0082 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
 
-**Status:** Proposed — grill IN PROGRESS (`/grill-with-docs` on Issue #188, 2026-07-29). **Decision 1
-locked**; further decisions appended as they resolve. Build = Issue #188 (rechartered by decision 1).
+**Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #188 — **thirteen locked
+decisions**, one of them taken and then reverted on measurement and recorded as such). Build =
+Issue #188, **rechartered** by decision 1 from *"fold the snipe rungs onto the unified marginal"* to
+*"build the Snipe Relevance instrument"*. Extends ADR-0080's relevance shape to a second instrument;
+supersedes the design doc's S4 snipe bullet and ADR-0078's *"snipe is now the shortest hop"*
+consequence. Nothing here is built.
 
 **Number claimed at grill time** (`docs/adr/README.md`: *next free number 0082*). Six collisions in
 four days precede this one, so the number is a rebase artifact rather than an identifier — **cite the
@@ -183,7 +187,8 @@ tie-breaker inside them.
 ### Two card-fact blindnesses in `_body_threat_rank`, found during the grill and verified at source
 
 Both are real, both are latent rather than corpus-visible today, and both are evidence about where
-`their_plan`'s magnitude should come from (an open decision at time of writing):
+`their_plan`'s magnitude should come from (**settled by decision 3**: the Threat Clock curve, which
+fixes the first of these and makes the second a one-regex addition):
 
 - **Self-locking attacks are invisible to the snipe order.** Latias ex (184) `Eon Blade` `{P}{P}●` 200
   reads *"During your next turn, this Pokémon can't use attacks"*, and the fact **is** parsed —
@@ -255,7 +260,7 @@ Three findings, in order of how load-bearing they are:
 The `10/19` figure is a **floor from a deliberately partial model** — `their_plan` + gates only, with no
 `my_route` factor built — not a verdict on the design.
 
-### The fork the gate exposed: gate SCOPE (open at time of writing)
+### The fork the gate exposed: gate SCOPE (settled by decision 4)
 
 Decision 1 says the ADR-0044 reads *"force it to 0"* on the whole target. **The shipped rungs do not do
 that**, and the corpus sides with the shipped rungs. Read at source in `baseline_snipe.py`, the guards
@@ -275,8 +280,8 @@ frames — `81905522-75`, `82523811-41`, `85164131-22` — have the human pickin
 `target_promotion_mirage`, which a whole-target gate makes **unreachable**. Under decision 1 as written
 those three frames cannot be won at all.
 
-Decision 1's gate list is therefore too coarse and needs amending; which way is the next locked
-decision, not assumed here.
+Decision 1's gate list is therefore too coarse and needs amending. **Resolved by decision 4 below:
+leg-scoped.**
 
 **4. The ADR-0044 reads are LEG-SCOPED guards, not whole-target gates. This AMENDS decision 1.** Only
 the Tera fact is a whole-target zero.
@@ -346,8 +351,10 @@ retained**, not residue. Issue #136's standing directive #1 ("no dead rungs left
 for the target half only, on the record above. Relevance-informed counter placement is a real future
 extension and is logged as such, not silently dropped.
 
-**6. `my_route = max( 1/⌈hp_remaining / max_rider_snipe⌉ , min(1, prize_value / my_prizes_remaining) )`
-— ungated, with NO membership boolean and NO floor constant.** Two alternative reasons a body helps
+**6. `my_route` is a max over DERIVED route legs — ungated, with NO membership boolean and NO floor
+constant.** *(As first ruled: `max(reach, share)`. **Decision 11 replaces `reach`'s role with the
+turns-to-KO delta and decision 12 settles the final leg set — read decision 12 for the shipped
+shape.** The ungated / no-constant property is what survives unchanged.)* Two alternative reasons a body helps
 *me*: my repeatable rider can finish it cheaply alongside my real attacks (**reach** — the arithmetic
 `snipe_prize_reach` already computes at `objectives.py:424`), or its prizes are a large share of what I
 still need (**share**). `max` because they are alternative claims about one subject, per decision 2.
@@ -383,11 +390,11 @@ against the same 19 frames used to validate it. With n = 19 that is shape-select
 set, so *"matches on the 19"* must NOT be the acceptance bar for the build — see the acceptance
 decision. The prototype is evidence that the design is *expressible*, not that it generalises.
 
-**Policy note (owed, not yet ruled).** The prototype read the curve at `incoming(t=1, charged=None)` —
+**Policy note — RULED by decision 8.** The prototype read the curve at `incoming(t=1, charged=None)` —
 the **ceiling** policy — and reached 17/19 there. The design doc's per-consumer conservatism table
 (ruling 2) specifies something more specific for this consumer: snipe-prep is *"existence-gated ceiling
-on the THREAT, slow on the INVESTMENT."* Pinning that split is an open ruling for the build, not
-settled by the prototype's default.
+on the THREAT, slow on the INVESTMENT."* **Decision 8 pins that split**, and ratifies the pairing the
+prototype had reached only by parameter default.
 
 **7. The acceptance bar is the full ADR-0072 pair, plus AUTHORED per-leg fixtures, plus a dedicated
 decider sweep — and reproducing 17/19 on the 19 DAMAGE frames is explicitly NOT one of the bars.**
@@ -482,8 +489,8 @@ forced-promotion Lunatone"). That flat `1.0` was an **unexamined constant introd
 precisely what decision 1 forbids, and the first held-out frame caught it. Decision 7's acceptance bar
 working as designed, on its first application.
 
-The forced-promotion leg therefore needs a **derived grade** rather than a saturating constant — an open
-ruling, not settled here.
+The forced-promotion leg therefore needs a **derived grade** rather than a saturating constant.
+**Resolved by decision 10 below**, which fixes this frame.
 
 ### `_SNIPE_THREAT_PRIZE_FLOOR = 5` — measured INERT under the new instrument
 
@@ -498,8 +505,7 @@ ADR-0078 handed this constant's re-audit to Issue #188. Measured by forcing the 
 
 Making redundancy fire *more* costs nothing; making it fire *less* costs `83667237-107`. **The rescue
 clause changes no outcome under the new instrument — not on the corpus, and not on `ms_snipe_energized_bench_f39`,
-the fixture written to pin it** ("the energized ex, at 6 prizes remaining"). Its fate is the last open
-ruling.
+the fixture written to pin it** ("the energized ex, at 6 prizes remaining"). **Retired by decision 13.**
 
 **10. The forced-promotion leg is GRADED on the promoted body's own curve threat, with NO imminence
 discount.** `forced_leg = normalize(incoming(my_active, [body], t=1, ceiling))` when
@@ -590,6 +596,62 @@ is meaningful evidence, and it is exactly the overfitting decision 7's acceptanc
 `share`'s retention rests on the *mechanism* above — it is bounded by `their_plan` and it decides the
 one frame in the human's favour — not on 17 beating 16.
 
+**13. `_SNIPE_THREAT_PRIZE_FLOOR = 5` is RETIRED — the rescue clause is deleted.** This is the
+re-audit ADR-0078 handed to this issue. The conditions the standing discipline sets for retiring a
+guard are met **and measured**, not asserted:
+
+- **The quantity it thresholds is now priced continuously.** `my_prizes_remaining` enters the
+  instrument through decision 12's `share = min(1, prize_value / my_prizes_remaining)`. Keeping the
+  threshold beside the graded term is two readings of one fact, one of them a magic number — the
+  ADR-0060/0062 *"price the quantity, don't threshold it"* move, and the standing *"a graded term
+  REPLACES its guard family and re-audits it"* rule.
+- **Both of its calibration anchors hold without it** (verified above): `ms_snipe_energized_bench_f39`
+  ("the energized ex, at 6 prizes remaining") PASSES with the clause inert, and `83667237-107` (the
+  stand-down at 4 prizes) is unaffected. The clause changes **no** decision at any setting except the
+  always-rescue one, which is strictly worse.
+
+Cost accepted: `target_prize_redundant` is shared with `_snipe_matchup_tactical`, so the semantics
+change reaches the Brief steer — both are in this issue's scope per decision 5, so it is contained.
+`test_snipe_the_real_attacker.py`'s `f39` case is documented as testing this floor specifically; its
+docstring must be **rewritten to say what it now tests**, not left describing a constant that no longer
+exists.
+
+## The instrument, assembled
+
+The thirteen decisions compose to one scorer. Stated whole, because no single decision above shows it:
+
+```
+relevance(target) = tera_veto ⊗ ( their_plan × my_route )        # decisions 1, 2, 4
+    snipe-for-the-ko  — structural DOMINATOR, outside the scalar   # decision 1
+    tera_veto         — ORDERS LAST (-KO_SCORE), never removes     # decision 4
+
+their_plan = max(                                                  # decisions 2, 3, 4, 9, 10
+    imminence  = normalize(incoming(t=1, ceiling)) / 2^turns_to_afford(attaches=1)
+                 ZEROED by target_prize_redundant OR target_promotion_mirage,
+    forward    = normalize(forward damage)  if target_is_strongest_forward
+                                            and not target_forward_form_in_play,
+    forced     = normalize(incoming(t=1, ceiling))  if target_is_forced_promotion
+                 — NO imminence discount: a forced promotion IS the timing claim,
+) × brief_multiplier      # ADR-0051 MatchupPlan; positive stands down on
+                          # redundant/mirage/Tera, negative always applies
+
+my_route = max(                                                    # decisions 6, 11, 12
+    ko_delta₂ = (turns_to_ko(b) − turns_to_ko(b after 2 chips)) / turns_to_ko(b),
+    reach     = 1 / ⌈hp_remaining / max_rider_snipe⌉,
+    share     = min(1, prize_value(b) / my_prizes_remaining),
+)
+```
+
+**Constants introduced: none.** `MAX_ATTACK_DAMAGE = 350` (the `normalize` denominator) is the existing
+derived, CSV-recomputed normalizer `deny_relevance` already ships. **Constants deleted: nine** — the six
+rung weights (60/45/40/30/20/12), `_ENERGIZED_SNIPE_TIER` (100000, subsumed by `turns_to_afford`),
+`_HAND_SIZE_ATTACKER_BOOST` and `_PREVENT_EX_SNIPE_BOOST` (500 each, decision 9), plus
+`_SNIPE_THREAT_PRIZE_FLOOR` (5, decision 13) — ten in total.
+
+Measured: **17/19 on the corpus** (misses `81905522-75`, the transposition, and `82749168-38`, the
+refuted label — both already out of scope) and **4/4 on the held-out committed fixtures**. Both figures
+are sanity floors, not the acceptance bar (decision 7).
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
@@ -612,6 +674,34 @@ one frame in the human's favour — not on 17 beating 16.
   Decision 2 + Amendment A keep it outside the DP.
 - `currency.PRIZE_DAMAGE_RATE` gains a consumer only at the exit boundary (relevance → the damage-scale
   `score`), not as the instrument's internal currency.
+- **The Value System's S4 now reads: gust alone uses the shared prize marginal.** After ADR-0080 (deny)
+  and this ADR (snipe), two of the three S4 instruments are categorical relevance instruments over their
+  own subject — `(body, energy)` pairs for deny, offered targets for snipe. The one-backend thesis
+  survives only for gust, which genuinely removes the body. Issue #189 should start from that rather
+  than rediscovering it, and ADR-0080's warning that gust *"has no escape route of deny's kind"* now has
+  a second data point behind it.
+- **`combat.incoming` gains the `hand_size_attacker` counter (decision 9)**, which closes one of the two
+  divergences `test_threat_shadow.py::REQ-DOOMSHADOW-0002` pins deliberately. That test must be
+  re-baselined and `threat_sweep.py --doom` re-run. The direction is fail-safe (a more pessimistic curve
+  yields fewer relaxes, and `doom_matched_relax` is relax-only), but it is a shared-machinery change and
+  may be split into its own issue — **not** duplicated inside the snipe leg.
+- **A parser family is owed:** *"does N more damage for each Benched Pokémon (both yours and your
+  opponent's)"* matches neither shipped bench family in `_SCALE_FAMILIES`, so Lillie's Clefairy ex (272)
+  and Skeledirge (203) read at printed damage. One regex plus its test.
+- **`test_snipe_the_real_attacker.py`'s `f39` case needs its docstring rewritten** — it is documented as
+  testing `_SNIPE_THREAT_PRIZE_FLOOR`, which decision 13 deletes. The frame still tests something real
+  (the energized bench pick); the description must say what.
+- **`baseline_snipe.py` survives**, holding the three counter Hypotheses as live, deliberately retained
+  deciders (decision 5). Anyone auditing Issue #136's standing directive #1 should read that decision
+  before recording them as dead rungs.
+- **Ten constants are deleted and none introduced** — see *The instrument, assembled*. That is the fold's
+  concrete deliverable, and it is what makes the two documented blunder classes (the additive stack
+  out-voting a KO; the Tera veto losing on points) unrepresentable rather than merely re-tuned.
+- **Method caution for the build, carried from decisions 6/11/12:** roughly a dozen scorer shapes were
+  measured against the same 19 corpus frames during this grill. One-frame differences between shapes are
+  not evidence at that point. Decision 7's acceptance bar exists for exactly this, and it already earned
+  its keep once — the held-out fixtures caught a real design defect (the flat forced-promotion constant)
+  on their first application.
 
 ## Alternatives rejected
 
