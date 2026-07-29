@@ -1,6 +1,8 @@
 # ADR-0080 — The opener is hand-conditional: a turn-0 evolve marginal REORDERS the declaration, and pins hold their slots
 
-**Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #203 — five locked decisions).
+**Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #203 — five locked decisions,
+plus **Amendment A** from the same session, which narrows decision 4 and defers decision 2 — read it
+before building; it changes what two decisions deliver).
 Build: Issue #203. **Extends ADR-0079** (the Set-Up Active pick is one deck declaration) rather than
 overturning it: the declaration stays, `open-the-declared-starter` stays at `+40`, and the seam keeps
 exactly one rule and one boolean. What changes is that the declaration's *effective order* is
@@ -78,8 +80,14 @@ the `_PRIZE_UNIT = 12` failure mode ADR-0065 forbids and ADR-0078 re-records.
 
 The dragapult rows overturn an **explicit user ruling** recorded in ADR-0079 Amendment B — Dreepy
 ranks 5th, *below* a 2-prize Fezandipiti ex, because *"an Active Dreepy is a misplaced Line base…
-the Line base is wanted on the BENCH."* So pins are needed for **demotions**, not only for rank-1
-intent, and the derived predicate of decision 1 does **not** catch these.
+the Line base is wanted on the BENCH."*
+
+> **Superseded by Amendment A.** This finding originally concluded that pins are needed for
+> **demotions** and that `dragapult_ex` must ship `Pin(DREEPY)` / `Pin(DUNSPARCE)`. Amendment A
+> silences all three rows *structurally* instead — none of Drakloak, Dudunsparce or Hariyama is a
+> declared `Line` payoff — so no demotion pin is needed anywhere in the repo today. The finding is
+> kept because it is what *diagnosed* the mis-specification, and because it is the frame that would
+> revive decision 2 if a deck ever wants a promotion the Line clause forbids.
 
 Other facts verified at source and load-bearing below: `docs/rules.md:96-97` — *"Cannot evolve a
 Pokémon the turn it was played/put into play"* and *"Cannot evolve on either player's very first
@@ -106,7 +114,10 @@ in ADR-0079 Amendment F for `_derived_accel_body_ids`. A purely-declared pin was
 hands the author a judgement the engine can compute and **drifts** — a stale pin survives the deck
 edit that invalidates it.
 
-**2. The declared pin is a MARKABLE ENTRY IN THE ONE LIST, not a second field.**
+**2. The declared pin is a MARKABLE ENTRY IN THE ONE LIST, not a second field. ⚠️ DEFERRED — not
+built; see Amendment A.** Amendment A's Line-payoff clause leaves this form with **zero consumers**,
+so it ships as a decided *shape* awaiting a frame (ADR-0079 decision 3's discipline), not as code.
+The reasoning below is what to build **if** a frame ever needs it.
 `starter_priority=[Pin(BUDEW), MUNKIDORI, DUNSPARCE, …]`, where `Pin` is a frozen dataclass exported
 from `common.strategy.strategy` and the field types as `list[int | Pin]`. One normaliser
 (`_rank_id(entry)`) that every reader goes through.
@@ -139,9 +150,13 @@ contains; the equation owns what this hand contains.** The equation reads exactl
 declaration structurally cannot know, and nothing else.
 
 **4. The currency is DAMAGE, and the equation is ADR-0070's evolve marginal read at turn 0. It fires
-ONLY when the offered body's evolution payoff is in hand.** For an offered body `b`, if some `e` in
-`board.hand_ids` has `stats[e].evolvesFrom == stats[b].name`, the marginal is
-`maxDamage(e) − maxDamage(b)`, in damage. Otherwise **0**.
+ONLY when the offered body's evolution payoff is in hand AND that payoff is the deck's declared
+WIN CONDITION.** For an offered body `b`, if some `e` in `board.hand_ids` has
+`stats[e].evolvesFrom == stats[b].name` **and** `e == line.payoff` for some `line` in
+`Strategy.lines`, the marginal is `maxDamage(e) − maxDamage(b)`, in damage. Otherwise **0**.
+
+The Line-payoff clause is **Amendment A** and is load-bearing, not a refinement: without it the
+equation fires on 5 promotable bodies across the three authored decks and only 1 firing is wanted.
 
 | frame | hand | Riolu | Solrock | equation |
 |---|---|---|---|---|
@@ -159,6 +174,10 @@ marginal, in damage, evaluated at turn 0 instead of on the `_EVOLVE` path — th
 parked. Prize-equivalents (`PRIZE_DAMAGE_RATE`) buy nothing at a seam where no KO is in reach;
 card-worth points are unavailable outright, since ADR-0078 decision 2 records that the **Worth Damage
 Rate does not exist** and its gate 2 remains unanchored as of that ADR's Amendment C.
+
+Under Amendment A this silence is *measured*, not asserted: across `mega_lucario`, `dragapult_ex` and
+`mega_starmie` the equation changes **exactly one decision** — case 1 — and `dragapult_ex` is
+untouched entirely.
 
 **Issue #203's question 5 dissolves rather than needing a ruling.** Frame **6b** (Dreepy +
 Fezandipiti ex, no accel) holds no evolution payoff, so the equation is silent, the declaration
@@ -189,6 +208,54 @@ Slot-holding is also what gives `Pin` the semantics Context finding 5 demands: i
 **demotion** pin (`Pin(DREEPY)` at rank 5 = *"Dreepy stays fifth, do not promote it"*), which a
 "pinned wins if present" semantics cannot express at all.
 
+## Amendment A — the payoff must be the declared LINE payoff; decision 2 loses its consumers (2026-07-29, same grill)
+
+Decision 4 as first locked claimed to be *"silent by default"*. **Enumerating every promotable body in
+the repo falsifies that claim**, and the check should have been run before locking:
+
+| deck | base | in-hand payoff | a declared `Line` payoff? | wanted? |
+|---|---|---|---|---|
+| `mega_lucario` | Riolu | Mega Lucario ex | ✅ `Line(payoff=MEGA_LUCARIO_EX)` | ✅ **the fix** |
+| `mega_lucario` | Makuhita | Hariyama (210) | ✗ no Line | ✗ |
+| `dragapult_ex` | Dreepy | **Drakloak** | ✗ the Line's payoff is Dragapult **ex** | ✗ ruled against |
+| `dragapult_ex` | Dunsparce | Dudunsparce | ✗ no Line — the *draw engine* | ✗ |
+| `mega_starmie` | Staryu | Mega Starmie ex | ✅ `Line(payoff=MEGA_STARMIE_EX)` | ~ harmless |
+
+**1 of 5 firings is wanted.** The design was noisy by default, and decision 2's pins were being used
+to suppress the noise one card at a time — which is **re-buying the guard pile ADR-0079 decision 2
+deleted**. That deletion rested on *"a guard that second-guesses a complete, deliberate ranking is …
+an override of deck intent"* — sound while the ranking is **static**, which is exactly the property
+this ADR removes. `dragapult_ex`'s Dunsparce row is the deleted `dont-open-with-the-engine` (−12)
+arriving back verbatim: `STRATEGY.md:128` says *"bench Dunsparce … → evolve → Run Away Draw"*.
+
+**The fix is at the specification, not per instance:** the in-hand payoff must be the `payoff` of a
+declared `Line` — the deck's stated win condition. Existing vocabulary (all four agents declare
+`lines`), so no new declaration.
+
+Effect: Dreepy, Dunsparce and Makuhita go silent **structurally**. Staryu still fires but is
+harmless — Cinderace's *derived* pin holds slot 0 when present, and when absent Staryu is the only
+other body in the deck. Net across all three authored decks: **exactly one behaviour change,
+`mega_lucario` case 1** — the one measured defect in Issue #203.
+
+**Consequences of the amendment:**
+
+- **`dragapult_ex` needs no pins and sees no behaviour change.** The build-blocking dependency
+  recorded before this amendment is **withdrawn**.
+- With Dreepy and Dunsparce silent, nothing can out-promote Budew, so **Budew needs no pin either**.
+  Decision 2's declared-`Pin` form therefore has **zero consumers** and is deferred rather than built
+  — ADR-0079 decision 3's *"the refinement awaits a frame"* discipline, applied to this ADR's own
+  vocabulary.
+- Decision 1's **derived** pin (`_route_only_at_setup`, Cinderace) is unaffected and remains
+  essential; only its declared-override half loses its consumer.
+- **Accepted limit:** a deck whose correct opener flip involves a non-win-condition body is now
+  unreachable, and needs a fresh grill rather than a tweak. The only in-repo candidates are a draw
+  engine the doctrine says to bench and a stepping stone already ruled against, so the limit is
+  currently free.
+
+Recorded at length because the sequencing is the lesson, and it is the same one ADR-0078 Amendment C
+records: the design was locked on an *asserted* property ("silent by default") that a five-row
+enumeration falsified in minutes. The decklists were available the whole time.
+
 ## Consequences
 
 - The Set-Up Active seam keeps **one rule and one boolean**; what gains hand-awareness is the
@@ -197,16 +264,15 @@ Slot-holding is also what gives `Pin` the semantics Context finding 5 demands: i
 - `Pilot._top_starter_id` stops being a five-line "first present" scan and becomes a ranking function
   needing `stats` and the hand. It earns its own unit tests, and **`board.top_starter_id` becomes
   hand-dependent** — existing fixtures that assume it resolves to Solrock need hand-aware rebuilds.
-- **`dragapult_ex` requires `Pin(DREEPY)` and `Pin(DUNSPARCE)` as part of this change.** Per Context
-  finding 5 these are not optional polish: shipping decision 4 without them actively regresses the
-  deck against the ADR-0079 Amendment B user ruling. Being doctrine, they go through the ADR-0046
-  proposal pipeline with a `score_diff` gate, not a hand edit.
-- `Strategy.starter_priority` types as `list[int | Pin]`. Known call sites: `Pilot._top_starter_id`,
-  `tests/strategy/test_setup_active_placement.py` (the completeness invariant),
-  `tests/strategy/test_budew_sacrificial_starter.py:56` (asserts `starter_priority[:1] == [_BUDEW]`,
-  becomes `[Pin(BUDEW)]`), and `/deck-align`'s drift finding. A missed site fails **open**.
-- The completeness invariant of ADR-0079 decision 5 must normalise through `_rank_id` — otherwise a
-  `Pin`-wrapped id reads as unranked and the invariant fails for a spurious reason.
+- ~~**`dragapult_ex` requires `Pin(DREEPY)` and `Pin(DUNSPARCE)`.**~~ **Withdrawn by Amendment A** —
+  both rows are silenced structurally by the Line-payoff clause, and `dragapult_ex` sees no
+  behaviour change at all.
+- `Strategy.starter_priority` keeps its `list[int]` type for now: decision 2's `Pin` form is
+  **deferred**, so no call site changes and `test_budew_sacrificial_starter.py:56` stands as written.
+  If a frame ever revives it, the field types as `list[int | Pin]` and the affected sites are
+  `Pilot._top_starter_id`, the ADR-0079 decision 5 completeness invariant (which must normalise
+  through `_rank_id`, else a wrapped id reads as unranked), that Budew assertion, and `/deck-align`'s
+  drift finding — with a missed site failing **open**.
 - `Strategy.partners` gains no consumer here. Context finding 1 establishes it does not discriminate
   case 1, so the temptation to wire it at this seam is recorded as **declined**, with the reason.
 - **Accepted limit:** the equation is deliberately narrow and prices no tempo/readiness family. The
@@ -246,3 +312,11 @@ Slot-holding is also what gives `Pin` the semantics Context finding 5 demands: i
 - **Additive `_opener_tactical`, or a second higher-weighted Hypothesis.** Both make the override's
   correctness depend on **learned** weights, and both re-introduce the cross-rule ordering ADR-0079
   decision 2 deleted (decision 5).
+- **An unrestricted payoff, with demotion pins suppressing the hazards** (decision 4 as first
+  locked). 1 wanted firing in 5, and the suppression is ADR-0079's deleted guard pile rebuilt by
+  hand, per card, per deck — with every future deck needing an author to spot the hazard unaided.
+  Superseded by Amendment A.
+- **Restricting to a TERMINAL hop** (nothing in the deck evolves from the payoff) instead of the Line
+  payoff. Kills Dreepy — Drakloak is not terminal, and per `docs/rules.md` §4's *"new in play"*
+  clause it cannot evolve again the same turn anyway — but Dudunsparce and Hariyama **are** terminal,
+  so two hazards survive. Strictly dominated by Amendment A's clause.

@@ -430,7 +430,12 @@ card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulliga
 **Opener Marginal**:
 The turn-0 reading of the **evolve marginal** (ADR-0070) that makes the opener hand-conditional: for
 a body on offer, `maxDamage(payoff) − maxDamage(body)` in **damage** when some card in
-`board.hand_ids` evolves from it, and **0** otherwise. Deliberately **silent by default** — it has no
+`board.hand_ids` evolves from it **and that card is the `payoff` of a declared `Line`** — the deck's
+stated win condition — and **0** otherwise. The Line clause is load-bearing, not a refinement:
+without it the marginal fires on 5 promotable bodies across the three authored decks and only 1
+firing is wanted, and suppressing the rest re-buys the guard pile ADR-0079 deleted (a mid-line
+stepping stone like Drakloak, or a draw engine like Dudunsparce, would otherwise promote its base).
+With it, the marginal changes exactly one decision in the repo. Deliberately **silent by default** — it has no
 opinion on which body is better, and detects only a *payoff stranded in hand*, which is the one thing
 a ranking authored before the hand is dealt cannot carry. That silence is what lets the declaration
 keep every frame it already gets right *by construction* rather than by tuning, and is why the design
@@ -441,12 +446,16 @@ payoff), tie-break (it REORDERS; a tie-break cannot reach the inversion it exist
 
 **Pin** / **Effective Starter Order**:
 A **Pin** marks one Starter Priority entry as immovable (`Pin(BUDEW)`, a frozen dataclass in
-`common.strategy.strategy`); the **Effective Starter Order** is what the Pilot actually resolves —
+`common.strategy.strategy`) — ⚠️ **the DECLARED Pin is deferred, not built**: the Opener Marginal's
+Line clause leaves it with zero consumers, so it is a decided shape awaiting a frame (ADR-0080
+Amendment A). The *derived* pin below is live and essential. The **Effective Starter Order** is what
+the Pilot actually resolves —
 pinned entries hold their declared slot, unpinned entries re-sort among the remaining slots by
 (Opener Marginal desc, declared rank asc). Because a Pin holds a *slot* rather than winning outright,
-it expresses a **demotion pin** as naturally as a rank-1 one: `Pin(DREEPY)` at rank 5 means "Dreepy
-stays fifth, do not promote it", which dragapult needs to preserve its ADR-0079 ruling that an Active
-Line base is *misplaced*. Pins are **derived first, declared as the override** (ADR-0079 Amendment
+it would express a **demotion pin** as naturally as a rank-1 one — `Pin(DREEPY)` at rank 5 meaning
+"Dreepy stays fifth, do not promote it". No deck needs that today: the Line clause silences every
+would-be demotion structurally, which is exactly why the declared form is deferred. Pins are
+**derived first, declared as the override** (ADR-0079 Amendment
 F's pattern): `_route_only_at_setup` pins any body whose only route into play is the setup pick — an
 `opener`-tagged card whose `evolvesFrom` name is absent from `Pilot.deck`, i.e. Cinderace in a deck
 running no Raboot — with no author input, and lifts by itself if the deck later runs the line.
