@@ -706,8 +706,41 @@ committed deny fixture is a play/hold frame, none a DISCARD select). Until that 
 adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0073's own
 `_PRIZE_UNIT = 12` — wrong by ~8×, and it endorsed feeding a 3-prize body to save a 40-point band — is
 the standing example of what guessing it costs.
+**MOOT for deny since ADR-0079 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
+pending.** The corpus-wide DISCARD sweep found 12 `Discard` frames, exactly one holding a Hammer
+(`86091435-68`), and that one is DEGENERATE rather than merely directional: the strip prices `0.000`
+under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate DIVIDES OUT of
+`m × PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE` and no Δ policy rescues it; both cards the endorsed ruling
+pitches price `0.0` themselves, so even a nonzero `m` would only assert *worth > 0*. Deny no longer
+needs the rate at all (it became a **Deny Relevance** instrument), so this leg is unbuilt by DESIGN,
+not by backlog. It remains genuinely owed to **gust**, whose `gust_target_slot` still feeds a
+prize-equivalent straight into the worth-summing DP with no conversion — latent only because Boss's
+Orders' `TAG_TIER["gust"]` floor absorbs it (ADR-0076 Amendment E, returned to Issue #189).
 _Avoid_: Prize Damage Rate (the prizes↔damage leg — this is the worth leg), Worth (the scale, not the
-rate that converts it), calibration (a value chosen to preserve an incumbent is not a derivation)
+rate that converts it), calibration (a value chosen to preserve an incumbent is not a derivation),
+"pending"/"not yet derived" for the deny case (it is moot there — say moot)
+
+**Deny Relevance**:
+Deny's value, and the answer to *"is this Energy doing important work for the opponent's plan?"* — a
+**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0079,
+Issue #199, user doctrine 2026-07-29). 0 = dead (an Energy on a Meowth ex, whose Ability needs none and
+whose Tuck Tail is `●●●` for 60), 1 = critical (the `{M}` on an Archaludon ex that Metal Defender
+`{M}{M}{M}` needs). Two hard gates force it to 0 — **no Energy on their board at all**, and **this
+body dies to our KO this turn** (Active by attack, benched by snipe; the ADR-0063 `active_can_ko` drop
+generalized). Three derived legs otherwise, all reading existing seams: **forward potential**
+(`forward_card_ids` — a Riolu carrying Mega Lucario ex outranks a Solrock carrying nothing),
+**typed unlock** (the `_DENY_CHARGED` per-attack typed affordability diff with and without *that*
+Energy — Dragapult's `{R}` counts toward Phantom Dive `{R}{P}`, its stray `{D}` counts toward
+nothing), and **ability fuel** (`CardStat.abilityEnergyTypes` — strip Munkidori's `{D}` to mute
+Adrena-Brain, not its `{P}`). A matched Brief's `threats[]` MULTIPLIES the derived rank, never sources
+it: the Brief-free fallback (`Scout._target_role`) ranks the doctrine backwards, topping an unbriefed
+board with the very Meowth ex the doctrine ignores. Scales the incumbent constants rather than
+introducing a scale — keep price `TAG_TIER["gust"] 10.0 × max_relevance`, target pick
+`argmax relevance`.
+_Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
+strip Δ / deny marginal (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
+typed-unlock leg, its two-term form does not), relevance as a bucket/category (it is a continuous
+scalar — the Makuhita "maybe" is the case buckets cannot express)
 
 **Ability Fuel**:
 The attach marginal's second additive channel (#139): the value of attaching the colour a DORMANT
