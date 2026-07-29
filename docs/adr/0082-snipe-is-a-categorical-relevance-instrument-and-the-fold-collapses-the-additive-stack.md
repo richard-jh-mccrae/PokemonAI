@@ -137,6 +137,78 @@ three S4 instruments — so after this ADR the score is: gust reads the shared p
 snipe are each categorical relevance instruments over their own subject (`(body, energy)` pairs for
 deny, offered targets for snipe).
 
+**2. The legs combine as a PRODUCT of two conjunctive sides, `max` within each side.** Snipe's
+discriminators split across two different subjects, which deny's do not:
+
+```
+relevance(target) = gates × their_plan × my_route          each factor ∈ [0,1]
+    their_plan = max(threat legs)      # does this body matter to the opponent's offence?
+    my_route   = max(route legs)       # does hurting it advance MY prize route?
+    gates      = 0 on Tera / target_prize_redundant / target_promotion_mirage
+```
+
+`max` within a side is `deny_relevance`'s shape used where deny's reasoning actually applies —
+alternative claims about **one** subject, the same combination `card_worth.role_value` uses for
+heterogeneous claims. The **product** across sides is the divergence, and it is deliberate: a snipe is
+worth spending only when the body matters to them *and* the damage advances me, so the two sides are
+conjunctive rather than alternative. A flat `max` over all legs would score a purely on-route body with
+zero threat identically to one that is both, losing the legitimate half of what the additive stack
+expressed. Multiplication is also the codebase's stated composition discipline — *"a booster must scale
+the oracle, never add to it"* (ADR-0063, `pilot.py:129-136`) — and it makes the additive failure mode
+**unrepresentable** rather than merely capped. A matched Brief's `threats[]` scales `their_plan` only,
+clipped back into `[0,1]`, mirroring `_BRIEF_THREAT_BOOST = 1.25` including its "0 × anything is 0"
+property, so authored scouting can never promote a whiff.
+
+Recorded honestly: the `82756021-57` / `83667237-107` pair does **not** discriminate between the product
+and a flat `max`, because decision 1 already makes redundancy a hard gate, so that pair separates under
+any combination rule. Decision 2 is made on failure-mode and composition grounds, not on that pair.
+
+### Measurement that shaped decisions 1–2: magnitude is not the driver at all
+
+Ranking the offered options by magnitude alone, with no gates, no tier and no route factor:
+
+| ranker | agrees with human |
+|---|---|
+| `max(own maxDamage, forward_max_damage)`, printed | 7/19 |
+| the same, with the missing bench scaler applied (below) | 7/19 |
+| `needs.opponent_target_value` (the chartered fold) | 7/19 |
+| **the shipped rungs** | **17/19** |
+
+Three independent magnitude rankers land on exactly 7/19. **The shipped 17/19 is produced almost
+entirely by the categorical reads** — the ADR-0044 gates, the Prize-Path membership, the imminence
+tier — not by any magnitude. That is decision 1's thesis measured from a second direction, and it sets
+the priority for the build: the gates and route legs carry the record; the magnitude leg is a
+tie-breaker inside them.
+
+### Two card-fact blindnesses in `_body_threat_rank`, found during the grill and verified at source
+
+Both are real, both are latent rather than corpus-visible today, and both are evidence about where
+`their_plan`'s magnitude should come from (an open decision at time of writing):
+
+- **Self-locking attacks are invisible to the snipe order.** Latias ex (184) `Eon Blade` `{P}{P}●` 200
+  reads *"During your next turn, this Pokémon can't use attacks"*, and the fact **is** parsed —
+  `AttackStat(243).nextTurnSelfLock is True` — and **is** honoured by `combat.incoming` /
+  the payability walk (ADR-0033, `combat.py:693,992,1018,1238`). But `_body_threat_rank` reads raw
+  `stat.maxDamage = 200`, so it prices a body that attacks every *other* turn as a full 200-per-turn
+  threat. ADR-0061 already rules that *a locking attack's value includes its forced follow-up*; the
+  snipe order never got the memo.
+- **A damage-scaling family is missing from the parser, and it hits a corpus-live body.** Lillie's
+  Clefairy ex (272) `Full Moon Rondo` `{P}●` 20 reads *"20 more damage for each Benched Pokémon (both
+  yours and your opponent's)"*. `_SCALE_FAMILIES` (`scouting/card_text.py:347`) ships
+  *"each of **your** Benched Pokémon"* → `atk_bench` and *"each of **your opponent's** Benched
+  Pokémon"* → `def_bench`, but nothing for the **combined** count, so `parse_attack_scaling` returns
+  `None` and `AttackStat(371).scaleVar is None` → the body is priced at **20**. On the corpus boards its
+  real damage is 100–120; on a full board it is 20 + 20×9 = **200**. Skeledirge (203) `Torcherto` shares
+  the exact phrasing. This is the same class as the `hand_size_attacker` gap `_forced_promotion_key`'s
+  docstring already records (*"Alakazam's printed 10 hides the real threat — the ms f85 gap"*), and that
+  tag covers exactly one card (743) in `card_functions.json`.
+
+The bot currently gets `81785223-28/39/45` right — the human takes the energized Clefairy over the bare
+Latias ex — but for the **wrong reason**: `_ENERGIZED_SNIPE_TIER = 100000` promotes it because it
+carries Energy, not because the model understands either the scaler or the lock. Reverse the Energy and
+the pick reverses with it. Right answer, wrong reason, is a latent regression waiting for an unseen
+board.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
