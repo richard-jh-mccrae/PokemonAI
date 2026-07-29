@@ -969,6 +969,12 @@ class Context:
     bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
                                         # strictly improves the opponent's cheapest Prize Path
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
+    bench_path_delta: float = 0.0       # ...and by HOW MUCH, in turns (ADR-0081 decision 5). The
+                                        # Deploy Marginal's exposure leg: the magnitude the boolean
+                                        # above is merely the sign of. `HORIZON`-graded when the play
+                                        # completes a previously-uncompletable route; 0 when the
+                                        # `objectives_path` switch is off, so exposure is DEFINED
+                                        # rather than estimated when the machinery is dark.
     promote_target_on_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): this promote/switch
                                         # candidate sits on THEIR cheapest path — bringing it up walks
                                         # it into the KO they want (rung DELETED as subsumed, ADR-0073 §7c)
@@ -5449,7 +5455,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp
                           and not target_is_bench_tera)   # Tera: no damage while Benched
         target_on_path = self._target_on_path(obs, select, option, board)   # Tier-3 (ADR-0040)
-        bench_shortens = self._bench_shortens_their_path(obs, select, option, stat, board)
+        bench_path_delta = self._bench_path_delta(obs, select, option, stat, board)
+        bench_shortens = bench_path_delta > 0.0     # the sign; one source, no drift
         promote_on_their_path = (select.get("context") in (_TO_ACTIVE, _SWITCH)
                                  and self._promote_target_on_their_path(obs, select, option, board))
         target_rank = self._target_threat_rank(
@@ -5572,6 +5579,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_is_forced_promotion=target_is_forced_promotion,
                        target_promotion_mirage=target_promotion_mirage,
                        bench_shortens_their_path=bench_shortens,
+                       bench_path_delta=bench_path_delta,
                        promote_target_on_their_path=promote_on_their_path,
                        counter_is_best_placement=(
                            board.best_counter_slot is not None
