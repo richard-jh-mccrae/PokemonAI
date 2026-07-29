@@ -389,6 +389,33 @@ the **ceiling** policy — and reached 17/19 there. The design doc's per-consume
 on the THREAT, slow on the INVESTMENT."* Pinning that split is an open ruling for the build, not
 settled by the prototype's default.
 
+**7. The acceptance bar is the full ADR-0072 pair, plus AUTHORED per-leg fixtures, plus a dedicated
+decider sweep — and reproducing 17/19 on the 19 DAMAGE frames is explicitly NOT one of the bars.**
+The prototype's shape was selected against those 19 frames, so scoring it on them again validates a fit
+against itself. Five bars:
+
+1. **Discrimination Gate** — `leaf_lab.py diff --baseline data/leaf_lab/baseline.json` over the gated
+   leaf frames, run **BEFORE** the arming decision, not after it (ADR-0072 decision 5 — the ordering
+   ADR-0076 Amendment E got wrong and had to write an amendment about). No unruled `OK → MISS`.
+2. **Decision Gate** — a new `tools/train/probes/snipe_decider_sweep.py`, following the
+   `deny_gate1.py` / `attach_decider_sweep.py` shape, classifying every change as **FIX / regression /
+   unlabelled** against the corpus ruling rather than reporting any behaviour change as a failure (the
+   ADR-0078 Amendment C framing). ADR-0072 names "the phase's `*_decider_sweep.py`" and none exists for
+   snipe today.
+3. **Paired-A/B Tripwire** — `gauntlet_ab.py --overlay` on the kill-switch at the ADR-0072 mid-build
+   bound (`crashes == 0 AND CI-lo >= -5%`), across the three historically-calibrated agents.
+4. **Per-leg unit fixtures AUTHORED from worked examples, not harvested from the 19** — the ADR-0080
+   pattern ("the five worked examples become the acceptance fixtures"). At minimum: the
+   `82756021-57` / `83667237-107` identical-magnitude pair (the impossibility proof, which any
+   magnitude-shaped successor fails by construction); a forward-leg ordering case (a pre-evo carrying a
+   wincon outranks one carrying nothing); the Tera **ordering-not-removal** case (a benched Tera as the
+   ONLY offered target must still be selectable); and Lillie's Clefairy ex reading its board-effective
+   damage rather than 20 once the combined-bench scaler family lands.
+5. **Kill-switch OFF byte-identical first, then armed** (the `develop_rollout` / seam-D precedent).
+
+`81905522-75` (transposition) and `82749168-38` (refuted label) stay **recorded misses**; a build that
+"fixes" either has almost certainly overfitted.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
