@@ -1089,6 +1089,10 @@ class OptionTrace:
                                  # refill that ARMS them). NOT in `score` — inert telemetry that makes the
                                  # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
                                  # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
+    deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0081): the per-leg
+                                 # breakdown for a Bench deployment. The decider sweep prints it on
+                                 # BOTH sides of a flip and a human rules the Decision Gate by
+                                 # reading it, so a bare total would make that gate unrulable.
     evolve_working: dict | None = None  # the EVOLVE DECIDER's legible working (ADR-0070): the per-option
                                  # TERM row — deploy (with each body's this_turn / payoff / the two clocks),
                                  # income_gain, income_loss, and the `tactical` the option actually scored.
@@ -1934,6 +1938,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                          if attach_row is not None else 0.0),
                            hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
                            evolve_working=evolve_row,
+                           deploy_working=deploy_row,
                            promote_retreat_working=promote_row)
 
     def _evolve_side(self, obs: dict, board: Board, raw: dict | None, card_id, *,
