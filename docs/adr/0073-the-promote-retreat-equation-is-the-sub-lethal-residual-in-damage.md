@@ -92,6 +92,9 @@ counter-frames forced:
 - **3b. The accel dividend re-anchors on `_ENERGY_RECOVER`.** `_DIVIDEND = 5` is ~45× short of the
   `75`-per-Energy the SAME rider earns on the attack option, need-gated by `_recover_units`.
   Retreating INTO Cinderace must credit what attacking WITH Cinderace credits.
+  ⚠️ **The rate itself is AMENDED** (2026-07-29, Issue #172 — see the amendment at the foot of this
+  ADR): `75` was tuned, not derived, and ~6 % above the bracket two human rulings impose. It is now
+  the derived `160/3`. The re-anchoring ruling above stands; only its magnitude moved.
 - **3c. `tempo_denied` is the one ASSERTED term, and is flagged as such.** Every other term now
   derives from card data or an existing oracle; "a denied Item turn ≈ one prize" does not (though it
   is what the shipped `_ITEM_LOCK_TEMPO = 12` = one `_PRIZE_UNIT` already claims, and
