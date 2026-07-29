@@ -406,15 +406,35 @@ class CombatMath:
         return st.recoil if st else 0
 
     # --- bench-rider prize math (opp_bench = ((cardId, hp), …), the Board snapshot) -------
+    def bench_ko_indices(self, opp_bench, reach: int) -> frozenset:
+        """WHICH benched Pokémon ``reach`` damage Knocks Out — indices into ``opp_bench``.
+
+        The bench Knock Out rule itself, stated ONCE: bench HP within the damage, bench damage
+        ignores Weakness/Resistance (ADR-0022), Tera bodies take none while benched.
+        `snipe_ko_prizes` is derived from this rather than restating it, so the two can never drift
+        (the `_build_standing` / `_affords` one-function-owns-the-fact lesson).
+
+        ``reach`` is any bench-reaching damage a single body could take — a single-target snipe
+        rider, or a distributable spread total pointed entirely at one body ("in any way you like",
+        so all of it may land on one). The rule does not care which produced it, and naming it
+        ``reach`` rather than ``rider`` keeps that honest.
+
+        Added by #199 (ADR-0079) for the Deny Relevance redundancy gate, which needs the IDENTITY of
+        the bodies that die — the doctrine's *"or maybe its a benched pokemon that we can snipe and
+        KO, same thing, no hammer on that specific pokemon"* — where the aggregate prize read alone
+        cannot say which body it meant."""
+        if reach <= 0:
+            return frozenset()
+        return frozenset(i for i, (cid, hp) in enumerate(opp_bench)
+                         if hp and hp <= reach and not self.is_tera(cid))
+
     def snipe_ko_prizes(self, opp_bench, rider: int) -> int:
         """Max prize among the opponent's benched Pokémon a bench-snipe ``rider`` KNOCKS OUT —
         bench HP <= rider (bench snipes ignore Weakness/Resistance, ADR-0022); Tera bodies take
-        none. 0 when the rider finishes nothing."""
-        if rider <= 0:
-            return 0
-        return max((self.prize_value({"id": cid}) for cid, hp in opp_bench
-                    if hp and hp <= rider and not self.is_tera(cid)),
-                   default=0)
+        none. 0 when the rider finishes nothing. DERIVED from `bench_ko_indices` (#199)."""
+        bench = list(opp_bench)
+        return max((self.prize_value({"id": bench[i][0]})
+                    for i in self.bench_ko_indices(bench, rider)), default=0)
 
     @staticmethod
     def best_ko_subset(items, budget: int) -> frozenset:

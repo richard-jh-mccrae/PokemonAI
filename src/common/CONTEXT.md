@@ -741,6 +741,24 @@ _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — rele
 strip Δ / deny marginal (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
 typed-unlock leg, its two-term form does not), relevance as a bucket/category (it is a continuous
 scalar — the Makuhita "maybe" is the case buckets cannot express)
+_(BUILT 2026-07-29 behind `deny_relevance`, compute-only and OFF: `common/deny_relevance.py` scores,
+`Pilot._relevance_terms` plumbs, `_opponent_target_rows` emits. Nothing consumes it — Issue #187 is
+the consumer. The **relevance normalizer** `MAX_ATTACK_DAMAGE = 350` is DERIVED — the largest attack
+damage in the set — and recomputed from the CSV by its test, never pinned; it is a `[0,1]` mapping,
+NOT an exchange rate. Known gap, recorded: Okidogi's static +100 HP / +100 damage buff makes its mute
+worth more than its own attacks imply, so the ability leg under-rates it — out of pool, so latent.)_
+
+**Bench Reach**:
+Any damage that can land on ONE benched opponent body this turn — the max of a single-target snipe
+rider and a DISTRIBUTABLE spread total (*"in any way you like"*, so all of it may fall on one body).
+The input to `combat.bench_ko_indices`, which names WHICH benched bodies die and from which
+`snipe_ko_prizes` now derives, so the bench Knock Out rule (HP within reach, Weakness/Resistance
+ignored per ADR-0022, Tera bodies immune while benched) is stated once. Introduced by #199 for **Deny
+Relevance**'s redundancy gate, which needs the body's identity rather than an aggregate prize.
+Reading only the snipe rider left that gate blind on Dragapult ex, whose Phantom Dive is a 6-counter
+spread and not a snipe — i.e. blind on one of our own three decks.
+_Avoid_: snipe rider (one SOURCE of reach, not the quantity), spread total (the other source),
+`snipe_ko_prizes` (the derived aggregate — it answers "how many prizes", never "which body")
 
 **Ability Fuel**:
 The attach marginal's second additive channel (#139): the value of attaching the colour a DORMANT
