@@ -1,4 +1,4 @@
-# ADR-0080 — The opener is hand-conditional: a turn-0 evolve marginal REORDERS the declaration, and pins hold their slots
+# ADR-0081 — The opener is hand-conditional: a turn-0 evolve marginal REORDERS the declaration, and pins hold their slots
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #203 — five locked decisions,
 plus **Amendment A** from the same session, which narrows decision 4 and defers decision 2 — read it
@@ -14,9 +14,13 @@ declaration, never in a trigger), **ADR-0046** (analysis proposes, one skill app
 **Context issues:** Issue #203 (this grill / build), Issue #161 / ADR-0079 (the declaration this
 extends), Issue #197 (the pregame **Bench** sibling — disjoint select context, still not merged).
 
-⚠️ **Number claimed at grill time.** `docs/adr/README.md` records the recurring lesson (0071 once,
-0074 three ways, 0076 twice, 0079 three times): the number settles at *merge* time, not grill time.
-Keep references greppable and expect to renumber.
+**Authored as 0080, renumbered 0080 → 0081 on rebase (2026-07-29).** The grill-time note on this file
+predicted exactly this and it landed within the day: Issue #199's *deny is a categorical relevance
+instrument* reached `main` first and KEEPS 0080 under the standing first-merged rule. Both are
+strategy ADRs, so `docs/adr/README.md`'s tooling-moves-first rule never applied. **Sixth collision in
+four days** — the commit history and the earlier Issue #203 comments therefore say 0080; this file is
+the same ADR. Per the README's own conclusion, the number is a rebase artifact rather than an
+identifier, so cite the issue alongside it: **ADR-0081, Issue #203**.
 
 ## Context
 

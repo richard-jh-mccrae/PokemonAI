@@ -123,7 +123,7 @@ _DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite,
                            # ahead of everything by `_finish_turn_last` — so a purely positive term could
                            # never decline one: any score above zero gets it played. The strip must beat
                            # the hold (ms f29: "wasted crushing hammer").
-_BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0080 decision 2, Issue #199): a body
+_BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0081 decision 2, Issue #199): a body
                            # the matched Matchup Brief names among its `threats` is scored up, then
                            # clipped back into [0,1]. A MULTIPLIER, never a source — authored scouting
                            # sharpens a read that already works without it, which is what keeps the
@@ -1333,7 +1333,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `turns_to_ko_me` per ENERGIZED opponent body.
                                                         # OFF by default so live play pays nothing until
                                                         # #199's gate 1 rules the read admissible
-        self.deny_relevance = deny_relevance            # ADR-0080 / Issue #199 COMPUTE-ONLY switch: emits
+        self.deny_relevance = deny_relevance            # ADR-0081 / Issue #199 COMPUTE-ONLY switch: emits
                                                         # the **Deny Relevance** read (the value that
                                                         # REPLACED deny's damage magnitude — see
                                                         # `common/deny_relevance.py`) on
@@ -7295,7 +7295,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         enabler = self._opp_switch_enabler()
         base_t = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
                                             switch_enabler=enabler)
-        # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once for the whole decision
+        # Deny Relevance's REDUNDANCY gate (ADR-0081 step 2), resolved once for the whole decision
         # rather than per body: which opponent bodies die to our Knock Out this turn, and so deny
         # nothing. Keyed by the row's own (area, bi) convention. Only built when the read is armed.
         doomed_ids = frozenset()
@@ -7327,7 +7327,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _bench_doomed_by_me(self, ma: dict | None, bench_list) -> frozenset:
         """Indices into ``bench_list`` of benched opponent bodies MY Active can Knock Out this turn.
 
-        The bench half of the Deny Relevance redundancy gate (ADR-0080 decision 1, step 2): *"or
+        The bench half of the Deny Relevance redundancy gate (ADR-0081 decision 1, step 2): *"or
         maybe its a benched pokemon that we can snipe and KO. same thing, no hammer on that specific
         pokemon."* The Active half is `board.active_can_ko` (ADR-0063's drop, which ADR-0078's
         re-audit ruled NOT subsumed and required to survive any swap).
@@ -7357,12 +7357,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _relevance_terms(self, b, *, doomed: frozenset, area: str, bi: int, brief_ids=()) -> dict:
         """The DENY instrument's value — **Deny Relevance**, the read that replaced the magnitude
-        (ADR-0080, Issue #199 grill; `common/deny_relevance.py` owns the scoring, this owns the plumbing).
+        (ADR-0081, Issue #199 grill; `common/deny_relevance.py` owns the scoring, this owns the plumbing).
 
         Emits, per opponent body: the best relevance achievable against it, WHICH attached Energy
         achieves it (by index into the body's ``energies``, so a consumer acts rather than
         re-derives), and the per-leg components for diagnosis. Compute-only behind `deny_relevance`
-        — nothing reads these yet, Issue #187 is the consumer (ADR-0080 decision 4).
+        — nothing reads these yet, Issue #187 is the consumer (ADR-0081 decision 4).
 
         The two gates come first and force 0 before any leg is scored:
           * **liveness** — no attached Energy, which also delivers ADR-0062's whiff structurally;
@@ -7375,7 +7375,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         A colourless/special Energy therefore scores 0 on the typed leg, which is correct — it pays
         no specific-type slot and so is never on a plan's critical path.
 
-        A matched Brief's ``threats`` MULTIPLY the derived rank, never source it (ADR-0080
+        A matched Brief's ``threats`` MULTIPLY the derived rank, never source it (ADR-0081
         decision 2): authored scouting sharpens a read that already works without it. The Brief-free
         path deliberately does NOT fall back to `Scout._target_role`, which orders `prize_liability`
         (any *ex* body) above `attacker` and so would top an unbriefed board with exactly the
@@ -7807,7 +7807,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return not st.evolvesFrom or self._opens_from_hand(cid)
 
     def _wincon_payoff_ids(self) -> frozenset:
-        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0080
+        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0081
         amendment A) — an evolution in hand only reorders the opener when it is what the deck is
         actually trying to build.
 
@@ -7821,10 +7821,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **Deliberately NOT `_wincon_set`**, whose first clause is identical. That set additionally
         unions in every card carrying a `win_condition` / `primary_attacker` ROLE, which is a strictly
         broader concept: it would let a role-tagged body that is on no declared Line act as an opener
-        payoff, widening the gate past what ADR-0080 decision 4 specifies (*"the `payoff` of one of the
+        payoff, widening the gate past what ADR-0081 decision 4 specifies (*"the `payoff` of one of the
         deck's declared win-condition Lines"*). The two sets coincide for all three authored decks
         today, so the divergence is LATENT — swapping them reddens nothing by accident. The binding
-        record is therefore ADR-0080 decision 4 plus its guard test
+        record is therefore ADR-0081 decision 4 plus its guard test
         (`test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base`), not this
         docstring, which would be deleted along with the very function a reviewer proposes collapsing.
 
@@ -7855,7 +7855,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return names
 
     def _opener_marginal(self, cid: int | None, hand_ids) -> float:
-        """**Opener Marginal** (ADR-0080 decision 4): ADR-0070's body-substituted evolve delta, in
+        """**Opener Marginal** (ADR-0081 decision 4): ADR-0070's body-substituted evolve delta, in
         DAMAGE, read at turn 0. Non-zero only when a card in hand evolves from `cid` AND that card is
         a declared Line payoff; then `maxDamage(payoff) - maxDamage(cid)`. Zero otherwise.
 
@@ -7869,7 +7869,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Matches on the evolution's `evolvesFrom` NAME, not an id, so reprints of the same body (Raboot
         is both 152 and 665) resolve identically. Reads the HAND only — at turn 0 the deck carries no
         frame-specific information, so deck odds would be a per-deck constant the ranking already
-        encodes (ADR-0080 decision 3)."""
+        encodes (ADR-0081 decision 3)."""
         if cid is None or not self.stats or not hand_ids:
             return 0.0
         st = self.stats.get(cid)
@@ -7888,7 +7888,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return best
 
     def _route_only_at_setup(self, cid: int | None) -> bool:
-        """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0080
+        """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0081
         decision 1) — true for an `opener`-tagged Evolution whose previous stage is absent from this
         deck, i.e. Cinderace in a deck running no Raboot. Skipping such a body forfeits it
         permanently, so the Opener Marginal may not move it.
@@ -7901,7 +7901,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **Fails CLOSED** — pins when it cannot tell — deliberately the opposite of
         `_is_startable_body`. The asymmetry is justified by consequence, not symmetry: a MISSING pin
         permanently forfeits a card, while a spurious one merely opens suboptimally. Pinning
-        everything degrades exactly to the pre-ADR-0080 behaviour (the declared order, verbatim)."""
+        everything degrades exactly to the pre-ADR-0081 behaviour (the declared order, verbatim)."""
         if cid is None:
             return False
         if not (self.stats and self.deck and self.functions):
@@ -7916,7 +7916,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return st.evolvesFrom not in self._deck_body_names()
 
     def _effective_starter_order(self, obs: dict, sp: list) -> list:
-        """**Effective Starter Order** (ADR-0080 decision 5): the declaration as resolved against THIS
+        """**Effective Starter Order** (ADR-0081 decision 5): the declaration as resolved against THIS
         opening hand. Pinned entries hold their declared slot; unpinned entries re-sort among the
         slots left over, by (Opener Marginal desc, declared rank asc).
 
@@ -7952,7 +7952,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         One id, not a rank, because SETUP_ACTIVE is a forced single pick (minCount/maxCount 1): argmax
         reads only the winner, so under a COMPLETE list this collapses the whole ordering losslessly
         (ADR-0079 decision 5). Twin of `_top_fetch_priority_id`, except that the order it scans is
-        hand-conditional (ADR-0080) rather than the declaration verbatim."""
+        hand-conditional (ADR-0081) rather than the declaration verbatim."""
         sp = getattr(self.strategy, "starter_priority", None)
         if not sp or not select or select.get("context") != _SETUP_ACTIVE:
             return None
