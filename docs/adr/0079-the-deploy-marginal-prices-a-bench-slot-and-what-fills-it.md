@@ -238,4 +238,37 @@ exactly that reasoning on the Threat Clock (retreat is paid in Energy, not a tur
 attacker is an AFFORDABILITY gate, not a +1). Whether the Prize Path's copy of the surcharge is
 likewise stale is worth checking when this term is built.
 
+**6. ONE equation across all three Bench entry points; multi-picks resolve by the existing
+greedy-with-gap-update.** *(User ruling, 2026-07-29.)*
+
+The decider owns `_SETUP_BENCH` (2, pregame), `_PLAY` (7) at `_MAIN`, and `_TO_BENCH` (5, the
+Poffin-class fetch straight onto the Bench). `_SETUP_BENCH` and `_TO_BENCH` are already members of
+`_GRAB_CONTEXTS`, whose ADR-0023 contract is exactly what a marginal wants — *"single multi-pick
+resolved GREEDILY w/ gap-update + take-fewer (not static top-N) so a satisfied need isn't
+double-grabbed"* — because decisions 2/3/5 all re-derive against the live board: after pick #1 the
+slot displacement is steeper, the Ability yield may be satisfied, and the path delta has moved. The
+`minCount == 0` **take-fewer decline** survives untouched and is how a below-zero deploy expresses
+itself, which is how `setup_bench_decline_f3` keeps passing.
+
+**Issue #197's item 2 dissolves rather than being solved.** "Highest-ranked card present is
+single-winner, the Bench is multi-pick" is a problem for a ranked DECLARATION (Issue #161's
+`starter_priority` shape), which has no way to say "and now the second pick is worth less". A marginal
+says it by construction.
+
+A set-level search over the offered picks was rejected on the repo's own mechanical test (ADR-0070
+amendment J): benching Basics is explicitly any-order and unlimited per turn (`rulebook.txt`
+L120–122), so bench filling is a **Commutative Set**, and the ruling there is categorical — *"needs no
+planner; the only way one can be missed is if an action is priced at or below zero. The fix is the
+equation's price."* Since the drops commute, a set search can find nothing correct per-option pricing
+does not already reach.
+
+Also rejected: a mid-game-only decider leaving `_SETUP_BENCH` to the surviving rules. It re-splits the
+seam decision 1 unified and re-creates Issue #197 item 3's two-vocabulary cost *inside* the Bench.
+
+Cost accepted: the pregame board is information-poor — no `line_ready`, the opponent's Active face
+down, Read γ ≈ 0, prizes hidden — so decision 5's exposure term is near noise at `_SETUP_BENCH` and
+decision 3's odds read is at its widest. Covered by the standing fail-closed discipline (ADR-0069
+decision 5): a term that cannot be computed contributes **ZERO**, never a guess. The consequence to
+expect is that the pregame decision is carried almost entirely by decisions 2 and 3, with 5 ≈ 0.
+
 *(Further decisions appended as they lock.)*
