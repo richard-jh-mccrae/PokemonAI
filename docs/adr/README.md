@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0077.**
+**Next free number: 0078.**
 
 ⚠️ The index below is **incomplete**: **0067** exists on disk but has never been given a row (it
 landed on the #137 / 0a branch). 0069 and 0070 were backfilled 2026-07-26. Re-indexing 0067 is
@@ -38,6 +38,12 @@ shape* renumbered to **0076** on rebase. All three are strategy ADRs, so the too
 did not apply to any of them. ⚠️ The lesson is now recurring (0071, then 0074 ×3): the number is
 claimed at grill time but only settled at merge time, so a long-lived branch should expect to
 renumber and should keep its ADR references greppable for exactly that reason.
+
+**0076 was claimed twice and resolved 2026-07-29.** #186's *the opponent-target slot family*
+(itself already renumbered 0074 → 0076 above) merged first and KEEPS 0076; Issue #172's *a ranked
+count consumer reads `expected`* renumbered to **0077** on rebase. Same first-merged rule, and the
+third instance of the recurring lesson in three days — the grill-time number is a claim, not a
+reservation.
 
 ## Index
 
@@ -120,3 +126,4 @@ renumber and should keep its ADR references greppable for exactly that reason.
 | [0074](0074-a-probability-may-weight-a-ranked-value-never-gate-a-lock.md) | A probability may WEIGHT a ranked value, never GATE a lock | Accepted (grilled 2026-07-27, `/grill-with-docs` on #175) and **IMPLEMENTED 2026-07-27**. Extends ADR-0067, amends ADR-0031 decision 3; leaves ADR-0030/0037 untouched |
 | [0075](0075-the-ko-oracle-prices-attachments-as-a-typed-budget.md) | The KO oracle prices attachments as a typed Budget, once, for every line | Accepted (grilled 2026-07-27, `/grill-with-docs` on #177 — five locked decisions); build = #177. Renumbered from 0074 on rebase (#175 merged first). Extends ADR-0067 and ADR-0074 into the five `_play_accel_extra` lines; gated by ADR-0072 |
 | [0076](0076-the-opponent-target-slot-family-splits-by-instrument-shape.md) | The opponent-target slot family splits by instrument shape: held-card keep pricing extends the Needs assignment; target-ranking reads the marginal directly | Accepted (grilled 2026-07-27, `/grill-with-docs` on #186 — three locked decisions); build = #186, consumed by #187/#188/#189/#190. Renumbered from 0074 on rebase (#175 merged first, #177 took 0075). Extends ADR-0065's Needs/`keep_v2`; gated by ADR-0072. Amendments A–F |
+| [0077](0077-a-ranked-count-consumer-reads-expected-not-the-probability-leg.md) | A ranked consumer asking HOW MANY reads `expected`, not the Probability Leg | Accepted (grilled 2026-07-28, `/grill-with-docs` on Issue #172 — four locked decisions); build = Issue #172. **Amends ADR-0074 decision 1** (the ranked branch splits by the question asked) and resolves its decision-6 untyped-union objection for `expected`; retires ADR-0061's hand-rolled `_deck_basic_energy_fuel` floor; gated by ADR-0072 |

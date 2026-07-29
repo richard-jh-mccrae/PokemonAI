@@ -92,6 +92,9 @@ counter-frames forced:
 - **3b. The accel dividend re-anchors on `_ENERGY_RECOVER`.** `_DIVIDEND = 5` is ~45× short of the
   `75`-per-Energy the SAME rider earns on the attack option, need-gated by `_recover_units`.
   Retreating INTO Cinderace must credit what attacking WITH Cinderace credits.
+  ⚠️ **The rate itself is AMENDED** (2026-07-29, Issue #172 — see the amendment at the foot of this
+  ADR): `75` was tuned, not derived, and ~6 % above the bracket two human rulings impose. It is now
+  the derived `160/3`. The re-anchoring ruling above stands; only its magnitude moved.
 - **3c. `tempo_denied` is the one ASSERTED term, and is flagged as such.** Every other term now
   derives from card data or an existing oracle; "a denied Item turn ≈ one prize" does not (though it
   is what the shipped `_ITEM_LOCK_TEMPO = 12` = one `_PRIZE_UNIT` already claims, and
@@ -390,3 +393,41 @@ Net new artifacts in 1c: **one rebuilt sweep script and one lane constant.**
   (ADR-0072 decisions 3–4), carrying their diagnosis. First entry: the Solrock-vs-Aura-Jab frame,
   invisible today because `best_affordable_ko_value` has no recover term, which a rollout gets for
   free through `_engine_leaf_value`'s wincon-Energy credit.
+
+## Amendment (2026-07-29, Issue #172): `ENERGY_RECOVER` is DERIVED too, and it was 6 % over
+
+Decision 3 ruled **one currency at a DERIVED rate** and derived `PRIZE_DAMAGE_RATE` from the card
+set — but `ENERGY_RECOVER`, the other exchange rate the same equation reads (§3b), stayed a **tuned
+band constant at 75**. Its own comment records the tuning: *"chip-scale, so fueled Aura Jab beats
+bare Mega Brave"* — reverse-engineered from ONE side, with nothing holding the top.
+
+It is now derived the same way: the **median damage-per-Energy over the 305 attacks in
+`data/EN_Card_Data.csv` costing ≥ 2 Energy**, exactly `160/3` ≈ 53.33. Cost ≥ 2 is the population an
+accel rider funds — a rider dumping 3 Energy pays for multi-Energy attackers, and
+`_recover_recipient_need` already measures need against a recipient's FORWARD form (a Riolu counts
+the `{F}{F}` its Mega Brave costs, not the `{F}` of Quick Attack), so the 634 cost-1 chip attacks are
+not what accel buys. A test recomputes it from the CSV, as decision 3 requires.
+
+**What makes the rate falsifiable rather than merely derived: two independent human rulings bracket
+it, and 75 sat outside.**
+
+| bound | ruling | constraint |
+|---|---|---|
+| lower | ADR-0061 (mega_lucario): fueled Aura Jab (130) + 3 accel beats bare Mega Brave (270) | `E > 46.63` |
+| upper | ep81904064 f44 (mega_starmie, ruled 2026-07-29): after Lillie's Determination, Nebula Beam (210) beats retreating into Cinderace for Turbo Flare (50 + 3 accel) | `E < 70.85` |
+
+At 75 the agent traded a 210-damage attack for a 50-damage one — 3 Energy of bench accel scored 225
+and outbid the attack it gave up. The defect was **pre-existing and masked**: the retired pigeonhole
+fuel floor (ADR-0077) under-counted the units, so an over-valued rate and an under-counted quantity
+cancelled. Fixing the read exposed the rate, which is why both land together.
+
+*Found while building:* `tests/strategy/test_promote_forward.py`'s accelerator fixture omitted both
+Turbo Flare's `recoverTarget="bench"` and Mega Starmie ex's dearer attack (Nebula Beam `{C}{C}{C}`
+210), so `_recover_recipient_need`'s `max(costs)` read 1 where the card says 3 — a bare Staryu
+reported a need of 1 instead of 3. The file's own docstring already required the fixture to carry the
+real record; it now does, and the frames measure the claim they name.
+
+Gates re-run at the derived rate: Decision Gate PASS ×3 (promote/retreat 15 FIX / 0 REGRESSION,
+attach 22 FIX / 0 REGRESSION, evolve 4 FIX / 0 REGRESSION), Discrimination Gate **PASS with zero
+unruled** — the `OK → MISS` the fuel fix alone had opened is gone, `leaf_correct` 191 → 192,
+`leaf_correct_strict` 35 → 36, average top-tie unchanged.

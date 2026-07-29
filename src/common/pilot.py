@@ -2029,7 +2029,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # `reach` rather than adding to it, so leaving it live would re-introduce the turn-1
             # damage the line above just refused.
             wall_progress=self._promote_wall_progress(obs, board, raw) if can_swing else None,
-            accel_units=self._promote_accel_units(obs, board, raw) if can_swing else 0,
+            accel_units=self._promote_accel_units(obs, board, raw) if can_swing else 0.0,
             closure=self._promote_closure(obs, raw, draws=draws if can_swing else 0),
             prizes=self._prize_value(raw),
             ko_active=ko_active, ko_bench=ko_bench,
@@ -2075,7 +2075,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return hp / min(t_star for t_star, _chip in vals.values())
 
-    def _promote_accel_units(self, obs: dict, board: Board, raw: dict) -> int:
+    def _promote_accel_units(self, obs: dict, board: Board, raw: dict) -> float:
         """Energy this body's accel rider would actually attach AND a recipient can actually USE —
         the `_recover_units` count (ADR-0073 §3b).
 
@@ -2085,9 +2085,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         cid = (raw or {}).get("id")
         stat = self.stats.get(cid) if (self.stats and cid is not None) else None
         if not (stat and stat.attacks):
-            return 0
+            return 0.0
         energy = len(raw.get("energies") or [])
-        best = 0
+        best = 0.0
         for aid in (stat.attacks or ()):
             if self.combat.attack_cost(aid) <= energy:
                 best = max(best, self._recover_units(aid, {}, board, obs))
@@ -4529,7 +4529,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rows.append(row)
         return {"eq": rows, "abstained": abstained} if rows else None
 
-    def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> int:
+    def _recover_units(self, attack_id, dmg_ctx: dict, board: Board, obs: dict) -> float:
         """Energy this attack's accel rider would actually attach AND that a recipient can
         actually USE — the development the Tactical layer credits (Aura Jab / Turbo Flare:
         attack + accelerate).
@@ -4540,8 +4540,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
              "discard" → my open discard (`my_discard_basic_energy`, ADR-0061: re-sourced from the
              Board so it is the one truth for my discard fuel — `_damage_context` keeps its own
              attacker-relative copy because it must also serve the Incoming direction);
-             "deck" → the whole-deck search's pool (`_deck_basic_energy_fuel`: tracker-exact once
-             anchored, else the sound pigeonhole floor — an endorser never over-counts).
+             "deck" → the whole-deck search's pool (`_deck_basic_energy_fuel`: the EXPECTED count
+             off the one Count Triple derivation, ADR-0077 — a ranked count consumer reads
+             `expected`, and anchored the leg collapses to the exact integer).
           3. the recipients' remaining NEED (ADR-0061). The old code checked only that the Bench was
              non-empty, so 3 {F} onto a Lunatone/Solrock support bench scored an identical +225 to 3
              {F} onto a Riolu that becomes the second Mega Lucario ex — and that +225 is exactly what
@@ -4553,37 +4554,44 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """
         st = self._attack_stat(attack_id)
         if not st or not getattr(st, "recoverN", 0):
-            return 0
+            return 0.0
         if getattr(st, "recoverSource", None) == "deck":
-            fuel = self._deck_basic_energy_fuel(board, obs, st.recoverEnergyType)
+            fuel = self._deck_basic_energy_fuel(st.recoverEnergyType)   # EXPECTED — fractional
         else:
-            by_type = (board.my_discard_basic_energy or {})
+            by_type = (board.my_discard_basic_energy or {})             # the discard is PUBLIC: exact
             fuel = (by_type.get(st.recoverEnergyType, 0) if st.recoverEnergyType is not None
                     else sum(by_type.values()))
         need = self._recover_recipient_need(st, board, obs)
-        return max(0, min(st.recoverN, fuel, need))
+        return max(0.0, min(float(st.recoverN), float(fuel), float(need)))
 
-    def _deck_basic_energy_fuel(self, board: Board, obs: dict, etype) -> int:
-        """Matching Basic-Energy copies a whole-deck search rider (Turbo Flare) can PROVABLY still
-        find in my deck. Tracker-anchored (`deck_known_counts`): the exact count. Pre-anchor: the
-        sound pigeonhole FLOOR — of the ``unseen`` matching copies (decklist − visible), at most
-        ``prizes_hidden`` can sit in the face-down prizes, so ≥ ``unseen − prizes_hidden`` are in
-        deck. An endorser must never over-count (grader safety); the floor typically saturates the
-        ``min(recoverN, …)`` anyway (9 Water unseen − 6 prizes ≥ 3). 0 without a decklist."""
-        def _matches(cid) -> bool:
-            st = self.stats.get(cid) if self.stats else None
-            return bool(st and st.is_basic_energy
-                        and (etype is None or getattr(st, "energyType", None) == etype))
-        if board.deck_known_counts:
-            return sum(n for cid, n in board.deck_known_counts.items() if n > 0 and _matches(cid))
-        if not self.deck:
-            return 0
-        me = self._my_player(obs)
-        visible = self._visible_card_counts(me)
-        unseen = sum(n - visible.get(cid, 0) for cid, n in Counter(self.deck).items() if _matches(cid))
-        prizes_hidden = sum(1 for p in (me.get("prize") or [])
-                            if not (isinstance(p, dict) and p.get("id") is not None))
-        return max(0, unseen - prizes_hidden)
+    def _deck_basic_energy_fuel(self, etype) -> float:
+        """Matching Basic Energy a whole-deck search rider (Turbo Flare) can EXPECT to still find in
+        my deck — `CountTriple.expected` off the ONE `MySide.deck_energy_counts` derivation
+        (ADR-0077 decision 3).
+
+        A COUNT question, so it reads the count leg. `p_any` answers *is there at least one?* and
+        weighting a full `recoverN` by it would claim "P(≥1) odds of finding ALL of them"; the
+        provable `floor` this replaces answered a question nobody asked — it reads 0 for every
+        realistic suite still behind hidden prizes (3 unseen Water behind 5 prizes on
+        `82756664|1|decision|97`, a deck 99.75 % certain to hold Water), which zeroed
+        `min(recoverN, fuel, need)` and killed the accel dividend outright (Issue #172).
+
+        `etype` None is an UNTYPED rider (Turbo Flare, Whimsicott ex's Energy Gift — "search your
+        deck for up to 3 Basic Energy cards"), which takes the cross-type union. That union is EXACT
+        rather than a second instrument: every type's leg divides the same
+        `(deck_count, prizes_hidden)`, so `Σₜ expectedₜ == expected(Σₜ unseenₜ)` — the identity that
+        licenses on `expected` what ADR-0074 decision 6 forbids on `p_any`.
+
+        No regime branch: anchored, the legs collapse to the exact integer on their own, so the old
+        `deck_known_counts` short-circuit is subsumed rather than replaced. 0.0 with no StateModel."""
+        model = getattr(self, "_state_model", None)
+        if model is None:
+            return 0.0
+        counts = model.mine.deck_energy_counts
+        if etype is None:
+            return float(sum(c.expected for c in counts.values()))
+        triple = counts.get(etype)
+        return float(triple.expected) if triple else 0.0
 
     def _is_benchable_body(self, cid) -> bool:
         """A benchable body: a Basic Pokémon (`is_pokemon` and no `evolvesFrom` — it grounds out on
@@ -4644,8 +4652,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The supply probability is a VALUE estimate, not a grader-safety endorsement, so it is the
         prize-split-weighted expectation (`_prize_split_hit`, un-floored unseen) — the SAME model the
-        shed's re-access uses — NOT the pigeonhole floor `_deck_basic_energy_fuel` needs (which zeroes
-        a 3-of Staryu behind six hidden prizes, ep83038055 f40's exact hole). Bounded (deficit ≤
+        shed's re-access uses, and (since ADR-0077) the same one `_deck_basic_energy_fuel` reads:
+        the pigeonhole floor that used to sit there zeroed a 3-of Staryu behind six hidden prizes,
+        ep83038055 f40's exact hole, and no ranked count consumer takes it now. Bounded (deficit ≤
         `_THIN_BENCH`, prob ≤ 1). REPLACES nothing live — reported beside the flat CYCLE so the corpus
         can measure whether the lift fixes f40 without over-firing before it is promoted into
         `_refresh_swing_tactical`. Flat `_REFRESH_CYCLE` on a developed board or a hand that can bench."""

@@ -86,8 +86,11 @@ class PromoteBody:
     #: Energy this body's accel rider would actually attach AND a recipient can actually USE — the
     #: `_recover_units` count, need-gated. §3b: the dividend re-anchors on `ENERGY_RECOVER`, because
     #: retreating INTO Cinderace must credit what attacking WITH Cinderace credits (the shipped
-    #: `_DIVIDEND = 5` was ~45x short of the 75-per-Energy the SAME rider earns on the attack).
-    accel_units: int = 0
+    #: `_DIVIDEND = 5` was an order of magnitude short of the per-Energy rate the SAME rider earns on
+    #: the attack — now the DERIVED `160/3`, see the ADR-0073 amendment of 2026-07-29).
+    #: FRACTIONAL: the deck-fuel leg is `CountTriple.expected` (ADR-0077), so this is an EXPECTED
+    #: count. `my_yield` must not coerce it — `int()` floored 2.5 to 2 and binned 37.5 points.
+    accel_units: float = 0.0
 
     # -- closure: the probabilistic middle (§5) -------------------------------------------------
     #: `max` over attacks of ``damage(a) x [readiness_p(a | enabler) - readiness_p(a)]`` — the
@@ -143,7 +146,7 @@ class PromoteBody:
         and its accel rider), which is the same axes discipline ADR-0069 §1 applies to the attach
         marginal — `max` WITHIN an axis, sum ACROSS."""
         attack = self.reach if self.wall_progress is None else float(self.wall_progress)
-        return max(0.0, attack) + ENERGY_RECOVER * max(0, int(self.accel_units))
+        return max(0.0, attack) + ENERGY_RECOVER * max(0.0, float(self.accel_units))
 
     def exposure(self) -> float:
         """The prizes promoting this body HANDS the opponent — continuous, per-body and

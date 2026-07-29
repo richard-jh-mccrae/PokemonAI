@@ -392,6 +392,32 @@ def test_deck_energy_p_is_a_projection_of_the_one_derivation():
             assert p == 1.0
 
 
+def test_expected_unions_additively_across_types():
+    """ADR-0077 decision 2: an UNTYPED rider (Turbo Flare, Energy Gift — "search your deck for up to
+    3 Basic Energy cards") needs a cross-type union, which ADR-0074 decision 6 forbids minting for
+    `p_any`. It is free for `expected`: every type's leg divides the same `(deck, prizes_hidden)`, so
+    the sum over types IS the aggregate, exactly — one derivation, not a second instrument.
+
+    Pinned so nobody later "optimises" the union into a per-type max or a parallel aggregate triple."""
+    m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)))
+    mine = m.mine
+    union = sum(c.expected for c in mine.deck_energy_counts.values())
+    aggregate = count_triple(sum(n for cid, n in mine.unseen_counts.items()
+                                 if _STATS[cid].is_typed_basic_energy),
+                             mine.prizes_hidden, mine.deck_count).expected
+    assert union == pytest.approx(aggregate)
+    assert union > 0.0                                       # the suite is live — not a vacuous pass
+
+
+def test_p_any_does_NOT_union_additively_the_way_expected_does():
+    """The other half of decision 2, stated as a test so the asymmetry is not mistaken for an
+    oversight: summing `p_any` over types is meaningless (it can exceed 1.0), which is exactly why
+    ADR-0074 took a conservative product for the probability and why the untyped union is licensed on
+    `expected` ALONE."""
+    m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)))
+    assert sum(m.mine.deck_energy_p.values()) > 1.0          # not a probability — never sum these
+
+
 def test_unseen_counts_is_one_derivation_over_every_visible_zone():
     m = _model(_player(active=_pult(energies=[E_R]), hand=[CRISPIN], discard=[E_P], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
