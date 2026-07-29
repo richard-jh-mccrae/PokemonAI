@@ -28,7 +28,6 @@ from common.strategy.context import ENERGY_RECOVER, KO_SCORE
 
 REPO = Path(__file__).resolve().parents[2]
 
-
 def pv(body: PromoteBody, retreat: RetreatSide | None = None):
     return promote_value(PromoteRetreatInputs(body=body, retreat=retreat))
 
@@ -61,23 +60,6 @@ def test_stay_forgone_is_gone():
 
 
 # ---- decision 3: ONE currency, at a DERIVED rate -------------------------------------------------
-
-def test_prize_damage_rate_recomputes_from_the_card_set():
-    """§3: the Prize Damage Rate is DERIVED, so a reviewer can recompute it and a future set can
-    re-derive it. This test IS that recomputation — the median HP-per-prize over every body in
-    `data/EN_Card_Data.csv` at the `docs/rules.md` §6 prize values (Mega ex 3, ex 2, else 1).
-
-    Pinning the literal instead would make the constant tuned-by-another-name."""
-    prizes = {"n/a": 1, "Pokémon ex": 2, "Mega Pokémon ex": 3}
-    bodies = {}
-    with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            hp = int(row["HP"]) if (row.get("HP") or "").strip().isdigit() else 0
-            if hp > 0:                                    # Trainers / Energy report no HP
-                bodies[row["Card ID"]] = hp / prizes[(row.get("Rule") or "n/a").strip()]
-    assert len(bodies) == 1061                            # the population ADR-0073 measured
-    assert statistics.median(bodies.values()) == PRIZE_DAMAGE_RATE
-
 
 def test_energy_recover_recomputes_from_the_card_set():
     """§3 again, for the OTHER exchange rate. `ENERGY_RECOVER` shipped as a tuned band constant (75,
@@ -123,6 +105,9 @@ def test_energy_recover_sits_inside_the_bracket_two_rulings_impose():
     assert ENERGY_RECOVER < (174.70 + 37.84) / 3           # ep81904064 f44's attack-over-accel line
 
 
+# NOTE: the Prize Damage Rate's RECOMPUTATION moved to tests/strategy/test_currency.py when
+# ADR-0078 hoisted the constant into `common/currency.py` — the recompute belongs beside the
+# constant, not beside its first consumer. What stays here is the promote-side CONSEQUENCE.
 def test_a_prize_is_worth_a_hundred_damage_not_twelve():
     """§3's whole point: exposing a 3-prize Mega Evolution Pokémon *ex* costs 300 damage, not the
     36 the superseded `_PRIZE_UNIT = 12` charged — which is why the shipped equation would feed the

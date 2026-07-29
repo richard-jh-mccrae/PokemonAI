@@ -45,6 +45,14 @@ count consumer reads `expected`* renumbered to **0077** on rebase. Same first-me
 third instance of the recurring lesson in three days — the grill-time number is a claim, not a
 reservation.
 
+**0077 was claimed twice and resolved 2026-07-29.** Issue #172's *a ranked count consumer reads
+`expected`* (itself already renumbered 0076 → 0077 above) merged first and KEEPS 0077; Issue #187's
+*the value currencies are three scales bridged by derived rates* renumbered to **0078** on rebase.
+Fourth collision in four days, and the second time a single ADR has been renumbered twice in its own
+life. Treat the number as a rebase artifact rather than an identifier: **cite the issue alongside it**
+("ADR-0078, Issue #187") so a rename can be applied to one branch's references without corrupting
+another's.
+
 ## Index
 
 | # | Title | Status |
@@ -127,3 +135,4 @@ reservation.
 | [0075](0075-the-ko-oracle-prices-attachments-as-a-typed-budget.md) | The KO oracle prices attachments as a typed Budget, once, for every line | Accepted (grilled 2026-07-27, `/grill-with-docs` on #177 — five locked decisions); build = #177. Renumbered from 0074 on rebase (#175 merged first). Extends ADR-0067 and ADR-0074 into the five `_play_accel_extra` lines; gated by ADR-0072 |
 | [0076](0076-the-opponent-target-slot-family-splits-by-instrument-shape.md) | The opponent-target slot family splits by instrument shape: held-card keep pricing extends the Needs assignment; target-ranking reads the marginal directly | Accepted (grilled 2026-07-27, `/grill-with-docs` on #186 — three locked decisions); build = #186, consumed by #187/#188/#189/#190. Renumbered from 0074 on rebase (#175 merged first, #177 took 0075). Extends ADR-0065's Needs/`keep_v2`; gated by ADR-0072. Amendments A–F |
 | [0077](0077-a-ranked-count-consumer-reads-expected-not-the-probability-leg.md) | A ranked consumer asking HOW MANY reads `expected`, not the Probability Leg | Accepted (grilled 2026-07-28, `/grill-with-docs` on Issue #172 — four locked decisions); build = Issue #172. **Amends ADR-0074 decision 1** (the ranked branch splits by the question asked) and resolves its decision-6 untyped-union objection for `expected`; retires ADR-0061's hand-rolled `_deck_basic_energy_fuel` floor; gated by ADR-0072 |
+| [0078](0078-the-value-currencies-are-three-scales-bridged-by-derived-rates.md) | The value currencies are three scales bridged by DERIVED rates, and building the bridge is a shared-layer prerequisite, not an instrument swap | Accepted (grilled 2026-07-28, `/grill-with-docs` on Issue #187 — six locked decisions); build = Issue #199 (S3c), consumed by Issue #187/#188/#189. Renumbered from 0077 on rebase (Issue #172 merged first). Hoists ADR-0073's `PRIZE_DAMAGE_RATE` to `common/currency.py` and names the still-underived Worth Damage Rate; supersedes ADR-0076 Amendment E's hand-off of the currency debt to Issue #189; overturns the WP-N8 play-side ruling. Amendments A–C record gate 1 failing, the user's instantaneous-deny ruling, and its passing |
