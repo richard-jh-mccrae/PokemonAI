@@ -193,4 +193,49 @@ own step 1 is an adjudication session with the user rather than a computation. P
 ladder-performance risk is accepted. **Issue #197 therefore becomes the grill record, not the build
 ticket** — the build is a new tracker phase filed blocked-by Issue #199.
 
+**5. Prize exposure is the PRIZE-PATH DELTA as a magnitude, not a flat liability.** *(User ruling,
+2026-07-29.)*
+
+```
+exposure(X) = ( their_path_turns(board) − their_path_turns(board + X) )
+              × PRIZE_DAMAGE_RATE × needs.phase_scale(...)
+```
+
+The magnitude is **already computed and discarded today**: `_bench_shortens_their_path`
+(`objectives.py:564`) builds the hypothetical board with the candidate body added, calls
+`prize_paths()` for `new_turns`, compares it against `board.their_path_turns`, and then returns
+`new_turns < old_turns` — a boolean, consumed by a flat −10. The change is to return the delta
+instead of its sign.
+
+Reachability is sharpened by feeding it `CombatMath.bench_harvest` (ADR-0071, **built**), which models
+the opponent's bench riders as ONE shared budget — attacking ends their turn, so a turn's bench damage
+is one attack's riders — rather than the per-body `_their_turns_to_ko` read the path currently uses.
+
+This folds BOTH surviving exposure rules into one derived term: `dont-bench-multiprize` (−15, flat and
+reach-blind) and `dont-bench-onto-their-path` (−10, the discarded magnitude).
+
+Rejected: a **harvest-delta-only** exposure (correctly shared-budget and reading-independent — the
+delta of an optimum VALUE needs no `POSSIBLE`/`UNAVOIDABLE` declaration, since that names which bodies
+achieve it — but it sees only bench-RIDER reach, so it prices a second Mega ex at zero against an
+opponent who simply gusts it up and knocks it out, which is how multi-prize bench liabilities are
+actually collected); and a **flat** `prize_value × PRIZE_DAMAGE_RATE × phase_scale`, which preserves
+today's blindness in a new currency.
+
+**Structural consequence, and the reason the equation is one thing rather than three bolted terms:**
+decisions 2, 3 and 5 now share one shape — *a difference of two optimal values under a hypothetical
+board change* (the displaced supplier, the fetched Supporter, the shortened path).
+
+Costs accepted: `bench_harvest` returns only the index frozenset, so the objective's prize total
+(`_harvest_optima`'s `best_key[0]`) needs a sibling accessor; the Prize-Path re-derivation now runs
+per deploy OPTION rather than once per decision (ADR-0040 calls it "small by construction" —
+subset-sums over ≤6 bodies — but it multiplies against decision 3's closure query on the same path);
+and the term inherits the `objectives_path` kill-switch, so it needs a defined value when that flag
+is off.
+
+**Observation handed to the build, NOT ruled here:** `_PATH_BENCH_EXTRA = 1` (`objectives.py:124`)
+charges a benched body a flat extra turn "to bring into KO range", while ADR-0071 decision 6 corrected
+exactly that reasoning on the Threat Clock (retreat is paid in Energy, not a turn, so a benched
+attacker is an AFFORDABILITY gate, not a +1). Whether the Prize Path's copy of the surcharge is
+likewise stale is worth checking when this term is built.
+
 *(Further decisions appended as they lock.)*
