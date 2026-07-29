@@ -68,6 +68,13 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
 - **Always rebase onto `main` first.** Whenever asked to open or update a PR: fetch and rebase the
   branch onto the latest `main` before pushing, and resolve any conflicts that surface. Do this
   every time, not just on the first PR for a branch — do not push straight from a stale base.
+- **Auto-subscribe on open, 5-minute check-in cadence.** As soon as a PR is opened in this repo,
+  call `subscribe_pr_activity` immediately — don't ask first. Use `send_later` for the self
+  check-in fallback (see the global PR-activity instructions) at a 5-minute cadence instead of the
+  default ~1 hour, re-arming after each firing until the PR is merged or closed. The four
+  monitoring tool calls this relies on (`subscribe_pr_activity`, `unsubscribe_pr_activity`,
+  `send_later`, `delete_trigger`) are allowlisted in `.claude/settings.json` so this runs without a
+  manual approval prompt each time.
 
 ## Secrets
 
