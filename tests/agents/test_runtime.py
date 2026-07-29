@@ -97,6 +97,9 @@ EXPECTED_SHIPPED = {
                                     # to a `gust_target` kind; 0 decision flips over 331 corpus
                                     # frames AND cleared the ADR-0072 mid-build tripwire (-0.75%
                                     # delta, CI-lo -4.3%, 0 crashes/2400 games)
+    "deny_strip_delta": False,      # ADR-0077 / #199 (S3c): compute-only strip delta, ships OFF —
+                                    # nothing reads it yet (#187 is the consumer, itself blocked on
+                                    # #199's gate 1), so ON would only cost compute
 }
 
 

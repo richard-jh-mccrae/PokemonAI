@@ -166,6 +166,15 @@ PROFILE = {
                                     # -11.5pp — the Tripwire screens catastrophes, not regressions,
                                     # so this is flagged for the ladder-corrections loop to watch,
                                     # not a reason to hold the flag back given the aggregate clears.
+    "deny_strip_delta": False,      # ADR-0077 / #199 (S3c), COMPUTE-ONLY, ships OFF: adds the deny
+                                    # instrument's STRIP delta to `_opponent_target_rows` beside the
+                                    # removal delta #186 built (a Hammer strips one Energy off a body
+                                    # that STAYS, so the removal delta is not its slice). Nothing
+                                    # reads the new fields — #187 is the consumer and is itself
+                                    # blocked on #199 — so ON changes no decision; it only costs one
+                                    # extra `turns_to_ko_me` per ENERGIZED opponent body per
+                                    # decision. OFF until #199's gate 1 rules the read admissible;
+                                    # `deny_gate1.py` forces it ON to run that measurement.
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one

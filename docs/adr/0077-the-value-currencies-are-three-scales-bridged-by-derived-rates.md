@@ -197,6 +197,70 @@ than a wiring change.
    and S3c must either capture new corrections or fall back to the reduced scope in *Alternatives
    rejected* below, explicitly and in writing.
 
+## Amendment A — gate 1 RAN and FAILED; the marginal cannot carry deny's discrimination (2026-07-28, #199 build)
+
+Steps 3–5 of #199's build shape landed the same day this ADR was written (`common/currency.py`, the
+`deny_strip_delta` strip Δ, `tools/train/probes/deny_gate1.py`), and gate 1 was run over all 21 ruled
+Hammer frames in `data/corrections/`. **It fails, and the failure is structural rather than a
+calibration miss.**
+
+**Result.** 21 ruled frames, 16 agree / 5 disagree — and every disagreement is the same shape: a frame
+the corpus rules PLAY where the marginal reads `m = 0.000`, against an incumbent oracle reading 65–140
+damage denied. The separation test:
+
+```
+min(m | PLAY) = 0.000     max(m | HOLD) = 0.150     => NOT SEPARABLE
+```
+
+There is no exchange rate that separates them, so the failure is not about the value of `k`. It is not
+about `PRIZE_DAMAGE_RATE` either — that constant only scales an ordering that is already wrong.
+
+**Mechanism, diagnosed.** The shared marginal is *forward-looking*: it prices "turns of MY survival
+bought", and the Threat-Clock curve credits the opponent their one manual attach per turn (rules.md
+§3). A single Energy strip is therefore **cancelled by construction** whenever the body can afford its
+attack again after one attach — which is most of the frames a Hammer is actually played on. ADR-0062's
+oracle measures the strip *instantaneously* (`best_affordable(E) − best_affordable(E−1)`) and never
+credits the re-attach. Both readings are internally coherent; they answer different questions, and the
+question the marginal answers is not the one deny is asking. Pinned as
+`test_deny_strip_delta.py::test_the_next_attach_cancels_a_strip_the_body_can_afford_to_lose`.
+
+**Two confounds of my own were checked and ruled out**, so the result is not an artifact of how the Δ
+was built:
+
+| variant | what it changes | min(m\|PLAY) | max(m\|HOLD) | verdict |
+|---|---|---|---|---|
+| slow / last-energy | the shipped Δ (`_DENY_CHARGED`, strips the last Energy) | 0.000 | 0.150 | NOT SEPARABLE |
+| slow / best-energy | maximises over WHICH Energy is stripped (typed costs) | 0.000 | 0.150 | NOT SEPARABLE |
+| no-attach / best-energy | `base_attach: 0` — no re-attach credit, closest to ADR-0062 | 0.000 | 0.900 | NOT SEPARABLE |
+
+The third variant is the interesting one: dropping the re-attach credit *does* light up the PLAY frames
+(0.267 / 0.425 / 0.500 / 0.900 where the slow policy read 0.000) — the mechanism above, confirmed from
+the other side. But it lights up the HOLD frames just as much (three at 0.900), so it trades one
+failure for another. Excluding `86091435-68` (which this ADR already flags as REFUTED-AS-LABELED and
+therefore unreliable) does not rescue any variant: min(m|PLAY) becomes 0.267 against max(m|HOLD) 0.900.
+
+**What this does NOT settle.** Gate 1 tested the marginal against the *play/hold* surface — decision 1's
+surface (b). It says nothing yet about surface (a), the keep price, or surface (c), the target pick,
+where a forward-looking read may still be the right instrument. And it does not touch gate 2: the Worth
+Damage Rate still has no anchor, independently of this result.
+
+**Consequence for the staircase.** Decision 1 as written — deny reads the shared marginal on all three
+surfaces — is **not deliverable as specified**, and #187 is blocked on a design decision rather than on
+wiring. The live options, for the user to rule in #199:
+
+1. **Take the recorded fallback** (this ADR's *Alternatives rejected*, "reduced scope"): the play rung
+   keeps the ADR-0062 damage oracle, and the marginal is adopted only where it is the right question.
+   The grill anticipated this outcome and named it the honest fallback; it now has evidence behind it
+   rather than being a hedge.
+2. **Give deny a non-forward-looking Δ** — price the strip instantaneously inside the shared value
+   function rather than through `turns_to_ko_me`. This keeps one currency but concedes that deny's Δ is
+   a different *kind* of quantity from gust's and snipe's, which weakens the one-backend claim.
+3. **Rule that the corpus is wrong** on some of the 5 disagreements. Not to be reached for lightly, but
+   two of them (`82523811-15`, `82523811-79`) have never been re-reviewed, and `86091435-68` is already
+   refuted-as-labeled — so the adjudication session gate 2 needs anyway is the natural place to look.
+
+Recorded here rather than in a review doc because it changes what decision 1 can promise.
+
 ## Consequences
 
 - **#187 is not the shortest hop of the three S4 swaps; it is the longest.** Deny is the only

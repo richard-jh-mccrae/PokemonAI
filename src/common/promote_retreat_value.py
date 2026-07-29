@@ -48,19 +48,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from common.currency import PRIZE_DAMAGE_RATE as _PRIZE_DAMAGE_RATE
 from common.grading import HORIZON, halve
 from common.strategy.context import ENERGY_RECOVER, KO_SCORE
 
 #: The **Prize Damage Rate** — damage per prize, the ONE exchange rate that lets prize Exposure be
 #: denominated in the damage currency the attach and evolve marginals already speak.
 #:
-#: DERIVED, not tuned: the MEDIAN HP-per-prize over every body in the set — 1061 bodies in
-#: `data/EN_Card_Data.csv` at the `docs/rules.md` §6 prize values, median **100.0** (mean 101.5; per
-#: band 90 / 130 / 110). Recomputable and falsifiable, which is the whole point — a test recomputes
-#: it from the CSV rather than pinning the literal, so a future set re-derives it instead of
-#: inheriting it. The superseded `_PRIZE_UNIT = 12` asserted roughly an eighth of this, which is why
-#: the shipped equation endorsed feeding a 3-prize body to save a 40-point band.
-PRIZE_DAMAGE_RATE = 100.0
+#: HOISTED to `common.currency` by ADR-0077 (#187 grill) — this module was its only consumer when
+#: ADR-0073 derived it, and the deny / snipe / gust marginals of the opponent-target family are three
+#: more. Re-exported here so every existing import keeps working; the derivation, the recomputing
+#: test and the note on the still-missing Worth leg all live at the new home.
+PRIZE_DAMAGE_RATE = _PRIZE_DAMAGE_RATE
 
 
 @dataclass
