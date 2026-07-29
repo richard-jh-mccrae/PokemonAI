@@ -7823,8 +7823,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         broader concept: it would let a role-tagged body that is on no declared Line act as an opener
         payoff, widening the gate past what ADR-0080 decision 4 specifies (*"the `payoff` of one of the
         deck's declared win-condition Lines"*). The two sets coincide for all three authored decks
-        today — which is exactly why the distinction has to be written down rather than discovered
-        later by a deck that separates them.
+        today, so the divergence is LATENT — swapping them reddens nothing by accident. The binding
+        record is therefore ADR-0080 decision 4 plus its guard test
+        (`test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base`), not this
+        docstring, which would be deleted along with the very function a reviewer proposes collapsing.
 
         Deck-fixed and match-invariant, so memoised in the same shape as `_wincon_set`."""
         cached = getattr(self, "_wincon_payoff_cache", None)

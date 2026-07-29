@@ -323,12 +323,15 @@ def test_the_setup_only_body_still_opens_against_a_large_in_line_payoff():
 # ── The derived pin tracks DECK COMPOSITION, not the card ────────────────────────────────────────
 
 _OPENER, _BASE, _PAYOFF, _PRE = 9001, 9002, 9003, 9004
+_RIVAL, _WINCON = 9005, 9006
 
 _SYNTH_STATS = {
     _OPENER: CardStat(_OPENER, name="Opener", hp=160, evolvesFrom="Pre", maxDamage=50),
     _BASE:   CardStat(_BASE, name="Base", hp=70, maxDamage=20),
     _PAYOFF: CardStat(_PAYOFF, name="Payoff", hp=210, evolvesFrom="Base", maxDamage=210),
     _PRE:    CardStat(_PRE, name="Pre", hp=90, maxDamage=30),
+    _RIVAL:  CardStat(_RIVAL, name="Rival", hp=80, maxDamage=20),
+    _WINCON: CardStat(_WINCON, name="Wincon", hp=300, evolvesFrom="Rival", maxDamage=250),
 }
 
 
@@ -383,6 +386,38 @@ def test_the_pin_fails_CLOSED_when_it_cannot_tell():
                          functions=None)
     obs = _setup_active_obs([_BASE, _OPENER, _PAYOFF], offer_ids=[_BASE, _OPENER])
     assert pilot.decide(obs) == [1], "cannot evaluate the pin -> pin everything -> declaration stands"
+
+
+def test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base():
+    """The gate is the declared **Line payoff**, never the win-condition **Role** set — and this is
+    the only thing standing between them, so deleting this test deletes the constraint.
+
+    `_wincon_payoff_ids` and the pre-existing `_wincon_set` share an identical first clause, and the
+    two sets COINCIDE for all three authored decks today. So collapsing one into the other changes no
+    shipped behaviour and reddens no other test — which is exactly why the constraint needs a test of
+    its own rather than a docstring on the function a reviewer might reasonably propose deleting.
+
+    The difference: `_wincon_set` additionally unions in every card carrying a `win_condition` /
+    `primary_attacker` ROLE. A Role is a label on a card; it says nothing about whether that card ends
+    a declared evolution path. Here `Wincon` is the declared Line payoff and `Payoff` is NOT on any
+    Line — it merely carries `primary_attacker`. Under the Line gate `Base` keeps its rank 2; under
+    `_wincon_set` `Base` is promoted over the declared rank 1 on a +190 marginal.
+
+    NOT hypothetical. mega_lucario's Hariyama (210 damage) is excluded twice over — its Line role is
+    `secondary_attacker` AND its card Role is `["secondary_attacker", "gust"]`. Promote that Role to
+    `primary_attacker` in a future alignment pass, an entirely reasonable doctrine edit, and the
+    `_wincon_set` reading silently re-admits it, resurrecting the Makuhita-over-Solrock defect from a
+    change that looks unrelated to openers."""
+    from common.strategy.strategy import Line
+    strategy = Strategy(starter_priority=[_RIVAL, _BASE],
+                        lines=[Line(path=[_RIVAL, _WINCON], payoff=_WINCON)],
+                        roles={_PAYOFF: ["primary_attacker"]})
+    pilot = Pilot(strategy, deck=[_RIVAL] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [_WINCON] * 4 + [1] * 44,
+                  general_strategy=GENERAL_STRATEGY, stats=_SYNTH_STATS, functions=CardFunctions({}))
+    obs = _setup_active_obs([_BASE, _RIVAL, _PAYOFF], offer_ids=[_BASE, _RIVAL])
+    assert pilot.decide(obs) == [1], (
+        "a `primary_attacker`-Roled body that is on no declared Line must NOT act as an opener "
+        "payoff — the declared rank 1 holds")
 
 
 def test_a_deck_with_no_declared_line_is_untouched():

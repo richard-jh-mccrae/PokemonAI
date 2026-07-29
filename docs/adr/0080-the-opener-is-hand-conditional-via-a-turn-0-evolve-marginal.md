@@ -179,6 +179,28 @@ Under Amendment A this silence is *measured*, not asserted: across `mega_lucario
 `mega_starmie` the equation changes **exactly one decision** — case 1 — and `dragapult_ex` is
 untouched entirely.
 
+> **The gate is the declared Line PAYOFF, never the win-condition ROLE set — and the two must not be
+> collapsed** (build, 2026-07-29). The runtime already has `_wincon_set`, whose first clause is
+> identical to the payoff set this decision needs, so reusing it looks like ordinary deduplication.
+> It is not. `_wincon_set` additionally unions in every card carrying a `win_condition` /
+> `primary_attacker` **Role**, and a Role is a label on a card that says nothing about whether that
+> card ends a declared evolution path. Reading it here would let a role-tagged body on **no** Line act
+> as an opener payoff, widening the gate past what this decision specifies.
+>
+> The hazard is live, not theoretical. mega_lucario's Hariyama (210 damage) is excluded twice over —
+> its Line role is `secondary_attacker` *and* its card Role is `["secondary_attacker", "gust"]`.
+> Promote that Role to `primary_attacker` in a future `/deck-align` pass — an entirely reasonable
+> doctrine edit — and the `_wincon_set` reading silently re-admits Hariyama, resurrecting the
+> Makuhita-over-Solrock defect from a change that looks unrelated to openers.
+>
+> **The two sets coincide for all three authored decks today**, so the divergence is latent: swapping
+> them changes no shipped behaviour and reddens no test that existed before this note. That is
+> precisely why it is recorded *here* and guarded by a dedicated test
+> (`test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base`) rather than left in a
+> docstring on `_wincon_payoff_ids` — a docstring dies with the function a reviewer proposes deleting,
+> and prose asks a maintainer to be careful where a test makes carelessness fail. Mutation-checked:
+> widening the gate to `_wincon_set` reddens that test and no other.
+
 **Issue #203's question 5 dissolves rather than needing a ruling.** Frame **6b** (Dreepy +
 Fezandipiti ex, no accel) holds no evolution payoff, so the equation is silent, the declaration
 stands, and the answer is Fez ex — the shipped behaviour. The frame is undecided only for designs
