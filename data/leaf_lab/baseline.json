@@ -1,15 +1,15 @@
 {
-  "git_rev": "e4c46ca",
+  "git_rev": "ec2d854",
   "agent": null,
-  "n": 276,
-  "scorable": 267,
+  "n": 277,
+  "scorable": 268,
   "unscorable": 9,
   "skipped_agent": 1,
-  "leaf_correct": 193,
-  "leaf_correct_rate": 0.7228464419475655,
+  "leaf_correct": 194,
+  "leaf_correct_rate": 0.7238805970149254,
   "leaf_correct_strict": 37,
-  "leaf_correct_strict_rate": 0.13857677902621723,
-  "avg_top_tie": 3.093632958801498,
+  "leaf_correct_strict_rate": 0.13805970149253732,
+  "avg_top_tie": 3.08955223880597,
   "rows": [
     {
       "key": "83686860|1|decision|13",
@@ -1790,6 +1790,30 @@
       "correct_rank": 1,
       "outscored_by": 0,
       "top_tie": 1
+    },
+    {
+      "key": "85709280|1|match|",
+      "episode_id": 85709280,
+      "agent": "mega_lucario",
+      "correct": [
+        0
+      ],
+      "values": [
+        194.85,
+        134.5125,
+        194.85,
+        134.5125
+      ],
+      "scored": 4,
+      "n_options": 4,
+      "unscorable": false,
+      "correct_value": 194.85,
+      "top_value": 194.85,
+      "correct_is_top": true,
+      "correct_is_unique_top": false,
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
     },
     {
       "key": "85709280|1|decision|55",
