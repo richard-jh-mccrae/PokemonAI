@@ -94,7 +94,10 @@ _METAL = 8                 # EnergyType.METAL — the predicate Archaludon's boa
 _BENCH_MAX = 5             # full Bench holds 5 — bench-filler places nothing once you're here
 _THIN_BENCH = 2            # below this many benched Pokémon board's underdeveloped — a starter need
 _OPENER_TAG = "opener"     # Function Tag: card whose Ability opens Active Spot (Explosiveness)
-_STARTER_ROLE = "starter"  # deck Role: card the deck intends to open with
+# (_STARTER_ROLE "starter" RETIRED 2026-07-28, ADR-0079: it drove nothing. Its only consumer was
+#  `_hand_startable`, which the mulligan rule reads -- and a hand holding any Basic never reaches
+#  that prompt (rulebook L224), so the Role mattered only for a non-Basic starter, i.e. Cinderace,
+#  which carries the `opener` TAG anyway. Naming a deck's openers is now `Strategy.starter_priority`.)
 _WINCON_ROLES = {"win_condition", "primary_attacker"}
 _ENGINE_TAGS = frozenset({"energy_accel", "draw", "search", "dig"})  # a "support/engine" Pokémon's
                            # Ability does one of these — the `fetch-the-support` importance signal +
@@ -128,7 +131,7 @@ __all__ = [
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_MOVE_CARD",
     "KO_SCORE", "ENERGY_RECOVER", "_METAL",
     "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
-    "_OPENER_TAG", "_STARTER_ROLE", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
+    "_OPENER_TAG", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
     "_UTILITY_TAGS", "_EVOLVING_THREAT_DMG",
     "_POSTURE_UNFAVORED", "_POSTURE_FAVORED", "_POSTURE_MIN_COVERAGE",
 ]

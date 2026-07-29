@@ -411,6 +411,13 @@ turn-ending attack, not only in SETUP).
 > | `conserve-ignition-prefer-water` | `conserve-discard-energy-prefer-basic` | baseline_energy |
 > | `prefer-going-second` | `params["preferred_start"]="second"` + `honor-preferred-start` | baseline_opening |
 
+> **ADR-0079 migration (2026-07-28).** The Set-Up ACTIVE seam is now ONE deck declaration —
+> `Strategy.starter_priority` in this deck's `strategy.py`, read by the general
+> `open-the-declared-starter`. Rows above naming `open-the-accelerator`,
+> `open-the-item-lock-starter`, `dont-open-multiprize-active`, `dont-open-with-the-engine`,
+> `start-solrock-over-lunatone` or the `starter` Role are **history** — all are deleted. See
+> [ADR-0079](../../../docs/adr/0079-the-setup-active-pick-is-one-deck-declaration.md).
+
 | General Hypothesis | Disposition | Seed weight | Why (deck-specific reasoning) |
 |---|---|---|---|
 | `prefer-rush-evolve-tutor` | covers-as-is (refined) | — | Salvatore rush-evolves Staryu→Mega Starmie ex; now gated on `line_preevo_in_play` (stands down with no Staryu in play to evolve) |

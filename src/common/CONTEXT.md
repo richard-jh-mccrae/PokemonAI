@@ -405,10 +405,25 @@ _Avoid_: doctrine (reserve that for the archetype+Mixin files), module (too gene
 
 **Role**:
 A deck's purpose-label assigned to one of its cards/lines (`win_condition`,
-`primary_attacker`, `accel_source`, `starter`, …) — the per-deck overlay on the universal
+`primary_attacker`, `accel_source`, `gust`, …) — the per-deck overlay on the universal
 Function Tag. Drawn from a closed, shared vocabulary (extended by process) so roles stay
-comparable across decks.
+comparable across decks. (`starter` was retired 2026-07-28 by ADR-0079 — it drove nothing, and
+naming a deck's openers is now the **Starter Priority**'s job.)
 _Avoid_: Function Tag (universal/mechanical; a Role is per-deck/intentional), job, slot
+
+**Starter Priority**:
+A deck's ordered list of the bodies it wants in the **Active Spot** at the pregame Set-Up pick,
+highest first (`Strategy.starter_priority`, card ids). Deck-declared data read by a card-id-free
+general rule — the Pilot resolves the highest-ranked id *present* among the `_SETUP_ACTIVE` options
+into `board.top_starter_id`, and `open-the-declared-starter` scores that one option. The sibling of
+**Fetch Priority** (`Strategy.fetch_priority`) and `Strategy.partners` in shape and in spirit
+(ADR-0034: the ids live in the declaration, never in a trigger). Must be **complete** — every
+startable body in the deck (a Basic, or an `opener`-tagged card) is ranked — which is what makes the
+single-winner read exact; CI enforces it, because an undeclared or partial list drops the pick back
+to the engine's option-index order. Covers the Active Spot ONLY; the pregame Bench is a separate
+seam. See ADR-0079.
+_Avoid_: starter Role (retired), opener (that's the Function Tag for an Ability that puts its own
+card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulligan decision)
 
 **Hypothesis**:
 A named, testable claim in a Strategy that biases scoring — carrying a rationale, a

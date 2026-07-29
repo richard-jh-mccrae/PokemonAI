@@ -88,17 +88,17 @@ def test_evolve_corpus_claims(agent, fixture):
             f"{fixture} endorsement claim slot={c.slot} endorsed={c.endorsed}: scores={scores}")
 
 
-# ── TARGETS: the equation's job. xfail(strict) → XPASS (hard fail) the moment it lands. ───────────
-@pytest.mark.parametrize("agent,fixture,leg", [
-    ("dragapult_ex", "dp_open_utility_over_fragile_line_base_f2", "exposure / opener (line-shape)"),
-])
-@pytest.mark.xfail(strict=True, reason="awaits the evolve-value equation (evolve-valuation-grill-spec.md)")
-def test_evolve_corpus_target(agent, fixture, leg):
-    """A correction the current rungs miss; the evolve-value equation must make it pass."""
-    fx = _fixture(fixture)
-    chosen = _pilot(agent).explain(fx["obs"]).chosen
-    assert chosen == fx["correct"], (
-        f"[{leg}] {fixture} chose {chosen}, expected {fx['correct']} ({fx.get('correct_label')})")
+# ── TARGETS: none. ───────────────────────────────────────────────────────────────────────────────
+# `f40` (income-ON one-shot burst) was PROMOTED to a regression test when the decider landed
+# (Issue #140) — its xfail(strict) XPASSed, which is what forced the move.
+#
+# `dp_open_utility_over_fragile_line_base_f2` LEFT this file 2026-07-28 (ADR-0079, Issue #161). It was
+# never an evolve target: it is a `_SETUP_ACTIVE` placement decision, so this equation never runs on
+# it, and a strict tripwire aimed at the wrong code path made this file dishonest about what it
+# covers. ADR-0070 §4 re-ruled it out of scope; it now lives — PASSING, not xfail — in
+# `tests/strategy/test_setup_active_placement.py`, fixed by a deck `starter_priority` declaration.
+#
+# This file therefore holds 4 regression tests + 1 claims case and no targets.
 
 
 # ── f82: a PIN since ADR-0071 removed the shared-budget inflation (was PLANNER SCOPE) ─────────────

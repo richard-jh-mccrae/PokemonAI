@@ -87,6 +87,20 @@ class Strategy:
     fetch_priority: list = field(default_factory=list)  # Tier-3 explicit grab order (cardIds, highest
                                                         # first) -- combo deck's override of derived
                                                         # fetch importance (ADR-0023); empty for most decks
+    starter_priority: list = field(default_factory=list)  # the deck's ordered opening bodies (cardIds,
+                                                        # highest first) for the pregame Set-Up ACTIVE pick
+                                                        # (ADR-0079). Deck-declared data read by the
+                                                        # card-name-free general `open-the-declared-starter`
+                                                        # -- the ids live HERE, never in a trigger (ADR-0034),
+                                                        # exactly as `fetch_priority` / `partners` do. The
+                                                        # Pilot resolves the highest-ranked id PRESENT among
+                                                        # the options into `board.top_starter_id`, so one
+                                                        # boolean carries the whole ordering. Must be
+                                                        # COMPLETE -- every startable body in the deck (a
+                                                        # Basic, or an `opener`-tagged card) ranked -- which
+                                                        # is what makes the single-winner read exact;
+                                                        # test_setup_active_placement enforces it for every
+                                                        # authored agent. Empty = pre-doctrine agent only.
     weight_overrides: dict = field(default_factory=dict)  # authored per-deck seed overrides of (typically
                                                         # general) Hypothesis weights by id -- doctrine-driven,
                                                         # sparse, UNDER the learned tuned.json layer (ADR-0035)

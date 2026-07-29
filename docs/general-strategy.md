@@ -40,15 +40,28 @@ not the 3 of Nebula Beam.
 > give the opponent a free card.
 
 **Reads:** at a `MULLIGAN` select (no Basic in hand → "redraw?"), penalises the **redraw** option
-when the hand holds an `opener`-tagged card (Explosiveness — [card-functions.md](card-functions.md))
-**or** a `starter`-Role card. The role branch makes the keep survive a `card_functions.json` A/B
-toggle. **Source:** F7 — Rulebook (the mulligan rule); the card's own Ability text.
+when the hand holds an `opener`-tagged card (Explosiveness — [card-functions.md](card-functions.md)).
+A `starter`-Role branch was a second signal until ADR-0079 retired that Role; it never changed an
+outcome, because it was only ever declared on Basics and a hand holding any Basic never reaches this
+prompt (`docs/rulebook.txt` L224). **Source:** F7 — Rulebook (the mulligan rule); the card's own
+Ability text.
 
-### `open-the-accelerator` · weight 40 · status: assumed *(folded from mega_starmie `open-cinderace`, 2026-07-02)*
-> At the Set-Up Active pick, prefer an `accel_source`-Role opener — acceleration on from turn one.
+### `open-the-declared-starter` · weight 40 · status: assumed *(ADR-0079, 2026-07-28)*
+> At the Set-Up Active pick, open with the highest-ranked body the deck DECLARED it wants there.
 
-**Reads:** `SETUP_ACTIVE` select + the candidate's `accel_source` Role. Role-keyed: a deck opts in
-by naming its accelerator. The only rule in the system at the Set-Up Active pick.
+**Reads:** `SETUP_ACTIVE` select + `Context.card_is_top_starter` — the Pilot resolves the
+highest-ranked id **present among the options** from `Strategy.starter_priority` into
+`board.top_starter_id`. Card-name-free: the ids live in the deck's declaration, never in the trigger
+(ADR-0034), the same shape as `fetch-deck-priority` over `Strategy.fetch_priority`. Deck-keyed
+opt-in, so an undeclared (pre-doctrine) deck is untouched; every **authored** agent must declare a
+*complete* ranking of its startable bodies, enforced by `tests/strategy/test_setup_active_placement.py`
+— completeness is what lets one boolean carry the whole order, since a forced single pick reads only
+the winner. **The only rule in the system at the Set-Up Active pick**, and the successor to all five
+that used to be there: `open-the-accelerator` (+40), `open-the-item-lock-starter` (+35),
+`dont-open-multiprize-active` (−15), `dont-open-with-the-engine` (−12) and mega_lucario's
+card-id-gated `start-solrock-over-lunatone` (+12) — all **deleted**, their job now carried by the
+ORDER of each deck's declaration. **Source:** dragapult `f2` and mega_lucario `f1`, both of which the
+seam lost to an option-index tie-break with every option scoring 0.0.
 
 ### `honor-preferred-start` · weight −30 · status: assumed *(folded from mega_starmie `prefer-going-second`, 2026-07-02)*
 > At the coin toss, honor the deck's declared tempo: `params["preferred_start"]` = `"first" | "second"`.

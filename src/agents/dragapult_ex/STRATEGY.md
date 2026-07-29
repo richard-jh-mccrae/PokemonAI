@@ -381,6 +381,13 @@ turn, else Crispin/Lillie's/Rosa's) → **evolve/attach** → **attack LAST**. C
 | Tactical: Weakness×2 / `prize-trade-target` | covers-as-is | Dragapult no weakness; prize preference applies |
 | `conserve-discard-energy-prefer-basic` | **N/A** | no `discard_eot` special energy (all Basic) |
 
+> **ADR-0079 migration (2026-07-28).** The Set-Up ACTIVE seam is now ONE deck declaration —
+> `Strategy.starter_priority` in this deck's `strategy.py`, read by the general
+> `open-the-declared-starter`. Rows above naming `open-the-accelerator`,
+> `open-the-item-lock-starter`, `dont-open-multiprize-active`, `dont-open-with-the-engine`,
+> `start-solrock-over-lunatone` or the `starter` Role are **history** — all are deleted. See
+> [ADR-0079](../../../docs/adr/0079-the-setup-active-pick-is-one-deck-declaration.md).
+
 **Existing deck Hypotheses (retained, cards all still present):** `bench-the-comeback-drawer` (Fezandipiti),
 `hold-evolution-until-attacker-ready` (Drakloak→Dragapult), `play-risky-ruins-when-net-positive` (Risky Ruins).
 

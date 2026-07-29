@@ -62,10 +62,15 @@ ROLES = {
     IMPIDIMP:      ["win_condition_base"],       # Line pre-evo (the Line drives line-piece rules)
     FROSLASS:      ["engine"],                   # Freezing Shroud = the chip half of the loop
     MUNKIDORI:     ["engine"],                   # Adrena-Brain = the shovel half; needs {D} attached
-    SNORUNT:       ["starter"],                  # base of the engine Line
-    BUDEW:         ["starter"],                  # sacrificial free item-lock opener (30 HP, 0-cost
-    #   Itchy Pollen) — the `item_lock` TAG drives `open-the-item-lock-starter`; same general
-    #   coverage dragapult_ex relies on, so no Role beyond `starter` and no deck rule.
+    # (Snorunt + Budew carried a `starter` Role until 2026-07-28; ADR-0079 retired it — it drove
+    #  nothing, since a hand holding any Basic never reaches the mulligan prompt that read it.
+    #  ⚠️ This deck is PRE-DOCTRINE (no STRATEGY.md / aligned.json / tuned.json), so it is exempt from
+    #  the `starter_priority` completeness invariant and declares none. Consequence, accepted in
+    #  ADR-0079 amendment A: with the five old Set-Up-Active rungs deleted, NOTHING scores this deck's
+    #  pregame Active pick and it falls to the engine's option-index order. Authoring the ranking —
+    #  Budew's free item-lock, Yveltal as the only real attacker (Dark Feather 110), Munkidori's 110-HP
+    #  body, and the two 70-HP Line bases that want the Bench — is /deck-genie's job, and /deck-align's
+    #  drift check ("≥2 startable bodies, no starter_priority") is what surfaces it.)
     YVELTAL:       ["secondary_attacker"],       # 1-of Basic {D} tech: Clutch retreat-denial / 110
     BOSS_ORDERS:   ["gust"],                     # the `gust` TAG/Role drives the Gust doctrine (ADR-0022)
     PETREL:        ["tutor"], POKE_PAD: ["tutor"], BUDDY_POFFIN: ["tutor"],

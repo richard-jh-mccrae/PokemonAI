@@ -70,6 +70,41 @@ generic behaviour the tags already trigger.
 - Is it a **stall/wall** that should decline to attack to buy tempo? (`stall` play-role.)
 - When does it **stay active** vs. retreat/get replaced?
 
+### Opening placement — the Set-Up Active pick (produces `starter_priority`)
+
+Ask this **once, over the whole set** — never per card. The deliverable is a **total order**, and a
+per-card "is this a decent opener?" pass structurally cannot produce one: you get five independent
+yes-votes and no ranking, which is exactly the all-options-score-0.0 state that made the engine's
+option index choose the opener (dragapult f2, mega_lucario f1). Per ADR-0079 the Set-Up Active seam
+has ONE rule reading ONE deck declaration, so this ranking *is* the deck's opening doctrine.
+
+- **Enumerate first (mechanical, from the dump).** Every card that can legally take the Active Spot
+  at setup: each **Basic**, plus anything whose Ability puts it there from hand (the `opener` Tag —
+  Cinderace's Explosiveness). The list must be **complete**; CI fails an authored deck that ranks a
+  subset, because an unranked body can be offered while nothing scores.
+- **Rank them, best first.** If you get the choice, who takes the Active Spot on turn 0?
+- **Justify each rank on four axes** — don't accept "it's the good one":
+  - does it **attack now**, and for how much? (a 1-Energy 10 and a 1-Energy 30 are not the same body)
+  - how much **HP** does it bring to the most-exposed slot on the board?
+  - how many **hops** from its payoff, and can the line even start? (nothing evolves on either
+    player's first turn — `docs/rules.md`)
+  - does it **do something the instant it is Active** — item-lock, acceleration, an Ability?
+- **Which bodies do you specifically NOT want Active, and where do they belong instead?** This is the
+  question that catches misplacement rather than fragility. A win-condition **Line base** usually
+  wants the BENCH, evolving behind cover — an Active line base is a line that is not being built.
+  dragapult ranks Dreepy *below* a 2-prize Fezandipiti ex for exactly this reason, which a naive
+  fragility-plus-prize-liability read gets backwards.
+- **Does the order flip going first vs second?** The player going first cannot attack or play a
+  Supporter on turn 1. If a deck genuinely wants a *different* opener on each side of the coin toss,
+  say so — `starter_priority` is a flat list today, and a real case is what earns the conditional
+  form (ADR-0079 decision 3).
+- **Multi-prize liability in that slot?** An ex/Mega-ex Active hands over 2–3 prizes. Ranking one
+  first is allowed and nothing subtracts from it — but say why.
+- **If your #1 is not in the opening hand, is #2 genuinely next** — or is it a different plan?
+
+Record the result as the ordered `starter_priority` in the doc, with a one-line reason per rank; it
+becomes a Strategy Proposal in Phase 6.
+
 ### Supporters (one per turn — the scarcest action)
 
 - It's your **once-per-turn** Supporter — so what's the **priority order** when you hold several?

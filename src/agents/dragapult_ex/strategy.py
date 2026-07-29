@@ -30,7 +30,8 @@ deck-specific:
 This file holds only the deck overlay: Roles, the Line, params, and the genuinely deck-bound
 Hypotheses. Pure data: no engine, no control flow. Weights are seeds (status="assumed") —
 ladder-tuned (ADR-0009). The 2026-07-09 re-author's NEW gaps (`use-the-draw-engine-ability`,
-`open-the-item-lock-starter` + `item_lock` tag on Budew, `energy_accel` tag on Rosa's,
+`open-the-item-lock-starter` [DELETED 2026-07-28 by ADR-0079 — Budew's opening rank is now this
+deck's `starter_priority`] + `item_lock` tag on Budew, `energy_accel` tag on Rosa's,
 `dont-strand-the-evolving-engine`) are GENERAL and have SHIPPED into common (deck-align 2026-07-15):
 baseline_sequencing.py / baseline_opening.py / doctrine_fetch.py + the two tags in card_functions.json.
 They live in common, NOT in this file (ADR-0046); the deck opts in by running the tagged cards.
@@ -54,11 +55,11 @@ ROLES = {
     CRISPIN:      ["accel_source"],                # primary un-gated accel: fetch+attach the Phantom Dive color
     BOSS_ORDERS:  ["gust"],                         # the `gust` TAG/Role drives the shipped Gust doctrine
     NIGHT_STRETCHER: ["recovery"],
-    BUDEW:        ["starter"],                     # the SACRIFICIAL item-lock starter (30 HP, free retreat,
-    #   0-cost Itchy Pollen): open it Active (`open-the-item-lock-starter` keys the `item_lock` TAG),
-    #   spend it — soak a hit for one prize (`interpose`/`promote-the-staller`), never fund it (free
-    #   attack → `attach_target_needs` False). The Role is behavioural (worth 0 — sacrificial, pinned)
-    #   and feeds `_hand_startable`; declared in STRATEGY.md §7 since 2026-07-09, wired 2026-07-19.
+    # Budew (235): the SACRIFICIAL item-lock starter (30 HP, free retreat, 0-cost Itchy Pollen) — open
+    #   it Active, spend it (soak a hit for one prize: `interpose`/`promote-the-staller`), never fund
+    #   it (free attack → `attach_target_needs` False). Its `starter` ROLE was RETIRED 2026-07-28
+    #   (ADR-0079: the Role drove nothing — a hand holding any Basic never reaches the mulligan prompt,
+    #   so `_hand_startable` never read it for a Basic). Opening it is now `starter_priority` rank 1.
     MUNKIDORI:    ["counter_mover"],               # Adrena-Brain: relay ≤3 counters ours→theirs each turn —
     #   spreads extra damage to assemble multi-KO Phantom Dive turns AND heals our own (peel counters
     #   off an Active Budew to keep the lock alive). A declared plan piece (user doctrine 2026-07-19):
@@ -66,8 +67,9 @@ ROLES = {
     #   its {P} on top of the {D} fuel (Mind Bend 60 + Confusion) once the benched line is fed.
     # Meowth ex (1071): NO Role — the general `supporter_tutor` TAG + `bench-the-supporter-tutor`
     #   + `grab-a-gust-supporter-for-the-ko` drive it (a `tutor` Role would misfire as a WINCON dig).
-    # Budew (235): opts into the pending general `open-the-item-lock-starter` via an `item_lock` TAG,
-    #   not a Role (proposal deck-genie-20260709). Rosa's (1240): `energy_accel` TAG -> `use-acceleration`
+    # Budew (235): its OPENING rank is `starter_priority` (ADR-0079, which deleted the
+    #   `open-the-item-lock-starter` rung this line used to name); the `item_lock` TAG still drives the
+    #   fetch-side reads. Rosa's (1240): `energy_accel` TAG -> `use-acceleration`
     #   (NOT the `accel_source` Role — it would mis-boost the comeback accel at setup). Both pending.
     # Fezandipiti / Risky Ruins / Crushing Hammer: driven by deck Hypotheses / infra / tags
     #   (Crushing Hammer -> general `play-energy-denial`), keyed on card_id / function tag — not a Role.
@@ -115,6 +117,24 @@ STRATEGY = Strategy(
     lines=[Line(path=[DREEPY, DRAKLOAK, DRAGAPULT_EX], payoff=DRAGAPULT_EX,
                 role="win_condition", ready=Ready(energy=2))],
     roles=ROLES,
+    # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this deck's
+    # startable bodies (ADR-0079; order USER-RULED 2026-07-28). Read by the general
+    # `open-the-declared-starter`; the ids live here, never in a trigger.
+    #   Budew (30 HP) — the free item-lock. Itchy Pollen costs nothing and taxes an Item-heavy setup
+    #     engine while our line assembles; `preferred_start="second"` exists so it fires T1. Was
+    #     `open-the-item-lock-starter` (+35).
+    #   Munkidori (110 HP, Mind Bend {P}+C 60) — the best BODY on offer: the most HP in the most-exposed
+    #     slot and a real attack. This is dragapult f2 (86091728|0|decision|2), which the seam used to
+    #     lose to an option-index tie-break with every option at 0.0.
+    #   Dunsparce (70 HP) then Fezandipiti ex (210 HP) — bodies we can afford to have shot at.
+    #   Dreepy (70 HP) — FIFTH, deliberately BELOW a 2-prize ex. Not because it is fragile but because
+    #     it is MISPLACED: it is the win-condition Line base and it wants the BENCH, evolving toward
+    #     Drakloak → Dragapult ex behind cover (`develop-the-wincon-base-first`). An Active Dreepy is a
+    #     line that is not being built, which costs more than exposing a body the deck can spare.
+    #     (A naive fragility+prize read would rank it ABOVE both ex's — the doctrine is the opposite.)
+    #   Meowth ex (170 HP, 2 prizes) — last: multi-prize liability, and opening it forfeits Last-Ditch
+    #     Catch (in-game bench-from-hand only). Was `dont-open-multiprize-active` (−15).
+    starter_priority=[BUDEW, MUNKIDORI, DUNSPARCE, FEZANDIPITI_EX, DREEPY, MEOWTH_EX],
     params={"setup_energy_target": 2,     # FP for Phantom Dive
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
                                           # functional consumer). Tier-1 engine sims (planner_engine_rank,
