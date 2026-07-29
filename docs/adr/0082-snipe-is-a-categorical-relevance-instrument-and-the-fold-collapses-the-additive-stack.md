@@ -278,6 +278,44 @@ those three frames cannot be won at all.
 Decision 1's gate list is therefore too coarse and needs amending; which way is the next locked
 decision, not assumed here.
 
+**4. The ADR-0044 reads are LEG-SCOPED guards, not whole-target gates. This AMENDS decision 1.** Only
+the Tera fact is a whole-target zero.
+
+```
+relevance(target) = tera_veto x ( their_plan x my_route )
+
+their_plan = max(
+    imminence/threat leg   -> ZEROED by target_prize_redundant OR target_promotion_mirage,
+    forward-wincon leg     -> guarded only by its own target_forward_form_in_play,
+    forced-promotion leg   -> unguarded,
+)
+my_route   = max( path leg, rider-reach leg )        # unguarded
+```
+
+Rationale: *"I don't need this body's prizes"* and *"they will never actually promote this"* are
+objections to treating the body as an **imminent attacker**. They are not objections to pre-chipping a
+developing win-condition on it, nor to hitting the body they are *forced* to bring up. Each objection
+stays attached to the claim it actually refutes — which is what `baseline_snipe.py` already does, and
+what the corpus endorses: `81905522-75`, `82523811-41` and `85164131-22` all have the human picking a
+`target_promotion_mirage` body, so a whole-target gate makes them unreachable. Dropping the reads
+instead is also refuted (Tera-only measured 6–7/9 against 8/9). The fold's job is to replace the
+*scoring mechanism*, not to silently re-rule which reads apply where.
+
+Two implementation constraints, both verified at source and both easy to lose in a refactor:
+
+- **The Tera veto is an ORDERING, not a removal.** `_snipe_tera_veto` returns `-KO_SCORE`, and its
+  docstring is explicit: *"Orders the Tera LAST; it does NOT remove the option — when a benched Tera is
+  the ONLY target the select is forced and the rider is wasted either way, so the agent must still
+  answer."* A literal `relevance = 0` that made the option unselectable would break a legal-move case.
+  The whole-target zero must therefore mean *ranked last among the offered options*.
+- **The Brief / MatchupPlan multiplier keeps its OWN whole-target stand-down.**
+  `_snipe_matchup_tactical` (ADR-0051) already stands a **positive** priority down on
+  `target_prize_redundant` / `target_promotion_mirage` / `target_is_bench_tera`, while a negative
+  (`avoid`) priority always applies. Under decision 2 the Brief scales `their_plan` — which now includes
+  an unguarded forward-wincon leg — so without preserving that stand-down explicitly a Brief boost would
+  start reaching mirage bodies through the forward leg. The asymmetry (positive stands down, negative
+  never does) is load-bearing and must survive.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
