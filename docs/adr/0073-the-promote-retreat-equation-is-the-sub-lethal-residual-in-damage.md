@@ -418,7 +418,7 @@ it, and 75 sat outside.**
 
 At 75 the agent traded a 210-damage attack for a 50-damage one — 3 Energy of bench accel scored 225
 and outbid the attack it gave up. The defect was **pre-existing and masked**: the retired pigeonhole
-fuel floor (ADR-0076) under-counted the units, so an over-valued rate and an under-counted quantity
+fuel floor (ADR-0077) under-counted the units, so an over-valued rate and an under-counted quantity
 cancelled. Fixing the read exposed the rate, which is why both land together.
 
 *Found while building:* `tests/strategy/test_promote_forward.py`'s accelerator fixture omitted both

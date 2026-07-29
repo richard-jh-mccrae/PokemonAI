@@ -4541,7 +4541,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
              Board so it is the one truth for my discard fuel — `_damage_context` keeps its own
              attacker-relative copy because it must also serve the Incoming direction);
              "deck" → the whole-deck search's pool (`_deck_basic_energy_fuel`: the EXPECTED count
-             off the one Count Triple derivation, ADR-0076 — a ranked count consumer reads
+             off the one Count Triple derivation, ADR-0077 — a ranked count consumer reads
              `expected`, and anchored the leg collapses to the exact integer).
           3. the recipients' remaining NEED (ADR-0061). The old code checked only that the Bench was
              non-empty, so 3 {F} onto a Lunatone/Solrock support bench scored an identical +225 to 3
@@ -4567,7 +4567,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _deck_basic_energy_fuel(self, etype) -> float:
         """Matching Basic Energy a whole-deck search rider (Turbo Flare) can EXPECT to still find in
         my deck — `CountTriple.expected` off the ONE `MySide.deck_energy_counts` derivation
-        (ADR-0076 decision 3).
+        (ADR-0077 decision 3).
 
         A COUNT question, so it reads the count leg. `p_any` answers *is there at least one?* and
         weighting a full `recoverN` by it would claim "P(≥1) odds of finding ALL of them"; the
@@ -4652,7 +4652,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The supply probability is a VALUE estimate, not a grader-safety endorsement, so it is the
         prize-split-weighted expectation (`_prize_split_hit`, un-floored unseen) — the SAME model the
-        shed's re-access uses, and (since ADR-0076) the same one `_deck_basic_energy_fuel` reads:
+        shed's re-access uses, and (since ADR-0077) the same one `_deck_basic_energy_fuel` reads:
         the pigeonhole floor that used to sit there zeroed a 3-of Staryu behind six hidden prizes,
         ep83038055 f40's exact hole, and no ranked count consumer takes it now. Bounded (deficit ≤
         `_THIN_BENCH`, prob ≤ 1). REPLACES nothing live — reported beside the flat CYCLE so the corpus

@@ -68,7 +68,7 @@ def _pilot(hand_ids=(), energy=20):
                             CINDERACE: ["accel_source", "starter"], STARYU: ["starter"]})
     # The deck holds real Basic Energy so the deck-search rider has fuel to find (`_recover_units`
     # bounds the dividend by the fuel in its source zone). `energy` thins the suite for the
-    # ADR-0076 frames, where the point is a suite the PIGEONHOLE FLOOR cannot see behind the prizes.
+    # ADR-0077 frames, where the point is a suite the PIGEONHOLE FLOOR cannot see behind the prizes.
     deck = [3] * energy + [STARYU] * 10 + [MEGA] * 10 + [CINDERACE] * 10 + [1] * (30 - energy)
     return Pilot(strat, deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({CINDERACE: ["opener"]}))
@@ -120,11 +120,11 @@ def test_promote_the_staller_over_a_bare_preevo_even_with_the_payoff_in_hand():
     assert p.decide(obs) == [0]                                  # staller, not the bare Staryu
 
 
-# ---- ADR-0076: the deck-fuel leg is an EXPECTATION, so the dividend survives a thin suite --------
+# ---- ADR-0077: the deck-fuel leg is an EXPECTATION, so the dividend survives a thin suite --------
 
 @pytest.mark.req("REQ-GEN-0026")
 def test_the_accel_dividend_survives_a_suite_the_pigeonhole_floor_zeroes():
-    """Issue #172 / ADR-0076, the f97 shape. 4 Basic {W} in the decklist, 2 of them VISIBLE on the
+    """Issue #172 / ADR-0077, the f97 shape. 4 Basic {W} in the decklist, 2 of them VISIBLE on the
     board, 5 face-down prizes: the provable pigeonhole floor is `max(0, 2 - 5)` = 0, so the shipped
     read claimed no fuel at all and the accel dividend died — on a deck that still holds Water with
     near-certainty.
@@ -151,7 +151,7 @@ def test_the_accel_dividend_survives_a_suite_the_pigeonhole_floor_zeroes():
 
 @pytest.mark.req("REQ-GEN-0026")
 def test_an_anchored_board_scores_the_dividend_exactly_as_before():
-    """The degeneracy guarantee (ADR-0076 verification). With no face-down prizes the Count Triple's
+    """The degeneracy guarantee (ADR-0077 verification). With no face-down prizes the Count Triple's
     legs collapse to one integer, so `expected` IS the old exact count and the dividend is unmoved —
     which is what separates "thin-Energy frames moved" from "everything moved"."""
     p = _pilot(energy=4)

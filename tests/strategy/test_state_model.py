@@ -393,7 +393,7 @@ def test_deck_energy_p_is_a_projection_of_the_one_derivation():
 
 
 def test_expected_unions_additively_across_types():
-    """ADR-0076 decision 2: an UNTYPED rider (Turbo Flare, Energy Gift — "search your deck for up to
+    """ADR-0077 decision 2: an UNTYPED rider (Turbo Flare, Energy Gift — "search your deck for up to
     3 Basic Energy cards") needs a cross-type union, which ADR-0074 decision 6 forbids minting for
     `p_any`. It is free for `expected`: every type's leg divides the same `(deck, prizes_hidden)`, so
     the sum over types IS the aggregate, exactly — one derivation, not a second instrument.

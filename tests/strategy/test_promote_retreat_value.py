@@ -158,7 +158,7 @@ def test_the_accel_dividend_is_zero_when_no_recipient_can_use_it():
 
 
 def test_a_FRACTIONAL_accel_dividend_is_paid_in_full_not_truncated():
-    """ADR-0076 decision 3: the deck-fuel leg is now `CountTriple.expected`, so `accel_units` is an
+    """ADR-0077 decision 3: the deck-fuel leg is now `CountTriple.expected`, so `accel_units` is an
     EXPECTED count and arrives fractional. `my_yield` used to coerce it with `int(...)`, which floored
     2.5 to 2 and silently binned 0.5 x ENERGY_RECOVER = 37.5 points — a whole half-Energy of
     development, on the very frames the expectation exists to serve.

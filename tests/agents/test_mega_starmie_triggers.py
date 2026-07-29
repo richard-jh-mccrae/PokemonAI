@@ -324,7 +324,7 @@ def _shipped_lucario_attack_stat():
 
 def _turbo_flare_obs(*, bench=(STARYU,), discard=(), prize=6):
     """A mega_starmie board with Cinderace Active. Driven through the real `_board()` so the read
-    reaches its StateModel — ADR-0076 retired the hand-injectable `Board(deck_known_counts=...)`
+    reaches its StateModel — ADR-0077 retired the hand-injectable `Board(deck_known_counts=...)`
     path, because anchoring is now the Count Triple's own regime rather than a separate branch."""
     me = {"active": [{"id": CINDERACE, "hp": 160, "energies": []}],
           "bench": [{"id": c, "hp": 70, "energies": []} for c in bench],
@@ -355,7 +355,7 @@ def test_turbo_flare_credit_is_need_and_fuel_gated():
 
 @pytest.mark.req("REQ-ACCEL-0002")
 def test_turbo_flare_keeps_its_credit_when_the_pigeonhole_floor_would_zero_it():
-    """Issue #172 / ADR-0076 at the shipped-agent seam. 6 of the 9 Water visible in the discard and
+    """Issue #172 / ADR-0077 at the shipped-agent seam. 6 of the 9 Water visible in the discard and
     5 face-down prizes leaves 3 unseen: the retired pigeonhole floor read `max(0, 3 - 5)` = 0 and
     killed the rider outright, on a deck that still holds Water with near-certainty. The expectation
     is fractional and strictly positive, so the dividend survives — and stays bounded by the
