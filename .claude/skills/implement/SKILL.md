@@ -48,3 +48,29 @@ Once done, use /code-review to review the work.
 Commit your work to the current branch.
 
 If this work traces to a tracked issue, once the full test suite passes and review is clean, advance that issue's status chip from `status:3-build` to `status:4-done` and close it (`state_reason: completed`). See `docs/agents/issue-tracker.md`.
+
+## Auto-open the PR when the work is actually finished
+
+Once the full test suite passes, /code-review is clean, and the work is committed, open the pull
+request automatically — don't wait to be asked — **but only if there are no pending questions**:
+nothing asked via the plain-chat format above is still awaiting an answer, and no ambiguity was
+punted rather than resolved. If a question is still open, stop and wait for the answer instead of
+opening a PR around unresolved decisions.
+
+Follow `CLAUDE.md`'s pull request conventions exactly:
+
+1. **Rebase onto `main` first.** Fetch and rebase the branch onto the latest `main`, resolving any
+   conflicts that surface, before pushing.
+2. **Push** the branch (`git push -u origin <branch-name>`).
+3. **Create the PR** with the GitHub MCP tools (`mcp__github__create_pull_request`), using
+   `.github/pull_request_template.md` as the body layout: a brief human-readable **Summary**
+   (what/why/how) and a **Technical details** section in caveman mode (terse fragments — files/
+   functions touched, edge cases, tests). Title always states the issue number, e.g.
+   `Issue #145: short description`, when this work traces to a tracked issue.
+4. **Subscribe immediately.** As soon as the PR is opened, call `subscribe_pr_activity` in the same
+   turn — don't ask first. Then use `send_later` to arm a self check-in **5 minutes** out (not the
+   default ~1 hour), re-arming after each firing until the PR is merged or closed, per `CLAUDE.md`'s
+   PR-monitoring cadence.
+
+If the work doesn't trace to a branch that's meant to become a PR (e.g. you're already iterating on
+an existing open PR), skip this section — commit and hand off as usual.
