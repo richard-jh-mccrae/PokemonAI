@@ -53,10 +53,12 @@ CLUSTERS = {
     "evolution": (EVOLUTION_HYPOTHESES, {
                         "prefer-rush-evolve-tutor", "dont-rush-evolve-without-target"}),
     "heal": (HEAL_HYPOTHESES, {"hold-clutch-heal", "dont-waste-clutch-heal"}),
-    "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "open-the-accelerator",
-                                     "honor-preferred-start", "dont-open-multiprize-active",
-                                     "dont-open-with-the-engine",   # opener half of the utility-body read
-                                     "open-the-item-lock-starter"}),
+    # The Set-Up ACTIVE pick is ONE rule over one deck declaration since ADR-0075 — `open-the-
+    # accelerator`, `open-the-item-lock-starter`, `dont-open-multiprize-active` and
+    # `dont-open-with-the-engine` were DELETED, not folded into a successor rung, and their job is
+    # now the ORDER of each deck's `Strategy.starter_priority`.
+    "opening": (OPENING_HYPOTHESES, {"keep-a-startable-hand", "honor-preferred-start",
+                                     "open-the-declared-starter"}),
     "sequencing": (SEQUENCING_HYPOTHESES, {"dig-before-commit",
                                            "dont-play-damage-boost-when-cant-attack",
                                            "use-the-draw-engine-ability",

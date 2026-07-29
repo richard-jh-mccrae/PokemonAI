@@ -1,10 +1,31 @@
 """BASELINE cluster: OPENING — opening-hand / mulligan / game-start decisions (ADR-0025). Don't
-redraw a hand you can already start; open with the piece your deck's Roles nominate. Pure data,
-no Mixin.
+redraw a hand you can already start; open with the body your deck declared. Pure data, no Mixin.
+
+**The Set-Up ACTIVE pick is ONE rule reading ONE deck declaration (ADR-0075).** It used to be five
+rungs across two layers — `open-the-accelerator` (+40, `accel_source` Role), `open-the-item-lock-
+starter` (+35, `item_lock` Tag), `dont-open-multiprize-active` (−15), `dont-open-with-the-engine`
+(−12), and mega_lucario's card-id-gated `start-solrock-over-lunatone` (+12). All five are DELETED.
+
+Why the whole pile went, rather than one more rung joining it:
+
+* **The positives were deck opinions expressed by proxy.** "Open the accelerator" / "open the
+  item-locker" are a deck saying which body it wants Active, spelled as a Role and a Tag. A
+  declaration says it directly AND in order, so the proxies buy nothing the list doesn't.
+* **The negatives second-guessed an explicit ranking.** A guard that demotes a body the deck
+  deliberately ranked first is not a rail, it is an override of deck intent — and the escape hatches
+  it needed for that (`_WINCON_ROLES`) are exactly the complexity a ranking removes.
+* **They ordered each other by accident.** A deck holding both an `accel_source` and an `item_lock`
+  body had its opener settled by `+40 > +35` — a comparison between two independently-tuned numbers
+  no deck ever grilled.
+* **The card-id reflex was already shipped.** `start-solrock-over-lunatone` gated on
+  `card_id == SOLROCK`. The ids now live in the deck's declaration, never in a trigger (ADR-0034).
+
+The frames: dragapult `f2` (Dreepy/Munkidori both 0.0 → the option-index tie-break opened the
+fragile Line base) and mega_lucario `f1` (Riolu/Lunatone both 0.0 → it opened the draw engine). Two
+decks, two frames, one root cause — the seam did not rank the field.
 """
-from common.strategy.baseline.baseline_bench import _multi_prize
-from common.strategy.context import _IS_FIRST, _MULLIGAN, _NO, _SETUP_ACTIVE, _WINCON_ROLES, _YES
-from common.strategy.strategy import Hypothesis, Plan
+from common.strategy.context import _IS_FIRST, _MULLIGAN, _NO, _SETUP_ACTIVE, _YES
+from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
     Hypothesis(
@@ -27,53 +48,23 @@ HYPOTHESES = [
             or (c.option_type == _NO and c.params.get("preferred_start") == "first")),
         weight=-30, status="assumed"),
     Hypothesis(
-        id="open-the-accelerator",
-        rationale="At the Set-Up Active pick, prefer an `accel_source`-Role opener — it turns its "
-                  "acceleration on from turn one (e.g. Cinderace: Explosiveness opens the Spot, Turbo "
-                  "Flare loads the Bench). Role-keyed opt-in; folded from mega_starmie `open-cinderace`.",
-        when=lambda c: c.select_context == _SETUP_ACTIVE   # pregame pick: the line can't be ready yet
-        and "accel_source" in c.roles,
+        id="open-the-declared-starter",
+        rationale="At the pregame Set-Up Active pick, open with the highest-ranked body the deck "
+                  "DECLARED it wants there (`Strategy.starter_priority`, highest first) among those "
+                  "actually on offer. The one rule at this seam, and the successor to all five it "
+                  "replaced (ADR-0075). Card-name-free: the ids live in the deck's declaration, and "
+                  "this trigger reads only the resolved `board.top_starter_id` — the same shape as "
+                  "`fetch-deck-priority` over `Strategy.fetch_priority`. Deck-keyed opt-in, so it is "
+                  "silent for a deck that has not declared (a pre-doctrine agent); every AUTHORED "
+                  "agent must declare a COMPLETE ranking of its startable bodies, which "
+                  "`test_setup_active_placement` enforces — completeness is what lets one boolean "
+                  "carry the whole order, since a forced single pick (minCount/maxCount 1) reads only "
+                  "the winner. Seed 40 for band legibility (`docs/weights.md` 'core doctrine', the "
+                  "band its ancestor `open-cinderace` occupied); with nothing else scoring at this "
+                  "seam the magnitude is behaviourally free, and per-deck strength belongs in "
+                  "`weight_overrides` (ADR-0035). Fixes dragapult f2 (Munkidori over the fragile "
+                  "Dreepy) and mega_lucario f1 (Solrock over the Lunatone draw engine) at source: "
+                  "both were option-index tie-breaks between options that all scored 0.0.",
+        when=lambda c: c.select_context == _SETUP_ACTIVE and c.card_is_top_starter,
         weight=40, status="assumed"),
-    Hypothesis(
-        id="open-the-item-lock-starter",
-        rationale="At the pregame Set-Up Active pick, prefer a candidate carrying the `item_lock` tag "
-                  "(Budew — Itchy Pollen: 0-cost attack, blocks the opponent's Item cards next turn): "
-                  "leading with a free item-lock disruptor taxes an item-heavy setup engine while our "
-                  "own wincon assembles. Tag-keyed opt-in twin of `open-the-accelerator` (which keys the "
-                  "`accel_source` Role); +35, just below it. A pregame pick, so KO-safe; no first/second "
-                  "gate needed (opening the lock going first just waits to fire T2). Silent for decks "
-                  "with no `item_lock` card.",
-        when=lambda c: c.select_context == _SETUP_ACTIVE and "item_lock" in c.tags,
-        weight=35, status="assumed"),
-    Hypothesis(
-        id="dont-open-multiprize-active",
-        rationale="At the pregame Set-Up Active pick (`_SETUP_ACTIVE`), DON'T open with a non-wincon "
-                  "multi-prize ex (Meowth ex) — the Active Spot is the most-exposed slot, so a 2-prize "
-                  "(ex) / 3-prize (Mega ex) liability there hands the opponent an easy multi-prize KO, "
-                  "and Meowth ex's Last-Ditch Catch only triggers on an IN-GAME bench-from-hand "
-                  "(EN_Card_Data row 1071 / rulebook L96), so opening it ALSO forfeits the free Supporter "
-                  "fetch. The Active-pick mirror of `dont-bench-multiprize` (same −15, same `_WINCON_ROLES` "
-                  "escape so a deck that MEANS to open its Basic-ex attacker still can) and the sibling of "
-                  "`dont-pre-bench-the-supporter-tutor` (which owns the pregame BENCH decline). No explicit "
-                  "'a plain Basic is also on offer' gate is needed: SETUP_ACTIVE is a forced single pick "
-                  "(minCount 1, so decide()'s take-fewer never trims), so when the ex is the ONLY startable "
-                  "Basic it stays the max-scoring option and is still placed — the −15 only bites when a "
-                  "plain Basic (Riolu/Solrock/Lunatone at score 0) outscores it. mega_lucario opened Meowth "
-                  "ex ~4/25 self-play games (residual-blunder audit 2026-07-05).",
-        when=lambda c: c.select_context == _SETUP_ACTIVE and _multi_prize(c.stat)
-        and not (_WINCON_ROLES & set(c.roles)),
-        weight=-15, status="assumed"),
-    Hypothesis(
-        id="dont-open-with-the-engine",
-        rationale="At the pregame Set-Up Active pick, DON'T open a body that exists to draw/tutor/stall "
-                  "and never attacks (`card_is_utility_body`) while an attacker is on offer — the Active "
-                  "Spot is where the game is fought, and a pure engine there loses the opening turns. The "
-                  "opener half of `dont-fund-the-non-attacking-body`, read off the same universal "
-                  "`Pilot._is_utility_body`; the deck-agnostic form of mega_lucario's "
-                  "`start-solrock-over-lunatone`, which cannot speak when Solrock isn't in hand. ml f1: "
-                  "Lunatone and Riolu both scored 0.0 and the option index opened the Lunatone. −12 "
-                  "orders any attacker above a pure engine; like `dont-open-multiprize-active` this is a "
-                  "forced single pick, so an engine that is the ONLY startable Basic is still placed.",
-        when=lambda c: c.select_context == _SETUP_ACTIVE and c.card_is_utility_body,
-        weight=-12, status="assumed"),
 ]

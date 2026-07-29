@@ -37,8 +37,10 @@ CRUSHING_HAMMER, BOSS_ORDERS, WALLYS, NIGHT_STRETCHER = 1120, 1182, 1229, 1097
 # Roles ARE the deck's opt-in to the role-keyed General Strategy rules (see docstring table).
 ROLES = {
     MEGA_STARMIE_EX: ["win_condition", "primary_attacker"],
-    CINDERACE: ["accel_source", "starter"],     # Explosiveness opener + Turbo Flare
-    STARYU: ["starter"],
+    CINDERACE: ["accel_source"],                # Explosiveness opener + Turbo Flare
+    # (the `starter` Role on Cinderace + Staryu RETIRED 2026-07-28, ADR-0075 — it drove nothing
+    #  and naming the openers is now `starter_priority` below. Cinderace keeps `accel_source`,
+    #  which the ATTACH/develop rules read; Staryu is carried by the Line.)
     IGNITION_ENERGY: ["accel_source"],           # CCC on an Evolution = one-attach Nebula Beam
     MEGA_SIGNAL: ["tutor"], SALVATORE: ["tutor"], HILDA: ["tutor"],
     BUDDY_POFFIN: ["tutor"], ULTRA_BALL: ["tutor"],
@@ -51,6 +53,15 @@ STRATEGY = Strategy(
     lines=[Line(path=[STARYU, MEGA_STARMIE_EX], payoff=MEGA_STARMIE_EX,
                 role="win_condition")],   # readiness engine-derived: online at 1 W (Jetting Blow), not CCC
     roles=ROLES,
+    # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this
+    # deck's startable bodies (ADR-0075). Read by the general `open-the-declared-starter`.
+    #   Cinderace (160 HP) — the opener AND the accel engine: Explosiveness puts it in the Active
+    #     Spot straight from hand, then Turbo Flare (50) loads the Bench. Was `open-cinderace`,
+    #     folded to `open-the-accelerator` (+40) — the exemplar `docs/weights.md` cites for the
+    #     core-doctrine band, and the reason this rule seeds at the same 40.
+    #   Staryu (70 HP) — the win-condition Line base. It wants the BENCH, evolving into Mega
+    #     Starmie ex behind the Cinderace wall, not the most-exposed slot.
+    starter_priority=[CINDERACE, STARYU],
     params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
                                           # functional consumer). Tier-1 engine sims (planner_engine_rank,

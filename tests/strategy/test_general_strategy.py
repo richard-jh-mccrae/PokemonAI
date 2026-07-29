@@ -147,10 +147,9 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
     assert by_tag.decide(mull) == [1]
     assert "keep-a-startable-hand" in _fired(by_tag.explain(mull).options[0])
 
-    # `starter` Role alone (no card_functions.json) -> still keeps: survives A/B toggle.
-    by_role = Pilot(Strategy(roles={OPENER: ["starter"]}), deck=[1] * 60,
-                    general_strategy=GENERAL_STRATEGY)
-    assert by_role.decide(mull) == [1]
+    # (The `starter` Role was a second accepted signal here until ADR-0075 retired it. It never
+    #  changed an outcome: it was only ever declared on Basics, and a hand holding any Basic never
+    #  reaches this prompt at all -- `docs/rulebook.txt` L224. The `opener` Tag above is the real one.)
 
     # neither signal -> ungoverned, defaults to redraw blunder.
     baseline = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
@@ -158,17 +157,30 @@ def test_keep_a_startable_hand_declines_to_mulligan_a_startable_opener():
 
 
 @pytest.mark.req("REQ-GEN-0056")
-def test_open_the_accelerator_prefers_the_accel_opener_at_setup_active():
-    # Folded from mega_starmie `open-cinderace` (same trigger + weight): a deck that Roles an
-    # `accel_source` opener wants it in the Active Spot — acceleration from turn one.
-    pilot = Pilot(Strategy(roles={666: ["accel_source", "starter"], 700: ["starter"]}),
-                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+def test_open_the_declared_starter_prefers_the_decks_ranked_opener_at_setup_active():
+    # Re-pointed from the deleted `open-the-accelerator` (ADR-0075). Same requirement — the deck gets
+    # the body it wants in the Active Spot — through a declaration instead of an `accel_source` Role,
+    # so the deck orders its WHOLE field rather than tripping one rung. Deck-keyed opt-in, and
+    # card-name-free: the ids live in Strategy.starter_priority, the trigger reads only the resolved
+    # board.top_starter_id. Behaviour on the shipped agents: test_setup_active_placement.py.
+    ACCEL, PLAIN = 666, 700
+    pilot = Pilot(Strategy(starter_priority=[ACCEL, PLAIN]), deck=[1] * 60,
+                  general_strategy=GENERAL_STRATEGY)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=SETUP_ACTIVE,
-                      current=state(hand=[700, 666]))
-    assert pilot.decide(obs) == [1]                # accel_source beats plain starter
-    accel, starter = pilot.explain(obs).options[1], pilot.explain(obs).options[0]
-    assert "open-the-accelerator" in _fired(accel)
-    assert "open-the-accelerator" not in _fired(starter)   # role-keyed: bare starter doesn't fire
+                      current=state(hand=[PLAIN, ACCEL]))
+    assert pilot.decide(obs) == [1]                       # rank 1 beats rank 2
+    ranked, lower = pilot.explain(obs).options[1], pilot.explain(obs).options[0]
+    assert "open-the-declared-starter" in _fired(ranked)
+    assert "open-the-declared-starter" not in _fired(lower)   # only the top body PRESENT scores
+
+    # Reversing the DECLARATION reverses the pick; reversing the option order does not.
+    flipped = Pilot(Strategy(starter_priority=[PLAIN, ACCEL]), deck=[1] * 60,
+                    general_strategy=GENERAL_STRATEGY)
+    assert flipped.decide(obs) == [0]
+
+    # An undeclared deck is untouched — nothing fires, nothing scores.
+    bare = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
+    assert all(not _fired(o) for o in bare.explain(obs).options)
 
 
 @pytest.mark.req("REQ-GEN-0057")

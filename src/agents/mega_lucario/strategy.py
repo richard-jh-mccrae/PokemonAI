@@ -108,15 +108,13 @@ HYPOTHESES = [
     # engine/needs-Solrock). Fix every seat: start the attacker, power the attacker not the engine, skip
     # a partnerless Solrock, and fetch toward EXACTLY one of each in play. Replaces `fetch-the-engine-
     # first` (its `not line_ready` gate + blanket-engine grab caused f41/f12/f26).
-    Hypothesis(
-        id="start-solrock-over-lunatone",
-        rationale="At the pregame Set-Up Active pick, start SOLROCK (the attacker — Cosmic Beam 70 for "
-                  "one {F}) over Lunatone (the benched draw engine that rarely attacks). Both score 0, so "
-                  "the option-index tie-break opened Lunatone (ml f1: CRITICAL). Lunatone belongs on the "
-                  "Bench powering Lunar Cycle; +12 opens Solrock. If only Lunatone is startable, nothing "
-                  "fires and the forced pick stands.",
-        when=lambda c: c.select_context == _SETUP_ACTIVE and c.card_id == SOLROCK,
-        weight=12, status="assumed"),
+    # (start-solrock-over-lunatone RETIRED 2026-07-28 — FOLDED into the deck's `starter_priority`
+    #  declaration below + the general `open-the-declared-starter` (baseline_opening, +40), ADR-0075.
+    #  It was gated on `card_id == SOLROCK` — the card-id reflex, shipped. The whole ml f1 finding
+    #  ("both score 0, so the option-index tie-break opened Lunatone") is now the ORDER of the
+    #  declaration: Solrock outranks Lunatone, and the general rule reads only the resolved
+    #  `board.top_starter_id`, never an id. The +12 could only lift Solrock above a 0-scoring field;
+    #  the ranking additionally orders Riolu, Makuhita and Meowth ex, which the rung never could.)
     # (dont-attach-to-the-engine RETIRED 2026-07-10 — FOLDED into the general
     #  `dont-fund-the-non-attacking-body` (baseline_energy, −12), which reads the same engine-only Role
     #  universally AND covers the ATTACH_FROM seam this rule was blind to (ml f121, CRITICAL: Aura Jab's
@@ -362,6 +360,22 @@ STRATEGY = Strategy(
     # its partner in play. Deck-declared so the GENERAL attach oracle zeroes a partnerless Solrock /
     # Lunatone (attach Ruling 6) — the value-side complement of the `skip-partnerless-solrock` rung.
     partners={SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
+    # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this deck's
+    # startable bodies (ADR-0075). Read by the general `open-the-declared-starter`; the ids live here,
+    # never in a trigger. Transcribed from the doctrine it replaces:
+    #   Solrock (110 HP, Cosmic Beam 70 for one {F}) — the attacker half of the pair; was
+    #     `start-solrock-over-lunatone` (+12, ml f1 CRITICAL).
+    #   Riolu (80 HP, Accelerating Stab {F} 30) — ONE hop from Mega Lucario ex (340 HP, Aura Jab 130)
+    #     and it can attack now. The constraint ADR-0075 is written around: open-Riolu must survive,
+    #     and it does here as a LINE-SHAPE read, not a card-id gate.
+    #   Makuhita (80 HP, {F} 10) — the secondary-line base; a body, not a plan.
+    #   Lunatone (110 HP) — the DRAW ENGINE. Belongs on the Bench powering Lunar Cycle; was
+    #     `dont-open-with-the-engine` (−12).
+    #   Meowth ex (170 HP, 2 prizes) — last. A multi-prize liability in the most-exposed slot, and
+    #     opening it forfeits Last-Ditch Catch (triggers only on an in-game bench-from-hand). Was
+    #     `dont-open-multiprize-active` (−15); the residual-blunder audit caught it opening ~4/25 games.
+    # A forced single pick still places whatever is offered when nothing better is (minCount 1).
+    starter_priority=[SOLROCK, RIOLU, MAKUHITA, LUNATONE, MEOWTH_EX],
     params={"setup_energy_target": 2,    # FF — toward the first Mega Brave (build-active-wincon target)
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
                                           # functional consumer). Tier-1 engine sims (planner_engine_rank,

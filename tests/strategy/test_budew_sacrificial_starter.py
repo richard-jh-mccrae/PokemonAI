@@ -10,8 +10,13 @@ ALREADY built and one declaration that had drifted:
                   MEANT to be spent — soak a hit for one prize (`interpose`, `promote-the-staller`);
   * no funding  — Itchy Pollen is free, so `attach_target_needs` is False and no energy rung ever
                   prices an attach onto Budew (the line eats the Energy — the 86091728-19 priority);
-  * startable   — the `starter` Role, declared in STRATEGY.md §7 but never wired into strategy.py
-                  (the drift this file closes): `_hand_startable` reads it at the mulligan keep.
+  * startable   — the deck's declared rank-1 OPENER. Was the `starter` Role (declared in STRATEGY.md
+                  §7, wired 2026-07-19); ADR-0075 retired that Role and moved the declaration to
+                  `Strategy.starter_priority`, where it actually drives the Set-Up Active pick.
+
+The opener BEHAVIOUR (Budew takes the Active Spot over the rest of the field) is asserted in
+`test_setup_active_placement.py`, which owns that seam. This file keeps the identity claims that are
+not about the seam: worth 0, never funded, and the declaration itself.
 """
 from __future__ import annotations
 
@@ -37,12 +42,20 @@ def pilot():
 
 
 @pytest.mark.req("REQ-WORTH-0003")
-def test_budew_declares_the_starter_role(pilot):
-    """STRATEGY.md §7 declares `BUDEW: ["starter"]`; the executable overlay must agree (the drift
-    fix), and a hand holding Budew reads startable at the mulligan keep."""
-    assert "starter" in pilot.strategy.roles.get(_BUDEW, []), (
-        "Budew's starter Role is declared in STRATEGY.md §7 but not wired in strategy.py")
-    assert pilot._hand_startable([{"id": _BUDEW}]), "a Budew hand does not read startable"
+def test_budew_is_the_decks_declared_rank_one_opener(pilot):
+    """STRATEGY.md §7 declares Budew the item-lock starter; the executable overlay must agree. Since
+    ADR-0075 that declaration is `Strategy.starter_priority` rank 1 rather than a `starter` Role —
+    the Role was retired because it drove nothing, and this is the form that does.
+
+    `_hand_startable` is deliberately NOT asserted here any more: it now reads only the `opener` Tag
+    (Explosiveness), and Budew is a plain Basic. That is moot rather than a regression — a hand
+    holding any Basic never reaches the mulligan prompt at all (`docs/rulebook.txt` L224: "if either
+    player has no Basic Pokemon in their opening hand, that player must take a mulligan"), which is
+    exactly why the Role could never change an outcome."""
+    assert pilot.strategy.starter_priority[:1] == [_BUDEW], (
+        f"Budew must be the declared rank-1 opener; got {pilot.strategy.starter_priority[:1]}")
+    assert "starter" not in pilot.strategy.roles.get(_BUDEW, []), (
+        "the `starter` Role was retired by ADR-0075 — the declaration is starter_priority")
 
 
 @pytest.mark.req("REQ-WORTH-0003")

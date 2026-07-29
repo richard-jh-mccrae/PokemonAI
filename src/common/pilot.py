@@ -289,6 +289,12 @@ class Board:
     top_fetch_priority_id: int | None = None  # at a TO_HAND search, highest-priority candidate id
                                        # present, by deck's explicit Strategy.fetch_priority list
                                        # (None off a search / no list / none present) — Tier-3 override
+    top_starter_id: int | None = None  # at the pregame SETUP_ACTIVE pick, the highest-ranked card id
+                                       # PRESENT among the options, by deck's Strategy.starter_priority
+                                       # (None off that select / no list / none present). The whole
+                                       # ordering collapses into this one id because SETUP_ACTIVE is a
+                                       # forced single pick — argmax reads only the winner (ADR-0075).
+                                       # Twin of `top_fetch_priority_id`; gates `open-the-declared-starter`
     line_preevo_in_play: bool = False  # a non-payoff member of a Line's path (a pre-evolution) is in
                                        # play — so there's something a rush-evolve tutor can evolve
     line_preevo_in_hand: bool = False  # a non-payoff Line member (a base/mid-line pre-evolution) is in
@@ -785,6 +791,11 @@ class Context:
     card_is_top_fetch_priority: bool = False  # this candidate IS deck's highest-priority fetch
                                        # target present (== board.top_fetch_priority_id) — Tier-3
                                        # explicit-list grab override (`fetch-deck-priority`)
+    card_is_top_starter: bool = False  # at the pregame SETUP_ACTIVE pick, this option IS the deck's
+                                       # highest-ranked startable body on offer (== board.top_starter_id)
+                                       # — the sole scorer at that seam, gating the general
+                                       # `open-the-declared-starter` (ADR-0075). The card-side twin of
+                                       # `card_is_top_fetch_priority`
     card_is_redundant: bool = False    # this option's card duplicates a Pokémon already in play (its
                                        # need is met) — lowest keep-value, preferred at a forced
                                        # discard (`discard-the-redundant`)
@@ -5134,6 +5145,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         card_is_support = bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags)))
         card_is_utility_body = bool(stat and stat.hp > 0 and self._is_utility_body(cid))
         card_is_top_fetch_priority = cid is not None and cid == board.top_fetch_priority_id
+        card_is_top_starter = cid is not None and cid == board.top_starter_id
         card_is_redundant = cid is not None and cid in board.in_play_ids
         card_is_hand_duplicate = cid is not None and cid in board.hand_duplicate_ids
         # a Basic/Special Energy is fungible — a second copy is always a future attach, never redundant
@@ -5269,6 +5281,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
                        card_is_utility_body=card_is_utility_body,
                        card_is_top_fetch_priority=card_is_top_fetch_priority,
+                       card_is_top_starter=card_is_top_starter,
                        card_is_redundant=card_is_redundant,
                        card_is_hand_duplicate=card_is_hand_duplicate,
                        card_already_in_hand=card_already_in_hand,
@@ -5904,6 +5917,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             setup_placed_ids=self._setup_placed_ids(obs),
             hand_duplicate_ids=self._hand_duplicate_ids(me),
             top_fetch_priority_id=self._top_fetch_priority_id(select),
+            top_starter_id=self._top_starter_id(obs, select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
             evolving_wincon_on_bench=self._evolving_wincon_on_bench(obs, select),
@@ -7610,18 +7624,52 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     counts[cid] += 1
 
     def _hand_startable(self, hand: list) -> bool:
-        """True if a card in hand can take the Active Spot — a Pokémon with the `opener`
-        Function Tag (Explosiveness-type) or the deck's `starter` Role — so a no-Basic hand is
-        keepable (a Basic would prevent the mulligan prompt entirely)."""
-        for c in hand:
-            cid = c.get("id") if c else None
-            if cid is None:
-                continue
-            if self.functions and _OPENER_TAG in self.functions.tags(cid):
-                return True
-            if _STARTER_ROLE in self.strategy.roles.get(cid, []):
-                return True
-        return False
+        """True if a card in hand can take the Active Spot WITHOUT being a Basic — a Pokémon with the
+        `opener` Function Tag (Cinderace's Explosiveness: "if this Pokémon is in your hand when you
+        are setting up to play, you may put it face down in the Active Spot"). Scoped to the mulligan
+        keep, where it is the only interesting case: a hand holding any Basic never reaches the prompt
+        (rulebook L224 — "if either player has no Basic Pokémon in their opening hand, that player
+        must take a mulligan").
+
+        The deck `starter` Role was a second accepted signal here until ADR-0075 retired it: every
+        declaration in the repo was either a Basic (moot per the rule above) or Cinderace, which
+        carries the `opener` Tag anyway — so it never changed this answer. Naming a deck's openers is
+        now `Strategy.starter_priority`'s job, at the Set-Up ACTIVE pick rather than the mulligan."""
+        if not self.functions:
+            return False
+        return any(_OPENER_TAG in self.functions.tags(c["id"])
+                   for c in hand if c and c.get("id") is not None)
+
+    def _is_startable_body(self, cid: int | None) -> bool:
+        """True iff this card can legally take the Active Spot at the pregame Set-Up pick — a Basic
+        Pokémon, or a card whose Ability puts it there from hand (`opener` Tag). The universe
+        `Strategy.starter_priority` must rank COMPLETELY (ADR-0075 decision 5); the one definition,
+        so the declaration's completeness test cannot drift from what the engine can actually offer."""
+        if cid is None or not self.stats:
+            return False
+        st = self.stats.get(cid)
+        if not st or not st.is_pokemon:
+            return False
+        return not st.evolvesFrom or (
+            bool(self.functions) and _OPENER_TAG in self.functions.tags(cid))
+
+    def _top_starter_id(self, obs: dict, select: dict | None) -> int | None:
+        """The body the deck most wants Active among the ones actually on offer — the first id in
+        `Strategy.starter_priority` present in this SETUP_ACTIVE select's options. None off that
+        select, on an empty list, or when nothing offered is ranked.
+
+        One id, not a rank, because SETUP_ACTIVE is a forced single pick (minCount/maxCount 1): argmax
+        reads only the winner, so under a COMPLETE list this collapses the whole ordering losslessly
+        (ADR-0075 decision 5). Exact twin of `_top_fetch_priority_id`."""
+        sp = getattr(self.strategy, "starter_priority", None)
+        if not sp or not select or select.get("context") != _SETUP_ACTIVE:
+            return None
+        present = set()
+        for opt in (select.get("option") or []):
+            card = self._option_pokemon(obs, select, opt)
+            if card and card.get("id") is not None:
+                present.add(card["id"])
+        return next((cid for cid in sp if cid in present), None)
 
     def _option_pokemon(self, obs: dict, select: dict, option: dict) -> dict | None:
         """The board card/Pokémon dict an option's (area, index, playerIndex) points at, or None.

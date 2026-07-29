@@ -126,6 +126,17 @@ With decision 2, this invariant is the **sole** guarantee for the whole seam: an
 nothing at `_SETUP_ACTIVE` and falls straight back to the index tie-break — the `f2` bug, for every
 deck.
 
+> **Amendment A (build, 2026-07-28) — the invariant scopes to AUTHORED agents.** It applies to every
+> agent carrying a `STRATEGY.md`, the marker of a deck-genie'd doctrine. `grimmsnarl_ex` (no
+> STRATEGY.md, no `aligned.json`, no `tuned.json`) and `slowking` (a decklist only) are pre-doctrine
+> and exempt — the same line `/deck-align` already draws ("a deck with no real `strategy.py` is
+> deck-genie's job first — report it, don't align it"). The exemption is asserted **explicitly** in
+> the test, not left implicit, so adding an agent cannot silently opt out. **Accepted regression:**
+> until it is authored, `grimmsnarl_ex` loses the opener guidance it has today (`+35` on Budew, the
+> two guards) and its Set-Up Active pick falls to the option-index tie-break. It is a pre-doctrine
+> agent with no recorded opening doctrine to transcribe; decision 10's `/deck-align` drift check is
+> what surfaces it.
+
 **6. `open-the-declared-starter` seeds at 40 — for band legibility, not calibration.** With one rule
 at the seam the weight interacts with nothing and any positive value is behaviourally identical.
 40 is the `docs/weights.md` "strong preference — core doctrine" band whose cited exemplar
@@ -133,13 +144,21 @@ at the seam the weight interacts with nothing and any positive value is behaviou
 exactly. Per-deck strength goes to `weight_overrides` (ADR-0035), never into the seed.
 
 **7. The seam gets ONE test file.** `tests/strategy/test_setup_active_placement.py` absorbs and
-retires `test_setup_active_multiprize.py` (carrying `REQ-OPEN-0002` to the successor) and
-`test_budew_sacrificial_starter.py`, and holds four groups: the `f2` fixture assertion, the two
-rewritten legacy behaviours, and the decision-5 invariant. The legacy tests are rewritten as
-**outcome** assertions (which body ends up Active), never score assertions, so they survive the
-currency change. **`f2` lands PASSING, not `xfail`** — dragapult's declaration is in scope, so an
-`xfail(strict)` would XPASS and hard-fail, which is the exact dishonesty Issue #161 opens by
-complaining about. Its fixture's `claims` entry (`"owner": "#161"`) resolves to the shipped ruling.
+retires `test_setup_active_multiprize.py` (carrying `REQ-OPEN-0002` to the successor), and holds four
+groups: the `f2` fixture assertion, the two rewritten legacy behaviours, and the decision-5 invariant.
+The legacy tests are rewritten as **outcome** assertions (which body ends up Active), never score
+assertions, so they survive the currency change. **`f2` lands PASSING, not `xfail`** — dragapult's
+declaration is in scope, so an `xfail(strict)` would XPASS and hard-fail, which is the exact
+dishonesty Issue #161 opens by complaining about. Its fixture's `claims` entry (`"owner": "#161"`)
+resolves to the shipped ruling.
+
+> **Amendment C (build, 2026-07-28) — `test_budew_sacrificial_starter.py` is AMENDED, not retired.**
+> This ADR over-stated it before the code was read. Only one of that file's three tests was about
+> this seam; the other two (`worth 0`, `never a funding target`) are Budew *identity* claims under
+> `REQ-WORTH-0003` and are untouched. The opener BEHAVIOUR moved to the placement file; the Role
+> assertion was rewritten in place as a `starter_priority` rank-1 assertion. `REQ-GEN-0056` likewise
+> re-points from the deleted `open-the-accelerator` to `open-the-declared-starter` inside
+> `test_general_strategy.py`, the natural home for a per-general-rule unit test, rather than moving.
 
 **8. The four declarations are authored through the ADR-0046 proposal pipeline, and the change lands
 ATOMICALLY.** Authoring four decks' opening doctrine *is* strategy authoring: `/deck-align` per deck
@@ -149,6 +168,24 @@ additionally folds `start-solrock-over-lunatone`. Running the decision-6 bank fo
 only honest test that it produces a usable ordering. Because decision 5's invariant fails the moment
 the rules are deleted without declarations present, the rule deletions, the fold, the four
 declarations and the invariant have **no green intermediate commit** — they land as one change.
+
+> **Amendment B (build, 2026-07-28) — the orders are TRANSCRIBED from shipped doctrine in-build, not
+> re-grilled.** The atomicity requirement makes a stop-at-fodder pass deliver nothing, so the three
+> authored decks' orders were derived in the build turn and confirmed by the user before being
+> written. This is not a weakening of ADR-0046: its concern is *unreviewed* executable authoring, and
+> the orders were reviewed before authoring rather than after. Crucially the orders **encode the very
+> rules being deleted**, so `score_diff` in `choice` mode is a real gate — a divergence means the
+> transcription is wrong, not that doctrine changed. Landed orders:
+>
+> | deck | `starter_priority` | provenance |
+> |---|---|---|
+> | `mega_starmie` | Cinderace → Staryu | `open-cinderace`/`open-the-accelerator` (+40); Staryu is the wincon basic, belongs benched |
+> | `mega_lucario` | Solrock → Riolu → Makuhita → Lunatone → Meowth ex | `start-solrock-over-lunatone` (+12, ml f1); the open-Riolu constraint; `dont-open-with-the-engine` on Lunatone; `dont-open-multiprize-active` on Meowth ex (REQ-OPEN-0002) |
+> | `dragapult_ex` | Budew → Munkidori → Dunsparce → Fezandipiti ex → Dreepy → Meowth ex | `open-the-item-lock-starter` (+35); `f2` (Munkidori ≻ Dreepy); **user ruling 2026-07-28** — Dreepy ranks 5th, *below* a 2-prize Fezandipiti ex, because the Line base is wanted on the BENCH (`develop-the-wincon-base-first`), not merely tolerated in the Active Spot |
+>
+> The dragapult order is the one that could not have been derived mechanically: a naive "fragility +
+> prize-liability" read puts Dreepy above both ex's. The doctrine is the opposite — an Active Dreepy
+> is a *misplaced* Line base, which is worse than exposing a body the deck can afford to lose.
 
 **9. Active only. The pregame Bench is out of scope → Issue #197.** `_SETUP_BENCH` (SelectContext 2)
 has seven rules in `baseline_bench.py` and **no motivating frame**, and the design does not transfer:
@@ -168,6 +205,30 @@ the most-exposed slot; hops from payoff; what it does the instant it is Active);
 specifically do **not** want Active and where they belong instead; whether the order flips going
 first vs second (decision 3's frame-hunt); multi-prize liability in that slot; and what happens when
 your #1 is not in the opening hand.
+
+> **Amendment D (build, 2026-07-28) — the score_diff gate result.** `choice` mode, 372 correction
+> frames, run for all four agents against a pre-change baseline. **Every divergence is a
+> `_SETUP_ACTIVE` frame — zero collateral divergence anywhere else in the corpus**, which is the
+> claim decision 2 rests on (the five rules only ever scored this seam).
+>
+> Partitioning the divergences by whether the frame is *reachable* for that agent (i.e. every card in
+> the select is in its deck.csv):
+>
+> | agent | own-deck frames | result |
+> |---|---|---|
+> | `dragapult_ex` | `86091728` (= f2) | **diverges `[0] → [1]` — the intended fix**, matching the correction's `correct` |
+> | `mega_lucario` | `84890060`, `85059103` | **no divergence** — the declaration reproduces `start-solrock-over-lunatone`, `dont-open-with-the-engine` and `dont-open-multiprize-active` exactly |
+> | `mega_starmie`, `grimmsnarl_ex` | none in corpus | — |
+>
+> All remaining divergences are **foreign frames**: another deck's correction replayed under this
+> agent's Pilot, on cards absent from its deck list. `score_diff` deliberately replays the whole
+> corpus under every agent, so that cross-product is a harness artifact rather than reachable play.
+> They diverge because the deleted guards were *deck-agnostic* (they scored any card's stats/tags)
+> whereas the declaration is *deck-scoped* (silent on cards a deck does not run). Inside a real game a
+> deck only ever sees its own cards, and decision 5's completeness invariant guarantees every one of
+> those is ranked — which is precisely why the invariant, not the guards, is what makes this safe.
+>
+> Net: **score-equal on every reachable frame, with the single intended exception.**
 
 ## Consequences
 

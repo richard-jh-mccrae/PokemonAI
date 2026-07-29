@@ -171,6 +171,13 @@ interactions**, and **anti-patterns** (when NOT to).
 Then grill the cross-card structure that wins games:
 - **Combos & sequencing ladders** — what plays in what order on a developing turn.
 - **Opening hands** — mulligan keeps; ideal vs survivable turn-1/2 lines going first vs second.
+- **Starter order (REQUIRED — produces `Strategy.starter_priority`)** — the deck's COMPLETE ranking
+  of every body that can legally take the Active Spot at setup (each Basic, plus anything with the
+  `opener` Tag). Ask it **once over the whole set**, never per card: it is a total order, and a
+  per-card pass cannot produce one. Since ADR-0075 this ranking is the ONLY thing scoring the Set-Up
+  Active pick — a deck that ships without it loses that decision to the engine's option index — so
+  it is a Phase-4 disposition row and a Phase-6 proposal like any other gap, not an optional note.
+  Question bank: [references/grilling-playbook.md](references/grilling-playbook.md) §Opening placement.
 - **Plan mapping** — what SETUP / RACE / STABILIZE / CLOSE look like for *this* deck, and what
   flips the Line to `ready` (the engine derives readiness from the payoff's cheapest attack cost —
   confirm that's right for this deck or set `Ready(energy=…)`).
@@ -231,6 +238,9 @@ One record per actionable disposition:
 - **`override-candidate` / "expand general"** → `target_layer: general-hypothesis`,
   `verification_contract: score-diff` (or `seed-ladder` for a pure doctrine seed).
 - **`covers-as-is`** → no proposal (nothing to author).
+- **starter order** → `target_layer: deck-strategy`, `verification_contract: score-diff`. Always
+  emitted for a new deck (there is no general default to fall back on) and it must be COMPLETE —
+  `tests/strategy/test_setup_active_placement.py` fails an authored agent that ranks a subset.
 
 Each record's `spec` is the STRATEGY.md rule (id + rationale + trigger sketch + seed weight) — thin
 fodder, **not** a written lambda; `provenance` links to the STRATEGY.md block. `roles` / `lines` /
