@@ -434,6 +434,73 @@ Ratifying it makes it a decision instead of an accident: a later reader finding 
 `charged=None` would otherwise be free to "fix" it. The split must be stated in the code, or the next
 refactor will collapse it.
 
+**9. The two `+500` boosts split by KIND — one is a curve gap to fix, the other is filed under the
+wrong side.** They are not the same sort of fact and do not share a fate:
+
+- **`_HAND_SIZE_ATTACKER_BOOST = 500`** (`hand_size_attacker` → **743 Alakazam**, corpus-present) *is* a
+  threat magnitude — a latent attacker whose printed damage hides it. But decision 3's source does
+  **not** model it: the hand-scaled counter is a bespoke addition inside `forward_incoming_damage`
+  (`combat.py:719-720`) only, and `doomed_incoming`'s docstring names its omission from the curve as one
+  of its two known divergences. **Fix `combat.incoming` / `_reach_form_damage` to model it**, at which
+  point the boost retires as genuinely subsumed. This also closes one of the two pinned doom-curve
+  divergences, in the **fail-safe direction**: it makes the curve more pessimistic, and since
+  `doom_matched_relax` is relax-only, a more pessimistic curve yields *fewer* relaxes, never a phantom
+  doom.
+- **`_PREVENT_EX_SNIPE_BOOST = 500`** (`prevent_ex_damage` → **345 Crustle** corpus-present, **330
+  Sylveon** not) is **not a threat magnitude at all.** The line does not hit me harder once evolved — it
+  becomes *immune to my ex attacker*. It does not threaten me; it **blocks my prize route**. It
+  therefore moves to **`my_route`** as a leg: a body whose line reaches `prevent_ex_damage` while my
+  Active is an ex/Mega ex is one my rider can never finish later, so its route value is maximal now.
+  Filing it under "how scary are they" was always a category error, and the two-sided product of
+  decision 2 is what makes the distinction expressible at all.
+
+Retiring both was considered and refuted: 743 and 345 both appear in the corrections corpus, and
+`_forced_promotion_key`'s docstring already records the Alakazam blindness as a live gap ("the ms f85
+gap"). Cost accepted: (a) touches the shared curve, so `test_threat_shadow.py`'s `REQ-DOOMSHADOW-0002`
+— which pins that divergence deliberately — must be re-baselined and the doom sweep re-run. Splitting
+(a) into its own issue is acceptable; duplicating the fact inside the snipe leg is not.
+
+### Held-out fixtures: the first generalisation check, and it found a real defect
+
+The four committed snipe fixtures (`ms_snipe_*.json`) live in `tests/fixtures/corrections/`, **not** in
+`data/corrections/`, so the 19-frame sweep never saw them — making them a genuine held-out set. Scoring
+the decision 1–8 prototype against them:
+
+| fixture | correct | prototype | |
+|---|---|---|---|
+| `ms_snipe_riolu_over_lunatone_f47` | `[2]` | `[2]` | PASS |
+| `ms_snipe_energized_bench_f39` | `[2]` | `[2]` | PASS |
+| `ms_snipe_attacker_line_over_support_f85` | `[0]` | `[0]` | PASS |
+| **`ms_snipe_evolving_wincon_preevo_f75`** | `[3]` | `[4]` | **MISS** |
+
+**The miss is a design defect, not a tuning miss.** On `f75` the prototype takes Solrock `[4]` (score
+0.5) over the Riolu `[3]` (0.386). Cause: the prototype scored the **forced-promotion leg as a flat
+`1.0`**, which dominates the Riolu's forward-wincon leg (`normalize(270) = 0.771`). The shipped rungs
+resolve this exact conflict the other way on purpose — `snipe-the-evolving-threat` (45) outranks
+`snipe-the-forced-promotion` (40), and `f47`'s docstring names the pairing ("Riolu over the
+forced-promotion Lunatone"). That flat `1.0` was an **unexamined constant introduced by the prototype**,
+precisely what decision 1 forbids, and the first held-out frame caught it. Decision 7's acceptance bar
+working as designed, on its first application.
+
+The forced-promotion leg therefore needs a **derived grade** rather than a saturating constant — an open
+ruling, not settled here.
+
+### `_SNIPE_THREAT_PRIZE_FLOOR = 5` — measured INERT under the new instrument
+
+ADR-0078 handed this constant's re-audit to Issue #188. Measured by forcing the clause
+(`not (target_energy and my_prizes_remaining >= FLOOR)`) live, always-rescuing and inert:
+
+| setting | effect | 19 frames | `f39` (its own anchor) |
+|---|---|---|---|
+| `5` (shipped) | rescues at ≥5 prizes | 17/19 | PASS |
+| `99` | clause **inert** — never rescues | **17/19** | **PASS** |
+| `0` | always rescues | 16/19 (loses `83667237-107`) | — |
+
+Making redundancy fire *more* costs nothing; making it fire *less* costs `83667237-107`. **The rescue
+clause changes no outcome under the new instrument — not on the corpus, and not on `ms_snipe_energized_bench_f39`,
+the fixture written to pin it** ("the energized ex, at 6 prizes remaining"). Its fate is the last open
+ruling.
+
 ## Consequences
 
 - **Issue #188 recharters** from *"fold the snipe rungs onto the unified marginal"* to *"build the Snipe
