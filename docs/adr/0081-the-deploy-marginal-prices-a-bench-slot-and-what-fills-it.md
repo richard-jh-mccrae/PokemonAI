@@ -403,8 +403,9 @@ re-measured, not auto-conformed.
 
 **Corpus.** `setup_bench_decline_f3` and `dp_dont_pre_bench_redundant_munkidori_f4` must keep passing
 as CONSEQUENCES of the equation (decisions 3 and 2), not of the weights that currently carry them.
-`ml_dont_bench_redundant_solrock_f51` is the phase's motivating frame and should be re-ruled with the
-user as an Endorsement Claim (its `correct == []` at a `minCount 1` select is degenerate as recorded).
+`ml_dont_bench_redundant_solrock_f51` is the phase's motivating frame; it was **re-ruled with the user
+2026-07-29 to `correct: [0]`** (play Lillie's Determination) and now GATES as a cross-lane Decision
+Claim — see **Amendment D**. The degenerate `correct == []` is gone from both stores.
 `ms_free_bench_evolve_f17`, `ml_dont_play_a_needless_pokemon_tutor_f114` and
 `ml_dont_energize_the_supporter_tutor_f84` are adjacent and should be swept.
 
@@ -585,6 +586,58 @@ catalogue, and it is genuinely cleaner on the currency axis. It loses on robustn
 "what does this Supporter enable" is a per-Supporter-class lookahead on an already-heavy path, close to
 re-implementing a mini turn-planner inside a marginal, and a much larger surface to get wrong than one
 pinned scalar that a gate can prove. It also re-imports the WP-N5 hand-card mismatch.
+
+## Amendment D — the motivating frame is RE-RULED and now gates (2026-07-29)
+
+*(User ruling, 2026-07-29, on the pulled-up board state of `85709280-51`.)*
+
+`ml_dont_bench_redundant_solrock_f51` recorded `correct: []` at a `minCount 1` Main select —
+degenerate, ungateable, and only ever meaning "not this". Both the Correction-log record and the
+committed fixture are re-ruled to **`correct: [0]` — play Lillie's Determination** instead of the
+second Solrock. The rationale is unchanged and was confirmed correct; only the positive pick was
+missing.
+
+**The board (turn 6, `frame_view.py`).** Active Meowth ex (no Energy); Bench **4 of 5** — Solrock
+(1 {F}), Mega Lucario ex (1 {F} + Air Balloon), a second Mega Lucario ex (bare, played this turn),
+Lunatone. Hand: **Solrock, Ultra Ball, Lillie's Determination**. Deck 33, holding **2× Makuhita**,
+Hariyama, Riolu, a third Mega Lucario ex. Nothing spent this turn — attach, Supporter, Stadium and
+retreat all still available.
+
+So the engine is already complete (Solrock **and** Lunatone in play), the second Solrock is redundant,
+and it would spend the **last** bench slot the Makuhita→Hariyama line needs — while both Makuhita sit
+in the deck behind the Ultra Ball in hand. Lillie's shuffles and redraws rather than committing the
+slot.
+
+**Claim shape.** A **cross-lane Decision Claim** (a Supporter `PLAY` preferred over a Pokémon `PLAY`),
+which ADR-0072 permits explicitly — *"Decision Claims are cross-lane by nature."* Written as an
+explicit `claims.decision` block with `ruled` and `why` and **no `owner`**, so it **GATES** rather
+than sitting held-out.
+
+**What the agent actually did, and why this is the phase's motivating frame.** The recorded
+`live_trace` shows the two rungs this ADR deletes deciding it against each other:
+
+| option | score | fired |
+|---|---|---|
+| `[0]` Lillie's Determination | **20.0** | `dig-before-commit` +20 |
+| `[1]` Ultra Ball | −50.0 | `dont-shed-a-live-card` −20, `dont-costly-tutor-when-starved-and-developed` −30 |
+| `[2]` **Solrock (chosen)** | **25.0** | `pre-position-attacker` +25 |
+| `[3]` End | 0.0 | — |
+
+`pre-position-attacker` (+25) out-scored `dig-before-commit` (+20) by **5 points**, and it is blind to
+both facts that decide the frame: that the engine is already complete, and that this is the last slot.
+Under the Deploy Marginal the netted assignment marginal prices a redundant body into a contested last
+slot near zero, and `pre-position-attacker` is deleted outright.
+
+**A constraint on `BAND`, recorded because it is the only one the corpus supplies.** This frame is not
+a rate anchor (Amendment A's structural finding stands — the two options are both `PLAY`s and neither
+is damage-denominated). But as a gating Decision Claim it *bounds the pin from above*:
+
+```
+BAND × net_assignment_relevance(2nd Solrock | bench 4/5, engine complete)  <  20.0
+```
+
+Weak, since the relevance should be ≈0 on this board anyway — but it is a real, checkable constraint
+on the preservation pin rather than a free parameter, and the Decision Gate enforces it.
 
 ## Open, deliberately not ruled here
 

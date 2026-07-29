@@ -375,8 +375,19 @@
  "chosen": [
   2
  ],
- "correct": [],
+ "correct": [
+  0
+ ],
  "chosen_label": "Play Solrock",
- "correct_label": "",
- "note": "mega_lucario ep85709280 match/f51 [slow_setup] CRITICAL: played a 2nd Solrock into the last bench slot. Solrock+Lunatone already in play = engine complete; a 2nd Solrock is redundant and clogs the bench needed for the Makuhita->Hariyama line. Suppress pre-position-attacker for a redundant engine duplicate."
+ "correct_label": "Play Lillie's Determination",
+ "note": "mega_lucario ep85709280 match/f51 [slow_setup] CRITICAL: played a 2nd Solrock into the last bench slot. Solrock+Lunatone already in play = engine complete; a 2nd Solrock is redundant and clogs the bench needed for the Makuhita->Hariyama line. Suppress pre-position-attacker for a redundant engine duplicate. RE-RULED 2026-07-29: correct is now [0] (play Lillie's), not [] — see claims.decision.why.",
+ "claims": {
+  "decision": {
+   "correct": [
+    0
+   ],
+   "ruled": "2026-07-29",
+   "why": "Re-ruled 2026-07-29 with the user (Issue #197 / ADR-0081 build prep). The recorded `correct` was [] at a minCount-1 Main select — degenerate, ungateable, and only ever meant \"not this\". The user's ruling on the pulled-up board state: play Lillie's Determination [0] instead. That makes this a CROSS-LANE Decision Claim (a Supporter PLAY preferred over a Pokemon PLAY), which ADR-0072 allows — Decision Claims are cross-lane by nature. Substance unchanged: with Solrock+Lunatone already in play the engine is complete, so a 2nd Solrock is redundant AND spends the last bench slot the Makuhita->Hariyama line needs (2x Makuhita sit in deck, reachable behind the Ultra Ball in hand). Lillie's shuffles and redraws instead of committing the slot. This is the motivating frame for the Deploy Marginal: `pre-position-attacker` (+25) scored the redundant deploy above Lillie's `dig-before-commit` (+20), and both rungs are deleted by ADR-0081."
+  }
+ }
 }
