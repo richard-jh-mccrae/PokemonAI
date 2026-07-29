@@ -187,13 +187,13 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
     grades toward full as their body nears ready: at deadline 0 the full passed-in value; each turn of
     slack halves it (a closing edge inverted — urgency, not decay of worth).
 
-    **``oracle_value`` is a misnomer, kept for call-compatibility (corrected 2026-07-28, ADR-0077).**
+    **``oracle_value`` is a misnomer, kept for call-compatibility (corrected 2026-07-28, ADR-0078).**
     This docstring used to claim the value came from the ADR-0062 denial oracle (`_opp_denial_best`).
     It does not, and has not since the WP-N8 currency ruling: the caller passes the flat disruption
     card-tier `TAG_TIER["gust"]` (~10) — `pilot._resolve_needs` — and the ADR-0062 oracle survives on
     that path only as a `> 0` BITE GATE (`_denial_at`), its damage magnitude discarded.
 
-    ADR-0077 (#187 grill) overturns that WP-N8 ruling in turn: deny is to read the shared per-body
+    ADR-0078 (#187 grill) overturns that WP-N8 ruling in turn: deny is to read the shared per-body
     `opponent_target_value` marginal on all three of its surfaces (this keep slot, the play rung, the
     target pick), converted at a DERIVED rate rather than consumed raw — the Worth Damage Rate, which
     is specified but **not yet derived** (it needs a keep-side corpus anchor that does not exist).

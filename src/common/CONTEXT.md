@@ -671,9 +671,9 @@ rate a superseded `_PRIZE_UNIT = 12` asserted at roughly an eighth of honest val
 shipped equation endorsed feeding a 3-prize body to save a 40-point band.
 _Avoid_: prize value (a card's own {1,2,3} — the rate CONVERTS it), `KO_SCORE` (the KO's dominance
 band, deliberately unbounded by this rate), Worth (the card/role tier currency)
-**Scope, ratified 2026-07-28 (ADR-0077, #187 grill):** this rate bridges prizes↔damage ONLY. It does
+**Scope, ratified 2026-07-28 (ADR-0078, #187 grill):** this rate bridges prizes↔damage ONLY. It does
 not reach Worth — that is the **Worth Damage Rate** below, and the two compose (prize-eq → worth =
-`PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`). ADR-0077 decision 2 also makes it the ONE conversion every
+`PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`). ADR-0078 decision 2 also makes it the ONE conversion every
 prize-denominated marginal uses to enter a damage-scale score, so its home moves out of
 `promote_retreat_value.py` (one consumer) into a shared one (four); the CSV-recomputing test moves
 with it, since falsifiability is the point rather than an incidental.
@@ -682,7 +682,7 @@ with it, since falsifiability is the point rather than an incidental.
 The MISSING third leg of the currency triangle, and the one ADR-0073 deliberately declined to build:
 **damage per card-worth point**, bridging the Worth scale (`ROLE_TIER` ≤ 30, `ENERGY_TIER` 8,
 `TAG_TIER` 10–30 — what the Needs DP sums) to the damage scale the tactical rungs and the Prize Damage
-Rate already share. Named and specified by ADR-0077 (#187 grill, 2026-07-28); **not yet derived, and
+Rate already share. Named and specified by ADR-0078 (#187 grill, 2026-07-28); **not yet derived, and
 deliberately not guessed.** Two shipped constant-pairs price the same object on both scales and
 disagree by ~9× — keeping a gust/denial Trainer is `TAG_TIER["gust"]` 10.0 vs `_DENIAL_ITEM_COST` 10
 (⇒ ~1 dmg/worth-pt), one Energy is `ENERGY_TIER` 8.0 vs `ENERGY_RECOVER` 75 (⇒ ~9.4) — so the rate

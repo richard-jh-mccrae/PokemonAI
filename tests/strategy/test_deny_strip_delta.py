@@ -1,10 +1,10 @@
-"""S3c — the deny instrument's STRIP delta (`Pilot._strip_delta_terms`, ADR-0077 / #199).
+"""S3c — the deny instrument's STRIP delta (`Pilot._strip_delta_terms`, ADR-0078 / #199).
 
 #186 built the opponent-target marginal's **removal** Δ: the turns of survival bought by a body
 leaving the board. That is the gust / snipe question. A Crushing Hammer never asks it — it discards
 ONE Energy and the body stays — so deny had no slice to read.
 
-The Δ that gives it one carries the **user's ruling of 2026-07-28** (ADR-0077 Amendments B + C): *"deny
+The Δ that gives it one carries the **user's ruling of 2026-07-28** (ADR-0078 Amendments B + C): *"deny
 shall not calculate energy re-attached on a following turn. It shall only ever perform a calculation
 on opponent's Pokémon with energy during our own turn."* So the POLICY is `base_attach: 0` — no credit
 for the Energy they re-attach next turn — while the FORM stays the shared two-term marginal, so the

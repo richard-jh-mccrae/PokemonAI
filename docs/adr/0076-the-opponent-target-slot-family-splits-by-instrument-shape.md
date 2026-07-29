@@ -270,7 +270,7 @@ apart), and `_opponent_target_rows` computes only the **removal** Δ, so deny ha
 all until a per-instrument (strip) Δ is built.
 
 **Consequently the denomination ruling does NOT land in #189.** It lands in a new **S3c** prerequisite
-issue ahead of all three S4 swaps, per **ADR-0077** — which also honours this ADR's own Decision 3
+issue ahead of all three S4 swaps, per **ADR-0078** — which also honours this ADR's own Decision 3
 (centralize the shared-value adjudication rather than letting each S4 issue re-litigate it through one
 instrument's lens). S3c additionally absorbs Decision 0's deferred `discard_recur_fuel` adoption on
 `turns_to_afford`, which Decision 0 assigned to #187: it changes the shared clock every instrument's

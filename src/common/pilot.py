@@ -1301,7 +1301,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # OFF = today's `deny`-only routing, byte-identical;
                                                         # ON = gust rows route to `gust_target` INSTEAD of
                                                         # `deny` for that decision (never both)
-        self.deny_strip_delta = deny_strip_delta        # ADR-0077 / #199 (S3c) COMPUTE-ONLY switch: adds
+        self.deny_strip_delta = deny_strip_delta        # ADR-0078 / #199 (S3c) COMPUTE-ONLY switch: adds
                                                         # the per-instrument STRIP delta to
                                                         # `_opponent_target_rows`. #186 built only the
                                                         # REMOVAL delta (turns bought by the body LEAVING),
@@ -7040,7 +7040,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     #: The **instantaneous** energy policy for the deny Δ (`_strip_delta_terms`).
     #:
-    #: **USER RULING, 2026-07-28 (ADR-0077 Amendment B), settling gate 1's failure:** *"deny shall not
+    #: **USER RULING, 2026-07-28 (ADR-0078 Amendment B), settling gate 1's failure:** *"deny shall not
     #: calculate energy re-attached on a following turn. It shall only ever perform a calculation on
     #: opponent's Pokémon with energy during our own turn."* So `base_attach` is **0** — the strip is
     #: priced against the Energy actually on their board at the moment we hold the Hammer, with no
@@ -7279,7 +7279,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return phase, rows
 
     def _strip_delta_terms(self, ma, bodies, i, phase, *, opp_active, enabler) -> dict:
-        """The DENY instrument's slice of the shared marginal (ADR-0077 decision 1; built by #199).
+        """The DENY instrument's slice of the shared marginal (ADR-0078 decision 1; built by #199).
 
         The removal Δ beside it asks "what do I buy by taking this body OFF the board" — the gust /
         snipe question. A Hammer cannot ask that: it discards ONE Energy and the body stays. So deny
@@ -7290,7 +7290,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         body's ``energies`` upward to model discard fuel; this drops one, so no live primitive is
         touched and no caller's body dict is mutated.
 
-        **SHAPE (user ruling, ADR-0077 Amendments B + C).** Deny's Δ is the SAME two-term marginal the
+        **SHAPE (user ruling, ADR-0078 Amendments B + C).** Deny's Δ is the SAME two-term marginal the
         removal Δ uses — ``needs.opponent_target_value`` over a ``turns_to_ko_me`` difference — so the
         one-backend claim of decision 1 holds for real. Only the POLICY differs (below).
 
@@ -7303,7 +7303,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         a one-step damage swing instead, on the mistaken worry that the horizon Δ "overstates"; the cap
         already contained it, and the corpus preferred this shape (see Amendment C's table).
 
-        ``prize_advance`` is **0**, and that is a ruling, not an omission (ADR-0077 decision 1 /
+        ``prize_advance`` is **0**, and that is a ruling, not an omission (ADR-0078 decision 1 /
         design doc line 50, "deny (pure tempo)"): a strip takes no Prizes. The forward-form case that
         might look like a prize term is already inside the curve — S1a established ``forward_card_ids``
         is all-descendants, so the read already sees what a body evolves into off the Energy it is
@@ -7321,7 +7321,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         removing one Energy cannot change what it deals. Only a charged policy prices the per-attack
         typed affordability a strip actually attacks.
 
-        `_DENY_CHARGED` carries the **user's ruling of 2026-07-28** (ADR-0077 Amendment B): the Δ is
+        `_DENY_CHARGED` carries the **user's ruling of 2026-07-28** (ADR-0078 Amendment B): the Δ is
         INSTANTANEOUS — `base_attach: 0`, no credit for the Energy they re-attach next turn — and it
         is only ever taken over opponent bodies carrying Energy right now. See that constant for why
         the design doc's "slow" (`base_attach: 1`) reading was the thing gate 1 measured as broken."""

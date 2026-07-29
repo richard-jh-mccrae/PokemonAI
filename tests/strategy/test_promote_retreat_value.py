@@ -106,7 +106,7 @@ def test_energy_recover_sits_inside_the_bracket_two_rulings_impose():
 
 
 # NOTE: the Prize Damage Rate's RECOMPUTATION moved to tests/strategy/test_currency.py when
-# ADR-0077 hoisted the constant into `common/currency.py` — the recompute belongs beside the
+# ADR-0078 hoisted the constant into `common/currency.py` — the recompute belongs beside the
 # constant, not beside its first consumer. What stays here is the promote-side CONSEQUENCE.
 def test_a_prize_is_worth_a_hundred_damage_not_twelve():
     """§3's whole point: exposing a 3-prize Mega Evolution Pokémon *ex* costs 300 damage, not the

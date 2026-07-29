@@ -166,7 +166,7 @@ PROFILE = {
                                     # -11.5pp — the Tripwire screens catastrophes, not regressions,
                                     # so this is flagged for the ladder-corrections loop to watch,
                                     # not a reason to hold the flag back given the aggregate clears.
-    "deny_strip_delta": False,      # ADR-0077 / #199 (S3c), COMPUTE-ONLY, ships OFF: adds the deny
+    "deny_strip_delta": False,      # ADR-0078 / #199 (S3c), COMPUTE-ONLY, ships OFF: adds the deny
                                     # instrument's STRIP delta to `_opponent_target_rows` beside the
                                     # removal delta #186 built (a Hammer strips one Energy off a body
                                     # that STAYS, so the removal delta is not its slice). Nothing

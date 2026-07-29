@@ -1,6 +1,6 @@
-"""Currency — the exchange rates between the value scales, DERIVED and never tuned (ADR-0077).
+"""Currency — the exchange rates between the value scales, DERIVED and never tuned (ADR-0078).
 
-The codebase speaks **three** value scales, and until ADR-0077 only one pair of them had a bridge:
+The codebase speaks **three** value scales, and until ADR-0078 only one pair of them had a bridge:
 
   * **damage / tactical** — the `score` the doctrines and rungs compete on. `KO_SCORE = 1000` is its
     dominance band; `_DENIAL_PLAY_W = 1.0` is "points per damage point denied"; `ENERGY_RECOVER = 75`
@@ -11,7 +11,7 @@ The codebase speaks **three** value scales, and until ADR-0077 only one pair of 
     `TAG_TIER` 10–30). `needs.py`'s "ONE currency" claim scopes to this scale alone.
 
 This module owns the conversions. A prize-denominated value must never be consumed raw by a
-consumer that counts in another scale (ADR-0077 decision 2) — that is how `_PRIZE_UNIT = 12` came to
+consumer that counts in another scale (ADR-0078 decision 2) — that is how `_PRIZE_UNIT = 12` came to
 assert roughly an eighth of honest value and made the promote/retreat equation endorse feeding a
 3-prize body to save a 40-point band.
 """
@@ -27,7 +27,7 @@ from __future__ import annotations
 #: roughly an eighth of this, which is why the shipped equation endorsed feeding a 3-prize body to
 #: save a 40-point band.
 #:
-#: Ratified by ADR-0073 (promote/retreat, its first consumer) and HOISTED here by ADR-0077 (#187
+#: Ratified by ADR-0073 (promote/retreat, its first consumer) and HOISTED here by ADR-0078 (#187
 #: grill) once three more consumers arrived — the deny / snipe / gust marginals of the
 #: opponent-target family, each of which must convert its prize-denominated slice before it can meet
 #: a damage-scale score. It deliberately does NOT reach `KO_SCORE` (the KO's dominance band is
@@ -35,7 +35,7 @@ from __future__ import annotations
 PRIZE_DAMAGE_RATE = 100.0
 
 
-# ── The Worth Damage Rate — the MISSING third leg (ADR-0077 decision 2/3) ─────────────────────────
+# ── The Worth Damage Rate — the MISSING third leg (ADR-0078 decision 2/3) ─────────────────────────
 #
 # There is deliberately NO `WORTH_DAMAGE_RATE` constant in this module yet, and adding one without
 # the derivation below is the exact fudge ADR-0065 forbids.

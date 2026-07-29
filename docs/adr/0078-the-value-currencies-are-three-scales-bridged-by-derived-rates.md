@@ -1,12 +1,15 @@
-# ADR-0077 — The value currencies are three scales bridged by DERIVED rates, and building the bridge is a shared-layer prerequisite, not an instrument swap
+# ADR-0078 — The value currencies are three scales bridged by DERIVED rates, and building the bridge is a shared-layer prerequisite, not an instrument swap
 
 **Status:** Accepted (grilled 2026-07-28, `/grill-with-docs` on #187 — six locked decisions). Build =
 a new **S3c** prerequisite issue; consumed by #187 (S4-deny), #188 (S4-snipe), #189 (S4-gust).
 Nothing here is built yet, and two of the decisions are **conditional on measurements that have not
 been run** (see *The two go/no-go gates*).
 
-⚠️ **Number claimed at grill time.** Per `docs/adr/README.md`'s recurring lesson (0071, then 0074 ×3),
-the number settles at merge time — expect to renumber on rebase and keep references greppable.
+**Renumbered 0077 → 0078 on rebase (2026-07-29).** The number was claimed at grill time and collided,
+exactly as `docs/adr/README.md`'s recurring lesson predicts (0071 once, 0074 three ways, 0076 twice).
+Issue #172's *a ranked count consumer reads `expected`* merged first and KEEPS 0077 under the standing
+first-merged rule; this ADR took 0078. Fourth collision in the series — the lesson is now that the
+number is a rebase artifact, not an identifier, so cite the issue alongside it.
 
 **Context issues:** #187 (this grill), #186 / ADR-0076 (the slot-family split this extends and partly
 supersedes), #136 (the Value System build tracker), #143 (the un-split original, closed),

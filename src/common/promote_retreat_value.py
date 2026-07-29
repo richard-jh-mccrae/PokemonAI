@@ -55,7 +55,7 @@ from common.strategy.context import ENERGY_RECOVER, KO_SCORE
 #: The **Prize Damage Rate** — damage per prize, the ONE exchange rate that lets prize Exposure be
 #: denominated in the damage currency the attach and evolve marginals already speak.
 #:
-#: HOISTED to `common.currency` by ADR-0077 (#187 grill) — this module was its only consumer when
+#: HOISTED to `common.currency` by ADR-0078 (#187 grill) — this module was its only consumer when
 #: ADR-0073 derived it, and the deny / snipe / gust marginals of the opponent-target family are three
 #: more. Re-exported here so every existing import keeps working; the derivation, the recomputing
 #: test and the note on the still-missing Worth leg all live at the new home.

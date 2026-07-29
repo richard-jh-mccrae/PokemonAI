@@ -1,6 +1,6 @@
-"""Currency — the derived exchange rates between the value scales (`common/currency.py`, ADR-0077).
+"""Currency — the derived exchange rates between the value scales (`common/currency.py`, ADR-0078).
 
-The Prize Damage Rate's recomputation moved here from `test_promote_retreat_value.py` when ADR-0077
+The Prize Damage Rate's recomputation moved here from `test_promote_retreat_value.py` when ADR-0078
 hoisted the constant out of the promote/retreat module: the property that makes it legitimate is that
 a reviewer can RECOMPUTE it, so the test belongs beside the constant rather than beside its first
 consumer.
@@ -25,7 +25,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 @pytest.mark.req("REQ-CURRENCY-0001")
 def test_prize_damage_rate_recomputes_from_the_card_set():
-    """ADR-0073 §3 / ADR-0077 decision 2: the Prize Damage Rate is DERIVED, so a reviewer can
+    """ADR-0073 §3 / ADR-0078 decision 2: the Prize Damage Rate is DERIVED, so a reviewer can
     recompute it and a future set can re-derive it. This test IS that recomputation — the median
     HP-per-prize over every body in `data/EN_Card_Data.csv` at the `docs/rules.md` §6 prize values
     (Mega ex 3, ex 2, else 1).
@@ -44,7 +44,7 @@ def test_prize_damage_rate_recomputes_from_the_card_set():
 
 @pytest.mark.req("REQ-CURRENCY-0002")
 def test_the_hoist_keeps_every_existing_import_working():
-    """ADR-0077: the constant moved homes, it did not change value. `promote_retreat_value` re-exports
+    """ADR-0078: the constant moved homes, it did not change value. `promote_retreat_value` re-exports
     it, so ADR-0073's consumers and tests are untouched by the hoist."""
     from common import promote_retreat_value as prv
     assert prv.PRIZE_DAMAGE_RATE is PRIZE_DAMAGE_RATE
@@ -54,7 +54,7 @@ def test_the_hoist_keeps_every_existing_import_working():
 
 @pytest.mark.req("REQ-CURRENCY-0003")
 def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
-    """ADR-0077 decision 3, and the guard that keeps #199 honest: there is NO worth↔damage rate, and
+    """ADR-0078 decision 3, and the guard that keeps #199 honest: there is NO worth↔damage rate, and
     inventing one is the ADR-0065 fudge. The two shipped constant-pairs that price the same object on
     both scales disagree by ~9x, so no pair-matching shortcut exists either — the rate needs a
     keep-side corpus anchor the corpus does not yet hold.
@@ -71,5 +71,5 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     trainer_rate = _DENIAL_ITEM_COST / TAG_TIER["gust"]
     energy_rate = ENERGY_RECOVER / ENERGY_TIER
     assert trainer_rate == pytest.approx(1.0)
-    assert energy_rate == pytest.approx(160 / 3 / 8)      # ADR-0077 (#172): the derived rate
+    assert energy_rate == pytest.approx(160 / 3 / 8)      # ADR-0078 (#172): the derived rate
     assert energy_rate / trainer_rate > 6          # same two scales, two answers — no single rate

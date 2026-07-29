@@ -1,9 +1,9 @@
-"""#199 GATE 1 — can the shared marginal reproduce ADR-0062's play/hold discrimination? (ADR-0077)
+"""#199 GATE 1 — can the shared marginal reproduce ADR-0062's play/hold discrimination? (ADR-0078)
 
-The go/no-go ADR-0077 puts ahead of any code in #187. The question, precisely:
+The go/no-go ADR-0078 puts ahead of any code in #187. The question, precisely:
 
     Deny's play rung today is  `coin_odds * _DENIAL_PLAY_W * opp_denial_best - _DENIAL_ITEM_COST`,
-    denominated in DAMAGE. ADR-0077 decision 2 repoints it at the shared per-body marginal, which is
+    denominated in DAMAGE. ADR-0078 decision 2 repoints it at the shared per-body marginal, which is
     denominated in PRIZE-EQUIVALENTS and converted by the derived `PRIZE_DAMAGE_RATE` (100). With
     `coin_odds = 0.5` for Crushing Hammer and `_DENIAL_ITEM_COST = 10`, the rung fires iff
 
@@ -107,7 +107,7 @@ def main() -> int:
 
         vals = [(r.get("deny_value", 0.0), r) for r in target_rows]
         m_all = max((v for v, _ in vals), default=0.0)
-        # The ADR-0063 guard is NOT subsumed by the marginal (ADR-0077's re-audit): `turns_to_ko_me`
+        # The ADR-0063 guard is NOT subsumed by the marginal (ADR-0078's re-audit): `turns_to_ko_me`
         # cannot see that I am about to KO their Active, so it would price a strip on a corpse.
         guarded = [v for v, r in vals if not (r["area"] == "active" and board.active_can_ko)]
         m_grd = max(guarded, default=0.0)
