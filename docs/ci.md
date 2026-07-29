@@ -163,14 +163,20 @@ so it was not born red.
 
 ### Baseline provenance
 
-`data/leaf_lab/baseline.json` is currently pinned at **`fa86dcb` (2026-07-29)**. Two deliberate
-re-captures, each with its flips ruled first — the ADR-0072 decision 2 precondition, *"only when a
-swap's flips have been ruled"*:
+`data/leaf_lab/baseline.json` is currently pinned at **`e4c46ca` (2026-07-29)**. Three deliberate
+re-captures, each taken only with **zero unruled `OK → MISS`** outstanding — the ADR-0072 decision 2
+precondition, *"only when a swap's flips have been ruled"*:
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
 | 2026-07-28 | `38ca76f` | 6 × `MISS → OK`, 3 × `OK → MISS` | move off the long-stale `81eac82` pin (details below) |
 | 2026-07-29 | `fa86dcb` | 1 × `MISS → OK` (`85046350\|0\|decision\|21`) | the user re-ruling of that frame's `correct` (`[2] → [1]`) |
+| 2026-07-29 | `e4c46ca` | 1 × `MISS → OK` (`82752604\|0\|decision\|88`) | rebase onto `96da320`; the gain is **main's** (Issue #172's `ENERGY_RECOVER` work), absorbed so it is protected |
+
+Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
+same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to
+`MISS` would compare `MISS → MISS` and pass silently. Absorbing an *improvement* needs no ruling;
+only an `OK → MISS` does, and there were none.
 
 The second is the smaller story: re-ruling `85046350-21`'s `correct` to the Active Dreepy changed
 what `leaf_lab` scores that frame against, so its verdict became `OK`. Aggregates moved with it —
