@@ -175,6 +175,57 @@ Munkidori `{D}` not `{P}`), so the typed choice is now **required**, not latent.
 finding stands as a statement about the corpus, and is exactly why the validating fixtures must be
 authored from the doctrine's worked examples rather than harvested.
 
+## Amendment A — what the build changed about decisions 2 and 5 (2026-07-29, Issue #199)
+
+Built the same day this ADR was written. Two decisions did not survive contact with the code exactly
+as written, and both are corrected here rather than left to drift.
+
+**Decision 2a was wrong on a fact, and the correction makes the build cheaper.** It claimed the
+Ability-fuel requirement was not machine-readable and budgeted a new Effect Clause kind plus a builder
+pass. That came from searching `card_effects.json` and `card_functions.json` — neither of which is
+where the fact lives. `parse_card_ability_energy` (`scouting/card_text.py`, ADR-0032) is anchored on
+exactly Munkidori's phrasing and `provider.py` populates `CardStat.abilityEnergyTypes` on every card;
+the attach marginal (Issue #139) has consumed it since. Deny's leg reads the same field. **No new data
+pipeline was built, and none was needed.**
+
+**Decision 5's "repurpose the strip-Δ seam" did not happen, because it turned out not to be needed.**
+The decision anticipated replacing `_strip_delta_terms`' scoring head while keeping its
+copy-and-mutate seam. In the event the relevance read never mutates a body at all — it scores from
+`attached_type_counts` plus the line's attack costs — so there was nothing to copy and mutate. What
+survives from that machinery is the *policy*, not the code: the typed per-attack affordability reading
+`_DENY_CHARGED` exists to express. `_strip_delta_terms` is therefore left intact behind its own
+`deny_strip_delta` flag, and retiring it stays Issue #187's call once it has a consumer, exactly as
+that flag's note says. A code review flagged this as "rebuilt, not repurposed" and was right on the
+facts; the divergence is recorded here rather than argued away.
+
+**One review finding was rejected, with the arithmetic, and it is worth preserving.** The Issue #199
+spec asked the typed-unlock leg to be *"a real affordability diff, not a colour-match"*. Implemented
+literally, that breaks **two of the five worked rulings**: Meowth ex stops being ignorable (Tuck Tail
+is pure-colourless `●●●`, so any lone Energy reads as a setback toward a 60-damage attack), and
+Dragapult ex's stray `{D}` becomes a target (the body sits exactly on Phantom Dive's 2-Energy total,
+so a total-count rule flags both Energies). The doctrine overrides the spec text, which was written
+before the arithmetic was worked. What the objection *did* surface is real and shipped as clause (2),
+the **binding count**: a genuinely typed attack such as `{F}●●` on a body holding exactly `{F}` plus
+two others really is broken by stripping one of the others. It is guarded on every specific slot
+already being covered — which is precisely what keeps Dragapult's `{D}` out, since there the missing
+`{P}` means the type binds rather than the count.
+
+**Also settled during the build:**
+
+- The **bench redundancy gate reads REACH, not a snipe rider** — the max of the single-target rider
+  and the distributable spread total, since a spread reads *"in any way you like"* and may land
+  entirely on one body. Reading only the rider left the gate blind on Dragapult ex, whose Phantom Dive
+  is a 6-counter spread — i.e. blind on one of our own three decks. `combat.bench_ko_indices` takes
+  the reach; `snipe_ko_prizes` derives from it so the bench Knock Out rule is stated once.
+- The **relevance normalizer** is `MAX_ATTACK_DAMAGE = 350`, the largest attack damage in the set,
+  recomputed from the CSV by its test rather than pinned. It maps damage into `[0,1]` and is **not**
+  an exchange rate.
+- The **mute introduces no constant**: `math.nextafter` puts it one representable step above its own
+  body's best attack leg, asserting an order without asserting a magnitude.
+- **Rainbow-class Special Energy** (Legacy 12, Neo Upper 10, Prism 16) reads untyped and so scores 0
+  on the typed leg. This matches how the shipped `combat.attached_type_counts` already treats it —
+  consistent rather than a second, divergent reading of the same fact. Recorded as a known gap.
+
 ## Consequences
 
 - **Gate 2 is answered "moot", which is a THIRD outcome its charter did not anticipate.** ADR-0078
