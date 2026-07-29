@@ -335,6 +335,47 @@ The five KO-line frames are also worth carrying into #199's step-1 adjudication 
 `_finish_turn_last` tiers a positive-scoring free Item ahead of a KO — the original ADR-0062 complaint,
 still live.
 
+## Amendment C — the Δ keeps the shared two-term FORM; only the policy changes (2026-07-28, user)
+
+Amendment B applied the ruling but implemented it as a one-step **damage swing**, on my worry that
+differencing `turns_to_ko_me` with no attaches modelled "wildly overstates" a strip, because a
+fully-stripped body reads as never attacking within the horizon.
+
+**The user rejected that reasoning, and the corpus agrees with them.** Their argument: a bare body
+genuinely cannot attack on the board as it stands, and *"we can't hammer them to give them negative
+attached energy"* — so the value **saturates** rather than compounding. The mechanism I missed is that
+`needs._SURVIVAL_CAP` (0.9) already bounds the term, so the horizon Δ can never run away; and the
+saturation floor is already implemented (a bare body returns 0).
+
+Both shapes were then measured over the 21 ruled Hammer frames:
+
+| shape | vs incumbent | vs corpus label | shared two-term form | sub-prize capped |
+|---|---|---|---|---|
+| **A** one-step damage swing (Amendment B) | 21/21 | 15/21 | ✗ broken — damage ÷ rate | ✗ uncapped (2.7 for a nuke strip) |
+| **B** horizon Δ in turns (the ruling) | 20/21 | **16/21** | ✓ `opponent_target_value` | ✓ ≤ `_SURVIVAL_CAP` |
+
+B's single divergence from the incumbent is **`82748422-26`**, where B says HOLD and *the human also
+says HOLD* (*"Playing Crushing Hammer here was worthless, given that Jetting Blow will KO Cinderace"*).
+It diverges from the incumbent only where the incumbent is wrong. Under ADR-0072's Decision Gate
+framing that is a **FIX, not a regression**, and the probe now classifies changes that way rather than
+reporting any behaviour change as a failure:
+
+```
+VERDICT — Decision Gate: PASS. 1 decision change vs the incumbent,
+          1 FIX (toward the corpus ruling), 0 regressions, 0 unlabelled.
+    FIX  82748422-26   incumbent PLAY -> repoint HOLD, human ruled HOLD
+VERDICT — corpus label: 5 misses, all 5 INHERITED, 0 NEW to the repoint.
+```
+
+**So the shipped Δ is the two-term marginal under `_DENY_CHARGED`**, and Amendment B's "honest cost"
+paragraph is **withdrawn**: deny shares the shared FORM as well as the shared currency, so decision 1's
+one-backend claim holds as written rather than being weakened. Deny is also back under
+`_SURVIVAL_CAP`, restoring the sub-prize tie-break discipline that the damage-swing shape broke.
+
+Recorded at length because the sequencing is the lesson: A was chosen on an *asserted* failure mode I
+had not measured, and the measurement — once the user pushed back — favoured the shape I had talked
+myself out of. The corpus was available the whole time.
+
 ## Consequences
 
 - **#187 is not the shortest hop of the three S4 swaps; it is the longest.** Deny is the only

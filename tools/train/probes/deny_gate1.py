@@ -159,16 +159,28 @@ def main() -> int:
     # was misleading: several HOLD labels say "take the KO / play the better line", which the deny
     # rung does not own and the incumbent fails identically, so counting them as deny failures
     # measures the KO and planner layers rather than this one.
-    shared = [r for r in rows if r[4] != r[5]]
+    # A behaviour change is only a REGRESSION if it moves AWAY from the corpus ruling (ADR-0072's
+    # Decision Gate: "zero unruled REGRESSION frames"). A change that moves TOWARD the human's label
+    # is a fix, and reporting it as a failure would punish the repoint for being right.
+    changed = [r for r in rows if r[4] != r[5]]
+    fixes = [r for r in changed if r[2] is not None and r[4] == r[2]]
+    regressions = [r for r in changed if r[2] is not None and r[5] == r[2]]
+    neutral = [r for r in changed if r[2] is None]
+    shared = regressions
     label_misses = [r for r in rows if r[2] is not None and r[2] != r[4]]
     inherited = [r for r in label_misses if r[5] != r[2]]
     print()
-    if not shared:
-        print("VERDICT — behaviour preservation: PASS. The repointed rung's play/hold sign matches "
-              "the incumbent on every ruled Hammer frame, so the swap changes no deny decision.")
+    if not regressions:
+        print(f"VERDICT — Decision Gate: PASS. {len(changed)} decision change(s) vs the incumbent, "
+              f"{len(fixes)} of them FIXES (toward the corpus ruling), {len(regressions)} regressions, "
+              f"{len(neutral)} unlabelled.")
+        for r in fixes:
+            print(f"    FIX  {r[0]}-{r[1]:<6} incumbent {r[5]} -> repoint {r[4]}, human ruled {r[2]}")
+        for r in neutral:
+            print(f"    ??   {r[0]}-{r[1]:<6} incumbent {r[5]} -> repoint {r[4]}, UNLABELLED — needs a ruling")
     else:
-        print(f"VERDICT — behaviour preservation: FAIL on {len(shared)} frame(s): "
-              + ", ".join(f"{r[0]}-{r[1]}" for r in shared))
+        print(f"VERDICT — Decision Gate: FAIL — {len(regressions)} unruled REGRESSION frame(s): "
+              + ", ".join(f"{r[0]}-{r[1]}" for r in regressions))
     if label_misses:
         print(f"VERDICT — corpus label: {len(label_misses)} miss(es), of which {len(inherited)} are "
               f"INHERITED (the incumbent misses them identically) and "

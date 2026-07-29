@@ -7290,23 +7290,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         body's ``energies`` upward to model discard fuel; this drops one, so no live primitive is
         touched and no caller's body dict is mutated.
 
-        **SHAPE (user ruling, ADR-0077 Amendment B).** Deny's Δ is a ONE-STEP DAMAGE SWING against the
-        board as it stands on our turn — ``incoming(t=1)`` before the strip minus after — divided by
-        ``PRIZE_DAMAGE_RATE`` so it lands in the same prize-equivalent currency the removal Δ speaks.
-        It deliberately does NOT go through ``needs.opponent_target_value``'s two-term form, because
-        the ruling makes deny's Δ a *damage* quantity rather than a *turns* one. The shared CURRENCY
-        is preserved; the shared two-term FORM is not, and that is the honest cost of the ruling.
+        **SHAPE (user ruling, ADR-0077 Amendments B + C).** Deny's Δ is the SAME two-term marginal the
+        removal Δ uses — ``needs.opponent_target_value`` over a ``turns_to_ko_me`` difference — so the
+        one-backend claim of decision 1 holds for real. Only the POLICY differs (below).
 
-        Why not a ``turns_to_ko_me`` difference, the way the removal Δ works: with no attaches
-        modelled the projection reports a fully-stripped body as never attacking again (Δ = the whole
-        horizon), which wildly overstates a strip they will simply re-attach past. That is a
-        multi-turn projection wearing a snapshot's clothes — the opposite of what the ruling asks for.
+        A fully-stripped body reads as not attacking within the horizon, so its Δ runs to the horizon.
+        That is **correct, not a runaway**, for two reasons the user's ruling names: a bare body
+        genuinely cannot attack on the board as it stands, and a Hammer cannot take it below zero, so
+        the value SATURATES rather than compounding — `_strip_delta_terms` returns 0 for a bare body,
+        which is that floor. `needs._SURVIVAL_CAP` (0.9) then bounds the term regardless, so deny stays
+        sub-prize and can never out-price a real prize outcome. An earlier draft of this method priced
+        a one-step damage swing instead, on the mistaken worry that the horizon Δ "overstates"; the cap
+        already contained it, and the corpus preferred this shape (see Amendment C's table).
 
         ``prize_advance`` is **0**, and that is a ruling, not an omission (ADR-0077 decision 1 /
         design doc line 50, "deny (pure tempo)"): a strip takes no Prizes. The forward-form case that
-        might look like a prize term is already inside the damage read — S1a established
-        ``forward_card_ids`` is all-descendants, so ``incoming`` already sees what a body evolves
-        into off the Energy it is banking (ADR-0063's `_DENIAL_FORWARD` instinct, derived).
+        might look like a prize term is already inside the curve — S1a established ``forward_card_ids``
+        is all-descendants, so the read already sees what a body evolves into off the Energy it is
+        banking (ADR-0063's `_DENIAL_FORWARD` instinct, derived).
 
         A body holding no Energy yields 0: there is nothing to strip, which is the ADR-0062 whiff
         arriving structurally instead of as a separate gate.
@@ -7324,21 +7325,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         INSTANTANEOUS — `base_attach: 0`, no credit for the Energy they re-attach next turn — and it
         is only ever taken over opponent bodies carrying Energy right now. See that constant for why
         the design doc's "slow" (`base_attach: 1`) reading was the thing gate 1 measured as broken."""
-        from common.currency import PRIZE_DAMAGE_RATE
+        from common import needs
         b = bodies[i]
         energies = list((b or {}).get("energies") or [])
         if not energies:
-            return {"strip_damage": 0, "deny_value": 0.0}      # nothing to strip — the whiff, derived
+            return {"strip_shift": 0, "deny_value": 0.0}       # nothing to strip — the whiff, derived
         stripped = dict(b)
         stripped["energies"] = energies[:-1]                   # one Energy gone; the body remains
-        before = self.combat.incoming(ma, bodies, 1, charged=self._DENY_CHARGED,
-                                      opp_active=opp_active, switch_enabler=enabler)
-        after = self.combat.incoming(ma, bodies[:i] + [stripped] + bodies[i + 1:], 1,
-                                     charged=self._DENY_CHARGED,
-                                     opp_active=stripped if b is opp_active else opp_active,
-                                     switch_enabler=enabler)
-        swing = max(0, before - after)                         # damage this strip takes off the board
-        return {"strip_damage": swing, "deny_value": swing / PRIZE_DAMAGE_RATE}
+        base = self.combat.turns_to_ko_me(ma, bodies, opp_active=opp_active,
+                                          switch_enabler=enabler, charged=self._DENY_CHARGED)
+        after = self.combat.turns_to_ko_me(ma, bodies[:i] + [stripped] + bodies[i + 1:],
+                                           opp_active=stripped if b is opp_active else opp_active,
+                                           switch_enabler=enabler, charged=self._DENY_CHARGED)
+        return {"strip_shift": after - base,                   # BOTH legs under `_DENY_CHARGED` — the
+                                                               # caller's `base_t` is the CEILING
+                                                               # baseline, and differencing across two
+                                                               # policies would be meaningless
+                "deny_value": needs.opponent_target_value(prize_advance=0.0,
+                                                          survival_shift=after - base, phase=phase)}
 
     def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
         """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
