@@ -227,9 +227,14 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
     print("\nTALLY")
     for k in ("frames", "agree", "flip", "FIX", "REGRESSION", "DIVERGENT", "unlabelled", "error"):
         print(f"  {k:<12} {tally[k]}")
+    # Partition by the Held-out Ledger (ADR-0072 decision 4): a frame ruled onto another issue
+    # REPORTS but does not gate. Computing the ledger and not splitting on it was the first version's
+    # bug — it printed `held out 0` while a ruled frame sat in the gating list.
+    regressions = [g for g in graded if g["verdict"] == "REGRESSION"]
     ok = print_gate_report("DECISION GATE (ADR-0072) — deploy decider swap",
-                           gating=[g for g in graded if g["verdict"] == "REGRESSION"],
-                           ruled=[], held_out=held_out, total=tally["frames"],
+                           gating=[g for g in regressions if g["key"] not in held_out],
+                           ruled=[g for g in regressions if g["key"] in held_out],
+                           held_out=held_out, total=tally["frames"],
                            rule="zero unruled REGRESSION frames",
                            line=lambda g: f"REGRESSION {g['key']}  correct={g['label']}")
     return 0 if (ok and passed) else 1
