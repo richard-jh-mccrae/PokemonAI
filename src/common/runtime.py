@@ -114,12 +114,14 @@ PROFILE = {
                                     # user-ruled (6 FIX, 0 regression) and the rungs it replaced are
                                     # DELETED, so OFF is DEGRADED MODE, not a rollback: evolve
                                     # endorsements go silent and only the _PLAY-side Gate speaks.
-    "deploy_value": True,           # the DEPLOY DECIDER (ADR-0081, Issue #197): the Bench
+    "deploy_value": False,          # the DEPLOY DECIDER (ADR-0081, Issue #197): the Bench
                                     # marginal — netted Needs assignment + bench-drop Ability,
                                     # both dimensionless ratios through DEPLOY_BAND, plus the
                                     # damage-native accel unlock and Prize-Path exposure.
-                                    # Emergency revert lever only: OFF is DEGRADED MODE, not a
-                                    # rollback, because the rungs it replaces are deleted.
+                                    # ARMED-OFF: wired into _option_trace, but the nine rungs it
+                                    # replaces are still LIVE, so ON before the deletion commit would
+                                    # DOUBLE-COUNT every bench play. Flips ON with that commit, once
+                                    # the Decision Gate's flips are ruled (ADR-0072).
     "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069, the FIRST
                                     # no-shadow decider swap): the axes-sum marginal (`_attach_value`)
                                     # IS the energy-attach decision — attack axis (tonight's

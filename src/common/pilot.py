@@ -1854,6 +1854,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # and the planner's spend account read it
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
         promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0073
+        deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0081 (#197)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -1876,7 +1877,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
                     + (attach_row["tactical"] if attach_row is not None else 0.0)
                     + (evolve_row["tactical"] if evolve_row is not None else 0.0)
-                    + (promote_row["tactical"] if promote_row is not None else 0.0))
+                    + (promote_row["tactical"] if promote_row is not None else 0.0)
+                    + (deploy_row["total"] if deploy_row is not None else 0.0))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
