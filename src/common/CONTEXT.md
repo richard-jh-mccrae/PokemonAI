@@ -310,7 +310,46 @@ A **benched** Line member (a pre-evolution or the payoff) that a bench-targeting
 Energy onto — e.g. Cinderace's Turbo Flare attaches 3 Basic Energy to the Bench, so a benched Staryu
 is its recipient. With **no** recipient the acceleration is wasted, so developing one is the top setup
 priority while the accelerator is Active (`accel_recipient_missing` → `develop-the-accel-recipient`).
+_(Accepted design 2026-07-29, ADR-0081 (Issue #197) decision 8: the "top setup priority" PRESCRIPTION retires — the
+recipient's value is priced as the **Deploy Marginal**'s accel-unlock leg, the Attach Budget that
+becomes realisable because a landing spot exists, so it scales with the accelerator's actual yield and
+falls to zero when the accelerator is not Active or the Budget already lands. The CONCEPT stands; the
+flat rung and the `accel_recipient_missing` decision input go with it.)_
 _Avoid_: target (overloaded — reserve "recipient" for the body that *receives* accelerated Energy)
+
+**Deploy Marginal**:
+The value of putting ONE body into ONE **Bench Slot**, denominated in damage — the fourth per-seam
+value equation, beside the attach (ADR-0069), evolve (ADR-0070) and promote/retreat (ADR-0073)
+marginals. Owns every way a body reaches my Bench: `_SETUP_BENCH` (pregame), `_PLAY` at `_MAIN`, and
+`_TO_BENCH` (the Poffin-class fetch). Five legs, and all of them are the SAME shape — *a difference of
+two optimal values under a hypothetical board change*: the supplier's contribution and its **Slot
+Displacement** (the Needs assignment), the **Ability yield** (a bench-drop tutor priced by the Needs
+slot its fetch fills, odds-weighted and quota-aware), the **accel unlock** (the Attach Budget a landing
+spot realises), minus **exposure** (the Prize-Path delta the new body hands the opponent). It is
+strictly a VALUE layer: the loss-avoidance guard (an empty Bench under a KO'd Active loses on the
+spot, `rules.md` §7) is NOT a leg — it is a post-setup sound rung ABOVE the equation, because
+`_LINE_CAP`'s band invariant means a bounded positional term can never be un-outbiddable. Replaces
+nine of the ten shipped bench rules; `keep-a-bench` is promoted to that rung rather than deleted.
+_(Accepted design 2026-07-29, `/grill-with-docs`; ADR-0081, Issue #197. Build is a Value-System phase
+blocked-by Issue #199 — two legs are Worth-denominated and cross the scale boundary ADR-0078 governs.)_
+_Avoid_: bench value (ambiguous — say which side; **Bench Harvest** is the opponent's read over MY
+bench), development (the retired rung vocabulary — `develop-a-basic-in-setup` and friends are what
+this replaces), deploy-now slot (`needs.deploy_now_slot`, an EVOLUTION play this turn — one input, not
+this equation), `starter_priority` (Issue #161's Active-slot DECLARATION — the deliberate asymmetry
+this ADR records)
+
+**Slot Displacement**:
+The cost leg of the **Deploy Marginal**: what occupying a Bench Slot with THIS body gives up — the
+contribution of the best supplier it displaces, as a difference of `needs.py` assignment values. The
+supplier set is deployable bodies in hand PLUS bodies reachable from deck (`fetch_closure`'s **reach**
+direction, weighted by Deck-Content Odds), because the displaced body is often not one you are holding
+— on the motivating frame (`ml_dont_bench_redundant_solrock_f51`) it is Makuhita, in the deck, behind
+the Ultra Ball in hand. Emergent, never a constant: zero on an empty Bench, steep on a full one with
+live candidates. Retires the binary `my_bench < _BENCH_MAX` gates and `Board.bench_full` as a decision
+input — the 5th slot no longer costs what the 1st costs.
+_Avoid_: bench pressure / scarcity penalty (a tuned scalar — Displacement is a computed difference),
+saturation (`_READINESS_SATURATED`, a per-BODY redundancy discount that co-diagnoses f51 and is a
+different quantity), `bench_full` (the retired boolean)
 
 **KO Oracle**:
 The ONE closed-form home for combat judgment — *can X KO Y, what is that KO worth, how fast

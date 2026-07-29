@@ -1,8 +1,12 @@
-# ADR-0079 — The deploy marginal prices a bench slot and what fills it
+# ADR-0081 — The deploy marginal prices a bench slot and what fills it
 
-**Status:** DRAFT — grilling in progress (`/grill-with-docs` on Issue #197, 2026-07-29). Decisions are
-recorded here as they lock; nothing below is built. **Expect renumbering at merge** (#136 directive 8 —
-0079 is claimed, not settled; ADR-0078 is itself claimed-not-merged on the Issue #199 line).
+**Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #197 — **eight locked
+decisions**). **Nothing here is built.** The build is a new Value-System phase (tracker Issue #136),
+filed **blocked-by Issue #199** — decision 4. **Renumbered 0079 -> 0081 on rebase (2026-07-29)** — the SIXTH collision in the series (#136
+directive 8). Issue #161's *the Set-Up Active pick is one deck declaration* merged first and KEEPS
+0079 under the standing first-merged rule; Issue #199's *deny is a categorical relevance instrument*
+took 0080. Cite the issue alongside the number ("ADR-0081, Issue #197") — the number is a rebase
+artifact, not an identifier.
 
 **Context issues:** Issue #197 (this grill — split out of the Issue #161 grill as the pregame-Bench
 half), Issue #161 (`starter_priority`, the Active-slot sibling), Issue #136 (the Value System build
@@ -316,4 +320,96 @@ theory that an empty Bench makes every deploy attractive anyway (unsound in the 
 3-prize body whose decision-5 exposure prices negative can still lose to `End`, ending the turn with
 an empty Bench).
 
-*(Further decisions appended as they lock.)*
+**8. `develop-the-accel-recipient` folds onto the ATTACH axis as a deploy counterfactual — not into
+the `line` slot.** *(User ruling, 2026-07-29.)*
+
+The value the rule expresses is not the recipient's own worth; it is the accelerator's yield that
+currently has nowhere to land (glossary, **Acceleration Recipient**: *"With no recipient the
+acceleration is wasted"*). So it is priced as
+
+```
+accel_unlock(X) = best_readiness(board + X) − best_readiness(board)      # re-read through the
+                                                                        # Attach Budget (ADR-0067)
+                                                                        # + Build Standing (ADR-0069 §3)
+```
+
+— literally ADR-0069 decision 2's `this_turn` counterfactual (*"best_dmg(B | Budget with E committed)
+− best_dmg(B | manual leg unspent)"*) extended from an attach option to a DEPLOY option.
+`develop-the-accel-recipient` deletes, and `board.accel_recipient_missing` retires as a decision input.
+
+Three behaviours become derived instead of asserted: **zero** when the accelerator is not Active
+(nothing to land), **zero** when the Budget already has a landing spot (the rule's hand-written
+stand-down), and **proportional** — a 3-Energy Turbo Flare pays more than a 1-Energy trickle, which
+the flat +20 cannot express.
+
+Rejected: keeping it as an eleventh surviving rule (it is a pure VALUE claim, so unlike decision 7's
+guard it has no principled exemption, and +20 is a coincidence with no referent); and folding it as a
+tier bump on the body's `line` slot, which attributes the value to the wrong object and would keep
+paying when the accelerator is benched, dead, or already supplied. That third option is ADR-0069 §3's
+mistake in miniature — the retired `_attach_type_wasted` BOOLEAN was replaced by a typed FRACTION
+exactly because a flag cannot express how much actually lands, and "has a recipient" is the same flag
+standing in for a quantity ADR-0067 already computes.
+
+## Consequences
+
+**The equation.** Four value legs, all one shape — *a difference of two optimal values under a
+hypothetical board change*:
+
+```
+deploy_marginal(X) =   supplier_contribution(X)          # decision 2, via the Needs assignment
+                     − slot_displacement(X)              # decision 2, the displaced supplier
+                     + ability_yield(X)                  # decision 3, the need-matched fetch
+                     + accel_unlock(X)                   # decision 8, the realised Attach Budget
+                     − exposure(X)                       # decision 5, the Prize-Path delta
+```
+
+with the Worth-denominated legs converted once through Issue #199's **Worth Damage Rate** (decision 4),
+and the prize-denominated leg through `PRIZE_DAMAGE_RATE`. Scored at all three Bench entry points
+(decision 6). Above it, outside the equation, sits the post-setup `empty_bench` sound rung
+(decision 7).
+
+**Deletions — nine of ten bench rules, plus two doctrine rungs.** `baseline_bench.py`:
+`dont-bench-multiprize`, `pre-position-attacker`, `develop-a-basic-in-setup`,
+`develop-the-wincon-base-first`, `dont-bench-onto-their-path`, `develop-the-accel-recipient` (six of
+seven; `keep-a-bench` is PROMOTED to the sound rung, not deleted). `doctrine_fetch.py`:
+`bench-the-supporter-tutor`, `dont-pre-bench-the-supporter-tutor`, `dont-pre-bench-a-redundant-utility`.
+Signals retiring as decision inputs: `Board.bench_full` / the `my_bench < _BENCH_MAX` gates
+(decision 2), `board.accel_recipient_missing` (decision 8),
+`board.no_supporter_in_hand` (decision 3), and `bench_shortens_their_path` as a BOOLEAN — its
+magnitude survives (decision 5).
+
+**Additions.** `supporter_tutor` → `needs.SUPPLIES` (decision 3); a Bench slot family in `needs.py`
+(decision 2); a `bench_harvest` sibling exposing `_harvest_optima`'s objective prize total
+(decision 5); `_bench_shortens_their_path` returns a delta rather than a sign (decision 5).
+
+**Gates owed (ADR-0072 / #136 directive 6).** A `tools/train/probes/deploy_decider_sweep.py`
+**Decision Gate** with zero unruled `REGRESSION` frames; the **Discrimination Gate**
+(`leaf_lab.py diff --baseline data/leaf_lab/baseline.json`) run BEFORE the arming decision; and the
+mid-build **Tripwire** (`gauntlet_swap_ab.py --stage mid-build` — this swap DELETES what its flag
+would fall back to, so `gauntlet_swap_ab` is the right instrument, not the `--overlay` variant). The
+`Leaf Profile` field-set pin WILL move (decisions 3 and 8 add reads) and must be deliberately
+re-measured, not auto-conformed.
+
+**Corpus.** `setup_bench_decline_f3` and `dp_dont_pre_bench_redundant_munkidori_f4` must keep passing
+as CONSEQUENCES of the equation (decisions 3 and 2), not of the weights that currently carry them.
+`ml_dont_bench_redundant_solrock_f51` is the phase's motivating frame and should be re-ruled with the
+user as an Endorsement Claim (its `correct == []` at a `minCount 1` select is degenerate as recorded).
+`ms_free_bench_evolve_f17`, `ml_dont_play_a_needless_pokemon_tutor_f114` and
+`ml_dont_energize_the_supporter_tutor_f84` are adjacent and should be swept.
+
+**Issue #197 is closed by this ADR as the grill record.** Its item 1 (is there a defect?) — yes, and
+its "no motivating frame" premise was false. Item 2 (multi-pick shape) — dissolved by decision 6.
+Items 3 and 4 (the two-vocabulary cost and the shared completeness invariant with Issue #161) —
+superseded by decision 1: the Bench gets an equation, not a declaration, so the asymmetry with
+`starter_priority` is deliberate and there is no shared universe to invariant over. The BUILD is a new
+Value-System tracker phase, filed **blocked-by Issue #199** (decision 4).
+
+## Open, deliberately not ruled here
+
+- Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a
+  measurement for S3c, not a claim.
+- Whether `_PATH_BENCH_EXTRA = 1` (`objectives.py:124`) is stale against ADR-0071 decision 6's
+  correction of the same reasoning on the Threat Clock (decision 5's observation).
+- The runtime budget: three per-option optima (closure query, path re-derivation, Attach Budget) on
+  one path. Memoisation strategy is a build decision; the `Leaf Profile` is the instrument that will
+  price it.
