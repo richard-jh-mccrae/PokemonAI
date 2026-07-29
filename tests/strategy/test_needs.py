@@ -270,3 +270,104 @@ def test_fuel_slots_ride_the_pitch_side_not_the_keep_side():
     assert needs.pitch_gain(slots, elig, 0) == 0.0
     picks = needs.cheapest_removal(slots, elig, resupply, [0.0, 0.0, 0.0], 1)
     assert picks == [1]                                 # the fuel energy out-pitches even the dreg
+
+
+# ── the DEPLOY assignment: capacity, and gain minus the marginal slot (ADR-0081, Issue #197) ──────
+
+
+@pytest.mark.req("REQ-NEEDS-0010")
+def test_capacity_bounds_how_many_cards_can_be_assigned_at_once():
+    """The Bench holds 5, and that cap is what makes a deploy DISPLACE anything at all.
+
+    The DP assigns each card to at most ONE slot, so the number of cards assigned is exactly the
+    number of slots covered — `popcount(mask)`. A capacity bound is therefore a popcount bound, which
+    is why this is an exact extension rather than a heuristic. Without it a candidate's marginal is
+    identical whether the Bench is empty or full, which IS the defect Issue #197 exists to fix (every
+    bench rule gating on a binary `my_bench < _BENCH_MAX`)."""
+    slots = [needs.Slot("line", 20.0, 99, "s1"), needs.Slot("line", 15.0, 99, "s2")]
+    elig = [{0}, {1}]                                   # A covers S1 only, B covers S2 only
+    resupply = [0.0, 0.0]
+    assert needs.assignment_value(slots, elig, resupply) == 35.0                    # uncapped
+    assert needs.assignment_value(slots, elig, resupply, capacity=None) == 35.0     # explicit
+    assert needs.assignment_value(slots, elig, resupply, capacity=2) == 35.0        # cap not binding
+    assert needs.assignment_value(slots, elig, resupply, capacity=1) == 20.0        # best one only
+    assert needs.assignment_value(slots, elig, resupply, capacity=0) == 0.0         # base only
+
+
+@pytest.mark.req("REQ-NEEDS-0010")
+def test_capacity_keeps_the_resupply_base_which_no_bench_slot_can_change():
+    """`base` is what the CLOSURE re-supplies whether or not a body is deployed, so it is independent
+    of Bench capacity — capping the deploys must not delete the deck's own coverage."""
+    slots = [needs.Slot("line", 20.0, 99, "s1")]
+    assert needs.assignment_value(slots, [{0}], [0.25], capacity=0) == pytest.approx(5.0)
+    assert needs.assignment_value(slots, [{0}], [0.25], capacity=1) == pytest.approx(20.0)
+
+
+@pytest.mark.req("REQ-NEEDS-0011")
+def test_deploy_marginal_is_gain_minus_the_marginal_slot_cost():
+    """ADR-0081 amendment E: `net(X) = gain(X) − displacement(X)`.
+
+    Decision 2's written form (`V(C) − V(C, X pinned)`) is ≤ 0 for every candidate — forcing a card
+    into an optimal assignment can only lower it — so it can rank bodies but can never clear the
+    turn-ender floor, which is `ms_free_bench_evolve_f17`'s failure mode. The corrected form is the
+    one under which decision 2's own sentence ("the cost of the 5th slot is emergent: exactly the
+    contribution of the supplier it displaces") is literally true of a computed quantity.
+
+    Here A covers a 20 slot, B a 15 slot. With Bench room for BOTH, deploying A displaces nothing and
+    nets its full 20. With room for only ONE, deploying A costs B its 15 — and deploying the WORSE
+    body nets negative, which is how the take-fewer decline and the turn-ender floor refuse it."""
+    slots = [needs.Slot("line", 20.0, 99, "s1"), needs.Slot("line", 15.0, 99, "s2")]
+    elig = [{0}, {1}]
+    resupply = [0.0, 0.0]
+    assert needs.deploy_marginal(slots, elig, resupply, 0, capacity=2) == 20.0
+    assert needs.deploy_marginal(slots, elig, resupply, 0, capacity=1) == pytest.approx(5.0)
+    assert needs.deploy_marginal(slots, elig, resupply, 1, capacity=1) == pytest.approx(-5.0)
+
+
+@pytest.mark.req("REQ-NEEDS-0011")
+def test_deploy_marginal_prices_a_redundant_body_at_zero_however_free_the_bench():
+    """The f51 shape, in miniature: the engine slot is already covered by a sibling, so a second copy
+    GAINS nothing — and that is true on an empty Bench too, because redundancy is a property of the
+    board rather than of scarcity.
+
+    It nets exactly 0 at EVERY capacity, which is worth stating because it is easy to expect a
+    penalty at tight capacity and wrong: with one free slot and two interchangeable bodies, the slot
+    gets filled either way, so choosing this copy costs nothing. The penalty for a redundant body
+    appears only when something BETTER wanted the slot — which is the test below, and is f51's real
+    shape (the second Solrock displaced a Makuhita, not another Solrock)."""
+    slots = [needs.Slot("line", 20.0, 99, "engine")]
+    elig = [{0}, {0}]                                   # two interchangeable engine bodies
+    resupply = [0.0]
+    assert needs.deploy_marginal(slots, elig, resupply, 1, capacity=5) == 0.0
+    assert needs.deploy_marginal(slots, elig, resupply, 1, capacity=1) == 0.0
+
+    # ...and the real f51 shape. On that board the engine is COMPLETE (Solrock and Lunatone both in
+    # play), so `line_slots`' `primary_met` leaves no engine slot at all and the second Solrock
+    # supplies nothing — while the last Bench slot is exactly what the Makuhita->Hariyama line wants.
+    # Deploying it therefore nets the full displacement, which is the CRITICAL correction's own
+    # sentence ("clogs the bench needed for the Makuhita->Hariyama line") as arithmetic.
+    f51 = [needs.Slot("line", 20.0, 99, "second_line")]
+    elig_f51 = [set(), {0}]                             # 2nd Solrock (supplies nothing), Makuhita
+    assert needs.deploy_marginal(f51, elig_f51, [0.0], 0, capacity=1) == pytest.approx(-20.0)
+    assert needs.deploy_marginal(f51, elig_f51, [0.0], 0, capacity=2) == 0.0   # room for both: free
+
+
+@pytest.mark.req("REQ-NEEDS-0011")
+def test_deploy_marginal_displacement_reads_the_BEST_rival_not_a_constant():
+    """"Emergent, never a constant": the slot cost is whatever the displaced supplier was worth, so a
+    last slot contested by a 25 is dearer than the same slot contested by a 5."""
+    def net(rival_value):
+        slots = [needs.Slot("line", 20.0, 99, "mine"), needs.Slot("line", rival_value, 99, "theirs")]
+        return needs.deploy_marginal(slots, [{0}, {1}], [0.0, 0.0], 0, capacity=1)
+    assert net(25.0) == pytest.approx(-5.0)
+    assert net(5.0) == pytest.approx(15.0)
+
+
+@pytest.mark.req("REQ-NEEDS-0011")
+def test_supporter_tutor_supplies_a_slot_kind_so_a_bench_drop_tutor_is_not_priced_zero():
+    """Meowth ex's Last-Ditch Catch fetches a SUPPORTER, and `supporter_tutor` was absent from
+    SUPPLIES entirely — so the coverage lint's promise ("no card class is silently priced 0 by a
+    missed slot") did not hold for it. It supplies the draw/engine need the fetched Supporter serves."""
+    assert "supporter_tutor" in needs.SUPPLIES
+    assert set(needs.SUPPLIES["supporter_tutor"]) <= needs.SLOT_KINDS
+    assert needs.SUPPLIES["supporter_tutor"]

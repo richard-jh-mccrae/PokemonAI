@@ -639,6 +639,60 @@ BAND × net_assignment_relevance(2nd Solrock | bench 4/5, engine complete)  <  2
 Weak, since the relevance should be ≈0 on this board anyway — but it is a real, checkable constraint
 on the preservation pin rather than a free parameter, and the Decision Gate enforces it.
 
+## Amendment E — decision 2's written form is corrected at the arithmetic level, and the Needs DP gains a capacity bound (2026-07-29, build)
+
+*(User ruling during the build, 2026-07-29. Decision 2's SUBSTANCE is unchanged — this corrects how
+it is spelled, and adds the groundwork it silently assumed.)*
+
+**The DP had no capacity, so displacement could not exist.** `needs._keep_slot_dp` assigns each card
+to ≤1 slot with **no limit on how many cards are assigned**. Without a cap, a candidate's marginal is
+identical whether the Bench is empty or full — which IS the defect Issue #197 exists to fix. The
+extension is exact rather than heuristic: each assigned card covers exactly one slot, so *bodies
+deployed = `popcount(mask)`*, and a capacity bound is a **popcount bound**. `assignment_value` gains
+`capacity=None` (the unbounded keep-side reading every pre-existing caller wants — holding a card
+costs no board slot), and `base` is deliberately untouched by it, because the closure re-supplies a
+slot whether or not a body is deployed.
+
+**Decision 2's written form is ≤ 0 for every candidate.** It spells the marginal
+`V(C) − V(C, X pinned)`; forcing a card into an already-optimal assignment can only lower it, so the
+best candidate prices exactly **0** and every other one negative. That ranks bodies against each
+other but can never clear `_finish_turn_last`'s floor — which is exactly `ms_free_bench_evolve_f17`'s
+failure mode (a good develop netting 0.0 and being starved by the `score <= 0` gate). The corrected
+form:
+
+```
+net(X) = V(X deployed now, cap=K) − V(C \ X, cap=K)
+```
+
+— "the board's coverage if I spend a slot on X now" minus "its coverage if I don't, and the other
+candidates have all K slots". The left side is
+`max_j∈elig(X) [ w_j + V(C \ X, slots≠j, cap=K−1) ]`, floored by `V(C \ X, cap=K−1)` for a body that
+covers nothing yet still eats the slot. This is the form under which decision 2's OWN sentence — *"the
+cost of the 5th slot is emergent: exactly the contribution of the supplier it displaces"* — is
+literally true of a computed quantity.
+
+**Gain and displacement are not two subtractable terms.** The first implementation computed
+`gain − displacement` and double-counted: at tight capacity the gain ALREADY nets the displacement
+(removing X lets the rival take the slot), so subtracting it again charged twice. They are two
+readings of one difference.
+
+**A test expectation was wrong before the code was.** Two interchangeable bodies contesting one free
+slot net **0**, not a penalty — the slot gets filled either way, so choosing this copy costs nothing.
+A redundant body is only punished when something BETTER wanted the slot, which is f51's actual shape:
+the engine was complete (`primary_met` leaves no engine slot at all), so the second Solrock supplied
+**nothing** and displaced the Makuhita line outright, netting the full −20. The corpus frame is now a
+unit test in that shape.
+
+**`supporter_tutor` joins `SUPPLIES`** (`draw_engine`, `supply_wincon`) — decision 3 required it, and
+without it the coverage lint's promise ("no card class is silently priced 0 by a missed slot") did not
+hold for Meowth ex: the tag carried a `_READINESS_ABILITY_VALUE` but no slot kind, so the assignment
+priced a Last-Ditch drop at nothing.
+
+Cost accepted: three capacity-bounded DP evaluations per candidate instead of one, plus one more per
+eligible slot of the candidate. The DP is a bitmask over ≤16 slots and ~10 cards, so each is trivial,
+but it is a real multiplier on the deploy path and feeds the **Leaf Profile** re-measure the ADR
+already owes.
+
 ## Open, deliberately not ruled here
 
 - Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a
