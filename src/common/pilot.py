@@ -5071,10 +5071,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         correct and is not sufficient on its own.
 
         So where the Path cannot be read at all, the leg falls back to the body's OWN prize liability
-        — the EXCESS over a 1-prize body, because benching *something* is unavoidable and only the
-        surplus is a gift. Meowth ex (2 prizes) therefore carries 1 prize-equivalent of exposure at
-        Set Up, which is the fold of `dont-bench-multiprize` (−15) into the equation rather than a
-        special case for the pregame.
+        — normally the EXCESS over a 1-prize body, because some body must be fielded and only the
+        surplus is a gift. Meowth ex (2 prizes) carries 1 prize-equivalent at Set Up, which is the
+        fold of `dont-bench-multiprize` (−15) into the equation rather than a pregame special case.
+
+        A REDUNDANT pregame copy pays the FULL value instead — a card already placed on my board this
+        Set Up (`board.setup_placed_ids`), which is the signal built for exactly this question. The
+        excess rule discounts the first body because you cannot avoid fielding one; a SECOND copy of
+        what is already down avoids nothing, so none of it is excused. It is pure KO target, and by
+        `docs/rulebook.txt` L97 ("put **up to** 5 more Basic Pokémon...", hence `minCount 0`) plus
+        `docs/rules.md` §2 (my own first turn precedes the first legal attack in either seat),
+        declining costs nothing — the same body can be benched next turn if it turns out to be wanted.
+
+        Ruled on `85785609|0|decision|4` (user, 2026-07-30): "we typically only ever need a single
+        Munkidori in play. this second copy is a perfect fodder for Ultra Ball."
+
+        REDUNDANCY is the trigger, deliberately, and NOT the prize count — that was measured, not
+        assumed. Charging the full value for every pregame placement also declines Riolu, the
+        win-condition Line base (assignment 14.83 against a 30.0 charge), because ONE prize outweighs
+        the entire assignment band (`DEPLOY_BAND` 25 < `PRIZE_DAMAGE_RATE` × phase). A rule keyed on
+        prize count cannot separate a body worth laying from a spare of one already down; the
+        already-placed read can, and does: Riolu +14.83 (benched), a second Munkidori −28.87
+        (declined), Meowth ex −30.0 (declined) — all three from one rule.
 
         AMENDMENT F was tried here and WITHDRAWN (2026-07-30, same day). It stood the fallback down
         whenever declining would leave a bare Bench with no other Pokémon in hand, so that Meowth ex
@@ -5094,8 +5112,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return delta
         if board.their_path_turns is not None:
             return 0.0                     # the Path IS readable and says this body gifts nothing
-        prizes = self._prize_value({"id": self._option_card_id(obs, select, option)})
-        return float(max(0, int(prizes or 1) - 1))
+        cid = self._option_card_id(obs, select, option)
+        prizes = int(self._prize_value({"id": cid}) or 1)
+        if ((select or {}).get("context") == _SETUP_BENCH
+                and cid is not None and cid in board.setup_placed_ids):
+            return float(prizes)           # a REDUNDANT pregame copy: the whole body is a gift
+        return float(max(0, prizes - 1))   # otherwise only the surplus over an unavoidable body
 
     def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,

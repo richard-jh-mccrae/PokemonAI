@@ -85,6 +85,32 @@ def test_the_decline_is_the_deploy_marginals_exposure_leg():
     assert row["total"] < 0
 
 
+@pytest.mark.req("REQ-FETCH-0031")
+def test_a_needed_line_base_is_still_benched_at_set_up():
+    """The bound on the redundancy charge, and it is REQUIRED rather than merely reassuring.
+
+    The obvious way to make a second Munkidori decline is to charge every pregame placement its full
+    prize value. That was measured and REJECTED: it also declines Riolu, the win-condition Line base,
+    because ONE prize (`PRIZE_DAMAGE_RATE` x phase = 30) outweighs the entire assignment band
+    (`DEPLOY_BAND` = 25), so no prize-count rule can separate a body worth laying from a spare of one
+    already down.
+
+    Keying on `setup_placed_ids` can, and this is the half that proves it: Riolu is not already
+    placed, so it pays the ordinary excess (0 for a 1-prize body) and its assignment carries it."""
+    RIOLU = 677
+    fx = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    obs = json.loads(json.dumps(fx["obs"]))
+    me = obs["current"]["players"][obs["current"].get("yourIndex", 0)]
+    me["hand"].append({"id": RIOLU})
+    obs["select"]["option"].append({"type": 3, "area": 2, "playerIndex": 0,
+                                    "index": len(me["hand"]) - 1})
+    dec = _build_mega_lucario_pilot().explain(obs)
+    riolu = next(o for o in dec.options if o.card_id == RIOLU)
+    assert riolu.deploy_working["exposure"] == 0     # not redundant -> the ordinary excess, which is 0
+    assert riolu.score > 0
+    assert RIOLU in [dec.options[i].card_id for i in dec.chosen]
+
+
 def test_decline_only_drops_a_discouraged_pick_not_a_neutral_basic():
     """REQ-FETCH-0031: the take-fewer trims only the DISCOURAGED pick — a plain startable Basic
     (`bench-fill-a-basic` +12) is still placed, so the trim never becomes a blanket decline.
