@@ -1,0 +1,131 @@
+# ADR-0072's Decision Gate, watching MAIN — not a PR gate. The sibling of leaf-gate-main.yml.
+#
+# WHY THIS EXISTS. The Discrimination Gate has watched main since 2026-07-28 because nothing ran it
+# there and drift accumulated unattributed. The Decision Gate had the same exposure and worse: for
+# weeks it was not merely unwatched but VACUOUS. ADR-0072 defined it as "the phase's
+# `probes/*_decider_sweep.py`", each comparing the shipped agent against its own kill-switch OFF —
+# correct at the swap, when OFF was the incumbent rung pile, and meaningless the moment each phase
+# DELETED that pile (tracker directive 1 requires the deletion; nothing re-pointed the gates). With
+# the pile gone, OFF is an empty scorer whose argmax falls to option index, so all four sweeps could
+# only ever report FIX. They had been reporting PASS in that state for weeks, and PASS gets read as
+# evidence. ADR-0085 Amendment I rebuilt the gate against a RECORDED baseline; this job is what stops
+# the rebuilt one from going unwatched the way the original did.
+#
+# WHY IT RUNS AT ALL, given the leaf gate already runs here. The two ask different questions and the
+# decision-level one is what a ladder actually sees: the leaf lab asks "does the leaf still RANK the
+# human's option top?", this asks "does the agent still PLAY it?" — end-to-end, through the real
+# Pilot, including the planner and the tiebreaks the leaf ranking never reaches.
+#
+# WHY THE RUNTIME OBJECTION DIDN'T SURVIVE MEASUREMENT. The rebuild's own hand-off argued this gate
+# "replays 332 frames through a full Pilot and is materially slower than the leaf diff, so measure
+# the runtime before proposing it." Measured back-to-back on one box (2026-07-30, py3.12):
+#
+#     decider_lab diff   332 frames   31.6 s
+#     leaf_lab   diff    267 frames   71.0 s
+#
+# It is ~2.2x FASTER than the gate that already has a watchdog. The objection was a guess, and the
+# measurement retired it — which is the same "measure before asserting" correction this ADR series
+# keeps having to make.
+#
+# WHY IT NEVER WRITES THE BASELINE. The obvious automation — recapture on every merge — is precisely
+# what would make this job vacuous, in the same shape the old sweeps went vacuous: the "before"
+# picture would be redefined to whatever just landed, so every regression would bless itself and the
+# gate would pass forever by construction. The baseline is a RULING RECORD, not a cache. Re-capture
+# stays a deliberate human act:
+#     python tools/train/decider_lab.py capture --out data/decider_lab/baseline.json
+# run only after the flips it would absorb have been ruled with the user.
+#
+# WHAT A GREEN RUN DOES NOT MEAN. It means nothing REGRESSED against the last blessed build. It does
+# NOT mean the agent is right: the baseline records every frame it captured as the reference,
+# including the 101 where the agent contradicts a human ruling. Those are ranked in
+# docs/plans/decider-disagreement-triage.md and owned by the correction rounds, not by this job.
+name: Decider gate (main)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# NOT cancel-in-progress (matching leaf-gate-main.yml, deliberately unlike ci.yml): the whole point
+# is per-merge attribution. Cancelling an in-flight run on the next push discards the verdict for the
+# commit that may have caused the red, which is the one fact this job exists to capture.
+concurrency:
+  group: decider-gate-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  PYTHONUTF8: "1"          # match ci.yml — card names carry é, ™, …
+
+jobs:
+  decision-gate:
+    name: Decision Gate (ADR-0072) on main
+    runs-on: ubuntu-latest
+    # The gate itself measured 31.6s over 332 frames locally (2026-07-30, py3.12); the rest is pip
+    # install + engine check. 20 is headroom for corpus growth, NOT a measurement of a slow gate — if
+    # this ever approaches it, the frame count grew and the number deserves re-measuring.
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # This gate replays through each agent's REAL Pilot (`tune._build_pilot` -> the engine-backed
+      # CardStat provider), so unlike the pure-dict gate helpers it genuinely needs the committed
+      # native library to load. Same fail-fast check ci.yml and leaf-gate-main.yml run.
+      - name: Verify native engine loads
+        run: python -c "import sys; sys.path.insert(0, 'src'); import cg.sim; print('native engine loaded:', cg.sim.lib_path)"
+
+      # Every input is committed — the baseline, data/corrections, and the fixture Held-out Ledger —
+      # so this is reproducible offline with no extra fetch. Non-zero exit == unruled REGRESSION.
+      - name: Decision Gate
+        id: gate
+        run: |
+          mkdir -p reports
+          # `set +e` is LOAD-BEARING, not tidiness. GitHub runs `shell: bash` as
+          # `bash --noprofile --norc -eo pipefail {0}`, so errexit would abort this step the instant
+          # the gate exits non-zero — skipping the capture of `$?` and the corpus-shift warning, and
+          # leaving the failure unexplained. We want the red, but AFTER the diagnostics run.
+          # pipefail stays on so `| tee` cannot mask the exit code.
+          set +e
+          python tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json \
+            2>&1 | tee reports/decider-gate-main.txt
+          rc=$?
+          set -e
+          # A shifted corpus does NOT fail the gate (the verdict is per-frame flips only), but it
+          # must not pass unseen either: it means the two captures are no longer comparable and the
+          # gated set is quietly narrowing. `decider_lab` prints `corpus shape moved` with the
+          # added/removed counts; surface it as a warning so the re-capture gets owned.
+          if grep -q "corpus shape moved" reports/decider-gate-main.txt; then
+            echo "::warning::The corrections corpus has moved since data/decider_lab/baseline.json was captured (git_rev in the artifact). The gate's comparison is narrowing. Re-capture DELIBERATELY once any flips it would absorb have been ruled: python tools/train/decider_lab.py capture --out data/decider_lab/baseline.json"
+          fi
+          exit $rc
+
+      - name: Explain a red gate
+        if: failure() && steps.gate.outcome == 'failure'
+        run: |
+          echo "::error::main is RED on the ADR-0072 Decision Gate: at least one frame's DECISION moved away from the human's ruling and is not held out. This is attributable to the merge that triggered this run. Next step is a RULING, not a re-capture: read reports/decider-gate-main.txt (uploaded as an artifact), decide per frame whether the new decision is wrong (fix it) or right (hold it out via the fixture's frame_key + Decision-Claim owner, ADR-0072 decision 4 — one ruling holds a frame out of BOTH gates). Re-capturing the baseline to clear this would erase the evidence."
+
+      - name: Upload gate report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: decider-gate-main
+          path: reports/decider-gate-main.txt
+          if-no-files-found: warn

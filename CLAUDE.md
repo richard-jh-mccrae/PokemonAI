@@ -37,14 +37,18 @@ meta parsing, tuning, anything — read it at the source. Never recall it from t
   (Python 3.12), and that is **deliberate**, not a gap. Windows is covered by developing on
   it, so cross-platform discipline is upheld by the local run and review rather than by a
   second CI job. Widening the matrix is a one-line change (`docs/ci.md`) if that ever changes.
-- **CI runs tests, plus one main-watchdog gate.** `ci.yml` is the suite; `leaf-gate-main.yml`
+- **CI runs tests, plus two main-watchdog gates.** `ci.yml` is the suite; `leaf-gate-main.yml`
   runs ADR-0072's **Discrimination Gate** on every push to `main` and fails on an unruled
-  `OK → MISS` leaf flip (added 2026-07-28 — a narrow, deliberate widening of the old
-  "tests only" rule, because the gate was owed on main and nothing ran it there). It **never**
-  re-captures `data/leaf_lab/baseline.json`: the baseline is a ruling record, and auto-recapture
-  would make the gate vacuous. The rest of the global CI spec (Doxygen / Sphinx / GitHub Pages /
-  PDF) stays out until those toolchains exist here. Run locally: `python -m pytest tests/ -q`.
-  Details: `docs/ci.md`.
+  `OK → MISS` leaf flip (added 2026-07-28), and `decider-gate-main.yml` runs the same ADR's
+  **Decision Gate** and fails on an unruled `REGRESSION` — a frame whose DECISION moved off the
+  human's ruling (added 2026-07-30, ADR-0085 Amendment J; it measured 31.6 s to the leaf gate's
+  71 s, so the "too slow" objection did not survive measurement). Both are a narrow, deliberate
+  widening of the old "tests only" rule, because each gate was owed on main and nothing ran it
+  there. Neither **ever** re-captures its baseline (`data/leaf_lab/baseline.json`,
+  `data/decider_lab/baseline.json`): a baseline is a ruling record, and auto-recapture would make
+  the gate vacuous — which is not hypothetical, it is exactly how the old Decision Gate died. The
+  rest of the global CI spec (Doxygen / Sphinx / GitHub Pages / PDF) stays out until those
+  toolchains exist here. Run locally: `python -m pytest tests/ -q`. Details: `docs/ci.md`.
 - **Reference issues and PRs by kind, never a bare number.** In prose — chat, commit messages,
   PR/issue bodies and comments, skill docs — write **Issue #145** and **PR #6**, never a bare
   `#145`/`#6` (GitHub shares one number space across issues and PRs, so a bare number is

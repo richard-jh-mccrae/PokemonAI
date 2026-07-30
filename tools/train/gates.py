@@ -10,8 +10,11 @@ axes — so grading it that way measures it through the weakest consumer it will
 
 Merit therefore lives here, in two instruments that answer **exactly** rather than statistically:
 
-* **Decision Gate** — the phase's `probes/*_decider_sweep.py`: zero unruled ``REGRESSION`` frames.
-  ADR-0069 §8's protocol, promoted from convention to a gate.
+* **Decision Gate** — a Decider Lab capture diffed against a committed baseline: zero unruled
+  ``REGRESSION`` frames. ADR-0069 §8's protocol, promoted from convention to a gate. It used to be
+  *"the phase's ``probes/*_decider_sweep.py``"*, each comparing the agent against its own
+  kill-switch OFF; ADR-0085 Amendment I replaced that once every phase's deletion pass left OFF
+  scoring an empty pile (see ``decider_lab_diff``). The sweeps are diagnostics now.
 * **Discrimination Gate** — a Leaf Lab capture diffed before/after: zero unruled ``OK -> MISS``
   frame flips, over all scorable frames.
 
@@ -475,6 +478,59 @@ def held_out_frames(fixtures_dir=None) -> dict:
     return out
 
 
+def picks_as_set(pick):
+    """A pick compared as a SET, not a sequence.
+
+    Multi-pick contexts (`DISCARD` asks for N cards) legitimately return several indices, and their
+    ORDER is not a decision — the engine applies the whole set. Comparing sequences would report a
+    reordered multi-pick as a movement, which is a false positive in the one direction the Decision
+    Gate must never produce."""
+    return None if pick is None else frozenset(pick)
+
+
+def satisfies_human(chosen, correct) -> bool:
+    """Does ``chosen`` satisfy the Correction's ruling — the ONE predicate both readings key on.
+
+    **A Correction's ``correct`` is a CONSTRAINT, not the whole legal answer** (ADR-0085 Amendment J,
+    ruling the question ADR-0085 Amendment I left open). It names *the card the ruling was about*,
+    which is exactly what ADR-0082's Claim vocabulary records; a multi-pick select meanwhile returns
+    **every** index the engine requires. So the two vocabularies are not the same shape, and equality
+    between them is the wrong test:
+
+        DISCARD, `correct: [2]`, agent picks `[2, 3]`
+            equality  -> DISAGREE   (and the capture read 1/12 on `DISCARD` for exactly this reason,
+                                     which is a VOCABULARY MISMATCH, not a defect)
+            this test -> AGREE      (the ruled card *was* discarded; index 3 is the engine's other
+                                     required slot, which the human never ruled on either way)
+
+    Satisfaction is therefore ``correct ⊆ chosen``. On a single-pick context both sides are one
+    index, so it degenerates to equality and nothing changes — which is why the 220 single-pick
+    agreements are untouched by this.
+
+    The alternative ruling — rewrite those Corrections to record the full answer — was rejected: it
+    would put indices into a human ruling that the human never ruled on, destroying the one thing
+    ``correct`` is for. Read the record correctly rather than editing the record.
+
+    Three cases, each load-bearing:
+
+    * ``chosen is None`` — an unreplayable frame satisfies nothing. It must not read as agreement.
+    * ``correct is None`` — no ruling was recorded, so nothing can be satisfied. Callers report these
+      as ``UNLABELLED`` rather than as disagreement.
+    * ``correct == []`` — a recorded **DECLINE**: the ruling is *"take none of these"*, satisfied
+      only by an empty pick. Subset is WRONG here and dangerously so — the empty set is a subset of
+      everything, so reading a DECLINE through ``⊆`` would make every frame vacuously agree. Eleven
+      such frames sit in the corpus today (nine at ``MAIN``, one ``SETUP_BENCH_POKEMON``, one
+      ``TO_HAND``), and `86088989|0|decision|3` is genuinely satisfied — the agent declines too. They
+      are rulings, so they stay labelled and stay gated; Issue #229 owns whether the *writer* should
+      keep rejecting the shape the corpus already contains.
+    """
+    if chosen is None or correct is None:
+        return False
+    if not correct:                       # a recorded DECLINE — exact, never subset
+        return not chosen
+    return picks_as_set(correct) <= picks_as_set(chosen)
+
+
 def decider_lab_diff(before: dict, after: dict) -> dict:
     """Per-frame DECISION movement between two Decider Lab captures, classified against the human.
 
@@ -496,23 +552,21 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
     (``added`` / ``removed``) rather than skipped, so a baseline taken against a different corpus
     shape is visible instead of quietly shrinking the gated set.
 
+    Direction is judged by ``satisfies_human`` (``correct ⊆ chosen``, ADR-0085 Amendment J), NOT by
+    equality — the same predicate the capture's agree rate reports through, so the gate and the
+    readout cannot drift into two different ideas of "matches the human".
+
     Verdicts, per frame whose ``chosen`` moved:
-      ``REGRESSION``  the baseline matched the human's ``correct`` and this build does not
-      ``FIX``        this build matches and the baseline did not
-      ``NEUTRAL``    both miss, differently — a real change, but not one the corpus adjudicates
+      ``REGRESSION``  the baseline satisfied the human's ``correct`` and this build does not
+      ``FIX``        this build satisfies it and the baseline did not
+      ``NEUTRAL``    the ruling does not separate the two — both satisfy it, or both miss it. A real
+                     change, but not one the corpus adjudicates.
       ``UNLABELLED`` the frame carries no ``correct``, so no direction can be claimed
     """
     def index(rpt):
         return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
 
-    def norm(pick):
-        """A pick compared as a SET, not a sequence.
-
-        Multi-pick contexts (`DISCARD` asks for N cards) legitimately return several indices, and
-        their ORDER is not a decision — the engine applies the whole set. Comparing sequences would
-        report a reordered multi-pick as a REGRESSION, which is a false positive in the one direction
-        this gate must never produce."""
-        return None if pick is None else tuple(sorted(pick))
+    norm = picks_as_set
 
     b, a = index(before), index(after)
     rows = []
@@ -523,9 +577,9 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
         correct = a[k].get("correct")
         if correct is None:
             verdict = "UNLABELLED"
-        elif norm(now) == norm(correct):
+        elif satisfies_human(now, correct) and not satisfies_human(was, correct):
             verdict = "FIX"
-        elif norm(was) == norm(correct):
+        elif satisfies_human(was, correct) and not satisfies_human(now, correct):
             verdict = "REGRESSION"
         else:
             verdict = "NEUTRAL"

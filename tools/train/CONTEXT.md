@@ -137,7 +137,25 @@ equation against nothing and **could only ever report FIX**. They reported `PASS
 The lesson is one line, and it is why this instrument has the shape it has: **a gate must diff
 against a RECORDED baseline, never against a live switch.** The baseline is a RULING RECORD — never
 auto-recaptured, re-taken only once a build's flips have been ruled, exactly as `data/leaf_lab/`.
+Since ADR-0085 Amendment J it is watched on `main` by `.github/workflows/decider-gate-main.yml`, and
+the four `*_decider_sweep.py` have lost the dead OFF arm entirely — they are per-leg diagnostics that
+report and exit 0.
+
+**A green Decision Gate means nothing REGRESSED. It does not mean the agent is right** — the baseline
+records every frame it captured as the reference, including the 101 where the agent contradicts a
+human ruling (`docs/plans/decider-disagreement-triage.md` tiers them).
 _Avoid_: decision test, decider suite, regression run (it is an instrument; its readings are picks)
+
+**Satisfying a Correction**:
+What it means for a pick to match a human ruling: `correct ⊆ chosen`, never `correct == chosen`
+(`gates.satisfies_human`, ADR-0085 Amendment J). A Correction's `correct` names **the card the ruling
+was about**; a multi-pick select returns **every** index the engine demands, so the two are different
+vocabularies and equality across them mis-reports — it scored `DISCARD` at 1/12 where satisfaction
+reads 10/12. One exception, and it is load-bearing: `correct: []` is a recorded **DECLINE**, matched
+EXACTLY, because the empty set is a subset of everything and subset-reading it would make every frame
+vacuously agree. Both the Decision Gate's direction test and its agree-rate readout key on this one
+predicate, deliberately, so they cannot drift apart.
+_Avoid_: "the agent agrees with the correction" as a synonym for equality — say **satisfies**
 
 **Leaf Frame**:
 A **Correction** the **Leaf Lab** can score: a reseedable MAIN-select (context 0) board carrying
