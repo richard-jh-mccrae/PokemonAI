@@ -1,14 +1,14 @@
 {
-  "git_rev": "ec2d854",
+  "git_rev": "ac5b5b9",
   "agent": null,
   "n": 277,
   "scorable": 268,
   "unscorable": 9,
   "skipped_agent": 1,
-  "leaf_correct": 194,
-  "leaf_correct_rate": 0.7238805970149254,
-  "leaf_correct_strict": 37,
-  "leaf_correct_strict_rate": 0.13805970149253732,
+  "leaf_correct": 193,
+  "leaf_correct_rate": 0.7201492537313433,
+  "leaf_correct_strict": 36,
+  "leaf_correct_strict_rate": 0.13432835820895522,
   "avg_top_tie": 3.08955223880597,
   "rows": [
     {
@@ -1191,7 +1191,7 @@
       "episode_id": 84071010,
       "agent": "mega_lucario",
       "correct": [
-        1
+        0
       ],
       "values": [
         107.67500000000001,
@@ -1204,12 +1204,12 @@
       "scored": 6,
       "n_options": 6,
       "unscorable": false,
-      "correct_value": 7000,
+      "correct_value": 107.67500000000001,
       "top_value": 7000,
-      "correct_is_top": true,
-      "correct_is_unique_top": true,
-      "correct_rank": 1,
-      "outscored_by": 0,
+      "correct_is_top": false,
+      "correct_is_unique_top": false,
+      "correct_rank": 2,
+      "outscored_by": 1,
       "top_tie": 1
     },
     {
