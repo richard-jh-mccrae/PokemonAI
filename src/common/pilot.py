@@ -207,9 +207,10 @@ _SNIPE_THREAT_PRIZE_FLOOR = 5   # deny an ENERGIZED off-Prize-Path attacker (don
                            # threat will bleed my prizes before I close; below it I race my committed path
                            # (ms f39 snipe @6 vs 83667237-107 stand-down @4, symmetric boards). Calibrated
                            # on 2 corrections — a ladder-tuned floor.
-_HAND_SIZE_ATTACKER_BOOST = 500  # snipe-rank boost for a benched body whose evolution line CERTAINLY
-                           # reaches a hand-size attacker (Kadabra→Alakazam "Powerful Hand") — latent
-                           # win-condition hidden by low printed damage. `hand_size_attacker` Function Tag.
+# `_HAND_SIZE_ATTACKER_BOOST` (a flat +500 for a line reaching a hand-size attacker) was DELETED by
+# Issue #213. It was a proxy for a fact `_threat_damage_pair` now computes exactly, so keeping both
+# would double-count one card fact; and as a flat constant keyed off a Function Tag covering exactly
+# one card in the pool, it could never generalise to any other scaling attacker.
 _PREVENT_EX_SNIPE_BOOST = 500  # snipe-rank boost for a benched body whose line reaches a Pokémon that
                            # PREVENTS my ex attacker's damage (`prevent_ex_damage`, e.g. Dwebble→Crustle) —
                            # hard counter once evolved, snipe the fragile pre-evo NOW (ep82225138 f46).
@@ -1183,7 +1184,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
-                 deny_strip_delta=False, deny_relevance=False):
+                 deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1359,6 +1360,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # curve decide. OFF = today's behavior exactly (the
                                                         # boolean block fires); ON only ever narrows when
                                                         # relax is allowed (fail-scared preserved either way)
+        self.scaled_threat_rank = scaled_threat_rank    # Issue #213 kill-switch: the threat rank and the
+                                                        # forced-promotion read price a body through the
+                                                        # Damage Formula against the live board instead of
+                                                        # printed `maxDamage`, so a hand-size or
+                                                        # combined-bench attacker ranks by what it would
+                                                        # really hit for. Retires the flat
+                                                        # `_HAND_SIZE_ATTACKER_BOOST` proxy, which covered
+                                                        # exactly one card. OFF = the historical
+                                                        # printed-only read, byte-for-byte.
         self.gust_target_slots = gust_target_slots      # ADR-0076 kill-switch: generalizes `deny_slot` to
                                                         # a second instrument — held gust-effect Trainer
                                                         # cards (Guzma/Boss's-Orders-class) keep-price
@@ -5188,6 +5198,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                "atk_active_energy": len((aa or {}).get("energies") or []),
                "atk_bench": sum(1 for p in (atk.get("bench") or []) if p),
                "def_bench": sum(1 for p in (dfn.get("bench") or []) if p),
+               # `both_` is the THIRD direction class beside atk_/def_ (Issue #213): a variable
+               # counting BOTH sides at once ("for each Benched Pokemon (both yours and your
+               # opponent's)"). The sum is direction-symmetric, so ONE key is correct whichever
+               # side attacks — no mirroring, and the oracle keeps a single lookup per scaler.
+               "both_bench": (sum(1 for p in (atk.get("bench") or []) if p)
+                              + sum(1 for p in (dfn.get("bench") or []) if p)),
                "atk_discard_energy_total": total,
                "atk_discard_basic_by_type": by_type,
                "atk_bench_names": bench_names,
@@ -7034,16 +7050,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if cid is None:
             return 0.0
         stat = self.stats.get(cid) if self.stats else None
-        own = stat.maxDamage if stat else 0
-        fwd_fn = getattr(self.stats, "forward_max_damage", None)
-        fwd = (fwd_fn(cid) or 0) if fwd_fn is not None else 0
+        own, fwd = self._threat_damage_pair(cid, stat)
         fwd = self._read_modulated_forward(cid, fwd, read, gamma)   # lever C (ADR-0026): Read-accurate forward
         rank = float(max(own, fwd))
         rank += 0.001 * own                                   # more-evolved tie-break (Drakloak>Dreepy)
         if self.functions:
             line = {cid} | self._forward_card_ids(cid)
-            if any("hand_size_attacker" in self.functions.tags(i) for i in line):
-                rank += _HAND_SIZE_ATTACKER_BOOST
             my_active = self.stats.get(self._my_active_id(obs)) if self.stats else None
             if (my_active and my_active.is_ex_body                    # I attack with an ex/Mega ex …
                     and any("prevent_ex_damage" in self.functions.tags(i) for i in line)):  # … can't touch
@@ -7051,6 +7063,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if poke.get("energies"):                              # energized = imminent: a higher snipe tier
             rank += _ENERGIZED_SNIPE_TIER
         return rank
+
+    def _threat_damage_pair(self, cid, stat) -> tuple[float, float]:
+        """``(own, forward)`` damage for the threat rank — the body's own biggest hit and the
+        biggest its line evolves into.
+
+        ``scaled_threat_rank`` ON (Issue #213) prices both through the Damage Formula against the
+        live board (``CombatMath.threat_ceiling`` / ``forward_threat_ceiling``), so a scaling
+        attacker is ranked by what it would actually hit for. OFF reproduces the historical
+        PRINTED-only read (``CardStat.maxDamage`` + the provider's forward index) byte-for-byte,
+        as the flag's incident lever.
+
+        The printed read is why this needed fixing: it drops the Damage Formula's whole
+        ``per_unit x count(variable)`` term, so Alakazam ranks at its forward index's 10 and
+        Lillie's Clefairy ex at 20 — and the flat `_HAND_SIZE_ATTACKER_BOOST` that used to paper
+        over the first of those covered exactly one card in the pool and nothing else.
+        """
+        if not self.scaled_threat_rank:
+            fwd_fn = getattr(self.stats, "forward_max_damage", None)
+            return (float(stat.maxDamage if stat else 0),
+                    float((fwd_fn(cid) or 0) if fwd_fn is not None else 0))
+        ctx = getattr(self, "_opp_attack_context", None)
+        return (float(self.combat.threat_ceiling(cid, context=ctx)),
+                float(self.combat.forward_threat_ceiling(cid, context=ctx)))
 
     def _forward_card_ids(self, cid: int | None) -> frozenset:
         """Card ids the snipe target's evolution line evolves INTO (provider primitive; empty when no
@@ -7090,9 +7125,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Bench (printed max damage, energy-INDEPENDENT — they promote the win-condition and accelerate
         it, not the energized bench-sitter that merely happens to be affordable now). Returns
         ``id(body)`` for exact, duplicate-safe matching against the snipe option; None when not doomed
-        / no benched attacker / no provider. NOTE: blind to hand-size-scaling attackers (Alakazam's
-        printed 10 hides the real threat) — the ms f85 gap, deferred to a `forward_max_damage`/provider
-        fix so `_body_threat_rank`'s hand-size boost is reflected here without over-counting pre-evos.
+        / no benched attacker / no provider. Damage is priced by the same scaled read the snipe rank
+        uses (``_threat_damage_pair``), which closes the ms f85 gap this used to defer: printed damage
+        hid a hand-size attacker's whole threat, so Alakazam's line read 10.
 
         READY means it can actually ATTACK next turn — attached Energy plus the one manual attach they
         will make reaches some attack's cost. "Energy-INDEPENDENT" was only ever meant to say 'they
@@ -7107,7 +7142,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if not b:
                 continue
             stat = self.stats.get(b.get("id"))
-            own = stat.maxDamage if stat else 0
+            own = self._threat_damage_pair(b.get("id"), stat)[0]
             if own <= 0:
                 continue
             if getattr(stat, "tera", False):
@@ -7317,9 +7352,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         bridge for routing survival through the ONE Threat-Clock curve. Deciding NOTHING.
 
         Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) or with no live my-Active
-        vs opp-Active to read. The two divergences the sweep of this bit adjudicates before any swap:
-        the current-form affordability gate (`can_pay_cheapest`) and the omitted `hand_size_attacker`
-        forward counter — ADR-0064 §2 kept `active_doomed` unconditionally worst-case.
+        vs opp-Active to read. ONE divergence remains for the sweep to adjudicate before any swap:
+        the current-form affordability gate (`can_pay_cheapest`) — ADR-0064 §2 kept `active_doomed`
+        unconditionally worst-case. The hand-size counter was listed as a second divergence and was
+        not one; see `CombatMath.doomed_incoming` (Issue #213).
 
         Post-swap fields (the doom-shadow grill, 2026-07-23 — `doom_matched_relax`): `doom_old` is
         the worst-case oracle COMPUTED FRESH (the Board bit is now the decided value, not the

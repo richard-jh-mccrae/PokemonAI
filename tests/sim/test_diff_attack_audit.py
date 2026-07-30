@@ -24,7 +24,9 @@ ATTACKS = {
     1488: AttackStat(attackId=1488, damage=210, cost=3,
                      ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
     1487: AttackStat(attackId=1487, damage=120, cost=1, benchSnipe=50),
-    1072: AttackStat(attackId=1072, damage=0, cost=1, handSizeDamage=20),
+    # Powerful Hand: `handSizeDamage` is DERIVED from the scaling term now (Issue #213), so the
+    # fixture states the underlying fact rather than the roll-up.
+    1072: AttackStat(attackId=1072, damage=0, cost=1, scaleVar="atk_hand", scalePerUnit=20),
     142: AttackStat(attackId=142, damage=40, cost=1, damageMin=0, damageMax=40),
     123: AttackStat(attackId=123, damage=0, cost=3, scaleVar="atk_hand", scalePerUnit=30),
 }

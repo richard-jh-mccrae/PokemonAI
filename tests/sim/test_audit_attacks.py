@@ -335,6 +335,21 @@ def test_error_record_is_an_explicit_ledger_entry():
     assert "no resistant defender" in e["error"]
 
 
+@pytest.mark.req("REQ-AUDIT-0006")
+def test_a_failed_sweep_point_survives_the_merge_instead_of_being_swallowed():
+    # An error record that forgot its sweep shares a record_key with the plain panel record on
+    # the same scenario — and since an error never clobbers a success, it silently disappears.
+    # That is a silent skip, which is precisely what the ledger exists to prevent. Adding bench
+    # sweeps put ten points on `vanilla`, so the collision went from rare to routine.
+    ok = _rec(scenario="vanilla", sweep=None)
+    failed = error_record(1488, 1031, "vanilla", "match ended before the attack could fire",
+                          {"var": "atk_bench", "step": 2})
+    assert record_key(failed) != record_key(ok)
+    merged = merge_records([ok], [failed])
+    assert len(merged) == 2
+    assert any("error" in m for m in merged)
+
+
 @pytest.mark.req("REQ-AUDIT-0007")
 def test_merge_unions_by_key_and_new_measurement_wins():
     old = _rec(damage={"dealtActive": 100, "dealtBench": [], "dealtSelf": 0,

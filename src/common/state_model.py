@@ -775,8 +775,16 @@ class TheirSide(_SideBase):
     def incoming(self, my_body: dict | None, t: int = 1, *, evo_min_energy: int = 0,
                  context: dict | None = None) -> int:
         """Worst W/R-adjusted damage their affordable attackers could deal ``my_body`` at future turn
-        ``t`` — the Threat-Clock curve, memoized per ``(body, t)``. ``t=1`` is Reachable Incoming."""
-        key = ("incoming", id(my_body) if my_body is not None else None, t, evo_min_energy)
+        ``t`` — the Threat-Clock curve, memoized per ``(body, t, context)``. ``t=1`` is Reachable
+        Incoming.
+
+        ``context`` is part of the memo key (Issue #213): it prices every scaling attack, so two
+        callers passing different contexts must not share one answer. Latent while a single caller
+        threads one per-decision context, but the scaling term is load-bearing now that the threat
+        reads price the Damage Formula, and a memo that silently ignores an argument is a trap.
+        """
+        key = ("incoming", id(my_body) if my_body is not None else None, t, evo_min_energy,
+               id(context) if context is not None else None)
         return self._memoized(key, lambda: self._combat.incoming(
             my_body, self.body_raws, t, forward_ids=self._forward_ids,
             charged=self._charged, evo_min_energy=evo_min_energy, context=context))

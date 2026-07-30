@@ -265,10 +265,17 @@ def shape_record(*, attack_id: int, attacker_id: int, scenario: str, printed: in
             "coinLogs": damage["coinLogs"], "coin": coin, "sweep": sweep}
 
 
-def error_record(attack_id: int, attacker_id: int | None, scenario: str, msg: str) -> dict:
-    """Explicit could-not-measure ledger entry (REQ-AUDIT-0006)."""
+def error_record(attack_id: int, attacker_id: int | None, scenario: str, msg: str,
+                 sweep: dict | None = None) -> dict:
+    """Explicit could-not-measure ledger entry (REQ-AUDIT-0006).
+
+    Carries the SWEEP point it failed on. Without it every failed sweep on a given scenario
+    shares one :func:`record_key` with the plain panel record, and since an error never clobbers
+    a success, the failure is silently dropped — a silent skip, which is the one thing this
+    ledger exists to prevent.
+    """
     return {"attackId": attack_id, "attackerCardId": attacker_id, "scenario": scenario,
-            "coin": None, "sweep": None, "error": msg}
+            "coin": None, "sweep": sweep, "error": msg}
 
 
 def record_key(rec: dict) -> tuple:
@@ -488,6 +495,12 @@ class _SetupMiss(Exception):
     can never come online, so abort fast and retry on a fresh shuffle."""
 
 
+class _BenchMiss(Exception):
+    """A seat never reached its requested bench count within bench patience, so this shuffle
+    cannot produce a CONTROLLED point — retry. The last attempt accepts what it got and records
+    the actual counts: an uncontrolled point is dropped by the axis rules, never trusted."""
+
+
 def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cost,
                      extra_energy, delay_turns, cards, max_steps, bench_patience=10,
                      atk_bench=None, def_bench=None):
@@ -676,11 +689,13 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
     cards = cards or card_pool()
     info = attack_index().get(attack_id)
     if info is None or info["owner"] is None:
-        return [error_record(attack_id, None, plan["scenario"], "unknown attack or no owner card")]
+        return [error_record(attack_id, None, plan["scenario"],
+                             "unknown attack or no owner card", plan.get("sweep"))]
     attacker_id = info["owner"]
     if plan["defender"] is None:
         return [error_record(attack_id, attacker_id, plan["scenario"],
-                             "no qualifying defender in the pool for this scenario")]
+                             "no qualifying defender in the pool for this scenario",
+                             plan.get("sweep"))]
     atk_chain = evolution_chain(attacker_id, cards)
     def_chain = evolution_chain(plan["defender"], cards)
     own = cards[attacker_id].get("energyType") or 3         # colorless attacker -> Water
@@ -699,7 +714,7 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
         if getattr(start, "errorPlayer", -1) >= 0 or obs is None:
             battle_finish()
             return [error_record(attack_id, attacker_id, plan["scenario"],
-                                 "battle_start rejected the decks")]
+                                 "battle_start rejected the decks", plan.get("sweep"))]
         try:
             pre = _drive_to_attack(battle_select, obs, attack_id=attack_id, atk_chain=atk_chain,
                                    def_chain=def_chain, cost=info["energies"],
@@ -710,18 +725,26 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
                                    def_bench=plan.get("def_bench"))
             bench_size = len(board_snapshot(pre, 1)["bench"])
             atk_bench_size = len(board_snapshot(pre, 0)["bench"])
+            if attempt < 5 and (atk_bench_size, bench_size) != (
+                    _bench_target(0, plan.get("atk_bench")),
+                    _bench_target(1, plan.get("def_bench"))):
+                raise _BenchMiss()                  # uncontrolled point -- reshuffle and retry
             fork = _coin_fork(pre, attack_id, atk_deck, def_deck) if coin_fork else None
             damage, energies, hand_size = _fire_and_measure(battle_select, pre, attack_id)
             break
+        except _BenchMiss:
+            continue                                # fresh shuffle; attempt 5 accepts what it got
         except _SetupMiss:
             if attempt == 5:
                 return [error_record(attack_id, attacker_id, plan["scenario"],
-                                     "defender setup kept missing its chain basic")]
+                                     "defender setup kept missing its chain basic",
+                                     plan.get("sweep"))]
         except _Timeout as e:
-            return [error_record(attack_id, attacker_id, plan["scenario"], str(e))]
+            return [error_record(attack_id, attacker_id, plan["scenario"], str(e),
+                                 plan.get("sweep"))]
         except Exception as e:                              # never a silent skip
             return [error_record(attack_id, attacker_id, plan["scenario"],
-                                 f"{type(e).__name__}: {e}")]
+                                 f"{type(e).__name__}: {e}", plan.get("sweep"))]
         finally:
             battle_finish()
     common = dict(attack_id=attack_id, attacker_id=attacker_id, scenario=plan["scenario"],

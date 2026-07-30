@@ -21,11 +21,18 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
     before closing (and is the actual corpus evidence backing "swept clean" for BOTH flags, not
     just `gust_target_slots` — a gap the code-review Spec pass on #186 caught).
 
-    python tools/train/probes/threat_sweep.py            # all four
+  * RANK     (Issue #213) — the scaled threat rank A/B: each frame decided by a forced-OFF pilot
+    (the retired printed-`maxDamage` read plus its flat hand-size boost) and a forced-ON one (each
+    body priced through the Damage Formula against the live board), flagging any DECIDED-pick
+    difference. This is the ADR-0072 Decision Gate for that swap; both sides are forced explicitly
+    so it stays an A/B after the PROFILE ships the flag ON.
+
+    python tools/train/probes/threat_sweep.py            # all five
     python tools/train/probes/threat_sweep.py --doom     # doom only
     python tools/train/probes/threat_sweep.py --recur
     python tools/train/probes/threat_sweep.py --target
     python tools/train/probes/threat_sweep.py --slots
+    python tools/train/probes/threat_sweep.py --rank     # Issue #213 Decision Gate
 
 Offline and read-only.
 """
@@ -89,7 +96,7 @@ def sweep_doom(tune, frames) -> None:
                   f"{str(s.get('doom_final', s['doom_old'])):<6} "
                   f"{'AGREE' if s['agree'] else 'DISAGREE'}{' FLIP' if flip else ''}")
     print(f"\nDOOM: agree {agree}/{total}  |  disagree {total - agree} "
-          f"(incumbent-doomed-only={old_only} [curve LESS pessimistic — affordability/hand-size gate], "
+          f"(incumbent-doomed-only={old_only} [curve LESS pessimistic — the affordability gate], "
           f"curve-doomed-only={new_only})  |  matched-relax decided on {decided}, "
           f"final flipped vs worst-case on {flipped}\n")
 
@@ -159,6 +166,34 @@ def sweep_slots(tune, frames) -> None:
           f"recur_fuel_relax flips={recur_flips}  (unreplayable={errors})\n")
 
 
+def sweep_rank(tune, frames) -> None:
+    """RANK (Issue #213) — the ADR-0072 Decision Gate for the scaled threat rank.
+
+    Replays each frame through a forced-OFF and a forced-ON pilot and flags any frame whose DECIDED
+    pick differs. OFF is the retired printed-only read (`CardStat.maxDamage` + the provider's
+    printed forward index, plus the flat `_HAND_SIZE_ATTACKER_BOOST` that shipped with it); ON
+    prices each body through the Damage Formula against the live board.
+
+    Both sides are forced explicitly rather than leaning on the shipped default, so the comparison
+    stays an A/B even after the PROFILE flips the flag ON.
+    """
+    total = flips = errors = 0
+    for (ep, fr), rec in frames:
+        try:
+            d_off = _forced(tune, rec, scaled_threat_rank=False)
+            d_on = _forced(tune, rec, scaled_threat_rank=True)
+        except Exception:
+            errors += 1
+            continue
+        total += 1
+        if d_off.chosen != d_on.chosen:
+            flips += 1
+            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} scaled_threat_rank "
+                  f"off={d_off.chosen} on={d_on.chosen}  DISAGREE")
+    print(f"\nRANK: frames checked={total}  scaled_threat_rank flips={flips}  "
+          f"(unreplayable={errors})\n")
+
+
 def main(argv=None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -169,8 +204,9 @@ def main(argv=None) -> int:
     ap.add_argument("--recur", action="store_true")
     ap.add_argument("--target", action="store_true")
     ap.add_argument("--slots", action="store_true")
+    ap.add_argument("--rank", action="store_true")
     args = ap.parse_args(argv)
-    run_all = not (args.doom or args.recur or args.target or args.slots)
+    run_all = not (args.doom or args.recur or args.target or args.slots or args.rank)
     tune, frames = _tune(), _frames()
     if args.doom or run_all:
         sweep_doom(tune, frames)
@@ -180,6 +216,8 @@ def main(argv=None) -> int:
         sweep_target(tune, frames)
     if args.slots or run_all:
         sweep_slots(tune, frames)
+    if args.rank or run_all:
+        sweep_rank(tune, frames)
     return 0
 
 

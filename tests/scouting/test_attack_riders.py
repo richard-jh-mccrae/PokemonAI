@@ -6,8 +6,9 @@ direction). Samples are real card text from `data/EN_Card_Data.csv`.
 import pytest
 
 from common.scouting.provider import (
-    parse_attack_bench_snipe, parse_attack_bench_spread, parse_attack_hand_size,
-    parse_attack_ignores_active_effects, parse_attack_recoil, parse_attack_self_return)
+    parse_attack_bench_snipe, parse_attack_bench_spread,
+    parse_attack_ignores_active_effects, parse_attack_recoil, parse_attack_scaling,
+    parse_attack_self_return)
 
 
 @pytest.mark.req("REQ-GUST-0006")
@@ -102,8 +103,12 @@ def test_parse_attack_bench_spread(text, expected):
     ("This Pokémon also does 50 damage to itself.", 0),                  # recoil, not a hand-size rider
     ("", 0),
 ])
-def test_parse_attack_hand_size(text, expected):
-    assert parse_attack_hand_size(text) == expected
+def test_hand_size_damage_comes_from_the_one_scaling_parse(text, expected):
+    # Issue #213: the dedicated hand-size regex pair is retired. The Damage Formula's scaling
+    # term is now the single parse of this sentence, and `AttackStat.handSizeDamage` derives from
+    # it — so the two can no longer disagree, and an engine-fitted `atk_hand` override moves both.
+    scale = parse_attack_scaling(text)
+    assert (scale[1] if scale and scale[0] == "atk_hand" else 0) == expected
 
 
 @pytest.mark.req("REQ-LETHAL-0012")

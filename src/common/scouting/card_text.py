@@ -124,11 +124,6 @@ def _parse_retreat_free_grant(card):
 _RECOIL_RE = re.compile(r"This Pok.mon (?:also )?does (\d+) damage to itself\.?$")
 _BENCH_SNIPE_RE = re.compile(
     r"This attack also does (\d+) damage to 1 of your opponent.s Benched Pok.mon\.?$")
-# "For each card in hand" attacker (Powerful Hand): printed damage=0, invisible w/o text parse.
-# Counter-placement = N×10, ignores W/R; rarer "does N dmg for each card" is direct damage.
-_HAND_SIZE_COUNTERS_RE = re.compile(
-    r"Place (\d+) damage counters? on your opponent.s Active Pok.mon for each card in your hand\.?$")
-_HAND_SIZE_DAMAGE_RE = re.compile(r"does (\d+) (?:more )?damage for each card in your hand\.?$")
 _DAMAGE_PER_COUNTER = 10
 # Dmg "isn't affected by...effects on opponent's Active" (Nebula Beam) bypasses a damage-
 # PREVENTION Ability (Mysterious Rock Inn) combat math otherwise treats as an absolute wall.
@@ -176,29 +171,6 @@ def parse_attack_ignores_active_effects(text: str) -> bool:
     ex-attack damage) — the ep83054602 f17 missed win. Any other attack → False (the SAFE direction:
     under-crediting never wrongly upgrades a whiff to a KO)."""
     return bool(_IGNORES_ACTIVE_EFFECTS_RE.search((text or "").replace("\n", " ")))
-
-
-def parse_attack_hand_size(text: str) -> int:
-    """Per-card DAMAGE of a 'for each card in your hand' attack — the threat the printed `damage` (0)
-    hides. Alakazam's Powerful Hand "Place 2 damage counters … for each card in your hand" → 2×10 = 20;
-    a direct "does N damage for each card in your hand" → N. Counter placement ignores Weakness/
-    Resistance (counters are not 'damage'). 0 for any other attack. The forward-doom / Posture read
-    multiplies this by the opponent's hand size (ep82754875 f52).
-
-    Args:
-        text: the attack's free-text effect.
-
-    Returns:
-        The per-card damage (counter count × 10, or direct damage), else 0.
-    """
-    for sent in _sentences(text):
-        m = _HAND_SIZE_COUNTERS_RE.match(sent)
-        if m:
-            return int(m.group(1)) * _DAMAGE_PER_COUNTER
-        m = _HAND_SIZE_DAMAGE_RE.search(sent)
-        if m:
-            return int(m.group(1))
-    return 0
 
 
 # Defender ability families (ADR-0032 G1). Pool-verified: 2 prevent-from-ex (Sylveon 330 was
