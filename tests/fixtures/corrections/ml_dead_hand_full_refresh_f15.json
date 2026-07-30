@@ -242,5 +242,13 @@
     0
   ],
   "correct_label": "Play Team Rocket's Petrel",
-  "rationale": "Missed lethal (DoD re-tag 2026-07-13): the deterministic turn-3 WIN is Petrel -> tutor Air Balloon -> attach to Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80, opp bench empty. The recorded correct=[1] Lillie's was the refuted dead-hand framing (a stochastic redraw, not the sound line). decide() already plays [0]; the fix is that the Lethal Solver must LOCK the win (planned.goal=='win', next_step=[0]) so the veto-replay drives the whole cascade."
+  "rationale": "Missed lethal (DoD re-tag 2026-07-13): the deterministic turn-3 WIN is Petrel -> tutor Air Balloon -> attach to Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80, opp bench empty. The recorded correct=[1] Lillie's was the refuted dead-hand framing (a stochastic redraw, not the sound line). decide() already plays [0]; the fix is that the Lethal Solver must LOCK the win (planned.goal=='win', next_step=[0]) so the veto-replay drives the whole cascade.",
+  "frame_key": "84071010|0|decision|15",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ]
+    }
+  }
 }

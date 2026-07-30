@@ -286,3 +286,209 @@ def test_decision_gate_fails_on_unruled_regression_frames_only():
     assert decision_gate_verdict([{"key": "a", "verdict": "REGRESSION"}], held_out={}) is False
     assert decision_gate_verdict([{"key": "a", "verdict": "REGRESSION"}],
                                  held_out={"a": "#165"}) is True
+
+# ── Claim Agreement — a fixture's ruling must match its Correction's (ADR-0082) ────────────────────
+#
+# ADR-0072 made a re-ruling a STATE the instruments read, but only for the fixtures that adopted its
+# `claims` block. The two generations were measured (ADR-0082) as perfectly disjoint: 34 fixtures
+# carried a loose `episode`+`frame` pair and ZERO `claims`; 8 carried a `frame_key` and ALL 8 had
+# `claims`. Every re-ruling captured in a `claims` block survived; the two that were lost were in the
+# generation with nowhere to record one. This gate is the invariant that makes losing one loud.
+
+
+def _corr(tmp_path, *, episode=1, seat=0, frame=5, correct=(1,), obs=None, scope="decision"):
+    """One committed Correction on disk, minimal but real enough for `Correction.from_dict`."""
+    import json
+    rec = {"id": f"c{episode}{frame}", "source": "own", "episode_id": episode, "seat": seat,
+           "agent": "mega_starmie", "submission_id": None, "agent_version": None,
+           "episode_time": None, "tagged_at": "2026-01-01T00:00:00+00:00",
+           "decision": {"frame": frame, "turn": 3}, "chosen": [0], "chosen_label": "x",
+           "correct": list(correct), "correct_label": "y", "category": "wasted_resource",
+           "attribution": None, "rationale": "r", "scope": scope,
+           "obs": obs if obs is not None else {"current": {"turn": 3}}}
+    store = tmp_path / "corrections" / "agent_20260101_abc"
+    store.mkdir(parents=True, exist_ok=True)
+    with (store / "corrections.jsonl").open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(rec) + "\n")
+    return tmp_path / "corrections"
+
+
+def _fixture_file(tmp_path, name, payload):
+    import json
+    d = tmp_path / "fixtures"
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{name}.json").write_text(json.dumps(payload), encoding="utf-8")
+    return d
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_a_fixture_agreeing_with_its_correction_raises_nothing():
+    """The green case. Same `correct`, same obs — nothing to report."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, correct=(1,))
+    fx = _fixture_file(tmp, "ok", {"frame_key": "1|0|decision|5", "claims": {"decision": {"correct": [1]}},
+                                   "obs": {"current": {"turn": 3}}})
+    assert gates.claim_agreement(fixtures_dir=fx, store=store) == []
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_an_undeclared_disagreement_is_reported():
+    """The defect the gate exists for: the fixture asserts one pick, the corpus records another, and
+    nothing on the fixture says why. This is `ms_doom_relax_bare_terapagos_f29` in miniature."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, correct=(10,))
+    fx = _fixture_file(tmp, "stale", {"frame_key": "1|0|decision|5",
+                                      "claims": {"decision": {"correct": [2]}},
+                                      "obs": {"current": {"turn": 3}}})
+    found = gates.claim_agreement(fixtures_dir=fx, store=store)
+    assert [f["kind"] for f in found] == ["disagreement"]
+    assert found[0]["claim"] == [2] and found[0]["record"] == [10]
+    assert found[0]["fixture"] == "stale.json"
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_an_owner_declares_the_divergence_and_clears_it():
+    """Escape 1 — a **Held-out Frame**. `dragapult_hammer_over_develop_f32` is the live instance: its
+    Decision Claim is `[3]` against a recorded `[1]`, ruled onto #165 on 2026-07-25. Deleting the
+    owner returns it to gating, exactly as ADR-0072 decision 4 specifies."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, correct=(1,))
+    payload = {"frame_key": "1|0|decision|5", "obs": {"current": {"turn": 3}},
+               "claims": {"decision": {"correct": [3], "owner": "#165", "ruled": "2026-07-25",
+                                       "why": "re-ruled to the Turn Planner"}}}
+    fx = _fixture_file(tmp, "heldout", payload)
+    assert gates.claim_agreement(fixtures_dir=fx, store=store) == []
+
+    del payload["claims"]["decision"]["owner"]                     # ... but `ruled`+`why` remain
+    fx = _fixture_file(tmp, "heldout", payload)
+    assert gates.claim_agreement(fixtures_dir=fx, store=store) == []   # escape 2 still covers it
+
+    payload["claims"]["decision"] = {"correct": [3]}               # strip BOTH declarations
+    fx = _fixture_file(tmp, "heldout", payload)
+    assert [f["kind"] for f in gates.claim_agreement(fixtures_dir=fx, store=store)] == ["disagreement"]
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_a_dated_why_declares_a_re_ruling_recorded_on_the_fixture():
+    """Escape 2 — a re-ruling the fixture records itself, with a date and a reason but no owner (it is
+    not held out of anything; it simply departs). `dp_hold_evolve_until_typed_ready_f35` is the shape.
+    A `why` with NO date does not clear it: an undated claim cannot be audited against the record."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, correct=(1,))
+    fx = _fixture_file(tmp, "reruled", {"frame_key": "1|0|decision|5", "obs": {"current": {"turn": 3}},
+                                        "claims": {"decision": {"correct": [3], "ruled": "2026-07-26",
+                                                                "why": "RE-RULED: Poke Pad first"}}})
+    assert gates.claim_agreement(fixtures_dir=fx, store=store) == []
+
+    fx = _fixture_file(tmp, "reruled", {"frame_key": "1|0|decision|5", "obs": {"current": {"turn": 3}},
+                                        "claims": {"decision": {"correct": [3],
+                                                                "why": "no date on this one"}}})
+    assert [f["kind"] for f in gates.claim_agreement(fixtures_dir=fx, store=store)] == ["disagreement"]
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_a_frame_key_naming_no_committed_correction_is_reported():
+    """A dangling join — a typo'd key, or a record that left the corpus. Silent here would defeat the
+    whole gate: an unresolvable key reads exactly like a fixture with nothing to disagree with."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, episode=1, frame=5)
+    fx = _fixture_file(tmp, "dangling", {"frame_key": "1|0|decision|999",
+                                         "claims": {"decision": {"correct": [1]}},
+                                         "obs": {"current": {"turn": 3}}})
+    found = gates.claim_agreement(fixtures_dir=fx, store=store)
+    assert [f["kind"] for f in found] == ["no_record"]
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_the_adr_0050_reseeding_keys_are_not_obs_drift():
+    """Five committed fixtures carry `own_prizes` + `search_begin_input` their Correction's snapshot
+    does not — the ADR-0050 seeding that lets the offline sim replay them. That changes HOW a fixture
+    replays, never WHAT the human ruled, so a byte-compare would report five phantom divergences."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, obs={"current": {"turn": 3}})
+    fx = _fixture_file(tmp, "seeded", {"frame_key": "1|0|decision|5",
+                                       "claims": {"decision": {"correct": [1]}},
+                                       "obs": {"current": {"turn": 3}, "own_prizes": 4,
+                                               "search_begin_input": {"seed": 7}}})
+    assert gates.claim_agreement(fixtures_dir=fx, store=store) == []
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_obs_drift_beyond_the_seeding_keys_is_reported_because_indices_stop_comparing():
+    """`correct` is a list of positional option indices, so comparing it across two different boards
+    is meaningless. A fixture whose board has moved must be reported rather than compared."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, obs={"current": {"turn": 3}})
+    fx = _fixture_file(tmp, "drifted", {"frame_key": "1|0|decision|5",
+                                        "claims": {"decision": {"correct": [1]}},
+                                        "obs": {"current": {"turn": 9}}})
+    assert [f["kind"] for f in gates.claim_agreement(fixtures_dir=fx, store=store)] == ["obs_drift"]
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_two_fixtures_on_one_frame_key_are_judged_independently():
+    """Legal and load-bearing (ADR-0082): `86091435-35` and `85164605-41` each carry TWO fixtures —
+    a doom shadow beside a re-ruled pick, a planner commitment beside a held-out indifference. So the
+    gate must not assume one fixture per frame, and one bad sibling must not exonerate the other."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, correct=(1,))
+    d = _fixture_file(tmp, "sibling_ok", {"frame_key": "1|0|decision|5",
+                                          "claims": {"decision": {"correct": [1]}},
+                                          "obs": {"current": {"turn": 3}}})
+    _fixture_file(tmp, "sibling_stale", {"frame_key": "1|0|decision|5",
+                                         "claims": {"decision": {"correct": [7]}},
+                                         "obs": {"current": {"turn": 3}}})
+    found = gates.claim_agreement(fixtures_dir=d, store=store)
+    assert [(f["fixture"], f["kind"]) for f in found] == [("sibling_stale.json", "disagreement")]
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_a_fixture_without_a_frame_key_is_skipped_so_the_back_fill_stays_incremental():
+    """`parse_claims`'s back-compat promise, upheld at the gate: declaring a `frame_key` is what opts a
+    fixture in. Without it there is no join, and inventing one from a loose `episode`+`frame` pair
+    would be guessing at ADR-0049's identity."""
+    import tempfile, pathlib
+    tmp = pathlib.Path(tempfile.mkdtemp())
+    store = _corr(tmp, correct=(1,))
+    fx = _fixture_file(tmp, "unkeyed", {"episode": 1, "frame": 5, "correct": [2],
+                                        "obs": {"current": {"turn": 3}}})
+    assert gates.claim_agreement(fixtures_dir=fx, store=store) == []
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_the_committed_corpus_has_no_undeclared_disagreement():
+    """The live invariant, over the real corpus — the reason the gate exists rather than the proof it
+    parses. Any fixture that departs from its Correction must SAY SO, with an owner or a dated why."""
+    found = gates.claim_agreement()
+    assert found == [], "undeclared fixture/record disagreements: " + "; ".join(
+        f"{f['fixture']} {f['kind']} claim={f.get('claim')} record={f.get('record')}" for f in found)
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_a_fixtures_top_level_correct_agrees_with_its_explicit_decision_claim():
+    """The loophole the ADR-0082 back-fill would otherwise open. `parse_claims` PREFERS an explicit
+    `claims` block, but 33 test modules still read `fx["correct"]` directly — so a fixture carrying
+    both must keep them identical, or the gate would check one value while the tests assert the other.
+    Keeping both in sync (rather than deleting `correct`) is what makes the back-fill non-breaking;
+    this is the invariant that makes it safe."""
+    import json
+    from pathlib import Path
+    fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
+    for p in sorted(fixtures.glob("*.json")):
+        fx = json.loads(p.read_text(encoding="utf-8"))
+        block = fx.get("claims") or {}
+        dec = block.get("decision")
+        if dec is None or fx.get("correct") is None:
+            continue
+        claimed = dec if isinstance(dec, list) else dec.get("correct")
+        if claimed is None:
+            continue
+        assert sorted(claimed) == sorted(fx["correct"]), (
+            f"{p.name}: claims.decision.correct {claimed} != top-level correct {fx['correct']}")

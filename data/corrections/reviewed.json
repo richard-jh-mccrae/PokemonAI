@@ -717,5 +717,10 @@
     "disposition": "deferred-multi-turn",
     "reason": "Endgame heal-as-insurance (Healing grill, valuation-systems-coverage). Don't shuffle away the one clutch_heal (Wally's) while behind 5-2 in a 35-card-deck endgame. NOT doomed this turn (my 380 HP > their Nebula 210), so answer_doom correctly does not open; value is multi-turn survival-trajectory x redraw-odds x prize-stakes -> Prize-Race Planner family, same home as b4649. Covered COINCIDENTALLY today (Pilot plays [4] Jetting, Attack dominates; Lillie's [1] -1.6, no held-answer protection) so no live regression. Characterised in docs/todo/deferred-multi-turn-criticals.md (2026-07-21 round). Do NOT add a rung; mine a fresh failing example before building.",
     "round": "2026-07-21"
+  },
+  "82749168-29": {
+    "disposition": "fixed",
+    "reason": "RE-RULED 2026-07-28 in Issue #177's grill (2d647ba): correct [2] attach -> [10] Play Salvatore, a 2-prize KO on Terapagos ex -- Salvatore evolves the benched Staryu played this turn (its printed text permits it), Ignition Energy provides {C}{C}{C} on an Evolution, Cinderace retreats for 0, Nebula Beam 210 >= 130 remaining. Ledgered 2026-07-29 by ADR-0082 decision 4 / Issue #211, which also synced the stale fixture (ms_doom_relax_bare_terapagos_f29 still carried correct=[2]). The shipped Pilot picks [10]. ADR-0062's deny bound is unaffected -- the Hammer still prices exactly -1.25 and _DENIAL_BENCH < 30/70 still holds (ADR-0062 Amendment A).",
+    "round": "2026-07-29"
   }
 }
