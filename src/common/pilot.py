@@ -1140,10 +1140,12 @@ class Decision:
                                      # S1b, docs/plans/opponent-value-equation-unification.md): the
                                      # incumbent `active_doomed` (worst-case, the decider) beside its
                                      # `incoming(t=1)`-curve re-expression (`combat.doomed_incoming`,
-                                     # ceiling policy) + the agreement bit. Surfaces the two known
-                                     # divergences (current-form affordability gate; omitted
-                                     # hand_size_attacker forward counter) for the survival-swap
-                                     # adjudication. Deciding NOTHING — sparse: None mid-sim / no live
+                                     # ceiling policy) + the agreement bit. Surfaces the ONE known
+                                     # divergence (the current-form affordability gate) for the
+                                     # survival-swap adjudication; a second was claimed and RETRACTED
+                                     # (ADR-0064 Amendment A, Issue #213 — the hand-size scaler was
+                                     # always priced by the Damage Formula, on both sides of the
+                                     # comparison). Deciding NOTHING — sparse: None mid-sim / no live
                                      # my-Active vs opp-Active
     recur_shadow: dict | None = None    # the DISCARD-RECUR fuel SHADOW (Threat-Clock unification S2):
                                      # per opponent in-play body whose line refuels from its discard
@@ -5192,18 +5194,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             prize = player.get("prize")
             return max(0, 6 - len(prize)) if prize is not None else 0
 
+        atk_bench = sum(1 for p in (atk.get("bench") or []) if p)
+        dfn_bench = sum(1 for p in (dfn.get("bench") or []) if p)
         ctx = {"atk_hand": atk.get("handCount", len(atk.get("hand") or [])),
                "def_hand": dfn.get("handCount", len(dfn.get("hand") or [])),
                "def_active_energy": len((da or {}).get("energies") or []),
                "atk_active_energy": len((aa or {}).get("energies") or []),
-               "atk_bench": sum(1 for p in (atk.get("bench") or []) if p),
-               "def_bench": sum(1 for p in (dfn.get("bench") or []) if p),
+               "atk_bench": atk_bench,
+               "def_bench": dfn_bench,
                # `both_` is the THIRD direction class beside atk_/def_ (Issue #213): a variable
                # counting BOTH sides at once ("for each Benched Pokemon (both yours and your
                # opponent's)"). The sum is direction-symmetric, so ONE key is correct whichever
                # side attacks — no mirroring, and the oracle keeps a single lookup per scaler.
-               "both_bench": (sum(1 for p in (atk.get("bench") or []) if p)
-                              + sum(1 for p in (dfn.get("bench") or []) if p)),
+               "both_bench": atk_bench + dfn_bench,
                "atk_discard_energy_total": total,
                "atk_discard_basic_by_type": by_type,
                "atk_bench_names": bench_names,
@@ -7064,6 +7067,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rank += _ENERGIZED_SNIPE_TIER
         return rank
 
+    def _threat_own_damage(self, cid, stat) -> float:
+        """A body's OWN biggest hit — see :meth:`_threat_damage_pair` for the two policies.
+
+        Split out because ``_forced_promotion_key`` wants only this half, per benched body: asking
+        for the pair there would walk each line's forward forms and throw the answer away.
+        """
+        if not self.scaled_threat_rank:
+            return float(stat.maxDamage if stat else 0)
+        return float(self.combat.threat_ceiling(
+            cid, context=getattr(self, "_opp_attack_context", None)))
+
     def _threat_damage_pair(self, cid, stat) -> tuple[float, float]:
         """``(own, forward)`` damage for the threat rank — the body's own biggest hit and the
         biggest its line evolves into.
@@ -7079,13 +7093,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Lillie's Clefairy ex at 20 — and the flat `_HAND_SIZE_ATTACKER_BOOST` that used to paper
         over the first of those covered exactly one card in the pool and nothing else.
         """
+        own = self._threat_own_damage(cid, stat)
         if not self.scaled_threat_rank:
             fwd_fn = getattr(self.stats, "forward_max_damage", None)
-            return (float(stat.maxDamage if stat else 0),
-                    float((fwd_fn(cid) or 0) if fwd_fn is not None else 0))
-        ctx = getattr(self, "_opp_attack_context", None)
-        return (float(self.combat.threat_ceiling(cid, context=ctx)),
-                float(self.combat.forward_threat_ceiling(cid, context=ctx)))
+            return own, float((fwd_fn(cid) or 0) if fwd_fn is not None else 0)
+        return own, float(self.combat.forward_threat_ceiling(
+            cid, context=getattr(self, "_opp_attack_context", None)))
 
     def _forward_card_ids(self, cid: int | None) -> frozenset:
         """Card ids the snipe target's evolution line evolves INTO (provider primitive; empty when no
@@ -7142,7 +7155,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if not b:
                 continue
             stat = self.stats.get(b.get("id"))
-            own = self._threat_damage_pair(b.get("id"), stat)[0]
+            own = self._threat_own_damage(b.get("id"), stat)
             if own <= 0:
                 continue
             if getattr(stat, "tera", False):

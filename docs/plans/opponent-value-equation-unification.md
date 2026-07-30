@@ -369,9 +369,15 @@ nothing — the adjudication evidence:
 
 - **DOOM (S1b `threat_shadow`): agree 259/274 (94.5%); 15 disagreements, ALL one direction** —
   incumbent-doomed-only, the curve LESS pessimistic, every one with `incoming=0`. These are exactly the
-  two documented divergences (the current-form affordability gate + the omitted `hand_size_attacker`
-  forward counter): the curve refuses to cry doom when the opponent's Active provably can't afford an
-  attack next turn. **This 15-frame set is the survival-swap adjudication list** — each needs a
+  ONE documented divergence — the current-form affordability gate: the curve refuses to cry doom when
+  the opponent's Active provably can't afford an attack next turn.
+
+  > **Retraction (2026-07-30, Issue #213 / ADR-0064 Amendment A).** This paragraph used to name a
+  > second divergence, "the omitted `hand_size_attacker` forward counter". It was never real: the
+  > hand-size attack carries the Damage Formula's `atk_hand` scaler and every Incoming call site
+  > threads the damage context, so both sides of the comparison priced it. Re-running the sweep after
+  > the retirement gives **304/319 agree, the same 15 one-directional disagreements** on a corpus
+  > grown from 274 frames to 319 — the retirement moved doom agreement by exactly nothing. **This 15-frame set is the survival-swap adjudication list** — each needs a
   frame-by-frame ruling: is the curve right to relax (affordability), or must the worst-case incumbent
   stay scared (hidden burst Energy — the ADR-0064/planner_6858 lesson)? Do NOT swap before that grill.
 - **RECUR (S2 `recur_shadow`): 43 refueler frames; the fuel moves the clock in 41 body-reads.**

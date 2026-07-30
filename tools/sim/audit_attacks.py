@@ -688,14 +688,15 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
     """
     cards = cards or card_pool()
     info = attack_index().get(attack_id)
+
+    def _err(msg, attacker=None):        # one ledger entry shape; the plan identifies the point
+        return [error_record(attack_id, attacker, plan["scenario"], msg, plan.get("sweep"))]
+
     if info is None or info["owner"] is None:
-        return [error_record(attack_id, None, plan["scenario"],
-                             "unknown attack or no owner card", plan.get("sweep"))]
+        return _err("unknown attack or no owner card")
     attacker_id = info["owner"]
     if plan["defender"] is None:
-        return [error_record(attack_id, attacker_id, plan["scenario"],
-                             "no qualifying defender in the pool for this scenario",
-                             plan.get("sweep"))]
+        return _err("no qualifying defender in the pool for this scenario", attacker_id)
     atk_chain = evolution_chain(attacker_id, cards)
     def_chain = evolution_chain(plan["defender"], cards)
     own = cards[attacker_id].get("energyType") or 3         # colorless attacker -> Water
@@ -713,8 +714,7 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
         obs, start = battle_start(atk_deck, def_deck)
         if getattr(start, "errorPlayer", -1) >= 0 or obs is None:
             battle_finish()
-            return [error_record(attack_id, attacker_id, plan["scenario"],
-                                 "battle_start rejected the decks", plan.get("sweep"))]
+            return _err("battle_start rejected the decks", attacker_id)
         try:
             pre = _drive_to_attack(battle_select, obs, attack_id=attack_id, atk_chain=atk_chain,
                                    def_chain=def_chain, cost=info["energies"],
@@ -736,15 +736,11 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
             continue                                # fresh shuffle; attempt 5 accepts what it got
         except _SetupMiss:
             if attempt == 5:
-                return [error_record(attack_id, attacker_id, plan["scenario"],
-                                     "defender setup kept missing its chain basic",
-                                     plan.get("sweep"))]
+                return _err("defender setup kept missing its chain basic", attacker_id)
         except _Timeout as e:
-            return [error_record(attack_id, attacker_id, plan["scenario"], str(e),
-                                 plan.get("sweep"))]
+            return _err(str(e), attacker_id)
         except Exception as e:                              # never a silent skip
-            return [error_record(attack_id, attacker_id, plan["scenario"],
-                                 f"{type(e).__name__}: {e}", plan.get("sweep"))]
+            return _err(f"{type(e).__name__}: {e}", attacker_id)
         finally:
             battle_finish()
     common = dict(attack_id=attack_id, attacker_id=attacker_id, scenario=plan["scenario"],

@@ -352,6 +352,11 @@ class ObjectivesMixin:
         as ONE evolution hop (single-hop lines exact; multi-hop reads one turn optimistic — the
         defensive-safe direction, Read-γ-sharpenable)."""
         ctx = getattr(self, "_opp_attack_context", None)
+        if ctx is None:                                  # no per-decision context (a caller outside
+            ctx = {"atk_hand": opp.get("handCount", 0) or 0}   # `_board`): the hand-size scaler's
+            # variable is still knowable straight off `opp`, and this read had it before the shared
+            # fallback existed. Without it the credit would silently drop to 0 — an UNDER-read on a
+            # survival path, which is the one direction this must never fail in.
         promo_bench = self._promotion_surcharge(opp)
         bodies = ([(a, 0) for a in (opp.get("active") or []) if a]
                   + [(b, promo_bench) for b in (opp.get("bench") or []) if b])

@@ -62,9 +62,13 @@ def _axis_points(recs: list[dict], sweep_var: str, swept: str, pinned: str):
     where the other seat drifted is not single-variable, and trusting one is precisely how the
     spurious 274 fit happened.
     """
+    def _on_axis(r):
+        """No sweep at all (the panel point, already pinned to the reference) or THIS axis's."""
+        return (r.get("sweep") or {}).get("var", sweep_var) == sweep_var
+
     sel = [r for r in recs
            if r.get("scenario") == "vanilla" and not r.get("coin") and not r.get("coinLogs")
-           and (r.get("sweep") or {}).get("var", sweep_var) == sweep_var]
+           and _on_axis(r)]
     if len({r.get(pinned) for r in sel}) != 1:
         return None                                  # pinned seat drifted -> not single-variable
     pts = [(int(r[swept]), int(r["dealtActive"])) for r in sel if r.get(swept) is not None]

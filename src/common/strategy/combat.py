@@ -407,15 +407,12 @@ class CombatMath:
 
         Fail-safe on an unknown variable: a scaler whose variable is absent from ``context``
         contributes 0, leaving the printed base — never a crash, never an invented count.
+
+        Defender-free is expressed by passing NO defender to :meth:`predicted_max_damage`, rather
+        than by re-deriving its per-attack-else-card-level rule here: two copies of that rule are
+        free to drift, which is the exact failure :meth:`card_level_damage` was extracted to end.
         """
-        stat = self._card_stat(card_id)
-        if not stat:
-            return 0
-        aids = tuple(stat.attacks or ())
-        if aids and all(self.attack_stat(a) is not None for a in aids):
-            return int(max(self.predicted_damage(card_id, a, None, bound="max", context=context)
-                           for a in aids))
-        return int(self.card_level_damage(stat, None, context=context))
+        return int(self.predicted_max_damage(self._card_stat(card_id), None, context=context))
 
     def forward_threat_ceiling(self, card_id, *, context: dict | None = None) -> int:
         """The greatest :meth:`threat_ceiling` among the forms this body's line evolves INTO — the
