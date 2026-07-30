@@ -32,6 +32,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 RIOLU, MEGA_LUCARIO, SOLROCK = 677, 678, 676
 MUNKIDORI, DRAGAPULT_EX, MEOWTH_EX = 112, 121, 1071
+TERAPAGOS_EX = 176                         # Basic, retreat 2 — ms f21/f29's Active (EN_Card_Data.csv)
 HAMMER = 1120                              # Crushing Hammer (energy_denial, coin 0.5)
 FIRE, PSYCHIC, FIGHTING, DARKNESS = 2, 5, 6, 7
 
@@ -46,6 +47,10 @@ def _pilot(deck="dragapult_ex", *, armed=True):
     p = _build_pilot(deck)[0]
     p._planning = False
     p.deny_relevance = armed
+    # Set EXPLICITLY rather than inherited from PROFILE: these tests state their own preconditions,
+    # so they keep meaning the same thing whichever way the shipped flag goes. Guarding the shipped
+    # value is `test_runtime`'s job (`PROFILE == EXPECTED_SHIPPED`), not this file's.
+    p.deny_strip_delta = armed
     return p
 
 
@@ -186,8 +191,15 @@ def test_the_target_pick_applies_no_area_weight(  # ruling 2, 2026-07-30
     and that constant stays live on the OFF path — it is unread while armed, not deleted, so
     ADR-0062's derivation survives for whoever retires the magnitude path.
 
-    Guarded on `active_can_ko` being False, or the redundancy gate would zero the Active instead."""
+    Guarded on `active_can_ko` being False, or the redundancy gate would zero the Active instead.
+
+    **The CLOCK is switched off here (ADR-0084).** On this board the two bodies differ ONLY by area,
+    so the clock's tiebreak (`strip_shift` 6 on the Active, 0 on the bench) is indistinguishable from
+    an area weight and would mask the very thing this test isolates. Turning it off is not a dodge —
+    it is the absence-versus-zero distinction the tiebreak is built on, and the clock's own behaviour
+    is asserted separately in `test_the_clock_breaks_a_cross_body_relevance_tie`."""
     p = _pilot()
+    p.deny_strip_delta = False
     obs = _strip_obs([(ACTIVE, 0, 0), (BENCH, 0, 0)],
                      opp_active=_body(DRAGAPULT_EX, [FIRE]),
                      opp_bench=[_body(DRAGAPULT_EX, [FIRE])])
@@ -287,15 +299,47 @@ def test_the_fire_rung_prices_only_what_they_can_afford_right_now():
     -1.25 — ADR-0062's own figure, to the cent.
 
     Asserted as the two readings DIVERGING on one board, which is the property, rather than as the
-    two numbers."""
+    two numbers.
+
+    **Restructured for ADR-0084 decision 5, and it now tests two boards rather than one.** The old
+    fixture omitted the opponent's Active entirely — which its own claim to be f21/f29's board
+    contradicted, and which stopped being harmless once the bench weight became the promotion gate:
+    with no Active, `_promotion_open` takes its documented free-promotion leg (a body absent from the
+    list was Knocked Out, and its replacement comes off the Bench for free), so the gate opens and the
+    bench counts fully. Asserting `score <= 0` on the real anchor board would then be VACUOUS about
+    affordability, because a shut gate zeroes the reading whatever its affordability. So:
+
+      * **gate OPEN** (no Active) tests finding A itself, by arithmetic — the rung must price the
+        AFFORDABLE reading, and the banked one would score strictly higher on the same board;
+      * **gate SHUT** (the real anchor's **Terapagos ex** Active — Basic, retreat cost **2**, verified
+        in `EN_Card_Data.csv` — holding no Energy, so it cannot retreat) tests the corpus ruling: the
+        Hammer is HELD."""
+    from common.pilot import _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.strategy.denial import coin_odds
+
+    # ── gate OPEN: the fire rung reads AFFORDABLE, not banked (finding A, by arithmetic) ──
     p = _pilot()
     obs = _play_obs(opp_bench=[_body(DRAGAPULT_EX, [FIRE])])
-    board = p._board(obs, obs["select"])
+    p._board(obs, obs["select"])
     row = next(r for r in p._opponent_target_cache[1] if r["area"] == "bench")
     assert row["relevance"] > row["relevance_fire"] > 0, (
         f"the banked reading must exceed the affordable one on this board ({row['relevance']} vs "
         f"{row['relevance_fire']}) — if they were equal the gate would be untested")
-    assert _scores(p, obs)[0] <= 0, "an unaffordable threat must not be worth SPENDING a Hammer on"
+    p._unfavored = lambda _b: False
+    priced = coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K
+    assert _scores(p, obs)[0] == pytest.approx(priced * row["relevance_fire"] - _DENIAL_ITEM_COST), (
+        "the fire rung must price the AFFORDABLE reading")
+    assert priced * row["relevance"] > priced * row["relevance_fire"], (
+        "and the banked reading would have priced strictly higher — that gap IS finding A")
+
+    # ── gate SHUT: the real anchor's board, where the corpus ruled HOLD ──
+    q = _pilot()
+    anchor = _play_obs(opp_active=_body(TERAPAGOS_EX), opp_bench=[_body(DRAGAPULT_EX, [FIRE])])
+    board = q._board(anchor, anchor["select"])
+    assert board.deny_relevance_best == 0.0, (
+        "Terapagos ex holds no Energy against retreat cost 2 and no switch survives the read, so the "
+        "promotion gate must SHUT and the benched threat must carry no weight at all")
+    assert _scores(q, anchor)[0] <= 0, "an unaffordable threat must not be worth SPENDING a Hammer on"
 
 
 @pytest.mark.req("REQ-DENYREL-0028")
@@ -313,13 +357,19 @@ def test_a_body_exactly_paying_a_colourless_cost_is_relevant_but_one_short_is_no
         which REQ-DENYREL-0009 pins independently at the read's own seam).
     """
     from common import deny_relevance as dr
+    from common.pilot import _DENIAL_FORWARD
+    # Both attacks are the body's OWN (`is_forward=False`), so the ADR-0084 Amendment A forward
+    # discount cannot reach them — passed as the production constant rather than a literal so this
+    # stays a colourless-cost test and never silently becomes a discount test.
     WATER, COLOURLESS_3 = 3, [(210, {}, 3, False)]        # Nebula Beam ●●● 210
     exactly = dr.strip_relevance(energy_type=WATER, type_count=3, line_attacks=COLOURLESS_3,
-                                 total_attached=3, attached_counts={WATER: 3})
+                                 total_attached=3, attached_counts={WATER: 3},
+                                 forward_discount=_DENIAL_FORWARD)
     assert exactly["affordable_setback"] == 210 and exactly["relevance"] > 0, \
         "3 attached against a ●●● cost: the strip breaks the attack"
     short = dr.strip_relevance(energy_type=WATER, type_count=1, line_attacks=COLOURLESS_3,
-                               total_attached=1, attached_counts={WATER: 1})
+                               total_attached=1, attached_counts={WATER: 1},
+                               forward_discount=_DENIAL_FORWARD)
     assert short["relevance"] == 0.0, \
         "1 attached against a ●●● cost denies nothing — it could not attack either way"
 
@@ -333,7 +383,19 @@ def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
     happens to be Brief-named.
 
     That is the f17 discipline restated for a new booster — *a booster must scale the oracle, never
-    override it* — so the sharpener is scoped to the rank and the keep price only."""
+    override it* — so the sharpener is scoped to the rank and the keep price only.
+
+    **Re-anchored for ADR-0084 decisions 5 and 8.** This used to assert the absolute figure `-1.25`,
+    which the promotion gate retires: that number was `70 x 0.25` against `_DENIAL_BENCH`, and the
+    gate is boolean. Re-asserting the new absolute would assert arithmetic rather than the claim, and on
+    a gate-SHUT board the assertion would be vacuous (relevance zeroes out, so a Brief could reach the
+    fire leg unpunished and the test would still pass). So the claim is asserted COMPARATIVELY instead —
+    the fire rung's score must equal the arithmetic computed from the RAW affordable reading. Any boost
+    reaching that rung would change the number, so this is airtight without depending on the retired
+    constant — and it stays non-vacuous because this board leaves the promotion gate OPEN.
+
+    (A cross-deck control was tried first and rejected: `dragapult_ex`'s own matched Brief also names
+    Dragapult ex — it is the mirror — so it is not an unbriefed control at all.)"""
     p = _pilot("mega_starmie")
     obs = _play_obs(opp_bench=[_body(DRAGAPULT_EX, [FIRE])])
     board = p._board(obs, obs["select"])
@@ -344,8 +406,21 @@ def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
     # The ranked reading carries the boost; the fire reading is the raw affordable relevance.
     assert row["relevance_fire"] == pytest.approx(70 / 350.0), (
         "the fire reading must be the unboosted affordable setback (Jet Headbutt 70 / 350)")
-    assert _scores(p, obs)[0] == pytest.approx(-1.25), (
-        "a Brief-named body must not lift this hold above zero — that is an override, not a boost")
+
+    from common.pilot import _BRIEF_THREAT_BOOST, _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.strategy.denial import coin_odds
+
+    assert board.deny_relevance_best > 0, (
+        "this board must leave the promotion gate OPEN, or a zeroed reading would make the assertion "
+        "below pass even if the Brief did reach the fire leg")
+    assert _BRIEF_THREAT_BOOST > 1.0, "the sharpener must actually be a boost, or nothing is at risk"
+    p._unfavored = lambda _b: False
+    raw = (coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K * row["relevance_fire"]
+           - _DENIAL_ITEM_COST)
+    assert _scores(p, obs)[0] == pytest.approx(raw), (
+        f"the fire rung must price the RAW affordable reading even though this body is Brief-named — "
+        f"a {_BRIEF_THREAT_BOOST}x boost here would show up as a different number, and lifting a hold "
+        f"above the item cost is an override, not a boost")
 
 
 @pytest.mark.req("REQ-DENYREL-0026")
@@ -369,3 +444,279 @@ def test_off_reproduces_the_documented_incumbent_arithmetic_exactly():
     assert p._denial_play_tactical(board, _Ctx()) == expected
     assert board.deny_relevance_best == 0.0, "OFF must emit no relevance at all"
     assert board.deny_relevance_rows == ()
+
+
+# ── Issue #217 / ADR-0084: the derived clock is a TIEBREAK, not a deadline, and never a gate ──────
+#
+# All of these are asserted on REAL captured boards, because the clock (`strip_shift`) is a
+# `turns_to_ko_me` simulation and a hand-built board engineered to produce a chosen shift is a board
+# nobody has checked can exist (the isolated-probe lesson, plus ADR-0062's corollary: when an oracle
+# refuses a test board, check the BOARD before the assertion).
+#
+# The SELECT is synthesised over those real boards, because no captured fixture carries a
+# `DISCARD_ENERGY` menu — the engine only poses one mid-resolution, after a Hammer's coin comes up
+# heads. That is NOT the isolated-probe trap: the option set is fully enumerable (every Energy on
+# their board, per `_denial_target_tactical`'s own contract) and `_strip_over_board` enumerates all
+# of it, so no option the engine would have offered is missing.
+
+FIXTURES = REPO / "tests" / "fixtures" / "corrections"
+
+#: Real boards carrying a CROSS-BODY relevance tie whose clock deltas DIFFER — verified 2026-07-30.
+#: dp f82: active0 `{FIRE: 0.571}` delta 8 vs bench1 `{PSYCHIC: 0.571}` delta 0.
+#: ms f94: active0 `{FIGHTING: 0.964}` delta 1 vs bench1 `{FIGHTING: 0.964}` delta 0.
+_TIE_ACTS = [("dp_evolve_energized_line_body_first_f82.json", "dragapult_ex"),
+             ("ms_dont_lillies_away_the_bigger_hand_f94.json", "mega_starmie")]
+
+
+def _fixture_obs(name):
+    import json
+    return json.loads((FIXTURES / name).read_text(encoding="utf-8"))["obs"]
+
+
+def _strip_over_board(obs):
+    """A `DISCARD_ENERGY` select over EVERY Energy on the opponent's board — the menu the engine
+    actually poses, synthesised over a real captured board."""
+    state = obs["current"]
+    players, yi = state["players"], state.get("yourIndex", 0)
+    opp = players[1 - yi]
+    opts = []
+    for area, bodies in ((ACTIVE, opp.get("active") or []), (BENCH, opp.get("bench") or [])):
+        for bi, body in enumerate([b for b in bodies if b]):
+            for k in range(len(body.get("energies") or [])):
+                opts.append({"type": ENERGY, "area": area, "index": bi, "energyIndex": k})
+    assert opts, "fixture board carries no strippable Energy — wrong board for this test"
+    return dict(obs, select={"type": 0, "context": DISCARD_ENERGY, "minCount": 1, "maxCount": 1,
+                             "option": opts, "deck": None, "remainDamageCounter": 0,
+                             "remainEnergyCost": 0, "contextCard": None, "effect": None})
+
+
+def _rows_by_key(pilot):
+    """`{(area, bi): row}` off the per-decision opponent-target cache — relevance and clock."""
+    cache = pilot._opponent_target_cache
+    assert cache, "an armed board must resolve opponent-target rows"
+    return {(r["area"], r["bi"]): r for r in cache[1]}
+
+
+def _key_of(option):
+    return ("active" if option["area"] == ACTIVE else "bench", option["index"])
+
+
+@pytest.mark.req("REQ-DENYREL-0030")
+@pytest.mark.parametrize("fixture,deck", _TIE_ACTS)
+def test_the_clock_breaks_a_cross_body_relevance_tie(fixture, deck):
+    """**ADR-0084 decision 2.** Two candidates tied on relevance EXACTLY, on different bodies, whose
+    strips buy different amounts of survival: the one that actually buys turns must win.
+
+    Today that tie resolves by whatever order the engine listed its options — the precise defect
+    ADR-0062 named for the scoring case (*"the argmax fell through to index 0 and we stripped
+    whatever Energy happened to land first"*), arriving one surface later."""
+    p = _pilot(deck)
+    obs = _strip_over_board(_fixture_obs(fixture))
+    p._board(obs, obs["select"])                       # populates the per-decision cache
+    rows = _rows_by_key(p)
+
+    best = {}                                          # (area, bi) -> best score over its Energies
+    for opt, sc in zip(obs["select"]["option"], _scores(p, obs)):
+        k = _key_of(opt)
+        best[k] = max(sc, best.get(k, float("-inf")))
+
+    rel = {k: max((r.get("relevance_by_type") or {}).values(), default=0.0) for k, r in rows.items()}
+    top = max(rel.values())
+    tied = [k for k, v in rel.items() if v == pytest.approx(top)]
+    assert len(tied) >= 2, f"fixture must present a tie at the top relevance; got {rel}"
+    shifts = {k: rows[k].get("strip_shift") for k in tied}
+    assert len(set(shifts.values())) > 1, (
+        f"fixture must present DIFFERING clock deltas among the tied pair; got {shifts}")
+
+    winner = max(tied, key=lambda k: shifts[k])
+    for k in tied:
+        if k != winner:
+            assert best[winner] > best[k], (
+                f"the clock must break the tie: {winner} buys {shifts[winner]} turns and scores "
+                f"{best[winner]}, {k} buys {shifts[k]} and scores {best[k]} — equal scores mean the "
+                f"pick still falls through to engine option order")
+
+
+@pytest.mark.req("REQ-DENYREL-0031")
+def test_the_clock_is_silent_on_a_within_body_tie():
+    """**ADR-0084 decisions 2 and 3.** Two Energy TYPES on the SAME body, tied on relevance: the
+    clock cannot discriminate them — `strip_shift` is one reading per body, and the measured negative
+    result is that WHICH Energy you remove never changes it (109 bodies, 0 cases). So the tiebreak
+    must express no preference rather than manufacture one.
+
+    ml f121: the Active holds `{PSYCHIC: 0.714, FIRE: 0.714}`, both at clock delta 3."""
+    p = _pilot("mega_lucario")
+    obs = _strip_over_board(_fixture_obs("ml_aurajab_dont_load_the_engine_f121.json"))
+    p._board(obs, obs["select"])
+    by_type = _rows_by_key(p)[("active", 0)].get("relevance_by_type") or {}
+    tied_types = [t for t, v in by_type.items() if v == pytest.approx(max(by_type.values()))]
+    assert len(tied_types) >= 2, f"fixture must tie two types on one body; got {by_type}"
+
+    on_active = [sc for opt, sc in zip(obs["select"]["option"], _scores(p, obs))
+                 if _key_of(opt) == ("active", 0)]
+    top = max(on_active)
+    assert sum(1 for sc in on_active if sc == pytest.approx(top)) >= 2, (
+        f"two equally-relevant Energies on ONE body must score equal — the clock reads the same for "
+        f"both, so a preference here would be manufactured; got {on_active}")
+
+
+@pytest.mark.req("REQ-DENYREL-0035")
+def test_the_armed_read_discounts_a_forward_form_exactly_as_the_off_path_does():
+    """**ADR-0084 Amendment A — the defect Issue #217's investigation found in Issue #187's build.**
+
+    ADR-0080 decision 2 makes `_DENIAL_FORWARD` *"central"* to relevance's forward-potential leg and
+    *"promoted rather than deleted"*. It was never applied there: the only consumer was `_denial_at`,
+    on the OFF path. So the ARMED instrument credited a forward form at full damage and priced a
+    forward threat at DOUBLE the incumbent.
+
+    ms 82225643 f11 is the witness the user ruled on (2026-07-30, *"rationale is correct"*): turn 2, a
+    Basic Riolu holding one `{F}`, and Mega Lucario ex's Aura Jab (`{F}` 130) credited in full fired a
+    Hammer over the Pokégear 3.0 dig the corpus rules correct. Their hand holds no Mega Lucario ex, so
+    that attack cannot happen this turn or next.
+
+    Asserted as the two instruments AGREEING on one board rather than as either number, so a re-derived
+    `_DENIAL_FORWARD` carries both sides with it. Non-vacuous by construction: the forward attack must
+    out-damage the body's own, or there would be nothing for a discount to bite on."""
+    from common.deny_relevance import MAX_ATTACK_DAMAGE
+    from common.pilot import _DENIAL_FORWARD
+
+    obs = _fixture_obs("ms_hammer_forward_form_riolu_f12.json")
+
+    armed = _pilot("mega_starmie")
+    armed._board(obs, obs.get("select"))
+    row = max(_rows_by_key(armed).values(), key=lambda r: r.get("relevance") or 0.0)
+    assert row.get("relevance_forward"), (
+        "this fixture only tests the discount if the top row's relevance comes off a FORWARD form")
+
+    off = _pilot("mega_starmie", armed=False)
+    off_board = off._board(obs, obs.get("select"))
+    assert off_board.opp_denial_best > 0, (
+        "the OFF instrument must price this board, or there is no reference value to agree with")
+
+    # Compared on the AFFORDABLE reading, which is the one the fire rung uses and the one `_denial_at`
+    # is the OFF counterpart of. NOT the banked reading: that deliberately credits an attack they
+    # cannot pay for yet (here Mega Brave `{F}{F}` 270 off one `{F}`), which is the whole point of the
+    # forward leg and is SUPPOSED to exceed the OFF number. Comparing banked against OFF was this
+    # test's own first mistake — it read 135 vs 65 and looked like a bug when both were correct.
+    armed_fire = (row.get("relevance_fire") or 0.0) * MAX_ATTACK_DAMAGE
+    assert armed_fire == pytest.approx(off_board.opp_denial_best), (
+        f"armed must price the forward threat exactly as OFF does ({armed_fire} vs "
+        f"{off_board.opp_denial_best}) — undiscounted it prices "
+        f"{armed_fire / _DENIAL_FORWARD:.0f}, double the incumbent")
+    assert (row.get("relevance") or 0.0) > (row.get("relevance_fire") or 0.0), (
+        "and the BANKED reading must still exceed it — the discount scales the forward credit, it "
+        "does not delete the banked doctrine (ADR-0063: a discount, never a deletion)")
+
+
+@pytest.mark.req("REQ-DENYREL-0033")
+def test_the_clock_never_gates_the_keep_price_even_when_it_reads_zero():
+    """**ADR-0084 decision 7, the reversal — asserted NEGATIVELY.** A `strip_shift > 0` gate on the
+    keep price was recommended, ACCEPTED, and then reversed on measurement: it would have suppressed
+    128 of 218 relevance-positive corpus rows, because the clock measures *"does this strip delay MY
+    defeat by a whole turn or more"* rather than *"does this strip do anything"*.
+
+    Munkidori is the cleanest witness of the blindness. Its `{D}` fuels Adrena-Brain — an ABILITY — so
+    stripping it is real denial that changes no damage clock at all, and the clock reads 0. The keep
+    price must still open a slot on it. This test exists so that reviving the gate breaks something."""
+    p = _pilot("mega_lucario")
+    obs = _discard_obs(opp_bench=[_body(MUNKIDORI, [DARKNESS])])
+    board = p._board(obs, obs["select"])
+    rows = {(r["area"], r["bi"]): r for r in p._opponent_target_cache[1]}
+    row = rows[("bench", 0)]
+
+    assert row.get("relevance_ability_leg", 0.0) > 0, (
+        "the fixture only tests the blindness if relevance comes from the ABILITY leg")
+    assert not row.get("strip_shift"), (
+        f"and only if the clock reads nothing on it; got {row.get('strip_shift')} — muting an Ability "
+        f"delays no damage, so a KO clock cannot see this denial at all")
+    with_clock = _deny_slots(p, obs)
+    assert with_clock, (
+        "the keep price must STILL open a deny slot on a body the strip Δ cannot see — a delta may "
+        "order a tie, never gate one (ADR-0084 decision 7)")
+
+    # ...and UNCHANGED, not merely present: the strip Δ must not touch this surface at all. Compared
+    # against the same armed pilot with the Δ switched off, so the only difference is the reading the
+    # dropped bite gate would have consumed.
+    q = _pilot("mega_lucario")
+    q.deny_strip_delta = False
+    without = _deny_slots(q, obs)
+    assert [(x.key, x.value, x.deadline) for x in with_clock] ==            [(x.key, x.value, x.deadline) for x in without], (
+        f"the keep price must be byte-identical with and without the strip Δ — it is decision 1's "
+        f"surface and decision 7 removed its only proposed consumer; got {with_clock} vs {without}")
+
+
+@pytest.mark.req("REQ-DENYREL-0034")
+def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
+    """**ADR-0084 decision 8's build requirement.** Retiring `_DENIAL_BENCH` from the fire rung routes
+    a shut-gate board down the rung's WHIFF branch (`if not value: return 0.0`) instead of through the
+    arithmetic, so a hold that used to price `-1.25` now prices `0.00`.
+
+    Both are holds, but only if nothing downstream distinguishes a zero from a small negative — the
+    governing rule is that the tier requires `score <= 0`, which `0.0` satisfies. Asserted rather than
+    assumed, because a free Item is tiered ahead of everything by `_finish_turn_last` and a `> 0`
+    comparison anywhere would play the Hammer the corpus ruled against.
+
+    (The asymmetry itself — that a bad strip prices 0 where ADR-0062's reasoning implies it should
+    price negative — is knowingly left open and handed forward by decision 8.)
+
+    **Asserted on the REAL f21/f29 fixtures, with their full captured menus.** A first attempt used a
+    hand-built menu and was worthless twice over: `explain().chosen` is a LIST, so `chosen != 0` was
+    vacuously true, and with only one or two synthesised options the Pilot has nothing better to do and
+    plays the Hammer anyway. The claim is inherently about competing against the rest of a real turn,
+    so only a real menu can carry it — the isolated-probe lesson exactly."""
+    for fixture, want in (("ms_doom_relax_bare_terapagos_f21.json", [7]),
+                          ("ms_doom_relax_bare_terapagos_f29.json", [10])):
+        p = _pilot("mega_starmie")
+        obs = _fixture_obs(fixture)
+        select = obs["select"]
+        board = p._board(obs, select)
+        assert board.deny_relevance_best == 0.0, (
+            f"{fixture}: their Terapagos ex holds 0 Energy against retreat cost 2, so the promotion "
+            f"gate must SHUT and the benched threat must carry no weight")
+
+        ex = p.explain(obs)
+        hammer = [i for i, o in enumerate(select["option"])
+                  if p._option_card_id(obs, select, o) == HAMMER]
+        assert hammer, f"{fixture} must actually offer a Hammer, or it tests nothing"
+        assert all(ex.options[i].score == pytest.approx(0.0) for i in hammer), (
+            f"{fixture}: a shut gate must take the whiff branch at exactly 0.0 — this fixes WHICH "
+            f"branch, so the assertion below is known to be testing the zero case; got "
+            f"{[ex.options[i].score for i in hammer]}")
+        assert not set(ex.chosen) & set(hammer), (
+            f"{fixture}: a Hammer scoring 0.0 must NOT be chosen — a free Item is tiered ahead of "
+            f"everything by `_finish_turn_last`, so if any tier treats 0.0 as playable, decision 8's "
+            f"handed-forward asymmetry becomes forced rather than optional. chosen={ex.chosen}")
+        assert list(ex.chosen) == want, (
+            f"{fixture}: and the decision must still match the corpus ruling {want}; got {ex.chosen}")
+
+
+@pytest.mark.req("REQ-DENYREL-0032")
+@pytest.mark.parametrize("fixture,deck", _TIE_ACTS)
+def test_the_clock_never_reorders_what_relevance_already_separates(fixture, deck):
+    """**ADR-0084 decision 2, the subordination half.** The tiebreak is LEXICOGRAPHIC: wherever two
+    candidates differ on relevance, relevance decides, whatever the clock says.
+
+    Asserted as an invariant over every pair rather than on one hand-picked pair, because the bound
+    is derived from the observed relevance gap and an off-by-one in that derivation surfaces as
+    exactly this — a clock bonus large enough to overtake a real difference."""
+    p = _pilot(deck)
+    obs = _strip_over_board(_fixture_obs(fixture))
+    p._board(obs, obs["select"])
+    rows = _rows_by_key(p)
+
+    scored = []
+    for opt, sc in zip(obs["select"]["option"], _scores(p, obs)):
+        k = _key_of(opt)
+        etype = p._option_energy_type(rows[k].get("body"), opt)
+        scored.append(((rows[k].get("relevance_by_type") or {}).get(etype, 0.0), sc, k, etype))
+
+    assert any(a[0] > b[0] and a[0] != pytest.approx(b[0]) for a in scored for b in scored), (
+        f"the sweep below is vacuous unless the fixture actually presents two candidates that "
+        f"DIFFER on relevance; got {sorted({round(r, 4) for r, *_ in scored})}")
+    for rel_a, sc_a, key_a, t_a in scored:
+        for rel_b, sc_b, key_b, t_b in scored:
+            if rel_a > rel_b and rel_a != pytest.approx(rel_b):
+                assert sc_a > sc_b, (
+                    f"relevance {rel_a} at {key_a}/{t_a} scored {sc_a}, but LOWER relevance {rel_b} "
+                    f"at {key_b}/{t_b} scored {sc_b} — the clock must never overtake a relevance "
+                    f"difference, only break an exact tie")

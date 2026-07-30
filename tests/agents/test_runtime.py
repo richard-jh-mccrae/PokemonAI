@@ -103,14 +103,23 @@ EXPECTED_SHIPPED = {
                                     # flat `_HAND_SIZE_ATTACKER_BOOST` proxy is deleted. Ships ON
                                     # because OFF would make the change a no-op on the board and
                                     # both ADR-0072 merit gates measure the ON behaviour
-    "deny_strip_delta": False,      # ADR-0078 / #199 (S3c): compute-only strip delta, ships OFF —
-                                    # nothing reads it yet (#187 is the consumer, itself blocked on
-                                    # #199's gate 1), so ON would only cost compute
-    "deny_relevance": False,        # ADR-0080 / Issue #199 (S3c): compute-only **Deny Relevance** read —
-                                    # the value that REPLACED deny's damage magnitude once the grill
-                                    # measured the Worth Damage Rate underivable. Ships OFF; Issue #187 is
-                                    # the consumer and recharters to build the instrument on it, so
-                                    # ON would only cost compute
+    "deny_strip_delta": False,       # ADR-0078 / Issue #199 (S3c). ADR-0084 (Issue #217) gave it its
+                                    # consumer — the target pick's lexicographic tiebreak among
+                                    # candidates tied on relevance, which orders a tie and never GATES
+                                    # one (a `strip_shift > 0` keep-price gate suppresses 128/218
+                                    # relevance-positive rows). STILL OFF, so that consumer is inert:
+                                    # arming is owed by Issue #228
+    "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c). ⚠️ OFF is a KNOWN DEBT against
+                                    # tracker directive 1 (a kill-switch ships ON), not a decision —
+                                    # arming is owed by Issue #228. ADR-0084 (Issue #217) chartered it
+                                    # and the Discrimination Gate blocked it, so the ADR's
+                                    # pre-registered ship-dark fallback was taken. What DID clear:
+                                    # `_DENIAL_BENCH`'s retirement to the promotion gate, with 0 sign
+                                    # changes over 21 Hammer-ruled frames and **0 decision flips over
+                                    # 331 corpus frames at the real `decide()`** — the retest decision
+                                    # 5 made a precondition, because gate 1 proved SIGN only and the
+                                    # promotion gate inflates the rung's MAGNITUDE where it opens
+                                    # (f79 55->95, f26 16.25->95, f24 17.5->100)
 }
 
 

@@ -178,16 +178,45 @@ PROFILE = {
                                     # -11.5pp — the Tripwire screens catastrophes, not regressions,
                                     # so this is flagged for the ladder-corrections loop to watch,
                                     # not a reason to hold the flag back given the aggregate clears.
-    "deny_strip_delta": False,      # ADR-0078 / #199 (S3c), COMPUTE-ONLY, ships OFF: adds the deny
+    "deny_strip_delta": False,       # ADR-0078 / Issue #199 (S3c). ADR-0084 (Issue #217) gave it its first
+                                    # and only consumer — the target pick's lexicographic tiebreak,
+                                    # which orders a tie on the clock and never GATES one (a
+                                    # `strip_shift > 0` keep-price gate would suppress 128 of 218
+                                    # relevance-positive corpus rows: the clock is blind to Ability
+                                    # mutes, sub-turn setbacks, and plan damage that does not delay MY
+                                    # defeat — decision 7, recommended, ACCEPTED, then REVERSED on
+                                    # measurement). ⚠️ STILL SHIPS OFF, so that consumer is INERT.
+                                    # Arming was chartered by decision 6 and blocked by the
+                                    # Discrimination Gate; ADR-0084's pre-registered ship-dark
+                                    # fallback was taken. **Owed by Issue #228** (Phase 1e's last
+                                    # item) — the gate reports one flip predating deny (Issue #213's,
+                                    # against a stale baseline) and one leaf interaction. Originally: adds the deny
                                     # instrument's STRIP delta to `_opponent_target_rows` beside the
                                     # removal delta #186 built (a Hammer strips one Energy off a body
                                     # that STAYS, so the removal delta is not its slice). Nothing
-                                    # reads the new fields — #187 is the consumer and is itself
-                                    # blocked on #199 — so ON changes no decision; it only costs one
+                                    # reads the new fields — Issue #187 is the consumer and is itself
+                                    # blocked on Issue #199 — so ON changes no decision; it only costs one
                                     # extra `turns_to_ko_me` per ENERGIZED opponent body per
-                                    # decision. OFF until #199's gate 1 rules the read admissible;
+                                    # decision. OFF until Issue #199's gate 1 rules the read admissible;
                                     # `deny_gate1.py` forces it ON to run that measurement.
-    "deny_relevance": False,        # ADR-0080 / Issue #199 (S3c) + Issue #187, ships OFF: emits the
+    "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
+                                    # ⚠️ **STILL SHIPS OFF, and that is a KNOWN DEBT, not a decision.**
+                                    # Tracker directive 1 says a kill-switch ships ON and exists only
+                                    # as a revert lever, so this flag is in violation and Phase 1e is
+                                    # not complete while it is False. ADR-0084 (Issue #217) chartered
+                                    # the arming, the Discrimination Gate blocked it, and the ADR's
+                                    # pre-registered ship-dark fallback was taken. **Owed by
+                                    # Issue #228.** Two flips block it: `84071010|0|decision|15`
+                                    # regresses on a CLEAN tree (Issue #213's `scaled_threat_rank`
+                                    # against a baseline captured at `e4c46ca`), and
+                                    # `82225643|1|decision|11` is a LEAF card-worth interaction in
+                                    # which every deny component is individually correct — the armed
+                                    # keep price legitimately falls 5.0 -> 1.929, which makes playing a
+                                    # Hammer cheaper than the Pokégear dig the user ruled correct.
+                                    # Rule 11's warning is now 4-for-4: Issue #187's arming exposed
+                                    # three defects its pure tests could not reach, and Issue #217's
+                                    # exposed a fourth (ADR-0080's mandated `_DENIAL_FORWARD` discount
+                                    # was never applied to the armed read at all). Emits the
                                     # **Deny Relevance** read — *is this Energy doing important work
                                     # for the opponent's plan?* — on `_opponent_target_rows`. The
                                     # read that REPLACED deny's magnitude: Issue #199's grill measured the
