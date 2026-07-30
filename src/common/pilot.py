@@ -404,17 +404,11 @@ class Board:
     strongest_forward_bench: int | None = None  # greatest forward-evolution damage among opponent's
                                                 # benched snipe targets at a DAMAGE select — most dangerous
                                                 # latent evolving threat (Riolu→Mega Lucario over Hariyama). None off a Damage select
-    evolving_wincon_on_bench: bool = False  # at a DAMAGE select, some benched opponent snipe target is a
-                                        # developing WIN-CONDITION pre-evolution: forward damage reaches a
-                                        # win-condition-class body (>= _EVOLVING_THREAT_DMG), its evolved form
-                                        # is NOT yet in play, AND that form is a genuine higher-prize payoff
-                                        # (>= 2 prizes). When present, the current-attacker snipe rungs
-                                        # (top-threat / threat / forced-promotion) stand down on every body
-                                        # that is NOT that pre-evo, so `snipe-the-evolving-threat` (+45) takes
-                                        # the developing wincon instead of a bulky/energized current body whose
-                                        # rungs SUM past it (ms 85164131 f22 — chip the Staryu that becomes
-                                        # Mega Starmie ex, not the energized 1-prize Cinderace). Mirrors the
-                                        # `snipe_ko_available` sum-burial stand-down. Kill-switch `evolving_wincon_priority`
+    # `evolving_wincon_on_bench` was DELETED by ADR-0085 Amendment G. It marked a DEVELOPING
+    # win-condition pre-evolution on the opponent bench so the current-attacker rungs would stand
+    # down and their SUM could not bury `snipe-the-evolving-threat` (+45). Both the rungs and the sum
+    # are gone, so the field had ZERO readers; the scalar reaches the same pick through the `forward`
+    # leg ordering rather than through a stand-down. Witness: ms 85164131 f22.
     snipe_ko_available: bool = False    # at a DAMAGE select, SOME benched target is knocked out by the
                                         # snipe rider — so every POSITIONAL snipe rung must stand down and
                                         # let `snipe-for-the-ko` take the free prize. Three positional
@@ -1207,7 +1201,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
-                 evolving_wincon_priority=True, matchup_targeting=True,
+                 matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
@@ -1277,11 +1271,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         self.forced_promotion = forced_promotion        # ADR-0044 kill-switch: the Forced-Promotion Read
                                                         # — when their Active is dead, pre-chip the ready
                                                         # wincon they'll promote, not the energized bench-sitter
-        self.evolving_wincon_priority = evolving_wincon_priority  # kill-switch (default ON): at a DAMAGE snipe
-                                                        # with a developing higher-prize wincon pre-evo on the
-                                                        # opp bench, the current-attacker rungs stand down so
-                                                        # their SUM can't bury `snipe-the-evolving-threat` (ms
-                                                        # 85164131 f22). Backs `Board.evolving_wincon_on_bench`
         self.match_planner_steer = match_planner_steer  # ADR-0045 kill-switch (S3): the Match Planner's
                                                         # Game Plan directed goal biases the Turn Planner's
                                                         # candidate ranking (sub-prize, confidence-scaled).
@@ -6199,7 +6188,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             top_starter_id=self._top_starter_id(obs, select),
             weakest_bench_hp=self._weakest_snipe_hp(obs, select),
             strongest_forward_bench=self._strongest_forward_snipe(obs, select),
-            evolving_wincon_on_bench=self._evolving_wincon_on_bench(obs, select),
             snipe_damage=self._snipe_damage(obs, (ma or {}).get("id"), select),
             snipe_ko_available=self._snipe_ko_available(
                 opp, self._snipe_damage(obs, (ma or {}).get("id"), select)),
@@ -7007,31 +6995,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     best = fwd
         return best
 
-    def _evolving_wincon_on_bench(self, obs: dict, select: dict | None) -> bool:
-        """True iff some benched opponent snipe target is a DEVELOPING WIN-CONDITION pre-evolution: its
-        forward-evolution damage reaches a win-condition-class body (>= _EVOLVING_THREAT_DMG), its evolved
-        form is NOT yet in play, AND that form is a genuine higher-prize payoff (>= 2 prizes). When present,
-        the current-attacker snipe rungs stand down on every body that is NOT that pre-evo, so the +45
-        `snipe-the-evolving-threat` takes the developing wincon instead of a bulky/energized current body
-        whose rungs SUM past it (ms 85164131 f22: chip the Staryu that becomes Mega Starmie ex = 3 prizes,
-        not the energized 1-prize Cinderace). Mirrors the `snipe_ko_available` sum-burial stand-down. Off
-        (False) when the `evolving_wincon_priority` kill-switch is disabled or off a DAMAGE select. FAIL-CLOSED."""
-        if not getattr(self, "evolving_wincon_priority", True):
-            return False
-        if not select or select.get("context") != _DAMAGE:
-            return False
-        for o in (select.get("option") or []):
-            if o.get("type") != _CARD or o.get("area") != _BENCH:
-                continue
-            fwd = self._target_forward_damage(obs, select, o)
-            if fwd is None or fwd < _EVOLVING_THREAT_DMG:
-                continue
-            if self._target_forward_form_in_play(obs, select, o):
-                continue
-            cid = (self._option_pokemon(obs, select, o) or {}).get("id")
-            if cid is not None and self._forward_payoff_prize_value(cid) >= 2:
-                return True
-        return False
+    # `_evolving_wincon_on_bench` was DELETED by ADR-0085 Amendment G along with the
+    # `evolving_wincon_priority` kill-switch it gated. See the Board field note above.
 
     def _target_forward_form_in_play(self, obs: dict, select: dict, option: dict) -> bool:
         """True iff this bench DAMAGE snipe target is a PRE-EVOLUTION whose evolved form is ALREADY on

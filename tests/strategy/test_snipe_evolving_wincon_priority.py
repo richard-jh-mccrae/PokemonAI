@@ -69,18 +69,31 @@ def test_neither_target_scores_zero():
 
 
 @pytest.mark.req("REQ-READ-0006")
-def test_the_kill_switch_off_restores_the_blunder_and_so_pins_why_it_exists():
-    """With `evolving_wincon_priority` OFF, the three positional rungs no longer stand down and their
-    sum (30 + 20 + 40 = 90) buries the evolving-wincon rung (45) — the Pilot chips Cinderace. This is
-    the mechanism the switch exists to defeat; asserting it means a future 'simplification' that drops
-    the stand-down cannot pass green.
+def test_the_scalar_carries_the_critical_without_a_stand_down_switch():
+    """**The witness for retiring `evolving_wincon_priority`** (ADR-0085 Amendment G, user-ruled
+    2026-07-30).
 
-    `snipe_relevance` is forced OFF because the blunder is a property of the ADDITIVE stack, and armed
-    that stack is gone: the six target rungs stand down as a body (ADR-0085 decision 5), so there is
-    no sum of 90 left to bury anything and `evolving_wincon_priority` has nothing to stand down. The
-    scalar reaches Staryu on this board with the switch either way — it subsumes this stand-down
-    rather than depending on it (ADR-0085 Amendment C) — so this test can only be posed on the OFF
-    path, which is exactly where the mechanism it guards still lives.
+    This test used to assert the opposite direction: with the kill-switch OFF, the three positional
+    rungs stopped standing down, their sum `30 + 20 + 40 = 90` buried the `+45` evolving-wincon rung,
+    and the Pilot chipped Cinderace — the CRITICAL blunder. That assertion is no longer *posable*.
+    The deletion pass removed all six rungs, so there is no sum of 90 left to bury anything, no
+    stand-down left to switch off, and `board.evolving_wincon_on_bench` had ZERO readers. The flag was
+    measured inert on this very frame — Staryu either way — and was retired rather than left in
+    `PROFILE` advertising a behaviour it no longer had.
+
+    What replaces it is the claim the flag was really making: **the developing win-condition pre-evo
+    outranks the energized current attacker on f22.** The scalar reaches that by ORDERING rather than
+    by standing anything down — Staryu earns the `forward` leg (its line reaches Mega Starmie ex, a
+    3-prize wincon not yet in play) while Cinderace's 1-prize body has no forward payoff to bank. So
+    the doctrine is asserted directly against the shipped instrument, which is the only place it now
+    lives, and a regression in the `forward` leg fails here rather than silently reinstating a
+    CRITICAL.
     """
-    dec = _pilot(evolving_wincon_priority=False, snipe_relevance=False).explain(_fx()["obs"])
-    assert dec.chosen == [CINDERACE], "the kill-switch no longer changes the pick — has it gone inert?"
+    fx = _fx()
+    dec = _pilot().explain(fx["obs"])
+    assert dec.chosen == fx["correct"] == [STARYU], "the developing wincon, not the energized 1-prize body"
+
+    # ...and it is the ORDERING that carries it, not a gate: Cinderace stays scorable, it simply loses.
+    scores = {t.index: t.score for t in dec.options}
+    assert scores[STARYU] > scores[CINDERACE], "Staryu must WIN, not merely be the only survivor"
+    assert scores[CINDERACE] > 0 or scores[STARYU] > 0, "a stand-down that zeroes everything is index order"

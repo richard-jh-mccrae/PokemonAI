@@ -1227,6 +1227,48 @@ skipped 0083 in the belief that Issue #188 held it — a correct skip for the wr
 had gone to Issue #213. This ADR has now moved **0082 → 0083 → 0084 → 0085** across three rebases in a
 single day. `main`'s index had already predicted the landing spot before this branch rebased.
 
+## Amendment G — `evolving_wincon_priority` is RETIRED (2026-07-30, user ruling)
+
+Amendment F3 left this open. The user ruled: *"retire it (flag + `_evolving_wincon_on_bench` + the
+Board field), citing f22 under the scalar as the witness."* Done.
+
+**Deleted:** the `evolving_wincon_priority` `PROFILE` entry and ctor flag, `Pilot._evolving_wincon_on_bench`,
+and `Board.evolving_wincon_on_bench`. The flag had gated a stand-down that kept the current-attacker
+rungs from burying `snipe-the-evolving-threat` (+45) under their `30 + 20 + 40 = 90` sum. Amendment E
+deleted all six rungs, which left the field with **zero readers** and the flag changing no pick on any
+board — measured directly on the ms 85164131 f22 CRITICAL it was built for: Staryu either way.
+
+**Why retire rather than leave it inert.** A `PROFILE` entry is the deployment record's answer to
+"what ships"; an entry that advertises a CRITICAL-backed behaviour it no longer has is a false answer,
+and the next person to read it would reasonably believe the stand-down is live. That is the same
+failure #217 decision 5 retired `_DENIAL_BENCH` to avoid — *"the codebase currently holds two
+contradictory models of promotion… every future deny change would have to pick one"* — one level up:
+here the two models are "the rungs stand down under a switch" and "the scalar orders continuously",
+and only the second exists in code.
+
+**The witness, and why it is stronger than what it replaces.** `test_snipe_evolving_wincon_priority.py`'s
+kill-switch test asserted the blunder was *restorable* by flipping the flag off — a claim about the
+mechanism. That claim is no longer posable, so the test now asserts the **doctrine** instead: on f22
+the developing win-condition pre-evo must outrank the energized 1-prize current attacker, and it must
+do so by ORDERING rather than by anything standing down. Staryu earns the `forward` leg (its line
+reaches Mega Starmie ex, a 3-prize wincon not yet in play); Cinderace has no forward payoff to bank.
+The test also asserts Cinderace stays *scorable* — a stand-down that zeroes every option is index
+order with a bad prior, which is the degeneracy `test_neither_target_scores_zero` was written to
+catch and which the deletion pass must not reintroduce.
+
+This is the ADR-0060/0062 move applied to a boolean rather than a threshold: **the graded term
+replaces its guard family, and the guard is deleted rather than left switched on.** Three such guards
+have now gone this way in Issue #188 — `_SNIPE_THREAT_PRIZE_FLOOR` (decision 13), the six rungs'
+`snipe_ko_available` / `evolving_wincon_on_bench` stand-down clauses (Amendment E), and now the flag
+that fed the second of those.
+
+**Note for the S4 family.** `snipe_prize_redundant` and `forced_promotion` (ADR-0044) are NOT in the
+same position and were deliberately left alone: the scalar *consumes* them as leg-scoped guards
+(decision 4), so they have live readers and their switches still change picks.
+
+Gates re-run after the retirement: Discrimination Gate **PASS**, suite **4102 passed, 1 skipped,
+5 xfailed**.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the

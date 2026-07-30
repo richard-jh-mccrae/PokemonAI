@@ -57,7 +57,10 @@ PROFILE = {
     "match_planner_steer": True,    # ADR-0045 S3 Game Plan directs the Turn Goal
     "forgo_ko": True,               # ADR-0045 S4 forgo a non-winning KO
     "prize_economy_fetch": True,    # ADR-0048 cheap 1-prize attacker line
-    "evolving_wincon_priority": True,  # snipe-the-evolving-threat stand-down (ms 85164131 f22)
+    # `evolving_wincon_priority` was RETIRED by ADR-0085 Amendment G (Issue #188). It gated the
+    # stand-down that kept the current-attacker rungs from burying `snipe-the-evolving-threat`;
+    # the deletion pass removed those rungs, leaving the flag inert — it changed no pick on the
+    # ms 85164131 f22 CRITICAL it exists for, with the scalar reaching Staryu either way.
     "value_model": False,           # ADR-0042 armed-off: a learned seam ships after its own A/B
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target tiebreak
                                     # toward the body the opponent is least able to replace (rebuild odds).
