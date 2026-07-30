@@ -500,5 +500,13 @@
     3
   ],
   "correct_label": "Riolu (bench 4 · 80/80)",
-  "rationale": "CRITICAL: Solrock is worthless without a Lunatone in play. Lunatone is near worthless without a Solrock in play. write that down."
+  "rationale": "CRITICAL: Solrock is worthless without a Lunatone in play. Lunatone is near worthless without a Solrock in play. write that down.",
+  "claims": {
+    "decision": {
+      "correct": [
+        3
+      ]
+    }
+  },
+  "frame_key": "84889539|1|decision|87"
 }

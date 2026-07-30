@@ -492,3 +492,48 @@ def test_a_fixtures_top_level_correct_agrees_with_its_explicit_decision_claim():
             continue
         assert sorted(claimed) == sorted(fx["correct"]), (
             f"{p.name}: claims.decision.correct {claimed} != top-level correct {fx['correct']}")
+
+#: Fixtures that carry an ``episode``+``frame`` pair but deliberately assert **no pick**, so there is
+#: nothing for Claim Agreement to compare. Both are REFUTED Corrections (reviewed.json, human ack
+#: 2026-07-09): their `agent_choice`/`human_wanted` field names are not an older schema for
+#: `chosen`/`correct` — they INVERT it. `test_blunder_20260709` asserts the agent matches
+#: `agent_choice` and differs from `human_wanted`, so renaming the latter to `correct` would assert
+#: that a refuted pick is right. ADR-0082's build-shape note to normalise them was withdrawn on
+#: reading the consumer.
+ASSERTS_NO_PICK = {"ms0705_bosss_over_harlequin_f78.json", "ms0705_gust_cinderace_only_ko_f79.json"}
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_every_record_backed_fixture_declares_a_frame_key():
+    """ADR-0082 decision 1's completeness invariant. `claim_agreement` opts in on `frame_key`, so a
+    fixture that has a joinable identity and omits one is silently ungated — which is exactly how the
+    two lost re-rulings stayed lost. A NEW fixture added the old way fails here rather than quietly
+    reducing coverage."""
+    import json
+    from pathlib import Path
+    fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
+    loose = []
+    for p in sorted(fixtures.glob("*.json")):
+        fx = json.loads(p.read_text(encoding="utf-8"))
+        if fx.get("frame_key") or p.name in ASSERTS_NO_PICK:
+            continue
+        if fx.get("episode") is not None and fx.get("frame") is not None:
+            loose.append(p.name)
+    assert loose == [], (
+        "these fixtures can be joined to a Correction but declare no frame_key, so Claim Agreement "
+        f"skips them: {loose}")
+
+
+@pytest.mark.req("REQ-TRAIN-0045")
+def test_the_two_pick_less_fixtures_really_do_assert_no_pick():
+    """The exclusion above must stay honest: if either fixture ever gains a `correct`, it becomes
+    gateable and the exemption is stale. Pins the inversion too — `human_wanted` is the REFUTED ask,
+    never the ruling."""
+    import json
+    from pathlib import Path
+    fixtures = Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
+    for name in sorted(ASSERTS_NO_PICK):
+        fx = json.loads((fixtures / name).read_text(encoding="utf-8"))
+        assert fx.get("correct") is None, f"{name} gained a `correct` — it is gateable now"
+        assert "agent_choice" in fx and "human_wanted" in fx, f"{name} lost the refutation shape"
+        assert parse_claims(fx).decision is None, f"{name} must synthesise no Decision Claim"

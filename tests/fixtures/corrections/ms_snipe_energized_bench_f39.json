@@ -318,5 +318,13 @@
   2
  ],
  "correct_label": "Lillie’s Clefairy ex",
- "rationale": "Should snipe highest threat Pokemon, in this case the only benched pokemon with energy."
+ "rationale": "Should snipe highest threat Pokemon, in this case the only benched pokemon with energy.",
+ "claims": {
+  "decision": {
+   "correct": [
+    2
+   ]
+  }
+ },
+ "frame_key": "81785223|0|decision|39"
 }

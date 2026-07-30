@@ -253,5 +253,13 @@
     1
   ],
   "correct_label": "opp Staryu (bench 2 · 70/70)",
-  "rationale": "CRITICAL: We dont care at all about the benched Cinderace. Our Starmie can OHKO it whenever its promoted. we need to stomp out the next big threat, the opponents eventual win condition.\n\nOur matchup Posture feature should have caught this. needs review!"
+  "rationale": "CRITICAL: We dont care at all about the benched Cinderace. Our Starmie can OHKO it whenever its promoted. we need to stomp out the next big threat, the opponents eventual win condition.\n\nOur matchup Posture feature should have caught this. needs review!",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ]
+    }
+  },
+  "frame_key": "85164131|1|decision|22"
 }

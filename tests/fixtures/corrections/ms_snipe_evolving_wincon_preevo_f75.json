@@ -537,5 +537,13 @@
   3
  ],
  "correct_label": "Riolu",
- "rationale": "Hariyama is strongest benched pokemon, but is not threat due to no energy. Riolu can become mega lucario, so snipe that instead"
+ "rationale": "Hariyama is strongest benched pokemon, but is not threat due to no energy. Riolu can become mega lucario, so snipe that instead",
+ "claims": {
+  "decision": {
+   "correct": [
+    3
+   ]
+  }
+ },
+ "frame_key": "81905522|0|decision|75"
 }

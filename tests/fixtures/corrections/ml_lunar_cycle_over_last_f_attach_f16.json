@@ -259,5 +259,13 @@
     6
   ],
   "correct_label": "Ability: Lunatone (bench 1 · 110/110)",
-  "rationale": "Would have been more impactful to discard the energy and draw 3 cards instead of attaching and NOT attacking"
+  "rationale": "Would have been more impactful to discard the energy and draw 3 cards instead of attaching and NOT attacking",
+  "claims": {
+    "decision": {
+      "correct": [
+        6
+      ]
+    }
+  },
+  "frame_key": "85058574|1|decision|16"
 }

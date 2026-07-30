@@ -489,5 +489,13 @@
     2
   ],
   "correct_label": "Attach Basic {F} Energy → Makuhita (bench 2 · 80/80)",
-  "rationale": "avoid attaching energy to lunatone unless only option"
+  "rationale": "avoid attaching energy to lunatone unless only option",
+  "claims": {
+    "decision": {
+      "correct": [
+        2
+      ]
+    }
+  },
+  "frame_key": "84071010|0|decision|64"
 }

@@ -168,3 +168,52 @@ not a follow-up to it.
 - **Fold this into Issue #187.** The ruling is corpus-wide, not instrument-specific, so by ADR-0076
   decision 3's own principle it does not belong in the instrument's issue — and a back-fill across 34
   fixtures would make a deny-instrument diff unreviewable.
+
+
+## Amendment A (2026-07-29) — two build-shape corrections found while implementing (Issue #211)
+
+Both are corrections to *this ADR's* build shape, not to its decisions. Recorded because each was
+written from a field-name observation without reading the consumer, which is the same mistake in
+miniature that the ADR itself is about.
+
+**1. "Normalise the two `agent_choice`/`human_wanted` fixtures to `chosen`/`correct`" is WITHDRAWN.**
+Those field names are not an older schema — they **invert** the usual one. `ms0705_bosss_over_harlequin_f78`
+and `ms0705_gust_cinderace_only_ko_f79` are **REFUTED** Corrections (`reviewed.json`, `disposition:
+refuted`, human acknowledgement 2026-07-09), and `tests/strategy/test_blunder_20260709.py` asserts:
+
+```python
+assert dec.chosen == fx["agent_choice"]      # the agent is right
+assert dec.chosen != fx["human_wanted"]      # the human's ask is refuted
+```
+
+Renaming `human_wanted` to `correct` would have asserted that a refuted pick is the ruling. They
+therefore assert **no pick**, `parse_claims` synthesises no Decision Claim for them, and they are
+exempt from the `frame_key` back-fill — pinned by `ASSERTS_NO_PICK` plus a test that fails if either
+ever gains a `correct`, so the exemption cannot go stale.
+
+**2. Decision 5's provenance was wrong: `84071010-15` was re-ruled 2026-07-13, not by this grill.**
+`reviewed.json` already carried a `fixed` entry for it, round **2026-07-13**, whose reason states
+outright: *"Fixture re-tagged correct=[0] (Petrel), category missed_win."* So the ruling, the category
+change and the source verification all predate ADR-0082 by sixteen days — what never happened is the
+**propagation to the record**, which is precisely the drift this ADR exists to make loud. Consequences:
+no new ledger entry was added for it (the existing one is accurate and dated), and the record's note
+dates the ruling 2026-07-13 with 2026-07-29 as the propagation. The independent re-verification this
+grill performed stands; it was confirmation, not adjudication. That same 2026-07-13 entry also explains
+why the fixture carries `own_prizes` + `search_begin_input` (*"so the tracker anchors and
+deck_definitely_has(Air Balloon)=True"*), which independently corroborates `SEEDED_OBS_KEYS`.
+
+**Two things the build added beyond the recorded shape**, both closing holes the decisions imply but
+did not name:
+
+- **A fixture's top-level `correct` must equal an explicit `claims.decision.correct`.** 33 test modules
+  read `fx["correct"]` directly, so the back-fill keeps both in sync rather than deleting the former —
+  which is what makes it non-breaking, and which opens a drift the gate would not otherwise see.
+- **Every record-backed fixture must declare a `frame_key`** (a completeness invariant). Claim Agreement
+  opts in on that key, so a fixture with a joinable identity and no key is silently ungated — exactly
+  how the two lost re-rulings stayed lost. Coverage went 8 → 40 fixtures.
+
+**Also flagged, deliberately not fixed here:** `fixed` is not in `review_correction.py`'s
+`DISPOSITIONS` (`refuted | deferred | covered`), yet the committed ledger holds **four** `fixed`
+entries and one `deferred-multi-turn`, and nothing validates the value on load (`partition_reviewed`
+checks only presence). So the sanctioned CLI cannot produce entries the data already relies on.
+Widening a closed vocabulary is an ADR-shaped decision, not an implementation detail.

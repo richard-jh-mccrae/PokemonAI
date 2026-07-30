@@ -201,5 +201,13 @@
     1
   ],
   "correct_label": "Solrock",
-  "rationale": "CRITICAL: Lunatone is typically never an attacker while Solrock is our badass starter, swinging for 70 dmg for only a single energy. we almost always wanna start Solrock when we have a Lunatone as well."
+  "rationale": "CRITICAL: Lunatone is typically never an attacker while Solrock is our badass starter, swinging for 70 dmg for only a single energy. we almost always wanna start Solrock when we have a Lunatone as well.",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ]
+    }
+  },
+  "frame_key": "84890060|1|decision|1"
 }

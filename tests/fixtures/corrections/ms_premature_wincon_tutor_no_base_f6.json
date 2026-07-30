@@ -244,5 +244,13 @@
     0
   ],
   "correct_label": "Attach Basic {W} Energy → Cinderace (active · 160/160)",
-  "rationale": "fetching a Mega Starmie here doesnt help us, rather just not do it."
+  "rationale": "fetching a Mega Starmie here doesnt help us, rather just not do it.",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ]
+    }
+  },
+  "frame_key": "85164605|1|decision|6"
 }

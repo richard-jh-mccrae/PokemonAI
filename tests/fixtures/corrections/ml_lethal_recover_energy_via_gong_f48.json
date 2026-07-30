@@ -690,5 +690,13 @@
     9
   ],
   "correct_label": "Fighting Gong",
-  "rationale": "A fighting gong would have yielded us an energy to attach to our wincon, then free retreat into it and KO opponent."
+  "rationale": "A fighting gong would have yielded us an energy to attach to our wincon, then free retreat into it and KO opponent.",
+  "claims": {
+    "decision": {
+      "correct": [
+        9
+      ]
+    }
+  },
+  "frame_key": "84890060|1|decision|48"
 }

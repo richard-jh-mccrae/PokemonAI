@@ -423,5 +423,13 @@
   0
  ],
  "correct_label": "opp Kadabra (bench 1 · 80/80)",
- "rationale": "another critical blunder when sniping. must snipe opponents main attackers when they are able. math must exist here. a 70HP dunsparce requires just as many Jetting Blow snipes as a 80 HP kadabra, but the dunsparce is just a support pokemon, not a treat."
+ "rationale": "another critical blunder when sniping. must snipe opponents main attackers when they are able. math must exist here. a 70HP dunsparce requires just as many Jetting Blow snipes as a 80 HP kadabra, but the dunsparce is just a support pokemon, not a treat.",
+ "claims": {
+  "decision": {
+   "correct": [
+    0
+   ]
+  }
+ },
+ "frame_key": "82753102|1|decision|85"
 }

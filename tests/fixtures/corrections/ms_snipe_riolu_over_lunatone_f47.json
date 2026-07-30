@@ -361,5 +361,13 @@
   2
  ],
  "correct_label": "Riolu",
- "rationale": "should snipe preevolution to opponents main attacker"
+ "rationale": "should snipe preevolution to opponents main attacker",
+ "claims": {
+  "decision": {
+   "correct": [
+    2
+   ]
+  }
+ },
+ "frame_key": "82224509|1|decision|47"
 }

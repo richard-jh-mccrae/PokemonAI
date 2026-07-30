@@ -319,5 +319,13 @@
     2
   ],
   "correct_label": "End turn",
-  "rationale": "CRITICAL: we switched an unpowered riolu for an unpowered riolu. a waste."
+  "rationale": "CRITICAL: we switched an unpowered riolu for an unpowered riolu. a waste.",
+  "claims": {
+    "decision": {
+      "correct": [
+        2
+      ]
+    }
+  },
+  "frame_key": "84889539|1|decision|30"
 }
