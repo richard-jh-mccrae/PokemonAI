@@ -162,18 +162,46 @@ def test_45_forced_promotion_key_predicts_the_ready_wincon_not_the_energized_sta
     assert board.forced_promotion_key != id(staryu)
 
 
+# `test_45_..._via_the_rungs` was DELETED with the rungs it named (ADR-0085's deletion pass). It
+# asserted REQ-READ-0005 through `snipe-the-top-threat` / `snipe-the-threat` / `snipe-the-forced-
+# promotion` firing, and those hypotheses no longer exist. The requirement is unchanged and is
+# carried by the `_via_the_scalar` sibling immediately below, which asserts the same two facts on the
+# graded terms: the mirage zeroed at source, and the forced leg dominating its own imminence.
+
 @pytest.mark.req("REQ-READ-0005")
-def test_45_forced_promotion_redirects_the_snipe_and_suppresses_the_mirage():
-    """With the read on: the energized Staryu is a promotion mirage (they won't bring it up), so its
-    threat/imminence snipe is suppressed; the ready wincon gets `snipe-the-forced-promotion`."""
+def test_45_forced_promotion_redirects_the_snipe_and_suppresses_the_mirage_via_the_scalar():
+    """The SAME requirement through the shipped ARMED instrument (ADR-0085, armed-ON 2026-07-30).
+
+    The six additive target rungs stand down together when `snipe_relevance` is armed, so REQ-READ-0005
+    can no longer be read off hypothesis IDs — it is carried by the graded terms instead, and this
+    asserts it there so the requirement stays covered in the configuration that actually ships:
+
+    * the mirage is suppressed by ZEROING `imminence` (ADR-0085's `target_promotion_mirage`), which
+      collapses `their_plan` and with it the whole conjunctive product — not merely out-ranked;
+    * the ready wincon earns the `forced` leg, and `forced` must DOMINATE its own `imminence` (the
+      no-imminence-discount clause: a forced promotion is not discounted by how long they need).
+    """
     fx = _fx("planner_83661649_45.json")
     pilot = _shipped_pilot()
+    assert pilot.snipe_relevance is True                  # shipped ARMED — the path under test
     pilot.forced_promotion = True
-    d = pilot.explain(fx["obs"])
-    staryu_fired = {h.id for h, _w in d.options[0].fired}
-    mega_fired = {h.id for h, _w in d.options[1].fired}
-    assert "snipe-the-top-threat" not in staryu_fired and "snipe-the-threat" not in staryu_fired
-    assert "snipe-the-forced-promotion" in mega_fired
+    obs = fx["obs"]
+    select = obs["select"]
+    board = pilot._board(obs, select)
+    terms = [pilot._snipe_relevance_terms(obs, select, board, o,
+                                          pilot._context(obs, select, board, o))
+             for o in select["option"]]
+    staryu, mega = terms[0], terms[1]
+    # the mirage: zeroed at the source, so the product is zero however good our route is
+    assert staryu["imminence"] == 0.0
+    assert staryu["their_plan"] == 0.0
+    assert staryu["relevance"] == 0.0
+    assert staryu["my_route"] > 0.0                       # a live route, still worth nothing to snipe
+    # the ready wincon: the forced leg carries it, and outranks its own discounted imminence
+    assert mega["forced"] > 0.0
+    assert mega["forced"] > mega["imminence"]
+    assert mega["their_plan"] == pytest.approx(mega["forced"] * mega["brief_multiplier"])
+    assert mega["relevance"] > staryu["relevance"]
 
 
 @pytest.mark.req("REQ-READ-0005")

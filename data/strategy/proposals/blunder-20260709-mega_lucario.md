@@ -144,7 +144,7 @@ co-dependency stays deck-specific.
   full `shuffle_hand` refresh out-rank a marginal alternative dig AND override `attach-before-hand-shuffle`
   when the hand is genuinely dead.
 - verification_contract: verifier
-- provenance: correction 84071010:f15 | fixture tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json
+- provenance: correction 84071010:f15 | fixture tests/fixtures/corrections/ml_petrel_balloon_retreat_lethal_f15.json
 - status: refuted
 - for: general
 
@@ -183,7 +183,7 @@ dig-before-commit.)
   `live_trace.lethal` was null while a WIN existed.
 - verification_contract: verifier
 - provenance: correction 84071010:f15 (re-examined 2026-07-09 → missed T3 lethal, per
-  data/handoffs/ownside.md §3) | fixture tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json
+  data/handoffs/ownside.md §3) | fixture tests/fixtures/corrections/ml_petrel_balloon_retreat_lethal_f15.json
   (state re-verify at source on build; the fixture is named for the retired dead-hand framing) |
   reframes the refuted `revive-the-dead-hand-full-refresh` above | see [[lethal-solver-plan]]
 - status: applied

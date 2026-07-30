@@ -10,7 +10,7 @@
 
 **Status:** deferred at apply time, 2026-07-10 (`/update-strategy`). Proposal:
 `data/strategy/proposals/blunder-20260709-mega_lucario.md#lethal-retreat-enabler`.
-Correction: `84071010:f15`. Fixture: `tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json`.
+Correction: `84071010:f15`. Fixture: `tests/fixtures/corrections/ml_petrel_balloon_retreat_lethal_f15.json`.
 
 > **Update 2026-07-11 — the tool blocker is cleared (ADR-0050 merged).** The f15 fixture now carries
 > `obs["own_prizes"]` + `search_begin_input` (backfilled via `tools/train/backfill_seed.py`), so the

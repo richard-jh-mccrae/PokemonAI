@@ -419,7 +419,7 @@ def _mp_snipe_pilot(matchup_targeting=True):
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"]}),
-                 scout=Scout(tiny_artifact()), briefs=[brief],
+                 scout=Scout(tiny_artifact()), briefs=[brief], snipe_relevance=True,
                  posture=True, matchup_targeting=matchup_targeting)
 
 
@@ -434,17 +434,41 @@ def _damage_select_over_ml_bench():
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
-    dec = _mp_snipe_pilot().explain(_damage_select_over_ml_bench())
-    # Solrock's general draw-engine fact -> negative matchup contribution; Riolu (Brief
-    # fragile_preevo) -> positive. The pick lands on the wincon line, not the engine.
-    assert dec.options[1].tactical > 0 > dec.options[0].tactical
-    assert dec.chosen == [1]
+    # Solrock's general draw-engine fact -> an `avoid` MatchupPlan priority; Riolu (Brief
+    # fragile_preevo) -> a positive one. The pick lands on the wincon line, not the engine.
+    #
+    # ADR-0085 moved WHERE that steer is expressed. It used to be a signed ADDEND in the tactical
+    # band (`_snipe_matchup_tactical`, now deleted with the six rungs), so the requirement could be
+    # read as "tactical positive on one, negative on the other". Decision 5 folded it into the graded
+    # scalar as a MULTIPLIER on `their_plan`, which is why the sign is now asserted on
+    # `brief_multiplier` instead: > 1 sharpens the briefed target, < 1 de-prioritises the engine, and
+    # only the SIGN crosses the seam (`_BRIEF_THREAT_BOOST` supplies the magnitude, so no rate is
+    # invented to map a damage-scale priority into the [0,1] band).
+    pilot = _mp_snipe_pilot()
+    obs = _damage_select_over_ml_bench()
+    select = obs["select"]
+    board = pilot._board(obs, select)
+    terms = [pilot._snipe_relevance_terms(obs, select, board, o,
+                                          pilot._context(obs, select, board, o))
+             for o in select["option"]]
+    assert terms[1]["brief_multiplier"] > 1.0 > terms[0]["brief_multiplier"]
+    assert pilot.explain(obs).chosen == [1]
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_matchup_term_silent_under_kill_switch():
-    dec = _mp_snipe_pilot(matchup_targeting=False).explain(_damage_select_over_ml_bench())
-    assert dec.options[0].tactical == 0.0 and dec.options[1].tactical == 0.0
+    # The ADR-0051 spine's kill-switch: with `matchup_targeting` OFF the Brief cannot steer the pick
+    # at all. Asserted on `brief_multiplier` rather than on the retired tactical addend (see the
+    # sibling test above) — a flat 1.0 on BOTH targets is what "silent" means for a multiplier, and
+    # unlike `tactical == 0.0` it cannot pass merely because the term was deleted.
+    pilot = _mp_snipe_pilot(matchup_targeting=False)
+    obs = _damage_select_over_ml_bench()
+    select = obs["select"]
+    board = pilot._board(obs, select)
+    mults = [pilot._snipe_relevance_terms(obs, select, board, o,
+                                          pilot._context(obs, select, board, o))["brief_multiplier"]
+             for o in select["option"]]
+    assert mults == [1.0, 1.0]
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
@@ -571,6 +595,10 @@ def _lever_stats(attacks=None):
 
 def _lever_pilot(attack_table=None, **kw):
     table = attack_table or {11: AttackStat(11, damage=120, cost=1)}
+    # `snipe_relevance` armed to match the shipped PROFILE. ADR-0085's deletion pass removed the six
+    # DAMAGE target rungs, so an unarmed Pilot scores every bench target 0 and the snipe assertions
+    # below would pass or fail on option index rather than on the Brief steer under test.
+    kw.setdefault("snipe_relevance", True)
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=_lever_stats(table), **kw)
 
@@ -588,8 +616,28 @@ def test_snipe_hunts_the_briefed_preevo_end_to_end():
                                     opp_bench=bench))
     on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])                       # default ON
     off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], matchup_targeting=False)
+    # Asserted on the SCORES, not on the pick. Both bodies price relevance 0.0 on this board, so
+    # index order alone already returns [0] — a `decide(obs) == [0]` assertion passes with the Brief
+    # unwired and witnesses nothing (verified by deleting the tiebreak from the score sum: it stayed
+    # green). A strict score ORDERING can only come from the tiebreak, so that is what is asserted.
+    scores = {o.index: o.score for o in on.explain(obs).options}
+    assert scores[0] > scores[1], "the Brief must ORDER the tie, not merely coincide with index order"
     assert on.decide(obs) == [0]                           # the bare briefed Riolu (fragile_preevo)
-    assert off.decide(obs) == [1]                          # generic order: the energized Solrock
+
+    # The kill-switch is asserted as SILENCE, not as a rival pick. It used to read
+    # `off.decide(obs) == [1]` — "generic order: the energized Solrock" — which was the deleted
+    # `snipe-the-threat` rung (+20 for carrying Energy) doing the work. ADR-0085 Amendment E removed
+    # it, so on this board OFF has no signal at all: both bodies price relevance 0.0, and the pick
+    # falls to option index, which is [0] — the same answer ON gives, for an entirely different
+    # reason. A pick assertion here can no longer distinguish the switch's two states and would pass
+    # whether or not the Brief were wired in (the E4 vacuity, one test down). What IS still
+    # distinguishable, and is the switch's actual contract, is that the Brief contributes nothing:
+    # every option's tiebreak is flat 0.0, so no authored preference reaches the pick.
+    sel = obs["select"]
+    board = off._board(obs, sel)
+    breaks = [off._snipe_brief_tiebreak(obs, sel, board, o, off._context(obs, sel, board, o))
+              for o in sel["option"]]
+    assert breaks == [0.0, 0.0], "matchup_targeting OFF: the Brief must not order the tie"
 
 
 @pytest.mark.req("REQ-POSTURE-0007")

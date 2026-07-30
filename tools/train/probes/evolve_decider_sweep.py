@@ -21,6 +21,20 @@ as a FIX, a REGRESSION, or a no-label judgement call.
     python tools/train/probes/evolve_decider_sweep.py --all      # every frame, not only the flips
 
 Offline and read-only; two engine-backed Pilot builds per frame.
+⚠️ **This probe is a DIAGNOSTIC, not the Decision Gate** (since ADR-0085 Amendment I, 2026-07-30).
+
+ADR-0072 named "the phase's `*_decider_sweep.py`" as the Decision Gate, and this one compared the
+shipped agent against its own kill-switch turned OFF. That was right at the swap, when OFF *was* the
+incumbent rung pile. It stopped being right the moment that pile was DELETED, as tracker directive 1
+requires: with no rungs left, OFF is an empty scorer whose argmax falls to option index, so the
+comparison became "the equation versus nothing" and could only ever report FIX. A gate that cannot
+report a REGRESSION is not a gate. All four sweeps were in this state simultaneously and none said so.
+
+The Decision Gate is now `tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`,
+which diffs against a RECORDED capture — the property that kept the Discrimination Gate honest all
+along. What remains here is still worth running: the per-leg breakdown and the per-frame
+classification against the human are diagnosis this lab deliberately does not duplicate.
+
 """
 from __future__ import annotations
 
@@ -224,7 +238,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
     regressions = [g for g in graded if g["verdict"] == "REGRESSION"]
     ruled = [g for g in regressions if g["key"] in held_out]
     unruled = [g for g in regressions if g["key"] not in held_out]
-    print_gate_report(f"DECISION GATE — {len(graded)} labelled flip(s) graded",
+    print_gate_report(f"DIAGNOSTIC (not the Decision Gate — see decider_lab.py) — {len(graded)} labelled flip(s) graded",
                       gating=unruled, ruled=ruled, held_out=held_out, total=len(graded),
                       rule="zero unruled REGRESSION",
                       line=lambda g: f"REGRESSION {g['key']}  {g['label']}")

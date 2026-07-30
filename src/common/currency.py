@@ -66,3 +66,29 @@ def prize_to_damage(prize_equivalents: float) -> float:
     `score` the damage-scale rungs also write to. Callers that hold a *card-worth* value want the
     Worth Damage Rate instead — which does not exist yet, on purpose (see above)."""
     return float(prize_equivalents) * PRIZE_DAMAGE_RATE
+
+
+def tiebreak_bonus(relevances, k: float) -> float:
+    """Half the finest distinction a menu of ``[0,1]`` relevance values actually draws, in SCORE units.
+
+    The shared arithmetic behind BOTH relevance instruments' lexicographic tiebreaks — deny's
+    (ADR-0084, Issue #217 decision 2) and snipe's (ADR-0085 Amendment H, Issue #188). The two keep
+    their OWN guards, which differ on purpose: deny declines to order a zero because its ordering
+    signal is derived from the same board, snipe orders one because the Brief is independent authored
+    scouting. Only this quantum is common, and it lives here because it is the piece most likely to
+    drift apart unnoticed — the two copies had already grown a stale cross-reference between them by
+    the time it was extracted.
+
+    ``k`` is the instrument's normalizer, so ``k x relevance`` is its score and two distinct relevance
+    values differ by at least ``1 / k``. Half the smallest REAL gap on the menu therefore can never
+    overtake a difference relevance itself settled; ``1 / k`` — one damage unit — is the fallback when
+    the menu draws no distinction at all, which is exactly the all-zero case snipe must still order.
+
+    Deriving it beats fixing it: a hardcoded epsilon is sized against the arithmetic in front of it
+    and rots silently the first time a term changes that arithmetic — the ADR-0063 failure mode, where
+    a new positive term voided every guard calibrated against the previous scale with nothing failing
+    loudly.
+    """
+    distinct = sorted(set(relevances))
+    gaps = [b - a for a, b in zip(distinct, distinct[1:]) if b > a]
+    return 0.5 * float(k) * (min(gaps) if gaps else (1.0 / float(k)))

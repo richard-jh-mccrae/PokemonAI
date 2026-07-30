@@ -72,7 +72,7 @@ because the same blindness is what the guard in decision 2 exists to prevent.
 | fixture | fixture says | record says | reading |
 |---|---|---|---|
 | `ms_doom_relax_bare_terapagos_f29` | `[2]` | `[10]` (re-ruled 2026-07-28, Issue #177) | **real** — stale, no sibling |
-| `ml_dead_hand_full_refresh_f15` | `[0]` + a dated DoD re-tag | `[1]` | **real** — a verified win the record denies |
+| `ml_petrel_balloon_retreat_lethal_f15` | `[0]` + a dated DoD re-tag | `[1]` | **real** — a verified win the record denies |
 | `dp_doom_guard_archaludon_1e_f35` | `[2]` | `[1]` (re-ruled 2026-07-26, Issue #167) | **not drift** — sibling `dp_hold_evolve_until_typed_ready_f35` carries `frame_key 86091435\|0\|decision\|35` and `claims.decision.correct=[1]`, matching |
 | `ms_prefer_cheap_evolution_enabler_f41` | `[4]` | `[3]` | **not drift** — sibling `ms_item_over_supporter_indifferent_f41` carries `frame_key 85164605\|1\|decision\|41`, `claims.decision.correct=[3]`, `owner #145`, `ruled 2026-07-27` (*"valid but immaterial here"*) |
 | 5 seeded fixtures | — | — | **not drift** — obs differs **only** by `own_prizes` + `search_begin_input` (ADR-0050 reseeding) |
@@ -92,6 +92,10 @@ keep exactly their present meaning with no edit."* So a stale `correct` **is** a
 (`leaf_lab.py:176`). So f29's stale value currently feeds no gate. Back-fill `frame_key` onto it, as
 decision 1 requires, and it *would* — which is why decision 2's check is a precondition of decision 1,
 not a follow-up to it.
+
+*(Filename note, 2026-07-30: this fixture was renamed `ml_dead_hand_full_refresh_f15` →
+`ml_petrel_balloon_retreat_lethal_f15` — the old name described the SUPERSEDED 2026-07-05 ruling
+this very row identifies as drift. The row's finding is unchanged; only the pointer moved.)*
 
 ## Decisions
 

@@ -31,12 +31,15 @@ CLUSTERS = {
         "use-acceleration",                     # PLAY-side accel source pick (currency-clean)
         "prefer-active-attach-in-setup",        # positional prior, below one scaled build step
         "feed-the-line-for-disruptor-lock"}),   # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
+    # The six DAMAGE(15) TARGET rungs are DELETED since ADR-0085 (#188) — `snipe-for-the-ko` (60),
+    # `snipe-the-evolving-threat` (45), `snipe-the-forced-promotion` (40), `snipe-the-top-threat` (30),
+    # `snipe-the-threat` (20), `snipe-on-the-path` (12). The bench-target pick is decided by
+    # `common/snipe_relevance.py`'s [0,1] scalar, with the KO half as the structural
+    # `_snipe_ko_dominator`. The same shape as `promote` below (ADR-0073) and `energy` (ADR-0069):
+    # a decider replaces its rung family outright rather than standing it down.
+    # What SURVIVES here is the counter placement/move family — a different set of select contexts
+    # (13/14/16/40), untouched by decision 5's scope.
     "snipe": (SNIPE_HYPOTHESES, {
-        "snipe-the-threat", "snipe-for-the-ko", "snipe-the-top-threat",
-        "snipe-on-the-path",                    # Tier-3 Prize Path (ADR-0040)
-        "snipe-the-forced-promotion",           # ADR-0044 Forced-Promotion Read
-        "snipe-the-evolving-threat",            # restored 2026-07-09 (forward-wincon pre-evo, form-absent gated)
-        # counter placement/move family (Phantom Dive spread + Munkidori — adjacent bench-targeting):
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
                                  "develop-the-accel-recipient", "develop-a-basic-in-setup",

@@ -18,7 +18,8 @@ from train import gates
 from train.gates import (EVOLVE_LANE, OWNER_RE, RULED_RE, AxisClaim, DecisionClaim, EndorsementClaim,
                          decision_gate_verdict, discrimination_gate_verdict, evaluate_axis_claim,
                          evaluate_decision_claim, evaluate_endorsement_claim, held_out_owner,
-                         lane_slots, leaf_lab_diff, option_slot, parse_claims)
+                         lane_slots, leaf_lab_diff, option_slot, parse_claims,
+                         decider_lab_diff, decision_gate_verdict)
 
 # ── slot resolution — the shared basis both sweeps and Axis Claims compare on ─────────────────────
 
@@ -562,3 +563,76 @@ def test_the_two_pick_less_fixtures_really_do_assert_no_pick():
         assert fx.get("correct") is None, f"{name} gained a `correct` — it is gateable now"
         assert "agent_choice" in fx and "human_wanted" in fx, f"{name} lost the refutation shape"
         assert parse_claims(fx).decision is None, f"{name} must synthesise no Decision Claim"
+
+
+# ───────────────────────────────────────────── the Decision Gate's recorded baseline (ADR-0085 I)
+
+def _drow(key, chosen, correct, context=15, agent="mega_starmie"):
+    return {"key": key, "chosen": chosen, "correct": correct, "context": context, "agent": agent}
+
+
+def _dcap(rows):
+    return {"git_rev": "test", "rows": rows}
+
+
+def test_decider_lab_diff_reports_nothing_when_the_build_is_unchanged():
+    """The self-diff. A gate whose reference is a recorded capture must be silent against itself, or
+    every run manufactures work."""
+    rows = [_drow("a", [0], [0]), _drow("b", [1], [2])]
+    assert decider_lab_diff(_dcap(rows), _dcap(rows))["rows"] == []
+
+
+def test_decider_lab_diff_CAN_report_a_regression():
+    """**The property Amendment I exists to restore**, asserted directly.
+
+    The sweeps this replaces compared against a live kill-switch-OFF arm. Once each phase deleted its
+    rung pile, OFF became an empty scorer and the comparison could only ever produce FIX — measured
+    on the real corpus: `evolve_decider_sweep` reported `4 FIX, 0 REGRESSION` and
+    `snipe_decider_sweep` `12 FIX, 0 REGRESSION`, with no regression detectable by construction.
+    Asserting the four verdict directions here is what stops that from recurring silently."""
+    before = _dcap([_drow("regress", [0], [0]), _drow("fix", [9], [1]),
+                    _drow("neutral", [7], [1]), _drow("unlabelled", [0], None)])
+    after = _dcap([_drow("regress", [3], [0]), _drow("fix", [1], [1]),
+                   _drow("neutral", [8], [1]), _drow("unlabelled", [4], None)])
+    got = {r["key"]: r["verdict"] for r in decider_lab_diff(before, after)["rows"]}
+    assert got == {"regress": "REGRESSION", "fix": "FIX",
+                   "neutral": "NEUTRAL", "unlabelled": "UNLABELLED"}
+
+
+def test_decider_lab_regression_gates_unless_it_is_ruled():
+    """The Held-out Ledger reaches this gate too — one ruling must hold a frame out of BOTH gates,
+    which is why the key is built by `frame_key_of` on either side."""
+    before, after = _dcap([_drow("k", [0], [0])]), _dcap([_drow("k", [1], [0])])
+    rows = decider_lab_diff(before, after)["rows"]
+    assert decision_gate_verdict(rows, held_out={}) is False
+    assert decision_gate_verdict(rows, held_out={"k": "#165"}) is True
+
+
+def test_decider_lab_diff_surfaces_a_moved_corpus_rather_than_shrinking_the_gated_set():
+    """A baseline captured against a different corpus shape must be VISIBLE. Silently comparing only
+    the intersection is how a gate quietly stops covering what it claims to."""
+    d = decider_lab_diff(_dcap([_drow("a", [0], [0]), _drow("gone", [0], [0])]),
+                         _dcap([_drow("a", [0], [0]), _drow("new", [0], [0])]))
+    assert d["added"] == ["new"] and d["removed"] == ["gone"] and d["compared"] == 1
+
+
+def test_decider_lab_diff_compares_a_multi_pick_as_a_set_not_a_sequence():
+    """A reordered multi-pick is NOT a regression.
+
+    `DISCARD` (SelectContext 8) asks for N cards and the agent returns all of them; the engine
+    applies the set, so their order carries no decision. Comparing sequences would report
+    `[0, 2] -> [2, 0]` as a REGRESSION — a false positive in the one direction a gate must never
+    produce, since it is the direction that blocks a merge.
+
+    Found while writing the hand-off, by reading the captured `DISCARD` rows rather than trusting
+    the aggregate: the agent picks `[2, 3]` where `correct` records `[2]`, because a Correction's
+    `correct` names the card the RULING was about, not the whole legal answer. That mismatch is why
+    context 8 reads 1/12 agreement and why the per-context agree rate is not meaningful for
+    multi-pick contexts — the movement detection is, which is what actually gates.
+    """
+    before = _dcap([_drow("k", [0, 2], [0, 2], context=8)])
+    after = _dcap([_drow("k", [2, 0], [0, 2], context=8)])
+    assert decider_lab_diff(before, after)["rows"] == [], "order is not a decision"
+    # a genuine change to the SET is still caught
+    moved = _dcap([_drow("k", [2, 4], [0, 2], context=8)])
+    assert [r["verdict"] for r in decider_lab_diff(before, moved)["rows"]] == ["REGRESSION"]

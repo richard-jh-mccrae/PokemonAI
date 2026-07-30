@@ -15,16 +15,36 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from pilot_helpers import BENCH, card_opt, make_select, poke, state
 
 
-def _fired(trace):
-    return {h.id for h, _ in trace.fired}
-
-
 def _pilot(stats, functions=None, scaled_threat_rank=True):
-    # `scaled_threat_rank` ON matches the shipped PROFILE (Issue #213); the constructor default is
-    # OFF because the switch is an incident lever, and a bare Pilot() would otherwise silently
-    # exercise the retired printed-only read here.
+    # Both switches ON to match the shipped PROFILE; the constructor defaults are OFF because each is
+    # an incident lever, and a bare Pilot() would silently exercise a retired read.
+    # `scaled_threat_rank` is Issue #213's; `snipe_relevance` is ADR-0085's, and since that ADR's
+    # deletion pass removed the six DAMAGE target rungs there is no additive path left to fall back
+    # on — an unarmed Pilot scores every bench target 0 and the argmax degenerates to option index,
+    # which would make every ordering assertion below pass vacuously.
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=functions, scaled_threat_rank=scaled_threat_rank)
+                 functions=functions, scaled_threat_rank=scaled_threat_rank, snipe_relevance=True)
+
+
+def _rank(pilot, obs, index):
+    """One option's THREAT RANK — the instrument these tests are actually about.
+
+    They used to read it off a FIRED hypothesis id (`snipe-the-top-threat`), and ADR-0085 deleted
+    that rung with the other five. The rank itself SURVIVES: `planner.py:_ko_key_threat_lines` ranks
+    the opponent bench with `_body_threat_rank` for the ADR-0031 `ko_key_threat` Goal-Ladder rung
+    (`planner_key_threat`, shipped ON). So the requirement is unchanged and still live — only its
+    reader moved from a snipe rung to the Planner.
+
+    These assertions were deliberately NOT re-pointed at Snipe Relevance. The scalar is CATEGORICAL
+    (ADR-0085 decision 1) and asks *does this body matter to their plan and my route*, not *how big
+    is it*; on these fixtures the opponent bodies carry no Energy, so `their_plan` is 0 for every
+    target and the conjunctive product is 0 for all of them. Asserting a magnitude ordering on an
+    instrument that deliberately does not price magnitude would be testing the wrong thing — this is
+    ADR-0062's wall, which is why the two instruments coexist rather than one subsuming the other.
+    """
+    select = obs["select"]
+    pilot._board(obs, select)      # builds `_opp_attack_context`; the scaling term is 0 without it
+    return pilot._target_threat_rank(obs, select, select["option"][index], None, 0.0)
 
 
 _SNIPER = CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))   # my Active: a 50-snipe rider
@@ -43,10 +63,7 @@ def test_already_evolved_ex_outranks_a_low_hp_support_body():
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,  # DAMAGE
                       current=state(active=poke(700), opp_bench=[poke(121, hp=320), poke(64, hp=70)]))
-    dragapult, hoothoot = pilot.explain(obs).options
-    assert "snipe-the-top-threat" in _fired(dragapult)
-    assert "snipe-the-top-threat" not in _fired(hoothoot)
-    assert pilot.decide(obs) == [0]                                 # big ex, not the low-HP support
+    assert _rank(pilot, obs, 0) > _rank(pilot, obs, 1)             # 200-damage ex over low-HP support
 
 
 @pytest.mark.req("REQ-GEN-0028")
@@ -74,10 +91,7 @@ def test_a_line_that_reaches_a_hand_size_attacker_outranks_a_bigger_raw_damage_l
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
                       current=state(active=poke(700), opp_bench=[poke(742, hp=80), poke(305, hp=70)],
                                     opp_hand_count=7))
-    kadabra, dunsparce = pilot.explain(obs).options
-    assert "snipe-the-top-threat" in _fired(kadabra)
-    assert "snipe-the-top-threat" not in _fired(dunsparce)
-    assert pilot.decide(obs) == [0]                                 # latent hand-size attacker line
+    assert _rank(pilot, obs, 0) > _rank(pilot, obs, 1)             # 20x7 latent line > printed 90
 
 
 @pytest.mark.req("REQ-GEN-0028")
@@ -98,10 +112,7 @@ def test_the_rank_generalises_to_a_scaler_no_function_tag_covers():
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
                       current=state(active=poke(700), bench=[poke(64), poke(64), poke(64)],
                                     opp_bench=[poke(272, hp=190), poke(64, hp=70)]))
-    clefairy, hoothoot = pilot.explain(obs).options
-    assert "snipe-the-top-threat" in _fired(clefairy)              # 20 + 20*5 benched = 120 > 90
-    assert "snipe-the-top-threat" not in _fired(hoothoot)
-    assert pilot.decide(obs) == [0]
+    assert _rank(pilot, obs, 0) > _rank(pilot, obs, 1)             # 20 + 20*5 benched = 120 > 90
 
 
 @pytest.mark.req("REQ-GEN-0018")
@@ -116,8 +127,15 @@ def test_a_benched_knockout_outranks_a_scarier_chip():
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
                       current=state(active=poke(700), opp_bench=[poke(121, hp=320), poke(99, hp=50)]))
-    dragapult, frail = pilot.explain(obs).options
-    assert "snipe-for-the-ko" in _fired(frail) and "snipe-for-the-ko" not in _fired(dragapult)
+    # `snipe-for-the-ko` (+60) is gone with the rest; the free prize is now the STRUCTURAL
+    # `_snipe_ko_dominator` (KO_SCORE-class), which is why it cannot be out-summed by positional
+    # weights the way the +60 rung could (ms 82754241 f45).
+    from common.strategy.context import KO_SCORE
+    board = pilot._board(obs, obs["select"])
+    ko_ctx = pilot._context(obs, obs["select"], board, obs["select"]["option"][1])
+    chip_ctx = pilot._context(obs, obs["select"], board, obs["select"]["option"][0])
+    assert pilot._snipe_ko_dominator(ko_ctx) == KO_SCORE
+    assert pilot._snipe_ko_dominator(chip_ctx) == 0.0
     assert pilot.decide(obs) == [1]                                 # take prize, not chip
 
 
@@ -152,8 +170,8 @@ def test_the_kill_switch_off_restores_the_printed_only_read():
                                     opp_hand_count=7))
     on = _pilot(stats)
     off = _pilot(stats, scaled_threat_rank=False)
-    assert on.decide(obs) == [0]                                          # Kadabra: latent threat
-    assert off.decide(obs) == [1]                                         # Dunsparce: bigger printed
+    assert _rank(on, obs, 0) > _rank(on, obs, 1)                          # Kadabra: latent threat seen
+    assert _rank(off, obs, 0) < _rank(off, obs, 1)                        # OFF: bigger printed wins
     # ...and the pair each read to get there (the damage context is per-decision, so this must be
     # read AFTER a decision has built it — with no context the scaling term is 0 by design).
     assert on._threat_damage_pair(742, stats.get(742)) == (30.0, 140.0)   # line reaches 20x7

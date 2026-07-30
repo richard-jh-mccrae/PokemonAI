@@ -62,7 +62,8 @@ EXPECTED_SHIPPED = {
     "match_planner_steer": True,    # ADR-0045 S3
     "forgo_ko": True,               # ADR-0045 S4
     "prize_economy_fetch": True,    # ADR-0048
-    "evolving_wincon_priority": True,  # ms 85164131 f22
+    # `evolving_wincon_priority` RETIRED by ADR-0085 Amendment G — inert once the rungs it stood
+    # down were deleted. f22 is now asserted against the scalar in test_snipe_evolving_wincon_f22.py
     "value_model": False,           # ADR-0042 armed-off: ships only after its own ladder A/B
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target rebuild-odds tiebreak
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
@@ -109,6 +110,14 @@ EXPECTED_SHIPPED = {
                                     # one (a `strip_shift > 0` keep-price gate suppresses 128/218
                                     # relevance-positive rows). STILL OFF, so that consumer is inert:
                                     # arming is owed by Issue #228
+    "snipe_relevance": True,        # ADR-0083 / Issue #188 (S4-snipe): the **Snipe Relevance** scalar
+                                    # decides the DAMAGE bench-target select; the six additive target
+                                    # rungs + the MatchupPlan steer stand down together while armed.
+                                    # Armed-ON 2026-07-30 (ADR-0085 Amendment C) after the OFF path
+                                    # measured byte-identical and all three bars cleared: Decision
+                                    # Gate, Discrimination Gate (run ARMED, per ADR-0072 decision 5),
+                                    # and the mid-build Tripwire (-1.25 pp, CI [-4.79, +2.29], 0
+                                    # crashes / 2400 games — `mid_build_verdict` True)
     "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c). ⚠️ OFF is a KNOWN DEBT against
                                     # tracker directive 1 (a kill-switch ships ON), not a decision —
                                     # arming is owed by Issue #228. ADR-0084 (Issue #217) chartered it

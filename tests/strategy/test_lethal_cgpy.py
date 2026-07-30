@@ -69,7 +69,7 @@ def _pilot(deck):
     # f15 driven as the LETHAL framing ([0] = Play Petrel, the handoff's reframe), not its
     # retired dead-hand `correct` ([1] Lillie's — a draw-6 whose verdict is draw-dependent).
     # False = the Phase-3 steering hooks are unbuilt; their build flips exactly this pin.
-    ("ml_dead_hand_full_refresh_f15", "mega_lucario", [0], False),
+    ("ml_petrel_balloon_retreat_lethal_f15", "mega_lucario", [0], False),
 ], ids=lambda v: v if isinstance(v, str) else "")
 def test_engine_confirms_py_matches_the_native_verdicts(name, agent, line, expected):
     """The cgpy gate reproduces every native verdict on the seeded corpus: the one real
@@ -228,7 +228,7 @@ def test_f15_retreat_enabler_win_line_is_real_on_cgpy():
     Aura Jab 130 vs Riolu 80, empty bench -> the ENGINE declares the win. This is the
     hand-drive proof (previously native-only, scratchpad-only) as a committed, DLL-free
     regression — and the gate the Phase-3 steering hooks must turn green without a script."""
-    fx = _fixture("ml_dead_hand_full_refresh_f15")
+    fx = _fixture("ml_petrel_balloon_retreat_lethal_f15")
     obs = dict(fx["obs"], search_begin_input="cgpy")
     alias.install()
     try:

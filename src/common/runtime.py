@@ -57,7 +57,10 @@ PROFILE = {
     "match_planner_steer": True,    # ADR-0045 S3 Game Plan directs the Turn Goal
     "forgo_ko": True,               # ADR-0045 S4 forgo a non-winning KO
     "prize_economy_fetch": True,    # ADR-0048 cheap 1-prize attacker line
-    "evolving_wincon_priority": True,  # snipe-the-evolving-threat stand-down (ms 85164131 f22)
+    # `evolving_wincon_priority` was RETIRED by ADR-0085 Amendment G (Issue #188). It gated the
+    # stand-down that kept the current-attacker rungs from burying `snipe-the-evolving-threat`;
+    # the deletion pass removed those rungs, leaving the flag inert — it changed no pick on the
+    # ms 85164131 f22 CRITICAL it exists for, with the scalar reaching Staryu either way.
     "value_model": False,           # ADR-0042 armed-off: a learned seam ships after its own A/B
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target tiebreak
                                     # toward the body the opponent is least able to replace (rebuild odds).
@@ -199,6 +202,23 @@ PROFILE = {
                                     # extra `turns_to_ko_me` per ENERGIZED opponent body per
                                     # decision. OFF until Issue #199's gate 1 rules the read admissible;
                                     # `deny_gate1.py` forces it ON to run that measurement.
+    "snipe_relevance": True,        # ADR-0085 / Issue #188 (S4-snipe), armed-ON 2026-07-30: the **Snipe
+                                    # Relevance** scalar DECIDES the DAMAGE bench-target select in
+                                    # place of `baseline_snipe.py`'s six additive target rungs + the
+                                    # ADR-0051 MatchupPlan steer, which all stand down together.
+                                    # Snipe is the SECOND instrument to hit ADR-0062's "no monotone
+                                    # pricing of magnitude alone can separate them" wall, so it takes
+                                    # Deny Relevance's categorical shape rather than the shared prize
+                                    # marginal (which measured 7/19 against the rungs' 17/19 and
+                                    # restored a fixed ADR-0044 blunder on 83667237-107).
+                                    # All three ADR-0072 bars cleared before arming (Amendment C).
+                                    # The six rungs, the MatchupPlan steer, `_SNIPE_THREAT_PRIZE_FLOOR`
+                                    # and `_MATCHUP_PRIORITY_SCALE` are now DELETED (#136 directive 1,
+                                    # Amendment E), so **OFF is documented DEGRADED MODE, never a
+                                    # rollback** — the `attach_value` / `evolve_value` /
+                                    # `promote_retreat_value` precedent. See Amendment E3 for the one
+                                    # OPEN consequence: the Brief steer is a MULTIPLIER, so it goes
+                                    # inert when `their_plan` is 0 for every offered target.
     "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
                                     # ⚠️ **STILL SHIPS OFF, and that is a KNOWN DEBT, not a decision.**
                                     # Tracker directive 1 says a kill-switch ships ON and exists only

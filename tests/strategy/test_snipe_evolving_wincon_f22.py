@@ -1,5 +1,13 @@
 """ms 85164131 f22 (CRITICAL) — the evolving-wincon snipe priority, finally gated.
 
+⚠️ **The MECHANISM this file is named after no longer exists** (ADR-0085 Amendment G, 2026-07-30).
+`evolving_wincon_priority`, `Board.evolving_wincon_on_bench` and the three rungs it stood down are all
+DELETED; the f22 CRITICAL is now carried by `snipe_relevance`'s `forward` leg, which reaches the same
+pick by ORDERING rather than by standing anything down. Everything below the next paragraph describes
+the pre-2026-07-30 additive machinery and is kept as the historical record of WHY the correction was
+filed — read it in the past tense. The live assertion is
+`test_the_scalar_carries_the_critical_without_a_stand_down_switch`.
+
 The fixture `ms_snipe_evolving_wincon_over_promotion_stack_f22.json` has existed since 2026-07-09 and
 **no test consumed it**. `test_snipe_the_real_attacker.py` parametrises f75/f47/f39/f85; f22's only
 trace in the tree was a comment beside the kill-switch default. So the CRITICAL correction that
@@ -69,10 +77,31 @@ def test_neither_target_scores_zero():
 
 
 @pytest.mark.req("REQ-READ-0006")
-def test_the_kill_switch_off_restores_the_blunder_and_so_pins_why_it_exists():
-    """With `evolving_wincon_priority` OFF, the three positional rungs no longer stand down and their
-    sum (30 + 20 + 40 = 90) buries the evolving-wincon rung (45) — the Pilot chips Cinderace. This is
-    the mechanism the switch exists to defeat; pinning it means a future 'simplification' that drops
-    the stand-down cannot pass green."""
-    dec = _pilot(evolving_wincon_priority=False).explain(_fx()["obs"])
-    assert dec.chosen == [CINDERACE], "the kill-switch no longer changes the pick — has it gone inert?"
+def test_the_scalar_carries_the_critical_without_a_stand_down_switch():
+    """**The witness for retiring `evolving_wincon_priority`** (ADR-0085 Amendment G, user-ruled
+    2026-07-30).
+
+    This test used to assert the opposite direction: with the kill-switch OFF, the three positional
+    rungs stopped standing down, their sum `30 + 20 + 40 = 90` buried the `+45` evolving-wincon rung,
+    and the Pilot chipped Cinderace — the CRITICAL blunder. That assertion is no longer *posable*.
+    The deletion pass removed all six rungs, so there is no sum of 90 left to bury anything, no
+    stand-down left to switch off, and `board.evolving_wincon_on_bench` had ZERO readers. The flag was
+    measured inert on this very frame — Staryu either way — and was retired rather than left in
+    `PROFILE` advertising a behaviour it no longer had.
+
+    What replaces it is the claim the flag was really making: **the developing win-condition pre-evo
+    outranks the energized current attacker on f22.** The scalar reaches that by ORDERING rather than
+    by standing anything down — Staryu earns the `forward` leg (its line reaches Mega Starmie ex, a
+    3-prize wincon not yet in play) while Cinderace's 1-prize body has no forward payoff to bank. So
+    the doctrine is asserted directly against the shipped instrument, which is the only place it now
+    lives, and a regression in the `forward` leg fails here rather than silently reinstating a
+    CRITICAL.
+
+    The PICK itself is asserted by `test_..._is_sniped_over_the_energized_accelerator` above and the
+    non-degeneracy by `test_neither_target_scores_zero`; this asserts the one thing neither covers and
+    the retirement turns on — that Staryu **out-scores** Cinderace rather than merely outliving it.
+    Win-by-elimination would satisfy both other tests while meaning the stand-down had come back by
+    another route.
+    """
+    scores = {t.index: t.score for t in _pilot().explain(_fx()["obs"]).options}
+    assert scores[STARYU] > scores[CINDERACE], "Staryu must WIN on ordering, not survive a stand-down"

@@ -17,7 +17,7 @@ from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
 
 REPO = Path(__file__).resolve().parents[2]
-_F15 = REPO / "tests" / "fixtures" / "corrections" / "ml_dead_hand_full_refresh_f15.json"
+_F15 = REPO / "tests" / "fixtures" / "corrections" / "ml_petrel_balloon_retreat_lethal_f15.json"
 _DECK = REPO / "src" / "agents" / "mega_lucario" / "deck.csv"
 _AIR_BALLOON = 1174
 # the full-info film's exact seat-0 prizes at f15 (independent source of truth, not recomputed)
