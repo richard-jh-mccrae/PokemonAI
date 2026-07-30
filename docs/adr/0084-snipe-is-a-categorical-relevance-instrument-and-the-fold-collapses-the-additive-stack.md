@@ -1,4 +1,4 @@
-# ADR-0083 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
+# ADR-0084 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #188 — **thirteen locked
 decisions**, one of them taken and then reverted on measurement and recorded as such). Build =
@@ -7,12 +7,17 @@ Issue #188, **rechartered** by decision 1 from *"fold the snipe rungs onto the u
 supersedes the design doc's S4 snipe bullet and ADR-0078's *"snipe is now the shortest hop"*
 consequence. Nothing here is built.
 
-**Renumbered 0082 → 0083 on rebase (2026-07-30).** The number was claimed at grill time when
-`docs/adr/README.md` read *next free number 0082*; Issue #211's *a Correction's ruling lives in its
-Claim* merged to `main` first (PR #216) and KEEPS 0082 under the standing first-merged rule. **Seventh
-collision in five days** — and the file predicted it in this very paragraph, which is now the evidence
-rather than the warning. The number is a rebase artifact, not an identifier: **cite the issue alongside
-it** ("ADR-0083, Issue #188").
+**Renumbered 0082 → 0083 → 0084 across two rebases in one day (2026-07-30).** The number was claimed
+at grill time when `docs/adr/README.md` read *next free number 0082*; Issue #211's *a Correction's
+ruling lives in its Claim* merged to `main` first (PR #216) and KEEPS 0082 under the standing
+first-merged rule. On the **second** rebase — onto Issue #213, which had merged in the interval —
+0083 was gone too (#213's *a scaler's variable is named by measurement* took it and survived its own
+rebase), so this is **0084**. **Eighth collision in five days**, and this file predicted it in this
+very paragraph twice over, which is now the evidence rather than the warning. The number is a rebase
+artifact, not an identifier: **cite the issue alongside it** ("ADR-0084, Issue #188"). The convention
+earned its keep on the second move — 2 lines in `src/common/CONTEXT.md` reading `ADR-0083, Issue #213`
+belong to the ADR that KEPT 0083 and had to be held back while 48 lines across 13 files moved; a
+number-only replace would have repointed #213's own references at this ADR.
 
 **Context issues:** Issue #188 (this grill, S4-snipe), Issue #136 (the Value System tracker),
 Issue #143 (the un-split original, closed), Issue #187 (S4-deny — the sibling instrument this
@@ -986,6 +991,58 @@ Relevance is an improvement — the mid-build instrument cannot show that at aff
 construction. Two legs remain owed and are tracked elsewhere: the `incoming` fix split to **Issue
 #213**, and Lillie's Clefairy ex reading board-effective damage rather than its printed 20 (decision 7
 bar 4), which lands with the combined-bench scaler family. The 18-kwarg signature is **Issue #219**.
+
+## Amendment D — rebased onto Issue #213; both gates re-run; Issue #204 inherited (2026-07-30)
+
+**D1 — why the gates were re-run rather than carried forward.** Issue #213 (*the threat rank prices
+the Damage Formula, not printed damage*, ADR-0083 — a different ADR, see the numbering note above)
+merged while this branch was open, armed ON. It re-sourced the **threat ceiling** and the
+**forced-promotion read** from printed `maxDamage` to `CombatMath.threat_ceiling` /
+`forward_threat_ceiling` against the live board. Those are not neighbouring code — they are two of the
+three inputs this instrument's `their_plan` side reads (`imminence` and `forced` both take
+`incoming(t=1, ceiling)`; `forward` takes the forward index). Amendment C's gate numbers were
+therefore measured against inputs that no longer exist, and carrying them forward would have been a
+false claim rather than a stale one.
+
+Re-run on the rebased base, both **PASS** and both identical to Amendment C's verdicts:
+
+- **Decision Gate** — 19/19 unchanged, 0 FIX, 0 REGRESSION, 0 neutral; both recorded misses
+  (`81905522-75`, `82749168-38`) still missing.
+- **Discrimination Gate** (armed) — 267 frames vs `e4c46ca`, **0 unruled `OK → MISS`**, gated on 266,
+  1 held out (`84071010|0|decision|15`, `owner=#165`).
+- Suite **4102 passed**, 1 skipped, 3 xfailed (up from 4071 — #213's own tests arrived with the base).
+
+That the verdicts are unchanged under a changed threat source is worth stating as a property, not a
+relief: decision 1's categorical shape reads `incoming` through `normalize(...)` into `[0,1]`, so a
+re-scaling of the underlying damage estimate moves the input without reordering the targets. A
+magnitude-shaped successor — the kind decision 1 rejected — would have had no such insulation.
+
+**D2 — the Tripwire was NOT re-run, deliberately.** It A/Bs the flag ON against OFF on one build, so a
+new base moves both arms together; its verdict is a statement about the switch, not about the base.
+Re-running would also have re-rolled 2400 unseeded games and invited exactly the sign-chasing ADR-0072
+names as p-hacking. Amendment C's numbers stand as measured.
+
+**D3 — Issue #204 is now this issue's, and it lands on `imminence`.** Issue #217 (deny's timing
+unification) explicitly scopes snipe OUT — *"verified deny-scoped"*, blocking nothing here — but its
+out-of-scope section hands one item forward: *"`discard_recur_fuel` on `turns_to_afford` — still
+unowned, still belongs to whichever of Issue #188 / Issue #189 lands first."* This issue lands first,
+so #204 is ours.
+
+It is not incidental to this instrument. `imminence` divides by `2^turns_to_afford` (`pilot.py:7665`
+→ the `turns_to_afford=tta` argument), and `turns_to_afford` assumes the rules floor of **one attach
+per turn** (`rules.md` §3). The two cards carrying `discard_energy_recur` are, verified at source
+(`src/common/card_functions.json` → `data/EN_Card_Data.csv`): **190 Archaludon ex** and **678 Mega
+Lucario ex** — the latter reloading up to 3 Basic `{F}` from the discard onto its Bench via Aura Jab.
+For those lines the true clock is **faster** than the floor, so `turns_to_afford` reads too high, the
+`2^t` discount is too deep, and this instrument **under-rates** their imminence — i.e. under-snipes
+exactly the bodies that rearm fastest.
+
+Worth testing but NOT claimed here: `mega_lucario` was the agent with the least favourable armed delta
+in Amendment C's Tripwire (both its matchups negative, averaging −4.0 pp), and it is the deck built
+around card 678. A per-matchup delta at n=200 sits inside one standard error, so this is a hypothesis
+for #204 to measure, not a finding. Recorded because the mechanism is specific and checkable, and
+because "the deck whose wincon the clock under-rates is the deck the swap served worst" is the kind of
+coincidence that should be either confirmed or killed rather than left unremarked.
 
 ## Alternatives rejected
 

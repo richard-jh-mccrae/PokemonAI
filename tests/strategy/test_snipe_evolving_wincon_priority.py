@@ -76,10 +76,10 @@ def test_the_kill_switch_off_restores_the_blunder_and_so_pins_why_it_exists():
     the stand-down cannot pass green.
 
     `snipe_relevance` is forced OFF because the blunder is a property of the ADDITIVE stack, and armed
-    that stack is gone: the six target rungs stand down as a body (ADR-0083 decision 5), so there is
+    that stack is gone: the six target rungs stand down as a body (ADR-0084 decision 5), so there is
     no sum of 90 left to bury anything and `evolving_wincon_priority` has nothing to stand down. The
     scalar reaches Staryu on this board with the switch either way — it subsumes this stand-down
-    rather than depending on it (ADR-0083 Amendment C) — so this test can only be posed on the OFF
+    rather than depending on it (ADR-0084 Amendment C) — so this test can only be posed on the OFF
     path, which is exactly where the mechanism it guards still lives.
     """
     dec = _pilot(evolving_wincon_priority=False, snipe_relevance=False).explain(_fx()["obs"])

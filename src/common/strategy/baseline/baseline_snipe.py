@@ -27,7 +27,7 @@ HYPOTHESES = [
                   "forced-promotion 40 + evolving-threat 45 = 115 on an un-KO-able Grookey, vs 60 on the "
                   "KO-able Applin: ms 82754241 f45, and 97-vs-72 in 82753102 f63). A positional weight must "
                   "never override a KO, and neither may the sum of three.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0083: the scalar decides instead
+        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
                         and c.select_context == _DAMAGE and c.target_kos),
         weight=60, status="testing"),
     # NOTE: `dont-snipe-a-benched-tera` (−60) RETIRED — a benched Tera takes NO damage from attacks at
@@ -45,7 +45,7 @@ HYPOTHESES = [
                   "printed damage, prefers the more-developed body on a shared line, and boosts lines "
                   "that certainly reach a hand-size attacker, so it never pokes a low-HP support mon. "
                   "Stands down on a KO target (that's snipe-for-the-ko).",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0083: the scalar decides instead
+        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
                         and c.select_context == _DAMAGE and c.target_is_top_threat
                         and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
@@ -61,7 +61,7 @@ HYPOTHESES = [
                   "free prize (ms 82754241 f45 / 82753102 f63). "
                   "Co-fires with `snipe-the-top-threat` (`_target_threat_rank` already tiers energized "
                   "targets above bare ones) as the legible imminence signal on top of it.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0083: the scalar decides instead
+        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
                         and c.select_context == _DAMAGE and c.target_is_threat
                         and not c.board.snipe_ko_available
                         and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
@@ -77,7 +77,7 @@ HYPOTHESES = [
                   "right path member ('KO one Mega + snipe 3 smalls'). Stands down on a KO target — the path "
                   "axis must not stack onto the others past `snipe-for-the-ko`. Silent when the path is unknown "
                   "(runs through bodies not yet in play) or the `objectives_path` switch is off.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0083: the scalar decides instead
+        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
                         and c.select_context == _DAMAGE and c.target_on_path
                         and not c.board.snipe_ko_available),
         weight=12, status="testing"),
@@ -88,7 +88,7 @@ HYPOTHESES = [
                   "win-condition, energy-independent), not the energized bench-sitter that merely "
                   "carries Energy now. Pre-chip that body this turn. Overrides the energized-imminence "
                   "tier for this pick (its mirages are suppressed); silent while their Active is alive.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0083: the scalar decides instead
+        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
                         and c.select_context == _DAMAGE and c.target_is_forced_promotion
                         and not c.board.snipe_ko_available
                         and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
@@ -110,7 +110,7 @@ HYPOTHESES = [
                   "test_45/test_107 that a naive restore regressed), and fires only when the wincon is "
                   "still developing (form absent). +45 beats the forced-promotion pick where it fires. "
                   "Stands down on a KO target (`snipe-for-the-ko` +60 owns that). SEED; ladder-tuned.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0083: the scalar decides instead
+        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
                         and c.select_context == _DAMAGE and c.target_is_strongest_forward
                         and not c.target_forward_form_in_play and not c.board.snipe_ko_available),
         weight=45, status="assumed"),

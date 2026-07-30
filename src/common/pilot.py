@@ -933,7 +933,7 @@ class Context:
                                        # stack could outvote. Also excluded from `target_kos` and `_forced_promotion_key`
     snipe_relevance_armed: bool = False  # the `snipe_relevance` kill-switch, surfaced on the Context so
                                        # `baseline_snipe.py`'s six ADDITIVE target rungs stand down as a
-                                       # body when the graded scalar decides instead (ADR-0083 /
+                                       # body when the graded scalar decides instead (ADR-0084 /
                                        # Issue #188). Mirrors how Issue #187 kept `_DENIAL_BENCH` live on
                                        # deny's OFF path: UNREAD while armed, and DELETED by the
                                        # arming follow-up — never both paths scoring at once, which is
@@ -1421,7 +1421,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `turns_to_ko_me` per ENERGIZED opponent body.
                                                         # OFF by default so live play pays nothing until
                                                         # #199's gate 1 rules the read admissible
-        self.snipe_relevance = snipe_relevance          # ADR-0083 / Issue #188 kill-switch: the
+        self.snipe_relevance = snipe_relevance          # ADR-0084 / Issue #188 kill-switch: the
                                                         # **Snipe Relevance** scalar DECIDES the DAMAGE
                                                         # bench-target select in place of
                                                         # `baseline_snipe.py`'s six additive target
@@ -5533,7 +5533,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # off-path body away (f39: snipe the energized ex @ 6 prizes). Only in the RACING back-half
             # (`my_prizes_remaining < _SNIPE_THREAT_PRIZE_FLOOR`) do I stick to my committed path and let it
             # be (107: stand down @ 4 prizes). A NON-energized off-path body stays redundant regardless.
-            # ADR-0083 decision 13 RETIRES this rescue: `my_prizes_remaining` is now priced
+            # ADR-0084 decision 13 RETIRES this rescue: `my_prizes_remaining` is now priced
             # continuously by the scalar's `share` leg, so thresholding it here as well is two
             # readings of one fact (the ADR-0060/0062 "price the quantity, don't threshold it"
             # move). Measured INERT — floor 5 and an inert clause both score 17/19 on the corpus AND
@@ -7155,7 +7155,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         if self.snipe_relevance:
             return 0.0          # FOLDED: armed, this steer is the Brief MULTIPLIER inside
-                                # `snipe_relevance.target_relevance` (ADR-0083 decision 5). Scoring it
+                                # `snipe_relevance.target_relevance` (ADR-0084 decision 5). Scoring it
                                 # here as well would stack an additive term beside the graded scalar —
                                 # the currency-zone rule's "the marginal REPLACES rungs, never stacks".
         poke = self._option_pokemon(obs, select, option)
@@ -7183,7 +7183,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The armed replacement for `snipe-for-the-ko`'s +60 weight, and the same move the Tera veto
         already made — from a tuner-mutable positional weight to a KO_SCORE-class Tactical term
-        (ADR-0083 decision 1). The weight form is the documented blunder class: its own rationale
+        (ADR-0084 decision 1). The weight form is the documented blunder class: its own rationale
         records `top-threat 30 + forced-promotion 40 + evolving-threat 45 = 115` on an un-KO-able
         Grookey out-voting `60` on the KO-able Applin (`82754241-45`, and `97-vs-72` on
         `82753102-63`). Gating each rung on its own `target_kos` was not enough, because the bonuses
@@ -7763,14 +7763,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _snipe_relevance_terms(self, obs: dict, select: dict, board: Board, option: dict,
                                ctx) -> dict | None:
-        """The SNIPE instrument's value — **Snipe Relevance** (ADR-0083, Issue #188;
+        """The SNIPE instrument's value — **Snipe Relevance** (ADR-0084, Issue #188;
         `common/snipe_relevance.py` owns the scoring, this owns the board plumbing).
 
         Mirrors `_relevance_terms` for the sibling instrument. Returns None off a bench-DAMAGE option
         or without the stats provider, so the caller contributes nothing rather than guessing.
 
         Everything `their_plan` needs comes off the **Threat Clock** rather than
-        `_body_threat_rank` (ADR-0045's own thesis, and ADR-0083 decision 3), which is what wins the
+        `_body_threat_rank` (ADR-0045's own thesis, and ADR-0084 decision 3), which is what wins the
         self-lock and damage-scaler reads for free instead of re-deriving them. The two policies are
         SPLIT on purpose (decision 8) and must not be collapsed by a later refactor:
 
@@ -7860,12 +7860,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _snipe_relevance_tactical(self, obs: dict, select: dict, board: Board, option: dict,
                                   ctx) -> float:
-        """`K x relevance`, the armed snipe target score (ADR-0083 decisions 1-13).
+        """`K x relevance`, the armed snipe target score (ADR-0084 decisions 1-13).
 
         `K = MAX_ATTACK_DAMAGE`, which is the normalizer itself, so `K x relevance` lands back in
         DAMAGE units and the armed term is a strict generalisation of the band the deleted rungs
         competed in rather than a re-scaling — the identity ADR-0080 Amendment B derived for deny and
-        ADR-0083 Amendment A1 adopted here. It deliberately does NOT go through
+        ADR-0084 Amendment A1 adopted here. It deliberately does NOT go through
         `currency.PRIZE_DAMAGE_RATE`: relevance is a `[0,1]` scalar, not a prize-denominated value, so
         a prizes-to-damage rate would convert nothing.
 

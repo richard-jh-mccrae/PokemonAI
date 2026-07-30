@@ -1,4 +1,4 @@
-"""Snipe Relevance at the CONSUMER seam — the Pilot plumbing (ADR-0083, Issue #188).
+"""Snipe Relevance at the CONSUMER seam — the Pilot plumbing (ADR-0084, Issue #188).
 
 Seam 1 (`test_snipe_relevance.py`) covers the pure scorer's legs on authored worked examples. This
 file covers what the *Pilot* does with it: the switch's OFF-byte-identical promise, the resolve-once-per-
@@ -43,7 +43,7 @@ def _off(agent="mega_starmie"):
     """The kill-switch-OFF arm, forced EXPLICITLY.
 
     Until 2026-07-30 the shipped default was OFF, so these tests used `_shipped_pilot()` as the OFF
-    arm and the two were the same pilot. Arming (ADR-0083 Amendment C) split them: the OFF path is
+    arm and the two were the same pilot. Arming (ADR-0084 Amendment C) split them: the OFF path is
     still a live requirement — the switch has to keep working — but it is no longer the default, so
     it must be asked for by name rather than inherited.
     """
@@ -56,10 +56,10 @@ def _off(agent="mega_starmie"):
 
 @pytest.mark.req("REQ-SNIPECONS-0001")
 def test_the_switch_ships_armed():
-    """ADR-0083 decision 7 bar 5 staged OFF-first, then armed — this is the second stage.
+    """ADR-0084 decision 7 bar 5 staged OFF-first, then armed — this is the second stage.
 
     Arming was owed ADR-0072's two merit gates plus the paired-A/B Tripwire, and all three cleared
-    on 2026-07-30 (ADR-0083 Amendment C): Decision Gate 0 unruled REGRESSION; Discrimination Gate
+    on 2026-07-30 (ADR-0084 Amendment C): Decision Gate 0 unruled REGRESSION; Discrimination Gate
     PASS run ARMED per ADR-0072 decision 5 (0 unruled `OK -> MISS`, 1 ruled to #165); Tripwire
     -1.25 pp, 95% CI [-4.79, +2.29], 0 crashes / 2400 games -> `mid_build_verdict` True.
     """
@@ -118,7 +118,7 @@ def test_the_incumbent_rungs_stand_down_as_a_body_when_armed():
 
 @pytest.mark.req("REQ-SNIPECONS-0002")
 def test_the_counter_rungs_are_retained_and_unaffected():
-    """ADR-0083 decision 5: the three `DAMAGE_COUNTER_ANY` / counter-mover rungs are LIVE and
+    """ADR-0084 decision 5: the three `DAMAGE_COUNTER_ANY` / counter-mover rungs are LIVE and
     deliberately retained — disjoint select contexts (13/14/16/40 vs 15) so they never co-fire with
     a target rung, already derived from knapsack reads, and zero corpus frames to bench a rewrite
     against. They must not carry the stand-down."""
@@ -220,7 +220,7 @@ def test_a_benched_tera_is_ordered_last_but_stays_selectable():
 
 @pytest.mark.req("REQ-SNIPECONS-0007")
 def test_snipe_credits_banked_potential_unlike_denys_fire_reading():
-    """ADR-0083 Amendment A2, the question the ADR explicitly owed a test rather than an assumption.
+    """ADR-0084 Amendment A2, the question the ADR explicitly owed a test rather than an assumption.
 
     Deny's Finding A (ADR-0080 Amendment B) split its read: full relevance credits BANKED potential,
     which is right for deciding whether to KEEP a Hammer and wrong for deciding whether to SPEND one

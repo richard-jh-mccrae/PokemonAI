@@ -112,7 +112,7 @@ EXPECTED_SHIPPED = {
     "snipe_relevance": True,        # ADR-0083 / Issue #188 (S4-snipe): the **Snipe Relevance** scalar
                                     # decides the DAMAGE bench-target select; the six additive target
                                     # rungs + the MatchupPlan steer stand down together while armed.
-                                    # Armed-ON 2026-07-30 (ADR-0083 Amendment C) after the OFF path
+                                    # Armed-ON 2026-07-30 (ADR-0084 Amendment C) after the OFF path
                                     # measured byte-identical and all three bars cleared: Decision
                                     # Gate, Discrimination Gate (run ARMED, per ADR-0072 decision 5),
                                     # and the mid-build Tripwire (-1.25 pp, CI [-4.79, +2.29], 0
