@@ -1,4 +1,4 @@
-# ADR-0082 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
+# ADR-0083 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #188 — **thirteen locked
 decisions**, one of them taken and then reverted on measurement and recorded as such). Build =
@@ -7,9 +7,12 @@ Issue #188, **rechartered** by decision 1 from *"fold the snipe rungs onto the u
 supersedes the design doc's S4 snipe bullet and ADR-0078's *"snipe is now the shortest hop"*
 consequence. Nothing here is built.
 
-**Number claimed at grill time** (`docs/adr/README.md`: *next free number 0082*). Six collisions in
-four days precede this one, so the number is a rebase artifact rather than an identifier — **cite the
-issue alongside it** ("ADR-0082, Issue #188").
+**Renumbered 0082 → 0083 on rebase (2026-07-30).** The number was claimed at grill time when
+`docs/adr/README.md` read *next free number 0082*; Issue #211's *a Correction's ruling lives in its
+Claim* merged to `main` first (PR #216) and KEEPS 0082 under the standing first-merged rule. **Seventh
+collision in five days** — and the file predicted it in this very paragraph, which is now the evidence
+rather than the warning. The number is a rebase artifact, not an identifier: **cite the issue alongside
+it** ("ADR-0083, Issue #188").
 
 **Context issues:** Issue #188 (this grill, S4-snipe), Issue #136 (the Value System tracker),
 Issue #143 (the un-split original, closed), Issue #187 (S4-deny — the sibling instrument this
@@ -702,6 +705,58 @@ are sanity floors, not the acceptance bar (decision 7).
   not evidence at that point. Decision 7's acceptance bar exists for exactly this, and it already earned
   its keep once — the held-out fixtures caught a real design defect (the flat forced-promotion constant)
   on their first application.
+
+## Amendment A — four findings inherited from the sibling's consumer build (2026-07-30, rebase)
+
+Issue #187 merged (PR #216) the day after this grill, wiring Deny Relevance onto its three surfaces,
+and **ADR-0080 Amendment B** records what arming it exposed. Its headline is the single most useful
+thing this ADR can inherit: *"measuring the corpus with the switch armed exposed three defects that no
+compute-only test could have caught — the read was correct in isolation and wrong at every consumer."*
+Three of its four findings transfer; one **corrects decision 7's exit-boundary claim outright**.
+
+**A1 — `K` is DERIVED, and this ADR's exit boundary was wrong.** The Consequences bullet below says
+*"`currency.PRIZE_DAMAGE_RATE` gains a consumer only at the exit boundary."* **That is incorrect.**
+Relevance is a `[0,1]` scalar, not a prize-denominated value, so multiplying it by a prizes↔damage rate
+converts nothing — it merely rescales. Deny found the principled answer by measurement: since
+`relevance = setback / MAX_ATTACK_DAMAGE`, setting **`K = MAX_ATTACK_DAMAGE`** makes `K × relevance`
+the setback **damage**, so the armed rung prices in the incumbent's own units and is a strict
+generalisation rather than a re-scaling — *"there is no free parameter"*. Snipe's `their_plan` runs
+through the same `normalize`, so the same identity holds and snipe takes the same exit: **`K =
+MAX_ATTACK_DAMAGE`, imported not copied**, so a future set re-deriving it from the CSV carries `K`
+along. `PRIZE_DAMAGE_RATE` is **not** a consumer of this instrument. Decision 3's ADR-0080 mirror was
+right; the Consequences bullet drifted from it and is superseded here rather than edited in place.
+
+**A2 — the banked-potential question must be ASKED, not assumed.** Deny's Finding A split its read:
+full relevance credits banked potential (correct for deciding whether to KEEP a Hammer), while the
+FIRE rung must price only what the opponent can afford NOW (*"it fires at a threat that has not
+arrived"*). Snipe has no keep/spend split — every snipe is a spend — so the naive transfer would
+restrict snipe to the affordable-now read. **That is very likely wrong for snipe**, because
+`snipe-the-evolving-threat` exists precisely to pre-chip a body that cannot attack yet, and decision 3
+sources `their_plan` from a `t=1` ceiling curve that deliberately credits one attach. The finding is
+recorded not as a change but as a **question the build must answer with a fixture** rather than inherit
+by symmetry: does snipe's imminence leg credit banked potential? This ADR's position is yes; deny's
+experience is that the opposite was true for it, so the assumption needs a test, not a shrug.
+
+**A3 — the Brief sharpener is safe here, and here is why.** Deny's Finding C scoped the Brief off its
+fire reading, because that reading alone is compared against `_DENIAL_ITEM_COST`, where a `1.25×`
+multiplier becomes an **override** (it flipped f21 from `-1.25` to `+0.94`). Snipe's score is never
+compared against an absolute cost threshold — the DAMAGE select is a pure ranking among offered
+options — so decision 5's Brief-as-multiplier on `their_plan` does not have that failure mode.
+Recorded because the reasoning is what makes it safe; if a future change ever gates snipe on an
+absolute threshold, this exemption lapses with it.
+
+**A4 — a constant this ADR proposes deleting was RE-EXPRESSED rather than retired next door.**
+ADR-0078 decision 6 retired `_DENIAL_UNFAVORED`; ADR-0080 Amendment B **withdrew that retirement**,
+because `_denial_play_tactical` turned out to be ADR-0026 Lever A's last live consumer and retiring it
+unreplaced would have deleted Lever A as a side effect of a deny refactor. Direct caution for decision
+9 and decision 13: before deleting `_PREVENT_EX_SNIPE_BOOST` and `_SNIPE_THREAT_PRIZE_FLOOR`, check
+whether either is the **last** consumer of a lever or read that would silently vanish with it. This
+ADR's measurements establish that neither changes a decision; they do **not** establish that nothing
+else depends on their existence.
+
+**Also noted, minor:** the stale in-code `ADR-0081` references that should read ADR-0080 are now **9**
+in `pilot.py`, not the 16 recorded during this grill — Issue #187's merge cleaned seven of them in
+passing. Still not this issue's to finish.
 
 ## Alternatives rejected
 
