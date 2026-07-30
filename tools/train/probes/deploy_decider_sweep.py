@@ -133,6 +133,23 @@ def _seams():
             "briefs": load_briefs()}
 
 
+def _records_a_decline_it_cannot_state(rec, obs) -> bool:
+    """Does this record sit on an OPTIONAL select while asserting the agent's own pick?
+
+    Such a record cannot grade a decline, and a decline is precisely what an optional select puts on
+    the table. `correct` at `decision` scope must be non-empty and index a legal option, so "take
+    none" has no encoding; `chosen == correct` then means "no preference was recordable", NOT "taking
+    it was right". Grading against it turns a correct decline into a REGRESSION.
+
+    Deliberately narrow. It does NOT skip every `chosen == correct` record — on a MANDATORY select
+    those state a real preference (the pick was right), and a decider that flips away from one is a
+    genuine regression worth failing on. Only `minCount == 0` carries the encoding gap."""
+    select = (obs.get("select") or {})
+    if int(select.get("minCount") or 0) != 0:
+        return False
+    return sorted(rec.get("chosen") or []) == sorted(rec.get("correct") or [])
+
+
 def _cell(slots, names) -> str:
     """A picked identity as a card NAME — the table is read by a human ruling flips, and
     `('card', 676)` is not a decision anyone can rule on."""
@@ -196,6 +213,30 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
             # answers is "bench at all?", and matching it means picking no deploy. Reading only the
             # deploy identities would score that frame "unlabelled" and hide a real regression — which
             # is exactly f51's shape (correct = play Lillie's, a Supporter).
+            if correct and _records_a_decline_it_cannot_state(rec, obs):
+                # An OPTIONAL select whose record says `chosen == correct` states NOTHING about
+                # whether to decline, and a decline is the one answer the schema cannot hold: at
+                # `decision` scope `build_correction` requires `correct` to be non-empty and to index
+                # a legal option, so `correct: []` is rejected (all 10 corpus records carrying it are
+                # `turn` scope). The record therefore degenerates to "the agent's own pick", and
+                # grading a decider against it scores a CORRECT decline as a REGRESSION.
+                #
+                # ep83661652 f3 is the case — one option, `minCount 0`, and a rationale that says the
+                # opposite of what the fields say: "Playing Meowth during setup doesnt allow us to use
+                # Last-Ditch Catch ability, thus should be avoided when able." Three records repo-wide
+                # share the shape; the dragapult f4 sibling's own note reached this independently
+                # ("Degenerate record (decline is take-fewer, no index) — gate via a decline-test").
+                #
+                # Skipped on the RECORD's shape, not on a per-frame ruling, so no Held-out Ledger
+                # entry has to invent an owner for what is a schema limit. The behaviour stays gated
+                # by the decline tests that CAN state it (`test_setup_bench_decline.py`).
+                verdict = "unstatable"
+                tally[verdict] += 1
+                if not quiet:
+                    print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} "
+                          f"{_cell(new_slots, names):<15} {_cell(old_slots, names):<15} "
+                          f"{_cell(correct_slots, names):<15} {verdict:<12}")
+                continue
             if correct:
                 # A frame may record ALTERNATIVES: a set of picks the human ruled equally correct.
                 # f29's ruling is the case — "bench Riolu, Makuhita, and Solrock, ordering doesn't
@@ -236,11 +277,12 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
     passed = decision_gate_verdict(graded, held_out=held_out)
     if quiet:
         print(" ".join(f"{k}={tally[k]}" for k in ("frames", "agree", "flip", "FIX", "REGRESSION",
-                                                   "DIVERGENT", "unlabelled")) +
+                                                   "DIVERGENT", "unlabelled", "unstatable")) +
               f" gate={'PASS' if passed else 'FAIL'}")
         return 0 if passed else 1
     print("\nTALLY")
-    for k in ("frames", "agree", "flip", "FIX", "REGRESSION", "DIVERGENT", "unlabelled", "error"):
+    for k in ("frames", "agree", "flip", "FIX", "REGRESSION", "DIVERGENT", "unlabelled",
+              "unstatable", "error"):
         print(f"  {k:<12} {tally[k]}")
     # Partition by the Held-out Ledger (ADR-0072 decision 4): a frame ruled onto another issue
     # REPORTS but does not gate. Computing the ledger and not splitting on it was the first version's

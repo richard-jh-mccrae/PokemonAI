@@ -145,7 +145,36 @@ construction was wrong.
   `score < 0`. The exposure leg falls back to the body's own prize liability where the Prize Path is
   unreadable.
 
-## OPEN GRILL — Amendment F is too broad (raised 2026-07-30, user)
+## RULED — Amendment F is WITHDRAWN, option (a) (2026-07-30, user)
+
+*"option a sounds like cleanest solution reusing existing machinery"* — the narrowed rule wins, f3
+goes back to DECLINE, and the frame is held out of the Decision Gate.
+
+**The schema check that made it more than a tidiness call.** At `decision` scope `correct` is
+mandatory and must index a legal option (`build_correction`, `correction.py`), so `correct: []` — the
+only way to say "decline" — is rejected. All 10 corpus records carrying it are `turn` scope. f3 is
+therefore not a mis-recorded fixture; it is a record shape that **cannot state the ruling**, which is
+exactly what the Held-out Ledger exists for. Thirteen records repo-wide share the `chosen == correct`
+shape; three are this decline shape (`83661652` f3, `86088989` f3, `85785609` f4 — the dragapult
+Munkidori sibling, whose own note already reached the same conclusion independently).
+
+**`owner` names the ground, not a borrowed issue.** The ledger's `owner` means "another issue owns
+the fix", and #165 does not own this — the Turn Planner is irrelevant to a record-shape limit. The
+claim reads `#197-record-shape` so the ledger stays honest about why the frame is out.
+
+**Coverage is not lost.** `test_f3_declines_pre_benching_the_supporter_tutor` asserts the decline on
+this exact board and is now the ruling of record. Holding the frame out removes a false signal from
+the sweep, not a test.
+
+**Still open, deliberately NOT taken with it:** the in-game half. Decision 7's empty-Bench filter
+still forces a body unconditionally, where the narrowed rule would ask for a doomed Active. That is a
+different kind of change — the filter guards a LOSS, and gating a loss-guard on a prediction trades a
+bounded cost (one wasted Ability) for an unbounded one (losing the game on a bad doom read). It wants
+its own sitting. Recorded on `_empty_bench_forced`.
+
+### The original grill point, for the record
+
+
 
 **The point, verbatim:** *"Shall only bench Meowth when bench empty IF our active is doomed OR we
 need a specific supporter (which is issue #165 computation). if its early game and no KO threat, we
