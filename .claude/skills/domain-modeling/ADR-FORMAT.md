@@ -26,6 +26,10 @@ Only include these when they add genuine value. Most ADRs won't need them.
 
 Scan `docs/adr/` for the highest existing number and increment by one.
 
+*(A caller may override this — e.g. this repo's `/grill-with-docs` uses a temp name at grill time
+and defers real numbering to `/open-pr`, to avoid claiming a number long before it's known to be
+free. See that skill and `docs/adr/README.md` if so.)*
+
 ## When to offer an ADR
 
 All three of these must be true:
