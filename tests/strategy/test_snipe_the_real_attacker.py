@@ -4,7 +4,7 @@
   `snipe-the-evolving-threat`, gated by `target_forward_form_in_play` so it stands down when the evolved
   wincon is already on the opponent's board (the ADR-0044 discriminator).
 - **f39** — deny an ENERGIZED off-Prize-Path attacker while I still hold many prizes. On the
-  shipped (OFF) path this is `_SNIPE_THREAT_PRIZE_FLOOR`'s rescue clause; ADR-0084 decision 13
+  shipped (OFF) path this is `_SNIPE_THREAT_PRIZE_FLOOR`'s rescue clause; ADR-0085 decision 13
   RETIRES that rescue on the armed path, having measured it inert — the frame passes either way,
   because `my_prizes_remaining` is priced continuously by Snipe Relevance's `share` leg instead.
 - **f85** — Alakazam's threat is CALCULATED from the opponent's hand size (`handSizeDamage x handCount`),

@@ -18,7 +18,7 @@ from pilot_helpers import BENCH, card_opt, make_select, poke, state
 def _pilot(stats, functions=None, scaled_threat_rank=True):
     # Both switches ON to match the shipped PROFILE; the constructor defaults are OFF because each is
     # an incident lever, and a bare Pilot() would silently exercise a retired read.
-    # `scaled_threat_rank` is Issue #213's; `snipe_relevance` is ADR-0084's, and since that ADR's
+    # `scaled_threat_rank` is Issue #213's; `snipe_relevance` is ADR-0085's, and since that ADR's
     # deletion pass removed the six DAMAGE target rungs there is no additive path left to fall back
     # on — an unarmed Pilot scores every bench target 0 and the argmax degenerates to option index,
     # which would make every ordering assertion below pass vacuously.
@@ -29,14 +29,14 @@ def _pilot(stats, functions=None, scaled_threat_rank=True):
 def _rank(pilot, obs, index):
     """One option's THREAT RANK — the instrument these tests are actually about.
 
-    They used to read it off a FIRED hypothesis id (`snipe-the-top-threat`), and ADR-0084 deleted
+    They used to read it off a FIRED hypothesis id (`snipe-the-top-threat`), and ADR-0085 deleted
     that rung with the other five. The rank itself SURVIVES: `planner.py:_ko_key_threat_lines` ranks
     the opponent bench with `_body_threat_rank` for the ADR-0031 `ko_key_threat` Goal-Ladder rung
     (`planner_key_threat`, shipped ON). So the requirement is unchanged and still live — only its
     reader moved from a snipe rung to the Planner.
 
     These assertions were deliberately NOT re-pointed at Snipe Relevance. The scalar is CATEGORICAL
-    (ADR-0084 decision 1) and asks *does this body matter to their plan and my route*, not *how big
+    (ADR-0085 decision 1) and asks *does this body matter to their plan and my route*, not *how big
     is it*; on these fixtures the opponent bodies carry no Energy, so `their_plan` is 0 for every
     target and the conjunctive product is 0 for all of them. Asserting a magnitude ordering on an
     instrument that deliberately does not price magnitude would be testing the wrong thing — this is

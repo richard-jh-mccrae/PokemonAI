@@ -1,4 +1,4 @@
-"""Snipe Relevance decider sweep — ADR-0072's **Decision Gate** for Issue #188 (ADR-0084).
+"""Snipe Relevance decider sweep — ADR-0072's **Decision Gate** for Issue #188 (ADR-0085).
 
 Replays every committed `DAMAGE(15)` correction through a FRESH shipped Pilot per frame (the
 `needs_sweep` / `threat_sweep` discipline — stateful pilots, one per frame) twice: once as shipped
@@ -15,7 +15,7 @@ thing: several corpus rulings are owned by the KO rung or the Turn Planner rathe
 instrument under test, so reporting *any* behaviour change as a failure counts frames the swap does
 not own. A change toward the human is a FIX, not a regression.
 
-Two frames are RECORDED MISSES and must stay missing (ADR-0084 decision 7): `81905522-75` (the
+Two frames are RECORDED MISSES and must stay missing (ADR-0085 decision 7): `81905522-75` (the
 two-identical-Riolu transposition the design doc's own risk R3 says not to chase) and `82749168-38`
 (a `refuted` label). A run that "fixes" either has almost certainly overfitted — the scorer's shape
 was selected against these same 19 frames, so the sweep is a **sanity floor, not the merit gate**.
@@ -39,7 +39,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 DAMAGE = 15
 
-#: Frames ADR-0084 decision 7 records as PERMANENT misses, with the reason. Reported separately so a
+#: Frames ADR-0085 decision 7 records as PERMANENT misses, with the reason. Reported separately so a
 #: run that starts passing them is visible as the overfitting signal it is, rather than as progress.
 RECORDED_MISSES = {
     "81905522-75": "transposition — two identical Riolu, no board signal splits them (design-doc R3)",
@@ -144,7 +144,7 @@ def main(argv=None) -> int:
         print(f"  unreplayable   {len(unreplayable)}")
 
     # The recorded misses, reported explicitly in BOTH directions.
-    print("\nRECORDED MISSES (ADR-0084 decision 7 — these must STAY missing):")
+    print("\nRECORDED MISSES (ADR-0085 decision 7 — these must STAY missing):")
     for key, why in RECORDED_MISSES.items():
         rec = dict(_frames()).get(key)
         if rec is None:

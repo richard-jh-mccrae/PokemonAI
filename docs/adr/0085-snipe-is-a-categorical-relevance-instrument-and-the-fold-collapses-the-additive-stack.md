@@ -1,4 +1,4 @@
-# ADR-0084 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
+# ADR-0085 — Snipe is a CATEGORICAL RELEVANCE instrument too: the fold collapses the additive rung stack into one [0,1] scalar under hard gates, not onto the prize marginal
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #188 — **thirteen locked
 decisions**, one of them taken and then reverted on measurement and recorded as such). Build =
@@ -14,7 +14,7 @@ first-merged rule. On the **second** rebase — onto Issue #213, which had merge
 0083 was gone too (#213's *a scaler's variable is named by measurement* took it and survived its own
 rebase), so this is **0084**. **Eighth collision in five days**, and this file predicted it in this
 very paragraph twice over, which is now the evidence rather than the warning. The number is a rebase
-artifact, not an identifier: **cite the issue alongside it** ("ADR-0084, Issue #188"). The convention
+artifact, not an identifier: **cite the issue alongside it** ("ADR-0085, Issue #188"). The convention
 earned its keep on the second move — 2 lines in `src/common/CONTEXT.md` reading `ADR-0083, Issue #213`
 belong to the ADR that KEPT 0083 and had to be held back while 48 lines across 13 files moved; a
 number-only replace would have repointed #213's own references at this ADR.
@@ -1140,6 +1140,92 @@ The **Discrimination Gate is unaffected** and still discriminates — it compare
 baseline, not against a live OFF arm, which is precisely the property E4 says the Decision Gate now
 lacks. Re-run: **PASS**, 0 unruled `OK → MISS`, gated on 266, 1 held out to #165. Suite **4094
 passed, 1 skipped, 5 xfailed** (the two new strict xfails are E3).
+
+## Amendment F — rebased onto Issue #217; what it corroborates, and the switch the deletion orphaned (2026-07-30)
+
+Issue #217 (*deny's derived clock is a tiebreak, not a deadline* — **ADR-0084**, a different ADR)
+merged with both go/no-go gates passing. It was checked for re-grill triggers against this ADR before
+rebasing, because it rules on the same two primitives snipe reads: `turns_to_afford` and the clock
+delta.
+
+**F1 — it CORROBORATES decisions 3 and 11 rather than conflicting with them.** Its decision 1 rules
+that *"a clock DELTA may never be substituted for a clock READING"* — a reading is a *when*
+(`turns_to_afford = 1` → armed next turn), a delta is a *payoff* (`strip_shift` → this buys N turns),
+and substituting one for the other imports VALUE into a timing term, the scale crossing ADR-0080
+decision 1 found underivable. This instrument already splits exactly that way and did so independently:
+
+| side | term | kind | #217's verdict |
+|---|---|---|---|
+| `their_plan` | `imminence = … / 2^turns_to_afford` | **reading** | the correct use of a reading |
+| `my_route` | `ko_delta₂ = f(turns_to_ko_before, after)` | **delta** | legitimate — *"at target-pick time the card is already spent, so the cost is sunk and maximising payoff is the right objective"* |
+
+That last quote is #217 justifying its own target-pick tiebreak, and it is the same argument decision
+11 makes for `ko_delta₂`. Two instruments reached the reading/delta split independently; no re-grill.
+
+**F2 — tie exposure MEASURED, and it is materially lower than deny's.** #217 decision 2 found **28 of
+47** contested deny frames (60%) have a tied argmax resolved by engine option order — the ADR-0062
+defect — and added a lexicographic `strip_shift` tiebreak. The same measurement over this
+instrument's corpus, run before rebasing:
+
+```
+DAMAGE frames replayed        : 19
+  >=2 nonzero-relevance opts  : 9      (a real choice exists)
+  TIED argmax                 : 2      (22%)
+     81905522-75   2 options tied at 0.385714
+     85164605-48   2 options tied at 0.214286
+```
+
+`81905522-75` is decision 7's RECORDED MISS — two IDENTICAL Riolu, where no board-derived signal can
+split them by construction, so it is unbreakable rather than unsolved. `85164605-48` ties and lands on
+the ruled option **by engine option order**, i.e. correctly by luck. Recorded as a known exposure, not
+fixed: a tiebreak is only worth adding once a frame shows index order landing the WRONG way, and none
+does. #217's lexicographic pattern is the shape to reuse if one appears.
+
+**F3 — the deletion pass ORPHANED a shipped kill-switch, and this is Amendment A's defect class.**
+#217's own Amendment A found that ADR-0080's mandated `_DENIAL_FORWARD` discount *"was never applied
+to the relevance read — its only consumer was `_denial_at`, the OFF path."* A doctrine that lived only
+on the path nobody armed. Auditing this build for the same shape found the mirror image, created by
+Amendment E: a doctrine whose only consumers were the rungs we **deleted**.
+
+`board.evolving_wincon_on_bench` now has **zero readers**. Its only consumers were the
+`and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)` clauses on three of
+the six deleted rungs. The `evolving_wincon_priority` PROFILE flag therefore gates a computation
+nothing reads, and is **inert** — measured on the f22 CRITICAL it exists for:
+
+| `evolving_wincon_priority` | pick |
+|---|---|
+| `True` (shipped) | `[1]` Staryu ✓ |
+| `False` | `[1]` Staryu ✓ |
+
+The *doctrine* survives — Amendment C4 already showed the scalar reaches Staryu without it, because
+the `30 + 20 + 40 = 90` sum it defended against no longer exists. What does not survive is the flag's
+honesty: `PROFILE` advertises a shipped switch backed by a CRITICAL correction (ms 85164131 f22) that
+now changes nothing on any board.
+
+**This is left OPEN for a user ruling rather than resolved here.** Retiring a shipped kill-switch whose
+provenance is a CRITICAL is a decision, not a cleanup, and the deletion pass has already made one such
+call this session. The options are (a) retire `evolving_wincon_priority`,
+`Pilot._evolving_wincon_on_bench` and `Board.evolving_wincon_on_bench` together, citing f22 under the
+scalar as the witness that the doctrine is carried; or (b) keep the flag and record that it is
+deliberately inert pending a future consumer. Recommendation is (a) — an inert switch in the
+deployment record is exactly the "two contradictory models" problem #217 decision 5 retired
+`_DENIAL_BENCH` to avoid, one level up.
+
+**F4 — two independent corroborations of this branch's own findings.** #217's Amendment B attributes
+`84071010|0|decision|15` to a **clean tree** across four stashed configurations, confirming
+Amendment B's control run here; and it records that the leaf baseline, captured at `e4c46ca`, is stale
+against Issue #213's `scaled_threat_rank` — the same staleness Amendment D worked around by re-running
+both gates rather than carrying numbers forward.
+
+**F5 — the S4 family inconsistency now has an owner.** Amendment E flagged that deny ships OFF while
+snipe ships ON. #217's Amendment B took its pre-registered ship-dark fallback and chartered
+**Issue #228** for deny's arming, explicitly calling OFF *"a KNOWN DEBT, not a decision."* So the
+inconsistency is a sequencing artefact with a filed resolution, not an unowned divergence.
+
+**F6 — NINTH collision, and this ADR is the record holder.** Issue #217's ADR took **0084**, having
+skipped 0083 in the belief that Issue #188 held it — a correct skip for the wrong reason, since 0083
+had gone to Issue #213. This ADR has now moved **0082 → 0083 → 0084 → 0085** across three rebases in a
+single day. `main`'s index had already predicted the landing spot before this branch rebased.
 
 ## Alternatives rejected
 

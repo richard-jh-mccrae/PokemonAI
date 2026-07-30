@@ -232,7 +232,7 @@ _SNIPE_THREAT_PRIZE_FLOOR = 5   # deny an ENERGIZED off-Prize-Path attacker (don
 _PREVENT_EX_SNIPE_BOOST = 500  # snipe-rank boost for a benched body whose line reaches a Pokémon that
                            # PREVENTS my ex attacker's damage (`prevent_ex_damage`, e.g. Dwebble→Crustle) —
                            # hard counter once evolved, snipe the fragile pre-evo NOW (ep82225138 f46).
-# `_MATCHUP_PRIORITY_SCALE = 5` (ADR-0051) was DELETED with `_snipe_matchup_tactical` by ADR-0084
+# `_MATCHUP_PRIORITY_SCALE = 5` (ADR-0051) was DELETED with `_snipe_matchup_tactical` by ADR-0085
 # decision 5 — its sole consumer. It existed to map a MatchupPlan role priority into a TACTICAL band
 # defined relative to "the positional snipe rungs (Σ≲150)", and once those rungs are gone the band it
 # named has no lower edge to sit above. The Brief's steer now travels as a MULTIPLIER on a [0,1]
@@ -422,7 +422,7 @@ class Board:
     snipe_damage: int = 0              # at a DAMAGE select, bench-snipe rider my Active's attack
                                        # deals (max over my Active's attacks) — closed-form KO test for a
                                        # snipe target (rider >= target HP; ignores W/R). 0 off a Damage select
-    # `strongest_threat_rank` was DELETED with `target_is_top_threat` (ADR-0084): a whole-bench max
+    # `strongest_threat_rank` was DELETED with `target_is_top_threat` (ADR-0085): a whole-bench max
     # computed every DAMAGE decision that existed only to answer that one equality.
     best_counter_slot: tuple | None = None  # (area, index, playerIndex) of the OPPONENT Pokémon to place
                                         # the current counter on at a DAMAGE_COUNTER_ANY(14) spread OR a
@@ -931,7 +931,7 @@ class Context:
                                        # tuner-mutable `dont-snipe-a-benched-tera` (−60), which a positional
                                        # stack could outvote. Also excluded from `target_kos` and
                                        # `_forced_promotion_key`.
-    # `snipe_relevance_armed` was DELETED here by ADR-0084's deletion pass. It existed for exactly one
+    # `snipe_relevance_armed` was DELETED here by ADR-0085's deletion pass. It existed for exactly one
     # purpose — carrying the `not c.snipe_relevance_armed` stand-down into the six DAMAGE target rungs
     # so the additive stack could go quiet while the scalar decided. Those rungs are gone, so nothing
     # reads it and the Context stops advertising a switch no rule consults.
@@ -953,7 +953,7 @@ class Context:
     promote_target_hits_weakness: bool = False  # at a TO_ACTIVE promote, this option's body would strike
                                        # opponent's Active on its Weakness (x2 chip) — a favourable
                                        # sacrifice (Cinderace's Fire into a Fire-weak Archaludon/Duraludon)
-    # `target_is_top_threat` was DELETED by ADR-0084's deletion pass — the only rule that ever read
+    # `target_is_top_threat` was DELETED by ADR-0085's deletion pass — the only rule that ever read
     # it was `snipe-the-top-threat` (+30). It was an ARGMAX-EQUALITY flag (`target_rank ==
     # board.strongest_threat_rank`), i.e. a boolean standing in for "is this the biggest?", which is
     # precisely the shape decision 1 replaced: the scalar orders targets continuously, so the biggest
@@ -1419,7 +1419,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `turns_to_ko_me` per ENERGIZED opponent body.
                                                         # OFF by default so live play pays nothing until
                                                         # #199's gate 1 rules the read admissible
-        self.snipe_relevance = snipe_relevance          # ADR-0084 / Issue #188 kill-switch: the
+        self.snipe_relevance = snipe_relevance          # ADR-0085 / Issue #188 kill-switch: the
                                                         # **Snipe Relevance** scalar DECIDES the DAMAGE
                                                         # bench-target select in place of
                                                         # `baseline_snipe.py`'s six additive target
@@ -5521,7 +5521,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             snipe_ctx and getattr(self, "snipe_prize_redundant", False)
             and board.my_path_turns is not None and not target_on_path
             and not target_is_forced_promotion
-            # ADR-0084 decision 13: the `_SNIPE_THREAT_PRIZE_FLOOR = 5` PRIZE-POSITION rescue that used
+            # ADR-0085 decision 13: the `_SNIPE_THREAT_PRIZE_FLOOR = 5` PRIZE-POSITION rescue that used
             # to sit here is DELETED. It thresholded `my_prizes_remaining` to keep an ENERGIZED
             # off-path attacker out of the redundant set while I still held many prizes (f39: snipe
             # the energized ex @ 6; 83667237-107: stand down @ 4 — symmetric boards differing only in
@@ -7122,7 +7122,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return build_matchup_plan(brief_roles=brief_roles, read_roles=read_roles,
                                   draw_engine_ids=self._draw_engine_ids(opp), gamma=gamma)
 
-    # `_snipe_matchup_tactical` (ADR-0051's MatchupPlan snipe steer) was DELETED by ADR-0084
+    # `_snipe_matchup_tactical` (ADR-0051's MatchupPlan snipe steer) was DELETED by ADR-0085
     # decision 5, which put it in the fold's scope alongside the six target rungs. Armed it was
     # already inert, because the steer now travels as the Brief MULTIPLIER inside
     # `snipe_relevance.target_relevance` — only the SIGN crosses the seam, with `_BRIEF_THREAT_BOOST`
@@ -7136,7 +7136,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The armed replacement for `snipe-for-the-ko`'s +60 weight, and the same move the Tera veto
         already made — from a tuner-mutable positional weight to a KO_SCORE-class Tactical term
-        (ADR-0084 decision 1). The weight form is the documented blunder class: its own rationale
+        (ADR-0085 decision 1). The weight form is the documented blunder class: its own rationale
         records `top-threat 30 + forced-promotion 40 + evolving-threat 45 = 115` on an un-KO-able
         Grookey out-voting `60` on the KO-able Applin (`82754241-45`, and `97-vs-72` on
         `82753102-63`). Gating each rung on its own `target_kos` was not enough, because the bonuses
@@ -7188,7 +7188,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         the id/provider is missing (an unknowable body never outranks a known threat). This stays the
         generic (card-fact + Read-modulated) threat order.
 
-        SURVIVES ADR-0084's deletion pass despite its snipe-flavoured constants, because the snipe
+        SURVIVES ADR-0085's deletion pass despite its snipe-flavoured constants, because the snipe
         target pick is no longer its only consumer — `planner.py:_ko_key_threat_lines` ranks the
         opponent bench with it for the ADR-0031 `ko_key_threat` Goal-Ladder rung (`planner_key_threat`,
         shipped ON), and `test_posture_read.py` covers its ADR-0026 lever-C read modulation. So
@@ -7264,7 +7264,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         confirmed = any(p.seen_cardId == cid for p in read.evolution_paths)
         return fwd if confirmed else fwd * (1.0 - gamma)
 
-    # `_strongest_threat_rank` was DELETED by ADR-0084's deletion pass. It walked every benched
+    # `_strongest_threat_rank` was DELETED by ADR-0085's deletion pass. It walked every benched
     # DAMAGE option to find the greatest `_target_threat_rank`, solely so `target_is_top_threat` could
     # be computed as an equality against it — a full extra pass over the bench per decision to answer
     # a question the graded scalar answers by ordering. `_target_threat_rank` / `_body_threat_rank`
@@ -7715,14 +7715,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _snipe_relevance_terms(self, obs: dict, select: dict, board: Board, option: dict,
                                ctx) -> dict | None:
-        """The SNIPE instrument's value — **Snipe Relevance** (ADR-0084, Issue #188;
+        """The SNIPE instrument's value — **Snipe Relevance** (ADR-0085, Issue #188;
         `common/snipe_relevance.py` owns the scoring, this owns the board plumbing).
 
         Mirrors `_relevance_terms` for the sibling instrument. Returns None off a bench-DAMAGE option
         or without the stats provider, so the caller contributes nothing rather than guessing.
 
         Everything `their_plan` needs comes off the **Threat Clock** rather than
-        `_body_threat_rank` (ADR-0045's own thesis, and ADR-0084 decision 3), which is what wins the
+        `_body_threat_rank` (ADR-0045's own thesis, and ADR-0085 decision 3), which is what wins the
         self-lock and damage-scaler reads for free instead of re-deriving them. The two policies are
         SPLIT on purpose (decision 8) and must not be collapsed by a later refactor:
 
@@ -7762,7 +7762,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # Clefairy ex reads 20 instead of the up-to-200 it actually hits for — so `imminence` and
         # `forced`, which both take this number, under-read a whole card class by 10x. Every other
         # decider-facing `incoming` call in this file passes the `_board` stash; this one must too.
-        # ADR-0084 decision 7 bar 4 named exactly this case and could only be met once Issue #213's
+        # ADR-0085 decision 7 bar 4 named exactly this case and could only be met once Issue #213's
         # combined-bench scaler family landed, which it now has.
         incoming = self.combat.incoming(ma, [body], 1, opp_active=oa,
                                         context=getattr(self, "_opp_attack_context", None),
@@ -7824,12 +7824,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _snipe_relevance_tactical(self, obs: dict, select: dict, board: Board, option: dict,
                                   ctx) -> float:
-        """`K x relevance`, the armed snipe target score (ADR-0084 decisions 1-13).
+        """`K x relevance`, the armed snipe target score (ADR-0085 decisions 1-13).
 
         `K = MAX_ATTACK_DAMAGE`, which is the normalizer itself, so `K x relevance` lands back in
         DAMAGE units and the armed term is a strict generalisation of the band the deleted rungs
         competed in rather than a re-scaling — the identity ADR-0080 Amendment B derived for deny and
-        ADR-0084 Amendment A1 adopted here. It deliberately does NOT go through
+        ADR-0085 Amendment A1 adopted here. It deliberately does NOT go through
         `currency.PRIZE_DAMAGE_RATE`: relevance is a `[0,1]` scalar, not a prize-denominated value, so
         a prizes-to-damage rate would convert nothing.
 

@@ -153,13 +153,13 @@ def test_dont_rush_evolve_without_a_preevolution_in_play():
 
 
 # ---------------------------------------------------------------- snipe-the-top-threat (unified rank)
-# `test_snipe_the_top_threat_breaks_the_evolving_tie_on_the_strongest_line` was DELETED by ADR-0084's deletion pass:
+# `test_snipe_the_top_threat_breaks_the_evolving_tie_on_the_strongest_line` was DELETED by ADR-0085's deletion pass:
 # it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
 # carried by `test_a_pre_evo_carrying_a_wincon_outranks_one_carrying_nothing` and
 # `test_the_forward_leg_stands_down_once_the_evolved_wincon_is_already_in_play`
 # (test_snipe_relevance.py) — the forward leg plus its ADR-0044 discriminator.
 
-# `test_top_threat_picks_the_energized_body_over_a_bigger_latent_line` was DELETED by ADR-0084's deletion pass:
+# `test_top_threat_picks_the_energized_body_over_a_bigger_latent_line` was DELETED by ADR-0085's deletion pass:
 # it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
 # carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` (test_snipe_relevance.py).
 

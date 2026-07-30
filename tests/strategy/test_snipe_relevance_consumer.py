@@ -1,4 +1,4 @@
-"""Snipe Relevance at the CONSUMER seam — the Pilot plumbing (ADR-0084, Issue #188).
+"""Snipe Relevance at the CONSUMER seam — the Pilot plumbing (ADR-0085, Issue #188).
 
 Seam 1 (`test_snipe_relevance.py`) covers the pure scorer's legs on authored worked examples. This
 file covers what the *Pilot* does with it: the switch's OFF-byte-identical promise, the resolve-once-per-
@@ -29,7 +29,7 @@ def _shipped_pilot(agent="mega_starmie"):
     return _build_pilot(agent)[0]
 
 
-#: The six DAMAGE(15) target rungs ADR-0084 deleted — named once so both directions can assert it.
+#: The six DAMAGE(15) target rungs ADR-0085 deleted — named once so both directions can assert it.
 _DELETED_TARGET_RUNGS = frozenset({
     "snipe-for-the-ko", "snipe-the-top-threat", "snipe-the-threat", "snipe-on-the-path",
     "snipe-the-forced-promotion", "snipe-the-evolving-threat"})
@@ -49,7 +49,7 @@ def _off(agent="mega_starmie"):
     """The kill-switch-OFF arm, forced EXPLICITLY.
 
     Until 2026-07-30 the shipped default was OFF, so these tests used `_shipped_pilot()` as the OFF
-    arm and the two were the same pilot. Arming (ADR-0084 Amendment C) split them: the OFF path is
+    arm and the two were the same pilot. Arming (ADR-0085 Amendment C) split them: the OFF path is
     still a live requirement — the switch has to keep working — but it is no longer the default, so
     it must be asked for by name rather than inherited.
     """
@@ -62,10 +62,10 @@ def _off(agent="mega_starmie"):
 
 @pytest.mark.req("REQ-SNIPECONS-0001")
 def test_the_switch_ships_armed():
-    """ADR-0084 decision 7 bar 5 staged OFF-first, then armed — this is the second stage.
+    """ADR-0085 decision 7 bar 5 staged OFF-first, then armed — this is the second stage.
 
     Arming was owed ADR-0072's two merit gates plus the paired-A/B Tripwire, and all three cleared
-    on 2026-07-30 (ADR-0084 Amendment C): Decision Gate 0 unruled REGRESSION; Discrimination Gate
+    on 2026-07-30 (ADR-0085 Amendment C): Decision Gate 0 unruled REGRESSION; Discrimination Gate
     PASS run ARMED per ADR-0072 decision 5 (0 unruled `OK -> MISS`, 1 ruled to #165); Tripwire
     -1.25 pp, 95% CI [-4.79, +2.29], 0 crashes / 2400 games -> `mid_build_verdict` True.
     """
@@ -81,7 +81,7 @@ def test_the_switch_ships_armed():
     "ms_snipe_energized_bench_f39.json", "ms_snipe_attacker_line_over_support_f85.json",
 ])
 def test_off_is_documented_degraded_mode_not_a_rollback(fixture):
-    """What the kill-switch means AFTER ADR-0084's deletion pass.
+    """What the kill-switch means AFTER ADR-0085's deletion pass.
 
     This test previously asserted the opposite — that OFF left the six incumbent target rungs
     deciding, byte-identical. That was the correct contract for the staging commit, and it is now
@@ -125,7 +125,7 @@ def test_the_incumbent_rungs_stand_down_as_a_body_when_armed():
 
 @pytest.mark.req("REQ-SNIPECONS-0002")
 def test_the_counter_rungs_are_retained_and_the_target_rungs_are_gone():
-    """ADR-0084 decision 5, after the deletion pass, asserted in BOTH directions.
+    """ADR-0085 decision 5, after the deletion pass, asserted in BOTH directions.
 
     The six DAMAGE(15) target rungs are DELETED — not stood down, not shadowed. The three counter
     rungs are deliberately RETAINED: disjoint select contexts (13/14/16/40 vs 15) so they never
@@ -190,7 +190,7 @@ def test_a_knock_out_dominates_every_relevance_score_structurally():
 
 @pytest.mark.req("REQ-SNIPECONS-0005")
 def test_a_bench_count_scaler_is_priced_at_its_board_effective_damage_not_its_printed_base():
-    """ADR-0084 decision 7 **bar 4's fourth authored fixture**, finally satisfiable.
+    """ADR-0085 decision 7 **bar 4's fourth authored fixture**, finally satisfiable.
 
     The bar reads: *"Lillie's Clefairy ex reading its board-effective damage rather than 20 once the
     combined-bench scaler family lands."* That family landed with Issue #213
@@ -224,7 +224,7 @@ def test_a_bench_count_scaler_is_priced_at_its_board_effective_damage_not_its_pr
     src = inspect.getsource(_shipped_pilot().__class__._snipe_relevance_terms)
     assert "_opp_attack_context" in src, (
         "`_snipe_relevance_terms` must pass `context=` to `combat.incoming` -- without it every "
-        "bench-count scaler prices at its printed base (Issue #213 / ADR-0084 bar 4)")
+        "bench-count scaler prices at its printed base (Issue #213 / ADR-0085 bar 4)")
     assert "forward_max_damage" not in src, (
         "the forward leg must read `_threat_damage_pair`, not the provider's PRINTED forward index "
         "(which returns 0 for card 272)")
@@ -275,7 +275,7 @@ def test_a_benched_tera_is_ordered_last_but_stays_selectable():
 
 @pytest.mark.req("REQ-SNIPECONS-0007")
 def test_snipe_credits_banked_potential_unlike_denys_fire_reading():
-    """ADR-0084 Amendment A2, the question the ADR explicitly owed a test rather than an assumption.
+    """ADR-0085 Amendment A2, the question the ADR explicitly owed a test rather than an assumption.
 
     Deny's Finding A (ADR-0080 Amendment B) split its read: full relevance credits BANKED potential,
     which is right for deciding whether to KEEP a Hammer and wrong for deciding whether to SPEND one

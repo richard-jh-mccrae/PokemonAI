@@ -1,5 +1,5 @@
 """Snipe Relevance — *does damaging this body matter to their plan and to my prize route?*
-(ADR-0084, Issue #188).
+(ADR-0085, Issue #188).
 
 The snipe instrument's value, and **not a magnitude**. Issue #188 was chartered to fold the six
 additive target rungs in `baseline_snipe.py` onto the shared prize-denominated marginal; measuring
@@ -39,7 +39,7 @@ evolving-threat 45 = 115` on an un-KO-able Grookey beating `60` on the KO-able A
 
 ## their_plan — does this body matter to the opponent's offence?
 
-Sourced from the **Threat Clock**, not from `pilot._body_threat_rank` (ADR-0084 decision 3, and
+Sourced from the **Threat Clock**, not from `pilot._body_threat_rank` (ADR-0085 decision 3, and
 ADR-0045's own thesis — it names `_body_threat_rank` among the six scattered reads the Threat Clock
 exists to unify). The design doc specifies this exact query: *"`strongest_threat_rank` (snipe
 imminence) | the curve's earliest-KO-turn / slope per body | prep policy."*
@@ -96,7 +96,7 @@ could never see. It scores maximal because this turn is the last one in which th
 
 **None are introduced.** `MAX_ATTACK_DAMAGE` is `deny_relevance`'s existing derived, CSV-recomputed
 normalizer, imported rather than copied so a future set re-derives it once for both instruments.
-`K = MAX_ATTACK_DAMAGE` is also the exit to the damage-scale `score` (ADR-0084 Amendment A1): since
+`K = MAX_ATTACK_DAMAGE` is also the exit to the damage-scale `score` (ADR-0085 Amendment A1): since
 `relevance = setback / MAX_ATTACK_DAMAGE`, `K x relevance` lands back in damage units, exactly as
 ADR-0080 Amendment B derived for deny. **`currency.PRIZE_DAMAGE_RATE` is NOT a consumer** — relevance
 is a `[0,1]` scalar, not a prize-denominated value, so a prizes-to-damage rate would convert nothing
@@ -125,7 +125,7 @@ from common.deny_relevance import MAX_ATTACK_DAMAGE, normalize
 #: ``relevance = setback / MAX_ATTACK_DAMAGE``, ``K x relevance`` recovers the setback in DAMAGE, so
 #: the armed rung prices in the incumbent's own units and is a strict generalisation of it rather
 #: than a re-scaling. There is no free parameter. Derived for deny by ADR-0080 Amendment B and
-#: adopted here by ADR-0084 Amendment A1, which corrects this ADR's original claim that
+#: adopted here by ADR-0085 Amendment A1, which corrects this ADR's original claim that
 #: `currency.PRIZE_DAMAGE_RATE` was the exit — it is not, and it never was: relevance is not
 #: prize-denominated, so that rate would convert nothing.
 K = MAX_ATTACK_DAMAGE
@@ -134,7 +134,7 @@ K = MAX_ATTACK_DAMAGE
 def ko_delta(turns_before: float | None, turns_after: float | None) -> float:
     """Fraction of the body's Active clock that ``chips`` worth of damage removes.
 
-    The user's ruling (ADR-0084 decision 11): a chip is worth something only if it takes a TURN off
+    The user's ruling (ADR-0085 decision 11): a chip is worth something only if it takes a TURN off
     how long the body will sit in the Active spot against my real attacker. A 50-damage snipe onto a
     340-HP Mega Lucario ex takes it to 290 and removes no turn at all — a wasted snipe.
 
@@ -211,7 +211,7 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
             target must remain selectable.
         brief_priority: the matched MatchupPlan/Brief priority, signed and already scaled. A
             POSITIVE priority stands down on a redundant / mirage / Tera body; a negative (``avoid``)
-            priority always applies. That asymmetry is load-bearing (ADR-0084 Amendment A3): a
+            priority always applies. That asymmetry is load-bearing (ADR-0085 Amendment A3): a
             booster must scale the oracle, never override it.
         turns_to_ko_before / turns_to_ko_after: `combat.turns_to_ko` against the body as it stands
             and after the two-chip window (decision 11).

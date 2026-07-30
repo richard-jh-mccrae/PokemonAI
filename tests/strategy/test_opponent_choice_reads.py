@@ -162,7 +162,7 @@ def test_45_forced_promotion_key_predicts_the_ready_wincon_not_the_energized_sta
     assert board.forced_promotion_key != id(staryu)
 
 
-# `test_45_..._via_the_rungs` was DELETED with the rungs it named (ADR-0084's deletion pass). It
+# `test_45_..._via_the_rungs` was DELETED with the rungs it named (ADR-0085's deletion pass). It
 # asserted REQ-READ-0005 through `snipe-the-top-threat` / `snipe-the-threat` / `snipe-the-forced-
 # promotion` firing, and those hypotheses no longer exist. The requirement is unchanged and is
 # carried by the `_via_the_scalar` sibling immediately below, which asserts the same two facts on the
@@ -170,13 +170,13 @@ def test_45_forced_promotion_key_predicts_the_ready_wincon_not_the_energized_sta
 
 @pytest.mark.req("REQ-READ-0005")
 def test_45_forced_promotion_redirects_the_snipe_and_suppresses_the_mirage_via_the_scalar():
-    """The SAME requirement through the shipped ARMED instrument (ADR-0084, armed-ON 2026-07-30).
+    """The SAME requirement through the shipped ARMED instrument (ADR-0085, armed-ON 2026-07-30).
 
     The six additive target rungs stand down together when `snipe_relevance` is armed, so REQ-READ-0005
     can no longer be read off hypothesis IDs — it is carried by the graded terms instead, and this
     asserts it there so the requirement stays covered in the configuration that actually ships:
 
-    * the mirage is suppressed by ZEROING `imminence` (ADR-0084's `target_promotion_mirage`), which
+    * the mirage is suppressed by ZEROING `imminence` (ADR-0085's `target_promotion_mirage`), which
       collapses `their_plan` and with it the whole conjunctive product — not merely out-ranked;
     * the ready wincon earns the `forced` leg, and `forced` must DOMINATE its own `imminence` (the
       no-imminence-discount clause: a forced promotion is not discounted by how long they need).

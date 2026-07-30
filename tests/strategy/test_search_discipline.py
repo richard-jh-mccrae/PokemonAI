@@ -243,7 +243,7 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
 
 
 # --- snipe-for-the-ko: a bench snipe that KNOCKS OUT the target (HP <= rider) is a free prize ------
-# `test_snipe_for_the_ko_prefers_the_killable_bench_target` was DELETED by ADR-0084's deletion pass:
+# `test_snipe_for_the_ko_prefers_the_killable_bench_target` was DELETED by ADR-0085's deletion pass:
 # it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
 # carried by `test_the_ko_dominator_fires_only_when_armed_and_only_on_a_ko_target` (consumer seam) and
 # `test_a_benched_knockout_outranks_a_scarier_chip` (test_snipe_threat_rank.py) — the free prize

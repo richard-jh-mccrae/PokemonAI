@@ -234,19 +234,19 @@ def test_power_up_attacker_attaches_energy_rather_than_passing():
     assert pilot.decide(obs) == [0]
 
 
-# `test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy` was DELETED by ADR-0084's deletion pass:
+# `test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy` was DELETED by ADR-0085's deletion pass:
 # it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
 # carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` (test_snipe_relevance.py) —
 # an energized body is nearer to attacking, which the `imminence` leg reads off `turns_to_afford`
 # as a continuous quantity rather than the retired `_ENERGIZED_SNIPE_TIER` step.
 
-# `test_snipe_the_top_threat_hits_the_fragile_preevo_over_the_weakest_deadend` was DELETED by ADR-0084's deletion pass:
+# `test_snipe_the_top_threat_hits_the_fragile_preevo_over_the_weakest_deadend` was DELETED by ADR-0085's deletion pass:
 # it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
 # carried by `test_a_pre_evo_carrying_a_wincon_outranks_one_carrying_nothing` (test_snipe_relevance.py) — the
-# `forward` leg, ADR-0084 decision 1's own worked pair (Riolu banks toward Mega Lucario ex 270;
+# `forward` leg, ADR-0085 decision 1's own worked pair (Riolu banks toward Mega Lucario ex 270;
 # a Solrock's line reaches nothing).
 
-# `test_snipe_the_top_threat_tiers_an_energized_body_above_a_bigger_latent_one` was DELETED by ADR-0084's deletion pass:
+# `test_snipe_the_top_threat_tiers_an_energized_body_above_a_bigger_latent_one` was DELETED by ADR-0085's deletion pass:
 # it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
 # carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` and
 # `test_no_sum_of_positional_legs_can_out_vote_a_single_stronger_one` (test_snipe_relevance.py).

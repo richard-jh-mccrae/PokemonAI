@@ -433,7 +433,7 @@ def _damage_select_over_ml_bench():
 
 
 @pytest.mark.xfail(strict=True, reason=
-    "ADR-0084 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
+    "ADR-0085 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
     "deleted, `relevance = their_plan * my_route` is 0 for EVERY target on a board where "
     "nothing is imminent, and a MULTIPLIER cannot express a preference over a zero -- so the "
     "Brief steer goes inert and the pick falls to option index. Measured here: brief_multiplier "
@@ -448,7 +448,7 @@ def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
     # Solrock's general draw-engine fact -> an `avoid` MatchupPlan priority; Riolu (Brief
     # fragile_preevo) -> a positive one. The pick lands on the wincon line, not the engine.
     #
-    # ADR-0084 moved WHERE that steer is expressed. It used to be a signed ADDEND in the tactical
+    # ADR-0085 moved WHERE that steer is expressed. It used to be a signed ADDEND in the tactical
     # band (`_snipe_matchup_tactical`, now deleted with the six rungs), so the requirement could be
     # read as "tactical positive on one, negative on the other". Decision 5 folded it into the graded
     # scalar as a MULTIPLIER on `their_plan`, which is why the sign is now asserted on
@@ -606,7 +606,7 @@ def _lever_stats(attacks=None):
 
 def _lever_pilot(attack_table=None, **kw):
     table = attack_table or {11: AttackStat(11, damage=120, cost=1)}
-    # `snipe_relevance` armed to match the shipped PROFILE. ADR-0084's deletion pass removed the six
+    # `snipe_relevance` armed to match the shipped PROFILE. ADR-0085's deletion pass removed the six
     # DAMAGE target rungs, so an unarmed Pilot scores every bench target 0 and the snipe assertions
     # below would pass or fail on option index rather than on the Brief steer under test.
     kw.setdefault("snipe_relevance", True)
@@ -615,7 +615,7 @@ def _lever_pilot(attack_table=None, **kw):
 
 
 @pytest.mark.xfail(strict=True, reason=
-    "ADR-0084 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
+    "ADR-0085 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
     "deleted, `relevance = their_plan * my_route` is 0 for EVERY target on a board where "
     "nothing is imminent, and a MULTIPLIER cannot express a preference over a zero -- so the "
     "Brief steer goes inert and the pick falls to option index. Measured here: brief_multiplier "

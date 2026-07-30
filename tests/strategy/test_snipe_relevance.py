@@ -1,7 +1,7 @@
-"""Snipe Relevance — the pure scorer (ADR-0084, Issue #188).
+"""Snipe Relevance — the pure scorer (ADR-0085, Issue #188).
 
 Authored from the grill's WORKED EXAMPLES rather than harvested from the 19 corpus frames that chose
-the design (ADR-0084 decision 7 bar 4, mirroring ADR-0080's "the five worked examples become the
+the design (ADR-0085 decision 7 bar 4, mirroring ADR-0080's "the five worked examples become the
 acceptance fixtures"). The distinction is load-bearing: ~12 scorer shapes were measured against those
 19 frames during the grill, so re-scoring the composite on them validates a fit against itself. These
 assert per-LEG behaviour, which is the gap that let Lillie's Clefairy ex be right-for-the-wrong-reason
@@ -36,7 +36,7 @@ RIDER = 50                             # Jetting Blow's bench-snipe rider
 @pytest.mark.req("REQ-SNIPEREL-0001")
 def test_the_normalizer_is_recomputed_from_the_card_set_not_pinned():
     """`K` is the exit rate back to the damage scale AND the normalizer, identical by construction
-    (ADR-0084 Amendment A1 / ADR-0080 Amendment B). Recomputed from the CSV rather than pinned, so a
+    (ADR-0085 Amendment A1 / ADR-0080 Amendment B). Recomputed from the CSV rather than pinned, so a
     future set re-derives it — the property that makes it falsifiable is the point."""
     best = 0
     with (REPO / "data" / "EN_Card_Data.csv").open(newline="", encoding="utf-8") as fh:
@@ -181,7 +181,7 @@ def test_prize_redundancy_suppresses_imminence_the_same_way():
 
 @pytest.mark.req("REQ-SNIPEREL-0008")
 def test_a_positive_brief_boost_sharpens_but_stands_down_on_the_adr_0044_reads():
-    """ADR-0084 decision 5 + Amendment A3. A matched Brief MULTIPLIES the derived rank; it must never
+    """ADR-0085 decision 5 + Amendment A3. A matched Brief MULTIPLIES the derived rank; it must never
     reach a body ADR-0044 says to skip, or authored scouting starts overriding the read instead of
     sharpening it."""
     # `brief_boost` is the CALLER's existing `_BRIEF_THREAT_BOOST` (1.25) — the scorer reads only the

@@ -830,7 +830,7 @@ rainbow-class Special Energy reads untyped, so it scores 0 even on a body exactl
 
 **Snipe Relevance**:
 Snipe's value, and the answer to *"does damaging this body actually matter to their plan and to my
-prize route?"* — a **scalar in [0,1]** per offered target, NOT a magnitude (ADR-0084, Issue #188,
+prize route?"* — a **scalar in [0,1]** per offered target, NOT a magnitude (ADR-0085, Issue #188,
 2026-07-29). The **second** instrument to reach ADR-0062's wall (*"no monotone pricing of magnitude
 alone can separate them"*) and take **Deny Relevance**'s shape for the same structural reason: a
 snipe target, like a stripped body, **survives** — so what matters is whether it *matters*, not how
@@ -854,7 +854,7 @@ it pays 3.0 prizes to chip a 340-HP body; it stays gust's currency, not snipe's)
 RATE (the refuted magnitude successor — 11/19 vs the rungs' 17/19), normalizing the six weights into
 [0,1] (six undetermined constants where the scalar keeps one), Prize-Redundant Target / Forced-Promotion
 Read (ADR-0044 *reads* — these are legs and gates the scalar consumes, not the scalar itself)
-_(BUILT 2026-07-30 behind `snipe_relevance`, ARMED-ON 2026-07-30 (ADR-0084 Amendment C — Decision Gate
+_(BUILT 2026-07-30 behind `snipe_relevance`, ARMED-ON 2026-07-30 (ADR-0085 Amendment C — Decision Gate
 19/19 unchanged, Discrimination Gate PASS run ARMED, Tripwire −1.25 pp CI [−4.79, +2.29] 0 crashes):
 `common/snipe_relevance.py` scores,_
 `Pilot._snipe_relevance_terms` _plumbs (resolved once per decision),_ `_snipe_relevance_tactical`
@@ -862,7 +862,7 @@ _consumes at_ `K = MAX_ATTACK_DAMAGE`_, and_ `_snipe_ko_dominator` _carries the 
 structure. The six target rungs STAND DOWN as a body while armed; their DELETION (#136 directive 1,
 "rungs an equation replaces are DELETED, not suppressed") is a SEPARATE follow-up and is still owed —
 arming kept them as the live OFF path so the kill-switch stays real, the staging Issue #187 used for_
-`_DENIAL_BENCH`_, not a shadow. ADR-0084 (Issue #188),
+`_DENIAL_BENCH`_, not a shadow. ADR-0085 (Issue #188),
 thirteen decisions. The shipped shape:_
 `relevance = tera_veto ⊗ (their_plan × my_route)`_, with_ `snipe-for-the-ko` _a structural dominator
 outside it and the Tera veto ORDERING last rather than removing the option (a benched Tera as the only

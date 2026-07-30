@@ -31,7 +31,7 @@ CLUSTERS = {
         "use-acceleration",                     # PLAY-side accel source pick (currency-clean)
         "prefer-active-attach-in-setup",        # positional prior, below one scaled build step
         "feed-the-line-for-disruptor-lock"}),   # OFFENSIVE item-lock maneuver step 1 (dragapult f20)
-    # The six DAMAGE(15) TARGET rungs are DELETED since ADR-0084 (#188) — `snipe-for-the-ko` (60),
+    # The six DAMAGE(15) TARGET rungs are DELETED since ADR-0085 (#188) — `snipe-for-the-ko` (60),
     # `snipe-the-evolving-threat` (45), `snipe-the-forced-promotion` (40), `snipe-the-top-threat` (30),
     # `snipe-the-threat` (20), `snipe-on-the-path` (12). The bench-target pick is decided by
     # `common/snipe_relevance.py`'s [0,1] scalar, with the KO half as the structural

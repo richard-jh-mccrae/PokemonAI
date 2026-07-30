@@ -1,6 +1,6 @@
 """BASELINE cluster: SNIPE — the COUNTER-placement selects (ADR-0025).
 
-Since ADR-0084 (Issue #188) this module owns only the counter contexts: the DAMAGE_COUNTER_ANY(14)
+Since ADR-0085 (Issue #188) this module owns only the counter contexts: the DAMAGE_COUNTER_ANY(14)
 "place a counter in any way you like" spread placement (Phantom Dive / Munkidori —
 `place-counter-to-convert`), plus the counter-mover's SOURCE(16) and AMOUNT(40) picks. The DAMAGE(15)
 bench-snipe target pick that used to live here is now decided by `common/snipe_relevance.py`; see the
@@ -15,7 +15,7 @@ from common.strategy.context import (_DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY,
 from common.strategy.strategy import Hypothesis
 
 HYPOTHESES = [
-    # --- The SIX DAMAGE(15) target rungs that used to live here are DELETED (ADR-0084, Issue #188).
+    # --- The SIX DAMAGE(15) target rungs that used to live here are DELETED (ADR-0085, Issue #188).
     # `snipe-for-the-ko` (60), `snipe-the-evolving-threat` (45), `snipe-the-forced-promotion` (40),
     # `snipe-the-top-threat` (30), `snipe-the-threat` (20) and `snipe-on-the-path` (12) were an
     # ADDITIVE stack, and the stack itself was the defect: bonuses firing on DIFFERENT bodies summed
