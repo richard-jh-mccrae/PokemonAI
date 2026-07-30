@@ -234,67 +234,22 @@ def test_power_up_attacker_attaches_energy_rather_than_passing():
     assert pilot.decide(obs) == [0]
 
 
-@pytest.mark.req("REQ-GEN-0012")
-def test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy():
-    # Damage/snipe select over opponent's Bench: bare Pokémon (opt0) vs one already
-    # carrying Energy (opt1, closest to attacking). snipe-the-threat lifts the energized target.
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY)
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
-                      current=state(active=poke(700),
-                                    opp_bench=[poke(800, energy=0), poke(900, energy=1)]))
-    assert pilot.decide(obs) == [1]
-    assert "snipe-the-threat" in _fired(pilot.explain(obs).options[1])
-    assert "snipe-the-threat" not in _fired(pilot.explain(obs).options[0])
+# `test_snipe_the_threat_prefers_the_benched_attacker_carrying_energy` was DELETED by ADR-0084's deletion pass:
+# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
+# carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` (test_snipe_relevance.py) —
+# an energized body is nearer to attacking, which the `imminence` leg reads off `turns_to_afford`
+# as a continuous quantity rather than the retired `_ENERGIZED_SNIPE_TIER` step.
 
-    # All-bare Bench (no energized threat anywhere): rule fires on nothing -> baseline holds.
-    no_threat = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
-                            context=DAMAGE,
-                            current=state(active=poke(700),
-                                          opp_bench=[poke(800, energy=0), poke(900, energy=0)]))
-    assert "snipe-the-threat" not in _fired(pilot.explain(no_threat).options[1])
+# `test_snipe_the_top_threat_hits_the_fragile_preevo_over_the_weakest_deadend` was DELETED by ADR-0084's deletion pass:
+# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
+# carried by `test_a_pre_evo_carrying_a_wincon_outranks_one_carrying_nothing` (test_snipe_relevance.py) — the
+# `forward` leg, ADR-0084 decision 1's own worked pair (Riolu banks toward Mega Lucario ex 270;
+# a Solrock's line reaches nothing).
 
-
-@pytest.mark.req("REQ-GEN-0022")
-def test_snipe_the_top_threat_hits_the_fragile_preevo_over_the_weakest_deadend():
-    # No bench target carries Energy. Fragile pre-evo whose line becomes an attacker (Riolu -> Mega
-    # Lucario ex, 270) is the better snipe than a low-HP dead-end basic — even though dead-end is
-    # weakest. Unified threat RANK ranks Riolu's line top. (The ep81905522 f75 shape.)
-    stats = DictCardStatProvider({
-        500: CardStat(500, name="Sunkern", maxDamage=20),                 # dead-end basic
-        333: CardStat(333, name="Riolu", maxDamage=10),
-        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-    })
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
-                      current=state(active=poke(700),
-                                    opp_bench=[poke(500, hp=60), poke(333, hp=80)]))
-    deadend, evolving = pilot.explain(obs).options
-    assert "snipe-the-top-threat" in _fired(evolving)              # Riolu: line reaches 270 (top rank)
-    assert "snipe-the-top-threat" not in _fired(deadend)          # Sunkern: dead end, not top
-    assert pilot.decide(obs) == [1]                                # evolving line is top threat
-
-
-@pytest.mark.req("REQ-GEN-0022")
-def test_snipe_the_top_threat_tiers_an_energized_body_above_a_bigger_latent_one():
-    # Energized = imminent (strictly higher snipe tier, ADR-0020): energized 30-damage attacker is
-    # sniped before a BIGGER but not-yet-powered latent line (Riolu -> Mega Lucario ex 270). Rank
-    # tiers energized body to top; snipe-the-threat co-fires as legible imminence signal.
-    stats = DictCardStatProvider({
-        333: CardStat(333, name="Riolu", maxDamage=10),
-        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-        900: CardStat(900, name="Zubat", maxDamage=30),               # energized, non-evolving
-    })
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # opt0: Riolu, no energy (latent threat). opt1: energized attacker (imminent, higher tier).
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
-                      current=state(active=poke(700),
-                                    opp_bench=[poke(333, hp=90), poke(900, energy=1, hp=80)]))
-    latent, energized = pilot.explain(obs).options
-    assert "snipe-the-top-threat" in _fired(energized)            # energized body is top tier
-    assert "snipe-the-top-threat" not in _fired(latent)
-    assert "snipe-the-threat" in _fired(energized)
-    assert pilot.decide(obs) == [1]                                # energized (imminent) sniped first
-
+# `test_snipe_the_top_threat_tiers_an_energized_body_above_a_bigger_latent_one` was DELETED by ADR-0084's deletion pass:
+# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
+# carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` and
+# `test_no_sum_of_positional_legs_can_out_vote_a_single_stronger_one` (test_snipe_relevance.py).
 
 @pytest.mark.req("REQ-GEN-0022")
 def test_only_snipe_rules_fire_at_a_damage_select():

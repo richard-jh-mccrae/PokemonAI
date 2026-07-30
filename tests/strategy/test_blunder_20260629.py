@@ -153,44 +153,16 @@ def test_dont_rush_evolve_without_a_preevolution_in_play():
 
 
 # ---------------------------------------------------------------- snipe-the-top-threat (unified rank)
-@pytest.mark.req("REQ-GEN-0028")
-def test_snipe_the_top_threat_breaks_the_evolving_tie_on_the_strongest_line():
-    stats = DictCardStatProvider({
-        333: CardStat(333, name="Riolu", maxDamage=30, evolvesFrom=None),
-        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-        444: CardStat(444, name="Makuhita", maxDamage=30, evolvesFrom=None),
-        674: CardStat(674, name="Hariyama", maxDamage=210, evolvesFrom="Makuhita"),
-    })
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # Two no-Energy evolving threats; Makuhita is WEAKEST (lower HP). Unified threat rank picks
-    # strongest forward line (Riolu->Mega Lucario 270 over Makuhita->Hariyama 210), never weakest.
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
-                      current=state(active=poke(700),
-                                    opp_bench=[poke(444, hp=60), poke(333, hp=90)]))  # idx0 Makuhita(weakest), idx1 Riolu
-    riolu = pilot.explain(obs).options[1]
-    assert "snipe-the-top-threat" in _fired(riolu)
-    assert pilot.decide(obs) == [1]                       # Riolu (strongest forward) over weakest Makuhita
+# `test_snipe_the_top_threat_breaks_the_evolving_tie_on_the_strongest_line` was DELETED by ADR-0084's deletion pass:
+# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
+# carried by `test_a_pre_evo_carrying_a_wincon_outranks_one_carrying_nothing` and
+# `test_the_forward_leg_stands_down_once_the_evolved_wincon_is_already_in_play`
+# (test_snipe_relevance.py) — the forward leg plus its ADR-0044 discriminator.
 
+# `test_top_threat_picks_the_energized_body_over_a_bigger_latent_line` was DELETED by ADR-0084's deletion pass:
+# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
+# carried by `test_imminence_subsumes_the_energized_tier_without_a_tier_constant` (test_snipe_relevance.py).
 
-@pytest.mark.req("REQ-GEN-0028")
-def test_top_threat_picks_the_energized_body_over_a_bigger_latent_line():
-    stats = DictCardStatProvider({
-        333: CardStat(333, name="Riolu", maxDamage=30, evolvesFrom=None),
-        678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-        900: CardStat(900, name="Zubat", maxDamage=30),
-    })
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # Energized benched body present -> higher snipe tier (imminent); bigger but latent Riolu
-    # line stands below it, so top-threat pick is the energized attacker.
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
-                      current=state(active=poke(700),
-                                    opp_bench=[poke(333, hp=90), poke(900, energy=1, hp=80)]))
-    latent, energized = pilot.explain(obs).options
-    assert "snipe-the-top-threat" in _fired(energized) and "snipe-the-top-threat" not in _fired(latent)
-    assert pilot.decide(obs) == [1]                       # energized threat sniped
-
-
-# ---------------------------------------------------------------- keep-key-cards-at-discard
 @pytest.mark.req("REQ-GEN-0029")
 def test_keep_key_cards_at_discard_protects_the_burst_energy():
     pilot = _pilot()

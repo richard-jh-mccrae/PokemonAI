@@ -162,21 +162,11 @@ def test_45_forced_promotion_key_predicts_the_ready_wincon_not_the_energized_sta
     assert board.forced_promotion_key != id(staryu)
 
 
-@pytest.mark.req("REQ-READ-0005")
-def test_45_forced_promotion_redirects_the_snipe_and_suppresses_the_mirage_via_the_rungs():
-    """The ADR-0044 ADDITIVE path (`snipe_relevance` OFF): the energized Staryu is a promotion mirage
-    (they won't bring it up), so its threat/imminence snipe is suppressed; the ready wincon gets
-    `snipe-the-forced-promotion`. Armed, these rungs stand down — see the `_scalar` sibling."""
-    fx = _fx("planner_83661649_45.json")
-    pilot = _shipped_pilot()
-    pilot.forced_promotion = True
-    pilot.snipe_relevance = False        # the rung family this test names only fires on the OFF path
-    d = pilot.explain(fx["obs"])
-    staryu_fired = {h.id for h, _w in d.options[0].fired}
-    mega_fired = {h.id for h, _w in d.options[1].fired}
-    assert "snipe-the-top-threat" not in staryu_fired and "snipe-the-threat" not in staryu_fired
-    assert "snipe-the-forced-promotion" in mega_fired
-
+# `test_45_..._via_the_rungs` was DELETED with the rungs it named (ADR-0084's deletion pass). It
+# asserted REQ-READ-0005 through `snipe-the-top-threat` / `snipe-the-threat` / `snipe-the-forced-
+# promotion` firing, and those hypotheses no longer exist. The requirement is unchanged and is
+# carried by the `_via_the_scalar` sibling immediately below, which asserts the same two facts on the
+# graded terms: the mirage zeroed at source, and the forced leg dominating its own imminence.
 
 @pytest.mark.req("REQ-READ-0005")
 def test_45_forced_promotion_redirects_the_snipe_and_suppresses_the_mirage_via_the_scalar():

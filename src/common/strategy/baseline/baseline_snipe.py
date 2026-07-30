@@ -1,123 +1,39 @@
-"""BASELINE cluster: SNIPE — choosing WHICH opponent Pokémon to damage/target (ADR-0025).
+"""BASELINE cluster: SNIPE — the COUNTER-placement selects (ADR-0025).
 
-Owns the two adjacent bench-targeting decision-contexts: the DAMAGE(15) bench-snipe (energized threat >
-evolving threat > weakest, guarded so they never double-count) AND the DAMAGE_COUNTER_ANY(14) "place a
-counter in any way you like" spread placement (Phantom Dive / Munkidori — `place-counter-to-convert`).
-Pure data, no Mixin. `EVOLVING_THREAT_DMG` (the line-becomes-an-attacker floor) lives here because only
-the snipe rules read it.
+Since ADR-0084 (Issue #188) this module owns only the counter contexts: the DAMAGE_COUNTER_ANY(14)
+"place a counter in any way you like" spread placement (Phantom Dive / Munkidori —
+`place-counter-to-convert`), plus the counter-mover's SOURCE(16) and AMOUNT(40) picks. The DAMAGE(15)
+bench-snipe target pick that used to live here is now decided by `common/snipe_relevance.py`; see the
+note in `HYPOTHESES` for what was deleted and why. Pure data, no Mixin.
+
+`EVOLVING_THREAT_DMG` was removed with the rungs — the surviving reader is
+`common/strategy/context.py`'s own `_EVOLVING_THREAT_DMG`, which the Snipe Relevance forward leg
+reaches through `target_is_strongest_forward`.
 """
-from common.strategy.context import (_DAMAGE, _DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY,
+from common.strategy.context import (_DAMAGE_COUNTER, _DAMAGE_COUNTER_ANY,
                                      _REMOVE_DAMAGE_COUNTER, _REMOVE_DAMAGE_COUNTER_COUNT)
 from common.strategy.strategy import Hypothesis
 
-# Evolution line "becomes an attacker" once it can OHKO a median body (median HP = 100; 100 is
-# ~p76 of damaging attacks). Tunable seed for `snipe-the-evolving-threat` (ADR-0020, docs/rules.md).
-EVOLVING_THREAT_DMG = 100
-
 HYPOTHESES = [
-    # --- unified threat order (ADR-0020 follow-up): bench KO = PRIZE; else snipe biggest attacker.
-    # Supersedes 4 flat priorities below (kept back-compat) — `_target_threat_rank` sees evolved ex + hand-size lines, never picks low-HP SUPPORT. ---
-    Hypothesis(
-        id="snipe-for-the-ko",
-        rationale="If a damage-select's snipe rider KOs the target (remaining HP <= rider, which ignores "
-                  "Weakness/Resistance), take it — a free prize beats any positional snipe. Outranks every "
-                  "other snipe priority: each positional rung now stands down whenever ANY KO is on offer "
-                  "(`board.snipe_ko_available`). Gating each rung on its own `target_kos` was not enough — "
-                  "the bonuses fire on a DIFFERENT body and their SUM out-voted the prize (top-threat 30 + "
-                  "forced-promotion 40 + evolving-threat 45 = 115 on an un-KO-able Grookey, vs 60 on the "
-                  "KO-able Applin: ms 82754241 f45, and 97-vs-72 in 82753102 f63). A positional weight must "
-                  "never override a KO, and neither may the sum of three.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
-                        and c.select_context == _DAMAGE and c.target_kos),
-        weight=60, status="testing"),
-    # NOTE: `dont-snipe-a-benched-tera` (−60) RETIRED — a benched Tera takes NO damage from attacks at
-    # all (`CardStat.tera`; rules.md §185), so sniping one is ALWAYS strictly wasted. That is a CARD
-    # FACT, not a preference, and it must never compete on points: as a tunable positional weight
-    # (`status="assumed"`) it held only by a 10-point margin (top-threat 30 + threat 20 = 50 < 60) and
-    # was DEFEATED once `snipe-on-the-path` (+12) also fired. It now lives in the Tactical layer as the
-    # structural `Pilot._snipe_tera_veto` (KO_SCORE-class), which dominates any positional stack, so no
-    # weight-tune and no future snipe rung can reintroduce the misplay (ms 81785223 f45: Wellspring Mask
-    # Ogerpon ex). The Tera is ordered LAST but still selectable when it is the ONLY bench target.
-    Hypothesis(
-        id="snipe-the-top-threat",
-        rationale="When no target can be KO'd, hit the biggest threat by `board.strongest_threat_rank` "
-                  "(own or forward-evolution damage) — sees already-evolved ex/Mega ex attackers by "
-                  "printed damage, prefers the more-developed body on a shared line, and boosts lines "
-                  "that certainly reach a hand-size attacker, so it never pokes a low-HP support mon. "
-                  "Stands down on a KO target (that's snipe-for-the-ko).",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
-                        and c.select_context == _DAMAGE and c.target_is_top_threat
-                        and not c.board.snipe_ko_available
-                        and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
-                        and not c.target_promotion_mirage      # ADR-0044: nor a non-promotion imminence mirage
-                        and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
-                                                               # stand down off the developing higher-prize wincon
-        weight=30, status="testing"),
-    Hypothesis(
-        id="snipe-the-threat",
-        rationale="A benched Pokémon already carrying Energy is closest to attacking, so sniping it "
-                  "denies the opponent their next attacker rather than poking a bare benchsitter. "
-                  "Stands down on a KO target — every positional rung must, or their SUM out-votes the "
-                  "free prize (ms 82754241 f45 / 82753102 f63). "
-                  "Co-fires with `snipe-the-top-threat` (`_target_threat_rank` already tiers energized "
-                  "targets above bare ones) as the legible imminence signal on top of it.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
-                        and c.select_context == _DAMAGE and c.target_is_threat
-                        and not c.board.snipe_ko_available
-                        and not c.target_prize_redundant       # ADR-0044: don't chip a body I don't need
-                        and not c.target_promotion_mirage      # ADR-0044: nor a non-promotion imminence mirage
-                        and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
-                                                               # stand down off the developing higher-prize wincon
-        weight=20, status="testing"),
-    Hypothesis(
-        id="snipe-on-the-path",
-        rationale="Tier-3 Prize Path (ADR-0040): this target sits on my cheapest route to my remaining "
-                  "prizes, so its damage/KO advances the MATCH win, not just the board. A path-economy "
-                  "axis stacking with the threat rank — a low-threat 1-prize body can still be the "
-                  "right path member ('KO one Mega + snipe 3 smalls'). Stands down on a KO target — the path "
-                  "axis must not stack onto the others past `snipe-for-the-ko`. Silent when the path is unknown "
-                  "(runs through bodies not yet in play) or the `objectives_path` switch is off.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
-                        and c.select_context == _DAMAGE and c.target_on_path
-                        and not c.board.snipe_ko_available),
-        weight=12, status="testing"),
-    Hypothesis(
-        id="snipe-the-forced-promotion",
-        rationale="ADR-0044 Forced-Promotion Read: the opponent's Active is dead, so a promotion is "
-                  "FORCED next turn — they bring up their highest-value READY attacker (the "
-                  "win-condition, energy-independent), not the energized bench-sitter that merely "
-                  "carries Energy now. Pre-chip that body this turn. Overrides the energized-imminence "
-                  "tier for this pick (its mirages are suppressed); silent while their Active is alive.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
-                        and c.select_context == _DAMAGE and c.target_is_forced_promotion
-                        and not c.board.snipe_ko_available
-                        and not (c.board.evolving_wincon_on_bench and not c.target_is_strongest_forward)),
-                                                               # stand down off the developing higher-prize wincon
-        weight=40, status="testing"),
-    Hypothesis(
-        id="snipe-the-evolving-threat",
-        rationale="Chip a benched PRE-EVOLUTION whose forward evolution becomes a win-condition-class "
-                  "attacker (`target_is_strongest_forward`: `forward_max_damage` strongest on the Bench "
-                  "AND >= EVOLVING_THREAT_DMG) — damage counters CARRY THROUGH evolution (rules.md), so "
-                  "pre-chipping Riolu (→ Mega Lucario ex 270) softens the eventual wall a turn early. "
-                  "RESTORED after the round-b7e483a retirement wrongly assumed `snipe-the-top-threat` "
-                  "subsumed it: `_target_threat_rank` lands `snipe-the-top-threat` (+30) / "
-                  "`snipe-the-forced-promotion` (+40) on the CURRENT bulky body (Hariyama/Lunatone, 0 "
-                  "forward) while the developing wincon pre-evo scored 0 (ms corrections f75/f47, human "
-                  "domain-expert, 4 games). GATED by `not target_forward_form_in_play` — the ADR-0044 "
-                  "discriminator: it stands down when the opponent ALREADY has the evolved wincon on the "
-                  "board (chip the ready form directly, not the redundant pre-evo — the exact case in "
-                  "test_45/test_107 that a naive restore regressed), and fires only when the wincon is "
-                  "still developing (form absent). +45 beats the forced-promotion pick where it fires. "
-                  "Stands down on a KO target (`snipe-for-the-ko` +60 owns that). SEED; ladder-tuned.",
-        when=lambda c: (not c.snipe_relevance_armed         # ADR-0084: the scalar decides instead
-                        and c.select_context == _DAMAGE and c.target_is_strongest_forward
-                        and not c.target_forward_form_in_play and not c.board.snipe_ko_available),
-        weight=45, status="assumed"),
-    # NOTE: flat `snipe-the-weakest`/`snipe-the-strongest-evolving-threat` RETIRED — `snipe-the-top-threat`
-    # subsumes them (round-b7e483a). `snipe-the-evolving-threat` RESTORED 2026-07-09 with the
-    # `target_forward_form_in_play` discriminator (it was NOT subsumed — the forward-wincon pre-evo scored
-    # 0). `EVOLVING_THREAT_DMG` floor stays.
+    # --- The SIX DAMAGE(15) target rungs that used to live here are DELETED (ADR-0084, Issue #188).
+    # `snipe-for-the-ko` (60), `snipe-the-evolving-threat` (45), `snipe-the-forced-promotion` (40),
+    # `snipe-the-top-threat` (30), `snipe-the-threat` (20) and `snipe-on-the-path` (12) were an
+    # ADDITIVE stack, and the stack itself was the defect: bonuses firing on DIFFERENT bodies summed
+    # and out-voted a free prize (30 + 40 + 45 = 115 on an un-KO-able Grookey vs 60 on the KO-able
+    # Applin, ms 82754241 f45), which is why five of the six carried a hand-written stand-down clause
+    # against `snipe_ko_available` and two more against `evolving_wincon_on_bench`. Every such clause
+    # is a guard bolted on to stop the sum, not a statement about the board.
+    #
+    # `common/snipe_relevance.py` replaces all six with ONE `[0,1]` scalar under hard gates —
+    # `relevance = tera_veto (x) (their_plan * my_route)` — where the ordering is a PRODUCT of two
+    # conjunctive sides, so nothing sums and no stand-down clause is needed. `snipe-for-the-ko` lives
+    # on as the structural `Pilot._snipe_ko_dominator` (KO_SCORE-class), OUTSIDE the scalar, because a
+    # free prize is not a graded preference.
+    #
+    # Deleted, not suppressed (#136 standing directive 1). `snipe_relevance` therefore ships ON and
+    # OFF is documented DEGRADED MODE, never a rollback — the `attach_value` / `evolve_value` /
+    # `promote_retreat_value` precedent. The THREE counter rungs below are out of scope (decision 5)
+    # and untouched: they own different select contexts (13/14/16/40), not the DAMAGE(15) pick.
 
     # --- DAMAGE_COUNTER_ANY: distribute a "put N counters in any way you like" spread (Phantom Dive)
     # or a counter-mover's "onto opponent" target (Munkidori). Distinct engine context (14) from the

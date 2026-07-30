@@ -1075,6 +1075,72 @@ the caller was not passing the board.
 Re-run after the fix: Decision Gate **19/19 unchanged** (as expected — the corpus is blind here),
 Discrimination Gate **PASS** (0 unruled `OK → MISS`, 1 held out), suite **4103 passed**.
 
+## Amendment E — the deletion pass (2026-07-30)
+
+Decision 1 says the six hand-seeded weights are *"deleted, not normalized"*, #136 standing directive 1
+says *"rungs an equation replaces are DELETED, not suppressed"*, and #188's acceptance names
+`baseline_snipe.py`'s folded rungs. Amendments B–D shipped them **staged** instead. This closes that.
+
+**E1 — what was deleted.** The six DAMAGE(15) target rungs (`snipe-for-the-ko` 60,
+`snipe-the-evolving-threat` 45, `snipe-the-forced-promotion` 40, `snipe-the-top-threat` 30,
+`snipe-the-threat` 20, `snipe-on-the-path` 12) and, with them: `EVOLVING_THREAT_DMG` (their floor),
+`_SNIPE_THREAT_PRIZE_FLOOR` + its rescue clause (decision 13, finally as written),
+`_snipe_matchup_tactical` + `_MATCHUP_PRIORITY_SCALE` (decision 5), `Context.snipe_relevance_armed`
+(it existed only to carry the stand-down), `Context.target_is_top_threat`,
+`Board.strongest_threat_rank` and `_strongest_threat_rank` — a whole-bench max computed per decision
+solely to answer one argmax equality. Four stale **tuner** overrides were also removed from
+`mega_starmie/tuned.json` (`snipe-the-evolving-threat` 48.0, `snipe-the-forced-promotion` 37.0,
+`snipe-the-threat` 17.0, `snipe-the-top-threat` 27.0) — ladder-learned weights for rungs that no
+longer exist, which `test_tuned_wiring.py` correctly refused to ship.
+
+The three counter rungs are retained (decision 5): disjoint select contexts, knapsack-derived, no
+corpus frames to bench a rewrite against. `snipe_relevance` therefore ships ON with **OFF as
+documented DEGRADED MODE, never a rollback** — the `attach_value` (19 rungs) / `evolve_value` (4) /
+`promote_retreat_value` (11) precedent, now stated in `PROFILE` and asserted by a renamed consumer
+test.
+
+**E2 — two constants this ADR claimed and CANNOT delete.** `_ENERGIZED_SNIPE_TIER` (100000) and
+`_PREVENT_EX_SNIPE_BOOST` (500) live inside `_body_threat_rank`, and the snipe pick is not its only
+consumer: `planner.py:_ko_key_threat_lines` ranks the opponent bench with it for the ADR-0031
+`ko_key_threat` Goal-Ladder rung (`planner_key_threat`, shipped ON), and `test_posture_read.py`
+covers its ADR-0026 lever-C read modulation. They are snipe-**named** but Planner-**shared**;
+retiring them is a Planner behaviour change owing its own gate and is outside decision 5's scope.
+This is the same error class as the *"ten constants deleted, none introduced"* claim Amendment B had
+to correct — a constant's NAME is not its ownership. Honest count for this issue: **seven constants
+and fields deleted, two provably undeletable here.**
+
+**E3 — the deletion makes the Brief steer inert on all-zero boards. OPEN, needs a ruling.** Found by
+`test_posture_read.py`, not by the gates. `relevance = tera_veto ⊗ (their_plan × my_route)` is
+conjunctive by decision 2, so when `their_plan` is 0 for *every* offered target the product is 0 for
+every one of them and the pick falls to option index. The Brief's steer is a MULTIPLIER (decision 5),
+and **a multiplier cannot express a preference over a zero**. Measured on the ADR-0051 fixture:
+`brief_multiplier` is correctly 1.25 on the briefed Riolu and 0.8 on the draw-engine Solrock, while
+`their_plan` is 0.0 for both — Riolu's forward leg standing down because Mega Lucario ex is already
+Active (the ADR-0044 discriminator working *correctly*), Solrock bare and unable to attack soon.
+
+Previously `_snipe_matchup_tactical` was a signed ADDEND and steered regardless. Two tests are marked
+`xfail(strict=True)` rather than rewritten to match, because rewriting them would launder a
+behaviour change into a test edit. **Adding an all-zero tie-break reopens decision 2**, which made
+the sides conjunctive precisely so that *"either alone is worthless"* — so this is a user ruling, not
+an implementation choice. The candidate shapes, for that conversation: fall back to `my_route` alone
+when `their_plan` is uniformly 0; or let a negative `avoid` priority act as an ordering term rather
+than a scaler; or accept index order on boards where nothing is relevant.
+
+**E4 — the Decision Gate is now VACUOUS for this instrument, and must be re-pointed.** It compares
+*shipped OFF* against *armed ON*. With the rungs deleted, OFF is index order, so the comparison is
+"the scalar versus nothing": this run reports **12 FIX, 0 REGRESSION, 1 neutral** where every prior
+run reported 19/19 unchanged. Nothing improved — the baseline collapsed. **A gate that can only ever
+report FIX cannot detect a regression**, which is the one thing ADR-0072 built it to do. Before the
+next change touches this instrument, `snipe_decider_sweep.py` needs its OFF column replaced by a
+RECORDED baseline of armed picks, exactly as `leaf_lab.py` uses `data/leaf_lab/baseline.json`. Filed
+rather than fixed here, because inventing a baseline format mid-deletion is how a gate quietly stops
+gating.
+
+The **Discrimination Gate is unaffected** and still discriminates — it compares against a recorded
+baseline, not against a live OFF arm, which is precisely the property E4 says the Decision Gate now
+lacks. Re-run: **PASS**, 0 unruled `OK → MISS`, gated on 266, 1 held out to #165. Suite **4094
+passed, 1 skipped, 5 xfailed** (the two new strict xfails are E3).
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the

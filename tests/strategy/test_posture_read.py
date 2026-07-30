@@ -419,7 +419,7 @@ def _mp_snipe_pilot(matchup_targeting=True):
                   targets=[{"card": "Riolu", "role": "fragile_preevo", "why": ""}])
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
                  functions=CardFunctions({SOLROCK: ["draw"]}),
-                 scout=Scout(tiny_artifact()), briefs=[brief],
+                 scout=Scout(tiny_artifact()), briefs=[brief], snipe_relevance=True,
                  posture=True, matchup_targeting=matchup_targeting)
 
 
@@ -432,19 +432,54 @@ def _damage_select_over_ml_bench():
                        context=DAMAGE, current=cur)
 
 
+@pytest.mark.xfail(strict=True, reason=
+    "ADR-0084 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
+    "deleted, `relevance = their_plan * my_route` is 0 for EVERY target on a board where "
+    "nothing is imminent, and a MULTIPLIER cannot express a preference over a zero -- so the "
+    "Brief steer goes inert and the pick falls to option index. Measured here: brief_multiplier "
+    "is correctly 1.25 (briefed Riolu) vs 0.8 (draw-engine Solrock), but their_plan is 0.0 for "
+    "both (Riolu's forward leg stands down because Mega Lucario ex is already Active -- the "
+    "ADR-0044 discriminator working correctly; Solrock is bare). Whether to add an all-zero "
+    "tie-break REOPENS decision 2, which made the two sides conjunctive precisely so that "
+    "'either alone is worthless'. Needs a user ruling; xfail-strict so a fix cannot land "
+    "silently.")
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
-    dec = _mp_snipe_pilot().explain(_damage_select_over_ml_bench())
-    # Solrock's general draw-engine fact -> negative matchup contribution; Riolu (Brief
-    # fragile_preevo) -> positive. The pick lands on the wincon line, not the engine.
-    assert dec.options[1].tactical > 0 > dec.options[0].tactical
-    assert dec.chosen == [1]
+    # Solrock's general draw-engine fact -> an `avoid` MatchupPlan priority; Riolu (Brief
+    # fragile_preevo) -> a positive one. The pick lands on the wincon line, not the engine.
+    #
+    # ADR-0084 moved WHERE that steer is expressed. It used to be a signed ADDEND in the tactical
+    # band (`_snipe_matchup_tactical`, now deleted with the six rungs), so the requirement could be
+    # read as "tactical positive on one, negative on the other". Decision 5 folded it into the graded
+    # scalar as a MULTIPLIER on `their_plan`, which is why the sign is now asserted on
+    # `brief_multiplier` instead: > 1 sharpens the briefed target, < 1 de-prioritises the engine, and
+    # only the SIGN crosses the seam (`_BRIEF_THREAT_BOOST` supplies the magnitude, so no rate is
+    # invented to map a damage-scale priority into the [0,1] band).
+    pilot = _mp_snipe_pilot()
+    obs = _damage_select_over_ml_bench()
+    select = obs["select"]
+    board = pilot._board(obs, select)
+    terms = [pilot._snipe_relevance_terms(obs, select, board, o,
+                                          pilot._context(obs, select, board, o))
+             for o in select["option"]]
+    assert terms[1]["brief_multiplier"] > 1.0 > terms[0]["brief_multiplier"]
+    assert pilot.explain(obs).chosen == [1]
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_matchup_term_silent_under_kill_switch():
-    dec = _mp_snipe_pilot(matchup_targeting=False).explain(_damage_select_over_ml_bench())
-    assert dec.options[0].tactical == 0.0 and dec.options[1].tactical == 0.0
+    # The ADR-0051 spine's kill-switch: with `matchup_targeting` OFF the Brief cannot steer the pick
+    # at all. Asserted on `brief_multiplier` rather than on the retired tactical addend (see the
+    # sibling test above) — a flat 1.0 on BOTH targets is what "silent" means for a multiplier, and
+    # unlike `tactical == 0.0` it cannot pass merely because the term was deleted.
+    pilot = _mp_snipe_pilot(matchup_targeting=False)
+    obs = _damage_select_over_ml_bench()
+    select = obs["select"]
+    board = pilot._board(obs, select)
+    mults = [pilot._snipe_relevance_terms(obs, select, board, o,
+                                          pilot._context(obs, select, board, o))["brief_multiplier"]
+             for o in select["option"]]
+    assert mults == [1.0, 1.0]
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
@@ -571,10 +606,25 @@ def _lever_stats(attacks=None):
 
 def _lever_pilot(attack_table=None, **kw):
     table = attack_table or {11: AttackStat(11, damage=120, cost=1)}
+    # `snipe_relevance` armed to match the shipped PROFILE. ADR-0084's deletion pass removed the six
+    # DAMAGE target rungs, so an unarmed Pilot scores every bench target 0 and the snipe assertions
+    # below would pass or fail on option index rather than on the Brief steer under test.
+    kw.setdefault("snipe_relevance", True)
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=_lever_stats(table), **kw)
 
 
+@pytest.mark.xfail(strict=True, reason=
+    "ADR-0084 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
+    "deleted, `relevance = their_plan * my_route` is 0 for EVERY target on a board where "
+    "nothing is imminent, and a MULTIPLIER cannot express a preference over a zero -- so the "
+    "Brief steer goes inert and the pick falls to option index. Measured here: brief_multiplier "
+    "is correctly 1.25 (briefed Riolu) vs 0.8 (draw-engine Solrock), but their_plan is 0.0 for "
+    "both (Riolu's forward leg stands down because Mega Lucario ex is already Active -- the "
+    "ADR-0044 discriminator working correctly; Solrock is bare). Whether to add an all-zero "
+    "tie-break REOPENS decision 2, which made the two sides conjunctive precisely so that "
+    "'either alone is worthless'. Needs a user ruling; xfail-strict so a fix cannot land "
+    "silently.")
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
     # Threading proof: recognized opponent → matched Brief resolves Riolu → _board() threads the

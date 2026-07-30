@@ -243,21 +243,11 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
 
 
 # --- snipe-for-the-ko: a bench snipe that KNOCKS OUT the target (HP <= rider) is a free prize ------
-@pytest.mark.req("REQ-GEN-0018")
-def test_snipe_for_the_ko_prefers_the_killable_bench_target():
-    # Active's snipe rider is 50 (attack id 11). 50-HP body dies to it (a prize); 140/300
-    # bodies only chip. snipe-for-the-ko outranks every positional priority -> take the knockout
-    stats = DictCardStatProvider({700: CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))},
-                                 attacks={11: AttackStat(11, damage=120, benchSnipe=50)})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1),
-                       card_opt(BENCH, 2, player=1)], context=DAMAGE,
-                      current=state(active=poke(700, energy=1),
-                                    opp_bench=[poke(900, hp=140), poke(901, hp=50), poke(902, hp=300)]))
-    assert pilot.decide(obs) == [1]                                  # the 50-HP target (a KO = prize)
-    assert "snipe-for-the-ko" in _fired(pilot.explain(obs).options[1])
-    assert "snipe-for-the-ko" not in _fired(pilot.explain(obs).options[2])   # 300-HP wall: no KO
-
+# `test_snipe_for_the_ko_prefers_the_killable_bench_target` was DELETED by ADR-0084's deletion pass:
+# it asserted a snipe TARGET rung that no longer exists. The requirement survives and is
+# carried by `test_the_ko_dominator_fires_only_when_armed_and_only_on_a_ko_target` (consumer seam) and
+# `test_a_benched_knockout_outranks_a_scarier_chip` (test_snipe_threat_rank.py) — the free prize
+# is now the STRUCTURAL `_snipe_ko_dominator`, which cannot be out-summed the way the +60 rung was.
 
 @pytest.mark.req("REQ-GEN-0018")
 def test_snipe_the_threat_outranks_the_weakest():

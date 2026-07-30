@@ -29,6 +29,12 @@ def _shipped_pilot(agent="mega_starmie"):
     return _build_pilot(agent)[0]
 
 
+#: The six DAMAGE(15) target rungs ADR-0084 deleted — named once so both directions can assert it.
+_DELETED_TARGET_RUNGS = frozenset({
+    "snipe-for-the-ko", "snipe-the-top-threat", "snipe-the-threat", "snipe-on-the-path",
+    "snipe-the-forced-promotion", "snipe-the-evolving-threat"})
+
+
 def _fx(name):
     return json.loads((REPO / "tests" / "fixtures" / "corrections" / name).read_text(encoding="utf-8"))
 
@@ -74,32 +80,33 @@ def test_the_switch_ships_armed():
     "ms_snipe_evolving_wincon_preevo_f75.json", "ms_snipe_riolu_over_lunatone_f47.json",
     "ms_snipe_energized_bench_f39.json", "ms_snipe_attacker_line_over_support_f85.json",
 ])
-def test_off_leaves_the_incumbent_path_entirely_intact(fixture):
-    """The OFF path must be the shipped rungs, untouched.
+def test_off_is_documented_degraded_mode_not_a_rollback(fixture):
+    """What the kill-switch means AFTER ADR-0084's deletion pass.
 
-    An earlier version of this test compared a shipped pilot against a shipped pilot with the flag
-    set to its own default — i.e. OFF against OFF — and so could not have detected any OFF-path
-    change at all. It now asserts the three things that actually constitute "unchanged": the scalar
-    contributes nothing, at least one incumbent target rung still fires, and the MatchupPlan steer
-    still scores beside them. (The behavioural evidence proper is `snipe_decider_sweep.py`'s OFF
-    column, which replays every corpus frame through a genuinely shipped pilot.)"""
+    This test previously asserted the opposite — that OFF left the six incumbent target rungs
+    deciding, byte-identical. That was the correct contract for the staging commit, and it is now
+    obsolete: the rungs are DELETED (#136 standing directive 1, "rungs an equation replaces are
+    DELETED, not suppressed"), so OFF no longer has an incumbent to fall back to. It scores every
+    bench target 0 and the argmax degenerates to option index.
+
+    That is the same contract `attach_value` (19 rungs deleted), `evolve_value` (4) and
+    `promote_retreat_value` (11) already carry in PROFILE: the switch survives as an incident lever,
+    and OFF is DOCUMENTED DEGRADED MODE, never a rollback. Asserted so the degradation is a stated
+    property somebody has to look at, rather than a surprise found in a game.
+    """
     fx = _fx(fixture)
     off = _off()
     obs, select = fx["obs"], fx["obs"]["select"]
     board = off._board(obs, select)
-    target_rungs = {"snipe-for-the-ko", "snipe-the-top-threat", "snipe-the-threat",
-                    "snipe-on-the-path", "snipe-the-forced-promotion", "snipe-the-evolving-threat"}
-    fired, steered = set(), 0.0
     for o in select["option"]:
         ctx = off._context(obs, select, board, o)
         assert off._snipe_relevance_terms(obs, select, board, o, ctx) is None
         assert off._snipe_relevance_tactical(obs, select, board, o, ctx) == 0.0
         assert off._snipe_ko_dominator(ctx) == 0.0
-        steered += abs(off._snipe_matchup_tactical(obs, select, board, o, ctx))
+    fired = set()
     for opt in off.explain(obs).options:
         fired |= {h.id for h, _w in opt.fired}
-    assert fired & target_rungs, "the incumbent rungs must still be deciding while OFF"
-    assert steered >= 0.0        # the steer is reachable OFF; armed it folds into the multiplier
+    assert not (fired & _DELETED_TARGET_RUNGS), "the deleted rungs must not come back"
 
 
 @pytest.mark.req("REQ-SNIPECONS-0002")
@@ -117,21 +124,27 @@ def test_the_incumbent_rungs_stand_down_as_a_body_when_armed():
 
 
 @pytest.mark.req("REQ-SNIPECONS-0002")
-def test_the_counter_rungs_are_retained_and_unaffected():
-    """ADR-0084 decision 5: the three `DAMAGE_COUNTER_ANY` / counter-mover rungs are LIVE and
-    deliberately retained — disjoint select contexts (13/14/16/40 vs 15) so they never co-fire with
-    a target rung, already derived from knapsack reads, and zero corpus frames to bench a rewrite
-    against. They must not carry the stand-down."""
+def test_the_counter_rungs_are_retained_and_the_target_rungs_are_gone():
+    """ADR-0084 decision 5, after the deletion pass, asserted in BOTH directions.
+
+    The six DAMAGE(15) target rungs are DELETED — not stood down, not shadowed. The three counter
+    rungs are deliberately RETAINED: disjoint select contexts (13/14/16/40 vs 15) so they never
+    co-fired with a target rung, already derived from knapsack reads, and zero corpus frames to
+    bench a rewrite against.
+
+    The earlier version of this test asserted every target rung carried a `snipe_relevance_armed`
+    stand-down. That guard is itself deleted (the Context field with it), which is why the assertion
+    is now about ABSENCE — a stand-down flag is what staging looks like, and staging is over.
+    """
     from common.strategy.baseline.baseline_snipe import HYPOTHESES
     counter = {"place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}
-    target = {"snipe-for-the-ko", "snipe-the-top-threat", "snipe-the-threat", "snipe-on-the-path",
-              "snipe-the-forced-promotion", "snipe-the-evolving-threat"}
     ids = {h.id for h in HYPOTHESES}
     assert counter <= ids, "the counter rungs must survive the fold"
-    guarded = {h.id for h in HYPOTHESES if "snipe_relevance_armed" in (h.when.__code__.co_names or ())}
-    # Asserted in BOTH directions so the test cannot pass vacuously: every target rung carries the
-    # stand-down, and no counter rung does.
-    assert guarded == target
+    assert not (ids & _DELETED_TARGET_RUNGS), "the six target rungs must be gone, not suppressed"
+    assert ids == counter, "the snipe cluster is now exactly the counter family"
+    # ...and no surviving rung may still reference the retired stand-down flag.
+    assert not any("snipe_relevance_armed" in (h.when.__code__.co_names or ()) for h in HYPOTHESES)
+
 
 
 @pytest.mark.req("REQ-SNIPECONS-0003")

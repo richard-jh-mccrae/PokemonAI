@@ -208,10 +208,14 @@ PROFILE = {
                                     # Deny Relevance's categorical shape rather than the shared prize
                                     # marginal (which measured 7/19 against the rungs' 17/19 and
                                     # restored a fixed ADR-0044 blunder on 83667237-107).
-                                    # OFF is byte-identical: the rungs are UNREAD while armed and
-                                    # DELETED by the arming follow-up, the staging Issue #187 used
-                                    # `_DENIAL_BENCH`. Arming needs ADR-0072's two merit gates plus
-                                    # the paired-A/B Tripwire — NOT yet run, so it ships OFF.
+                                    # All three ADR-0072 bars cleared before arming (Amendment C).
+                                    # The six rungs, the MatchupPlan steer, `_SNIPE_THREAT_PRIZE_FLOOR`
+                                    # and `_MATCHUP_PRIORITY_SCALE` are now DELETED (#136 directive 1,
+                                    # Amendment E), so **OFF is documented DEGRADED MODE, never a
+                                    # rollback** — the `attach_value` / `evolve_value` /
+                                    # `promote_retreat_value` precedent. See Amendment E3 for the one
+                                    # OPEN consequence: the Brief steer is a MULTIPLIER, so it goes
+                                    # inert when `their_plan` is 0 for every offered target.
     "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
                                     # ⚠️ **STILL SHIPS OFF, and that is a KNOWN DEBT, not a decision.**
                                     # Tracker directive 1 says a kill-switch ships ON and exists only
