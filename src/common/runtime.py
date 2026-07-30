@@ -155,6 +155,18 @@ PROFILE = {
                                     # `gauntlet_swap_ab.py`): aggregate delta +2.4%, 95% CI
                                     # [-1.1%, +5.9%], 0 crashes/2400 games — comfortably clears the
                                     # crashes==0 AND CI-lo>=-5% Tripwire (no delta clause mid-build).
+    "scaled_threat_rank": True,     # Issue #213, armed-ON 2026-07-30: the threat rank and the
+                                    # forced-promotion read price a body through the Damage Formula
+                                    # against the live board (`CombatMath.threat_ceiling` /
+                                    # `forward_threat_ceiling`) instead of printed `maxDamage` + the
+                                    # provider's printed forward index. Retires the flat
+                                    # `_HAND_SIZE_ATTACKER_BOOST` (+500), a proxy for exactly the
+                                    # fact the scaled read now computes — keeping both would
+                                    # double-count one card fact, and the proxy could never
+                                    # generalise past the single card its Function Tag covered.
+                                    # Ships ON because OFF makes the change a no-op on the board and
+                                    # both merit gates measure the ON behaviour; the switch survives
+                                    # as an incident lever, restoring the printed-only read exactly.
     "gust_target_slots": True,      # ADR-0076 (#186), armed-ON 2026-07-27: generalizes `deny_slot`
                                     # to a `gust_target` kind — held gust-effect Trainer cards
                                     # keep-price against the real per-body `opponent_target_value`

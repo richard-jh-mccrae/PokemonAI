@@ -368,8 +368,63 @@ class CombatMath:
             return max(self.predicted_damage(attacker_stat.cardId, a, defender, bound="max",
                                              context=context)
                        for a in aids)
+        return self.card_level_damage(attacker_stat, defender, context=context)
+
+    def card_level_damage(self, attacker_stat, defender: dict | None = None, *,
+                          context: dict | None = None) -> float:
+        """The ONE card-level damage fallback — used when no per-attack record resolves.
+
+        ``maxDamage`` x Weakness/Resistance (the single card-level rule), max'd with the hand-size
+        scaler's ``handSizeDamage`` x the attacker's hand. Counter placement is not "damage", so
+        that leg deliberately skips W/R.
+
+        Exists because both fallback paths used to hand-roll the hand-size leg themselves and did
+        it differently: the Threat-Clock form enumeration credited it as an EITHER/OR against the
+        printed roll-up, while the incoming read added it unconditionally beside the per-attack
+        oracle. One fact, two hand-rolled call sites, free to drift — and they did.
+
+        The per-attack path prices the hand-size attack through the Damage Formula's ``atk_hand``
+        scaler, so this fallback exists only for a body whose attack table is unavailable (a
+        partial provider). It reads the hand STRAIGHT from ``context``, without the "a card is
+        spent to evolve" decrement the old forward-only branch applied: one representation beats
+        two, and reading the full hand is the pessimistic direction on a survival read.
+        """
+        if not attacker_stat:
+            return 0
         d_stat = self._card_stat((defender or {}).get("id"))
-        return wr_adjust(attacker_stat, d_stat, attacker_stat.maxDamage or 0)
+        printed = wr_adjust(attacker_stat, d_stat, attacker_stat.maxDamage or 0)
+        hand = (context or {}).get("atk_hand") or 0
+        return max(printed, (getattr(attacker_stat, "handSizeDamage", 0) or 0) * hand)
+
+    def threat_ceiling(self, card_id, *, context: dict | None = None) -> int:
+        """How dangerous this body is on the CURRENT board — its biggest attack priced through the
+        Damage Formula (printed base + ``per_unit x count(variable)``), 0 when unknown.
+
+        Deliberately DEFENDER-FREE and Weakness/Resistance-free, exactly like the ``maxDamage`` it
+        replaces in the threat rank: it answers "how dangerous is this body", not "how much does it
+        hit my current Active for". Folding a defender in would make the snipe order swing on my
+        own Active's typing, and the Evolving Threat signal is deck-agnostic by construction.
+
+        Fail-safe on an unknown variable: a scaler whose variable is absent from ``context``
+        contributes 0, leaving the printed base — never a crash, never an invented count.
+
+        Defender-free is expressed by passing NO defender to :meth:`predicted_max_damage`, rather
+        than by re-deriving its per-attack-else-card-level rule here: two copies of that rule are
+        free to drift, which is the exact failure :meth:`card_level_damage` was extracted to end.
+        """
+        return int(self.predicted_max_damage(self._card_stat(card_id), None, context=context))
+
+    def forward_threat_ceiling(self, card_id, *, context: dict | None = None) -> int:
+        """The greatest :meth:`threat_ceiling` among the forms this body's line evolves INTO — the
+        board-priced counterpart of the provider's printed-only forward index. 0 for a dead-end
+        line or an unknown id.
+
+        This is what makes an Evolving Threat readable: a pre-evolution's own printed damage says
+        nothing about the attacker its line reaches, and the printed forward index reads Alakazam
+        at 10 because its whole threat lives in a scaling term.
+        """
+        return max((self.threat_ceiling(fid, context=context)
+                    for fid in self.forward_card_ids(card_id)), default=0)
 
     # --- card-tier combat facts -----------------------------------------------------------
     def prize_value(self, poke: dict | None) -> int:
@@ -699,15 +754,19 @@ class CombatMath:
     def forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None, *,
                                 context: dict | None = None) -> int:
         """Worst-case incoming if the opponent EVOLVES their Active's line next turn (play AS IF
-        they evolve): for each forward form affordable on their Energy + one attach, a
-        ``hand_size_attacker`` contributes its hand-scaled counters (W/R-free, hand one short —
-        a card is spent evolving), ANY form its printed damage W/R-adjusted vs my Active. 0 when
-        unknown / no ``opp`` dict (the forward read needs their hand size)."""
-        if not (self.stats and self.functions and ma and oa and opp):
+        they evolve): for each forward form affordable on their Energy + one attach, its damage
+        W/R-adjusted vs my Active. 0 when unknown / no ``opp`` dict.
+
+        The hand-size scaler is priced by the Damage Formula like every other scaler, through
+        ``context`` (Issue #213). This used to carry a hand-rolled ``hand_size_attacker`` branch
+        beside the oracle; it was dead on every production path — the generic ``atk_hand`` term
+        already reads higher, and all six Incoming call sites thread the per-decision context —
+        and the card-level case now lives in :meth:`card_level_damage`, one level down, where both
+        fallback paths reach it."""
+        if not (self.stats and ma and oa and opp):
             return 0
         if not self._card_stat(ma.get("id")):
             return 0
-        hand = max(0, (opp.get("handCount", 0) or 0) - 1)   # ≥1 card spent to play the evolution
         oa_energy = len(oa.get("energies") or [])
         best = 0
         for fid in self.forward_card_ids(oa.get("id")):
@@ -716,8 +775,6 @@ class CombatMath:
                 continue
             if (fstat.minAttackCost or 0) > oa_energy + 1:   # unaffordable even with next turn's attach
                 continue
-            if "hand_size_attacker" in self.functions.tags(fid):
-                best = max(best, (fstat.handSizeDamage or 0) * hand)   # counters ignore W/R
             best = max(best, int(self.predicted_max_damage(fstat, ma, context=context)))
         return best
 
@@ -742,10 +799,18 @@ class CombatMath:
         compares it to my HP (``>= my_hp`` ⇒ doomed).
 
         NOT byte-identical to :meth:`active_doomed`, by design — ADR-0064 §2 keeps that one
-        unconditionally worst-case. The curve (a) gates the current form on affordability
-        (``can_pay_cheapest`` under one attach) and (b) omits the ``hand_size_attacker`` forward
-        counter. Those two are exactly the divergences the doom SHADOW measures before any survival
-        swap. ``charged`` selects the policy — ``None`` = ceiling, the survival read's worst-case."""
+        unconditionally worst-case. The curve gates the current form on affordability
+        (``can_pay_cheapest`` under one attach); that is the ONE remaining divergence, and it is
+        what the doom SHADOW measures before any survival swap.
+
+        A second divergence used to be claimed here — that the curve omits the
+        ``hand_size_attacker`` forward counter. It was never true on a production path (Issue
+        #213): the hand-size attack carries the Damage Formula's ``atk_hand`` scaler like any other
+        scaling attack, and all six Incoming call sites thread the per-decision damage context, so
+        both reads price it — the curve in fact reads HIGHER, because the generic term prices a
+        forward form at the full hand where the retired branch spent the evolving card.
+
+        ``charged`` selects the policy — ``None`` = ceiling, the survival read's worst-case."""
         if not oa:
             return 0
         return int(self.incoming(ma, [oa], 1, charged=charged, context=context))

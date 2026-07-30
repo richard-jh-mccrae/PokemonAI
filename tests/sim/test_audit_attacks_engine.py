@@ -10,7 +10,7 @@ the only stochastic knob is bench arrival, guarded by a bounded retry.
 """
 import pytest
 
-from sim.audit_attacks import CRUSTLE, measure_attack
+from sim.audit_attacks import CRUSTLE, card_pool, measure_attack, plan_scenarios
 
 OKIDOGI, GOOD_PUNCH = 116, 147          # Fighting, Good Punch printed 70, cost {F}{F}, no rider
 HO_OH = 318                             # 130 HP, resists Fighting, no ability
@@ -20,17 +20,31 @@ MEGA_STARMIE, NEBULA_BEAM, JETTING_BLOW = 1031, 1488, 1487
 EEVEE, QUICK_ATTACK = 43, 40            # printed 20; "flip a coin, if heads 20 more"
 
 
-def _plan(scenario, defender):
-    return {"scenario": scenario, "defender": defender, "extra_energy": 0, "delay_turns": 0,
-            "sweep": None}
+def _plan(scenario, defender, **kw):
+    plan = {"scenario": scenario, "defender": defender, "extra_energy": 0, "delay_turns": 0,
+            "atk_bench": None, "def_bench": None, "sweep": None}
+    plan.update(kw)
+    return plan
 
 
-def _measure(attack_id, plan, attempts=3, need_bench=False, **kw):
-    """Bounded retry: bench arrival is the one stochastic knob (drawn spares get benched)."""
+def _measure(attack_id, plan, attempts=3, need_bench=False, want_bench=None, **kw):
+    """Bounded retry: bench arrival is the one stochastic knob (drawn spares get benched).
+
+    ``want_bench=(atk, dfn)`` retries until both seats actually reached those counts. The harness
+    fires anyway when bench patience runs out — deliberately, so a missed target degrades to a
+    duplicate fit point rather than a wrong one — but a test asserting exact counts has to wait
+    for the draw that makes them reachable.
+    """
     for _ in range(attempts):
         recs = measure_attack(attack_id, plan, **kw)
-        if "error" not in recs[0] and (not need_bench or recs[0]["defenderBench"] > 0):
-            return recs
+        r = recs[0]
+        if "error" in r:
+            continue
+        if need_bench and not r["defenderBench"]:
+            continue
+        if want_bench and (r["attackerBench"], r["defenderBench"]) != tuple(want_bench):
+            continue
+        return recs
     return recs
 
 
@@ -80,3 +94,47 @@ def test_coin_fork_measures_min_and_max_over_both_outcomes():
     assert by_coin[None]["attackerCardId"] == EEVEE
     assert by_coin["min"]["dealtActive"] == 20        # tails: printed only
     assert by_coin["max"]["dealtActive"] == 40        # heads: +20
+
+
+# --- per-seat bench control (REQ-AUDIT-0018) ---------------------------------------------
+# The cap is what turns bench population from an uncontrolled confound into a swept variable.
+# Skeledirge's Torcherto is the family the cap exists for: printed 60, "+20 more damage for
+# each Benched Pokemon (both yours and your opponent's)" — so a verified cap doubles as a
+# verification of the combined-bench model itself.
+
+SKELEDIRGE, TORCHERTO = 203, 274
+
+
+def _vanilla_plan(owner_card_id, **caps):
+    cards = card_pool()
+    plan = next(p for p in plan_scenarios(cards[owner_card_id], cards)
+                if p["scenario"] == "vanilla")
+    return {**plan, **caps}
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+def test_a_zero_bench_cap_empties_both_seats_and_the_scaler_contributes_nothing():
+    # A cap of 0 is the one target always reachable in a single draw, so this case is exact.
+    r = _measure(TORCHERTO, _vanilla_plan(SKELEDIRGE, atk_bench=0, def_bench=0),
+                 coin_fork=False)[0]
+    assert "error" not in r, r
+    assert r["printed"] == 60
+    assert (r["attackerBench"], r["defenderBench"]) == (0, 0)
+    assert r["dealtActive"] == 60                     # no bench => printed only
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+@pytest.mark.parametrize("atk,dfn", [(1, 2), (2, 1)])
+def test_bench_caps_bound_both_seats_and_the_combined_scaler_tracks_the_actual_counts(atk, dfn):
+    # Two invariants, both deterministic. The CEILING: neither seat may exceed its cap. The
+    # MODEL: dealt damage tracks the counts actually reached. Asserting the exact target instead
+    # would be asserting the shuffle — the harness deliberately fires when bench patience runs
+    # out, recording what it got, so a missed target is a duplicate fit point and not an error.
+    # `want_bench` still steers the retry at the target, so the wait path is exercised in
+    # practice; the assertions just don't depend on it landing.
+    plan = _vanilla_plan(SKELEDIRGE, atk_bench=atk, def_bench=dfn)
+    r = _measure(TORCHERTO, plan, attempts=6, want_bench=(atk, dfn), coin_fork=False)[0]
+    assert "error" not in r, r
+    assert r["printed"] == 60
+    assert r["attackerBench"] <= atk and r["defenderBench"] <= dfn
+    assert r["dealtActive"] == 60 + 20 * (r["attackerBench"] + r["defenderBench"])

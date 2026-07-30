@@ -3,10 +3,17 @@ docs/plans/opponent-value-equation-unification.md).
 
 ``CombatMath.doomed_incoming`` re-expresses the survival doom read as a query against the
 ``incoming(t=1)`` curve (ceiling policy). It is deliberately NOT byte-identical to ``active_doomed``
-— ADR-0064 §2 kept that one unconditionally worst-case — because the curve (a) gates the current
-form on affordability (``can_pay_cheapest``) and (b) omits the ``hand_size_attacker`` forward
-counter. The two therefore DIVERGE on exactly those cases; the shadow emits both + the agreement
-bit, DECIDING NOTHING, so a corpus sweep can adjudicate the divergence before any survival swap.
+— ADR-0064 §2 kept that one unconditionally worst-case — because the curve gates the current form
+on affordability (``can_pay_cheapest``). The two therefore DIVERGE on exactly that case; the shadow
+emits both + the agreement bit, DECIDING NOTHING, so a corpus sweep can adjudicate the divergence
+before any survival swap.
+
+Issue #213 RETIRED a second claimed divergence — that the curve omits the ``hand_size_attacker``
+forward counter. It was never true on a production path: the hand-size attack carries the Damage
+Formula's ``atk_hand`` scaler, every Incoming call site threads the damage context, and the curve
+therefore prices it (in fact slightly HIGHER than the retired hand-rolled branch did). The claim
+was retracted rather than implemented, the branch deleted, and the equivalence pinned below —
+REQ-DOOMSHADOW-0002, which pins the AFFORDABILITY divergence, is untouched by any of it.
 """
 import types
 
@@ -83,3 +90,27 @@ def test_threat_shadow_emits_the_agreement_bit_and_respects_the_midsim_guard():
     # no live Active on either side → sparse
     p._planning = False
     assert p._threat_shadow({"current": {"yourIndex": 0, "players": [{}, {}]}}, board) is None
+
+
+# REQ-DOOMSHADOW-0004 — the RETIRED divergence: the two reads agree on the hand-size family.
+# Driven through the real provider, because the claim was always about real card records: Powerful
+# Hand's `atk_hand` scaler, Kadabra's forward line, and a live damage context.
+def test_the_two_doom_reads_agree_on_a_hand_size_attacker():
+    from train.tune import _build_pilot
+    combat = _build_pilot("mega_lucario")[0].combat
+    ALAKAZAM, KADABRA = 743, 742
+    my = {"id": MY, "hp": 130}                      # 140 kills, 120 does not
+    opp = {"handCount": 7}
+    ctx = {"atk_hand": 7}
+    for body in ({"id": ALAKAZAM, "hp": 140, "energies": [5]},       # already the attacker
+                 {"id": KADABRA, "hp": 90, "energies": [5]}):        # one evolution away
+        worst = combat.active_doomed(my, body, opp, context=ctx)
+        curve = combat.doomed_incoming(my, body, context=ctx)
+        assert curve == 140                          # 20 dmg/card x a 7-card hand
+        assert worst is True and (curve >= my["hp"]) is True         # they AGREE
+    # ...and with no context the scaling term contributes 0 to BOTH, so they still agree. This is
+    # the case the retired branch used to make diverge, by crediting a card-level roll-up that the
+    # curve had no equivalent for.
+    kadabra = {"id": KADABRA, "hp": 90, "energies": [5]}
+    assert combat.active_doomed(my, kadabra, opp, context=None) is False
+    assert combat.doomed_incoming(my, kadabra, context=None) < my["hp"]

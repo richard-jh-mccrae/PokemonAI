@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0083.**
+**Next free number: 0084.**
 
 ⚠️ The index below is **incomplete**: **0067** exists on disk but has never been given a row (it
 landed on the #137 / 0a branch). 0069 and 0070 were backfilled 2026-07-26. Re-indexing 0067 is
@@ -67,6 +67,13 @@ and the third ADR in the series renumbered more than once in its own life. Issue
 a grill-time warning that it expected to renumber, and it did — within the day. Both are strategy
 ADRs, so the tooling-moves-first rule did not apply. At this point the collision is the norm rather
 than the exception: **claim nothing, cite the issue, and renumber at rebase**.
+
+**0083 claimed 2026-07-30** by Issue #213 (*a visible-state scaler's variable is named by
+measurement*) — and it SURVIVED its rebase, the first in this streak to do so. It skipped 0082
+because Issue #188's grill had claimed that number on an unmerged branch; by the time #213 rebased,
+0082 had gone to Issue #211 instead and 0083 was genuinely free. Skipping a contested number turns
+out to be cheaper than renumbering after the fact, but it is luck rather than a rule — cite it as
+**ADR-0083, Issue #213** regardless.
 
 ## Index
 
@@ -155,3 +162,4 @@ than the exception: **claim nothing, cite the issue, and renumber at rebase**.
 | [0080](0080-deny-is-a-categorical-relevance-instrument-not-a-magnitude-one.md) | Deny is a CATEGORICAL RELEVANCE instrument, not a magnitude one: the Worth Damage Rate is not needed, it is MOOT | Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #199 — five locked decisions); builds in Issue #187 (rechartered), Issue #199 closes as the shared layer reduced, Issue #188 unblocked, Issue #189 re-inherits the gust currency debt. Supersedes ADR-0078 decision 1 for deny and withdraws its one-backend claim for deny; answers gate 2 MOOT (the DISCARD sweep found the sole anchor degenerate — it prices 0.000 under both instruments, so the rate divides out) *(authored as 0079, renumbered 0079→0080 on rebase — Issue #161's Set-Up Active pick merged first)* |
 | [0081](0081-the-opener-is-hand-conditional-via-a-turn-0-evolve-marginal.md) | The opener is hand-conditional: a turn-0 evolve marginal REORDERS the declaration, and pins hold their slots | Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #203 — five locked decisions plus Amendment A, which narrows decision 4 and defers decision 2); build = Issue #203. **Extends** ADR-0079 rather than overturning it (one rule, one boolean, `+40` all unchanged — the *resolution* of `top_starter_id` gains hand-awareness); collects the placement work ADR-0070 §4 parked. Applies ADR-0034 / ADR-0046 / ADR-0065 *(authored as 0080, renumbered 0080→0081 on rebase — Issue #199's deny instrument merged first)* |
 | [0082](0082-a-corrections-ruling-lives-in-its-claim-and-must-agree-with-its-record.md) | A Correction's ruling lives in its **Claim**, and a Claim must AGREE with its record | Accepted (grilled 2026-07-29, `/grill-with-docs` during the Issue #187 review — five locked decisions, one a mid-grill withdrawal); build = Issue #211. **Extends ADR-0072 decisions 3-4** (the `claims` block and the Held-out Ledger) to the 34 fixtures that predate them, and adds the Claim Agreement invariant. Supersedes nothing; knock-on = ADR-0062 Amendment A. Records that `82749168-29` was re-ruled in Issue #177 and the corpus was right all along — the stale value was the fixture's |
+| [0083](0083-a-scalers-variable-is-named-by-measurement.md) | A visible-state scaler's VARIABLE is named by measurement, and a fit may only claim a variable the sweep controls | Accepted and BUILT — Issue #213 |

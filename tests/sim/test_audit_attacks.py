@@ -6,9 +6,9 @@ Lib-free — the engine drive-shell is covered by ``tests/test_audit_attacks_eng
 import pytest
 
 from sim.audit_attacks import (
-    CRUSTLE, _missing_typed, attack_window, bench_fodder, board_snapshot, build_side_deck,
-    damage_from_window, error_record, evolution_chain, merge_records, pick_panel,
-    plan_scenarios, record_key, shape_record,
+    CRUSTLE, _BENCH_REF, _missing_typed, _sub_select, attack_window, bench_fodder,
+    board_snapshot, build_side_deck, damage_from_window, error_record, evolution_chain,
+    merge_records, pick_panel, plan_scenarios, record_key, shape_record,
 )
 
 # Synthetic pool: plain dicts, same as drive-shell builds from all_card_data().
@@ -145,13 +145,58 @@ def test_sweep_adds_single_variable_points_on_vanilla_only():
     plans = plan_scenarios(_pool()[10], _pool(), sweep=True)
     sweeps = [p for p in plans if p["sweep"]]
     assert {(p["sweep"]["var"], p["sweep"]["step"]) for p in sweeps} == {
-        ("energy", 1), ("energy", 2), ("hand", 2), ("hand", 4)}
+        ("energy", 1), ("energy", 2), ("hand", 2), ("hand", 4),
+        ("atk_bench", 0), ("atk_bench", 1), ("atk_bench", 2),
+        ("def_bench", 0), ("def_bench", 1), ("def_bench", 2)}
     assert all(p["scenario"] == "vanilla" for p in sweeps)
     assert all(p["defender"] == 20 for p in sweeps)
     e1 = next(p for p in sweeps if p["sweep"] == {"var": "energy", "step": 1})
     assert e1["extra_energy"] == 1 and e1["delay_turns"] == 0
     h2 = next(p for p in sweeps if p["sweep"] == {"var": "hand", "step": 2})
     assert h2["delay_turns"] == 2 and h2["extra_energy"] == 0
+
+
+# --- per-seat bench control (REQ-AUDIT-0018) ---------------------------------------------
+# Bench population used to be an UNCONTROLLED confound: both seats benched every drawn basic,
+# and no record carried the attacker's count. A bench-scaling attack therefore varied with
+# whatever the shuffle benched, and the fitter — offered only hand size and attacker Energy —
+# fitted the one variable it could see (the spurious `atk_hand` on 274 Torcherto). Every plan
+# now PINS both seats; only the swept seat moves.
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+def test_every_panel_plan_pins_both_benches_to_the_reference():
+    plans = plan_scenarios(_pool()[10], _pool())
+    assert plans, "panel must not be empty"
+    assert all(p["atk_bench"] == _BENCH_REF and p["def_bench"] == _BENCH_REF for p in plans)
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+def test_a_bench_sweep_moves_one_seat_and_pins_the_other():
+    sweeps = [p for p in plan_scenarios(_pool()[10], _pool(), sweep=True) if p["sweep"]]
+    for var, moved, pinned in (("atk_bench", "atk_bench", "def_bench"),
+                               ("def_bench", "def_bench", "atk_bench")):
+        pts = [p for p in sweeps if p["sweep"]["var"] == var]
+        assert len(pts) >= 3                              # _fit_linear needs >=3 distinct points
+        assert {p[moved] for p in pts} == {0, 1, 2}       # the swept seat spans the axis
+        assert {p[pinned] for p in pts} == {_BENCH_REF}   # the other seat never moves
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+def test_energy_and_hand_sweeps_also_pin_both_benches():
+    # The root-cause fix: with the benches loose, a bench scaler could still fit hand size.
+    sweeps = [p for p in plan_scenarios(_pool()[10], _pool(), sweep=True) if p["sweep"]]
+    for p in (p for p in sweeps if p["sweep"]["var"] in ("energy", "hand")):
+        assert p["atk_bench"] == _BENCH_REF and p["def_bench"] == _BENCH_REF
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+def test_setup_bench_selection_respects_a_cap():
+    sel = {"context": 2, "maxCount": 4, "minCount": 0, "option": [{}, {}, {}, {}]}
+    assert _sub_select({"select": sel}) == [0, 1, 2, 3]         # uncapped: bench every spare
+    assert _sub_select({"select": sel}, cap=1) == [0]
+    assert _sub_select({"select": sel}, cap=0) == []
+    assert _sub_select({"select": sel}, cap=9) == [0, 1, 2, 3]  # cap above supply is harmless
 
 
 # --- log-window damage extraction (REQ-AUDIT-0004) ---------------------------------------
@@ -261,7 +306,7 @@ def test_healing_hp_change_is_not_counted_as_damage():
 
 def _rec(**kw):
     base = dict(attack_id=1488, attacker_id=1031, scenario="prevent_ex", printed=210,
-                defender_id=CRUSTLE, defender_hp=150, defender_bench=2,
+                defender_id=CRUSTLE, defender_hp=150, defender_bench=2, attacker_bench=1,
                 damage={"dealtActive": 210, "dealtBench": [], "dealtSelf": 0,
                         "coinLogs": 0, "koed": True},
                 energies=3, hand_size=4, coin=None, sweep=None)
@@ -277,6 +322,7 @@ def test_record_carries_the_full_measurement_shape():
     assert r["dealtActive"] == 210 and r["dealtBench"] == []
     assert r["defenderCardId"] == CRUSTLE and r["defenderHp"] == 150
     assert r["defenderBench"] == 2                          # whiffed rider vs no target
+    assert r["attackerBench"] == 1                          # the combined-bench scaler's other half
     assert r["attackerEnergies"] == 3 and r["myHandSize"] == 4
     assert r["coin"] is None and r["koed"] is True
     assert "error" not in r
@@ -287,6 +333,21 @@ def test_error_record_is_an_explicit_ledger_entry():
     e = error_record(999, 5, "resist", "no resistant defender for type 3")
     assert e["attackId"] == 999 and e["scenario"] == "resist"
     assert "no resistant defender" in e["error"]
+
+
+@pytest.mark.req("REQ-AUDIT-0006")
+def test_a_failed_sweep_point_survives_the_merge_instead_of_being_swallowed():
+    # An error record that forgot its sweep shares a record_key with the plain panel record on
+    # the same scenario — and since an error never clobbers a success, it silently disappears.
+    # That is a silent skip, which is precisely what the ledger exists to prevent. Adding bench
+    # sweeps put ten points on `vanilla`, so the collision went from rare to routine.
+    ok = _rec(scenario="vanilla", sweep=None)
+    failed = error_record(1488, 1031, "vanilla", "match ended before the attack could fire",
+                          {"var": "atk_bench", "step": 2})
+    assert record_key(failed) != record_key(ok)
+    merged = merge_records([ok], [failed])
+    assert len(merged) == 2
+    assert any("error" in m for m in merged)
 
 
 @pytest.mark.req("REQ-AUDIT-0007")

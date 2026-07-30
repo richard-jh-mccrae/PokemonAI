@@ -346,16 +346,17 @@ class ObjectivesMixin:
         """Yield ``(cost, damage, energy, evo_hops, promo)`` for every opponent attacker FORM vs
         ``my_body``. Each in-play body's current form and the forms its line forward-evolves INTO
         contribute, over the form's attacks — the **per-attack** oracle (worst-case, W/R-adjusted) when
-        the attack records resolve (real cards, affordability-exact), else the **card-level** fallback:
-        ``maxDamage`` × W/R at ``minAttackCost`` (an unknown cost reads as 0 — payable), or a
-        ``hand_size_attacker``'s ``handSizeDamage`` × the opponent's hand (a card spent to evolve). This
-        subsumes ``_predicted_max_damage``'s dual path AND ``_forward_incoming_damage``'s hand-size read.
+        the attack records resolve (real cards, affordability-exact), else the **card-level** fallback
+        (``CombatMath.card_level_damage`` at ``minAttackCost``; an unknown cost reads as 0 — payable).
         A benched body carries the promotion surcharge; the Active carries none. v1 models a forward form
         as ONE evolution hop (single-hop lines exact; multi-hop reads one turn optimistic — the
         defensive-safe direction, Read-γ-sharpenable)."""
         ctx = getattr(self, "_opp_attack_context", None)
-        d_stat = self.stats.get((my_body or {}).get("id")) if self.stats else None
-        hc = opp.get("handCount", 0) or 0
+        if ctx is None:                                  # no per-decision context (a caller outside
+            ctx = {"atk_hand": opp.get("handCount", 0) or 0}   # `_board`): the hand-size scaler's
+            # variable is still knowable straight off `opp`, and this read had it before the shared
+            # fallback existed. Without it the credit would silently drop to 0 — an UNDER-read on a
+            # survival path, which is the one direction this must never fail in.
         promo_bench = self._promotion_surcharge(opp)
         bodies = ([(a, 0) for a in (opp.get("active") or []) if a]
                   + [(b, promo_bench) for b in (opp.get("bench") or []) if b])
@@ -374,12 +375,10 @@ class ObjectivesMixin:
                                energy, evo_hops, promo)
                     continue
                 cost = getattr(stat, "minAttackCost", None) or 0    # unknown cost → 0 (assume payable)
-                if self.functions and "hand_size_attacker" in self.functions.tags(cid):
-                    hand = max(0, hc - (1 if evo_hops else 0))      # a card is spent to evolve
-                    dmg = (getattr(stat, "handSizeDamage", 0) or 0) * hand   # counters ignore W/R
-                else:
-                    from common.strategy.damage import wr_adjust
-                    dmg = wr_adjust(stat, d_stat, getattr(stat, "maxDamage", 0) or 0)
+                # ONE card-level fallback (Issue #213): `maxDamage` x W/R max'd with the hand-size
+                # scaler. This used to be an EITHER/OR branch keyed off the Function Tag, while
+                # the incoming read hand-rolled the same fact differently one module over.
+                dmg = self.combat.card_level_damage(stat, my_body, context=ctx)
                 yield (cost, dmg, energy, evo_hops, promo)
 
     def _promotion_surcharge(self, opp: dict) -> int:

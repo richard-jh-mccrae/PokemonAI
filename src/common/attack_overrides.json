@@ -72,8 +72,8 @@
   "damageMax": 100
  },
  "274": {
-  "scaleVar": "atk_hand",
-  "scalePerUnit": 5
+  "scaleVar": "both_bench",
+  "scalePerUnit": 20
  },
  "326": {
   "damageMin": 0,
@@ -94,6 +94,10 @@
  "364": {
   "damageMin": 0,
   "damageMax": 0
+ },
+ "371": {
+  "scaleVar": "both_bench",
+  "scalePerUnit": 20
  },
  "391": {
   "damageMin": 20,

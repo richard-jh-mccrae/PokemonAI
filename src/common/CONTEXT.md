@@ -166,8 +166,12 @@ per-attack), damage table (the raw printed number — an Attack Effect carries t
 
 **Damage Formula**:
 The closed-form damage expression of a single attack — `base + per_unit × count(variable)` over a
-CLOSED vocabulary of state variables (own/opponent hand size, attached Energy, discard-pile Energy,
-…), evaluated against the live board at decision time. Damage that scales on **visible** state is
+CLOSED vocabulary of state variables, evaluated against the live board at decision time. The
+vocabulary has three **direction classes**: `atk_` (attacker-relative), `def_` (defender-relative)
+and `both_` — a variable counting BOTH sides at once, e.g. "for each Benched Pokémon (both yours and
+your opponent's)". A `both_` variable is the sum of its two per-side halves and is therefore
+direction-SYMMETRIC: one value is correct whichever side is attacking (ADR-0083, Issue #213).
+Damage that scales on **visible** state is
 thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hidden**-state scaler
 (Mega Abomasnow ex's deck-discard) is bounded soundly via the deck tracker (pigeonhole floor) and
 estimated via Deck-Content Odds; only **true randomness** (coin flips) is carried as measured
@@ -228,6 +232,20 @@ from the Read's Dossier — what *this* archetype actually runs). The generic fo
 provider primitive both will share; the Read later refines an Evolving Threat's *accuracy*.
 _Avoid_: evolution threat / future attacker (use "Evolving Threat"), EvoPath (that's the Read's
 opponent-specific line), fragile_preevo (that's the `Intel.role` label, not the card-knowledge fact)
+
+**Threat Ceiling**:
+How dangerous a body is ON THE CURRENT BOARD — its biggest attack priced through the **Damage
+Formula** (base + scaling term), as opposed to its *printed* damage alone. Deliberately
+**defender-free** and Weakness/Resistance-free: it answers "how dangerous is this body", not "how
+much does it hit my Active for", so the snipe order cannot swing on my own Active's typing. Its
+forward variant is the greatest Threat Ceiling among the forms a line evolves INTO — what makes an
+**Evolving Threat** readable, since a pre-evolution's own printed damage says nothing about the
+attacker its line reaches, and a scaling attacker's printed damage says nothing about its threat
+either (Alakazam's Powerful Hand prints 0). Fail-safe: a scaler whose variable is absent from the
+decision context contributes 0, leaving the printed base — never a guess (ADR-0083, Issue #213).
+_Avoid_: printed damage / `maxDamage` (the base term only — the read this replaced), Incoming (the
+defensive projection against a *specific* body of mine; the Threat Ceiling is defender-free), threat
+rank (the ranking that CONSUMES this, and which also carries prize and immunity terms)
 
 **Irreplaceable Tool**:
 A one-per-deck Pokémon Tool with no recovery path — an **ACE SPEC** (read off `CardData`, max one per

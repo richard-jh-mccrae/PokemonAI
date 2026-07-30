@@ -239,3 +239,35 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
   ([hypergeometric-fetch-closure.md](../plans/hypergeometric-fetch-closure.md)).
 - **Loss-rung v2:** a bench of guaranteed-dead bodies (all KO-able next turn) as a doom equivalent of
   bench-empty — v1 gates on the literal visible fact only.
+
+## Amendment A — the hand-size divergence is RETRACTED, not implemented (2026-07-30, Issue #213)
+
+Decision 2 kept `active_doomed` unconditionally worst-case and named the follow-up. When that
+follow-up was shadowed (S1b, `doomed_incoming` + `Pilot._threat_shadow`), the shadow's
+documentation recorded **two** divergences between the worst-case incumbent and the Threat-Clock
+curve:
+
+1. the curve gates the current form on affordability (`can_pay_cheapest` under one attach), and
+2. the curve omits the `hand_size_attacker` forward counter.
+
+**(2) was never true on a production path.** Alakazam's Powerful Hand carries the Damage Formula's
+`atk_hand` scaler on its `AttackStat` like any other scaling attack, and all six Incoming call
+sites thread the per-decision damage context, so the curve prices it — in fact slightly HIGHER than
+the hand-rolled branch did, because the generic term reads the full hand where the branch spent the
+card used to evolve. Measured against the real provider at a 7-card hand, both reads return 140 for
+an Alakazam Active *and* for a Kadabra one evolution away, and both call it doomed.
+
+So the claim is **retracted rather than implemented**. `forward_incoming_damage`'s hand-size branch
+is deleted (dead on every production path), the card-level case moves into the single shared
+`CombatMath.card_level_damage` fallback that both fallback paths now reach, and the equivalence is
+pinned by `REQ-DOOMSHADOW-0004`.
+
+**What is unchanged.** Decision 2 stands: `active_doomed` remains unconditionally worst-case.
+`REQ-DOOMSHADOW-0002`, which pins the **affordability** divergence, is untouched — its fixture
+carries no hand-size attacker and its premise was never in question. Divergence (1) is now the only
+one, and it remains the shadow's whole reason to exist.
+
+**Evidence.** `threat_sweep.py --doom` after the change: **304/319 agree, 15 disagreements, all
+one-directional (incumbent-doomed-only)**. The same 15 the pre-change sweep reported on a corpus
+that has since grown from 274 frames to 319 — the retirement moved the doom agreement by exactly
+nothing, which is what "this divergence was never real" predicts.

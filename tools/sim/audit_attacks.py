@@ -32,8 +32,14 @@ Requirements:
                     entry — never a silent skip.
     REQ-AUDIT-0007  Re-runs merge by record key: a new measurement wins, but an error never
                     clobbers an existing success (accumulative, like card_functions).
-    REQ-AUDIT-0008  Sweep planning varies exactly ONE state variable (attached energy, or my
-                    hand size via delayed attack) across 2-3 points, only when requested.
+    REQ-AUDIT-0008  Sweep planning varies exactly ONE state variable (attached energy, my hand
+                    size via delayed attack, or one seat's bench) across 2-3 points, only when
+                    requested.
+    REQ-AUDIT-0018  Per-seat bench counts are CONTROLLED (a target both seats are driven to,
+                    within bench patience) and RECORDED on every measurement. Bench population
+                    was previously uncontrolled and unrecorded, so it was free to co-vary with
+                    the swept variable — which is how a combined-bench scaler came to ship an
+                    exact-looking `atk_hand` fit (274 Torcherto).
     REQ-AUDIT-0009  Coin fork: fork the pre-attack position via search_begin(manual_coin=True),
                     walk both outcomes of every coin select, record min and max dealt.
     REQ-AUDIT-0010  Engine smokes reproduce the known goldens: Resistance -30, Weakness x2,
@@ -48,8 +54,12 @@ from pathlib import Path
 _DECK_SIZE = 60
 CRUSTLE = 345          # prevent_ex panel body: ability zeroes damage from opponent {ex} Pokémon
 _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyType -> card id
+_BENCH_REF = 1         # both seats pinned here unless a bench sweep moves one (REQ-AUDIT-0018)
+_BENCH_STEPS = (0, 1, 2)
 _SWEEP_POINTS = ({"var": "energy", "step": 1}, {"var": "energy", "step": 2},
-                 {"var": "hand", "step": 2}, {"var": "hand", "step": 4})
+                 {"var": "hand", "step": 2}, {"var": "hand", "step": 4},
+                 *({"var": "atk_bench", "step": n} for n in _BENCH_STEPS),
+                 *({"var": "def_bench", "step": n} for n in _BENCH_STEPS))
 
 # Engine vocab (mirrors cg/api.py enums; kept as ints so unit tests stay lib-free).
 _OPT_YES, _OPT_NO, _OPT_PLAY, _OPT_ATTACH, _OPT_EVOLVE, _OPT_ATTACK, _OPT_END = 1, 2, 7, 8, 9, 13, 14
@@ -155,18 +165,26 @@ def plan_scenarios(attacker: dict, cards: dict[int, dict], sweep: bool = False) 
         sweep: Add single-variable sweep points (REQ-AUDIT-0008) when True.
 
     Returns:
-        ``[{"scenario", "defender", "extra_energy", "delay_turns", "sweep"}, ...]`` —
-        a None ``defender`` stays in the plan so the drive emits an error-ledger entry.
+        ``[{"scenario", "defender", "extra_energy", "delay_turns", "atk_bench", "def_bench",
+        "sweep"}, ...]`` — a None ``defender`` stays in the plan so the drive emits an
+        error-ledger entry.
+
+    Every plan PINS both seats' bench counts (REQ-AUDIT-0018). Bench population used to be
+    uncontrolled — both seats benched every drawn basic — which left it free to co-vary with the
+    swept variable and let a bench scaler fit hand size (the spurious 274 override). A bench
+    sweep moves exactly one seat and pins the other, so the fit stays single-variable.
     """
     panel = pick_panel(attacker, cards)
     order = ["vanilla", "weak", "resist"] + (["prevent_ex"] if panel["prevent_ex"] else [])
     plans = [{"scenario": s, "defender": panel[s], "extra_energy": 0, "delay_turns": 0,
-              "sweep": None} for s in order]
+              "atk_bench": _BENCH_REF, "def_bench": _BENCH_REF, "sweep": None} for s in order]
     if sweep:
         for pt in _SWEEP_POINTS:
             plans.append({"scenario": "vanilla", "defender": panel["vanilla"],
                           "extra_energy": pt["step"] if pt["var"] == "energy" else 0,
                           "delay_turns": pt["step"] if pt["var"] == "hand" else 0,
+                          "atk_bench": pt["step"] if pt["var"] == "atk_bench" else _BENCH_REF,
+                          "def_bench": pt["step"] if pt["var"] == "def_bench" else _BENCH_REF,
                           "sweep": dict(pt)})
     return plans
 
@@ -228,23 +246,36 @@ def damage_from_window(window: list[dict], defender_snap: dict, attacker_snap: d
 def shape_record(*, attack_id: int, attacker_id: int, scenario: str, printed: int,
                  defender_id: int, defender_hp: int, damage: dict, energies: int,
                  hand_size: int, coin: str | None, sweep: dict | None,
-                 defender_bench: int = 0) -> dict:
+                 defender_bench: int = 0, attacker_bench: int = 0) -> dict:
     """One measurement record (REQ-AUDIT-0005). ``koed`` marks a right-censored dealtActive;
     ``defenderBench`` = live snipe targets at fire time (a rider that whiffed vs bench=0 is
-    distinguishable from a rider that dealt 0)."""
+    distinguishable from a rider that dealt 0).
+
+    BOTH seats' bench counts are recorded (REQ-AUDIT-0018): the combined-bench scaler family
+    reads their sum, and recording them unconditionally makes the historical confound — bench
+    population co-varying with the swept variable — visible in retrospect rather than silent.
+    """
     return {"attackId": attack_id, "attackerCardId": attacker_id, "scenario": scenario,
             "printed": printed, "dealtActive": damage["dealtActive"],
             "dealtBench": damage["dealtBench"], "dealtSelf": damage["dealtSelf"],
             "defenderCardId": defender_id, "defenderHp": defender_hp,
-            "defenderBench": defender_bench, "koed": damage["koed"],
+            "defenderBench": defender_bench, "attackerBench": attacker_bench,
+            "koed": damage["koed"],
             "attackerEnergies": energies, "myHandSize": hand_size,
             "coinLogs": damage["coinLogs"], "coin": coin, "sweep": sweep}
 
 
-def error_record(attack_id: int, attacker_id: int | None, scenario: str, msg: str) -> dict:
-    """Explicit could-not-measure ledger entry (REQ-AUDIT-0006)."""
+def error_record(attack_id: int, attacker_id: int | None, scenario: str, msg: str,
+                 sweep: dict | None = None) -> dict:
+    """Explicit could-not-measure ledger entry (REQ-AUDIT-0006).
+
+    Carries the SWEEP point it failed on. Without it every failed sweep on a given scenario
+    shares one :func:`record_key` with the plain panel record, and since an error never clobbers
+    a success, the failure is silently dropped — a silent skip, which is the one thing this
+    ledger exists to prevent.
+    """
     return {"attackId": attack_id, "attackerCardId": attacker_id, "scenario": scenario,
-            "coin": None, "sweep": None, "error": msg}
+            "coin": None, "sweep": sweep, "error": msg}
 
 
 def record_key(rec: dict) -> tuple:
@@ -414,14 +445,20 @@ def _generic_advance(sel):
     return list(range(k))
 
 
-def _sub_select(obs):
-    """Selection for a non-MAIN context: YES on activate-style prompts, else generic."""
+def _sub_select(obs, cap: int | None = None):
+    """Selection for a non-MAIN context: YES on activate-style prompts, else generic.
+
+    ``cap`` bounds the SETUP bench (REQ-AUDIT-0018) — setup is the second place a seat benches,
+    so a cap applied only in the main phase would leak an uncontrolled count past it. None keeps
+    the historical behaviour (bench every spare, so snipe/spread riders have targets).
+    """
     sel = obs.get("select") or {}
     ctx = sel.get("context")
     if ctx in (_CTX_ACTIVATE, _CTX_FIRST_EFFECT):
         return _yes_no(obs, True)
     if ctx == _CTX_SETUP_BENCH:
-        return list(range(sel.get("maxCount", 0)))         # bench every spare -- snipe targets
+        n = sel.get("maxCount", 0)
+        return list(range(n if cap is None else min(n, cap)))
     return _generic_advance(sel)
 
 
@@ -430,6 +467,23 @@ def _end_turn(obs):
         if o.get("type") == _OPT_END:
             return [i]
     return _generic_advance(obs.get("select") or {})
+
+
+def _bench_target(seat: int, cap: int | None) -> int:
+    """How many bodies ``seat`` must have benched before the attack may fire (REQ-AUDIT-0018).
+
+    An explicit cap is a TARGET, not merely a ceiling: a ceiling alone would let the attack fire
+    at whatever the shuffle happened to bench, which is the uncontrolled confound the cap exists
+    to remove. ``None`` reproduces the historical wait exactly — the defender must field a bench
+    so snipe/spread riders have a target, and the attacker is unconstrained.
+    """
+    return (1 if seat == 1 else 0) if cap is None else cap
+
+
+def _benches_ready(obs, caps: dict) -> bool:
+    """Both seats have reached their bench targets."""
+    return all(len(board_snapshot(obs, seat)["bench"]) >= _bench_target(seat, caps.get(seat))
+               for seat in (0, 1))
 
 
 class _Timeout(Exception):
@@ -441,17 +495,33 @@ class _SetupMiss(Exception):
     can never come online, so abort fast and retry on a fresh shuffle."""
 
 
+class _BenchMiss(Exception):
+    """A seat never reached its requested bench count within bench patience, so this shuffle
+    cannot produce a CONTROLLED point — retry. The last attempt accepts what it got and records
+    the actual counts: an uncontrolled point is dropped by the axis rules, never trusted."""
+
+
 def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cost,
-                     extra_energy, delay_turns, cards, max_steps, bench_patience=10):
+                     extra_energy, delay_turns, cards, max_steps, bench_patience=10,
+                     atk_bench=None, def_bench=None):
     """Advance the battle until the attacker (seat 0) is ready to fire ``attack_id``.
 
     The attacker climbs its chain on the Active, banks Energy to ``need + extra``, then waits
     for the defender's Active to be its chain tip (Crustle must be evolved before the hit),
     for the defender to field a bench (up to ``bench_patience`` extra turns, so snipe riders
-    have targets), and for ``delay_turns`` hand-growing waits. Both seats bench drawn basics.
+    have targets), and for ``delay_turns`` hand-growing waits.
+
+    ``atk_bench`` / ``def_bench`` set each seat's bench count (REQ-AUDIT-0018); None keeps the
+    historical behaviour. Each is both a ceiling (the seat stops benching once reached) and a
+    TARGET (the attack waits, within ``bench_patience``, until both seats reach theirs) — a
+    ceiling alone would fire at whatever the shuffle benched, which is the confound the caps
+    exist to remove. When patience runs out the attack fires anyway and the record carries the
+    ACTUAL counts, so a missed target degrades to a duplicate fit point, never a wrong one.
+
     Returns the pre-attack observation.
     """
     delay_left, bench_wait = delay_turns, bench_patience
+    caps = {0: atk_bench, 1: def_bench}
     for _ in range(max_steps):
         cur = obs.get("current") or {}
         if cur.get("result", -1) != -1:
@@ -468,7 +538,7 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
         elif ctx == _CTX_SETUP_ACTIVE:
             obs = battle_select([_setup_pick(obs, seat, chain[0])])
         elif ctx != _CTX_MAIN:
-            obs = battle_select(_sub_select(obs))
+            obs = battle_select(_sub_select(obs, cap=caps.get(seat)))
         else:
             defender = _active(obs, 1)
             if defender is not None and defender.get("id") not in def_chain:
@@ -482,10 +552,12 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
                 if eo is not None:
                     obs = battle_select([eo])
                     continue
-            bo = _find_bench_play(obs, seat, cards)
-            if bo is not None:
-                obs = battle_select([bo])
-                continue
+            cap = caps.get(seat)
+            if cap is None or len(board_snapshot(obs, seat)["bench"]) < cap:
+                bo = _find_bench_play(obs, seat, cards)
+                if bo is not None:
+                    obs = battle_select([bo])
+                    continue
             if seat != 0:
                 obs = battle_select(_end_turn(obs))        # defender sits (evolves, never attacks)
                 continue
@@ -502,8 +574,8 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
             atk_opt = _find_attack_opt(obs, attack_id)
             if (tip and atk_opt is not None and len(attached) >= len(cost) + extra_energy
                     and opp_ready):
-                if not board_snapshot(obs, 1)["bench"] and bench_wait > 0:
-                    bench_wait -= 1                        # give snipe rider a target
+                if bench_wait > 0 and not _benches_ready(obs, caps):
+                    bench_wait -= 1                        # let both seats reach their targets
                     obs = battle_select(_end_turn(obs))
                     continue
                 if delay_left > 0:
@@ -616,17 +688,25 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
     """
     cards = cards or card_pool()
     info = attack_index().get(attack_id)
+
+    def _err(msg, attacker=None):        # one ledger entry shape; the plan identifies the point
+        return [error_record(attack_id, attacker, plan["scenario"], msg, plan.get("sweep"))]
+
     if info is None or info["owner"] is None:
-        return [error_record(attack_id, None, plan["scenario"], "unknown attack or no owner card")]
+        return _err("unknown attack or no owner card")
     attacker_id = info["owner"]
     if plan["defender"] is None:
-        return [error_record(attack_id, attacker_id, plan["scenario"],
-                             "no qualifying defender in the pool for this scenario")]
+        return _err("no qualifying defender in the pool for this scenario", attacker_id)
     atk_chain = evolution_chain(attacker_id, cards)
     def_chain = evolution_chain(plan["defender"], cards)
     own = cards[attacker_id].get("energyType") or 3         # colorless attacker -> Water
     fill = [e or own for e in info["energies"]] or [own]    # colorless cost -> own type effect
-    atk_deck = build_side_deck(atk_chain, fill)             # clauses reference their own Energy
+    # The attacker seat carries bench fodder ONLY when a plan asks it to bench (REQ-AUDIT-0018):
+    # its own chain basic is otherwise the sole benchable body, so an attacker-bench target would
+    # depend on drawing a spare copy. Kept conditional deliberately — fodder displaces Energy fill
+    # and lengthens games, and every non-bench measurement should keep the deck it was taken with.
+    atk_fodder = bench_fodder(cards, set(atk_chain)) if plan.get("atk_bench") else []
+    atk_deck = build_side_deck(atk_chain, fill, atk_fodder)  # clauses reference their own Energy
     battle_start, battle_select, battle_finish = _engine()
     for attempt in range(6):                                # fresh shuffle when setup misses;
         fodder = bench_fodder(cards, set(def_chain)) if attempt < 4 else []
@@ -634,32 +714,39 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
         obs, start = battle_start(atk_deck, def_deck)
         if getattr(start, "errorPlayer", -1) >= 0 or obs is None:
             battle_finish()
-            return [error_record(attack_id, attacker_id, plan["scenario"],
-                                 "battle_start rejected the decks")]
+            return _err("battle_start rejected the decks", attacker_id)
         try:
             pre = _drive_to_attack(battle_select, obs, attack_id=attack_id, atk_chain=atk_chain,
                                    def_chain=def_chain, cost=info["energies"],
                                    extra_energy=plan["extra_energy"],
                                    delay_turns=plan["delay_turns"], cards=cards,
-                                   max_steps=max_steps)
+                                   max_steps=max_steps,
+                                   atk_bench=plan.get("atk_bench"),
+                                   def_bench=plan.get("def_bench"))
             bench_size = len(board_snapshot(pre, 1)["bench"])
+            atk_bench_size = len(board_snapshot(pre, 0)["bench"])
+            if attempt < 5 and (atk_bench_size, bench_size) != (
+                    _bench_target(0, plan.get("atk_bench")),
+                    _bench_target(1, plan.get("def_bench"))):
+                raise _BenchMiss()                  # uncontrolled point -- reshuffle and retry
             fork = _coin_fork(pre, attack_id, atk_deck, def_deck) if coin_fork else None
             damage, energies, hand_size = _fire_and_measure(battle_select, pre, attack_id)
             break
+        except _BenchMiss:
+            continue                                # fresh shuffle; attempt 5 accepts what it got
         except _SetupMiss:
             if attempt == 5:
-                return [error_record(attack_id, attacker_id, plan["scenario"],
-                                     "defender setup kept missing its chain basic")]
+                return _err("defender setup kept missing its chain basic", attacker_id)
         except _Timeout as e:
-            return [error_record(attack_id, attacker_id, plan["scenario"], str(e))]
+            return _err(str(e), attacker_id)
         except Exception as e:                              # never a silent skip
-            return [error_record(attack_id, attacker_id, plan["scenario"],
-                                 f"{type(e).__name__}: {e}")]
+            return _err(f"{type(e).__name__}: {e}", attacker_id)
         finally:
             battle_finish()
     common = dict(attack_id=attack_id, attacker_id=attacker_id, scenario=plan["scenario"],
                   printed=info["damage"], defender_id=plan["defender"],
                   defender_hp=cards[plan["defender"]]["hp"], defender_bench=bench_size,
+                  attacker_bench=atk_bench_size,
                   energies=energies, hand_size=hand_size, sweep=plan["sweep"])
     out = [shape_record(damage=damage, coin=None, **common)]
     if fork:

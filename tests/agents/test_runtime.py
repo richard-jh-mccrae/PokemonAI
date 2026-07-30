@@ -97,6 +97,12 @@ EXPECTED_SHIPPED = {
                                     # to a `gust_target` kind; 0 decision flips over 331 corpus
                                     # frames AND cleared the ADR-0072 mid-build tripwire (-0.75%
                                     # delta, CI-lo -4.3%, 0 crashes/2400 games)
+    "scaled_threat_rank": True,     # Issue #213 armed-ON 2026-07-30: the threat rank and the
+                                    # forced-promotion read price a body through the Damage Formula
+                                    # against the live board instead of printed `maxDamage`, and the
+                                    # flat `_HAND_SIZE_ATTACKER_BOOST` proxy is deleted. Ships ON
+                                    # because OFF would make the change a no-op on the board and
+                                    # both ADR-0072 merit gates measure the ON behaviour
     "deny_strip_delta": False,      # ADR-0078 / #199 (S3c): compute-only strip delta, ships OFF —
                                     # nothing reads it yet (#187 is the consumer, itself blocked on
                                     # #199's gate 1), so ON would only cost compute
