@@ -200,7 +200,7 @@ def test_retreat_enabler_lethal_f15_locks_and_wins_end_to_end_when_flag_on():
     Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80,
     opp bench empty -> WIN. With ``retreat_enabler_lethal`` ON the tier LOCKS the win (planned.goal=='win',
     next_step==[0]) and the grab/attach steering drives the full cascade to a real engine WIN."""
-    fx = _fixture("ml_dead_hand_full_refresh_f15")
+    fx = _fixture("ml_petrel_balloon_retreat_lethal_f15")
     pilot = _pilot("mega_lucario", promote_ko_aware=True, retreat_enabler_lethal=True)
     d = pilot.explain(fx["obs"])
     assert d.chosen == [0]
@@ -213,7 +213,7 @@ def test_retreat_enabler_lethal_off_does_not_lock_f15():
     """Soundness bookend: with the flag OFF (default) the tier is inert — no win LOCK, and the
     ``[correct]``-only cascade REFUTES (closed-form recognition alone never composes the Petrel ->
     Air Balloon -> retreat -> promote steering)."""
-    fx = _fixture("ml_dead_hand_full_refresh_f15")
+    fx = _fixture("ml_petrel_balloon_retreat_lethal_f15")
     pilot = _pilot("mega_lucario", promote_ko_aware=True)   # retreat_enabler_lethal defaults False
     d = pilot.explain(fx["obs"])
     assert d.planned is None or d.planned.goal != "win"

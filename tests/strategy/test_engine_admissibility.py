@@ -35,7 +35,7 @@ CLASSIFIED = {
     "ms_lethal_recover_energy_to_win_f110":    ("mega_starmie", set()),
     "ml_lethal_recover_energy_retreat_ko_f26": ("mega_lucario", set()),
     "ml_lethal_recover_energy_via_gong_f48":   ("mega_lucario", set()),
-    "ml_dead_hand_full_refresh_f15":           ("mega_lucario", set()),
+    "ml_petrel_balloon_retreat_lethal_f15":           ("mega_lucario", set()),
     # THE ONE. Its cascade shuffles its hand back in and draws off the reshuffled deck, so its
     # verdict is whatever that shuffle allowed. Re-ruled out of the agreement gate (#178); the
     # `[correct]`-only claims in test_planner_boost_promote were rewritten around it.

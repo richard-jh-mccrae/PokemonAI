@@ -872,7 +872,7 @@ legal, and the steps **do not commute**, so it is a **Maneuver**, which is Issue
 rather than any equation's. It is also a `Main` select, so the DAMAGE-select instrument this ADR
 builds could never have scored it.
 
-`tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json` already declared the `frame_key` but
+`tests/fixtures/corrections/ml_petrel_balloon_retreat_lethal_f15.json` already declared the `frame_key` but
 carried **no owner**, which is exactly why the gate counted it unruled; the Decision Claim now carries
 `owner` / `ruled` / `why` per ADR-0072 decision 4, and the gate reports it under `HELD OUT` —
 **visible, never gating**. Re-run: **`GATE: PASS`, gated on 266 frames, 1 held out.**

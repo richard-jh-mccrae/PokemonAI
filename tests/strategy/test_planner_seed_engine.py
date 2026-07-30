@@ -77,7 +77,7 @@ def _tutor_menu_card_ids(pilot, obs, first_step):
 def test_exact_seeding_exposes_the_deck_certain_air_balloon_that_prefix_hides():
     """The engine-level seeding gap: after Team Rocket's Petrel (tutor a Trainer), the deck-certain Air
     Balloon is offered under exact seeding and NOT under the id-sorted decklist prefix."""
-    obs = _fixture("ml_dead_hand_full_refresh_f15")["obs"]
+    obs = _fixture("ml_petrel_balloon_retreat_lethal_f15")["obs"]
     assert obs.get("search_begin_input") and obs.get("own_prizes")   # fixture is seed-ready
 
     exact = _tutor_menu_card_ids(_pilot(_deck("mega_lucario")), obs, _PETREL_STEP)

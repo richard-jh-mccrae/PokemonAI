@@ -44,7 +44,7 @@ def test_probe_exposes_the_tutor_menu_encodings_after_petrel():
     require_cg()
     from sim.lethal_probe import probe_follow_ups
     obs = json.loads((REPO / "tests" / "fixtures" / "corrections"
-                      / "ml_dead_hand_full_refresh_f15.json").read_text(encoding="utf-8"))["obs"]
+                      / "ml_petrel_balloon_retreat_lethal_f15.json").read_text(encoding="utf-8"))["obs"]
 
     selects = probe_follow_ups(_mega_lucario_pilot(), obs, [0])   # [0] = Play Team Rocket's Petrel
 
