@@ -25,6 +25,20 @@ The merit gates are the Discrimination Gate (`leaf_lab.py diff`) and the paired-
     python tools/train/probes/snipe_decider_sweep.py --legs     # ...plus the per-leg breakdown
 
 Offline and read-only.
+⚠️ **This probe is a DIAGNOSTIC, not the Decision Gate** (since ADR-0085 Amendment I, 2026-07-30).
+
+ADR-0072 named "the phase's `*_decider_sweep.py`" as the Decision Gate, and this one compared the
+shipped agent against its own kill-switch turned OFF. That was right at the swap, when OFF *was* the
+incumbent rung pile. It stopped being right the moment that pile was DELETED, as tracker directive 1
+requires: with no rungs left, OFF is an empty scorer whose argmax falls to option index, so the
+comparison became "the equation versus nothing" and could only ever report FIX. A gate that cannot
+report a REGRESSION is not a gate. All four sweeps were in this state simultaneously and none said so.
+
+The Decision Gate is now `tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`,
+which diffs against a RECORDED capture — the property that kept the Discrimination Gate honest all
+along. What remains here is still worth running: the per-leg breakdown and the per-frame
+classification against the human are diagnosis this lab deliberately does not duplicate.
+
 """
 from __future__ import annotations
 
@@ -155,7 +169,7 @@ def main(argv=None) -> int:
         print(f"  {key:<16} {state}   ({why})")
 
     gated = [r for r in regressions if r[0] not in RECORDED_MISSES]
-    print(f"\nVERDICT — Decision Gate: {'PASS' if not gated else 'FAIL'}. "
+    print(f"\nDIAGNOSTIC (not the Decision Gate — see decider_lab.py): {'clean' if not gated else 'FLIPS'}. "
           f"{len(fixes)} FIX, {len(gated)} unruled REGRESSION, {len(neutral)} neutral.")
     if gated:
         print("  Every unruled REGRESSION must be ruled with the user BEFORE the deletion commit "

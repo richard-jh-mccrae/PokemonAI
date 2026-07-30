@@ -1377,6 +1377,64 @@ twice and the strict-maximum test would read the duplicate as a rival, silently 
 a board where the Brief does express a preference. No corpus `DAMAGE` frame offers a body twice, so
 this guards a shape the engine may pose rather than fixing one it does.
 
+## Amendment I — E4 resolved: the Decision Gate gets a RECORDED baseline (2026-07-30, grilled)
+
+Amendment E4 found this instrument's Decision Gate vacuous after the deletion pass. Grilled
+2026-07-30. **The first thing the grill established is that E4 understated the problem: it is not
+snipe's, it is every decider swap's, and all four were broken simultaneously with none of them
+saying so.**
+
+**Measured, not inferred.** ADR-0072 defines the Decision Gate as *"the phase's
+`tools/train/probes/*_decider_sweep.py`"*, and each compares the shipped agent against its own
+kill-switch OFF. That was correct at the swap, when OFF *was* the incumbent rung pile. Every phase
+then DELETED its pile — tracker directive 1 requires exactly that — and no gate was re-pointed:
+
+| pile | rungs remaining | was | its sweep |
+|---|---|---|---|
+| `baseline_promote` | **0** | 12 | `promote_retreat_decider_sweep` |
+| `baseline_energy` | 3 | 22 | `attach_decider_sweep` |
+| `baseline_evolution` | 2 | 6 | `evolve_decider_sweep` |
+| `baseline_snipe` | 3 (counter rungs) | 9 | `snipe_decider_sweep` |
+
+Run on the real corpus: `evolve_decider_sweep` reports **4 FIX, 0 REGRESSION**; `snipe_decider_sweep`
+reports **12 FIX, 0 REGRESSION**. With the pile gone, "OFF" is an empty scorer whose argmax falls to
+option index, so each gate compares its equation against nothing. **A gate that can only ever report
+FIX cannot report the one thing ADR-0072 built it for** — and a vacuous gate is worse than an absent
+one, because `PASS` is read as evidence. All four had been reporting `PASS` in this state.
+
+**The fix — `tools/train/decider_lab.py`.** One capture over every replayable Correction, recording
+what the shipped agent DECIDES; the gate diffs against a committed baseline
+(`data/decider_lab/baseline.json`, 332 frames, `git_rev`-stamped). `--context N` gates one phase's
+frames. The diff lives in `train/gates.py` beside `leaf_lab_diff` so the two gates cannot drift in
+shape, and it keys through `frame_key_of` so one Held-out ruling holds a frame out of BOTH.
+
+The Discrimination Gate was never exposed to this for one structural reason, and it is the whole
+lesson: **it diffs against a recorded capture, never against a live switch.**
+
+**Said plainly: this REPLACES the Decision Gate rather than repairing it.** The original asks *"did
+this swap regress against the incumbent?"* — a transition instrument, meaningful exactly once. Once
+the incumbent is deleted there is no transition to measure. The recorded baseline asks *"did this
+build regress against the last blessed build?"*, which is a different and standing question, and
+strictly more end-to-end than the leaf-level Discrimination Gate: it compares the decision actually
+played, not the leaf ranking behind it.
+
+**Verified by MUTATION, because "it passes" is exactly the evidence that failed here.** With the
+snipe ordering inverted (`return -K * relevance`), the new gate reports **12 REGRESSION and FAILS**
+on the same frames the old sweep called FIX. A weaker mutation is recorded too, because it surprised
+me: dropping `share` from `my_route` changes **no** decision on this build, though the grill had
+recorded it as costing `82756021-57` (16/19). That measurement predates the context fix, the deletion
+pass and the tiebreak — a reminder that a measured claim expires when the thing it measured moves.
+
+**The four sweeps are now DIAGNOSTICS**, bannered as such, with the two that called
+`print_gate_report` no longer titling themselves the Decision Gate. Their per-leg breakdowns remain
+worth running; `decider_lab.py` deliberately does not duplicate them.
+
+**Cross-issue touch, named rather than buried:** this edits probes owned by Issues #139, #140 and
+#141 (all closed). The alternative was leaving three known-vacuous gates on `main`.
+
+**Baseline discipline, inherited verbatim from the leaf lab:** it is a RULING RECORD. CI must never
+auto-recapture it, or the gate becomes a mirror that agrees with whatever it is shown.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the

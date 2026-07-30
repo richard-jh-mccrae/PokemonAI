@@ -120,6 +120,25 @@ It measures the *leaf's ranking*, **not the shipped decision** — a `MISS` says
 evaluation buries the human's option, not that the live agent played the frame worse.
 _Avoid_: leaf test, leaf eval, leaf benchmark (it is an instrument, and its readings are rankings)
 
+**Decider Lab**:
+The Leaf Lab's sibling one level up: it replays every replayable **Correction** through a fresh
+shipped Pilot and records what the agent **DECIDES**, then diffs that against a committed capture
+(`tools/train/decider_lab.py`, `data/decider_lab/baseline.json`). Where the Leaf Lab asks *does the
+leaf RANK the human's option top*, this asks *does the agent PLAY it* — the end-to-end reading, and
+the one a ladder actually sees. Since ADR-0085 Amendment I it **is** the **Decision Gate**.
+
+It exists because the gate's old reference rotted silently. ADR-0072 named each phase's
+`*_decider_sweep.py`, and every one of those compared the agent against its own kill-switch OFF —
+correct at the swap, when OFF was the incumbent rung pile, and meaningless once each phase DELETED
+that pile as directive 1 requires. `baseline_promote` was left holding **zero** rungs. With no
+incumbent, OFF is an empty scorer whose argmax is option index, so all four sweeps compared their
+equation against nothing and **could only ever report FIX**. They reported `PASS` throughout.
+
+The lesson is one line, and it is why this instrument has the shape it has: **a gate must diff
+against a RECORDED baseline, never against a live switch.** The baseline is a RULING RECORD — never
+auto-recaptured, re-taken only once a build's flips have been ruled, exactly as `data/leaf_lab/`.
+_Avoid_: decision test, decider suite, regression run (it is an instrument; its readings are picks)
+
 **Leaf Frame**:
 A **Correction** the **Leaf Lab** can score: a reseedable MAIN-select (context 0) board carrying
 something to rank — either a `turn_plan` payload or any MAIN-select pick correction naming a

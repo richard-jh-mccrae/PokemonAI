@@ -473,3 +473,54 @@ def held_out_frames(fixtures_dir=None) -> dict:
         if owner:
             out[key] = owner
     return out
+
+
+def decider_lab_diff(before: dict, after: dict) -> dict:
+    """Per-frame DECISION movement between two Decider Lab captures, classified against the human.
+
+    The Decision Gate's comparison after ADR-0085 Amendment I. It replaces the sweeps' live
+    kill-switch-OFF arm, which measured *"the equation versus the rungs it replaced"* — a question
+    that stops existing the moment those rungs are DELETED. Every decider swap has now deleted its
+    pile (`baseline_promote` holds **zero** rungs, `baseline_energy` 3 of 22, `baseline_evolution` 2
+    of 6, `baseline_snipe` 3 counter rungs of 9), so all four sweeps were comparing the shipped agent
+    against an empty scorer whose argmax is option index. Measured: `evolve_decider_sweep` reported
+    `4 FIX, 0 REGRESSION` and `snipe_decider_sweep` `12 FIX, 0 REGRESSION` — **a gate that can only
+    ever report FIX cannot report the one thing ADR-0072 built it for.**
+
+    So the reference becomes a RECORDED baseline, exactly as the Discrimination Gate has always used
+    one, and the question becomes *"did this build regress against the last blessed build?"* — which
+    is a different question from the swap-moment one, and the honest thing to say is that this
+    REPLACES the transition instrument rather than repairing it.
+
+    Rows match on the stable ``key`` (`frame_key_of`). Frames on only one side are surfaced
+    (``added`` / ``removed``) rather than skipped, so a baseline taken against a different corpus
+    shape is visible instead of quietly shrinking the gated set.
+
+    Verdicts, per frame whose ``chosen`` moved:
+      ``REGRESSION``  the baseline matched the human's ``correct`` and this build does not
+      ``FIX``        this build matches and the baseline did not
+      ``NEUTRAL``    both miss, differently — a real change, but not one the corpus adjudicates
+      ``UNLABELLED`` the frame carries no ``correct``, so no direction can be claimed
+    """
+    def index(rpt):
+        return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
+
+    b, a = index(before), index(after)
+    rows = []
+    for k in sorted(b.keys() & a.keys()):
+        was, now = b[k].get("chosen"), a[k].get("chosen")
+        if was == now:
+            continue
+        correct = a[k].get("correct")
+        if correct is None:
+            verdict = "UNLABELLED"
+        elif now == correct:
+            verdict = "FIX"
+        elif was == correct:
+            verdict = "REGRESSION"
+        else:
+            verdict = "NEUTRAL"
+        rows.append({"key": k, "agent": a[k].get("agent"), "context": a[k].get("context"),
+                     "before": was, "after": now, "correct": correct, "verdict": verdict})
+    return {"rows": rows, "compared": len(b.keys() & a.keys()),
+            "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys())}
