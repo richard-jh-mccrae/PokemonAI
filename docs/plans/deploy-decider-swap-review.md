@@ -145,6 +145,51 @@ construction was wrong.
   `score < 0`. The exposure leg falls back to the body's own prize liability where the Prize Path is
   unreadable.
 
+## OPEN GRILL — Amendment F is too broad (raised 2026-07-30, user)
+
+**The point, verbatim:** *"Shall only bench Meowth when bench empty IF our active is doomed OR we
+need a specific supporter (which is issue #165 computation). if its early game and no KO threat, we
+can wait a turn."*
+
+Amendment F currently stands the Set-Up exposure fallback down whenever the Bench is empty and no
+other Basic is held — an UNCONDITIONAL stand-down. The grill point narrows it to two triggers:
+
+1. **the Active is doomed** — a real KO threat this coming turn, so there may be no next turn to
+   bench in; or
+2. **we need a specific Supporter** — the Ability leg's own question, which is #165's computation.
+
+Absent both, waiting is strictly better, and the reason is sharper than "it's early": **you can bench
+Meowth on your own first turn and still GET Last-Ditch Catch.** `docs/rules.md` §2 — the player going
+first cannot attack on turn 1 and the player going second acts only after that turn — so my first
+turn precedes the first legal attack either way. Benching at Set Up spends the Ability for a body I
+could have had one turn later WITH the fetch. The one-body risk Amendment F prices does not
+materialise until the opponent can attack, which is after that turn.
+
+### The tension this must resolve — as stated, it REVERSES f3
+
+f3 is `turn 0`, pregame: no KO threat exists, and the Ability cannot fire at `_SETUP_BENCH` by
+derivation (decision 3), so **neither trigger is met** and the narrowed rule declines — the ruling
+Amendment F was written to overturn, on the 2026-07-30 Decision Gate sitting.
+
+Both readings cannot hold. The choice is:
+
+- **(a) The narrowed rule wins, f3 goes back to DECLINE.** Amendment F is withdrawn and the
+  `83661652|0|decision|3` sweep frame returns to a REGRESSION needing a different disposition
+  (degenerate-record hold-out is the obvious candidate — `chosen == correct == [0]`, one option,
+  `minCount 0`, so the record cannot index a decline; 13 records repo-wide share that shape).
+  Reverts `test_f3_benches_the_tutor_because_it_is_the_only_body_held`.
+- **(b) Amendment F stands for the PREGAME only, and the narrowed rule governs the in-game empty
+  Bench.** Distinguishable: at Set Up the placement is free of the Ability trade-off in one
+  direction only — you cannot fire it now, but you also cannot be attacked before your own turn.
+  This needs a reason why the pregame differs that is not just "f3 was ruled that way".
+- **(c) The narrowed rule wins everywhere AND f3 keeps its ruling on a different basis** — i.e.
+  something other than the one-body argument justifies benching there.
+
+**Not implemented pending that ruling.** What is measured today: at f3 the placement scores exactly
+0.0 (stood down, never endorsed), so whichever way this goes the body is never *recommended* — only
+un-penalised. Note also that trigger 2 is dead at `_SETUP_BENCH` by decision 3's derivation, so under
+the narrowed rule Set Up reduces to trigger 1 alone.
+
 ## Known-open, recorded rather than fixed
 
 - The **line-deadline gap** — step 1.
