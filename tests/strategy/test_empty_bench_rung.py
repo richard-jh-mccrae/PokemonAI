@@ -16,10 +16,12 @@ import pytest
 
 from common.pilot import Pilot
 from common.cards import CardFunctions
-from common.scouting.provider import CardStat
+from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.context import _MAIN, _PLAY, _SETUP_BENCH
 from common.strategy.general_strategy import GENERAL_STRATEGY
+
+ATTACKER, OPPA, ATK = 900, 678, 20   # the planner-branch board: a chip attacker vs a KO-able Active
 
 RIOLU, MEOWTH, BALL = 677, 1071, 1121
 
@@ -108,3 +110,50 @@ def test_the_guard_does_NOT_fire_during_set_up():
     board = pilot._board(obs, select)
     order = list(range(len(select["option"])))
     assert pilot._empty_bench_forced(obs, select, board, select["option"], order) == order
+
+
+@pytest.mark.req("REQ-DEPLOY-0010")
+def test_the_guard_covers_the_PLANNER_branch_too():
+    """The guard is a filter over the WHOLE decision, not a step of the scoring path — and the
+    planner returns before the scoring path reaches it.
+
+    Found by the ADR-0083 spec review. `decide()` early-returns `planned.next_step` when
+    `plan_turn` commits a line, several stanzas above where `_empty_bench_forced` was applied, so a
+    planned turn could end post-setup with an empty Bench while a legal deploy sat on the menu —
+    the exact case decision 7 obliges the rung to prevent ("must ALSO prevent `_finish_turn_last`
+    from ending a post-setup turn with an empty Bench while a deploy was available").
+
+    The first repair was ineffective and the negative cases are why this test carries them: handing
+    the guard only `planned.next_step` cannot work, because the guard reorders WITHIN the order it
+    is given and the planned step is precisely where the deploy is absent. It is handed the full
+    menu instead."""
+    stats = {ATTACKER: CardStat(ATTACKER, name="attacker", hp=200, energyType=3, minAttackCost=1,
+                                minCostDamage=100, maxDamage=100, attacks=(ATK,)),
+             OPPA: CardStat(OPPA, name="opp", hp=60, energyType=7),
+             RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=3)}
+    provider = DictCardStatProvider(stats, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
+
+    def _planner_pilot():
+        return Pilot(Strategy(roles={ATTACKER: ["primary_attacker"]}), deck=[1] * 60,
+                     general_strategy=GENERAL_STRATEGY, stats=provider,
+                     functions=CardFunctions({}), deploy_value=True)
+
+    def _decide(bench, hand):
+        opts = [{"type": 13, "attackId": ATK}] + ([{"type": _PLAY, "index": 0}] if hand else [])
+        obs = {"current": {"players": [
+            {"active": [{"id": ATTACKER, "hp": 200, "maxHp": 200, "energies": [3]}],
+             "bench": bench, "hand": [{"id": c} for c in hand],
+             "prize": [None] * 2, "deckCount": 40},
+            {"active": [{"id": OPPA, "hp": 60, "maxHp": 60, "energies": []}],
+             "bench": [], "prize": [None] * 2, "deckCount": 40}],
+            "yourIndex": 0, "turn": 4},
+            "select": {"context": 0, "minCount": 1, "maxCount": 1, "option": opts}}
+        dec = _planner_pilot().explain(obs)
+        assert dec.planned is not None, "this board must reach the PLANNER branch or it tests nothing"
+        return opts[dec.chosen[0]]["type"] if dec.chosen else None
+
+    body = [{"id": RIOLU, "hp": 80, "maxHp": 80, "energies": []}]
+    assert _decide([], [RIOLU]) == _PLAY          # empty Bench + a legal body -> the deploy is FORCED
+    assert _decide([], []) == 13                  # nothing to force -> the planner's line is untouched
+    assert _decide(body, [RIOLU]) == 13           # Bench already developed -> silent
+

@@ -1542,7 +1542,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
         refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
         if planned is not None:                         # the below-win Goal Ladder. Refutes kept on every
-            return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
+            # The empty-Bench guard applies HERE TOO. It is a soundness FILTER over the whole
+            # decision, not a step of the scoring path, and this branch returns before the scoring
+            # path reaches it — so without this the planner could end a post-setup turn with an empty
+            # Bench while a deploy sat on the menu, which is the exact obligation ADR-0083 decision 7
+            # places on the rung ("must ALSO prevent `_finish_turn_last` from ending a post-setup turn
+            # with an empty Bench while a deploy was available"). Silent whenever it has nothing to
+            # force, so a planned line that already benches, or one at a select with no legal body,
+            # is returned untouched and the planner keeps its ordering.
+            # Handed the FULL menu, not just `next_step`: the guard reorders within the order it is
+            # given, and the planned step is precisely the case where the deploy is NOT in it. When
+            # the guard moves a body to the front, that body becomes this decision's whole step and
+            # the planner re-plans from the benched board next call.
+            _rest = [i for i in range(len(options)) if i not in set(planned.next_step)]
+            _guarded = self._empty_bench_forced(obs, select, board, options,
+                                                list(planned.next_step) + _rest)
+            planned_steps = (list(planned.next_step) if not _guarded or _guarded[0] in planned.next_step
+                             else [_guarded[0]])
+            return Decision(chosen=planned_steps,       # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read, planned=planned,
                             # The doom shadow is a per-decision DIAGNOSTIC, so it must not depend on
                             # which branch decided. #177 made more KO lines reachable, which sent
@@ -5095,62 +5112,34 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _deploy_exposure_prizes(self, obs: dict, select: dict, board: Board, option: dict,
                                 stat) -> float:
-        """The exposure leg's prize-equivalents (decision 5), with the FALLBACK the first sweep run
-        proved necessary.
+        """The exposure leg's prize-equivalents (decision 5): the Prize-Path DELTA, and nothing else.
 
-        Preferred read: the Prize-Path DELTA — how much benching this body shortens the opponent's
-        cheapest route (`_bench_path_delta`). Sharp, board-aware, and zero against a body they cannot
-        reach.
+        How much does benching this body shorten the opponent's cheapest route (`_bench_path_delta`)?
+        Sharp, board-aware, and zero against a body they cannot reach.
 
-        But the Path is not always READABLE. At `_SETUP_BENCH` the opponent's Active is face down, so
-        `_their_turns_to_ko` answers None for every body and the delta collapses to 0 — and a zero
-        exposure is what let the equation bench Meowth ex during Set Up on `setup_bench_decline_f3`:
-        the optional-select take-fewer drops only `score < 0`, so a derived-zero Ability leg plus a
-        zero exposure lands at exactly 0.0 and the placement survives. Decision 3's derived zero is
-        correct and is not sufficient on its own.
+        **Where the Path cannot be read, this contributes ZERO** — decision 6, verbatim: *"a term that
+        cannot be computed contributes ZERO, never a guess."* That matters in practice rather than in
+        principle: the Path is unreadable on 189 of the corpus's non-Set-Up frames (both pregame
+        Actives face down is the obvious case, but far from the only one).
 
-        So where the Path cannot be read at all, the leg falls back to the body's OWN prize liability
-        — the EXCESS over a 1-prize body, because some body must be fielded and only the surplus is a
-        gift. A 2-prize ex therefore carries 1 prize-equivalent, which is the fold of
-        `dont-bench-multiprize` (−15) into the equation rather than a special case.
+        A FALLBACK stood here and is now DELETED, and the history is worth keeping because it is a
+        lesson about scope. It guessed the body's own prize liability — the excess over a 1-prize
+        body — and was added for ONE reason: at `_SETUP_BENCH` a derived-zero Ability leg plus a zero
+        exposure lands at exactly 0.0, and the optional-select take-fewer drops only `score < 0`, so
+        Meowth ex survived the pregame on `setup_bench_decline_f3`. Decision 9 now refuses every
+        pregame placement by RULE, so that reason is gone — and with it went two more pregame patches
+        that had accreted on the same spot (a `setup_placed_ids` redundancy charge, and before it a
+        flat full-prize Set-Up charge measured and rejected for also declining the win-condition Line
+        base). Amendment F was a fourth, proposed and withdrawn the same day.
 
-        The Set-Up branch this used to carry is GONE, and so is the `setup_placed_ids` redundancy
-        charge that briefly sat beside it. Decision 9 rules that we never bench during Set Up at all,
-        so a pregame placement is no longer a decision to price — three separate pregame special cases
-        turned out to be approximations of one rule. The fallback now serves only its original job:
-        a mid-game bench play whose Prize Path cannot be read.
-
-        AMENDMENT F was tried here and WITHDRAWN (2026-07-30, same day). It stood the fallback down
-        whenever declining would leave a bare Bench with no other Pokémon in hand, so that Meowth ex
-        was placed on `83661652|0|decision|3` rather than declined. The user's own narrowing retired
-        it: bench on an empty Bench only when the Active is DOOMED or a specific Supporter is needed,
-        because `docs/rules.md` §2 puts my first turn before the first legal attack in either seat —
-        so at Set Up I can wait and bench the tutor on turn 1 *with* Last-Ditch Catch. The one-body
-        risk the amendment priced does not exist until the opponent can attack, which is after that
-        turn, and neither trigger is met at a pregame placement (the Ability cannot fire at
-        `_SETUP_BENCH` at all, by decision 3's derivation). See
-        `docs/plans/deploy-decider-swap-review.md`.
-
-        Never both: a readable Path already prices the liability in the currency that matters, so the
-        fallback applies only when the Path is silent."""
+        Removing it was checked, not assumed: both ADR-0072 gates still PASS and the suite stays
+        green, so the guess was carrying none of the rulings. Four patches on one context, none of
+        them load-bearing, is what a missing rule looks like from the inside.
+        """
         delta = self._bench_path_delta(obs, select, option, stat, board)
         if delta > 0.0:
             return delta
-        if board.their_path_turns is not None:
-            return 0.0                     # the Path IS readable and says this body gifts nothing
-        prizes = int(self._prize_value({"id": self._option_card_id(obs, select, option)}) or 1)
-        return float(max(0, prizes - 1))   # only the surplus over the body you cannot avoid fielding
-
-    def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
-        """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,
-        shipped ON). 0 when the switch is OFF — DEGRADED MODE, not a rollback: the rungs this
-        replaced are deleted, so OFF means bench endorsements go silent and the surviving structure
-        decides alone.
-
-        Signed, and allowed to go NEGATIVE — that is what lets the decider price a body below ending
-        the turn, which is how the optional-select take-fewer decline refuses a pregame placement."""
-        row = self._deploy_decision(obs, select, board, option)
-        return 0.0 if row is None else float(row["total"])
+        return 0.0                         # unreadable Path: decision 6 says ZERO, never a guess
 
     def _attach_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The ATTACH decider's contribution to an option's score (kill-switch `attach_value`,
@@ -8918,7 +8907,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return not st.evolvesFrom or self._opens_from_hand(cid)
 
     def _wincon_payoff_ids(self) -> frozenset:
-        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0083
+        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0081
         amendment A) — an evolution in hand only reorders the opener when it is what the deck is
         actually trying to build.
 
@@ -8932,10 +8921,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **Deliberately NOT `_wincon_set`**, whose first clause is identical. That set additionally
         unions in every card carrying a `win_condition` / `primary_attacker` ROLE, which is a strictly
         broader concept: it would let a role-tagged body that is on no declared Line act as an opener
-        payoff, widening the gate past what ADR-0083 decision 4 specifies (*"the `payoff` of one of the
+        payoff, widening the gate past what ADR-0081 decision 4 specifies (*"the `payoff` of one of the
         deck's declared win-condition Lines"*). The two sets coincide for all three authored decks
         today, so the divergence is LATENT — swapping them reddens nothing by accident. The binding
-        record is therefore ADR-0083 decision 4 plus its guard test
+        record is therefore ADR-0081 decision 4 plus its guard test
         (`test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base`), not this
         docstring, which would be deleted along with the very function a reviewer proposes collapsing.
 
@@ -8966,7 +8955,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return names
 
     def _opener_marginal(self, cid: int | None, hand_ids) -> float:
-        """**Opener Marginal** (ADR-0083 decision 4): ADR-0070's body-substituted evolve delta, in
+        """**Opener Marginal** (ADR-0081 decision 4): ADR-0070's body-substituted evolve delta, in
         DAMAGE, read at turn 0. Non-zero only when a card in hand evolves from `cid` AND that card is
         a declared Line payoff; then `maxDamage(payoff) - maxDamage(cid)`. Zero otherwise.
 
@@ -8980,7 +8969,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Matches on the evolution's `evolvesFrom` NAME, not an id, so reprints of the same body (Raboot
         is both 152 and 665) resolve identically. Reads the HAND only — at turn 0 the deck carries no
         frame-specific information, so deck odds would be a per-deck constant the ranking already
-        encodes (ADR-0083 decision 3)."""
+        encodes (ADR-0081 decision 3)."""
         if cid is None or not self.stats or not hand_ids:
             return 0.0
         st = self.stats.get(cid)
@@ -8999,7 +8988,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return best
 
     def _route_only_at_setup(self, cid: int | None) -> bool:
-        """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0083
+        """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0081
         decision 1) — true for an `opener`-tagged Evolution whose previous stage is absent from this
         deck, i.e. Cinderace in a deck running no Raboot. Skipping such a body forfeits it
         permanently, so the Opener Marginal may not move it.
@@ -9012,7 +9001,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **Fails CLOSED** — pins when it cannot tell — deliberately the opposite of
         `_is_startable_body`. The asymmetry is justified by consequence, not symmetry: a MISSING pin
         permanently forfeits a card, while a spurious one merely opens suboptimally. Pinning
-        everything degrades exactly to the pre-ADR-0083 behaviour (the declared order, verbatim)."""
+        everything degrades exactly to the pre-ADR-0081 behaviour (the declared order, verbatim)."""
         if cid is None:
             return False
         if not (self.stats and self.deck and self.functions):
@@ -9027,7 +9016,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return st.evolvesFrom not in self._deck_body_names()
 
     def _effective_starter_order(self, obs: dict, sp: list) -> list:
-        """**Effective Starter Order** (ADR-0083 decision 5): the declaration as resolved against THIS
+        """**Effective Starter Order** (ADR-0081 decision 5): the declaration as resolved against THIS
         opening hand. Pinned entries hold their declared slot; unpinned entries re-sort among the
         slots left over, by (Opener Marginal desc, declared rank asc).
 
@@ -9063,7 +9052,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         One id, not a rank, because SETUP_ACTIVE is a forced single pick (minCount/maxCount 1): argmax
         reads only the winner, so under a COMPLETE list this collapses the whole ordering losslessly
         (ADR-0079 decision 5). Twin of `_top_fetch_priority_id`, except that the order it scans is
-        hand-conditional (ADR-0083) rather than the declaration verbatim."""
+        hand-conditional (ADR-0081) rather than the declaration verbatim."""
         sp = getattr(self.strategy, "starter_priority", None)
         if not sp or not select or select.get("context") != _SETUP_ACTIVE:
             return None

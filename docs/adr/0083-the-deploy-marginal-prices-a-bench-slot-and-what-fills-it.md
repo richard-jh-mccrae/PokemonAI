@@ -838,6 +838,41 @@ size, and the prize count is 6 regardless — but that is absence of evidence fr
 proof. The narrow re-opening, if it is ever wanted, is trigger 1 of the user's own narrowing: a
 doomed Active, which cannot arise at Set Up under (2) and (3) above.
 
+## Spec-review findings — two decisions are PARTIAL, recorded not papered over (2026-07-30)
+
+Found by the `/code-review` Spec axis against this ADR. Both are places the ADR claims more than the
+build delivers, so the ADR is corrected here rather than the claim left standing.
+
+### Decision 6's third entry point is NOT wired — `_TO_BENCH` is unpriced
+
+> *"The decider owns `_SETUP_BENCH` (2, pregame), `_PLAY` (7) at `_MAIN`, and `_TO_BENCH` (5, the
+> Poffin-class fetch straight onto the Bench)."*
+
+`_deploy_decision` resolves the candidate against `_deploy_supplier_rows`, which reads **hand** rows.
+A `_TO_BENCH` candidate is a **deck** card, so the lookup returns `None` and the decider abstains
+silently. Two of three entry points are live; the ADR's "one equation, three entry points" overstates
+the build.
+
+It has a live cost, measured on the corpus's only `_TO_BENCH` frame (`86091728-43`): all four options
+score **12.00** — `bench-fill-a-basic` alone — the decider prices none of them, and the pick falls to
+menu position, taking `[0, 1]` where the human ruled `[2, 3]`. That is precisely the indifference →
+positional-tiebreak failure Issue #197 was opened about, surviving at the entry point the swap did
+not reach. Not a regression (the incumbent ties there too, on the same unchanged rung), so it does
+not gate — but it is unfinished work, not a non-issue.
+
+Decision 9 makes this the only remaining unpriced Bench entry point, since `_SETUP_BENCH` is no
+longer a decision at all.
+
+### Decision 5's `bench_harvest` sharpening is not built
+
+> *"Reachability is sharpened by feeding it `CombatMath.bench_harvest` (ADR-0071, **built**) … rather
+> than the per-body `_their_turns_to_ko` read the path currently uses."*
+> Additions: *"a `bench_harvest` sibling exposing `_harvest_optima`'s objective prize total"*
+
+`combat.py` is untouched; `_bench_path_delta` still calls `_their_turns_to_ko`, and no sibling
+accessor exists. The exposure leg works — the Prize-Path delta is real — but on the coarser read the
+decision meant to replace.
+
 ## Open, deliberately not ruled here
 
 - Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a

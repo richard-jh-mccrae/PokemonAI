@@ -490,7 +490,7 @@ startable body in the deck (a Basic, or an `opener`-tagged card) is ranked — w
 single-winner read exact; CI enforces it, because an undeclared or partial list drops the pick back
 to the engine's option-index order. Covers the Active Spot ONLY; the pregame Bench is a separate
 seam. Declares what the DECK contains; what THIS HAND contains is the Opener Marginal's business
-(ADR-0083). See ADR-0079, ADR-0083.
+(ADR-0081). See ADR-0079, ADR-0081.
 _Avoid_: starter Role (retired), opener (that's the Function Tag for an Ability that puts its own
 card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulligan decision)
 
@@ -507,7 +507,7 @@ opinion on which body is better, and detects only a *payoff stranded in hand*, w
 a ranking authored before the hand is dealt cannot carry. That silence is what lets the declaration
 keep every frame it already gets right *by construction* rather than by tuning, and is why the design
 needs no override threshold. Reads the **hand only**: at turn 0 the deck carries no frame-specific
-information, so deck odds would be a per-deck constant the ranking already encodes. See ADR-0083.
+information, so deck odds would be a per-deck constant the ranking already encodes. See ADR-0081.
 _Avoid_: opener equation / opener value (too broad — it prices no tempo or readiness, only a stranded
 payoff), tie-break (it REORDERS; a tie-break cannot reach the inversion it exists for)
 
@@ -530,8 +530,8 @@ and the override cannot be disarmed by a learned weight.
 ⚠️ A **declared** Pin — a deck marking one of its own ranks immovable, which would also express a
 *demotion* pin ("this body stays fifth, do not promote it") — is **decided in shape but NOT built and
 has no code**: the Line clause silences every would-be demotion structurally, leaving it zero
-consumers, so it awaits a frame (ADR-0083 Amendment A). `Strategy.starter_priority` is therefore
-still a plain list of card ids. See ADR-0083.
+consumers, so it awaits a frame (ADR-0081 Amendment A). `Strategy.starter_priority` is therefore
+still a plain list of card ids. See ADR-0081.
 _Avoid_: a separate `starter_pinned` field (rejected — two declarations that must agree per card),
 lock (reserve for the win-condition sense), tie-break
 
