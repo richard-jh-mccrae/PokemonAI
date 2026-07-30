@@ -34,6 +34,7 @@ from common.strategy.planner import PlannerMixin, TurnLine
 # (_EFFICIENCY/_BENCH_SNIPE* moved to the KO oracle, ADR-0052 — the one home for combat valuation.)
 from common.card_worth import ENERGY_TIER      # the attach decider's resource tie-break anchor
 from common.deny_relevance import MAX_ATTACK_DAMAGE as _DENY_RELEVANCE_NORM  # noqa: E402
+from common.snipe_relevance import K as _SNIPE_RELEVANCE_K  # noqa: E402
 #                                             the relevance normalizer, imported so `_DENY_RELEVANCE_K`
 #                                             below is the SAME number by construction rather than a
 #                                             copy that could drift when a new set re-derives it
@@ -932,9 +933,9 @@ class Context:
                                        # stack could outvote. Also excluded from `target_kos` and `_forced_promotion_key`
     snipe_relevance_armed: bool = False  # the `snipe_relevance` kill-switch, surfaced on the Context so
                                        # `baseline_snipe.py`'s six ADDITIVE target rungs stand down as a
-                                       # body when the graded scalar decides instead (ADR-0083, Issue
-                                       # #188). Mirrors how #187 kept `_DENIAL_BENCH` live on deny's OFF
-                                       # path: the incumbent is UNREAD while armed, and DELETED by the
+                                       # body when the graded scalar decides instead (ADR-0083 /
+                                       # Issue #188). Mirrors how Issue #187 kept `_DENIAL_BENCH` live on
+                                       # deny's OFF path: UNREAD while armed, and DELETED by the
                                        # arming follow-up — never both paths scoring at once, which is
                                        # what the currency-zone rule forbids (the marginal REPLACES its
                                        # rungs, never stacks with them).
@@ -5532,7 +5533,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # off-path body away (f39: snipe the energized ex @ 6 prizes). Only in the RACING back-half
             # (`my_prizes_remaining < _SNIPE_THREAT_PRIZE_FLOOR`) do I stick to my committed path and let it
             # be (107: stand down @ 4 prizes). A NON-energized off-path body stays redundant regardless.
-            and not (target_energy and board.my_prizes_remaining >= _SNIPE_THREAT_PRIZE_FLOOR)
+            # ADR-0083 decision 13 RETIRES this rescue: `my_prizes_remaining` is now priced
+            # continuously by the scalar's `share` leg, so thresholding it here as well is two
+            # readings of one fact (the ADR-0060/0062 "price the quantity, don't threshold it"
+            # move). Measured INERT — floor 5 and an inert clause both score 17/19 on the corpus AND
+            # both pass `ms_snipe_energized_bench_f39`, the fixture written to cover it. Retired on
+            # the ARMED path only, because this flag also feeds the OFF-path rungs and deleting it
+            # outright would break decision 7's byte-identical promise; the deletion lands with the
+            # rungs in the arming follow-up.
+            and not (not self.snipe_relevance
+                     and target_energy and board.my_prizes_remaining >= _SNIPE_THREAT_PRIZE_FLOOR)
             # a high-prize body I never need is avoided ALWAYS; a low-prize off-path body only when I'm
             # not under pressure (else deny the threat) — the "not an imminent threat to me" guard
             and (card_prize_value >= 2 or not board.active_doomed))
@@ -7775,8 +7785,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         correct answer at zero."""
         if not (self.snipe_relevance and self.stats):
             return None
-        if (select or {}).get("context") != _DAMAGE or option.get("area") != _BENCH:
-            return None
+        if ((select or {}).get("context") != _DAMAGE or option.get("type") != _CARD
+                or option.get("area") != _BENCH):
+            return None      # the incumbent rungs' exact scope — a non-CARD bench option at a DAMAGE
+                             # select was scored by nothing before and must stay that way
         body = self._option_pokemon(obs, select, option)
         if not body:
             return None
@@ -7788,13 +7800,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return cache[key]
 
         from common import snipe_relevance as srel
-        state = obs.get("current") or {}
-        players = state.get("players") or []
-        yi = state.get("yourIndex", 0)
-        me = players[yi] if 0 <= yi < len(players) else None
-        opp = players[1 - yi] if 0 <= 1 - yi < len(players) else None
-        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
-        oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        ma, oa = self._my_active(obs), self._opp_active(obs)
         if not ma:
             return None
 
@@ -7827,10 +7833,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         # The ADR-0051 MatchupPlan steer, folded in as the Brief MULTIPLIER (decision 5). Its
         # positive/negative asymmetry lives in the pure scorer, where it is testable.
+        # Only the SIGN travels: `_BRIEF_THREAT_BOOST` supplies the magnitude, so no rate is invented
+        # to map a damage-scale MatchupPlan priority into the [0,1] band (ADR-0065's no-fudge rule).
         priority = 0.0
         plan = getattr(board, "matchup_plan", None)
         if plan is not None and cid is not None:
-            priority = (plan.priority(cid) or 0.0) * _MATCHUP_PRIORITY_SCALE / KO_SCORE
+            priority = plan.priority(cid) or 0.0
 
         got = srel.target_relevance(
             incoming_damage=incoming, turns_to_afford=tta,
@@ -7841,7 +7849,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),
             promotion_mirage=bool(getattr(ctx, "target_promotion_mirage", False)),
             is_tera=bool(getattr(ctx, "target_is_bench_tera", False)),
-            brief_priority=priority,
+            brief_priority=priority, brief_boost=_BRIEF_THREAT_BOOST,
             turns_to_ko_before=t_before, turns_to_ko_after=t_after,
             hp_remaining=hp, rider_damage=rider,
             prize_value=self.combat.prize_value(body),
@@ -7868,8 +7876,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         got = self._snipe_relevance_terms(obs, select, board, option, ctx)
         if not got:
             return 0.0
-        from common.snipe_relevance import K
-        return K * got["relevance"]
+        return _SNIPE_RELEVANCE_K * got["relevance"]
 
     def _relevance_terms(self, b, *, doomed: frozenset, area: str, bi: int, brief_ids=()) -> dict:
         """The DENY instrument's value — **Deny Relevance**, the read that replaced the magnitude

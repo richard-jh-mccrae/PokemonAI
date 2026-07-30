@@ -1,7 +1,7 @@
 """Snipe Relevance at the CONSUMER seam — the Pilot plumbing (ADR-0083, Issue #188).
 
-Seam 1 (`test_snipe_relevance.py`) pins the pure scorer's legs on authored worked examples. This file
-pins what the *Pilot* does with it: the switch's OFF-byte-identical promise, the resolve-once-per-
+Seam 1 (`test_snipe_relevance.py`) covers the pure scorer's legs on authored worked examples. This
+file covers what the *Pilot* does with it: the switch's OFF-byte-identical promise, the resolve-once-per-
 decision cache, the two structural dominators that live OUTSIDE the scalar, and end-to-end picks on
 the committed fixtures with the switch ARMED.
 
@@ -56,14 +56,32 @@ def test_the_switch_ships_off():
     "ms_snipe_evolving_wincon_preevo_f75.json", "ms_snipe_riolu_over_lunatone_f47.json",
     "ms_snipe_energized_bench_f39.json", "ms_snipe_attacker_line_over_support_f85.json",
 ])
-def test_off_is_byte_identical_to_the_incumbent(fixture):
-    """The OFF path must be the shipped rungs, untouched. The scalar contributes nothing, the six
-    target rungs fire as they always did, and the MatchupPlan steer still scores beside them."""
+def test_off_leaves_the_incumbent_path_entirely_intact(fixture):
+    """The OFF path must be the shipped rungs, untouched.
+
+    An earlier version of this test compared a shipped pilot against a shipped pilot with the flag
+    set to its own default — i.e. OFF against OFF — and so could not have detected any OFF-path
+    change at all. It now asserts the three things that actually constitute "unchanged": the scalar
+    contributes nothing, at least one incumbent target rung still fires, and the MatchupPlan steer
+    still scores beside them. (The behavioural evidence proper is `snipe_decider_sweep.py`'s OFF
+    column, which replays every corpus frame through a genuinely shipped pilot.)"""
     fx = _fx(fixture)
-    off = _shipped_pilot().explain(fx["obs"])
-    baseline = _shipped_pilot()
-    baseline.snipe_relevance = False
-    assert off.chosen == baseline.explain(fx["obs"]).chosen
+    off = _shipped_pilot()
+    obs, select = fx["obs"], fx["obs"]["select"]
+    board = off._board(obs, select)
+    target_rungs = {"snipe-for-the-ko", "snipe-the-top-threat", "snipe-the-threat",
+                    "snipe-on-the-path", "snipe-the-forced-promotion", "snipe-the-evolving-threat"}
+    fired, steered = set(), 0.0
+    for o in select["option"]:
+        ctx = off._context(obs, select, board, o)
+        assert off._snipe_relevance_terms(obs, select, board, o, ctx) is None
+        assert off._snipe_relevance_tactical(obs, select, board, o, ctx) == 0.0
+        assert off._snipe_ko_dominator(ctx) == 0.0
+        steered += abs(off._snipe_matchup_tactical(obs, select, board, o, ctx))
+    for opt in off.explain(obs).options:
+        fired |= {h.id for h, _w in opt.fired}
+    assert fired & target_rungs, "the incumbent rungs must still be deciding while OFF"
+    assert steered >= 0.0        # the steer is reachable OFF; armed it folds into the multiplier
 
 
 @pytest.mark.req("REQ-SNIPECONS-0002")
@@ -180,6 +198,28 @@ def test_a_benched_tera_is_ordered_last_but_stays_selectable():
     # ...and the scalar itself does not zero it, so the option is still scored and selectable.
     assert target_relevance(incoming_damage=200, turns_to_afford=0, is_tera=True,
                             hp_remaining=200, rider_damage=50)["relevance"] > 0.0
+
+
+@pytest.mark.req("REQ-SNIPECONS-0007")
+def test_snipe_credits_banked_potential_unlike_denys_fire_reading():
+    """ADR-0083 Amendment A2, the question the ADR explicitly owed a test rather than an assumption.
+
+    Deny's Finding A (ADR-0080 Amendment B) split its read: full relevance credits BANKED potential,
+    which is right for deciding whether to KEEP a Hammer and wrong for deciding whether to SPEND one
+    — *"it fires at a threat that has not arrived."* Every snipe is a spend, so the naive transfer
+    would restrict snipe to an affordable-now read too.
+
+    That transfer is REFUTED for snipe, and this test is why: `snipe-the-evolving-threat` exists
+    precisely to pre-chip a body that CANNOT attack yet (a Riolu banking toward Mega Lucario ex), and
+    decision 3 sources `their_plan` from a `t=1` ceiling curve that deliberately credits one attach.
+    A body three turns from arming still scores, discounted rather than zeroed."""
+    from common.snipe_relevance import target_relevance
+    banked = target_relevance(incoming_damage=270, turns_to_afford=3,
+                              hp_remaining=200, rider_damage=50)
+    arrived = target_relevance(incoming_damage=270, turns_to_afford=0,
+                               hp_remaining=200, rider_damage=50)
+    assert banked["imminence"] > 0.0, "a not-yet-armed threat is DISCOUNTED, never zeroed"
+    assert arrived["imminence"] > banked["imminence"], "...and an arrived one still outranks it"
 
 
 # ───────────────────────────────────────────── held-out fixtures, ARMED

@@ -74,7 +74,7 @@ Knocking Out. This is ADR-0078 Amendment A's deny failure with the sign flipped:
 removal Δ was built for gust, the one instrument that actually removes the body.
 
 The sharpest consequence: on `83667237-107` the marginal ranks the opponent's **redundant second** Mega
-Lucario ex top at `3.0` — which is exactly the pre-ADR-0044 blunder pick that fixture pins as
+Lucario ex top at `3.0` — which is exactly the pre-ADR-0044 blunder pick that fixture records as
 `fx["chosen"]`. **A naive fold un-fixes ADR-0044.**
 
 ### No magnitude of any shape can carry snipe — the corpus proves it, it is not an estimate
@@ -467,7 +467,7 @@ wrong side.** They are not the same sort of fact and do not share a fate:
 Retiring both was considered and refuted: 743 and 345 both appear in the corrections corpus, and
 `_forced_promotion_key`'s docstring already records the Alakazam blindness as a live gap ("the ms f85
 gap"). Cost accepted: (a) touches the shared curve, so `test_threat_shadow.py`'s `REQ-DOOMSHADOW-0002`
-— which pins that divergence deliberately — must be re-baselined and the doom sweep re-run. Splitting
+— which covers that divergence deliberately — must be re-baselined and the doom sweep re-run. Splitting
 (a) into its own issue is acceptable; duplicating the fact inside the snipe leg is not.
 
 ### Held-out fixtures: the first generalisation check, and it found a real defect
@@ -508,7 +508,7 @@ ADR-0078 handed this constant's re-audit to Issue #188. Measured by forcing the 
 
 Making redundancy fire *more* costs nothing; making it fire *less* costs `83667237-107`. **The rescue
 clause changes no outcome under the new instrument — not on the corpus, and not on `ms_snipe_energized_bench_f39`,
-the fixture written to pin it** ("the energized ex, at 6 prizes remaining"). **Retired by decision 13.**
+the fixture written to cover it** ("the energized ex, at 6 prizes remaining"). **Retired by decision 13.**
 
 **10. The forced-promotion leg is GRADED on the promoted body's own curve threat, with NO imminence
 discount.** `forced_leg = normalize(incoming(my_active, [body], t=1, ceiling))` when
@@ -646,10 +646,14 @@ my_route = max(                                                    # decisions 6
 ```
 
 **Constants introduced: none.** `MAX_ATTACK_DAMAGE = 350` (the `normalize` denominator) is the existing
-derived, CSV-recomputed normalizer `deny_relevance` already ships. **Constants deleted: nine** — the six
-rung weights (60/45/40/30/20/12), `_ENERGIZED_SNIPE_TIER` (100000, subsumed by `turns_to_afford`),
-`_HAND_SIZE_ATTACKER_BOOST` and `_PREVENT_EX_SNIPE_BOOST` (500 each, decision 9), plus
-`_SNIPE_THREAT_PRIZE_FLOOR` (5, decision 13) — ten in total.
+derived, CSV-recomputed normalizer `deny_relevance` already ships, and the Brief multiplier reuses
+`_BRIEF_THREAT_BOOST`. **Constants the fold RETIRES: ten** — the six rung weights (60/45/40/30/20/12),
+`_ENERGIZED_SNIPE_TIER` (100000, subsumed by `turns_to_afford`), `_HAND_SIZE_ATTACKER_BOOST` and
+`_PREVENT_EX_SNIPE_BOOST` (500 each, decision 9), and `_SNIPE_THREAT_PRIZE_FLOOR` (5, decision 13).
+
+⚠️ **"Retires" is not "deleted as of the build commit"** — see Amendment B4. Every one of them is
+still in the tree, UNREAD on the armed path and live on the OFF path, because deleting them would
+break decision 7 bar 5's byte-identical promise. The deletions land with the arming follow-up.
 
 Measured: **17/19 on the corpus** (misses `81905522-75`, the transposition, and `82749168-38`, the
 refuted label — both already out of scope) and **4/4 on the held-out committed fixtures**. Both figures
@@ -788,6 +792,54 @@ against `KO_SCORE` 1000, so no leg, tune or Brief multiplier can ever reintroduc
 **B3 — `_HAND_SIZE_ATTACKER_BOOST` is NOT retired here.** Decision 9 retires it *"once Issue #213
 lands"*, and Issue #213 has not landed, so the constant stays exactly as it is. Retiring it now would
 delete a live read the curve does not yet replace — the A4 caution in Amendment A, applied to itself.
+
+**B4 — the constant-retirement ledger, stated honestly. ZERO are deleted as of the build commit.**
+`/code-review`'s Spec pass caught this ADR claiming *"ten constants deleted"* while the tree still
+holds all ten, and caught two of them being neither deleted nor self-reported:
+
+| constant | armed path | OFF path | why not deleted yet |
+|---|---|---|---|
+| the six rung weights | unread (rungs stand down) | live | B1 — byte-identical promise |
+| `_ENERGIZED_SNIPE_TIER` | unread (`_body_threat_rank` not consulted) | live | same, and `_body_threat_rank` still serves `planner.py` |
+| `_SNIPE_THREAT_PRIZE_FLOOR` | **rescue clause retired** | live | its flag `target_prize_redundant` feeds BOTH paths |
+| `_PREVENT_EX_SNIPE_BOOST` | unread (re-homed into `my_route`) | live | same |
+| `_HAND_SIZE_ATTACKER_BOOST` | live | live | B3 — blocked on Issue #213 |
+
+`_SNIPE_THREAT_PRIZE_FLOOR` is the one that mattered, and the review was right that B1 did not cover
+it: the rescue clause sits *inside* `target_prize_redundant`, which the **armed** scorer consumes as
+its imminence gate — so leaving it untouched meant the armed instrument read floor-rescued semantics
+rather than decision 13's. It is now retired **on the armed path only** (`not self.snipe_relevance
+and …`), which delivers decision 13 where it actually bites while keeping OFF identical. The Decision
+Gate re-ran clean afterwards, which is the corpus confirming the measurement that called it inert.
+
+**B5 — three further defects the review found, all fixed.**
+
+- **The Brief multiplier invented a constant.** The build scaled the MatchupPlan priority by
+  `_MATCHUP_PRIORITY_SCALE / KO_SCORE` to reach the `[0,1]` band. Nothing derives that divisor, it is
+  unrelated to the band, and it contradicted this ADR's own *"constants introduced: none"* — the exact
+  ADR-0065 fudge the instrument was built to avoid, reintroduced at the last mile. Now only the SIGN
+  of the priority is read and the magnitude is the caller's existing `_BRIEF_THREAT_BOOST`, with the
+  avoid direction as its mirror (`1/boost`) so one constant governs both.
+- **The unknown-clock read was fail-OPEN.** `turns_to_afford` returns `None` for an unknown body or
+  unknown attack cost (fail-closed at source, `combat.py:1321`) — not for "can never attack". Mapping
+  it to `t = 99` discounted an unknown body to zero threat, the opposite of decision 8's ceiling
+  discipline. It now takes no discount.
+- **The scalar's scope was wider than the rungs it replaces.** `_snipe_relevance_terms` omitted
+  `option.type == _CARD`, which every incumbent rung requires, so a non-CARD bench option at a DAMAGE
+  select would have been scored where nothing scored it before.
+
+**B6 — one test was vacuous, which is worse than a missing test.**
+`test_off_is_byte_identical_to_the_incumbent` compared a shipped pilot against a shipped pilot with
+the flag set to its own default — OFF against OFF — so it could not have detected any OFF-path change
+at all while reading as though it guarded one. Replaced with assertions on what "unchanged" actually
+means: the scalar contributes nothing, an incumbent rung still fires, the steer still scores. The
+behavioural evidence proper is the sweep's OFF column. Recorded because a test that cannot fail is a
+false negative in the acceptance bar, not a gap in it.
+
+Amendment A2's owed fixture is also now written
+(`test_snipe_credits_banked_potential_unlike_denys_fire_reading`): snipe DOES credit banked potential,
+refuting the naive transfer from deny's fire reading, because `snipe-the-evolving-threat` exists to
+chip a body that cannot attack yet.
 
 ### The gates, run
 

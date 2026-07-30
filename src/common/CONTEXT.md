@@ -840,8 +840,10 @@ Lucario ex (7 rider hits), and the human takes the Mega on one and the Makuhita 
 only difference being categorical (`target_prize_redundant`, ADR-0044's body-identity Prize-Path read,
 fires on `107`'s *second* Mega). Hard gates force it to 0 above the scalar rather than competing
 inside it: the **Tera** card fact (a benched Tera takes NO damage, `rules.md §185`) and the ADR-0044
-redundancy reads (`target_prize_redundant` / `target_promotion_mirage`); `snipe-for-the-ko` and
-`_snipe_tera_veto` stay structural dominators outside it. Replaces — deletes — `baseline_snipe.py`'s
+redundancy reads (`target_prize_redundant` / `target_promotion_mirage`) — the latter two **leg-scoped**,
+zeroing the imminence claim only (decision 4 amended decision 1 here: three corpus frames have the human
+picking a mirage-flagged body, so a whole-target gate makes them unreachable). `snipe-for-the-ko` and
+`_snipe_tera_veto` stay structural dominators outside it. Replaces `baseline_snipe.py`'s
 six ADDITIVE target weights (60/45/40/30/20/12), whose summing is a documented blunder class in their
 own rationales (`30+40+45 = 115` on an un-KO-able Grookey beating `60` on the KO-able Applin,
 `82754241-45`; and the Tera veto had to be retired from being a weight because `+12` from
@@ -852,15 +854,19 @@ it pays 3.0 prizes to chip a 340-HP body; it stays gust's currency, not snipe's)
 RATE (the refuted magnitude successor — 11/19 vs the rungs' 17/19), normalizing the six weights into
 [0,1] (six undetermined constants where the scalar keeps one), Prize-Redundant Target / Forced-Promotion
 Read (ADR-0044 *reads* — these are legs and gates the scalar consumes, not the scalar itself)
-_(NOT BUILT — ADR-0083 (Issue #188), thirteen decisions. The shipped shape:_
+_(BUILT 2026-07-30 behind `snipe_relevance`, OFF: `common/snipe_relevance.py` scores,_
+`Pilot._snipe_relevance_terms` _plumbs (resolved once per decision),_ `_snipe_relevance_tactical`
+_consumes at_ `K = MAX_ATTACK_DAMAGE`_, and_ `_snipe_ko_dominator` _carries the KO rung as
+structure. The six target rungs STAND DOWN as a body while armed and are DELETED by the arming
+follow-up — the staging Issue #187 used for_ `_DENIAL_BENCH`_, not a shadow. ADR-0083 (Issue #188),
+thirteen decisions. The shipped shape:_
 `relevance = tera_veto ⊗ (their_plan × my_route)`_, with_ `snipe-for-the-ko` _a structural dominator
 outside it and the Tera veto ORDERING last rather than removing the option (a benched Tera as the only
 target must stay selectable)._ `their_plan = max(imminence, forward, forced) × brief` _— imminence is_
 `normalize(incoming(t=1, ceiling)) / 2^turns_to_afford`_, zeroed by the two ADR-0044 reads, which are
 **leg-scoped guards, not whole-target gates** (three corpus frames have the human picking a
 mirage-flagged body); forced-promotion is graded on the promoted body's own curve threat with NO
-imminence discount, because a forced promotion IS the timing claim._ `my_route = max(ko_delta₂, reach,
-share)` _— the damage leg is the **turns-to-KO delta over a two-chip window** (user ruling: a chip that
+imminence discount, because a forced promotion IS the timing claim._ `my_route = max(ko_delta₂, reach, share, prevent_ex)` _— the damage leg is the **turns-to-KO delta over a two-chip window** (user ruling: a chip that
 does not remove a turn from how long the body sits Active is a wasted snipe; a 50 snipe onto a 340-HP
 Mega Lucario ex changes nothing), not a rider-hit count. Sources come off the **Threat Clock**, not_
 `_body_threat_rank` _(ADR-0045's own thesis), which wins_ `nextTurnSelfLock` _and the parsed_ `scaleVar`
@@ -868,7 +874,7 @@ _scalers for free. **Ten constants deleted, none introduced**: the six rung weig
 `_ENERGIZED_SNIPE_TIER` _(100000, subsumed by_ `turns_to_afford`_),_ `_HAND_SIZE_ATTACKER_BOOST` _and_
 `_PREVENT_EX_SNIPE_BOOST` _(500 each — the first a curve gap to fix, the second re-homed to_ `my_route`
 _because it blocks my route rather than threatening me), and_ `_SNIPE_THREAT_PRIZE_FLOOR` _(5, measured
-inert even on the fixture written to pin it). 17/19 corpus + 4/4 held-out — both sanity floors, NOT the
+inert even on the fixture written to cover it). 17/19 corpus + 4/4 held-out — both sanity floors, NOT the
 acceptance bar: ~12 shapes were measured against those same 19 frames, so the bar is the ADR-0072 pair
 plus authored per-leg fixtures.)_
 

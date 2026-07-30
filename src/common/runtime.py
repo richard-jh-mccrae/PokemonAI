@@ -209,7 +209,7 @@ PROFILE = {
                                     # marginal (which measured 7/19 against the rungs' 17/19 and
                                     # restored a fixed ADR-0044 blunder on 83667237-107).
                                     # OFF is byte-identical: the rungs are UNREAD while armed and
-                                    # DELETED by the arming follow-up, the same staging #187 used for
+                                    # DELETED by the arming follow-up, the staging Issue #187 used
                                     # `_DENIAL_BENCH`. Arming needs ADR-0072's two merit gates plus
                                     # the paired-A/B Tripwire — NOT yet run, so it ships OFF.
     "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c) + Issue #187.

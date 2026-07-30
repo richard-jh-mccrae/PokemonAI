@@ -182,6 +182,7 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
                      forward_form_in_play: bool = False, is_forced_promotion: bool = False,
                      prize_redundant: bool = False, promotion_mirage: bool = False,
                      is_tera: bool = False, brief_priority: float = 0.0,
+                     brief_boost: float = 1.0,
                      turns_to_ko_before: float | None = None,
                      turns_to_ko_after: float | None = None,
                      hp_remaining: int = 0, rider_damage: int = 0,
@@ -195,7 +196,10 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
             (under-counting their reach loses games, ADR-0064's hidden-burst lesson) and the slow
             rules-floor clock on how SOON (over-counting their speed only wastes a rider).
         turns_to_afford: `combat.turns_to_afford(body, attaches_per_turn=1)` — the slow half of that
-            split. ``None`` means never armed, which reads as maximally distant.
+            split. ``None`` means UNKNOWN (fail-closed at source), and takes no discount at all
+            rather than reading as maximally distant, which would be the fail-open direction.
+        brief_boost: the multiplier a matched Brief applies — the caller's `_BRIEF_THREAT_BOOST`.
+            Passed in rather than defined here so one constant governs both instruments.
         forward_damage: `stats.forward_max_damage(card_id)`, for the developing-wincon leg.
         is_strongest_forward / forward_form_in_play: ADR-0044's `snipe-the-evolving-threat`
             discriminator — chip the pre-evo only while the evolved wincon is NOT already on board.
@@ -227,7 +231,11 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
     if prize_redundant or promotion_mirage:
         imminence = 0.0
     else:
-        t = 99 if turns_to_afford is None else max(0, int(turns_to_afford))
+        # `None` means the body or its biggest-attack cost is UNKNOWN (`combat.turns_to_afford` is
+        # fail-closed there), not "it can never attack". Discounting an unknown body to zero threat
+        # would be fail-OPEN, which is the direction decision 8 exists to forbid — under-counting
+        # their reach feeds them the wincon. So an unknown clock takes NO discount.
+        t = 0 if turns_to_afford is None else max(0, int(turns_to_afford))
         imminence = normalize(incoming_damage) / (2 ** t)
 
     forward = (normalize(forward_damage)
@@ -238,11 +246,15 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
 
     their_plan = max(imminence, forward, forced)
 
+    # Only the SIGN of the priority is read here. The magnitude is the caller's existing
+    # `_BRIEF_THREAT_BOOST` (1.25), passed in rather than re-derived: a Brief is a SHARPENER, and how
+    # hard it sharpens is already settled for the sibling instrument. Scaling the raw MatchupPlan
+    # priority into this band would need a rate nothing derives — the free parameter ADR-0065 forbids.
     multiplier = 1.0
     if brief_priority > 0 and not (prize_redundant or promotion_mirage or is_tera):
-        multiplier = 1.0 + float(brief_priority)
-    elif brief_priority < 0:
-        multiplier = max(0.0, 1.0 + float(brief_priority))
+        multiplier = max(0.0, float(brief_boost))
+    elif brief_priority < 0 and brief_boost:
+        multiplier = 1.0 / float(brief_boost)      # the mirror, so one constant governs both directions
     their_plan = min(1.0, their_plan * multiplier)
 
     # ── my_route ──────────────────────────────────────────────────────────────────────────────

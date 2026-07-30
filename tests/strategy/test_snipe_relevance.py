@@ -110,7 +110,7 @@ def test_the_forward_leg_stands_down_once_the_evolved_wincon_is_already_in_play(
 
 @pytest.mark.req("REQ-SNIPEREL-0005")
 def test_the_forced_promotion_leg_is_graded_and_cannot_bury_a_developing_wincon():
-    """The `ms_snipe_evolving_wincon_preevo_f75` defect, pinned. A flat 1.0 on this leg saturates it
+    """The `ms_snipe_evolving_wincon_preevo_f75` defect, covered. A flat 1.0 on this leg saturates it
     and beats the Riolu's forward read, so the prototype took card 676 Solrock — the forced
     promotion — over card 677 Riolu, which is the fixture's ruling. Graded on the promoted body's own
     curve threat, a harmless forced promotion loses to a real developing win-condition."""
@@ -119,7 +119,7 @@ def test_the_forced_promotion_leg_is_graded_and_cannot_bury_a_developing_wincon(
     developing_wincon = sr.target_relevance(forward_damage=RIOLU_FWD, is_strongest_forward=True,
                                             hp_remaining=RIOLU_HP, rider_damage=RIDER)
     assert developing_wincon["relevance"] > harmless_forced["relevance"]
-    assert harmless_forced["forced"] < 1.0, "a saturating constant is the defect this pins"
+    assert harmless_forced["forced"] < 1.0, "a saturating constant is the defect this covers"
 
 
 @pytest.mark.req("REQ-SNIPEREL-0005")
@@ -184,12 +184,16 @@ def test_a_positive_brief_boost_sharpens_but_stands_down_on_the_adr_0044_reads()
     """ADR-0083 decision 5 + Amendment A3. A matched Brief MULTIPLIES the derived rank; it must never
     reach a body ADR-0044 says to skip, or authored scouting starts overriding the read instead of
     sharpening it."""
-    base = dict(incoming_damage=200, turns_to_afford=0, hp_remaining=200, rider_damage=RIDER)
+    # `brief_boost` is the CALLER's existing `_BRIEF_THREAT_BOOST` (1.25) — the scorer reads only the
+    # SIGN of the priority, so no rate is invented to map a MatchupPlan steer into the [0,1] band.
+    base = dict(incoming_damage=200, turns_to_afford=0, hp_remaining=200, rider_damage=RIDER,
+                brief_boost=1.25)
     plain = sr.target_relevance(**base)
-    briefed = sr.target_relevance(**base, brief_priority=0.25)
-    briefed_mirage = sr.target_relevance(**base, brief_priority=0.25, promotion_mirage=True)
-    briefed_tera = sr.target_relevance(**base, brief_priority=0.25, is_tera=True)
+    briefed = sr.target_relevance(**base, brief_priority=1.0)
+    briefed_mirage = sr.target_relevance(**base, brief_priority=1.0, promotion_mirage=True)
+    briefed_tera = sr.target_relevance(**base, brief_priority=1.0, is_tera=True)
     assert briefed["relevance"] > plain["relevance"]
+    assert briefed["brief_multiplier"] == pytest.approx(1.25), "the caller's constant, not a new one"
     assert briefed_mirage["brief_multiplier"] == 1.0
     assert briefed_tera["brief_multiplier"] == 1.0
 
@@ -198,17 +202,20 @@ def test_a_positive_brief_boost_sharpens_but_stands_down_on_the_adr_0044_reads()
 def test_a_negative_avoid_priority_always_applies_even_on_a_gated_body():
     """The asymmetry is deliberate: de-prioritising a draw engine is safe regardless of the gates,
     while boosting is not."""
-    base = dict(incoming_damage=200, turns_to_afford=0, hp_remaining=200, rider_damage=RIDER)
-    avoided = sr.target_relevance(**base, brief_priority=-0.5)
-    avoided_gated = sr.target_relevance(**base, brief_priority=-0.5, is_tera=True)
+    base = dict(incoming_damage=200, turns_to_afford=0, hp_remaining=200, rider_damage=RIDER,
+                brief_boost=1.25)
+    avoided = sr.target_relevance(**base, brief_priority=-1.0)
+    avoided_gated = sr.target_relevance(**base, brief_priority=-1.0, is_tera=True)
     assert avoided["brief_multiplier"] < 1.0
     assert avoided_gated["brief_multiplier"] < 1.0
+    # ONE constant governs both directions — the suppression is the boost's mirror, not a second seed.
+    assert avoided["brief_multiplier"] == pytest.approx(1 / 1.25)
 
 
 @pytest.mark.req("REQ-SNIPEREL-0008")
 def test_a_brief_can_never_promote_a_whiff():
     """`0 x anything is 0` — the property `_BRIEF_THREAT_BOOST` relies on, carried over verbatim."""
-    whiff = sr.target_relevance(incoming_damage=0, brief_priority=10.0,
+    whiff = sr.target_relevance(incoming_damage=0, brief_priority=10.0, brief_boost=1.25,
                                 hp_remaining=200, rider_damage=RIDER)
     assert whiff["relevance"] == 0.0
 
@@ -307,6 +314,7 @@ def test_no_sum_of_positional_legs_can_out_vote_a_single_stronger_one():
 def test_relevance_stays_inside_the_unit_band():
     """The band is the contract every consumer scales against; a Brief boost must not escape it."""
     maxed = sr.target_relevance(incoming_damage=10_000, turns_to_afford=0, brief_priority=99.0,
+                                brief_boost=1.25,
                                 hp_remaining=10, rider_damage=RIDER, prize_value=9, prizes_needed=1,
                                 turns_to_ko_before=3.0, turns_to_ko_after=0.0, prevents_my_ex=True)
     assert 0.0 <= maxed["relevance"] <= 1.0
