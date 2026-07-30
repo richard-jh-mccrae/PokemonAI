@@ -387,5 +387,13 @@
   2
  ],
  "correct_label": "Lillie's Determination",
- "rationale": "i would have discarded one of our lillie's given that we have 2 in hand"
+ "rationale": "i would have discarded one of our lillie's given that we have 2 in hand",
+ "claims": {
+  "decision": {
+   "correct": [
+    2
+   ]
+  }
+ },
+ "frame_key": "83967840|0|decision|54"
 }

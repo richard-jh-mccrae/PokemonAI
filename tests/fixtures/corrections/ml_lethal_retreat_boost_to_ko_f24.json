@@ -506,10 +506,18 @@
   "chosen": [
     6
   ],
-  "chosen_label": "Attach Basic {F} Energy \u2192 Riolu (bench 2 \u00b7 80/80)",
+  "chosen_label": "Attach Basic {F} Energy → Riolu (bench 2 · 80/80)",
   "correct": [
     5
   ],
-  "correct_label": "Attach Basic {F} Energy \u2192 Solrock (bench 1 \u00b7 110/110)",
-  "rationale": "CRITICAL: The winning line was missed. Could have attached energy to Solrock. Retreated and promoted Solrock. Played two Premium Power Pros such that Solrock would swing for 130, OHKOing opponent for the win."
+  "correct_label": "Attach Basic {F} Energy → Solrock (bench 1 · 110/110)",
+  "rationale": "CRITICAL: The winning line was missed. Could have attached energy to Solrock. Retreated and promoted Solrock. Played two Premium Power Pros such that Solrock would swing for 130, OHKOing opponent for the win.",
+  "claims": {
+    "decision": {
+      "correct": [
+        5
+      ]
+    }
+  },
+  "frame_key": "84889011|0|decision|24"
 }

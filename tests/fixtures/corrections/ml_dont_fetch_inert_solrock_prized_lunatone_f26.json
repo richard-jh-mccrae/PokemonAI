@@ -565,5 +565,13 @@
     3
   ],
   "correct_label": "Makuhita",
-  "rationale": "CRITICAL: Two things\n1) We have Hariyama in hand, so fetching a Makuhita is a natural choice\n2) playing this card reveals our entire deck thus prize cards. we can see our only two lunatones in our prize cards meaning that solrock is USELESS in play until we retrieve those."
+  "rationale": "CRITICAL: Two things\n1) We have Hariyama in hand, so fetching a Makuhita is a natural choice\n2) playing this card reveals our entire deck thus prize cards. we can see our only two lunatones in our prize cards meaning that solrock is USELESS in play until we retrieve those.",
+  "claims": {
+    "decision": {
+      "correct": [
+        3
+      ]
+    }
+  },
+  "frame_key": "84889539|1|decision|26"
 }

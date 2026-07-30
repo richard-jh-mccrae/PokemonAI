@@ -340,10 +340,124 @@ def held_out_map(claims_by_key: dict) -> dict:
     return {k: held_out_owner(c) for k, c in claims_by_key.items() if held_out_owner(c)}
 
 
-# ── the one I/O function in this module ───────────────────────────────────────────────────────────
-# Everything above is pure so it unit-tests without a filesystem. This reads the committed corpus,
-# and lives here rather than in either gate because BOTH consult the same Ledger — putting it in one
-# gate would make the other import its sibling just to read a ruling.
+# ── the filesystem-facing functions ───────────────────────────────────────────────────────────────
+# Everything above is pure so it unit-tests without a filesystem. These read the committed corpus,
+# and live here rather than in either gate because BOTH consult the same Ledger — putting them in one
+# gate would make the other import its sibling just to read a ruling. They share ONE corpus walk
+# (`iter_keyed_fixtures`) for the same reason `frame_key_of` is the single place the key shape is
+# built: a second glob that drifted by a field would silently stop seeing frames.
+
+#: Observation keys a corpus fixture may legitimately carry beyond its Correction's own snapshot:
+#: ADR-0050's reseeding payload, which is what lets the offline sim replay the board. They change HOW
+#: a fixture replays, never WHAT the human ruled — so **Claim Agreement** compares boards modulo them.
+#: Five committed fixtures rely on this; a byte-compare reports them as five phantom divergences.
+SEEDED_OBS_KEYS = ("own_prizes", "search_begin_input")
+
+
+def iter_keyed_fixtures(fixtures_dir=None):
+    """Yield ``(path, fixture, frame_key, Claims)`` per committed fixture declaring a ``frame_key``.
+
+    THE one corpus walk. Declaring a ``frame_key`` is what opts a fixture into everything keyed on
+    ADR-0049's identity — the **Held-out Ledger** and **Claim Agreement** alike — so both read the
+    corpus through here. A fixture without one is skipped, which is what keeps ADR-0082's back-fill
+    incremental and matches `parse_claims`'s own back-compat promise."""
+    import json
+    from pathlib import Path
+    root = Path(fixtures_dir) if fixtures_dir else \
+        Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
+    for path in sorted(root.glob("*.json")):
+        fx = json.loads(path.read_text(encoding="utf-8"))
+        key = fx.get("frame_key")
+        if key:
+            yield path, fx, key, parse_claims(fx)
+
+
+def claim_declares_a_divergence(claim) -> bool:
+    """Does this claim DECLARE that it departs from its Correction?
+
+    ADR-0082 decision 2 allows exactly two escapes and no others, both already-shipped ADR-0072
+    fields so this adds an invariant rather than a schema:
+
+    * an ``owner`` — a **Held-out Frame**, ruled onto another issue (`dragapult_hammer_over_develop_f32`
+      asserts ``[3]`` against a recorded ``[1]``, ruled onto Issue #165);
+    * a dated ``why`` — a re-ruling the fixture records itself, with no owner because it is held out of
+      nothing; it simply departs (`dp_hold_evolve_until_typed_ready_f35`'s shape).
+
+    An **undated** ``why`` does not clear it, and the date must satisfy `RULED_RE` — the same
+    ``YYYY-MM-DD`` shape a held-out claim's ``ruled`` already owes. A claim that cannot be audited
+    against the record on a real date is prose, and prose losing a re-ruling is the whole failure
+    ADR-0072 named; ``"ruled": "soon"`` would reopen it.
+
+    A non-string ``ruled`` (``true``, a number) is **rejected, never raised on**: a hand-edited fixture
+    is exactly where that typo appears, and a gate that crashes on malformed input is a gate that gets
+    skipped rather than fixed."""
+    if held_out_owner(claim):
+        return True
+    ruled, why = getattr(claim, "ruled", None), getattr(claim, "why", None)
+    return bool(why) and isinstance(ruled, str) and RULED_RE.match(ruled) is not None
+
+
+def claim_agreement(fixtures_dir=None, store=None) -> list[dict]:
+    """**Claim Agreement** (ADR-0082 decision 2) — every committed fixture whose Decision Claim
+    departs from its **Correction**'s ``correct`` without declaring it. Empty list = green.
+
+    The Correction is the *ruling of record*: the **Leaf Lab** scores Corrections, not fixtures, so a
+    record left wrong keeps feeding bad ranking signal however many fixtures are right. A fixture may
+    still depart — but it must say so via `claim_declares_a_divergence`.
+
+    Three findings, each a ``{fixture, frame_key, kind, ...}`` dict:
+
+    * ``no_record``   — the ``frame_key`` resolves to no committed Correction. A dangling join reads
+      exactly like a fixture with nothing to disagree with, so silence here would defeat the gate.
+    * ``obs_mismatch`` — the boards differ beyond `SEEDED_OBS_KEYS`. ``correct`` is a list of positional
+      option indices, so across two different boards it is not comparable and the claim is *not*
+      compared. Reported **regardless of the escapes**: a declared re-ruling excuses a different
+      *ruling*, never an unsound *join*.
+    * ``disagreement`` — the claim and the record name different picks, undeclared.
+
+    Opting in is `iter_keyed_fixtures`' business: a fixture with no ``frame_key`` has no join, and
+    deriving one from the loose ``episode``+``frame`` pair would be guessing at ADR-0049's identity
+    (the Scope's *subject*, not the Anchor frame). Several fixtures may share one key — legal and
+    load-bearing — so each is judged independently."""
+    from train.blunder.correction import identity_key
+    from train.blunder.store import DEFAULT_ROOT, load_corrections
+
+    by_key = {frame_key_of(*identity_key(c)): c
+              for c in load_corrections(store if store is not None else DEFAULT_ROOT)}
+
+    found: list[dict] = []
+    for path, fx, key, claims in iter_keyed_fixtures(fixtures_dir):
+        claim = claims.decision
+        if claim is None:                    # a fixture asserting only lane claims has no pick to check
+            continue
+        rec = by_key.get(key)
+        if rec is None:
+            found.append({"fixture": path.name, "frame_key": key, "kind": "no_record",
+                          "claim": list(claim.correct), "record": None})
+            continue
+        mismatch = _obs_mismatch_keys(fx.get("obs"), rec.obs)
+        if mismatch:
+            found.append({"fixture": path.name, "frame_key": key, "kind": "obs_mismatch",
+                          "claim": list(claim.correct), "record": list(rec.correct or []),
+                          "keys": mismatch})
+            continue
+        if sorted(claim.correct) != sorted(rec.correct or []) and not claim_declares_a_divergence(claim):
+            found.append({"fixture": path.name, "frame_key": key, "kind": "disagreement",
+                          "claim": list(claim.correct), "record": list(rec.correct or [])})
+    return found
+
+
+def _obs_mismatch_keys(fixture_obs, record_obs) -> list:
+    """Top-level observation keys on which the two boards differ, ignoring `SEEDED_OBS_KEYS`.
+
+    Top-level is deliberate: a deeper diff would report the same board twice over (the seeding payload
+    also perturbs nested prize counts), and the question here is only *is this the same board* — a
+    binary the option indices depend on."""
+    if fixture_obs is None or record_obs is None:
+        return []
+    keys = (set(fixture_obs) | set(record_obs)) - set(SEEDED_OBS_KEYS)
+    return sorted(k for k in keys if fixture_obs.get(k) != record_obs.get(k))
+
 
 def held_out_frames(fixtures_dir=None) -> dict:
     """The **Held-out Ledger**: ``{frame key: owner}`` over the committed corpus fixtures.
@@ -353,17 +467,8 @@ def held_out_frames(fixtures_dir=None) -> dict:
     property rather than a per-lane one, so it is the DECISION claim's owner that holds a frame out
     of the Discrimination Gate; lane claims stay independently gated (decision 4). Deleting the owner
     returns the frame to gating."""
-    import json
-    from pathlib import Path
-    root = Path(fixtures_dir) if fixtures_dir else \
-        Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "corrections"
     out = {}
-    for path in sorted(root.glob("*.json")):
-        fx = json.loads(path.read_text(encoding="utf-8"))
-        key = fx.get("frame_key")
-        if not key:
-            continue
-        claims = parse_claims(fx)
+    for _path, _fx, key, claims in iter_keyed_fixtures(fixtures_dir):
         owner = held_out_owner(claims.decision) if claims.decision else None
         if owner:
             out[key] = owner

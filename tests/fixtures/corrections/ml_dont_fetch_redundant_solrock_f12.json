@@ -450,5 +450,13 @@
     0
   ],
   "correct_label": "Makuhita",
-  "rationale": "CRITICAL: already have solrock on board, so dont fetch it. we typically only ever need one solrock and one lunatone in play"
+  "rationale": "CRITICAL: already have solrock on board, so dont fetch it. we typically only ever need one solrock and one lunatone in play",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ]
+    }
+  },
+  "frame_key": "84889011|0|decision|12"
 }

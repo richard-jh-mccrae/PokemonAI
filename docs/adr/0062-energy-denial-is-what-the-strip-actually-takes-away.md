@@ -123,3 +123,53 @@ damage math rather than a flag. ep82753102 **f37** (a bare Kadabra Active) likew
   first strip → the next menu reads **130.0**. Both Hammers show the same score in the *same* menu, which
   is harmless — `decide()` returns ONE option. The Planner never double-counts either (`energy_denial` is
   only a `_DISRUPT_TAGS` member there; it never scores denial magnitude). **Nothing to fix.**
+
+## Amendment A (2026-07-29) — f29's ruling was superseded; the bound it derives SURVIVES
+
+Recorded during the Issue #187 review grill (**ADR-0082**). Nothing in this ADR's arithmetic changes;
+this note exists so a reader verifying Issue #187's *"Deny 5/5 (ADR-0062) holds"* acceptance criterion
+does not trip over a quotation that no longer matches the corpus.
+
+**What changed.** `ms 82749168 f29` was **re-ruled 2026-07-28** during Issue #177's grill (`2d647ba`):
+`correct` is now **`[10]` Play Salvatore**, not the *"attach Basic {W} to a Staryu"* pick this ADR was
+written against. The re-ruling is not about the Hammer — it found a **2-prize KO** on the board that
+both the original tagging and this ADR's analysis missed: Salvatore evolves a benched Staryu into
+Mega Starmie ex (its printed text permits a body put into play this turn), Ignition Energy provides
+`{C}{C}{C}` on an Evolution, Cinderace retreats for free (retreat 0), and Nebula Beam `●●●`/210 clears
+Terapagos ex's 130 remaining HP. Verified at source: `EN_Card_Data.csv` ids 1189, 1031, 17, 176;
+`docs/rules.md` §4 (a Mega ex evolving does **not** end your turn) and §6 (`ex` → 2 prizes).
+
+**What survives — re-measured on HEAD, not assumed.**
+
+| this ADR's claim | status |
+|---|---|
+| f29's Hammer play value `−1.25` | **exact** — option 9 prices `−1.25` on the shipped Pilot today |
+| f29 must HOLD the Hammer | **holds** — the Pilot plays Salvatore; the Hammer is not played |
+| `_DENIAL_BENCH = 0.25`, derived from `< 30/70 = 0.43` | **holds** — the derivation needs f29 to *not play* the Hammer, and Salvatore-instead-of-Hammer satisfies that exactly as attach-instead-of-Hammer did |
+| *"no monotone pricing of magnitude alone can separate them"* (f29 denial 70 > f15 denial 30, yet f29 must hold) | **holds** — untouched by which non-Hammer option wins |
+
+**What is now stale in the text above.** The *"Why a flat rung could not work"* section quotes the
+original rationale (*"wasted crushing hammer because opponents active has no energy"*) as the motivating
+blunder. That quote is preserved deliberately as the historical record — it is what the decision was
+made against — but the corpus no longer contains it. This ADR already noted the stated reason was a
+card-fact error whose conclusion was right; the re-ruling adds that the *whole turn* was undersold by
+both readings.
+
+**Consequence for the frame's role.** f29 is now **two** anchors at once: the dead-Hammer anchor this
+ADR derives its bench weight from, and a missed-KO anchor for the *"a positive-scoring free Item is
+tiered ahead of an available Knock Out"* family (`_finish_turn_last`). ADR-0082 declined to charter that
+family; it was **split and filed 2026-07-29** once measured, because it turned out to be two problems:
+
+- **The frame half → Issue #165.** Of the five frames Issue #199's gate-1 note listed as live instances,
+  **three now HIT** on HEAD (`83053965-28`, `83455356-11`, `85046350-32`) and `86091435-68` is
+  refuted-as-labelled — so exactly **one** genuine miss survives, `83664340-24`, whose own rationale
+  names the Turn Planner. ⚠️ That frame's *embedded agent trace is stale*: it shows
+  `disrupt-when-unfavored +18` on the Hammer, a rung whose `energy_denial` half **this ADR's amendment
+  retired**. At HEAD the Hammer prices `+7.88` as a pure tactical — a **bench** strip via
+  `_DENIAL_BENCH`, which ADR-0063's `active_can_ko` guard deliberately does not zero. So the frame is a
+  **doctrine conflict with a passing test of ours**
+  (`test_the_hammer_still_hits_the_BENCH_on_a_turn_i_knock_out_their_active`), not a tuning gap.
+- **The structural half → Issue #212.** `_DENIAL_ITEM_COST` prices *keeping* an Item for `energy_denial`
+  and nothing else (`_denial_play_tactical` returns 0.0 otherwise), so no other free Item in the pool
+  has a finite-resource hold price at all — the defect this ADR named, still unfixed for everything that
+  is not a Hammer.

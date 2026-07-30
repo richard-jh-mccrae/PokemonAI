@@ -553,5 +553,15 @@
     4
   ],
   "correct_label": "Evolve Staryu (bench · 70/70) into Mega Starmie ex",
-  "rationale": "The Staryu is evolvable this turn and the Mega Starmie ex is in hand, so the FREE direct-evolve reaches the same 1-prize KO as any tutor while spending no card and no tutor slot - the cheapest enabler (free direct-evolve > Item tutor > Supporter tutor)"
+  "rationale": "The Staryu is evolvable this turn and the Mega Starmie ex is in hand, so the FREE direct-evolve reaches the same 1-prize KO as any tutor while spending no card and no tutor slot - the cheapest enabler (free direct-evolve > Item tutor > Supporter tutor)",
+  "claims": {
+    "decision": {
+      "correct": [
+        4
+      ],
+      "ruled": "2026-07-29",
+      "why": "DECLARED DIVERGENCE from Correction 85164605-41, which records the human's correct=[3] Play Mega Signal. Both are live and neither supersedes the other: the sibling fixture ms_item_over_supporter_indifferent_f41 carries that [3] held out to #145 (ruled 2026-07-27, 'the correction is valid (Item before Supporter) but immaterial HERE'), while THIS fixture asserts what the Planner must commit on the same board -- the FREE direct-evolve [4], which ties the tutor line on prizes and survival but spends no card and no Supporter slot, so the cheapest-enabler tier must break the tie toward it (test_planner_engine.py::test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler). Recorded per ADR-0082: reconcile to the sibling, never re-adjudicate."
+    }
+  },
+  "frame_key": "85164605|1|decision|41"
 }

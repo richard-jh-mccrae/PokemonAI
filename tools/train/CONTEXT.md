@@ -164,3 +164,30 @@ before this nothing in code ever knew f32/f82 had been re-ruled. Useful only whi
 dozen frames the section becomes wallpaper, which is the failure mode it exists to prevent.
 _Avoid_: excluded / skipped (it still runs and still reports), xfail (the pytest mechanism, a
 different surface), deferred frame, parked
+
+**Frame Key**:
+A **Correction**'s `identity_key` (`episode|seat|scope|n` — ADR-0049's Scope-*subject* identity)
+carried on a corpus fixture as `frame_key`: the join that lets an instrument find the Correction a
+fixture was cut from. Declaring it is what opts a fixture into both the **Held-out Ledger** and
+**Claim Agreement**. Fixtures predating [ADR-0072](../../docs/adr/0072-mid-build-swaps-are-gated-by-deterministic-instruments.md)
+instead carry a loose `episode` + `frame` pair, which is **not** the identity and does not join — the
+two populations are disjoint (34 loose-keyed, 8 `frame_key`, and every one of the 8 carries a `claims`
+block while none of the 34 do), which is the defect
+[ADR-0082](../../docs/adr/0082-a-corrections-ruling-lives-in-its-claim-and-must-agree-with-its-record.md)
+back-fills. Several fixtures may legally share one Frame Key — they assert different things about the
+same board — so a consumer keys on it without assuming uniqueness.
+_Avoid_: episode/frame (the loose pre-0072 pair, not an identity), fixture id, correction id, key
+
+**Claim Agreement**:
+The invariant (ADR-0082) that a fixture's **Decision Claim** equals its **Correction**'s `correct`,
+joined by **Frame Key** — because the Correction is the *ruling of record* and the **Leaf Lab** scores
+Corrections, not fixtures (`leaf_lab.py`), so a record left wrong keeps feeding bad ranking signal
+however many fixtures are right. Exactly two escapes, both already-shipped ADR-0072 fields and both
+machine-readable: an `owner` (a **Held-out Frame** — ruled out of this decider's scope) or a dated
+`why` (a re-ruling recorded on the fixture). An **undeclared** disagreement is the defect the check
+exists to catch; two existed when it was written, both in the pre-`claims` generation that has nowhere
+to put a re-ruling. Note `parse_claims` synthesises a Decision Claim from a bare top-level `correct`,
+so a stale `correct` *is* a stale Claim wherever it is reached.
+_Avoid_: sync, parity, drift check (the failure is an *undeclared* disagreement, not drift as such —
+note the separate `obs_mismatch` finding is about the two BOARDS not matching, a different referent),
+label check (a **Correction**'s `correct` is one layer down)

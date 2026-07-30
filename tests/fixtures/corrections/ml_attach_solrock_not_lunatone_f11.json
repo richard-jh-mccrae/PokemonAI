@@ -259,5 +259,13 @@
     1
   ],
   "correct_label": "Attach Basic {F} Energy → Solrock (bench 1 · 110/110)",
-  "rationale": "dont attach energy nor attack for lunatone when there are other options"
+  "rationale": "dont attach energy nor attack for lunatone when there are other options",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ]
+    }
+  },
+  "frame_key": "84890060|1|decision|11"
 }

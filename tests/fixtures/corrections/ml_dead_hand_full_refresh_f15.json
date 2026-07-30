@@ -242,5 +242,13 @@
     0
   ],
   "correct_label": "Play Team Rocket's Petrel",
-  "rationale": "Missed lethal (DoD re-tag 2026-07-13): the deterministic turn-3 WIN is Petrel -> tutor Air Balloon -> attach to Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80, opp bench empty. The recorded correct=[1] Lillie's was the refuted dead-hand framing (a stochastic redraw, not the sound line). decide() already plays [0]; the fix is that the Lethal Solver must LOCK the win (planned.goal=='win', next_step=[0]) so the veto-replay drives the whole cascade."
+  "rationale": "Missed lethal (DoD re-tag 2026-07-13): the deterministic turn-3 WIN is Petrel -> tutor Air Balloon -> attach to Makuhita (retreat 2-2=0) -> free retreat -> promote Mega Lucario ex -> Aura Jab {F} 130 >= Riolu 80, opp bench empty. decide() already plays [0]; the fix is that the Lethal Solver must LOCK the win (planned.goal=='win', next_step=[0]) so the veto-replay drives the whole cascade.\n\nRECORD NOW AGREES, 2026-07-29 (ADR-0082 decision 5, Issue #211). This note used to add: 'The recorded correct=[1] Lillie's was the refuted dead-hand framing (a stochastic redraw, not the sound line)' -- true when written, stale now. Correction 84071010-15 was only ever re-tagged on the FIXTURE in 2026-07-13; the record kept correct=[1] for 16 days until this issue propagated the ruling to it. Both sides now read [0], so Claim Agreement gates this frame with no escape declared.",
+  "frame_key": "84071010|0|decision|15",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ]
+    }
+  }
 }

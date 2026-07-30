@@ -555,5 +555,13 @@
     1
   ],
   "correct_label": "Basic {F} Energy",
-  "rationale": "CRITICAL: you had the chance to fetch an energy, which could be attached to Mega Lucario, then free retreat to lucario and KO opponent with Aura Jab. that then would have recycled 2 energies from discard to be placed on solrock and lunatone."
+  "rationale": "CRITICAL: you had the chance to fetch an energy, which could be attached to Mega Lucario, then free retreat to lucario and KO opponent with Aura Jab. that then would have recycled 2 energies from discard to be placed on solrock and lunatone.",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ]
+    }
+  },
+  "frame_key": "84890060|1|decision|26"
 }

@@ -538,5 +538,13 @@
     1
   ],
   "correct_label": "Solrock",
-  "rationale": "CRITICAL: dont ultra ball to fetch mega lucario when we know that there are no more Riolus in our deck."
+  "rationale": "CRITICAL: dont ultra ball to fetch mega lucario when we know that there are no more Riolus in our deck.",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ]
+    }
+  },
+  "frame_key": "84071010|0|decision|53"
 }

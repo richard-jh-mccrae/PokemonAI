@@ -312,5 +312,13 @@
     1
   ],
   "correct_label": "Attach Basic {W} Energy → Mega Starmie ex (active · 210/330 · 2⚡)",
-  "rationale": "Too conservative to attach energy to Cinderace. Our Mega Starmie is lost next turn, so be it, hit the opponent with everything we got and hope for an opportunity next turn."
+  "rationale": "Too conservative to attach energy to Cinderace. Our Mega Starmie is lost next turn, so be it, hit the opponent with everything we got and hope for an opportunity next turn.",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ]
+    }
+  },
+  "frame_key": "85163079|0|decision|51"
 }

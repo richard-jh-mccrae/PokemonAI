@@ -515,5 +515,13 @@
   1
  ],
  "correct_label": "Basic {W} Energy",
- "rationale": "Grab energy first, attach to active, attack, win match"
+ "rationale": "Grab energy first, attach to active, attack, win match",
+ "claims": {
+  "decision": {
+   "correct": [
+    1
+   ]
+  }
+ },
+ "frame_key": "84897262|1|decision|110"
 }
