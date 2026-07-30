@@ -394,12 +394,16 @@ def test_a_dated_why_declares_a_re_ruling_recorded_on_the_fixture(tmp_path):
 
 
 @pytest.mark.req("REQ-TRAIN-0045")
-@pytest.mark.parametrize("ruled", [None, "soon", "2026-7-26", "26-07-2026", ""])
+@pytest.mark.parametrize("ruled", [None, "soon", "2026-7-26", "26-07-2026", "", True, 20260726])
 def test_an_undated_or_malformed_why_does_not_clear_a_disagreement(tmp_path, ruled):
     """The escape must be auditable against the record ON A DATE, so `ruled` owes `RULED_RE`'s
     ``YYYY-MM-DD`` — the same shape a held-out claim already owes. Without this, `"ruled": "soon"`
     silently disarms the gate for that fixture forever, which is the failure mode the gate exists to
-    prevent wearing a different hat."""
+    prevent wearing a different hat.
+
+    `True` and a bare number are in here because a hand-edited fixture is exactly where that typo
+    appears, and they must be REJECTED rather than raise — a gate that crashes on malformed input is a
+    gate that gets skipped rather than fixed."""
     store = _corr(tmp_path, correct=(1,))
     dec = {"correct": [3], "why": "departs, but unauditably"}
     if ruled is not None:

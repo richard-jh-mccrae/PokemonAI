@@ -386,11 +386,15 @@ def claim_declares_a_divergence(claim) -> bool:
     An **undated** ``why`` does not clear it, and the date must satisfy `RULED_RE` — the same
     ``YYYY-MM-DD`` shape a held-out claim's ``ruled`` already owes. A claim that cannot be audited
     against the record on a real date is prose, and prose losing a re-ruling is the whole failure
-    ADR-0072 named; ``"ruled": "soon"`` would reopen it."""
+    ADR-0072 named; ``"ruled": "soon"`` would reopen it.
+
+    A non-string ``ruled`` (``true``, a number) is **rejected, never raised on**: a hand-edited fixture
+    is exactly where that typo appears, and a gate that crashes on malformed input is a gate that gets
+    skipped rather than fixed."""
     if held_out_owner(claim):
         return True
     ruled, why = getattr(claim, "ruled", None), getattr(claim, "why", None)
-    return bool(why) and bool(ruled) and RULED_RE.match(ruled) is not None
+    return bool(why) and isinstance(ruled, str) and RULED_RE.match(ruled) is not None
 
 
 def claim_agreement(fixtures_dir=None, store=None) -> list[dict]:

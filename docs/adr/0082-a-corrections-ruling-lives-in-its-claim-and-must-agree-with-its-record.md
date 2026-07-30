@@ -133,11 +133,17 @@ not a follow-up to it.
   as well as attach-instead-of-Hammer did. What changed is that the frame now doubles as a missed-KO
   anchor, and the rationale ADR-0062 quotes is superseded. **Issue #187's acceptance criterion
   ("Deny 5/5 holds") is unaffected** — verified, not assumed.
-- **`ms_prefer_cheap_evolution_enabler_f41` and `dp_doom_guard_archaludon_1e_f35` need no ruling
-  change.** Their top-level `correct` is vestigial next to a sibling's Claim. Back-filling them under
-  decision 1 must reconcile *to the sibling*, not to a fresh adjudication — and the f41 pair is the
-  standing example of why: promoting its `[4]` into the record, as an earlier decision in this grill
+- **`ms_prefer_cheap_evolution_enabler_f41` and `dp_doom_guard_archaludon_1e_f35` need no *fresh
+  adjudication*.** Their top-level `correct` is vestigial next to a sibling's Claim. Back-filling them
+  under decision 1 must reconcile *to the sibling*, not to a fresh adjudication — and the f41 pair is
+  the standing example of why: promoting its `[4]` into the record, as an earlier decision in this grill
   would have done, would have overwritten a live `owner #145` user ruling dated 2026-07-27.
+  ⚠️ **"No ruling change" is the wrong phrase and was corrected on review** (this bullet originally read
+  that way): reconciling *is* a value change on the fixture where its vestigial pick disagrees. In the
+  build, f35's `correct` moved `[2]` → `[1]` to match both its record and its sibling — safe because
+  nothing reads that fixture's pick — while f41's stayed `[4]` behind a declared escape, because
+  `test_planner_engine` asserts it and the record's `[3]` is held out. The invariant is *reconcile to
+  the sibling*, and which side moves follows from that, not from leaving values untouched.
 - **Two fixtures for one frame is legal and load-bearing.** The pairs above assert different things
   about the same board (a doom shadow vs a re-ruled pick; a planner commitment vs a held-out
   indifference). Decision 2's check keys on `frame_key`, so it must tolerate several fixtures per
@@ -202,8 +208,15 @@ grill performed stands; it was confirmation, not adjudication. That same 2026-07
 why the fixture carries `own_prizes` + `search_begin_input` (*"so the tracker anchors and
 deck_definitely_has(Air Balloon)=True"*), which independently corroborates `SEEDED_OBS_KEYS`.
 
-**Two things the build added beyond the recorded shape**, both closing holes the decisions imply but
+**Three things the build added beyond the recorded shape**, each closing a hole the decisions imply but
 did not name:
+
+- **A third finding kind, `no_record`** — a `frame_key` that resolves to no committed Correction. The
+  decisions name only the disagreement check, but a dangling join is *indistinguishable from agreement*
+  (nothing to disagree with), so a typo'd key or a record that left the corpus would read green. The
+  companion `obs_mismatch` finding is likewise unnamed by the decisions and follows from the same
+  reasoning: `correct` is positional, so two different boards make the comparison meaningless rather
+  than false.
 
 - **A fixture's top-level `correct` must equal an explicit `claims.decision.correct`.** 33 test modules
   read `fx["correct"]` directly, so the back-fill keeps both in sync rather than deleting the former —
