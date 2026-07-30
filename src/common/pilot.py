@@ -9,6 +9,7 @@ engine passes, so the fast unit suite needs no native lib.
 from __future__ import annotations
 
 import copy
+import dataclasses
 
 from collections import Counter
 from dataclasses import dataclass, field, replace
@@ -27,6 +28,7 @@ from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
+from common.grading import HORIZON as _HORIZON
 from common.needs import SUPPLIES as needs_SUPPLIES
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
@@ -1195,6 +1197,15 @@ class Decision:
                                      # (needs.opponent_target_value; survival via the S1 turns_to_ko_me
                                      # curve). Deciding NOTHING — the evidence for the snipe/gust/deny
                                      # slot-assignment fold. Sparse: None mid-sim / no opp bodies
+
+
+def _slot_cid(slot):
+    """The card id a `line:<cid>` slot belongs to, or None for any other slot kind."""
+    key = getattr(slot, "key", "") or ""
+    if getattr(slot, "kind", "") != "line" or not key.startswith("line:"):
+        return None
+    head = key.split(":")[1]
+    return int(head) if head.isdigit() else None
 
 
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
@@ -4746,6 +4757,26 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                               "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
         return hand_rows, deck_rows
 
+    def _deploy_line_deadline(self, me: dict, cid) -> int:
+        """When the line THIS held body belongs to comes online, in turns — the deploy path's
+        readiness read.
+
+        `_line_readiness_deadline` answers the held-PAYOFF direction ("is my Riolu in play, so this
+        Mega is live?"). For a held BASE it is structurally 99: nothing in play forward-evolves INTO
+        a Basic, so no base is ever found. Correct for the shed question it was built for, and
+        useless for this one — deploying a base is precisely what STARTS its clock.
+
+        So a held body that is itself a line pre-evolution reads its own hop instead: benching it now
+        means evolving next turn, so a single-hop base (Riolu -> Mega Lucario ex) is deadline 1.
+        Anything else defers to the payoff-direction helper unchanged."""
+        if cid is None:
+            return 99
+        if cid in self._line_preevo_set():
+            forward = self._forward_card_ids(cid) or ()
+            if any(f in self._wincon_set() or f in self._line_member_set() for f in forward):
+                return 1                       # bench now, evolve next turn
+        return self._line_readiness_deadline(me, cid)
+
     def _deploy_resupply(self, board: Board, slots: list, elig_all: list, hand_n: int,
                          deck_rows: list) -> list:
         """Per-slot RESUPPLY from the deck leg: how likely the closure re-fills each slot without
@@ -4770,6 +4801,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             for j in j_set:
                 if 0 <= j < len(resupply):
                     resupply[j] = max(resupply[j], odds)
+        # The CLOSING EDGE — whether the deck delivers IN TIME, not merely whether it delivers.
+        # `_resolve_needs`' own docstring specifies this rule and records it as not yet landed: "a
+        # deadline-0 slot must take resupply 0.0 regardless of how many the deck could re-draw,
+        # because one needed THIS turn is not re-drawable in time" — the same reasoning behind the
+        # deploy-now spike and the deadline-0 answer-doom slot.
+        #
+        # It is what stops SCARCITY standing in for URGENCY. Without it two equal-tier lines are
+        # separated by re-drawability alone, so a win-condition base the deck holds more of sinks
+        # beneath a scarcer secondary line — 83661652-44, where Makuhita priced 16.67 against Riolu's
+        # 2.19 because the deck held no more Makuhita and 87% odds of another Riolu. Both facts are
+        # true; they are answers to different questions.
+        #
+        # Graded against the shared HORIZON rather than a constant invented here: a latent slot
+        # (deadline 99) keeps its full re-access credit, a deadline-1 slot keeps ~1/9 of it.
+        for j, s in enumerate(slots):
+            dl = max(0, int(getattr(s, "deadline", 99) or 0))
+            resupply[j] *= min(1.0, dl / float(_HORIZON))
         return resupply
 
     def _last_ditch_spent(self, me: dict) -> bool:
@@ -4817,6 +4865,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         slots, elig_all = self._resolve_needs(obs, board, hand_rows + deck_rows,
                                               include_general=False)
         elig = elig_all[:len(hand_rows)]
+        # Re-stamp each LINE slot with the deploy-path deadline before the resupply clamp reads
+        # it: `_resolve_needs` supplies the held-PAYOFF direction, which is structurally 99 for
+        # a held base. Scoped here so the discard and refresh sites are untouched.
+        slots = [dataclasses.replace(s, deadline=self._deploy_line_deadline(me, _slot_cid(s)))
+                 if _slot_cid(s) is not None else s for s in slots]
         resupply = self._deploy_resupply(board, slots, elig_all, len(hand_rows), deck_rows)
         capacity = max(0, _BENCH_MAX - int(board.my_bench or 0))
         assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity)
