@@ -758,6 +758,60 @@ else depends on their existence.
 in `pilot.py`, not the 16 recorded during this grill — Issue #187's merge cleaned seven of them in
 passing. Still not this issue's to finish.
 
+## Amendment B — the build (2026-07-30, Issue #188)
+
+Built the day after the grill. Three things did not survive contact with the code exactly as written,
+and one pre-existing gate failure was measured rather than inherited.
+
+**B1 — decision 1's "delete the six weights" is STAGED behind arming, not done in this change.** The
+standing directive #1 on Issue #136 (*"rungs an equation replaces are DELETED, not suppressed"*) and
+this ADR's own decision 7 bar 5 (*"kill-switch OFF byte-identical first"*) cannot both hold in one
+commit: deleting the rungs makes OFF non-identical by construction. The conflict is settled by
+**precedent rather than by preference** — Issue #187 hit it one day earlier and resolved it the same
+way, keeping `_DENIAL_BENCH` live on deny's OFF path with ADR-0080 Amendment B recording the rule
+outright: *"The constant stays live on the OFF path … so ADR-0062's derivation is unread while armed,
+not deleted."* So the six target rungs each gain a single `not c.snipe_relevance_armed` first
+conjunct and go silent **as a body** when the scalar decides; deletion is the arming follow-up's
+commit. `Context.snipe_relevance_armed` exists only to carry that stand-down.
+
+**B2 — `snipe-for-the-ko` had to MOVE, not merely stand down.** Decision 1 says both that the six
+weights (which include the KO rung's 60) are deleted *and* that `snipe-for-the-ko` remains a
+structural dominator. Gating it off with the other five leaves the armed path with **nothing scoring
+a Knock-Out target**, because `_snipe_relevance_tactical` deliberately stands the scalar down when
+`board.snipe_ko_available`. The coherent reading — and the one that makes the ADR's two clauses both
+true — is that the KO rung makes exactly the journey the Tera veto already made: from a tuner-mutable
+positional weight to a `KO_SCORE`-class Tactical term (`Pilot._snipe_ko_dominator`). This is strictly
+better than preserving the weight: at 60 it was *out-voted in the corpus* (`30+40+45 = 115` on an
+un-KO-able Grookey, `82754241-45`), whereas `K x relevance` is bounded by `MAX_ATTACK_DAMAGE` 350
+against `KO_SCORE` 1000, so no leg, tune or Brief multiplier can ever reintroduce the misplay.
+
+**B3 — `_HAND_SIZE_ATTACKER_BOOST` is NOT retired here.** Decision 9 retires it *"once Issue #213
+lands"*, and Issue #213 has not landed, so the constant stays exactly as it is. Retiring it now would
+delete a live read the curve does not yet replace — the A4 caution in Amendment A, applied to itself.
+
+### The gates, run
+
+| gate | result |
+|---|---|
+| **Decision Gate** (`snipe_decider_sweep.py`, new) | **PASS** — 19/19 DAMAGE frames unchanged, 0 FIX, 0 regressions |
+| **Discrimination Gate** (`leaf_lab.py diff`) | **FAIL**, and **gate-identical to main** — see below |
+| Paired-A/B Tripwire | **NOT RUN** — the switch therefore ships OFF |
+
+The Decision Gate's "19/19 unchanged" is not vacuous: the `--legs` breakdown shows the scalar live and
+discriminating (on `82756021-57` the Mega Lucario ex tops at `0.500` against Makuhita's `0.300`; on
+`83667237-107` Makuhita is the *only* non-zero option because every other body is redundancy-gated).
+Both recorded misses stay missing, which the probe reports explicitly in both directions so a run that
+starts passing them is visible as the overfitting signal it would be.
+
+**The Discrimination Gate fails on a regression this branch does not cause.**
+`84071010|0|decision|15` flips `OK → MISS` (rank 1 → 2). A **control run with this branch's changes
+stashed reports the identical regression at the identical rank**, so the branch is gate-identical to
+main and the flip is pre-existing drift against the baseline pinned at `e4c46ca`. It is also
+**unowned** — it appears in no fixture's Held-out Ledger entry. Recorded here rather than worked
+around: ADR-0072 decision 5's prescription for exactly this is *"run the gate on `main` before the
+next swap, not after it"*, and the debt is now one swap older. It must be ruled before this switch is
+armed, because an armed swap cannot be distinguished from it while it stands.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the

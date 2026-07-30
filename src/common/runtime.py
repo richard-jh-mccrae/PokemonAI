@@ -199,6 +199,19 @@ PROFILE = {
                                     # extra `turns_to_ko_me` per ENERGIZED opponent body per
                                     # decision. OFF until Issue #199's gate 1 rules the read admissible;
                                     # `deny_gate1.py` forces it ON to run that measurement.
+    "snipe_relevance": False,       # ADR-0083 / Issue #188 (S4-snipe), ships OFF: the **Snipe
+                                    # Relevance** scalar DECIDES the DAMAGE bench-target select in
+                                    # place of `baseline_snipe.py`'s six additive target rungs + the
+                                    # ADR-0051 MatchupPlan steer, which all stand down together.
+                                    # Snipe is the SECOND instrument to hit ADR-0062's "no monotone
+                                    # pricing of magnitude alone can separate them" wall, so it takes
+                                    # Deny Relevance's categorical shape rather than the shared prize
+                                    # marginal (which measured 7/19 against the rungs' 17/19 and
+                                    # restored a fixed ADR-0044 blunder on 83667237-107).
+                                    # OFF is byte-identical: the rungs are UNREAD while armed and
+                                    # DELETED by the arming follow-up, the same staging #187 used for
+                                    # `_DENIAL_BENCH`. Arming needs ADR-0072's two merit gates plus
+                                    # the paired-A/B Tripwire — NOT yet run, so it ships OFF.
     "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
                                     # ⚠️ **STILL SHIPS OFF, and that is a KNOWN DEBT, not a decision.**
                                     # Tracker directive 1 says a kill-switch ships ON and exists only

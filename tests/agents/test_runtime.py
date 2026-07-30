@@ -109,6 +109,11 @@ EXPECTED_SHIPPED = {
                                     # one (a `strip_shift > 0` keep-price gate suppresses 128/218
                                     # relevance-positive rows). STILL OFF, so that consumer is inert:
                                     # arming is owed by Issue #228
+    "snipe_relevance": False,       # ADR-0083 / Issue #188 (S4-snipe): the **Snipe Relevance** scalar
+                                    # decides the DAMAGE bench-target select; the six additive target
+                                    # rungs + the MatchupPlan steer stand down together while armed.
+                                    # Ships OFF and byte-identical — arming needs ADR-0072's two merit
+                                    # gates plus the Tripwire, none of which has been run
     "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c). ⚠️ OFF is a KNOWN DEBT against
                                     # tracker directive 1 (a kill-switch ships ON), not a decision —
                                     # arming is owed by Issue #228. ADR-0084 (Issue #217) chartered it

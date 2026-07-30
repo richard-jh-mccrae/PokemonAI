@@ -930,6 +930,14 @@ class Context:
                                        # `_snipe_tera_veto` (KO_SCORE-class, Tactical) — it superseded the
                                        # tuner-mutable `dont-snipe-a-benched-tera` (−60), which a positional
                                        # stack could outvote. Also excluded from `target_kos` and `_forced_promotion_key`
+    snipe_relevance_armed: bool = False  # the `snipe_relevance` kill-switch, surfaced on the Context so
+                                       # `baseline_snipe.py`'s six ADDITIVE target rungs stand down as a
+                                       # body when the graded scalar decides instead (ADR-0083, Issue
+                                       # #188). Mirrors how #187 kept `_DENIAL_BENCH` live on deny's OFF
+                                       # path: the incumbent is UNREAD while armed, and DELETED by the
+                                       # arming follow-up — never both paths scoring at once, which is
+                                       # what the currency-zone rule forbids (the marginal REPLACES its
+                                       # rungs, never stacks with them).
     promote_target_kos: bool = False   # at a TO_ACTIVE promote, benched Pokémon this option brings
                                        # up can KNOCK OUT opp's Active this turn (cheapest attack reaches
                                        # HP) — promote it to take the prize from the front (esp. an accelerator that also loads the bench)
@@ -1207,7 +1215,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  leaf_hand_value=False, attach_value=True, evolve_value=True,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
-                 deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False):
+                 deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
+                 snipe_relevance=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1411,6 +1420,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `turns_to_ko_me` per ENERGIZED opponent body.
                                                         # OFF by default so live play pays nothing until
                                                         # #199's gate 1 rules the read admissible
+        self.snipe_relevance = snipe_relevance          # ADR-0083 / Issue #188 kill-switch: the
+                                                        # **Snipe Relevance** scalar DECIDES the DAMAGE
+                                                        # bench-target select in place of
+                                                        # `baseline_snipe.py`'s six additive target
+                                                        # rungs + the ADR-0051 MatchupPlan steer, which
+                                                        # all stand down together while it is armed.
+                                                        # Snipe is the SECOND instrument to reach
+                                                        # ADR-0062's "no monotone pricing of magnitude
+                                                        # alone can separate them" wall (`82756021-57`
+                                                        # vs `83667237-107`: identical HP / prize /
+                                                        # rider / turns-to-finish, opposite rulings), so
+                                                        # it takes Deny Relevance's categorical shape.
         self.deny_relevance = deny_relevance            # ADR-0080 / Issue #199 switch: emits
                                                         # the **Deny Relevance** read (the value that
                                                         # REPLACED deny's damage magnitude — see
@@ -1840,6 +1861,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_matchup_tactical(obs, select, board, option, ctx)
+                    + self._snipe_relevance_tactical(obs, select, board, option, ctx)
+                    + self._snipe_ko_dominator(ctx)   # armed: the KO rung, as structure not a weight
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._gust_stall_target_tactical(obs, select, board, option)
@@ -5556,6 +5579,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_forward_damage=target_forward_damage,
                        target_kos=target_kos, target_is_top_threat=target_is_top_threat,
                        target_is_bench_tera=target_is_bench_tera,
+                       snipe_relevance_armed=bool(self.snipe_relevance),
                        target_on_path=target_on_path, target_prize_redundant=target_prize_redundant,
                        target_is_forced_promotion=target_is_forced_promotion,
                        target_promotion_mirage=target_promotion_mirage,
@@ -6269,6 +6293,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # cached (the `_opp_attack_context` stash precedent) — both the S3a diagnostic shadow and the
         # live `gust_target` slot emission read this SAME cache rather than each re-running the
         # per-body `turns_to_ko_me` simulation from scratch.
+        self._snipe_relevance_cache = {}            # per-decision, keyed by id(body) — the curve
+                                                    # reads are per BODY while `_context` runs per
+                                                    # OPTION, and a DAMAGE select offers the same
+                                                    # bench repeatedly (ADR-0076 Amendment C's
+                                                    # resolve-once-per-decision promise).
         self._opponent_target_cache = self._opponent_target_rows(obs, board)
         if self.deny_relevance and self._opponent_target_cache is not None:
             # Deny Relevance, resolved ONCE per decision off that same cache (ADR-0080, Issue #187).
@@ -7114,6 +7143,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if (select.get("context") != _DAMAGE or option.get("type") != _CARD
                 or option.get("area") != _BENCH or board.snipe_ko_available):
             return 0.0
+        if self.snipe_relevance:
+            return 0.0          # FOLDED: armed, this steer is the Brief MULTIPLIER inside
+                                # `snipe_relevance.target_relevance` (ADR-0083 decision 5). Scoring it
+                                # here as well would stack an additive term beside the graded scalar —
+                                # the currency-zone rule's "the marginal REPLACES rungs, never stacks".
         poke = self._option_pokemon(obs, select, option)
         cid = (poke or {}).get("id")
         if cid is None:
@@ -7133,6 +7167,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             #                                              (bench-only), so `_can_ko` still takes it there —
             #                                              which is what makes roling one safe at all.
         return pri
+
+    def _snipe_ko_dominator(self, ctx) -> float:
+        """STRUCTURAL dominator: a bench snipe that KNOCKS OUT its target is a free PRIZE.
+
+        The armed replacement for `snipe-for-the-ko`'s +60 weight, and the same move the Tera veto
+        already made — from a tuner-mutable positional weight to a KO_SCORE-class Tactical term
+        (ADR-0083 decision 1). The weight form is the documented blunder class: its own rationale
+        records `top-threat 30 + forced-promotion 40 + evolving-threat 45 = 115` on an un-KO-able
+        Grookey out-voting `60` on the KO-able Applin (`82754241-45`, and `97-vs-72` on
+        `82753102-63`). Gating each rung on its own `target_kos` was not enough, because the bonuses
+        fire on a DIFFERENT body and their SUM out-voted the prize.
+
+        As a dominator that is unrepresentable: `K x relevance` is bounded by `MAX_ATTACK_DAMAGE`
+        (350), so no relevance score can approach `KO_SCORE` (1000), and no future leg or Brief
+        multiplier can reintroduce the misplay. `ctx.target_kos` is already false for a benched Tera
+        (it takes no damage at all), so the two dominators cannot both fire on one body."""
+        return KO_SCORE if (self.snipe_relevance and ctx.target_kos) else 0.0
 
     def _snipe_tera_veto(self, ctx) -> float:
         """STRUCTURAL veto: a benched Tera Pokémon takes NO damage from attacks at all ("prevent all
@@ -7699,6 +7750,126 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                      if self.combat.attack_cost(aid) <= attached), default=0)
         bench = [(b.get("id"), b.get("hp", 0)) for b in bench_list]
         return self.combat.bench_ko_indices(bench, reach)
+
+    def _snipe_relevance_terms(self, obs: dict, select: dict, board: Board, option: dict,
+                               ctx) -> dict | None:
+        """The SNIPE instrument's value — **Snipe Relevance** (ADR-0083, Issue #188;
+        `common/snipe_relevance.py` owns the scoring, this owns the board plumbing).
+
+        Mirrors `_relevance_terms` for the sibling instrument. Returns None off a bench-DAMAGE option
+        or without the stats provider, so the caller contributes nothing rather than guessing.
+
+        Everything `their_plan` needs comes off the **Threat Clock** rather than
+        `_body_threat_rank` (ADR-0045's own thesis, and ADR-0083 decision 3), which is what wins the
+        self-lock and damage-scaler reads for free instead of re-deriving them. The two policies are
+        SPLIT on purpose (decision 8) and must not be collapsed by a later refactor:
+
+          * `incoming(..., charged=None)` — the CEILING, for how HARD they can hit. Under-counting
+            their reach feeds them the wincon (ADR-0064's hidden-burst lesson).
+          * `turns_to_afford(..., attaches_per_turn=1)` — the SLOW rules-floor clock (`rules.md` §3),
+            crediting no acceleration, for how SOON. Over-counting their speed only wastes a rider.
+
+        The route side reads `combat.turns_to_ko`, which prices the body **as an Active** against my
+        real attack — the *"once it moves into active"* the user's ruling asks for — rather than
+        counting rider hits, and over a TWO-chip window because a one-chip read scores `82756021-57`'s
+        correct answer at zero."""
+        if not (self.snipe_relevance and self.stats):
+            return None
+        if (select or {}).get("context") != _DAMAGE or option.get("area") != _BENCH:
+            return None
+        body = self._option_pokemon(obs, select, option)
+        if not body:
+            return None
+        cache = getattr(self, "_snipe_relevance_cache", None)
+        if cache is None:
+            cache = self._snipe_relevance_cache = {}
+        key = id(body)
+        if key in cache:
+            return cache[key]
+
+        from common import snipe_relevance as srel
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else None
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) else None
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        if not ma:
+            return None
+
+        cid = body.get("id")
+        incoming = self.combat.incoming(ma, [body], 1, opp_active=oa,
+                                        switch_enabler=self._opp_switch_enabler())
+        tta = self.combat.turns_to_afford(body)
+        fwd_fn = getattr(self.stats, "forward_max_damage", None)
+        forward_damage = (fwd_fn(cid) or 0) if (fwd_fn and cid is not None) else 0
+
+        # The route side. `rider` is my repeatable bench reach; `my_energy` is what my Active carries
+        # NOW, so `turns_to_ko` reads the attack I can actually afford (on `82756021-57` that is
+        # Jetting Blow 120, not Nebula Beam 210 — which is why that body reads 3 turns, not 2).
+        rider = board.snipe_damage or 0
+        hp = body.get("hp") or 0
+        my_energy = len((ma.get("energies") or []))
+        t_before = self.combat.turns_to_ko(ma.get("id"), my_energy, body)
+        chipped = dict(body)
+        chipped["hp"] = max(1, hp - 2 * rider)
+        t_after = self.combat.turns_to_ko(ma.get("id"), my_energy, chipped) if (hp and rider) else None
+
+        # `_PREVENT_EX_SNIPE_BOOST` re-homed to the ROUTE side (decision 9): a line reaching
+        # `prevent_ex_damage` does not hit me harder once evolved, it becomes IMMUNE to my ex
+        # attacker — so my route through it closes permanently and this turn is the last one it exists.
+        my_stat = self.stats.get(ma.get("id")) if ma.get("id") is not None else None
+        prevents_my_ex = bool(
+            self.functions and my_stat and getattr(my_stat, "is_ex_body", False) and cid is not None
+            and any("prevent_ex_damage" in self.functions.tags(i)
+                    for i in ({cid} | self._forward_card_ids(cid))))
+
+        # The ADR-0051 MatchupPlan steer, folded in as the Brief MULTIPLIER (decision 5). Its
+        # positive/negative asymmetry lives in the pure scorer, where it is testable.
+        priority = 0.0
+        plan = getattr(board, "matchup_plan", None)
+        if plan is not None and cid is not None:
+            priority = (plan.priority(cid) or 0.0) * _MATCHUP_PRIORITY_SCALE / KO_SCORE
+
+        got = srel.target_relevance(
+            incoming_damage=incoming, turns_to_afford=tta,
+            forward_damage=forward_damage,
+            is_strongest_forward=bool(getattr(ctx, "target_is_strongest_forward", False)),
+            forward_form_in_play=bool(getattr(ctx, "target_forward_form_in_play", False)),
+            is_forced_promotion=bool(getattr(ctx, "target_is_forced_promotion", False)),
+            prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),
+            promotion_mirage=bool(getattr(ctx, "target_promotion_mirage", False)),
+            is_tera=bool(getattr(ctx, "target_is_bench_tera", False)),
+            brief_priority=priority,
+            turns_to_ko_before=t_before, turns_to_ko_after=t_after,
+            hp_remaining=hp, rider_damage=rider,
+            prize_value=self.combat.prize_value(body),
+            prizes_needed=max(1, int(getattr(board, "my_prizes_remaining", 6) or 6)),
+            prevents_my_ex=prevents_my_ex)
+        cache[key] = got
+        return got
+
+    def _snipe_relevance_tactical(self, obs: dict, select: dict, board: Board, option: dict,
+                                  ctx) -> float:
+        """`K x relevance`, the armed snipe target score (ADR-0083 decisions 1-13).
+
+        `K = MAX_ATTACK_DAMAGE`, which is the normalizer itself, so `K x relevance` lands back in
+        DAMAGE units and the armed term is a strict generalisation of the band the deleted rungs
+        competed in rather than a re-scaling — the identity ADR-0080 Amendment B derived for deny and
+        ADR-0083 Amendment A1 adopted here. It deliberately does NOT go through
+        `currency.PRIZE_DAMAGE_RATE`: relevance is a `[0,1]` scalar, not a prize-denominated value, so
+        a prizes-to-damage rate would convert nothing.
+
+        Stands down on a KO target exactly as every positional rung did — `snipe-for-the-ko` and the
+        Tera veto remain STRUCTURAL dominators outside the scalar (decision 1)."""
+        if board.snipe_ko_available:
+            return 0.0
+        got = self._snipe_relevance_terms(obs, select, board, option, ctx)
+        if not got:
+            return 0.0
+        from common.snipe_relevance import K
+        return K * got["relevance"]
 
     def _relevance_terms(self, b, *, doomed: frozenset, area: str, bi: int, brief_ids=()) -> dict:
         """The DENY instrument's value — **Deny Relevance**, the read that replaced the magnitude
