@@ -873,6 +873,47 @@ longer a decision at all.
 accessor exists. The exposure leg works — the Prize-Path delta is real — but on the coarser read the
 decision meant to replace.
 
+## The Tripwire FAILS, and the attribution so far (2026-07-30)
+
+`gauntlet_swap_ab.py --stage mid-build`, candidate `0a2d7b2` against the pre-swap commit `ac5b5b9`
+(the same point the Discrimination Gate baseline was captured at, so all three instruments share one
+incumbent). Both arms rebased onto main, seat-balanced, n=200 per arm per matchup.
+
+```
+AGGREGATE delta = -0.0317   95% CI [-0.0667, +0.0034]   crashes = 0   (2400 games)
+TRIPWIRE: False  (rule: CI-lo >= -0.05 AND crashes == 0)
+```
+
+Worst matchup `mega_lucario vs mega_starmie` at -9.0 pp. **The swap does not currently have the merge
+evidence it owes**, and no PR should be opened on it.
+
+**An earlier run PASSED (-0.0008, CI-lo -3.6%) and must not be quoted as cover.** Its incumbent was
+staged before the rebase, so it lacked main's own work and was not the build this swap replaces. The
+lesson is narrow and worth keeping: an A/B arm staged before a rebase measures a counterfactual that
+never existed.
+
+### Attribution, measured — and the first hypothesis was WRONG
+
+The obvious suspect was decision 9: the rules argument proves deferring the pregame bench is *safe*,
+but it assumes the agent rebuilds the board on turn 1, and the equation prices a spare body at only
+~1.96 once `keep-a-bench` (+60) stops firing on a non-empty Bench — a 60 -> 2 cliff, moving bench
+development from an UNCONTESTED pregame select into a main menu where ~2 points loses to almost
+anything.
+
+That cliff is real and the inference from it was false. Isolated directly — the same candidate bundle
+with `_never_pre_bench` neutered and nothing else touched:
+
+```
+with decision 9 vs without:  delta = +0.0208  CI [-0.0137, +0.0554]  crashes = 0   TRIPWIRE: True
+```
+
+**Decision 9 is worth +2.1 pp.** It is not the regression; it offsets part of one. Which puts the
+remainder — the deletion, the equation, and the changes made during the code review — at roughly
+-5.3 pp, and that is where the investigation now sits.
+
+Recorded because the wrong hypothesis was expensive to hold and cheap to test: a plausible mechanism
+plus a real measurement (the 60 -> 2 cliff) is not evidence of a cause.
+
 ## Open, deliberately not ruled here
 
 - Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a
