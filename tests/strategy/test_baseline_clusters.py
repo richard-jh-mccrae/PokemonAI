@@ -41,7 +41,7 @@ CLUSTERS = {
     # (13/14/16/40), untouched by decision 5's scope.
     "snipe": (SNIPE_HYPOTHESES, {
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
-    # ONE rule since the deploy-decider swap (#197, ADR-0083): six of the seven bench rungs were
+    # ONE rule since the deploy-decider swap (#197, ADR-0084): six of the seven bench rungs were
     # DELETED when `common.deploy_value` became the real decider — `dont-bench-multiprize` is now the
     # exposure leg, `dont-bench-onto-their-path` the Prize-Path delta, `develop-the-accel-recipient`
     # the accel unlock, and the three develop/prefer rungs the assignment relevance. `keep-a-bench`

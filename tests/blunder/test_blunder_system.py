@@ -152,7 +152,7 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     # preevo` +5) or the bench-fill Poffin. Chosen the Mega, corrected to the Poffin.
     #
     # Deliberately a SAME-TIER select, and this test used to be a Main-phase play-vs-attach pair until
-    # ADR-0083 made that shape unable to exercise the W route at all. Two reasons, both structural
+    # ADR-0084 made that shape unable to exercise the W route at all. Two reasons, both structural
     # rather than a weight being merely too strong: `_finish_turn_last` sequences a Main menu by TIER
     # before score, so a develop is chosen over a higher-scoring attach whatever the weights say; and
     # on a bare Bench the post-setup empty-Bench guard (decision 7) FILTERS the order, forcing the

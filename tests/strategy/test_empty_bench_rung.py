@@ -1,4 +1,4 @@
-"""The post-setup empty-Bench SOUND RUNG (ADR-0083 decision 7, Issue #197).
+"""The post-setup empty-Bench SOUND RUNG (ADR-0084 decision 7, Issue #197).
 
 `keep-a-bench` (+60) is the one rule in the bench table that guards a WIN CONDITION rather than a
 preference: `docs/rules.md` §7 case 2 — "Opponent has no Pokémon in play to replace a KO'd Active".
@@ -117,7 +117,7 @@ def test_the_guard_covers_the_PLANNER_branch_too():
     """The guard is a filter over the WHOLE decision, not a step of the scoring path — and the
     planner returns before the scoring path reaches it.
 
-    Found by the ADR-0083 spec review. `decide()` early-returns `planned.next_step` when
+    Found by the ADR-0084 spec review. `decide()` early-returns `planned.next_step` when
     `plan_turn` commits a line, several stanzas above where `_empty_bench_forced` was applied, so a
     planned turn could end post-setup with an empty Bench while a legal deploy sat on the menu —
     the exact case decision 7 obliges the rung to prevent ("must ALSO prevent `_finish_turn_last`

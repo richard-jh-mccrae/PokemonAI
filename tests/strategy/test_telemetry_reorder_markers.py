@@ -100,7 +100,7 @@ def test_real_attack_last_decision_emits_deferred_and_reordered():
     ``deferred``, AND carries the top-level ``reordered`` — the full 'why' a trace reader needs.
 
     The free action is a `search` Item (`dig-before-commit` +20), not a bare Basic develop. Since
-    ADR-0083 a develop carries no flat endorsement — it is priced by the Deploy Marginal — and on this
+    ADR-0084 a develop carries no flat endorsement — it is priced by the Deploy Marginal — and on this
     board a roleless second body genuinely fills no need, so it scores 0 and nothing resequences. That
     is the equation answering correctly; it just leaves nothing for a TELEMETRY test to observe."""
     board = state(active=poke(ATTACKER, energy=1, hp=200, max_hp=200),

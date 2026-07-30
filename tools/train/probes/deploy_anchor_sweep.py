@@ -1,6 +1,6 @@
 """Deploy-seam anchor sweep — can the DEPLOY corpus derive the **Worth Damage Rate**?
 
-The question ADR-0083 (Issue #197) decision 4 left open, and ADR-0080 (Issue #199) made urgent by
+The question ADR-0084 (Issue #197) decision 4 left open, and ADR-0080 (Issue #199) made urgent by
 ruling the rate MOOT for deny rather than deriving it. The Deploy Marginal has two Worth-denominated
 legs (slot displacement, ability yield) that must reach a damage-scale score, so it needs the bridge
 deny no longer does.
@@ -16,7 +16,7 @@ divided out. This asks the same question of the deploy corpus, which is natively
 therefore the more promising seam (ADR-0078 decision 3 says as much).
 
 **Result, 2026-07-29: NO USABLE ANCHOR, and the reason is structural.** See the report this prints,
-and ADR-0083 Amendment A. Both sides do price nonzero here (Riolu `win_condition_base` 20.0 against
+and ADR-0084 Amendment A. Both sides do price nonzero here (Riolu `win_condition_base` 20.0 against
 Lunatone's Power Gem 50), so this is not deny's failure mode — but every candidate ruling turns out to
 be a **sequencing** claim rather than an exclusive choice: benching Basics is "as many as you want, in
 any order" and only the attack ends the turn (`docs/rulebook.txt` L120-122), so "play Riolu, THEN
@@ -27,7 +27,7 @@ The general form, which no additional corpus capture can escape: **a deploy is n
 damage-denominated option.** Benching consumes no attach, no Supporter slot, and does not end the
 turn, so it cannot TRADE against an attack or an attach. The only genuine competitor for a Bench slot
 is another deploy, and that comparison is worth-versus-worth, carrying no rate information. The same
-commutativity that let ADR-0083 decision 6 rule out a set-level planner is what closes this seam as a
+commutativity that let ADR-0084 decision 6 rule out a set-level planner is what closes this seam as a
 rate anchor.
 
     python tools/train/probes/deploy_anchor_sweep.py             # the report
@@ -237,7 +237,7 @@ def main() -> int:
   attack or an attach. The only real competitor for a Bench slot is another deploy — worth versus
   worth, carrying no rate information. Capturing more frames cannot change this.
 
-  Consequence: ADR-0083 decision 4 is re-opened. See ADR-0083 Amendment A.""")
+  Consequence: ADR-0084 decision 4 is re-opened. See ADR-0084 Amendment A.""")
     return 0
 
 

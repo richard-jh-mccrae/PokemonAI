@@ -567,14 +567,14 @@ class ObjectivesMixin:
         'benching the second Mega hands them their exact 6' case — ADR-0040 Path Denial,
         REQ-OBJ-0006). A soft per-option signal; gated by ``objectives_path``.
 
-        DERIVED from :meth:`_bench_path_delta` since ADR-0083: the sign of the magnitude, so the two
+        DERIVED from :meth:`_bench_path_delta` since ADR-0084: the sign of the magnitude, so the two
         readings cannot drift apart."""
         return self._bench_path_delta(obs, select, option, stat, board) > 0.0
 
     def _bench_path_delta(self, obs, select, option, stat, board) -> float:
         """**How much** benching this body shortens the opponent's cheapest Prize Path, in turns.
 
-        The Deploy Marginal's exposure leg (ADR-0083 decision 5). This magnitude was already being
+        The Deploy Marginal's exposure leg (ADR-0084 decision 5). This magnitude was already being
         computed here and **thrown away** — the method returned `new_turns < old_turns`, a boolean,
         to a flat −10 rung — so the change is to return the delta rather than its sign.
 

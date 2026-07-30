@@ -1,4 +1,4 @@
-"""The PREGAME setup bench: we never place one (ADR-0083 decision 9).
+"""The PREGAME setup bench: we never place one (ADR-0084 decision 9).
 
 This module used to be about the DECLINE MECHANISM — `decide()`'s single-pick take-fewer trimming a
 placement some Hypothesis scored below zero (`dont-pre-bench-the-supporter-tutor` −15, later the

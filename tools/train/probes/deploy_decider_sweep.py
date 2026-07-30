@@ -1,4 +1,4 @@
-"""Deploy DECIDER sweep — the Decision Gate's input for the no-shadow swap (Issue #197, ADR-0083).
+"""Deploy DECIDER sweep — the Decision Gate's input for the no-shadow swap (Issue #197, ADR-0084).
 
 The sibling of `attach_decider_sweep.py` / `evolve_decider_sweep.py` / `promote_retreat_decider_sweep.py`,
 same protocol (ADR-0069 §8): run the corpus through BOTH deploy deciders while both still exist and
@@ -17,7 +17,7 @@ The two pilots, built fresh per frame (pilots are stateful; sharing one pollutes
 Comparison is by the resolved OPTION IDENTITY, never the raw option index — and for this lane that
 identity is the CARD, not a board slot: a mid-game bench play is `OptionType.PLAY` carrying a bare
 hand index and no `area`, so the positional resolver returns None for exactly the options this
-decider ranks (ADR-0083's `option_slot` extension). `correct` (the human label, where the frame has
+decider ranks (ADR-0084's `option_slot` extension). `correct` (the human label, where the frame has
 one) is shown on both sides so a flip reads as a FIX, a REGRESSION, or a no-label judgement call.
 
     python tools/train/probes/deploy_decider_sweep.py            # the flip table + the tally
@@ -43,7 +43,7 @@ from train.gates import (DEPLOY_LANE, decision_gate_verdict, frame_key_of,  # no
                          held_out_frames, in_lane, lane_slots, option_slot,
                          print_gate_report)
 
-#: The rungs the Deploy Marginal retires (ADR-0083). Forced to 0 in the NEW pilot so this probe
+#: The rungs the Deploy Marginal retires (ADR-0084). Forced to 0 in the NEW pilot so this probe
 #: measures the post-deletion agent without needing the deletion first.
 #:
 #: `keep-a-bench` is deliberately ABSENT: it guards a WIN CONDITION rather than a preference
@@ -145,7 +145,7 @@ def _records_a_decline_it_cannot_state(rec, obs) -> bool:
     those state a real preference (the pick was right), and a decider that flips away from one is a
     genuine regression worth failing on. Only `minCount == 0` carries the encoding gap.
 
-    DORMANT since ADR-0083 decision 9 (2026-07-30), and kept anyway. The two frames it was built for
+    DORMANT since ADR-0084 decision 9 (2026-07-30), and kept anyway. The two frames it was built for
     are both `_SETUP_BENCH`, where the Pilot now declines by RULE — so both sweep pilots agree, the
     frames never reach grading, and the tally reads `unstatable 0`. The encoding gap it guards is a
     property of the Correction schema rather than of those frames, so it still holds for any future

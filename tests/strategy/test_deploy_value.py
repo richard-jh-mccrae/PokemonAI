@@ -1,4 +1,4 @@
-"""The DEPLOY decider's equation (`common/deploy_value.py`, ADR-0083 / Issue #197).
+"""The DEPLOY decider's equation (`common/deploy_value.py`, ADR-0084 / Issue #197).
 
 Pure arithmetic over resolved board facts — no engine, no obs, no Pilot — which is the seam the ADR
 picked so the whole equation is testable with plain numbers. Prior art for the style:
@@ -173,7 +173,7 @@ def test_the_result_reports_every_leg_so_a_disagreement_is_diagnosable():
 
 @pytest.mark.req("REQ-DEPLOY-0005")
 def test_accel_unlock_credits_the_energy_a_landing_spot_realises():
-    """ADR-0083 decision 8, and the leg's whole point: benching an Acceleration Recipient is worth
+    """ADR-0084 decision 8, and the leg's whole point: benching an Acceleration Recipient is worth
     the Energy the accelerator can now ACTUALLY place — not a flat bonus for being a line piece.
 
     The rider is Aura Jab ("attach up to 3 Basic {F} Energy from your discard pile to your Benched
