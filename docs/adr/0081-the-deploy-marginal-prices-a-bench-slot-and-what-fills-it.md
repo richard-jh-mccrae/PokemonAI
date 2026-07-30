@@ -393,16 +393,38 @@ magnitude survives (decision 5).
 (decision 2); a `bench_harvest` sibling exposing `_harvest_optima`'s objective prize total
 (decision 5); `_bench_shortens_their_path` returns a delta rather than a sign (decision 5).
 
-**Gates owed (ADR-0072 / #136 directive 6).** A `tools/train/probes/deploy_decider_sweep.py`
-**Decision Gate** with zero unruled `REGRESSION` frames; the **Discrimination Gate**
-(`leaf_lab.py diff --baseline data/leaf_lab/baseline.json`) run BEFORE the arming decision; and the
-mid-build **Tripwire** (`gauntlet_swap_ab.py --stage mid-build` — this swap DELETES what its flag
-would fall back to, so `gauntlet_swap_ab` is the right instrument, not the `--overlay` variant). The
-`Leaf Profile` field-set pin WILL move (decisions 3 and 8 add reads) and must be deliberately
-re-measured, not auto-conformed.
+**Gates (ADR-0072 / #136 directive 6) — both PASS.** The
+`tools/train/probes/deploy_decider_sweep.py` **Decision Gate**: 3 FIX, 0 unruled `REGRESSION`, one
+frame held out to #165 (`83661652|0|decision|19` — a multi-step turn-plan complaint whose `correct`
+can only index the first action). The **Discrimination Gate**
+(`leaf_lab.py diff --baseline data/leaf_lab/baseline.json`), run BEFORE the arming decision: 0 unruled
+`OK → MISS`, one frame held out to #165 (`86091435|0|decision|35`) and one IMPROVED. The mid-build
+**Tripwire** is `gauntlet_swap_ab.py --stage mid-build` — this swap DELETES what its flag would fall
+back to, so flag-OFF is degraded mode and the two-BUILD runner is the right instrument, not the
+`--overlay` variant. The `Leaf Profile` field-set pin was re-measured deliberately and **did NOT move** — this
+ADR predicted it would ("decisions 3 and 8 add reads") and the prediction was wrong. Measured on a
+real MAIN decision that prices a deploy (`83661652-40`): 36 model fields touched, **none beyond
+`LEAF_PROFILE`**, and the six beyond `PER_DECISION_PROFILE` all already belong to the attach/promote
+decider and KO-line clusters. The reason is a category error in the prediction: the pin bounds
+*`StateModel` field* reads, and the Ability and accel legs add none — they read `needs` slots, the
+decklist, `CardStat`, and `_recover_units`, none of which is a model projection. The runtime cost of
+those legs is real but is not what this instrument measures, so no pin change was warranted and none
+was made.
 
-**Corpus.** `setup_bench_decline_f3` and `dp_dont_pre_bench_redundant_munkidori_f4` must keep passing
-as CONSEQUENCES of the equation (decisions 3 and 2), not of the weights that currently carry them.
+One gate mechanism was added rather than merely run. The sweep now excludes a record it cannot grade:
+an OPTIONAL select (`minCount == 0`) whose Correction asserts the agent's own pick. At `decision`
+scope `correct` must be non-empty and index a legal option, so a DECLINE — the answer an optional
+select exists to allow — has no encoding, and `chosen == correct` there means "no preference was
+recordable", not "taking it was right". Grading against it turned a correct decline into a
+REGRESSION. Deliberately narrow: on a MANDATORY select `chosen == correct` states a real preference
+and still gates (10 of the 13 such records repo-wide). Dormant since decision 9 — both pilots now
+decline at Set Up, so those frames agree and never reach grading — and kept because the gap is a
+property of the Correction schema, not of those two frames.
+
+**Corpus.** `setup_bench_decline_f3` and `dp_dont_pre_bench_redundant_munkidori_f4` keep passing —
+though NOT as consequences of the equation, which is where this ADR expected to land them. Both are
+pregame placements, and decision 9 refuses those by rule; the equation never prices them. Their
+outcome is unchanged from the rungs that used to carry them, which is why they remain the anchors.
 `ml_dont_bench_redundant_solrock_f51` is the phase's motivating frame; it was **re-ruled with the user
 2026-07-29 to `correct: [0]`** (play Lillie's Determination) and now GATES as a cross-lane Decision
 Claim — see **Amendment D**. The degenerate `correct == []` is gone from both stores.
@@ -710,20 +732,111 @@ benched, both collapse to `accel_recipient_missing` being False. And the yield i
 `develop-the-accel-recipient` (+20) may now be deleted with the other eight, because the leg that
 replaces it returns a real value.
 
-## Build hand-off (2026-07-30)
+## Build state (2026-07-30) — LANDED
 
-The build is partly landed on `claude/bench-filling-pokemon-abilities-8otrk9` — the equation, the
-Pilot delegation (armed OFF), the sound rung, the sweep, and every corpus ruling. **The deletion is
-deliberately NOT applied**, because it must follow a fix the build surfaced.
+The swap is complete on `claude/bench-filling-pokemon-abilities-8otrk9`: the equation, the Pilot
+delegation, the sound rung, the sweep, every corpus ruling, the deletion of the nine rungs, and
+`deploy_value` armed ON. Both ADR-0072 gates PASS.
 
-Full state, ordered next steps and the 16-failure triage:
+Two defects the arming exposed, both fixed and worth recording because each would have shipped
+silently:
+
+* **The Ability leg was INERT** — decision 3, the reason Issue #197 was opened.
+  `_supporter_fetch_need` asked `_resolve_needs` for an UNCOVERED `draw_engine` / `supply_wincon`
+  slot, but that resolver derives slots FROM THE HELD ROWS: `draw_engine` is emitted only `if
+  engines:` (I hold an engine), `supply_wincon` only `if tutors:`. Correct for keep-value, where a
+  slot exists to price a card you have; exactly inverted here, where the need exists BECAUSE I hold
+  nothing that meets it. The leg measured 0 on every board — the real mega_lucario deck holding six
+  Supporters included. It now builds the two slots directly (values still from `needs`, so the
+  derivations cannot drift) and matches them against the Supporters the DECK actually holds. Odds
+  range over the decklist, not `deck_known_counts`, which is empty until the tracker anchors and was
+  zeroing the leg on a missing signal — the fail direction ADR-0074 forbids.
+* **The `supply_wincon` claim was FABRICATED.** Unconditioned it paid +10 on every board and made
+  Meowth ex always worth benching — the opposite of the issue's own framing. Neither deck's Supporter
+  line reaches the win-condition (mega_lucario's Petrel is `tutor_trainer`), so the leg now requires a
+  Supporter whose own fetch closure reaches it. Measured after: 6.67 with no Supporter held, 0 with
+  Lillie's, and still paying behind Boss's Orders or Judge — the NEED, not "any Supporter".
+
+The **line-deadline gap** that blocked the deletion is closed. `_line_readiness_deadline` answers the
+held-PAYOFF direction and is structurally 99 for a held base, so `_deploy_line_deadline` supplies the
+deploy-path timing; and the assignment DP never read `Slot.deadline` at all, so the **closing edge**
+(`_deploy_resupply` clamping re-access by `min(1, deadline/HORIZON)`) is what makes urgency bite
+rather than scarcity standing in for it. Riolu 2.19 → 15.05, and f40 — the frame ruled to test exactly
+this — now picks it.
+
+Full narrative, rulings and triage:
 **[`docs/plans/deploy-decider-swap-review.md`](../plans/deploy-decider-swap-review.md)**.
 
-The blocking item is the **line-deadline gap**: `_resolve_needs` never supplies `line_slots`'
-`deadline` / `succ_deadline`, so every line slot sits at `dl=99` and `resupply` alone separates two
-equal-tier lines — which sinks a re-drawable win-condition base beneath a scarcer secondary line
-(`83661652-44`: Makuhita 16.67, Riolu 2.19). Frame **f40** is the test of it and is expected to fail
-until it is fixed.
+## Amendment F — PROPOSED and WITHDRAWN the same day (2026-07-30)
+
+Recorded because it was in the tree for part of a day and the reasoning that killed it is the
+reasoning behind decision 9.
+
+**What it said.** The exposure fallback's Set-Up branch STANDS DOWN when declining would leave a bare
+Bench with no other Pokémon in hand — so `83661652|0|decision|3` placed Meowth ex rather than
+declining. The argument: on that board Lunatone is Active and the hand is two {F}, two Lillie's, a
+Boss's and Meowth ex, so the tutor is the ONLY Pokémon held, and the choice looked like "2-prize
+liability vs a one-body board" where a single Knock Out loses outright.
+
+**Why it was wrong.** It priced a risk that does not exist yet. `docs/rules.md` §2 puts my own first
+turn before the first legal attack in either seat, so the one-body board is never exposed to an
+attack before I can bench from hand — and benching then FIRES Last-Ditch Catch, which the pregame
+placement wastes. The amendment paid a real cost (the Ability) to insure against a risk that is
+unreachable on the turn it was charged.
+
+The user's narrowing is what retired it: *"Shall only bench Meowth when bench empty IF our active is
+doomed OR we need a specific supporter... if its early game and no KO threat, we can wait a turn."*
+Neither trigger can hold at `_SETUP_BENCH` — no attack is legal yet, and the Ability cannot fire there
+at all by decision 3's derivation. Generalised, that is decision 9.
+
+**What it cost, and the lesson.** A day, and two test flips in each direction. The tell was that the
+fix needed a *new condition* to reach a frame the existing legs already handled correctly everywhere
+else. Two more pregame special cases followed it (the `setup_placed_ids` redundancy charge for
+`85785609|0|decision|4`, and before that a flat full-prize Set-Up charge that was measured and
+rejected because it also declined the win-condition Line base). Three patches on one context is what
+finally surfaced the rule underneath.
+
+## Decision 9 — we NEVER bench during Set Up (2026-07-30, user)
+
+**Ruling.** Place the starting Active; place nothing on the Bench during match setup; evaluate the
+position on our own first turn instead. `Pilot._never_pre_bench`, a FILTER on the pick like decision
+7's guard — a rule, not a price.
+
+**Deferring is weakly dominant**, and every leg is read at source rather than recalled:
+
+1. **The placement is optional.** "Put **up to** 5 more Basic Pokémon face down on your Bench"
+   (`docs/rulebook.txt` L97), which is why the select carries `minCount 0` and this can be a filter.
+2. **No ATTACK reaches me first, in either seat.** Going first, my turn 1 precedes any opponent
+   action at all; going second, their turn 1 cannot attack (`docs/rules.md` §2, rulebook L152), so
+   their turn 2 is the first legal attack — after my turn 1 either way.
+3. **No ABILITY damage reaches me either.** This is the leg that makes (2) sufficient rather than
+   merely suggestive, and it was checked rather than assumed: only Basics can be in play on turn 1,
+   because neither player may evolve on their own first turn (`docs/rules.md` §4, rulebook L123-128),
+   and of the **21 damage-counter Abilities in `data/EN_Card_Data.csv`, ZERO sit on a Basic**.
+   Dusknoir's 13 counters, Froslass's checkup counters and Team Rocket's Tyranitar's Sand Stream are
+   all evolutions.
+4. **My held Basics cannot be stripped meanwhile.** The player going first cannot play a Supporter
+   (rulebook L133), so no Judge or Iono shuffles them back before my turn.
+
+**What deferring buys.** The pregame placement wastes every bench-drop Ability — "once during your
+turn" is unsatisfiable before the game starts, which is the Meowth ex case that opened Issue #197.
+Benching the same body on turn 1 fires it. Going second it also buys a draw and sight of their
+committed board before any of mine is spent. Going first it is exactly equivalent: nothing happens
+between Set Up and my turn 1.
+
+**It SUBSUMES three special cases, all deleted with it** — the exposure fallback's pregame branch,
+the `setup_placed_ids` redundancy charge, and `bench-fill-a-basic`'s `_SETUP_BENCH` half (its
+`_TO_BENCH` half stays). That three separate patches on one context collapsed into one rule is the
+argument that this is the right altitude, not merely a simpler answer.
+
+**Scope.** `_SETUP_BENCH` only. The Set-Up ACTIVE choice is untouched (a Basic there is mandatory),
+and every in-game bench play remains the Deploy Marginal's to price.
+
+**Known limit, stated rather than hidden.** This is a HARD rule, so a genuine case for a pregame
+bench could never be taken. A targeted scan found none — no card in the pool keys off opening Bench
+size, and the prize count is 6 regardless — but that is absence of evidence from one scan, not a
+proof. The narrow re-opening, if it is ever wanted, is trigger 1 of the user's own narrowing: a
+doomed Active, which cannot arise at Set Up under (2) and (3) above.
 
 ## Open, deliberately not ruled here
 
