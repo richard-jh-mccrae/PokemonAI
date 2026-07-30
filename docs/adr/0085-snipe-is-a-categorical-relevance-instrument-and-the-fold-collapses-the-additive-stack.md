@@ -1246,7 +1246,7 @@ contradictory models of promotion… every future deny change would have to pick
 here the two models are "the rungs stand down under a switch" and "the scalar orders continuously",
 and only the second exists in code.
 
-**The witness, and why it is stronger than what it replaces.** `test_snipe_evolving_wincon_priority.py`'s
+**The witness, and why it is stronger than what it replaces.** `test_snipe_evolving_wincon_f22.py`'s
 kill-switch test asserted the blunder was *restorable* by flipping the flag off — a claim about the
 mechanism. That claim is no longer posable, so the test now asserts the **doctrine** instead: on f22
 the developing win-condition pre-evo must outrank the energized 1-prize current attacker, and it must

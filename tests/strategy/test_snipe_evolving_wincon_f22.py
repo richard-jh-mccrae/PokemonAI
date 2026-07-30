@@ -96,12 +96,12 @@ def test_the_scalar_carries_the_critical_without_a_stand_down_switch():
     the doctrine is asserted directly against the shipped instrument, which is the only place it now
     lives, and a regression in the `forward` leg fails here rather than silently reinstating a
     CRITICAL.
-    """
-    fx = _fx()
-    dec = _pilot().explain(fx["obs"])
-    assert dec.chosen == fx["correct"] == [STARYU], "the developing wincon, not the energized 1-prize body"
 
-    # ...and it is the ORDERING that carries it, not a gate: Cinderace stays scorable, it simply loses.
-    scores = {t.index: t.score for t in dec.options}
-    assert scores[STARYU] > scores[CINDERACE], "Staryu must WIN, not merely be the only survivor"
-    assert scores[CINDERACE] > 0 or scores[STARYU] > 0, "a stand-down that zeroes everything is index order"
+    The PICK itself is asserted by `test_..._is_sniped_over_the_energized_accelerator` above and the
+    non-degeneracy by `test_neither_target_scores_zero`; this asserts the one thing neither covers and
+    the retirement turns on — that Staryu **out-scores** Cinderace rather than merely outliving it.
+    Win-by-elimination would satisfy both other tests while meaning the stand-down had come back by
+    another route.
+    """
+    scores = {t.index: t.score for t in _pilot().explain(_fx()["obs"]).options}
+    assert scores[STARYU] > scores[CINDERACE], "Staryu must WIN on ordering, not survive a stand-down"

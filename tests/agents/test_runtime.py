@@ -63,7 +63,7 @@ EXPECTED_SHIPPED = {
     "forgo_ko": True,               # ADR-0045 S4
     "prize_economy_fetch": True,    # ADR-0048
     # `evolving_wincon_priority` RETIRED by ADR-0085 Amendment G — inert once the rungs it stood
-    # down were deleted. f22 is now asserted against the scalar in test_snipe_evolving_wincon_priority.py
+    # down were deleted. f22 is now asserted against the scalar in test_snipe_evolving_wincon_f22.py
     "value_model": False,           # ADR-0042 armed-off: ships only after its own ladder A/B
     "ko_target_whiff": True,        # BUILD 1 armed-ON 2026-07-14 (ladder-testing): KO-target rebuild-odds tiebreak
     "opp_resource_reads": True,     # BUILD 2 armed-ON 2026-07-14 (ladder-testing): deck-out grind nudge
