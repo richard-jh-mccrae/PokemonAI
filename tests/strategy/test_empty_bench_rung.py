@@ -149,11 +149,57 @@ def test_the_guard_covers_the_PLANNER_branch_too():
             "yourIndex": 0, "turn": 4},
             "select": {"context": 0, "minCount": 1, "maxCount": 1, "option": opts}}
         dec = _planner_pilot().explain(obs)
-        assert dec.planned is not None, "this board must reach the PLANNER branch or it tests nothing"
-        return opts[dec.chosen[0]]["type"] if dec.chosen else None
+        return (opts[dec.chosen[0]]["type"] if dec.chosen else None), dec.planned
 
     body = [{"id": RIOLU, "hp": 80, "maxHp": 80, "energies": []}]
-    assert _decide([], [RIOLU]) == _PLAY          # empty Bench + a legal body -> the deploy is FORCED
-    assert _decide([], []) == 13                  # nothing to force -> the planner's line is untouched
-    assert _decide(body, [RIOLU]) == 13           # Bench already developed -> silent
+
+    # Empty Bench + a legal body: the deploy is FORCED, and no line is reported — the override
+    # replaced the plan, so `planned` is deliberately None here and cannot double as the
+    # "did we reach the planner branch" probe. The two silent cases below carry that instead.
+    picked, planned = _decide([], [RIOLU])
+    assert picked == _PLAY and planned is None
+
+    # Nothing to force, and Bench already developed: the guard is silent, so the planner's own line
+    # comes back intact — which is also what proves this board reaches the PLANNER branch at all.
+    for bench, hand in (([], []), (body, [RIOLU])):
+        picked, planned = _decide(bench, hand)
+        assert planned is not None, "this board must reach the PLANNER branch or it tests nothing"
+        assert picked == 13
+        assert planned.next_step == [0]           # the invariant holds when the guard stands down
+
+
+@pytest.mark.req("REQ-DEPLOY-0010")
+def test_when_the_guard_overrides_the_planner_no_line_is_reported():
+    """The record stays WELL-FORMED when the guard overrides a planned line.
+
+    `planned.next_step == chosen` is an invariant of the emitted record — asserted at
+    `test_planner_engine.py:275`, and the `plan_candidates` / `committed` telemetry rests on it. The
+    first version of the planner-branch guard broke it: it forced the deploy into `chosen` while
+    still reporting `planned`, so the trace advertised a committed line the agent did not follow.
+
+    CI caught it and this test exists because the local suite could not: the failing case is a LIVE
+    drive that only sometimes reaches an empty Bench, so it passed 15/15 locally and failed on repeat
+    6 of 15 in the determinism backstop. Asserted here on a board that forces the condition, rather
+    than on a drive that stumbles into it."""
+    stats = {ATTACKER: CardStat(ATTACKER, name="attacker", hp=200, energyType=3, minAttackCost=1,
+                                minCostDamage=100, maxDamage=100, attacks=(ATK,)),
+             OPPA: CardStat(OPPA, name="opp", hp=60, energyType=7),
+             RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=3)}
+    provider = DictCardStatProvider(stats, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
+    pilot = Pilot(Strategy(roles={ATTACKER: ["primary_attacker"]}), deck=[1] * 60,
+                  general_strategy=GENERAL_STRATEGY, stats=provider,
+                  functions=CardFunctions({}), deploy_value=True)
+    obs = {"current": {"players": [
+        {"active": [{"id": ATTACKER, "hp": 200, "maxHp": 200, "energies": [3]}],
+         "bench": [], "hand": [{"id": RIOLU}], "prize": [None] * 2, "deckCount": 40},
+        {"active": [{"id": OPPA, "hp": 60, "maxHp": 60, "energies": []}],
+         "bench": [], "prize": [None] * 2, "deckCount": 40}],
+        "yourIndex": 0, "turn": 4},
+        "select": {"context": 0, "minCount": 1, "maxCount": 1,
+                   "option": [{"type": 13, "attackId": ATK}, {"type": _PLAY, "index": 0}]}}
+    dec = pilot.explain(obs)
+    assert dec.chosen == [1]                 # the guard forced the deploy over the planned attack
+    assert dec.planned is None               # ...and no line is claimed, because none was followed
+    # the invariant test_planner_engine.py asserts, stated directly:
+    assert dec.planned is None or dec.planned.next_step == list(dec.chosen)
 

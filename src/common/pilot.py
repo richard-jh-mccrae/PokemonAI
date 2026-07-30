@@ -1554,13 +1554,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # given, and the planned step is precisely the case where the deploy is NOT in it. When
             # the guard moves a body to the front, that body becomes this decision's whole step and
             # the planner re-plans from the benched board next call.
+            #
+            # And when it overrides, the line is DROPPED (`planned=None`) rather than reported
+            # alongside a pick it does not name. `planned.next_step == chosen` is a well-formedness
+            # invariant of the emitted record — `test_planner_engine.py:275`, and the whole
+            # `plan_candidates` / `committed` telemetry rests on it — so reporting a committed line we
+            # did not follow would make every planner trace unreadable. Overridden IS "no line
+            # committed this decision": the guard took the turn's next action, and the planner
+            # re-plans from the benched board on the next call. Caught by the CI determinism backstop
+            # on repeat 6 of 15, because whether a live drive reaches an empty Bench varies per run.
             _rest = [i for i in range(len(options)) if i not in set(planned.next_step)]
             _guarded = self._empty_bench_forced(obs, select, board, options,
                                                 list(planned.next_step) + _rest)
-            planned_steps = (list(planned.next_step) if not _guarded or _guarded[0] in planned.next_step
-                             else [_guarded[0]])
+            _overridden = bool(_guarded) and _guarded[0] not in planned.next_step
+            planned_steps = [_guarded[0]] if _overridden else list(planned.next_step)
             return Decision(chosen=planned_steps,       # Decision shape so a lethal_verify drop is countable
-                            options=traces, read=board.read, planned=planned,
+                            options=traces, read=board.read,
+                            planned=None if _overridden else planned,
                             # The doom shadow is a per-decision DIAGNOSTIC, so it must not depend on
                             # which branch decided. #177 made more KO lines reachable, which sent
                             # frames like 82749168-29 down this branch for the first time and
