@@ -1269,6 +1269,68 @@ same position and were deliberately left alone: the scalar *consumes* them as le
 Gates re-run after the retirement: Discrimination Gate **PASS**, suite **4102 passed, 1 skipped,
 5 xfailed**.
 
+## Amendment H — E3 resolved: a Brief TIEBREAK beneath relevance (2026-07-30, grilled)
+
+Amendment E3 left the Brief steer inert on all-zero boards and flagged it as needing a ruling because
+any fix appeared to reopen decision 2. Grilled 2026-07-30; **two decisions locked**, and decision 2 is
+NOT reopened.
+
+**H1 — the fix is a LEXICOGRAPHIC tiebreak, not a term.** Relevance remains the sole ranker. Among
+options scoring **exactly** equal, the signed MatchupPlan/Brief priority orders them instead of the
+engine's option index. Because a comparison key is not a value, `relevance` arithmetic is untouched
+and decision 2's *"either alone is worthless"* stays literally true — no amendment to the product.
+
+This is Issue #217 decision 2's shape, adopted deliberately rather than reinvented: *"Relevance stays
+the sole ranker; `strip_shift` orders only options already exactly tied."* It also subsumes
+**Amendment F2**: 2 of 9 contested corpus frames carry a tied argmax, one of which
+(`85164605-48`) lands correctly only by engine order. One mechanism closes both findings.
+
+**Three measurements shaped this, two of them refuting candidates I had recommended.**
+
+- **The `my_route` fallback is refuted.** Falling back to `my_route` when `their_plan` is uniformly 0
+  was the obvious fix and does not work: on the witness fixture `my_route` is **0.500 for both**
+  targets, so it produces a tie at 0.500 and falls to index order anyway.
+- **There is no corpus anchor.** **0 of 19** committed `DAMAGE` frames reach an all-zero board; the
+  only witness is a SYNTHETIC fixture (hand-built `state()`/`poke()`, the ADR-0051 threading proof).
+  Recorded because this repo's standing discipline is *"refinements await a frame"*, and this
+  refinement proceeds on a requirement (REQ-POSTURE-0006/0007) rather than on a corrected frame — a
+  weaker warrant, and the honest reason to prefer the narrowest mechanism that works.
+- **No corpus frame changes.** On `81905522-75` the two tied options are both card 677 with
+  IDENTICAL priority (`89.9999…`), so the tiebreak is itself tied and decision 7's recorded miss
+  **stays missing**. On `85164605-48` the relevance-tied pair share priority `0.0`. Nothing reorders.
+
+**H2 — it FIRES at relevance zero, diverging from the sibling on exactly one line.** Deny's tiebreak
+guards `if mine is None or not rel: return 0.0` — *"absent reading, or nothing relevant — not a
+zero."* Snipe's omits `not rel`.
+
+The divergence is principled, and the principle is the **source of the ordering signal**:
+
+| instrument | ordering signal | source | fires at relevance 0? |
+|---|---|---|---|
+| deny (ADR-0084) | `strip_shift` | **derived** from the same board | **no** — would re-assert a fact relevance already priced at nothing |
+| snipe (this) | Brief priority | **independent authored scouting** | **yes** — carries information the board reads do not |
+
+A zero `their_plan` says the threat clock is silent about this body, not that the Brief is wrong about
+it. Decision 2's *"authored scouting can never promote a whiff"* is preserved exactly as written: it
+protects a whiff from outranking a **non**-whiff, and on an all-zero menu there is nothing of value to
+promote it above.
+
+**Inherited from the sibling without change:** the epsilon is DERIVED, not hardcoded — half the finest
+distinction relevance draws on this menu, falling back to `1 / K` (one damage unit) when the menu
+draws none, which is exactly the all-zero case. Hardcoding it is the ADR-0063 failure mode (a constant
+sized against arithmetic that later changes, rotting silently). It stays tiny by construction so it
+orders a tie without swamping the other tacticals summed into the same option score — the error an
+earlier deny draft made by bounding the bonus with its own relevance.
+
+**Build notes carried forward.** The tiebreak must live in the Pilot consumer, not
+`snipe_relevance.py`: it needs the menu's PEERS and the pure scorer is per-target by construction. It
+rides the existing `snipe_relevance` flag — it is part of that instrument, and directive 1 forbids
+minting a second switch for it. Its seam test must assert that a tiny positive score on a
+previously-zero option cannot flip an ADR-0072 **Endorsement Claim** (`score > 0`, "is this slot taken
+at all"); `DAMAGE(15)` is a forced select so it cannot manufacture a snipe that would not happen, but
+that is a property to assert rather than assume. The two `xfail(strict=True)` tests in
+`test_posture_read.py` are the acceptance witness — strict, so the fix cannot land silently.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the
