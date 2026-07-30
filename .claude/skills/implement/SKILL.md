@@ -16,6 +16,14 @@ When you must ask, use the **same format as `grill-with-docs`**: plain chat text
 each option explained in both plain English and technical terms, plus the reasoning for your
 recommendation. Then wait — expect clarifying questions back before the developer decides.
 
+## Respond via `/caveman`
+
+Route your chat prose — status updates, hand-offs, the running narration of what you're doing and
+why — through the `/caveman` skill: terse fragments, no fluff, facts stated plainly. The dual
+plain-English + technical explanation of each option in the question protocol above is the one
+carve-out — it stays written out in full, exactly as `grill-with-docs` specifies, since that's what
+makes the option legible to the developer in the first place.
+
 ## Build the sound option, not the small one
 
 Whether you're recommending an option or silently resolving an ambiguity yourself, apply
