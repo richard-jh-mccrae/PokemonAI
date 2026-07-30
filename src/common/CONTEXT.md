@@ -854,11 +854,15 @@ it pays 3.0 prizes to chip a 340-HP body; it stays gust's currency, not snipe's)
 RATE (the refuted magnitude successor — 11/19 vs the rungs' 17/19), normalizing the six weights into
 [0,1] (six undetermined constants where the scalar keeps one), Prize-Redundant Target / Forced-Promotion
 Read (ADR-0044 *reads* — these are legs and gates the scalar consumes, not the scalar itself)
-_(BUILT 2026-07-30 behind `snipe_relevance`, OFF: `common/snipe_relevance.py` scores,_
+_(BUILT 2026-07-30 behind `snipe_relevance`, ARMED-ON 2026-07-30 (ADR-0083 Amendment C — Decision Gate
+19/19 unchanged, Discrimination Gate PASS run ARMED, Tripwire −1.25 pp CI [−4.79, +2.29] 0 crashes):
+`common/snipe_relevance.py` scores,_
 `Pilot._snipe_relevance_terms` _plumbs (resolved once per decision),_ `_snipe_relevance_tactical`
 _consumes at_ `K = MAX_ATTACK_DAMAGE`_, and_ `_snipe_ko_dominator` _carries the KO rung as
-structure. The six target rungs STAND DOWN as a body while armed and are DELETED by the arming
-follow-up — the staging Issue #187 used for_ `_DENIAL_BENCH`_, not a shadow. ADR-0083 (Issue #188),
+structure. The six target rungs STAND DOWN as a body while armed; their DELETION (#136 directive 1,
+"rungs an equation replaces are DELETED, not suppressed") is a SEPARATE follow-up and is still owed —
+arming kept them as the live OFF path so the kill-switch stays real, the staging Issue #187 used for_
+`_DENIAL_BENCH`_, not a shadow. ADR-0083 (Issue #188),
 thirteen decisions. The shipped shape:_
 `relevance = tera_veto ⊗ (their_plan × my_route)`_, with_ `snipe-for-the-ko` _a structural dominator
 outside it and the Tera veto ORDERING last rather than removing the option (a benched Tera as the only

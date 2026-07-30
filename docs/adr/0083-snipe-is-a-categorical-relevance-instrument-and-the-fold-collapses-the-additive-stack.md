@@ -880,6 +880,113 @@ carried **no owner**, which is exactly why the gate counted it unruled; the Deci
 ADR-0072 decision 5's prescription — *"run the gate on `main` before the next swap, not after it"* —
 is what this discharges, one swap later than it should have been.
 
+## Amendment C — the Tripwire ran; `snipe_relevance` armed ON (2026-07-30)
+
+Decision 7's bar 5 stages the kill-switch **OFF byte-identical first, then armed**. Amendment B closed
+the first stage; this closes the second. All five bars now cleared, and the two that had to be re-run
+in the *armed* configuration were.
+
+**C1 — the paired-A/B Tripwire.** `gauntlet_ab.py --overlay '{"params":{"snipe_relevance":true}}'` at
+`-n 200` per arm per directed matchup across the three historically-calibrated agents
+(`mega_starmie`, `mega_lucario`, `dragapult_ex`) — 6 directed matchups, **2400 games**, ~25 min. The
+instrument choice follows ADR-0076 Amendment D: this switch is a pure additive kill-switch whose OFF
+path is fully intact, so the flag-overlay A/B is the mechanically correct tool, not
+`gauntlet_swap_ab.py` (which A/Bs two *builds* and is for a swap that deletes what a flag used to fall
+back to).
+
+| matchup (overlay on the first) | ON | OFF | delta | crashes |
+|---|---|---|---|---|
+| mega_starmie vs mega_lucario | 138/200 | 145/200 | −3.5 pp | 0 |
+| mega_starmie vs dragapult_ex | 175/200 | 172/200 | +1.5 pp | 0 |
+| mega_lucario vs mega_starmie | 57/200 | 64/200 | −3.5 pp | 0 |
+| mega_lucario vs dragapult_ex | 105/200 | 114/200 | −4.5 pp | 0 |
+| dragapult_ex vs mega_starmie | 37/200 | 34/200 | +1.5 pp | 0 |
+| dragapult_ex vs mega_lucario | 93/200 | 91/200 | +1.0 pp | 0 |
+
+**Aggregate −1.25 pp, 95% CI [−4.79, +2.29], achieved half-width 3.54 pp, 0 crashes / 2400 games.**
+
+`paired_ab.mid_build_verdict(result, crashes=0)` → **True** (`ci_lo ≥ −5% AND crashes == 0`, no delta
+clause). The script's own printed `FLIP value_model ON: False` is the **post-composition** rule
+(`flips_on`, `delta ≥ 0 AND ci_lo ≥ −1%`) and is not this phase's bar — the same disregard ADR-0076
+Amendment D recorded, except applied here through the canonical function rather than by hand.
+
+Two things must be said plainly rather than rounded off:
+
+- **The margin over the bound is +0.21 pp**, and the point estimate is negative. The thinness is not
+  an underpowered run — the half-width came in at 3.54 pp, i.e. the design point the tolerance was
+  calibrated for (`MID_BUILD_REG_TOL`'s own comment: *"achieved half-width there is ~3.4 pp, so a
+  truly neutral swap clears −5 pp with margin"*). The margin is thin because the delta is −1.25 pp,
+  not because the measurement was.
+- **Re-running for a tighter answer was considered and rejected as forbidden, not merely expensive.**
+  ADR-0072's Context settles it: half-width scales as `1/√n`, so resolving −1 pp near a zero delta
+  needs n ≈ 2340/arm/matchup — **~28,000 games, 8–10 h** — and the native engine is unseedable
+  (`src/cgpy/rng.py`), so common-random-numbers pairing is unavailable and the deals are unpaired
+  between arms. ADR-0072 names re-running until the sign lands as **p-hacking** outright.
+
+What makes this decidable is that the outcome is a **statistical twin of the precedent the tolerance
+was written about**. Phase 1b measured −1.17 pp, CI [−4.59, +2.25], 0 crashes / 2400 games and was
+merged on a `FLIP: False` (ADR-0070 amendment H); ADR-0072 then created `mid_build_verdict` precisely
+so that shape stops being read as a regression. This run is −1.25 pp, CI [−4.79, +2.29], 0 crashes /
+2400 games. Treating it as disqualifying would retroactively re-litigate Phase 1b and make the
+mid-build bar unpassable by any neutral decider swap, which is the failure mode ADR-0072 exists to
+prevent. **The verdict claims what it says and nothing more: no catastrophe, no crashes.** It is not a
+non-regression claim. Merit rests on the two deterministic per-frame gates below, which answer exactly
+rather than statistically.
+
+**C2 — the Discrimination Gate, re-run ARMED.** This was the real gap, and Amendment B did not close
+it. `leaf_lab.py:153` builds its pilots through `tune._build_pilot`, i.e. from the **shipped**
+`PROFILE` — so Amendment B's passing run measured the OFF path and could say nothing about arming.
+ADR-0072 decision 5 requires the gate *before* the arming decision, which only has content if the
+gate sees the armed instrument. Re-run with `PROFILE["snipe_relevance"] = True`:
+
+**`GATE: PASS` — 267 frames vs `e4c46ca`, 0 unruled `OK → MISS`, gated on 266, 1 held out**
+(`84071010|0|decision|15`, `owner=#165`). Byte-identical verdict to the OFF run: **arming introduces
+no new leaf regression anywhere in the 266.**
+
+**C3 — the Decision Gate, re-confirmed.** `snipe_decider_sweep.py`: **19/19 unchanged**, 0 FIX, 0
+REGRESSION, 0 neutral, and both recorded misses (`81905522-75`, `82749168-38`) **still missing** — the
+overfitting tripwire stayed silent. The armed scalar reproduces the incumbent's pick on every corpus
+DAMAGE frame, which is the strongest available statement that the −1.25 pp is noise rather than a
+decision defect: there is no frame on which the two readings disagree.
+
+**C4 — the scalar subsumes `evolving_wincon_priority`'s stand-down.** Found while updating the suite,
+and worth recording as evidence rather than as a test fix. On the f22 CRITICAL
+(`ms_snipe_evolving_wincon_over_promotion_stack_f22.json`), the four switch combinations read:
+
+| `snipe_relevance` | `evolving_wincon_priority` | pick |
+|---|---|---|
+| armed | ON (shipped) | `[1]` Staryu ✓ |
+| armed | **OFF** | `[1]` Staryu ✓ |
+| OFF | ON | `[1]` Staryu ✓ |
+| OFF | **OFF** | `[0]` Cinderace ✗ (the blunder) |
+
+Armed, the pick survives `evolving_wincon_priority` being switched off. The blunder is a property of
+the additive stack — the `30 + 20 + 40 = 90` sum burying the `+45` rung — and armed there is no sum
+left to bury anything, because decision 5 stands the six target rungs down as a body. So the scalar
+does not *depend* on that stand-down; it makes it redundant. That file's kill-switch test now forces
+`snipe_relevance=False`, since the mechanism it guards only exists on the OFF path.
+
+**C5 — suite consequences of the flip.** Nine tests asserted the shipped default rather than the
+configuration they meant, and all nine were tests whose intent was *the OFF path*: they used
+`_shipped_pilot()` **as** the OFF arm, which was only sound while shipped meant OFF. Arming split the
+two. Fixed by adding an explicit `_off()` helper and asking for OFF by name — the kill-switch path
+remains a live requirement and keeps its coverage. Two required more than a helper swap:
+`test_the_switch_ships_off` → `test_the_switch_ships_armed` (it asserted the thing this amendment
+changes), and REQ-READ-0005's forced-promotion test, which read the requirement off *hypothesis IDs*
+from the now-stood-down rung family. Rather than swap one mechanism for the other, that requirement is
+now covered on **both** paths: `..._via_the_rungs` (forced OFF) and `..._via_the_scalar`, the latter
+asserting the graded terms directly — the mirage zeroed at source (`imminence 0.0 → their_plan 0.0 →
+relevance 0.0`, collapsing the conjunctive product however good our route is) and the ready wincon's
+`forced` leg dominating its own discounted `imminence` (`0.6` vs `0.075`). Suite: **4071 passed, 1
+skipped, 3 xfailed**.
+
+**What arming does and does not settle.** It settles that the instrument is admissible: exact on every
+frame either gate can adjudicate, and no catastrophe in play. It does **not** settle that Snipe
+Relevance is an improvement — the mid-build instrument cannot show that at affordable `n`, by
+construction. Two legs remain owed and are tracked elsewhere: the `incoming` fix split to **Issue
+#213**, and Lillie's Clefairy ex reading board-effective damage rather than its printed 20 (decision 7
+bar 4), which lands with the combined-bench scaler family. The 18-kwarg signature is **Issue #219**.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the

@@ -199,7 +199,7 @@ PROFILE = {
                                     # extra `turns_to_ko_me` per ENERGIZED opponent body per
                                     # decision. OFF until Issue #199's gate 1 rules the read admissible;
                                     # `deny_gate1.py` forces it ON to run that measurement.
-    "snipe_relevance": False,       # ADR-0083 / Issue #188 (S4-snipe), ships OFF: the **Snipe
+    "snipe_relevance": True,        # ADR-0083 / Issue #188 (S4-snipe), armed-ON 2026-07-30: the **Snipe
                                     # Relevance** scalar DECIDES the DAMAGE bench-target select in
                                     # place of `baseline_snipe.py`'s six additive target rungs + the
                                     # ADR-0051 MatchupPlan steer, which all stand down together.

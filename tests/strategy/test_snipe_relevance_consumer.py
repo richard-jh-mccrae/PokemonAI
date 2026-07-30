@@ -39,15 +39,33 @@ def _armed(agent="mega_starmie"):
     return p
 
 
+def _off(agent="mega_starmie"):
+    """The kill-switch-OFF arm, forced EXPLICITLY.
+
+    Until 2026-07-30 the shipped default was OFF, so these tests used `_shipped_pilot()` as the OFF
+    arm and the two were the same pilot. Arming (ADR-0083 Amendment C) split them: the OFF path is
+    still a live requirement — the switch has to keep working — but it is no longer the default, so
+    it must be asked for by name rather than inherited.
+    """
+    p = _shipped_pilot(agent)
+    p.snipe_relevance = False
+    return p
+
+
 # ───────────────────────────────────────────────────────── the switch's promises
 
 @pytest.mark.req("REQ-SNIPECONS-0001")
-def test_the_switch_ships_off():
-    """ADR-0083 decision 7 bar 5. Arming needs ADR-0072's two merit gates plus the paired-A/B
-    Tripwire; until those run, OFF is what ships."""
+def test_the_switch_ships_armed():
+    """ADR-0083 decision 7 bar 5 staged OFF-first, then armed — this is the second stage.
+
+    Arming was owed ADR-0072's two merit gates plus the paired-A/B Tripwire, and all three cleared
+    on 2026-07-30 (ADR-0083 Amendment C): Decision Gate 0 unruled REGRESSION; Discrimination Gate
+    PASS run ARMED per ADR-0072 decision 5 (0 unruled `OK -> MISS`, 1 ruled to #165); Tripwire
+    -1.25 pp, 95% CI [-4.79, +2.29], 0 crashes / 2400 games -> `mid_build_verdict` True.
+    """
     from common.runtime import PROFILE
-    assert PROFILE["snipe_relevance"] is False
-    assert _shipped_pilot().snipe_relevance is False
+    assert PROFILE["snipe_relevance"] is True
+    assert _shipped_pilot().snipe_relevance is True
 
 
 @pytest.mark.req("REQ-SNIPECONS-0001")
@@ -66,7 +84,7 @@ def test_off_leaves_the_incumbent_path_entirely_intact(fixture):
     still scores beside them. (The behavioural evidence proper is `snipe_decider_sweep.py`'s OFF
     column, which replays every corpus frame through a genuinely shipped pilot.)"""
     fx = _fx(fixture)
-    off = _shipped_pilot()
+    off = _off()
     obs, select = fx["obs"], fx["obs"]["select"]
     board = off._board(obs, select)
     target_rungs = {"snipe-for-the-ko", "snipe-the-top-threat", "snipe-the-threat",
@@ -165,7 +183,7 @@ def test_the_ko_dominator_fires_only_when_armed_and_only_on_a_ko_target():
     from common.strategy.context import KO_SCORE
     kos = type("C", (), {"target_kos": True})()
     no_kos = type("C", (), {"target_kos": False})()
-    off, on = _shipped_pilot(), _armed()
+    off, on = _off(), _armed()
     assert off._snipe_ko_dominator(kos) == 0.0, "OFF: the incumbent rung owns the KO"
     assert on._snipe_ko_dominator(kos) == KO_SCORE
     assert on._snipe_ko_dominator(no_kos) == 0.0

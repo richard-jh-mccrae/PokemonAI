@@ -72,7 +72,15 @@ def test_neither_target_scores_zero():
 def test_the_kill_switch_off_restores_the_blunder_and_so_pins_why_it_exists():
     """With `evolving_wincon_priority` OFF, the three positional rungs no longer stand down and their
     sum (30 + 20 + 40 = 90) buries the evolving-wincon rung (45) — the Pilot chips Cinderace. This is
-    the mechanism the switch exists to defeat; pinning it means a future 'simplification' that drops
-    the stand-down cannot pass green."""
-    dec = _pilot(evolving_wincon_priority=False).explain(_fx()["obs"])
+    the mechanism the switch exists to defeat; asserting it means a future 'simplification' that drops
+    the stand-down cannot pass green.
+
+    `snipe_relevance` is forced OFF because the blunder is a property of the ADDITIVE stack, and armed
+    that stack is gone: the six target rungs stand down as a body (ADR-0083 decision 5), so there is
+    no sum of 90 left to bury anything and `evolving_wincon_priority` has nothing to stand down. The
+    scalar reaches Staryu on this board with the switch either way — it subsumes this stand-down
+    rather than depending on it (ADR-0083 Amendment C) — so this test can only be posed on the OFF
+    path, which is exactly where the mechanism it guards still lives.
+    """
+    dec = _pilot(evolving_wincon_priority=False, snipe_relevance=False).explain(_fx()["obs"])
     assert dec.chosen == [CINDERACE], "the kill-switch no longer changes the pick — has it gone inert?"
