@@ -44,7 +44,7 @@ The f29 adjudication request was filed on Issue #187, relocated to Issue #199, a
 there — Issue #199 worked the *other* anchor (`86091435-68`) and closed. Its close-out routed the
 generic "a positive-scoring free Item is tiered ahead of a KO" family to Issue #165's Turn Planner,
 but nothing ever filed *this* frame anywhere. Meanwhile the actual re-ruling had already happened, two
-days earlier, in a third issue (#177) that the trail does not mention. **Prose hand-offs between
+days earlier, in a third issue (Issue #177) that the trail does not mention. **Prose hand-offs between
 issues lost the frame in both directions at once** — which is ADR-0072's own thesis (*"a re-ruling is a
 state the instruments read, not prose in a swap-review doc"*) arriving from a new direction.
 
@@ -71,9 +71,9 @@ because the same blindness is what the guard in decision 2 exists to prevent.
 
 | fixture | fixture says | record says | reading |
 |---|---|---|---|
-| `ms_doom_relax_bare_terapagos_f29` | `[2]` | `[10]` (re-ruled 2026-07-28, #177) | **real** — stale, no sibling |
+| `ms_doom_relax_bare_terapagos_f29` | `[2]` | `[10]` (re-ruled 2026-07-28, Issue #177) | **real** — stale, no sibling |
 | `ml_dead_hand_full_refresh_f15` | `[0]` + a dated DoD re-tag | `[1]` | **real** — a verified win the record denies |
-| `dp_doom_guard_archaludon_1e_f35` | `[2]` | `[1]` (re-ruled 2026-07-26, #167) | **not drift** — sibling `dp_hold_evolve_until_typed_ready_f35` carries `frame_key 86091435\|0\|decision\|35` and `claims.decision.correct=[1]`, matching |
+| `dp_doom_guard_archaludon_1e_f35` | `[2]` | `[1]` (re-ruled 2026-07-26, Issue #167) | **not drift** — sibling `dp_hold_evolve_until_typed_ready_f35` carries `frame_key 86091435\|0\|decision\|35` and `claims.decision.correct=[1]`, matching |
 | `ms_prefer_cheap_evolution_enabler_f41` | `[4]` | `[3]` | **not drift** — sibling `ms_item_over_supporter_indifferent_f41` carries `frame_key 85164605\|1\|decision\|41`, `claims.decision.correct=[3]`, `owner #145`, `ruled 2026-07-27` (*"valid but immaterial here"*) |
 | 5 seeded fixtures | — | — | **not drift** — obs differs **only** by `own_prizes` + `search_begin_input` (ADR-0050 reseeding) |
 | 2 × `ms0705_*` | `agent_choice` / `human_wanted` | `chosen` / `correct` | **not drift** — an older field-naming, same rationale |
@@ -188,7 +188,7 @@ assert dec.chosen != fx["human_wanted"]      # the human's ask is refuted
 
 Renaming `human_wanted` to `correct` would have asserted that a refuted pick is the ruling. They
 therefore assert **no pick**, `parse_claims` synthesises no Decision Claim for them, and they are
-exempt from the `frame_key` back-fill — pinned by `ASSERTS_NO_PICK` plus a test that fails if either
+exempt from the `frame_key` back-fill — recorded as `ASSERTS_NO_PICK` plus a test that fails if either
 ever gains a `correct`, so the exemption cannot go stale.
 
 **2. Decision 5's provenance was wrong: `84071010-15` was re-ruled 2026-07-13, not by this grill.**
