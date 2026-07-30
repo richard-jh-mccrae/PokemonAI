@@ -134,7 +134,7 @@ def _tagged_pilot():
 
 def _deploy_ability_relevance(hand):
     """The Deploy Marginal's ABILITY leg for benching Meowth ex with `hand` held, on the REAL
-    mega_lucario pilot. Real, not the `_tagged_pilot()` stub: since ADR-0081 the leg matches the need
+    mega_lucario pilot. Real, not the `_tagged_pilot()` stub: since ADR-0083 the leg matches the need
     against the Supporters the DECK actually holds, and the stub's filler deck contains none — it
     would measure 0 for the wrong reason and pass either assertion."""
     from train.tune import _build_pilot
@@ -148,7 +148,7 @@ def _deploy_ability_relevance(hand):
 def test_bench_the_supporter_tutor_when_supporterless_in_setup():
     """SETUP, Meowth ex in hand, no Supporter held: bench it to fetch one (the free-Ability grab).
 
-    `bench-the-supporter-tutor` (+25) is DELETED — ADR-0081 decision 3 makes the bench-drop Ability a
+    `bench-the-supporter-tutor` (+25) is DELETED — ADR-0083 decision 3 makes the bench-drop Ability a
     need-matched fetch yield, so what used to be a flat endorsement is now a priced leg."""
     assert _deploy_ability_relevance([MEOWTH_EX]) > 0
 

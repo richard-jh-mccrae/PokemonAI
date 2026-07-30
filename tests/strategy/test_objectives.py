@@ -383,7 +383,7 @@ def test_objectives_trace_rides_the_decision_and_telemetry():
 
 @pytest.mark.req("REQ-OBJ-0006")
 def test_the_path_delta_survives_as_a_MAGNITUDE_not_only_its_sign():
-    """ADR-0081 decision 5: the exposure leg of the Deploy Marginal is the AMOUNT by which benching
+    """ADR-0083 decision 5: the exposure leg of the Deploy Marginal is the AMOUNT by which benching
     this body shortens the opponent's cheapest Prize Path — and that amount was already being
     computed here and thrown away, with only `new_turns < old_turns` returned to a flat −10 rung.
 

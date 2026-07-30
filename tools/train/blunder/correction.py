@@ -88,7 +88,7 @@ class Correction:
     attribution: str | None     # learning-surface link (derived by Tuner; ADR-0017)
     rationale: str              # free prose
     #: OPTIONAL alternative correct picks — a SET of option-index lists the human ruled EQUALLY
-    #: correct, where the single `correct` list over-specifies (ADR-0081, Issue #197). First case:
+    #: correct, where the single `correct` list over-specifies (ADR-0083, Issue #197). First case:
     #: `83661652` f29, ruled "bench Riolu, Makuhita, and Solrock, ordering doesn't matter, just
     #: don't play ultra ball" — the rationale distinguishes a basic from the Ultra Ball, not one
     #: basic from another, so scoring only `correct` marks a REGRESSION for a pick the human

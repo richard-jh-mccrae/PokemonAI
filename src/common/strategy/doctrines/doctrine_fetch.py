@@ -862,7 +862,7 @@ HYPOTHESES = [
                   "to the `option_type==_PLAY` bench reflexes, so every candidate would score 0 and greedy "
                   "take-fewer benches NOTHING (the Buddy-Poffin whiff that cost ~3:1 in the mirror); skips a "
                   "multi-prizer (ex/Mega ex) and stands down once the Bench is full. `_SETUP_BENCH` was DROPPED "
-                  "from the scope by ADR-0081 decision 9 — we never bench during Set Up, so a +12 that could only "
+                  "from the scope by ADR-0083 decision 9 — we never bench during Set Up, so a +12 that could only "
                   "argue for a placement the rule already refuses is dead weight, and leaving it would let a "
                   "reader think the pregame is still being scored.",
         when=lambda c: c.select_context == _TO_BENCH and c.card_is_starter
@@ -947,7 +947,7 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_sheds_key,
         weight=-25, status="testing"),
     # `bench-the-supporter-tutor` (+25), `dont-pre-bench-the-supporter-tutor` (−15) and
-    # `dont-pre-bench-a-redundant-utility` (−15) stood here until ADR-0081. All three answered the
+    # `dont-pre-bench-a-redundant-utility` (−15) stood here until ADR-0083. All three answered the
     # SAME question — is this body worth a Bench slot right now? — from the fetch side, and the
     # Deploy Marginal now prices it: the tutor's Supporter fetch is the ability leg's need-matched
     # yield (zero at `_SETUP_BENCH` by derivation, since a pregame placement never triggers the

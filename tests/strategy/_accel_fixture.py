@@ -1,4 +1,4 @@
-"""A real accel-stranded board for the Deploy Marginal's accel-unlock leg (ADR-0081 decision 8).
+"""A real accel-stranded board for the Deploy Marginal's accel-unlock leg (ADR-0083 decision 8).
 
 Built on the REAL mega_lucario pilot rather than a hand-stubbed one, because the leg reads card
 facts the stub would have to re-assert: Mega Lucario ex's Aura Jab is the rider ("Attach up to 3

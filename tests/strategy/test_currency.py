@@ -65,7 +65,7 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     a derivation, not ahead of it. **It survived Issue #199** — ADR-0080 ran the anchor gate, found
     the corpus's one candidate priced 0.000 on both instruments (so the rate divided out), and ruled
     the rate MOOT for deny rather than deriving it. The guard therefore stays, permanently rather
-    than pending, and ADR-0081's seam-scoped `DEPLOY_BAND` below is explicitly NOT this constant."""
+    than pending, and ADR-0083's seam-scoped `DEPLOY_BAND` below is explicitly NOT this constant."""
     assert not hasattr(currency, "WORTH_DAMAGE_RATE")
     assert not hasattr(currency, "prize_to_worth")
 
@@ -82,7 +82,7 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
 
 @pytest.mark.req("REQ-CURRENCY-0004")
 def test_the_deploy_band_is_present_pinned_and_labelled_as_a_preservation_choice():
-    """ADR-0081 (Issue #197) amendment C — the honest half of the guard above.
+    """ADR-0083 (Issue #197) amendment C — the honest half of the guard above.
 
     The Deploy Marginal's two Worth legs are dimensionless RATIOS (`marginal / DEPLOY_WORTH_SCALE`),
     so the Worth scale never escapes the Needs assignment and no universal rate is needed. But

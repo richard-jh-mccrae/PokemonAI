@@ -53,7 +53,7 @@ def test_lane_constants_match_the_engine_enums():
                                  (int(OptionType.CARD), int(SelectContext.TO_BENCH)))
 
 
-# ── deploy option IDENTITY (ADR-0081, Issue #197) ────────────────────────────────────────────────
+# ── deploy option IDENTITY (ADR-0083, Issue #197) ────────────────────────────────────────────────
 
 
 @pytest.mark.req("REQ-TRAIN-0041")

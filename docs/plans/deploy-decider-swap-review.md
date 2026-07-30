@@ -1,4 +1,4 @@
-# Deploy decider swap — review & hand-off (Issue #197, ADR-0081)
+# Deploy decider swap — review & hand-off (Issue #197, ADR-0083)
 
 Self-contained pickup doc for the **Deploy Marginal** build (Phase 1h of the Value System, tracker
 Issue #136). Sibling of `attach-decider-swap-review.md` / `evolve-decider-swap-review.md` /
@@ -39,7 +39,7 @@ refresh-SHED site. Changing it must not move their behaviour — check `test_nee
 
 ### 2. Re-apply the deletion, arm `deploy_value` ON
 
-Nine rules, all named in ADR-0081's Consequences:
+Nine rules, all named in ADR-0083's Consequences:
 
 * `baseline_bench.py` — `dont-bench-multiprize`, `pre-position-attacker`, `develop-a-basic-in-setup`,
   `develop-the-wincon-base-first`, `dont-bench-onto-their-path`, `develop-the-accel-recipient`
@@ -222,7 +222,7 @@ the narrowed rule Set Up reduces to trigger 1 alone.
 ## Known-open, recorded rather than fixed
 
 - The **line-deadline gap** — step 1.
-- `_PATH_BENCH_EXTRA = 1` may be stale against ADR-0071 decision 6 (ADR-0081 decision 5's observation).
+- `_PATH_BENCH_EXTRA = 1` may be stale against ADR-0071 decision 6 (ADR-0083 decision 5's observation).
 - `currency.py` on `main` still says the anchor capture is "issue #199's build-shape step 1", which
   ADR-0080 superseded.
 - The spec comment on Issue #197 still lists f51 under "must be re-ruled" — now satisfied.

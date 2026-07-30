@@ -51,7 +51,7 @@ AGENTS = REPO / "src" / "agents"
 
 # dragapult_ex
 DREEPY, MUNKIDORI, DUNSPARCE, FEZANDIPITI_EX, BUDEW = 119, 112, 305, 140, 235
-DRAKLOAK, DUDUNSPARCE = 120, 66      # the payoffs ADR-0081's Line clause must stay SILENT on
+DRAKLOAK, DUDUNSPARCE = 120, 66      # the payoffs ADR-0083's Line clause must stay SILENT on
 # mega_lucario
 SOLROCK, RIOLU, MAKUHITA, LUNATONE = 676, 677, 673, 675
 MEGA_LUCARIO_EX, HARIYAMA = 678, 674  # the declared Line payoff, and a non-Line payoff
@@ -99,9 +99,9 @@ def _setup_active_obs(hand_ids, offer_ids=None):
     Carried over from the retired `test_setup_active_multiprize.py` so the REQ-OPEN-0002 assertions
     below are exercised through exactly the shape they were written against — with `offer_ids`
     defaulting to "offer everything", option index `i` still maps to `hand_ids[i]` and every
-    pre-ADR-0081 call is byte-for-byte unchanged.
+    pre-ADR-0083 call is byte-for-byte unchanged.
 
-    `offer_ids` exists because the hand-conditional opener (ADR-0081) cannot be expressed without it:
+    `offer_ids` exists because the hand-conditional opener (ADR-0083) cannot be expressed without it:
     the thing that flips the pick is an EVOLUTION held in hand, and an evolution is never a startable
     body, so it is in hand and never on offer. Offering it anyway would test a board the engine
     cannot produce. Options are still real hand indices, so the Pilot resolves them exactly as it
@@ -227,21 +227,21 @@ def test_the_highest_ranked_body_PRESENT_wins_not_merely_rank_one():
     assert pilot.decide(_setup_active_obs([DREEPY, DUNSPARCE])) == [1]
 
 
-# ── ADR-0081: the opener is HAND-CONDITIONAL ─────────────────────────────────────────────────────
+# ── ADR-0083: the opener is HAND-CONDITIONAL ─────────────────────────────────────────────────────
 #
 # The declaration is authored before any hand is dealt, so it cannot know what is IN that hand. The
 # Opener Marginal supplies exactly that and nothing else: `maxDamage(payoff) - maxDamage(body)` when
 # a card in hand evolves from the offered body AND that card is the deck's declared `Line` payoff.
 # Otherwise ZERO — so on every frame below except the first, the declaration decides untouched.
 #
-# The Line clause is load-bearing, not a refinement (ADR-0081 amendment A): without it the marginal
+# The Line clause is load-bearing, not a refinement (ADR-0083 amendment A): without it the marginal
 # fires on FIVE promotable bodies across these three decks and only ONE firing is wanted, and
 # suppressing the other four would rebuild the guard pile ADR-0079 deleted. Each silence test below
 # is one of those four.
 
 
 def test_the_line_base_beats_rank_one_when_its_wincon_payoff_is_in_hand():
-    """ADR-0081's motivating frame, case 1. mega_lucario ranks Solrock 1st and Riolu 2nd, and that is
+    """ADR-0083's motivating frame, case 1. mega_lucario ranks Solrock 1st and Riolu 2nd, and that is
     right on most hands — but Cosmic Beam {F} 70 "does nothing" without a benched Lunatone, while
     Riolu is one hop and one {F} from Aura Jab 130. Holding Mega Lucario ex is what flips it.
 
@@ -261,7 +261,7 @@ def test_rank_one_holds_when_the_payoff_is_not_in_hand():
     """Case 2 — the regression guard that gives case 1 its meaning. Identical bodies on offer; the
     hand holds Makuhita instead of the Mega, so Riolu's Marginal is 0 and Solrock's declared rank 1
     stands. A general 2-turn readiness equation gets this WRONG (Solrock reads 0 partnerless against
-    Riolu's 30) and would need an underivable threshold to rescue it — ADR-0081 decision 4."""
+    Riolu's 30) and would need an underivable threshold to rescue it — ADR-0083 decision 4."""
     pilot = _pilot("mega_lucario")
     obs = _setup_active_obs([SOLROCK, RIOLU, MAKUHITA], offer_ids=[SOLROCK, RIOLU])
     assert pilot.decide(obs) == [0], "no payoff in hand — the declaration decides, untouched"
@@ -299,7 +299,7 @@ def test_a_secondary_attacker_line_payoff_does_not_promote_its_base():
     condition, and its own comment says the win-condition machinery ignores it.
 
     The first implementation read every declared Line and promoted Makuhita over a declared rank-1
-    Solrock on the strength of raw damage — exactly the "big number wins" reasoning ADR-0081
+    Solrock on the strength of raw damage — exactly the "big number wins" reasoning ADR-0083
     amendment A rejected. The gate is `_wincon_lines`, the same role filter the rest of the
     win-condition machinery uses, so being the declared WIN CONDITION is what counts, not damage."""
     pilot = _pilot("mega_lucario")
@@ -351,7 +351,7 @@ def _synth_pilot(deck_ids, *, stats=_SYNTH_STATS, functions=_UNSET):
 
 
 def test_the_derived_pin_fires_when_the_deck_omits_the_evolution_route():
-    """ADR-0081 decision 1: "is the Set-Up pick this body's only route into play?" — computed from
+    """ADR-0083 decision 1: "is the Set-Up pick this body's only route into play?" — computed from
     the DECKLIST, not declared. With no "Pre" in the deck the opener-tagged body is pinned, so it
     holds rank 1 against a +190 Marginal on the other body. This is Cinderace's protection, derived."""
     pilot = _synth_pilot([_OPENER] * 4 + [_BASE] * 4 + [_PAYOFF] * 4 + [1] * 48)
@@ -370,7 +370,7 @@ def test_the_derived_pin_LIFTS_when_the_deck_runs_the_evolution_route():
 
 
 def test_the_pin_fails_CLOSED_when_it_cannot_tell():
-    """ADR-0081 decision 1's fail direction, deliberately the OPPOSITE of `_is_startable_body`'s.
+    """ADR-0083 decision 1's fail direction, deliberately the OPPOSITE of `_is_startable_body`'s.
     Justified by consequence rather than symmetry: a MISSING pin permanently forfeits a card, while a
     spurious one merely opens suboptimally.
 
@@ -472,7 +472,7 @@ def test_every_declaration_ranks_every_startable_body_in_the_deck():
 
 
 def test_every_authored_agent_declares_a_win_condition_line():
-    """ADR-0081's new dependency, guarded. The Opener Marginal reads `Strategy.lines[].payoff`, so a
+    """ADR-0083's new dependency, guarded. The Opener Marginal reads `Strategy.lines[].payoff`, so a
     deck that declares no Line silently gets no equation — the pick still works, it just stops being
     hand-conditional. That is a SILENT no-op rather than a wrong answer, which is exactly why it
     needs an invariant: `starter_priority` has had one since ADR-0079 decision 5 and `lines` had

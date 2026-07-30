@@ -69,7 +69,7 @@ SELECT_CONTEXT_SETUP_BENCH = 2                      # cg.api.SelectContext.SETUP
 SELECT_CONTEXT_TO_BENCH = 5                         # cg.api.SelectContext.TO_BENCH
 AREA_HAND = 2                                       # cg.api.AreaType.HAND
 
-#: The DEPLOY lane (ADR-0081, Issue #197) — every way a body reaches MY Bench, which the Deploy
+#: The DEPLOY lane (ADR-0083, Issue #197) — every way a body reaches MY Bench, which the Deploy
 #: Marginal owns as one decision: a mid-game `PLAY` from hand at the main menu, the pregame
 #: placement (`CARD` under SETUP_BENCH_POKEMON), and a fetch straight onto the Bench (`CARD` under
 #: TO_BENCH). `PLAY` needs no context qualifier — it is only ever posed at the main menu.
@@ -121,7 +121,7 @@ def option_slot(option: dict, frame: dict | None = None) -> tuple | None:
     (`evolve_decider_sweep.py`, ADR-0069 §8). Both decider sweeps resolved this themselves; one
     implementation here is what keeps them from drifting apart.
 
-    **Rung 2 is ADR-0081's (Issue #197) extension, and it is why the parameter exists.** A mid-game
+    **Rung 2 is ADR-0083's (Issue #197) extension, and it is why the parameter exists.** A mid-game
     bench play is `OptionType.PLAY` carrying a BARE hand index and no ``area``
     (`strategy/context.py`), so rungs 1 and 3 both miss it and the positional resolver returned None
     for exactly the options the Deploy Marginal ranks. The identity that survives a menu re-ordering

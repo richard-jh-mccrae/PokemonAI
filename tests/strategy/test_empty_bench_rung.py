@@ -1,4 +1,4 @@
-"""The post-setup empty-Bench SOUND RUNG (ADR-0081 decision 7, Issue #197).
+"""The post-setup empty-Bench SOUND RUNG (ADR-0083 decision 7, Issue #197).
 
 `keep-a-bench` (+60) is the one rule in the bench table that guards a WIN CONDITION rather than a
 preference: `docs/rules.md` §7 case 2 — "Opponent has no Pokémon in play to replace a KO'd Active".

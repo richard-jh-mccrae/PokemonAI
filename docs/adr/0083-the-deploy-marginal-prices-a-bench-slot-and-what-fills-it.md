@@ -1,4 +1,4 @@
-# ADR-0081 — The deploy marginal prices a bench slot and what fills it
+# ADR-0083 — The deploy marginal prices a bench slot and what fills it
 
 **Status:** Accepted (grilled 2026-07-29, `/grill-with-docs` on Issue #197 — **eight locked
 decisions**). **Nothing here is built.** The build is a new Value-System phase (tracker Issue #136),
@@ -9,7 +9,7 @@ fixed yardstick and a preservation-pinned band (**Amendment C**). **The phase is
 Decisions 1-3 and 5-8 stand as originally ruled. **Renumbered 0079 -> 0081 on rebase (2026-07-29)** — the SIXTH collision in the series (#136
 directive 8). Issue #161's *the Set-Up Active pick is one deck declaration* merged first and KEEPS
 0079 under the standing first-merged rule; Issue #199's *deny is a categorical relevance instrument*
-took 0080. Cite the issue alongside the number ("ADR-0081, Issue #197") — the number is a rebase
+took 0080. Cite the issue alongside the number ("ADR-0083, Issue #197") — the number is a rebase
 artifact, not an identifier.
 
 **Context issues:** Issue #197 (this grill — split out of the Issue #161 grill as the pregame-Bench

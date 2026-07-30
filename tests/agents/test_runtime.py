@@ -79,7 +79,7 @@ EXPECTED_SHIPPED = {
                                     # protocol's batched review is closed (6 FIX, 0 regression) and the
                                     # four baseline_evolution rungs it replaced are DELETED, so OFF is
                                     # degraded mode rather than a rollback.
-    "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0081, Issue #197). The
+    "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0083, Issue #197). The
                                     # Decision Gate is ruled and the nine rungs it replaced are DELETED
                                     # (`keep-a-bench` excepted — decision 7 keeps it a sound rung), so OFF
                                     # is degraded mode rather than a rollback.

@@ -297,7 +297,7 @@ SUPPLIES: dict = {
     # `deny_tags` once armed, so one card is never priced through two instruments at once).
     "gust":               ("deny", "gust_target"),
     "recycle":            ("supply_wincon", "fund_attack"),
-    # ADR-0081 (Issue #197): a bench-drop tutor (Meowth ex's Last-Ditch Catch) fetches a SUPPORTER,
+    # ADR-0083 (Issue #197): a bench-drop tutor (Meowth ex's Last-Ditch Catch) fetches a SUPPORTER,
     # so what it supplies is the DRAW/ENGINE need that Supporter serves — plus the wincon dig, when
     # the Supporter the deck holds is a tutor. It was absent from this table entirely, so the
     # coverage lint's promise ("no card class is silently priced 0 by a missed slot") did not hold
@@ -325,7 +325,7 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
     (base, best): ``base`` = Σ_j v_j·r_j (what the closure re-supplies even with no held card) and
     ``best`` = the optimal held coverage on top. V = base + best.
 
-    ``capacity`` (ADR-0081, Issue #197) bounds how many cards may be assigned AT ONCE — the Bench
+    ``capacity`` (ADR-0083, Issue #197) bounds how many cards may be assigned AT ONCE — the Bench
     holds 5, and that cap is the only reason a deploy displaces anything. Because each card takes at
     most one slot, the number of cards assigned is exactly the number of slots covered, so the bound
     is a **popcount bound on the mask** — an exact restriction of the same DP, not a heuristic.
@@ -395,7 +395,7 @@ def keep_v2(slots, eligibility, resupply, index: int, *, intrinsic: float = 0.0)
 
 def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> float:
     """What DEPLOYING card ``index`` into one of ``capacity`` free Bench slots is worth, in Worth
-    points — the Deploy Marginal's assignment leg (ADR-0081, Issue #197, amendment E).
+    points — the Deploy Marginal's assignment leg (ADR-0083, Issue #197, amendment E).
 
         net(X) = V(X deployed now, cap=K) − V(C \\ X, cap=K)
 
@@ -431,7 +431,7 @@ def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> fl
 
     Worth-denominated, like everything else in this module. The caller divides by
     `currency.DEPLOY_WORTH_SCALE` to get the dimensionless relevance that crosses into the damage
-    scale (ADR-0081 amendment B) — this function must never be handed to a damage-scale consumer raw.
+    scale (ADR-0083 amendment B) — this function must never be handed to a damage-scale consumer raw.
     """
     k = max(0, int(capacity))
     without = frozenset({index})

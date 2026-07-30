@@ -310,7 +310,7 @@ A **benched** Line member (a pre-evolution or the payoff) that a bench-targeting
 Energy onto — e.g. Cinderace's Turbo Flare attaches 3 Basic Energy to the Bench, so a benched Staryu
 is its recipient. With **no** recipient the acceleration is wasted, so developing one is the top setup
 priority while the accelerator is Active (`accel_recipient_missing` → `develop-the-accel-recipient`).
-_(Accepted design 2026-07-29, ADR-0081 (Issue #197) decision 8: the "top setup priority" PRESCRIPTION retires — the
+_(Accepted design 2026-07-29, ADR-0083 (Issue #197) decision 8: the "top setup priority" PRESCRIPTION retires — the
 recipient's value is priced as the **Deploy Marginal**'s accel-unlock leg, the Attach Budget that
 becomes realisable because a landing spot exists, so it scales with the accelerator's actual yield and
 falls to zero when the accelerator is not Active or the Budget already lands. The CONCEPT stands; the
@@ -330,7 +330,7 @@ VALUE layer: the loss-avoidance guard (an empty Bench under a KO'd Active loses 
 `rules.md` §7) is NOT a leg — it is a post-setup sound rung ABOVE the equation, because `_LINE_CAP`'s
 band invariant means a bounded positional term can never be un-outbiddable. Replaces nine of the ten
 shipped bench rules; `keep-a-bench` is promoted to that rung rather than deleted.
-_(Accepted design 2026-07-29, `/grill-with-docs`; ADR-0081, Issue #197, amendments A–C. **Unblocked** —
+_(Accepted design 2026-07-29, `/grill-with-docs`; ADR-0083, Issue #197, amendments A–C. **Unblocked** —
 the Worth legs are ratios, so no `WORTH_DAMAGE_RATE` is referenced and ADR-0080's currency guard
 stands. `BAND / D` is nevertheless a seam-scoped worth↔damage rate, honestly labelled and pinned to
 preserve incumbent behaviour, never claimed as a derivation.)_
@@ -344,7 +344,7 @@ this ADR records)
 What occupying a Bench Slot with THIS body gives up, as ONE netted marginal over the `needs.py`
 assignment — `V(suppliers ∪ {X deployed}) − V(suppliers)`. It is **not** a separate cost leg subtracted
 from a contribution leg: the DP over five bench slots already prices scarcity, so a body's contribution
-and what it displaces are two readings of one number (ADR-0081 Amendment B). The supplier set is
+and what it displaces are two readings of one number (ADR-0083 Amendment B). The supplier set is
 deployable bodies in hand PLUS bodies reachable from deck (`fetch_closure`'s **reach** direction,
 weighted by Deck-Content Odds), because the displaced body is often not one you are holding — on the
 motivating frame (`ml_dont_bench_redundant_solrock_f51`) it is Makuhita, in the deck, behind the Ultra
@@ -355,7 +355,7 @@ Enters the damage-scale score as a **dimensionless ratio**, divided by the fixed
 yardstick `D = max(ROLE_TIER) = 30.0`: the Worth points cancel, so the Worth scale never escapes the
 assignment. The yardstick is fixed rather than per-decision because the marginal competes against `End`
 and against attacks, so the ratio must mean the same thing on every board. Accepted cost: a ratio
-discards absolute magnitude — "20 of 100" and "2 of 10" both read 0.2 (ADR-0081 Amendment C).
+discards absolute magnitude — "20 of 100" and "2 of 10" both read 0.2 (ADR-0083 Amendment C).
 _Avoid_: bench pressure / scarcity penalty (a tuned scalar — Displacement is a computed difference),
 saturation (`_READINESS_SATURATED`, a per-BODY redundancy discount that co-diagnoses f51 and is a
 different quantity), `bench_full` (the retired boolean), treating it as a separate leg from the
@@ -490,7 +490,7 @@ startable body in the deck (a Basic, or an `opener`-tagged card) is ranked — w
 single-winner read exact; CI enforces it, because an undeclared or partial list drops the pick back
 to the engine's option-index order. Covers the Active Spot ONLY; the pregame Bench is a separate
 seam. Declares what the DECK contains; what THIS HAND contains is the Opener Marginal's business
-(ADR-0081). See ADR-0079, ADR-0081.
+(ADR-0083). See ADR-0079, ADR-0083.
 _Avoid_: starter Role (retired), opener (that's the Function Tag for an Ability that puts its own
 card into the Active Spot, e.g. Explosiveness), opening hand (that's the mulligan decision)
 
@@ -507,7 +507,7 @@ opinion on which body is better, and detects only a *payoff stranded in hand*, w
 a ranking authored before the hand is dealt cannot carry. That silence is what lets the declaration
 keep every frame it already gets right *by construction* rather than by tuning, and is why the design
 needs no override threshold. Reads the **hand only**: at turn 0 the deck carries no frame-specific
-information, so deck odds would be a per-deck constant the ranking already encodes. See ADR-0081.
+information, so deck odds would be a per-deck constant the ranking already encodes. See ADR-0083.
 _Avoid_: opener equation / opener value (too broad — it prices no tempo or readiness, only a stranded
 payoff), tie-break (it REORDERS; a tie-break cannot reach the inversion it exists for)
 
@@ -530,8 +530,8 @@ and the override cannot be disarmed by a learned weight.
 ⚠️ A **declared** Pin — a deck marking one of its own ranks immovable, which would also express a
 *demotion* pin ("this body stays fifth, do not promote it") — is **decided in shape but NOT built and
 has no code**: the Line clause silences every would-be demotion structurally, leaving it zero
-consumers, so it awaits a frame (ADR-0081 Amendment A). `Strategy.starter_priority` is therefore
-still a plain list of card ids. See ADR-0081.
+consumers, so it awaits a frame (ADR-0083 Amendment A). `Strategy.starter_priority` is therefore
+still a plain list of card ids. See ADR-0083.
 _Avoid_: a separate `starter_pinned` field (rejected — two declarations that must agree per card),
 lock (reserve for the win-condition sense), tie-break
 

@@ -973,7 +973,7 @@ class Context:
     bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
                                         # strictly improves the opponent's cheapest Prize Path
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
-    bench_path_delta: float = 0.0       # ...and by HOW MUCH, in turns (ADR-0081 decision 5). The
+    bench_path_delta: float = 0.0       # ...and by HOW MUCH, in turns (ADR-0083 decision 5). The
                                         # Deploy Marginal's exposure leg: the magnitude the boolean
                                         # above is merely the sign of. `HORIZON`-graded when the play
                                         # completes a previously-uncompletable route; 0 when the
@@ -1090,7 +1090,7 @@ class OptionTrace:
                                  # refill that ARMS them). NOT in `score` — inert telemetry that makes the
                                  # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
                                  # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
-    deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0081): the per-leg
+    deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0083): the per-leg
                                  # breakdown for a Bench deployment. The decider sweep prints it on
                                  # BOTH sides of a flip and a human rules the Decision Gate by
                                  # reading it, so a bare total would make that gate unrulable.
@@ -1373,7 +1373,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # deleted, so OFF silences evolve endorsements
                                                         # and only the _PLAY-side Gate speaks.
         self.deploy_value = deploy_value            # the DEPLOY DECIDER's emergency lever
-                                                    # (ADR-0081, Issue #197). Ctor default OFF
+                                                    # (ADR-0083, Issue #197). Ctor default OFF
                                                     # keeps the raw-scoring substrate neutral;
                                                     # `make_agent` resolves the shipped ON from
                                                     # PROFILE, like every other switch.
@@ -1566,7 +1566,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
         # The empty-Bench guard runs LAST, above the sequencer: it is a soundness FILTER, so
-        # nothing downstream may re-order a deploy back below End (ADR-0081 decision 7).
+        # nothing downstream may re-order a deploy back below End (ADR-0083 decision 7).
         order = self._empty_bench_forced(obs, select, board, options, order)
         # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
         # trace reader doesn't misread "top-score not chosen" as a scoring bug. `reordered` = attack-last
@@ -1712,7 +1712,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return out
 
     def _never_pre_bench(self, select: dict, chosen: list) -> list:
-        """NEVER place a Pokémon on the Bench during Set Up (ADR-0081 decision 9). A sound rule read
+        """NEVER place a Pokémon on the Bench during Set Up (ADR-0083 decision 9). A sound rule read
         off the rulebook, not a price — so it filters the pick rather than scoring it, like decision
         7's empty-Bench guard.
 
@@ -1751,7 +1751,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _empty_bench_forced(self, obs: dict, select: dict, board: Board, options: list,
                             order: list) -> list:
-        """The post-setup EMPTY-BENCH guard (ADR-0081 decision 7): with nothing to promote, a single
+        """The post-setup EMPTY-BENCH guard (ADR-0083 decision 7): with nothing to promote, a single
         Knock-Out ends the match on the spot (`docs/rules.md` §7 case 2), so a legal Pokémon deploy is
         TAKEN rather than ranked.
 
@@ -1958,7 +1958,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # and the planner's spend account read it
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
         promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0073
-        deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0081 (#197)
+        deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0083 (#197)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -4758,11 +4758,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return self._attach_value(obs, select, board, option)
 
-    # ── the DEPLOY decider (ADR-0081, Issue #197) ────────────────────────────────────────────────
+    # ── the DEPLOY decider (ADR-0083, Issue #197) ────────────────────────────────────────────────
 
     def _deploy_supplier_rows(self, obs: dict, board: Board):
         """``(hand_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by ZONE
-        because the two are not interchangeable (ADR-0081 decision 2).
+        because the two are not interchangeable (ADR-0083 decision 2).
 
         Only POKÉMON: capacity here is BENCH capacity, and a Trainer covering a draw need costs no
         Bench slot.
@@ -4883,7 +4883,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return False
 
     def _deploy_decision(self, obs: dict, select: dict, board: Board, option: dict):
-        """Price ONE candidate Bench deployment — the Pilot half of ADR-0081: resolve board facts
+        """Price ONE candidate Bench deployment — the Pilot half of ADR-0083: resolve board facts
         into `DeployInputs` and delegate. None when the switch is off or the option is not a body
         reaching my Bench."""
         if not getattr(self, "deploy_value", False):
@@ -8918,7 +8918,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return not st.evolvesFrom or self._opens_from_hand(cid)
 
     def _wincon_payoff_ids(self) -> frozenset:
-        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0081
+        """The deck's declared WIN-CONDITION Line payoffs. The gate on the Opener Marginal (ADR-0083
         amendment A) — an evolution in hand only reorders the opener when it is what the deck is
         actually trying to build.
 
@@ -8932,10 +8932,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **Deliberately NOT `_wincon_set`**, whose first clause is identical. That set additionally
         unions in every card carrying a `win_condition` / `primary_attacker` ROLE, which is a strictly
         broader concept: it would let a role-tagged body that is on no declared Line act as an opener
-        payoff, widening the gate past what ADR-0081 decision 4 specifies (*"the `payoff` of one of the
+        payoff, widening the gate past what ADR-0083 decision 4 specifies (*"the `payoff` of one of the
         deck's declared win-condition Lines"*). The two sets coincide for all three authored decks
         today, so the divergence is LATENT — swapping them reddens nothing by accident. The binding
-        record is therefore ADR-0081 decision 4 plus its guard test
+        record is therefore ADR-0083 decision 4 plus its guard test
         (`test_a_ROLE_tagged_body_that_is_no_line_payoff_does_not_promote_its_base`), not this
         docstring, which would be deleted along with the very function a reviewer proposes collapsing.
 
@@ -8966,7 +8966,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return names
 
     def _opener_marginal(self, cid: int | None, hand_ids) -> float:
-        """**Opener Marginal** (ADR-0081 decision 4): ADR-0070's body-substituted evolve delta, in
+        """**Opener Marginal** (ADR-0083 decision 4): ADR-0070's body-substituted evolve delta, in
         DAMAGE, read at turn 0. Non-zero only when a card in hand evolves from `cid` AND that card is
         a declared Line payoff; then `maxDamage(payoff) - maxDamage(cid)`. Zero otherwise.
 
@@ -8980,7 +8980,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Matches on the evolution's `evolvesFrom` NAME, not an id, so reprints of the same body (Raboot
         is both 152 and 665) resolve identically. Reads the HAND only — at turn 0 the deck carries no
         frame-specific information, so deck odds would be a per-deck constant the ranking already
-        encodes (ADR-0081 decision 3)."""
+        encodes (ADR-0083 decision 3)."""
         if cid is None or not self.stats or not hand_ids:
             return 0.0
         st = self.stats.get(cid)
@@ -8999,7 +8999,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return best
 
     def _route_only_at_setup(self, cid: int | None) -> bool:
-        """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0081
+        """Is the pregame Set-Up pick this body's ONLY route into play? The DERIVED pin (ADR-0083
         decision 1) — true for an `opener`-tagged Evolution whose previous stage is absent from this
         deck, i.e. Cinderace in a deck running no Raboot. Skipping such a body forfeits it
         permanently, so the Opener Marginal may not move it.
@@ -9012,7 +9012,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **Fails CLOSED** — pins when it cannot tell — deliberately the opposite of
         `_is_startable_body`. The asymmetry is justified by consequence, not symmetry: a MISSING pin
         permanently forfeits a card, while a spurious one merely opens suboptimally. Pinning
-        everything degrades exactly to the pre-ADR-0081 behaviour (the declared order, verbatim)."""
+        everything degrades exactly to the pre-ADR-0083 behaviour (the declared order, verbatim)."""
         if cid is None:
             return False
         if not (self.stats and self.deck and self.functions):
@@ -9027,7 +9027,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return st.evolvesFrom not in self._deck_body_names()
 
     def _effective_starter_order(self, obs: dict, sp: list) -> list:
-        """**Effective Starter Order** (ADR-0081 decision 5): the declaration as resolved against THIS
+        """**Effective Starter Order** (ADR-0083 decision 5): the declaration as resolved against THIS
         opening hand. Pinned entries hold their declared slot; unpinned entries re-sort among the
         slots left over, by (Opener Marginal desc, declared rank asc).
 
@@ -9063,7 +9063,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         One id, not a rank, because SETUP_ACTIVE is a forced single pick (minCount/maxCount 1): argmax
         reads only the winner, so under a COMPLETE list this collapses the whole ordering losslessly
         (ADR-0079 decision 5). Twin of `_top_fetch_priority_id`, except that the order it scans is
-        hand-conditional (ADR-0081) rather than the declaration verbatim."""
+        hand-conditional (ADR-0083) rather than the declaration verbatim."""
         sp = getattr(self.strategy, "starter_priority", None)
         if not sp or not select or select.get("context") != _SETUP_ACTIVE:
             return None
