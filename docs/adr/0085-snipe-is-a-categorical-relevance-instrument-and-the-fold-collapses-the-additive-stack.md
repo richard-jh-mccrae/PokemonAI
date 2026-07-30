@@ -1322,7 +1322,8 @@ sized against arithmetic that later changes, rotting silently). It stays tiny by
 orders a tie without swamping the other tacticals summed into the same option score — the error an
 earlier deny draft made by bounding the bonus with its own relevance.
 
-**Build notes carried forward.** The tiebreak must live in the Pilot consumer, not
+**Build notes carried forward.** *(Two of these were amended by the build itself — see "H3, what the
+build changed about H" below.)* The tiebreak must live in the Pilot consumer, not
 `snipe_relevance.py`: it needs the menu's PEERS and the pure scorer is per-target by construction. It
 rides the existing `snipe_relevance` flag — it is part of that instrument, and directive 1 forbids
 minting a second switch for it. Its seam test must assert that a tiny positive score on a
@@ -1330,6 +1331,51 @@ previously-zero option cannot flip an ADR-0072 **Endorsement Claim** (`score > 0
 at all"); `DAMAGE(15)` is a forced select so it cannot manufacture a snipe that would not happen, but
 that is a property to assert rather than assume. The two `xfail(strict=True)` tests in
 `test_posture_read.py` are the acceptance witness — strict, so the fix cannot land silently.
+
+### H3 — what the build changed about H, and why (2026-07-30)
+
+Two of H's build notes were amended by building it. Recorded here rather than silently, because a
+spec-axis review correctly flagged both as deviations from the amendment as written.
+
+**The arithmetic moved to the pure module; the PLUMBING stayed in the Pilot.** H said *"the tiebreak
+must live in the Pilot consumer, not `snipe_relevance.py`: it needs the menu's PEERS."* That reason is
+sound and still holds — `Pilot._snipe_brief_peers` collects the menu and remains in the consumer. But
+it applies to peer COLLECTION, not to the arithmetic over an already-collected list, and putting the
+arithmetic in the Pilot forced the seam test to reimplement it to assert it. `snipe_relevance.brief_tiebreak`
+is now the pure function, mirroring the module's existing scoring/plumbing split.
+
+**The epsilon is SHARED with deny, not merely inherited.** H said *"inherited from the sibling without
+change"*, which a standards-axis review flagged as the strongest smell in the diff: the derivation was
+duplicated verbatim across two files, and the copies had **already drifted** — snipe's docstring cited
+`_deny_strip_tiebreak`, a symbol that does not exist (the sibling is `_deny_strip_delta_tiebreak`).
+Duplicating to avoid touching a shared module is the worse option under this repo's build ranking, so
+the quantum is extracted to `currency.tiebreak_bonus` and BOTH instruments call it. **Deny's shipped
+tiebreak was edited under this issue** — behaviour-identical, its own tests green — which is a
+cross-issue touch worth naming rather than burying. The GUARDS stay separate, which is the entire
+point of H2.
+
+**Three defects in this build's own tests, all found by review and all the same class — an assertion
+that cannot fail:**
+
+1. `assert "brief_tiebreak" in inspect.getsource(Pilot._snipe_brief_tiebreak)` — satisfied by the
+   method's own `def` line, so it passed unconditionally. Replaced by a behavioural spy.
+2. The Endorsement-Claim test ran on a fixture drawing NO relevance tie (`[0.0, 0.375]`), so every
+   bonus was `0.0` and it passed with the feature deleted; it also never computed a score. Its claim
+   was backwards, too: the tiebreak **does** raise a zero score — that is its job — and what makes it
+   safe is that `DAMAGE` is a FORCED select. Now asserted in that direction.
+3. `test_snipe_hunts_the_briefed_preevo_end_to_end` asserted `decide(obs) == [0]`, which index order
+   already returns on that board, so one of the two named acceptance witnesses was inert. Now asserts
+   a strict score ORDERING, which only the tiebreak can produce.
+
+Verified by **deletion**: with `_snipe_brief_tiebreak` removed from the score sum, both witnesses now
+fail. Before the fix only one did. That mutation check is the thing that should have been run when the
+witnesses were written, and is the reason all three defects reached review at all.
+
+**One latent robustness gap closed on the way:** peers are now DEDUPED by bench slot, as the deny
+sibling dedupes by its `(area, index)` key. Two options naming one body would otherwise enter the list
+twice and the strict-maximum test would read the duplicate as a rival, silently muting the tiebreak on
+a board where the Brief does express a preference. No corpus `DAMAGE` frame offers a body twice, so
+this guards a shape the engine may pose rather than fixing one it does.
 
 ## Alternatives rejected
 

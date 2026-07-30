@@ -432,17 +432,6 @@ def _damage_select_over_ml_bench():
                        context=DAMAGE, current=cur)
 
 
-@pytest.mark.xfail(strict=True, reason=
-    "ADR-0085 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
-    "deleted, `relevance = their_plan * my_route` is 0 for EVERY target on a board where "
-    "nothing is imminent, and a MULTIPLIER cannot express a preference over a zero -- so the "
-    "Brief steer goes inert and the pick falls to option index. Measured here: brief_multiplier "
-    "is correctly 1.25 (briefed Riolu) vs 0.8 (draw-engine Solrock), but their_plan is 0.0 for "
-    "both (Riolu's forward leg stands down because Mega Lucario ex is already Active -- the "
-    "ADR-0044 discriminator working correctly; Solrock is bare). Whether to add an all-zero "
-    "tie-break REOPENS decision 2, which made the two sides conjunctive precisely so that "
-    "'either alone is worthless'. Needs a user ruling; xfail-strict so a fix cannot land "
-    "silently.")
 @pytest.mark.req("REQ-POSTURE-0006")
 def test_snipe_shuns_the_draw_engine_and_prefers_the_brief_target():
     # Solrock's general draw-engine fact -> an `avoid` MatchupPlan priority; Riolu (Brief
@@ -614,17 +603,6 @@ def _lever_pilot(attack_table=None, **kw):
                  stats=_lever_stats(table), **kw)
 
 
-@pytest.mark.xfail(strict=True, reason=
-    "ADR-0085 OPEN QUESTION (deletion pass, 2026-07-30): with the six additive target rungs "
-    "deleted, `relevance = their_plan * my_route` is 0 for EVERY target on a board where "
-    "nothing is imminent, and a MULTIPLIER cannot express a preference over a zero -- so the "
-    "Brief steer goes inert and the pick falls to option index. Measured here: brief_multiplier "
-    "is correctly 1.25 (briefed Riolu) vs 0.8 (draw-engine Solrock), but their_plan is 0.0 for "
-    "both (Riolu's forward leg stands down because Mega Lucario ex is already Active -- the "
-    "ADR-0044 discriminator working correctly; Solrock is bare). Whether to add an all-zero "
-    "tie-break REOPENS decision 2, which made the two sides conjunctive precisely so that "
-    "'either alone is worthless'. Needs a user ruling; xfail-strict so a fix cannot land "
-    "silently.")
 @pytest.mark.req("REQ-POSTURE-0007")
 def test_snipe_hunts_the_briefed_preevo_end_to_end():
     # Threading proof: recognized opponent → matched Brief resolves Riolu → _board() threads the
@@ -638,8 +616,28 @@ def test_snipe_hunts_the_briefed_preevo_end_to_end():
                                     opp_bench=bench))
     on = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief])                       # default ON
     off = _lever_pilot(scout=Scout(tiny_artifact()), briefs=[brief], matchup_targeting=False)
+    # Asserted on the SCORES, not on the pick. Both bodies price relevance 0.0 on this board, so
+    # index order alone already returns [0] — a `decide(obs) == [0]` assertion passes with the Brief
+    # unwired and witnesses nothing (verified by deleting the tiebreak from the score sum: it stayed
+    # green). A strict score ORDERING can only come from the tiebreak, so that is what is asserted.
+    scores = {o.index: o.score for o in on.explain(obs).options}
+    assert scores[0] > scores[1], "the Brief must ORDER the tie, not merely coincide with index order"
     assert on.decide(obs) == [0]                           # the bare briefed Riolu (fragile_preevo)
-    assert off.decide(obs) == [1]                          # generic order: the energized Solrock
+
+    # The kill-switch is asserted as SILENCE, not as a rival pick. It used to read
+    # `off.decide(obs) == [1]` — "generic order: the energized Solrock" — which was the deleted
+    # `snipe-the-threat` rung (+20 for carrying Energy) doing the work. ADR-0085 Amendment E removed
+    # it, so on this board OFF has no signal at all: both bodies price relevance 0.0, and the pick
+    # falls to option index, which is [0] — the same answer ON gives, for an entirely different
+    # reason. A pick assertion here can no longer distinguish the switch's two states and would pass
+    # whether or not the Brief were wired in (the E4 vacuity, one test down). What IS still
+    # distinguishable, and is the switch's actual contract, is that the Brief contributes nothing:
+    # every option's tiebreak is flat 0.0, so no authored preference reaches the pick.
+    sel = obs["select"]
+    board = off._board(obs, sel)
+    breaks = [off._snipe_brief_tiebreak(obs, sel, board, o, off._context(obs, sel, board, o))
+              for o in sel["option"]]
+    assert breaks == [0.0, 0.0], "matchup_targeting OFF: the Brief must not order the tie"
 
 
 @pytest.mark.req("REQ-POSTURE-0007")

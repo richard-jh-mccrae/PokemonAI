@@ -1849,6 +1849,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._denial_play_tactical(board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_relevance_tactical(obs, select, board, option, ctx)
+                    + self._snipe_brief_tiebreak(obs, select, board, option, ctx)
                     + self._snipe_ko_dominator(ctx)   # armed: the KO rung, as structure not a weight
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
@@ -5205,11 +5206,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if sum(1 for k in tied if shifts.get(k) == best) > 1:
             return 0.0                            # tied on the clock too — no preference expressible
         # The finest distinction relevance actually draws on THIS menu; `1 / K` (one damage unit) when
-        # it draws none. Never this candidate's own relevance — see the docstring.
-        distinct = sorted({r for r, _k in peers})
-        gaps = [b - a for a, b in zip(distinct, distinct[1:]) if b > a]
-        quantum = min(gaps) if gaps else (1.0 / _DENY_RELEVANCE_K)
-        return 0.5 * _DENIAL_TARGET_W * _DENY_RELEVANCE_K * quantum
+        # it draws none. Never this candidate's own relevance — see the docstring. The arithmetic is
+        # shared with snipe's tiebreak (`currency.tiebreak_bonus`, extracted 2026-07-30 by ADR-0085
+        # Amendment H) because it is the piece most likely to drift; the GUARDS above stay separate,
+        # which is the whole point of the divergence recorded there.
+        from common.currency import tiebreak_bonus
+        return _DENIAL_TARGET_W * tiebreak_bonus([r for r, _k in peers], _DENY_RELEVANCE_K)
 
     def _deny_body_at(self, obs: dict, key) -> dict | None:
         """The opponent body a ``(area, bi)`` deny key names, read off the live obs."""
@@ -6282,6 +6284,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                     # OPTION, and a DAMAGE select offers the same
                                                     # bench repeatedly (ADR-0076 Amendment C's
                                                     # resolve-once-per-decision promise).
+        self._snipe_peer_cache = None               # per-decision `[(relevance, priority)]` over the
+                                                    # WHOLE menu, for the Brief tiebreak (ADR-0085
+                                                    # Amendment H). Built once: the tiebreak is
+                                                    # inherently peer-relative, so computing it per
+                                                    # option would rebuild every rival's Context on
+                                                    # every option — O(n^2) `_context` per decision.
         self._opponent_target_cache = self._opponent_target_rows(obs, board)
         if self.deny_relevance and self._opponent_target_cache is not None:
             # Deny Relevance, resolved ONCE per decision off that same cache (ADR-0080, Issue #187).
@@ -7806,6 +7814,98 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not got:
             return 0.0
         return _SNIPE_RELEVANCE_K * got["relevance"]
+
+    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan) -> float:
+        """This option's signed MatchupPlan/Brief priority, or 0.0 when nothing is briefed.
+
+        One owner, because the tiebreak reads it twice — once for the candidate and once per peer —
+        and the two readings MUST agree exactly: the comparison is `!=` against a strict maximum, so
+        any drift between them silently turns a winner into a non-winner."""
+        cid = (self._option_pokemon(obs, select, option) or {}).get("id")
+        if plan is None or cid is None:
+            return 0.0
+        return float(plan.priority(cid) or 0.0)
+
+    def _snipe_brief_peers(self, obs: dict, select: dict, board: Board) -> list[tuple[float, float]]:
+        """``[(relevance, brief_priority)]`` over every bench target this menu offers, once per
+        decision. Peers are read off the SELECT, not off the board: a body no option targets is not a
+        candidate, and ranking against it would invent a tie the engine never posed."""
+        cached = getattr(self, "_snipe_peer_cache", None)
+        if cached is not None:
+            return cached
+        plan = getattr(board, "matchup_plan", None)
+        peers, seen = [], set()
+        for o in (select.get("option") or ()):
+            if o.get("type") != _CARD or o.get("area") != _BENCH:
+                continue
+            # DEDUPED by bench slot, as the deny sibling dedupes by its `(area, index)` key. Two
+            # options naming the SAME body would otherwise enter twice, and the strict-maximum test
+            # (`sum(p == best) > 1`) would read that duplicate as a rival and silently mute the
+            # tiebreak on a board where the Brief does express a preference. No corpus DAMAGE frame
+            # offers a body twice today, so this is a guard against a shape the engine may pose
+            # rather than a fix for one it does.
+            slot = o.get("index")
+            if slot in seen:
+                continue
+            got = self._snipe_relevance_terms(obs, select, board, o,
+                                              self._context(obs, select, board, o))
+            if got is None:
+                continue
+            seen.add(slot)
+            peers.append((got["relevance"], self._snipe_brief_priority(obs, select, o, plan)))
+        self._snipe_peer_cache = peers
+        return peers
+
+    def _snipe_brief_tiebreak(self, obs: dict, select: dict, board: Board, option: dict,
+                              ctx) -> float:
+        """The **Brief Tiebreak** — ordering BENEATH relevance, never a term in it (ADR-0085
+        Amendment H).
+
+        Relevance stays the sole ranker. Among options it scores EXACTLY equal, the signed
+        MatchupPlan/Brief priority orders them instead of the engine's option index. Because this is a
+        comparison key rather than a value, decision 2's conjunctive product is untouched and *"either
+        alone is worthless"* stays literally true.
+
+        **Why it exists.** The deletion pass (Amendment E) turned the Brief steer from a signed ADDEND
+        into a MULTIPLIER, and a multiplier cannot express a preference over a zero: where `their_plan`
+        is 0 for every target the product is 0 for all of them however the Brief reads them, and the
+        pick fell to option index (Amendment E3).
+
+        ⚠️ **Diverges from `_deny_strip_delta_tiebreak` on exactly one line, deliberately.** That sibling
+        guards ``not rel -> 0.0`` (*"nothing relevant — not a zero"*); this one fires at zero. The
+        difference is the SOURCE of the ordering signal, not taste: `strip_shift` is DERIVED from the
+        same board, so ordering by it at zero relevance would re-assert a fact relevance already priced
+        at nothing, whereas the Brief priority is INDEPENDENT AUTHORED scouting — a zero `their_plan`
+        says the threat clock is silent about this body, not that the Brief is wrong about it.
+        Decision 2's *"authored scouting can never promote a whiff"* is preserved exactly as written:
+        it protects a whiff from outranking a NON-whiff, and on an all-zero menu there is nothing of
+        value to promote it above.
+
+        **No sign guard, unlike the sibling's ``best > 0``.** A strict maximum is the whole test. That
+        admits the neutral-over-``avoid`` case — two bodies tied on relevance where the Brief only
+        says *don't poke the draw engine* — which a positive-only guard would drop, and which is the
+        half of the ADR-0051 steer that survives on a board where nothing is imminent. It also cannot
+        manufacture a preference: when every tied candidate carries the same priority (the two
+        IDENTICAL Riolu on `81905522-75` both read `fragile_preevo`) there is no strict maximum and
+        this returns 0.0, so decision 7's recorded miss stays missing.
+
+        The bonus is DERIVED, never hardcoded: half the finest distinction relevance actually draws on
+        THIS menu, falling back to ``1 / K`` — one damage unit — when it draws none, which is exactly
+        the all-zero case. A fixed epsilon would be sized against relevance's current arithmetic and
+        would rot silently the moment a term changed it (the ADR-0063 failure mode). Half of the
+        smallest real gap can never overtake a difference relevance itself settled, and the result is
+        a fraction of one damage unit — small enough to order a tie without swamping the other
+        tacticals summed into the same option score.
+        """
+        if not self.snipe_relevance or board.snipe_ko_available:
+            return 0.0
+        got = self._snipe_relevance_terms(obs, select, board, option, ctx)
+        if got is None:
+            return 0.0
+        from common import snipe_relevance as srel
+        mine = self._snipe_brief_priority(obs, select, option, getattr(board, "matchup_plan", None))
+        return srel.brief_tiebreak(self._snipe_brief_peers(obs, select, board),
+                                   got["relevance"], mine)
 
     def _relevance_terms(self, b, *, doomed: frozenset, area: str, bi: int, brief_ids=()) -> dict:
         """The DENY instrument's value — **Deny Relevance**, the read that replaced the magnitude

@@ -102,9 +102,19 @@ ADR-0080 Amendment B derived for deny. **`currency.PRIZE_DAMAGE_RATE` is NOT a c
 is a `[0,1]` scalar, not a prize-denominated value, so a prizes-to-damage rate would convert nothing
 and merely rescale.
 
-**Ten constants are deleted** by the fold: the six rung weights (60/45/40/30/20/12),
-`_ENERGIZED_SNIPE_TIER`, `_PREVENT_EX_SNIPE_BOOST`, `_SNIPE_THREAT_PRIZE_FLOOR`, and (once Issue #213
-lands the curve fix) `_HAND_SIZE_ATTACKER_BOOST`.
+**Seven are deleted, and two provably cannot be** (corrected 2026-07-30 — an earlier draft of this
+paragraph claimed ten, which was false in two ways). Deleted by the fold and its deletion pass: the
+six rung weights (60/45/40/30/20/12) with the rungs themselves, `_SNIPE_THREAT_PRIZE_FLOOR`,
+`_MATCHUP_PRIORITY_SCALE` (orphaned with `_snipe_matchup_tactical`), and the
+`evolving_wincon_priority` kill-switch with `Board.evolving_wincon_on_bench` (ADR-0085 Amendment G).
+`_HAND_SIZE_ATTACKER_BOOST` went too, but to Issue #213 rather than to this fold.
+
+**`_ENERGIZED_SNIPE_TIER` and `_PREVENT_EX_SNIPE_BOOST` STAY**, and the reason is worth stating so it
+is not "fixed" later: both live inside `Pilot._body_threat_rank`, which `planner.py`'s ADR-0031
+`ko_key_threat` rung also consumes (`planner_key_threat`, shipped ON). They are snipe-NAMED but
+Planner-SHARED, so retiring them is a Planner behaviour change owing its own gate — outside decision
+5's scope. `_PREVENT_EX_SNIPE_BOOST`'s *snipe* reading is nonetheless re-homed here as the
+`prevent_ex` route leg; what survives at the old site serves the other consumer.
 
 ## What stays OUTSIDE this scalar
 
@@ -118,6 +128,7 @@ from __future__ import annotations
 
 import math
 
+from common.currency import tiebreak_bonus
 from common.deny_relevance import MAX_ATTACK_DAMAGE, normalize
 
 #: The exit rate from the ``[0, 1]`` relevance band back into the damage-scale ``score`` the
@@ -175,6 +186,40 @@ def prize_share(prize_value: int, prizes_needed: int) -> float:
     if prizes_needed <= 0:
         return 0.0
     return min(1.0, max(0.0, float(prize_value) / float(prizes_needed)))
+
+
+def brief_tiebreak(peers: list[tuple[float, float]], mine_relevance: float,
+                   mine_priority: float) -> float:
+    """The **Brief Tiebreak** bonus — ordering BENEATH relevance, never a term in it (ADR-0085
+    Amendment H). Pure: the Pilot owns the plumbing, this owns the arithmetic.
+
+    Args:
+        peers: ``[(relevance, brief_priority)]`` for every target THIS menu offers, including me.
+        mine_relevance / mine_priority: this candidate's own two readings.
+
+    Returns:
+        A bonus in score units, or 0.0 when no preference is expressible.
+
+    Fires only among candidates tied on relevance EXACTLY, and only for a STRICT maximum priority
+    among them — so when the Brief says the same thing about every tied body (two copies of one card
+    carry one role) nothing is ordered and nothing is manufactured. Unlike its sibling
+    (`Pilot._deny_strip_delta_tiebreak`, ADR-0084 / Issue #217 decision 2) it does NOT
+    guard on `relevance > 0`: a zero `their_plan` says the threat clock is silent about this body, not
+    that the authored Brief is wrong about it. There is deliberately NO sign guard either — a strict
+    maximum is the whole test — which admits the neutral-over-``avoid`` case a positive-only rule
+    would drop.
+
+    The bonus is DERIVED, never a constant — see `currency.tiebreak_bonus`, which both relevance
+    instruments share. Only that quantum is common: deny's tiebreak keeps its own guards, and the
+    difference between them is deliberate (see above).
+    """
+    tied = [p for r, p in peers if r == mine_relevance]
+    if len(tied) < 2:
+        return 0.0                                  # nothing tied with me — relevance already decided
+    best = max(tied)
+    if mine_priority != best or sum(1 for p in tied if p == best) > 1:
+        return 0.0                                  # not the winner, or tied on the Brief as well
+    return tiebreak_bonus([r for r, _p in peers], K)
 
 
 def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = None,
