@@ -169,7 +169,7 @@ retirement does not ship.
 Both ship OFF (`runtime.py:169`, `:178`), and every decision here lives inside the
 `if self.deny_relevance:` branch — so shipping them dark would change nothing. Tracker build rule 1 is
 explicit that a kill-switch *ships ON*; rule 11 records that Issue #199 shipped this very read
-compute-only with 18 green tests and no consumer, and *"wiring it in #187 immediately exposed three
+compute-only with 18 green tests and no consumer, and *"wiring it in Issue #187 immediately exposed three
 defects the pure tests could not reach."* Adding five more unexercised decisions to that path defers
 the discovery of their defects to whoever arms the switch, with a larger blast radius.
 
@@ -260,3 +260,93 @@ Fixing that changes every zero-value frame, predates this issue, and is handed f
   it. Both the acceptance and the reversal are recorded. The general lesson is narrower than "measure
   first" — it is that **a gate's input must be checked against the predicate it stands in for, not
   merely against the frames the gate was invented to fix.**
+
+## Amendment A (2026-07-30) — the armed read never applied ADR-0080's mandated forward discount
+
+**Found while building decision 6, by investigating the one Discrimination Gate flip this work caused.
+A defect in Issue #187's build, not in this one.**
+
+[ADR-0080](0080-deny-is-a-categorical-relevance-instrument-not-a-magnitude-one.md) decision 2 is
+explicit about the forward-potential leg: *"Riolu carries Mega Lucario ex; Solrock carries nothing.
+This makes `_DENIAL_FORWARD = 0.5` **central**, reversing ADR-0078's re-audit which had it slated for
+deletion"*, and in its consequences, *"`_DENIAL_FORWARD` is **promoted rather than deleted**."*
+
+**It was never applied to the relevance read.** Its only consumer was `_denial_at` — the **OFF** path.
+`strip_relevance`'s affordability gate was a pure energy-COUNT test (`total_attached >= total_cost`)
+with no `is_forward` branch, so a forward form's attack entered the reading at full damage. The armed
+instrument therefore priced a forward threat at **double** the incumbent for the life of Issue #187's
+build.
+
+**The witness, ruled by the user 2026-07-30 (*"82225643-11 rationale is correct"*).** ms 82225643 f11
+is turn 2. The target is a Basic Riolu holding one `{F}`; Mega Lucario ex's Aura Jab (`{F}`, 130) was
+credited in full, firing a Hammer at `55.0` over the Pokégear 3.0 dig the corpus rules correct — and
+their hand holds no Mega Lucario ex, so that attack cannot land this turn or next.
+
+| reading | before | after | OFF reference |
+|---|---|---|---|
+| f12 affordable (`relevance_fire`) | 130 | **65** | **65** — parity to the cent |
+| f11 fire-rung score | `+55.0` | **`+22.5`** | `+22.5` |
+| f12 banked (`relevance`) | 270 | 135 | — (deliberately higher) |
+
+**Fix.** `strip_relevance` splits its setback by source and combines them as
+`max(own, forward_discount x forward)` — byte-for-byte the shape `_denial_at` uses — for both the
+banked and the affordable readings. `forward_setback` stays RAW for diagnosis. `forward_discount` is
+**keyword-only with NO default**: a permissive default is exactly how this went wrong, so omitting it
+now fails loudly at the call instead of silently crediting in full.
+
+A **discount, never a deletion** — ADR-0063 derived the bound from two frames and its lower leg is ms
+82225643 f12, which must still PLAY the Hammer off a banked `{F}`. Excluding forward attacks from the
+affordable reading outright was considered and rejected for exactly that reason.
+
+Pinned by `REQ-DENYREL-0035`, which asserts the two instruments AGREEING on one board rather than
+either number, so a re-derived `_DENIAL_FORWARD` carries both sides with it. It also asserts the banked
+reading still exceeds the affordable one — the discount scales the forward credit without deleting the
+banked doctrine. (A first draft of that test compared BANKED against OFF, read 135 vs 65, and looked
+like a bug when both numbers were correct; the parity claim belongs on the affordable reading, which is
+the one the fire rung consumes and the one `_denial_at` is the counterpart of.)
+
+## Amendment B (2026-07-30) — decision 6 is NOT taken: the pre-registered ship-dark fallback was used
+
+**Decision 6 chartered arming `deny_relevance` and `deny_strip_delta`. The Discrimination Gate blocked
+it, so the fallback decision 6 pre-registered — *"ship the decisions behind the OFF switch and hand
+arming forward"* — was taken. Arming is owed by Issue #228, Phase 1e's last item.**
+
+This is recorded as a decision NOT taken rather than quietly dropped, because the reasoning for arming
+(tracker directive 1: a kill-switch *ships ON*) is unchanged and still owed.
+
+**What the gate reports, attributed across four configurations.** Every Issue #217 change was stashed
+and re-run to isolate ownership:
+
+| config | flips |
+|---|---|
+| clean tree, zero changes of mine | `84071010\|0\|decision\|15` |
+| code changes only, flags OFF (**as shipped**) | `84071010\|0\|decision\|15` — *identical* |
+| flags ON, incumbent `_DENIAL_BENCH` | `84071010`, `82225643\|1\|decision\|11` |
+| flags ON, all changes | `84071010`, `82225643` — *identical to the row above* |
+
+Three consequences follow, and only one of them is this issue's problem:
+
+1. **`84071010|0|decision|15` is PRE-EXISTING and unrelated to deny.** It regresses on a clean tree.
+   The baseline was captured at `e4c46ca` and main has since landed Issue #213's `scaled_threat_rank`
+   (`fac85e2`). The baseline is a **ruling record** (`CLAUDE.md`: auto-recapture *"would make the gate
+   vacuous"*), so this cannot be self-served — it needs a ruling and a re-capture by that change's
+   owner. **As shipped, this work adds ZERO gate regressions.**
+2. **Decisions 2 and 5 are gate-NEUTRAL.** Rows 3 and 4 are identical, so neither the tiebreak nor
+   `_DENIAL_BENCH`'s retirement moves a single leaf frame. Decision 5's own precondition — the
+   `decide()` retest — passed independently: **0 decision flips over 331 corpus frames**.
+3. **`82225643|1|decision|11` survives the Amendment A fix**, and is a **LEAF** interaction in which
+   every deny component is individually correct. Armed, the Hammer's keep price legitimately falls
+   `5.0 -> 1.929` (`TAG_TIER["gust"] 10 x banked 0.386 / 2^1`) — exactly what ADR-0080 designed. A
+   Hammer that is cheaper to HOLD makes PLAYING one cost less worth, so Hammer-play boards outrank the
+   Pokégear dig in the leaf (`correct=63.0` vs `top=113.0`, rank 1 -> 3).
+
+**Point 3 is why this issue stopped rather than pressing on.** The user ruled the corpus rationale
+correct on that frame, so the outcome is wrong — but no deny component is wrong, which makes it a leaf
+card-worth weighting question. Decision 1 leaves the keep price deliberately unchanged, and the leaf is
+a different subsystem; "fixing" a correct component to move a leaf rank would be the wrong repair.
+
+**Consequence for the shipped state.** Decisions 2, 5, 7 and 8 and Amendment A are all merged and
+**inert** — every one lives inside `if self.deny_relevance:`. The nine tests covering them set the
+flags explicitly, so they exercise the armed path without depending on the shipped value. Rule 11's
+warning is now 4-for-4: Issue #187's arming exposed three defects its pure tests could not reach, and
+Issue #217's exposed a fourth. Issue #228 should budget for a fifth.

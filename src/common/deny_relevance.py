@@ -116,7 +116,7 @@ def normalize(setback_damage: float) -> float:
 
 
 def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types=(),
-                    total_attached: int = 0, attached_counts=None) -> dict:
+                    total_attached: int = 0, attached_counts=None, forward_discount: float) -> dict:
     """Relevance of removing ONE Energy of ``energy_type`` from a body, with its legs.
 
     Args:
@@ -133,9 +133,19 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
             (``CardStat.abilityEnergyTypes``).
         total_attached: how many Energy of any type the body holds, for the binding-count clause.
         attached_counts: ``{EnergyType: count}`` for the whole body, for the binding-count clause.
+        forward_discount: the factor a FORWARD form's attack is credited at — `pilot._DENIAL_FORWARD`,
+            whose derivation (`0.154 < d < 0.8`, from ms 82225643 f12 and dragapult 85046350 f32) is
+            documented at that constant. **Keyword-only and deliberately has NO default.** A
+            permissive default is exactly how this went wrong: ADR-0080 decision 2 mandated the
+            discount, nothing applied it, and the armed instrument priced forward threats at double
+            the OFF path for a week (Issue #217, ADR-0084 Amendment A). Omitting it now fails loudly
+            at the call rather than silently crediting in full.
 
     Returns:
         ``{"relevance", "attack_leg", "ability_leg", "setback_damage", "forward_setback"}``.
+        ``setback_damage`` and ``affordable_setback`` are POST-discount — the instrument's answer,
+        the same quantity `_denial_at` returns. ``forward_setback`` stays RAW, so the forward
+        contribution remains visible for diagnosis.
         Relevance is the MAX of the legs — the shape `card_worth.role_value` uses to combine
         heterogeneous claims.
     """
@@ -146,7 +156,15 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
         return blank
     counts = attached_counts or {}
 
-    setback = forward_setback = affordable_setback = body_best = 0
+    # Split by SOURCE so the forward contribution can be discounted rather than credited in full —
+    # ADR-0080 decision 2 makes `_DENIAL_FORWARD` "central" to this leg and "promoted rather than
+    # deleted", and Issue #217 found it was never applied here at all (only in `_denial_at`, the OFF
+    # path). Armed, that priced a forward threat at DOUBLE the incumbent: on ms 82225643 f11 a Riolu's
+    # single {F} credited Mega Lucario ex's Aura Jab at the full 130, firing a turn-2 Hammer over the
+    # Pokégear dig the corpus rules correct (user ruling 2026-07-30, ADR-0084 Amendment A).
+    own_setback = forward_setback = 0
+    own_affordable = forward_affordable = 0
+    body_best = 0
     for damage, need, total_cost, is_forward in line_attacks:
         body_best = max(body_best, int(damage))
         breaks_it = False
@@ -173,9 +191,10 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
             count_binds = type_ready and total_attached <= total_cost
             breaks_it = typed_slot or count_binds
         if breaks_it:
-            setback = max(setback, int(damage))
             if is_forward:
                 forward_setback = max(forward_setback, int(damage))
+            else:
+                own_setback = max(own_setback, int(damage))
             # AFFORDABLE-only mirror: the same setback restricted to attacks the body can pay for as
             # it stands. Full relevance deliberately credits BANKED potential (a Riolu's {F} is worth
             # taking before Mega Lucario ex exists), which is right for deciding whether a Hammer is
@@ -183,7 +202,16 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
             # card NOW, where crediting an attack they cannot yet make fires at a threat that has not
             # arrived. Consumers pick the reading their decision needs (ADR-0080 Amendment B).
             if total_attached >= total_cost:
-                affordable_setback = max(affordable_setback, int(damage))
+                if is_forward:
+                    forward_affordable = max(forward_affordable, int(damage))
+                else:
+                    own_affordable = max(own_affordable, int(damage))
+    # `max(own, discount x forward)` — byte-for-byte the shape `_denial_at` uses on the OFF path
+    # (`max(now, _DENIAL_FORWARD * forward)`), so the two instruments price a forward threat the same
+    # way. A DISCOUNT, never a deletion: ADR-0063 derived the bound from two frames, and its lower
+    # leg is ms 82225643 f12, which must still PLAY the Hammer off a Riolu's banked {F}.
+    setback = max(own_setback, forward_discount * forward_setback)
+    affordable_setback = max(own_affordable, forward_discount * forward_affordable)
     attack = normalize(setback)
 
     # The mute. Only the LAST Energy of the gated type switches an Ability off: "any {D} attached"

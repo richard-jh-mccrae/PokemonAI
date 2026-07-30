@@ -119,6 +119,16 @@ _DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Cru
                            # an Active strip is spent immediately, a bench strip is easily undone. The
                            # bound is DERIVED, not tuned to taste: ms f29 (bench, 70) must hold while
                            # ms f15 (Active, 30) must play, which forces bench weight < 30/70 = 0.43.
+                           # ⚠️ OFF-PATH ONLY since ADR-0084 decision 5. Its stated premise above is
+                           # REFUTED by the rules: retreat is an ordinary turn action (rules.md §2)
+                           # paid in Energy discard and attacking ends the turn, so retreat-then-attack
+                           # is legal in ONE turn — a benched attacker owes Energy, never tempo
+                           # (ADR-0071 decision 6, `combat._promotion_open`). The ARMED fire rung and
+                           # target pick both read the boolean gate instead. Kept live here and in
+                           # `_opp_denial_best` so the ADR-0062 derivation is not deleted and the
+                           # OFF-vs-ARMED diff still works (tracker Issue #136 build rule 11).
+                           # Measured: 0 sign changes over 21 Hammer-ruled frames, and 0 decision
+                           # flips over 331 corpus frames at the real `decide()`.
 _DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLACES `play-energy-denial`'s
                            # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
                            # off a benched body. Same lesson as ADR-0060: price the quantity, don't
@@ -146,10 +156,17 @@ _DENIAL_TARGET_W = 1.0     # points per damage-point denied, at the DISCARD_ENER
 #: parameter here: pin it to anything else and the two instruments stop agreeing.
 #:
 #: Measured on the ADR-0062 anchors, the identity reproduces the incumbent to the cent where the
-#: readings coincide — f21/f29's benched Dragapult ex prices **-1.25 on both**, which is the exact
-#: value ADR-0062 derived `_DENIAL_BENCH` from and ADR-0082 Amendment A re-verified. It diverges only
-#: upward, where relevance sees a setback `_denial_at` cannot (f12 +55.0 vs +22.50, f26 +16.25 vs
-#: +1.25) — same sign, same decision, strictly better informed.
+#: readings coincide, and diverges only upward where relevance sees a setback `_denial_at` cannot —
+#: **f12 +55.0 vs +22.50, f26 +16.25 vs +1.25**, same sign, same decision, strictly better informed.
+#:
+#: ⚠️ **The witness moved (ADR-0084 decision 8).** This note used to cite f21/f29's benched Dragapult
+#: ex pricing **-1.25 on both**. That figure was `70 x _DENIAL_BENCH`, and decision 5 retired the
+#: constant from this rung in favour of ADR-0071's promotion GATE. On that board the gate SHUTS (their
+#: Terapagos ex holds 0 Energy against retreat cost 2, and no switch survives the read), so the bench
+#: carries no weight, `deny_relevance_best` is 0, and the rung takes its whiff branch at **0.00** —
+#: same decision, different number. f12 and f26 are the surviving witnesses; f21/f29 now witness the
+#: GATE instead. K itself is untouched: decision 5 changed an area WEIGHT, which multiplies outside
+#: this normalizer, so there was never a free parameter here to re-derive.
 #:
 #: It is **NOT an exchange rate** and must never be reused as one: that is the Worth Damage Rate, which
 #: ADR-0080 decision 1 rules MOOT for deny and `common/currency.py`'s guard test keeps absent by design.
@@ -495,8 +512,12 @@ class Board:
                                        # doing work worth denying (no Energy at all, surplus Energy, or
                                        # the only live body dies to my Knock Out this turn) — HOLD.
                                        # Replaces `opp_denial_best` on the fire-now rung when armed.
-    deny_relevance_rows: tuple = ()    # per-body `(area, bi, {EnergyType: relevance})` — what the TARGET
-                                       # pick ranks on. Keyed by TYPE, never by position: a
+    deny_relevance_rows: tuple = ()    # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
+                                       # what the TARGET pick ranks on, plus the ADR-0084 clock DELTA
+                                       # its lexicographic tiebreak reads (None when `deny_strip_delta`
+                                       # is off — absence, NOT a measured zero). One row set, so the
+                                       # rank and its tiebreak can never drift apart.
+                                       # Keyed by TYPE, never by position: a
                                        # `DISCARD_ENERGY` option's `energyIndex` indexes attached CARDS
                                        # while `energies` counts the units they PROVIDE, so the two
                                        # indexes diverge on any multi-unit Energy (see `_relevance_terms`).
@@ -5098,9 +5119,97 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         if self.deny_relevance:
             etype = self._option_energy_type(target, option)
-            rel = (self._deny_relevance_map(obs, board).get(key) or {}).get(etype, 0.0)
-            return _DENIAL_TARGET_W * weight * _DENY_RELEVANCE_K * rel
+            rel_map = self._deny_relevance_map(obs, board)
+            rel = (rel_map.get(key) or {}).get(etype, 0.0)
+            base = _DENIAL_TARGET_W * weight * _DENY_RELEVANCE_K * rel
+            return base + self._deny_strip_delta_tiebreak(obs, board, select, key, rel, rel_map)
         return _DENIAL_TARGET_W * weight * self._denial_at(target)
+
+    def _deny_strip_delta_tiebreak(self, obs: dict, board: Board, select: dict, key,
+                                   rel: float, rel_map: dict) -> float:
+        """The ADR-0084 decision 2 tiebreak: among candidates tied on relevance EXACTLY, prefer the
+        one whose strip actually buys turns of survival. Returns 0.0 whenever there is nothing to
+        break.
+
+        **Lexicographic, and provably so — the bound is DERIVED, not hand-set.** The adjustment is
+        half the FINEST distinction relevance actually draws: the smallest positive gap between two
+        distinct relevance values on this menu, falling back to ``1 / K`` — one unit of damage — when
+        the menu draws no distinction at all. Since ``K x relevance`` IS the setback damage
+        (ADR-0080 Amendment B) and damage is integral, two relevance values that differ at all differ
+        by at least ``1 / K``, so half of that can never overtake a difference relevance settled.
+
+        Deriving the bound rather than fixing it is the whole point: a hardcoded epsilon would be a
+        constant sized against relevance's current arithmetic, and this repo has a recorded case of a
+        new positive term silently voiding every guard calibrated against the previous arithmetic
+        (ADR-0063). A rotted bound would begin overriding real differences with nothing failing
+        loudly. Any fraction in (0, 1) is equally sound; a half is the midpoint of that proven-safe
+        interval, NOT a value fitted to data.
+
+        It is also deliberately TINY — a fraction of one damage unit. An earlier draft bounded the top
+        tier by its own relevance, which is order-safe (nothing sits above it) but yields a bonus of
+        ~125 score units on a real board. That would order the tie correctly and then swamp the other
+        twenty-odd tacticals summed into the same option score, converting a tiebreak into a rung.
+
+        **Why this may not GATE.** The clock reads *"does this strip delay MY defeat by a whole turn
+        or more"*, which is strictly narrower than *"does this strip do anything"* — it is blind to
+        Ability mutes, to sub-turn setbacks, and to any strip that wrecks their plan without touching
+        their clock against me. Measured, a `strip_shift > 0` gate on the keep price would suppress
+        128 of 218 relevance-positive corpus rows (ADR-0084 decision 7, the reversal). Ordering a tie
+        asserts no worth; gating one asserts a great deal.
+
+        Silent, by construction, on the cases the clock cannot speak to: a body tied with itself
+        across two Energy TYPES reads ONE delta (`strip_shift` is per body, and which Energy you
+        remove never changes it — 109 bodies, 0 cases), so no strict maximum exists and no preference
+        is manufactured."""
+        shifts = self._deny_strip_shift_map(obs, board)
+        mine = shifts.get(key)
+        if mine is None or not rel:
+            return 0.0                            # absent reading, or nothing relevant — not a zero
+        # Every candidate this menu actually offers, as (relevance, key). Peers are read off the
+        # SELECT rather than off the board: an Energy no option targets is not a candidate, and
+        # ranking against it would invent a tie the engine never posed.
+        peers = []
+        for opt in (select.get("option") or ()):
+            if opt.get("type") != _ENERGY:
+                continue
+            area = opt.get("area")
+            k = ("active", 0) if area == _ACTIVE else (
+                ("bench", opt.get("index", -1)) if area == _BENCH else None)
+            if k is None or k not in rel_map:
+                continue
+            if k[0] == "active" and board.active_can_ko:
+                continue                          # the caller already scored this option 0.0 — a body
+                #                                   dying to my KO is not a candidate, and letting it
+                #                                   hold the largest shift would make `best`
+                #                                   unreachable and silently re-mute the tiebreak on
+                #                                   the live bench candidate
+            r = (rel_map.get(k) or {}).get(
+                self._option_energy_type(self._deny_body_at(obs, k), opt), 0.0)
+            peers.append((r, k))
+        tied = {k for r, k in peers if r == rel}
+        if len(tied) < 2:
+            return 0.0                            # nothing tied with me — relevance already decided
+        best = max((shifts.get(k) for k in tied), key=lambda s: (s is not None, s))
+        if best is None or best <= 0 or mine != best:
+            return 0.0                            # no strict winner, or I am not it
+        if sum(1 for k in tied if shifts.get(k) == best) > 1:
+            return 0.0                            # tied on the clock too — no preference expressible
+        # The finest distinction relevance actually draws on THIS menu; `1 / K` (one damage unit) when
+        # it draws none. Never this candidate's own relevance — see the docstring.
+        distinct = sorted({r for r, _k in peers})
+        gaps = [b - a for a, b in zip(distinct, distinct[1:]) if b > a]
+        quantum = min(gaps) if gaps else (1.0 / _DENY_RELEVANCE_K)
+        return 0.5 * _DENIAL_TARGET_W * _DENY_RELEVANCE_K * quantum
+
+    def _deny_body_at(self, obs: dict, key) -> dict | None:
+        """The opponent body a ``(area, bi)`` deny key names, read off the live obs."""
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
+        area, bi = key
+        bodies = [b for b in (opp.get("active") if area == "active" else opp.get("bench")) or [] if b]
+        return bodies[bi] if 0 <= bi < len(bodies) else None
 
     def _option_energy_type(self, target: dict | None, option: dict):
         """The `EnergyType` a ``DISCARD_ENERGY`` option's own Energy contributes, or ``None``.
@@ -6178,11 +6287,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # they can do NOW (ADR-0080 Amendment B). Measured on the four ADR-0062 anchors, this is
             # what keeps all four signs: f21/f29 hold (-6.50), f12 plays (+16.00), f26 plays (+0.50).
             # Full relevance here fires on f21/f29 (+2.50) off an unaffordable Phantom Dive.
+            # ADR-0084 decision 5: the bench AREA WEIGHT is the ADR-0071 decision 6 promotion GATE,
+            # not `_DENIAL_BENCH`. `_DENIAL_BENCH`'s own premise — "a benched body must still be
+            # promoted before the denial bites" — is refuted by the rules: retreat is an ordinary
+            # turn action (rules.md §2) paid in Energy discard, and attacking ends the turn, so
+            # retreat-then-attack is legal in ONE turn. A benched attacker owes Energy, never tempo.
+            # So the honest reading is boolean: a benched body counts FULLY when promotion is open
+            # and NOT AT ALL when it is shut — which on ms f21/f29 is stricter than the 0.25 it
+            # replaces (their Active holds 0 Energy against retreat cost 2 and no switch survives
+            # the read, so the gate SHUTS and the rung takes its whiff branch). Measured over all 21
+            # Hammer-ruled corpus frames: ZERO sign changes vs the constant
+            # (`tools/train/probes/deny_gate217.py`). `_DENIAL_BENCH` stays live on the OFF path.
+            _opp_bodies = [b for b in ([oa] if oa else []) + list(opp.get("bench") or []) if b]
+            promotion_open = bool(_opp_bodies) and self.combat._promotion_open(
+                _opp_bodies, oa, switch_enabler=self._opp_switch_enabler())
             board.deny_relevance_best = max(
-                (r.get("relevance_fire", 0.0) * (1.0 if r["area"] == "active" else _DENIAL_BENCH)
+                (r.get("relevance_fire", 0.0) * (1.0 if r["area"] == "active"
+                                                 else (1.0 if promotion_open else 0.0))
                  for r in _rel_rows), default=0.0)
             board.deny_relevance_rows = tuple(
-                (r["area"], r["bi"], dict(r.get("relevance_by_type") or {})) for r in _rel_rows)
+                (r["area"], r["bi"], dict(r.get("relevance_by_type") or {}), r.get("strip_shift"))
+                for r in _rel_rows)
         return board                                    # COMPUTE-ONLY here — nothing scores off it yet (S2)
 
     def _opp_hand_strip_odds(self) -> float:
@@ -7516,13 +7641,33 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         slot uses — without the fallback an armed hand-built board would emit NO deny slots and read
         as a whiff, which is a silent behaviour change rather than a fail-closed one."""
         if board.deny_relevance_rows:
-            return {(a, i): rel for a, i, rel in board.deny_relevance_rows}
+            return {(a, i): rel for a, i, rel, _shift in board.deny_relevance_rows}
+        result = self._deny_rows(obs, board)
+        return {(r["area"], r["bi"]): dict(r.get("relevance_by_type") or {}) for r in result}
+
+    def _deny_strip_shift_map(self, obs: dict, board: Board) -> dict:
+        """``{(area, bi): strip_shift}`` — the ADR-0084 **strip Δ** per body, the target pick's
+        lexicographic tiebreak key. Named for the delta, never "clock": `strip_shift` is a
+        delta OF `turns_to_ko_me`, not a reading of it (CONTEXT.md, The Two Clocks). Same cache-or-compute ladder as `_deny_relevance_map`, off the
+        SAME rows, so the rank and its tiebreak cannot drift apart.
+
+        A value of ``None`` means **absent, not zero** — `deny_strip_delta` is off, or the row never
+        carried a reading. The distinction is load-bearing: a delta may break a tie but must never
+        GATE one (ADR-0084 decision 7), and an absent reading must leave the ranking exactly as
+        relevance alone ordered it."""
+        if board.deny_relevance_rows:
+            return {(a, i): shift for a, i, _rel, shift in board.deny_relevance_rows}
+        return {(r["area"], r["bi"]): r.get("strip_shift") for r in self._deny_rows(obs, board)}
+
+    def _deny_rows(self, obs: dict, board: Board) -> list:
+        """The per-decision opponent-target rows, cached-or-computed — the one ladder both deny maps
+        read. Falls back to a fresh compute for a hand-built `board` that never went through
+        `_board()` (test fixtures); without it an armed hand-built board would emit NO deny slots and
+        read as a whiff, which is a silent behaviour change rather than a fail-closed one."""
         result = getattr(self, "_opponent_target_cache", None)
         if result is None:
             result = self._opponent_target_rows(obs, board)
-        if result is None:
-            return {}
-        return {(r["area"], r["bi"]): dict(r.get("relevance_by_type") or {}) for r in result[1]}
+        return list(result[1]) if result else []
 
     def _bench_doomed_by_me(self, ma: dict | None, bench_list) -> frozenset:
         """Indices into ``bench_list`` of benched opponent bodies MY Active can Knock Out this turn.
@@ -7606,7 +7751,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             etype = getattr(est, "energyType", None) if est else None
             got = dr.strip_relevance(energy_type=etype, type_count=counts.get(etype, 0),
                                      line_attacks=line_attacks, ability_types=ability_types,
-                                     total_attached=len(energies), attached_counts=counts)
+                                     total_attached=len(energies), attached_counts=counts,
+                                     # ADR-0084 Amendment A: the ADR-0080-mandated forward discount,
+                                     # the SAME constant `_denial_at` applies on the OFF path. Without
+                                     # it the armed read credited a forward form in full.
+                                     forward_discount=_DENIAL_FORWARD)
             by_type[etype] = got["relevance"]
             fire = max(fire, got["affordable_relevance"])
             if best["relevance_energy"] is None or got["relevance"] > best["relevance"]:
@@ -7704,7 +7853,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `_DENY_CHARGED` carries the **user's ruling of 2026-07-28** (ADR-0078 Amendment B): the Δ is
         INSTANTANEOUS — `base_attach: 0`, no credit for the Energy they re-attach next turn — and it
         is only ever taken over opponent bodies carrying Energy right now. See that constant for why
-        the design doc's "slow" (`base_attach: 1`) reading was the thing gate 1 measured as broken."""
+        the design doc's "slow" (`base_attach: 1`) reading was the thing gate 1 measured as broken.
+
+        **`energies[:-1]` is arbitrary and measured HARMLESS, not assumed harmless (ADR-0084 decision
+        3).** Removing "the last-attached Energy" looks like it should matter under a typed
+        affordability policy, and it does not: across **109 corpus bodies holding two or more
+        Energies, which Energy is removed changes `turns_to_ko_me` in ZERO cases**, with zero false
+        negatives for this policy. So the per-removed-TYPE generalisation the charged framing implies
+        is measurably inert, while raising cost from 2 simulations per body per decision to
+        `1 + Ntypes`. That is an EMPIRICAL rather than a provable guarantee: if a board ever appears
+        where a body holds one critical and one surplus Energy AND sets the clock, re-run that
+        measurement rather than re-deriving the question — the harness is
+        `tools/train/probes/deny_gate217.py`.
+
+        **Consumer (ADR-0084 decision 7).** Exactly ONE: the target pick's lexicographic tiebreak
+        (`_deny_strip_delta_tiebreak`). This Δ may order a tie; it may never GATE one. It reads *"does this
+        strip delay MY defeat by a whole turn or more"*, which is strictly narrower than *"does this
+        strip do anything"* — blind to Ability mutes, to sub-turn setbacks, and to any strip that
+        wrecks their plan without touching their clock against me. Measured, a `strip_shift > 0` gate
+        on the keep price would have suppressed **128 of 218** relevance-positive rows."""
         from common import needs
         b = bodies[i]
         energies = list((b or {}).get("energies") or [])
