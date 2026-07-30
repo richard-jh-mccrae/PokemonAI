@@ -352,7 +352,7 @@ def test_the_leaf_profile_is_bounded_as_the_145_tripwire():
     nothing"."""
     import math
 
-    from tests.strategy.test_leaf_profile import LEAF_PROFILE, _Probe
+    from test_leaf_profile import LEAF_PROFILE, _Probe   # sibling module, not a `tests.` package
     deck = _deck()
     pilot = _engine_pilot(deck)
     obs, start = battle_start(deck, list(deck))
