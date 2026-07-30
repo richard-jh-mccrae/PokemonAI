@@ -1,5 +1,13 @@
 """ms 85164131 f22 (CRITICAL) — the evolving-wincon snipe priority, finally gated.
 
+⚠️ **The MECHANISM this file is named after no longer exists** (ADR-0085 Amendment G, 2026-07-30).
+`evolving_wincon_priority`, `Board.evolving_wincon_on_bench` and the three rungs it stood down are all
+DELETED; the f22 CRITICAL is now carried by `snipe_relevance`'s `forward` leg, which reaches the same
+pick by ORDERING rather than by standing anything down. Everything below the next paragraph describes
+the pre-2026-07-30 additive machinery and is kept as the historical record of WHY the correction was
+filed — read it in the past tense. The live assertion is
+`test_the_scalar_carries_the_critical_without_a_stand_down_switch`.
+
 The fixture `ms_snipe_evolving_wincon_over_promotion_stack_f22.json` has existed since 2026-07-09 and
 **no test consumed it**. `test_snipe_the_real_attacker.py` parametrises f75/f47/f39/f85; f22's only
 trace in the tree was a comment beside the kill-switch default. So the CRITICAL correction that
