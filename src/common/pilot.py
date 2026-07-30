@@ -1598,6 +1598,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             min_count = select.get("minCount", 0)
             while len(chosen) > min_count and traces[chosen[-1]].score < 0:
                 chosen = chosen[:-1]
+        chosen = self._never_pre_bench(select, chosen)
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
                         posture=self._posture_record(board),
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
@@ -1709,6 +1710,44 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     out[slot] = opt
             i = j + 1
         return out
+
+    def _never_pre_bench(self, select: dict, chosen: list) -> list:
+        """NEVER place a Pokémon on the Bench during Set Up (ADR-0081 decision 9). A sound rule read
+        off the rulebook, not a price — so it filters the pick rather than scoring it, like decision
+        7's empty-Bench guard.
+
+        Deferring to my own first turn is WEAKLY DOMINANT: never worse, sometimes better. Three facts
+        make it safe, each checked at source rather than recalled:
+
+        1. **The placement is optional.** "Put **up to** 5 more Basic Pokémon face down on your Bench"
+           (`docs/rulebook.txt` L97) — which is why the select carries `minCount 0` and this can be a
+           filter at all.
+        2. **No ATTACK reaches me first, in either seat.** Going first, my turn 1 precedes any
+           opponent action at all; going second, their turn 1 cannot attack (`docs/rules.md` §2,
+           rulebook L152), so their turn 2 is the first legal attack — after my turn 1 either way.
+        3. **No ABILITY damage reaches me either**, which is the leg that makes 2 sufficient rather
+           than merely suggestive. Only Basics can be in play on turn 1, because neither player may
+           evolve on their own first turn (`docs/rules.md` §4, rulebook L123-128) — and of the 21
+           damage-counter Abilities in `data/EN_Card_Data.csv`, ZERO are on a Basic. Dusknoir's 130,
+           Froslass's checkup counters and Tyranitar's Sand Stream are all evolutions.
+
+        And the Basics I keep in hand cannot be stripped in the meantime: the player going first
+        cannot play a Supporter (rulebook L133), so no Judge or Iono shuffles them away.
+
+        What deferring BUYS: the pregame placement wastes every bench-drop Ability, since "once during
+        your turn" is unsatisfiable before the game starts — Meowth ex's Last-Ditch Catch is the case
+        that opened Issue #197. Benching the same body on turn 1 fires it. Going second it also buys
+        information: I draw a card and see their committed board before spending any of my own.
+
+        This SUBSUMES three Set-Up special cases that were separately bolted onto the equation — the
+        exposure fallback's pregame branch, the redundancy charge keyed on `setup_placed_ids`, and
+        `bench-fill-a-basic`'s `_SETUP_BENCH` half. Three approximations of one rule.
+
+        Scoped to `_SETUP_BENCH` only. The Set-Up ACTIVE choice is untouched (a Basic there is
+        mandatory), and every in-game bench play is still the Deploy Marginal's to price."""
+        if select.get("context") != _SETUP_BENCH:
+            return chosen
+        return []
 
     def _empty_bench_forced(self, obs: dict, select: dict, board: Board, options: list,
                             order: list) -> list:
@@ -5071,28 +5110,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         correct and is not sufficient on its own.
 
         So where the Path cannot be read at all, the leg falls back to the body's OWN prize liability
-        — normally the EXCESS over a 1-prize body, because some body must be fielded and only the
-        surplus is a gift. Meowth ex (2 prizes) carries 1 prize-equivalent at Set Up, which is the
-        fold of `dont-bench-multiprize` (−15) into the equation rather than a pregame special case.
+        — the EXCESS over a 1-prize body, because some body must be fielded and only the surplus is a
+        gift. A 2-prize ex therefore carries 1 prize-equivalent, which is the fold of
+        `dont-bench-multiprize` (−15) into the equation rather than a special case.
 
-        A REDUNDANT pregame copy pays the FULL value instead — a card already placed on my board this
-        Set Up (`board.setup_placed_ids`), which is the signal built for exactly this question. The
-        excess rule discounts the first body because you cannot avoid fielding one; a SECOND copy of
-        what is already down avoids nothing, so none of it is excused. It is pure KO target, and by
-        `docs/rulebook.txt` L97 ("put **up to** 5 more Basic Pokémon...", hence `minCount 0`) plus
-        `docs/rules.md` §2 (my own first turn precedes the first legal attack in either seat),
-        declining costs nothing — the same body can be benched next turn if it turns out to be wanted.
-
-        Ruled on `85785609|0|decision|4` (user, 2026-07-30): "we typically only ever need a single
-        Munkidori in play. this second copy is a perfect fodder for Ultra Ball."
-
-        REDUNDANCY is the trigger, deliberately, and NOT the prize count — that was measured, not
-        assumed. Charging the full value for every pregame placement also declines Riolu, the
-        win-condition Line base (assignment 14.83 against a 30.0 charge), because ONE prize outweighs
-        the entire assignment band (`DEPLOY_BAND` 25 < `PRIZE_DAMAGE_RATE` × phase). A rule keyed on
-        prize count cannot separate a body worth laying from a spare of one already down; the
-        already-placed read can, and does: Riolu +14.83 (benched), a second Munkidori −28.87
-        (declined), Meowth ex −30.0 (declined) — all three from one rule.
+        The Set-Up branch this used to carry is GONE, and so is the `setup_placed_ids` redundancy
+        charge that briefly sat beside it. Decision 9 rules that we never bench during Set Up at all,
+        so a pregame placement is no longer a decision to price — three separate pregame special cases
+        turned out to be approximations of one rule. The fallback now serves only its original job:
+        a mid-game bench play whose Prize Path cannot be read.
 
         AMENDMENT F was tried here and WITHDRAWN (2026-07-30, same day). It stood the fallback down
         whenever declining would leave a bare Bench with no other Pokémon in hand, so that Meowth ex
@@ -5112,12 +5138,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return delta
         if board.their_path_turns is not None:
             return 0.0                     # the Path IS readable and says this body gifts nothing
-        cid = self._option_card_id(obs, select, option)
-        prizes = int(self._prize_value({"id": cid}) or 1)
-        if ((select or {}).get("context") == _SETUP_BENCH
-                and cid is not None and cid in board.setup_placed_ids):
-            return float(prizes)           # a REDUNDANT pregame copy: the whole body is a gift
-        return float(max(0, prizes - 1))   # otherwise only the surplus over an unavoidable body
+        prizes = int(self._prize_value({"id": self._option_card_id(obs, select, option)}) or 1)
+        return float(max(0, prizes - 1))   # only the surplus over the body you cannot avoid fielding
 
     def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,

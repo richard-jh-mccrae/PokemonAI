@@ -1,21 +1,26 @@
-"""The PREGAME setup-bench DECLINE (ep83661652 f3, 2026-07-04): two pieces.
+"""The PREGAME setup bench: we never place one (ADR-0081 decision 9).
 
-1. `decide()` single-pick take-fewer — at an OPTIONAL select (`minCount == 0`) the Pilot may DECLINE
-   (return fewer picks) when the best option is actively DISCOURAGED (score < 0), instead of always
-   taking `maxCount` options. Unchanged, and still the mechanism.
-2. WHAT makes the score negative. Was `dont-pre-bench-the-supporter-tutor` (−15); since ADR-0081 it
-   is the Deploy Marginal's exposure leg, which prices Meowth ex's 2-prize liability instead of
-   asserting a flat penalty.
+This module used to be about the DECLINE MECHANISM — `decide()`'s single-pick take-fewer trimming a
+placement some Hypothesis scored below zero (`dont-pre-bench-the-supporter-tutor` −15, later the
+Deploy Marginal's exposure leg). That framing is retired. The pregame is not a decision we price at
+all: `Pilot._never_pre_bench` refuses every `_SETUP_BENCH` placement outright.
 
-The decline briefly flipped on 2026-07-30 (ADR-0081 Amendment F: with no other Pokémon in hand,
-declining leaves a one-body board) and was restored the same day by the user's own narrowing —
-`docs/rules.md` §2 puts my first turn before the first legal attack in either seat, so the tutor can
-be benched on turn 1 *with* Last-Ditch Catch. Waiting costs nothing here; benching costs the Ability.
+Why it is a RULE and not a price, all checked at source:
 
-The corpus record for this frame CANNOT express that: at `decision` scope `correct` is mandatory and
-must index a legal option (`correction.py`), so a decline has no representation and the record reads
-`chosen == correct == [0]`. It is held out of the Decision Gate on exactly that ground
-(`ml0703_decline_the_setup_tutor_f3.json`), and the ruling lives HERE instead.
+* the placement is optional — "put **up to** 5 more Basic Pokémon face down on your Bench"
+  (`docs/rulebook.txt` L97), hence `minCount 0`;
+* no ATTACK can reach me before my own first turn in either seat (`docs/rules.md` §2, rulebook L152);
+* no ABILITY damage can either — only Basics are in play on turn 1, since neither player may evolve on
+  their own first turn (`docs/rules.md` §4), and none of the 21 damage-counter Abilities in
+  `EN_Card_Data.csv` sits on a Basic;
+* and the Basics I keep in hand cannot be stripped, because the player going first cannot play a
+  Supporter (rulebook L133).
+
+So deferring is weakly dominant: never worse, and it preserves every bench-drop Ability (Meowth ex's
+Last-Ditch Catch — the case that opened Issue #197) plus a turn of information.
+
+The take-fewer mechanism itself is NOT tested here any more — it is alive and covered at `_TO_BENCH`
+in `test_fetch_doctrine.py`, which is where it still decides something.
 """
 import importlib.util
 import json
@@ -27,12 +32,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from common.cards import CardFunctions  # noqa: E402
-from common.pilot import Pilot  # noqa: E402
-from common.scouting.provider import CardStat  # noqa: E402
-from common.strategy import Strategy  # noqa: E402
 from common.strategy.context import _SETUP_BENCH  # noqa: E402
-from common.strategy.general_strategy import GENERAL_STRATEGY  # noqa: E402
 
 FIXTURE = REPO / "tests" / "fixtures" / "corrections" / "setup_bench_decline_f3.json"
 
@@ -47,56 +47,26 @@ def _build_mega_lucario_pilot():
 
 @pytest.mark.req("REQ-FETCH-0031")
 def test_f3_declines_pre_benching_the_supporter_tutor():
-    """REQ-FETCH-0031: on the real f3 pregame state the Pilot DECLINES (chosen == []) rather than
-    benching Meowth ex — the supporter_tutor is saved for an in-game bench, which is strictly better
-    because the SAME body can be benched on turn 1 and still fire Last-Ditch Catch.
+    """The frame this module was built on: on the real f3 pregame state the Pilot DECLINES rather than
+    benching Meowth ex, so Last-Ditch Catch survives for an in-game bench.
 
-    THIS is the frame's ruling of record. The corpus correction cannot carry it: a decline needs
-    `correct: []`, which `decision` scope forbids, so the sweep sees `chosen == correct == [0]` and
-    would read the decline as a regression. The frame is held out on that ground, and this test is
-    what actually gates the behaviour."""
+    Ruled 2026-07-04, re-affirmed 2026-07-30. The OUTCOME is unchanged across every mechanism this
+    has had — a −15 rung, then the exposure leg, now the rule — which is why it stays the anchor."""
     fx = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    pilot = _build_mega_lucario_pilot()
-    assert pilot.decide(fx["obs"]) == [], "should decline the optional pregame bench of Meowth ex"
-
-
-def _setup_bench_obs(hand_ids):
-    """A minimal SETUP_BENCH select (minCount 0, maxCount 1) offering each hand card as a bench pick."""
-    opts = [{"type": "Card", "area": 2, "index": i, "playerIndex": 0} for i in range(len(hand_ids))]
-    return {"current": {"players": [{"active": [None], "bench": [], "hand": [{"id": c} for c in hand_ids]},
-                                    {"active": [None], "bench": []}], "yourIndex": 0, "turn": 0},
-            "select": {"context": _SETUP_BENCH, "minCount": 0, "maxCount": 1, "option": opts}}
-
-
-def test_the_decline_is_the_deploy_marginals_exposure_leg():
-    """REQ-FETCH-0031: the trim fires because the pick scores < 0, and since ADR-0081 that negative is
-    the Deploy Marginal's EXPOSURE leg, not `dont-pre-bench-the-supporter-tutor` (−15, deleted).
-
-    The pregame Actives are face down, so the Prize Path is unreadable (`their_path_turns is None`)
-    and exposure falls back to the body's own liability: Meowth ex is a 2-prize ex, one prize of
-    EXCESS over an unavoidable 1-prize body. The Ability leg contributes nothing — at Set Up "once
-    during your turn" is unsatisfiable, so decision 3's zero is DERIVED — leaving the exposure alone
-    to sink the placement."""
-    fx = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    option = _build_mega_lucario_pilot().explain(fx["obs"]).options[0]
-    assert option.score < 0
-    row = option.deploy_working
-    assert row["exposure"] > 0 and row["ability_relevance"] == 0
-    assert row["total"] < 0
+    assert _build_mega_lucario_pilot().decide(fx["obs"]) == []
 
 
 @pytest.mark.req("REQ-FETCH-0031")
-def test_a_needed_line_base_is_still_benched_at_set_up():
-    """The bound on the redundancy charge, and it is REQUIRED rather than merely reassuring.
+def test_the_refusal_is_unconditional_even_for_the_wincon_line_base():
+    """The rule does not weigh the body, and this is the assertion that says so.
 
-    The obvious way to make a second Munkidori decline is to charge every pregame placement its full
-    prize value. That was measured and REJECTED: it also declines Riolu, the win-condition Line base,
-    because ONE prize (`PRIZE_DAMAGE_RATE` x phase = 30) outweighs the entire assignment band
-    (`DEPLOY_BAND` = 25), so no prize-count rule can separate a body worth laying from a spare of one
-    already down.
+    An hour before decision 9 this file asserted the OPPOSITE — that Riolu, the win-condition Line
+    base, must still be benched at Set Up — because the mechanism then was a price and a needed body
+    could outbid its own exposure. Under the rule there is nothing to outbid: Riolu is benched on turn
+    1 instead, losing nothing, since my first turn precedes any legal attack in either seat.
 
-    Keying on `setup_placed_ids` can, and this is the half that proves it: Riolu is not already
-    placed, so it pays the ordinary excess (0 for a 1-prize body) and its assignment carries it."""
+    Kept as a test rather than dropped, because "surely we still want the line base down" is exactly
+    the intuition that would quietly reintroduce a pregame price."""
     RIOLU = 677
     fx = json.loads(FIXTURE.read_text(encoding="utf-8"))
     obs = json.loads(json.dumps(fx["obs"]))
@@ -104,25 +74,17 @@ def test_a_needed_line_base_is_still_benched_at_set_up():
     me["hand"].append({"id": RIOLU})
     obs["select"]["option"].append({"type": 3, "area": 2, "playerIndex": 0,
                                     "index": len(me["hand"]) - 1})
-    dec = _build_mega_lucario_pilot().explain(obs)
-    riolu = next(o for o in dec.options if o.card_id == RIOLU)
-    assert riolu.deploy_working["exposure"] == 0     # not redundant -> the ordinary excess, which is 0
-    assert riolu.score > 0
-    assert RIOLU in [dec.options[i].card_id for i in dec.chosen]
+    assert _build_mega_lucario_pilot().decide(obs) == []
 
 
-def test_decline_only_drops_a_discouraged_pick_not_a_neutral_basic():
-    """REQ-FETCH-0031: the take-fewer trims only the DISCOURAGED pick — a plain startable Basic
-    (`bench-fill-a-basic` +12) is still placed, so the trim never becomes a blanket decline.
-
-    `deploy_value=True` is passed explicitly: the Pilot ctor defaults every feature OFF (the shipped
-    state lives in `runtime.PROFILE`, which `tune._build_pilot` applies), so without it this pilot has
-    no decider and the test would measure the ctor default. The DECLINE half lives in the two tests
-    above, on the real f3 board — a hand-built pregame with an opponent holding no Pokémon at all
-    reads `their_path_turns == 0.0` rather than None, which suppresses the exposure fallback the
-    decline depends on."""
-    RIOLU = 677
-    stats = {RIOLU: CardStat(RIOLU, name="Riolu", hp=80)}
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                  functions=CardFunctions({}), deploy_value=True)
-    assert pilot.decide(_setup_bench_obs([RIOLU])) == [0]          # a plain Basic: still benched
+@pytest.mark.req("REQ-FETCH-0031")
+def test_the_refusal_is_scoped_to_the_pregame_select():
+    """Soundness bound: `_never_pre_bench` keys on `_SETUP_BENCH` and nothing else, so an in-game
+    bench play is untouched and still the Deploy Marginal's to price. Asserted on the filter directly
+    — a board-level test would confound the rule with whatever the equation happens to score."""
+    pilot = _build_mega_lucario_pilot()
+    assert pilot._never_pre_bench({"context": _SETUP_BENCH}, [0]) == []
+    assert pilot._never_pre_bench({"context": _SETUP_BENCH}, [0, 1]) == []
+    for ctx in (0, 7, 9):                       # MAIN / TO_HAND / TO_BENCH: all left alone
+        assert pilot._never_pre_bench({"context": ctx}, [0, 1]) == [0, 1]
+    assert pilot._never_pre_bench({}, [0]) == [0]      # no context: never silently refuses

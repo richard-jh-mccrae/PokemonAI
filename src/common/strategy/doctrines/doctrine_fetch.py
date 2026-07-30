@@ -857,12 +857,15 @@ HYPOTHESES = [
         weight=30, status="assumed"),
     Hypothesis(
         id="bench-fill-a-basic",
-        rationale="At a bench-PLACEMENT grab (`_TO_BENCH`/`_SETUP_BENCH`), take a startable Basic — the "
+        rationale="At an in-game bench-PLACEMENT grab (`_TO_BENCH`), take a startable Basic — the "
                   "bench-context mirror of `fetch-a-starter`. Needed because a CARD-target candidate is invisible "
                   "to the `option_type==_PLAY` bench reflexes, so every candidate would score 0 and greedy "
                   "take-fewer benches NOTHING (the Buddy-Poffin whiff that cost ~3:1 in the mirror); skips a "
-                  "multi-prizer (ex/Mega ex) and stands down once the Bench is full.",
-        when=lambda c: c.select_context in (_TO_BENCH, _SETUP_BENCH) and c.card_is_starter
+                  "multi-prizer (ex/Mega ex) and stands down once the Bench is full. `_SETUP_BENCH` was DROPPED "
+                  "from the scope by ADR-0081 decision 9 — we never bench during Set Up, so a +12 that could only "
+                  "argue for a placement the rule already refuses is dead weight, and leaving it would let a "
+                  "reader think the pregame is still being scored.",
+        when=lambda c: c.select_context == _TO_BENCH and c.card_is_starter
         and c.board.my_bench < _BENCH_MAX
         and not (c.stat and getattr(c.stat, "is_ex_body", False)),
         weight=12, status="testing"),

@@ -143,7 +143,14 @@ def _records_a_decline_it_cannot_state(rec, obs) -> bool:
 
     Deliberately narrow. It does NOT skip every `chosen == correct` record — on a MANDATORY select
     those state a real preference (the pick was right), and a decider that flips away from one is a
-    genuine regression worth failing on. Only `minCount == 0` carries the encoding gap."""
+    genuine regression worth failing on. Only `minCount == 0` carries the encoding gap.
+
+    DORMANT since ADR-0081 decision 9 (2026-07-30), and kept anyway. The two frames it was built for
+    are both `_SETUP_BENCH`, where the Pilot now declines by RULE — so both sweep pilots agree, the
+    frames never reach grading, and the tally reads `unstatable 0`. The encoding gap it guards is a
+    property of the Correction schema rather than of those frames, so it still holds for any future
+    optional select; removing it would re-open a hole nothing else covers. Its tests exercise the
+    predicate directly, not through the corpus, so they keep working while it is unexercised."""
     select = (obs.get("select") or {})
     if int(select.get("minCount") or 0) != 0:
         return False
