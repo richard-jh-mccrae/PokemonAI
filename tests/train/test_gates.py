@@ -614,3 +614,25 @@ def test_decider_lab_diff_surfaces_a_moved_corpus_rather_than_shrinking_the_gate
     d = decider_lab_diff(_dcap([_drow("a", [0], [0]), _drow("gone", [0], [0])]),
                          _dcap([_drow("a", [0], [0]), _drow("new", [0], [0])]))
     assert d["added"] == ["new"] and d["removed"] == ["gone"] and d["compared"] == 1
+
+
+def test_decider_lab_diff_compares_a_multi_pick_as_a_set_not_a_sequence():
+    """A reordered multi-pick is NOT a regression.
+
+    `DISCARD` (SelectContext 8) asks for N cards and the agent returns all of them; the engine
+    applies the set, so their order carries no decision. Comparing sequences would report
+    `[0, 2] -> [2, 0]` as a REGRESSION — a false positive in the one direction a gate must never
+    produce, since it is the direction that blocks a merge.
+
+    Found while writing the hand-off, by reading the captured `DISCARD` rows rather than trusting
+    the aggregate: the agent picks `[2, 3]` where `correct` records `[2]`, because a Correction's
+    `correct` names the card the RULING was about, not the whole legal answer. That mismatch is why
+    context 8 reads 1/12 agreement and why the per-context agree rate is not meaningful for
+    multi-pick contexts — the movement detection is, which is what actually gates.
+    """
+    before = _dcap([_drow("k", [0, 2], [0, 2], context=8)])
+    after = _dcap([_drow("k", [2, 0], [0, 2], context=8)])
+    assert decider_lab_diff(before, after)["rows"] == [], "order is not a decision"
+    # a genuine change to the SET is still caught
+    moved = _dcap([_drow("k", [2, 4], [0, 2], context=8)])
+    assert [r["verdict"] for r in decider_lab_diff(before, moved)["rows"]] == ["REGRESSION"]

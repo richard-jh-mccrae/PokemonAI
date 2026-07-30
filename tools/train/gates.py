@@ -505,18 +505,27 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
     def index(rpt):
         return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
 
+    def norm(pick):
+        """A pick compared as a SET, not a sequence.
+
+        Multi-pick contexts (`DISCARD` asks for N cards) legitimately return several indices, and
+        their ORDER is not a decision — the engine applies the whole set. Comparing sequences would
+        report a reordered multi-pick as a REGRESSION, which is a false positive in the one direction
+        this gate must never produce."""
+        return None if pick is None else tuple(sorted(pick))
+
     b, a = index(before), index(after)
     rows = []
     for k in sorted(b.keys() & a.keys()):
         was, now = b[k].get("chosen"), a[k].get("chosen")
-        if was == now:
+        if norm(was) == norm(now):
             continue
         correct = a[k].get("correct")
         if correct is None:
             verdict = "UNLABELLED"
-        elif now == correct:
+        elif norm(now) == norm(correct):
             verdict = "FIX"
-        elif was == correct:
+        elif norm(was) == norm(correct):
             verdict = "REGRESSION"
         else:
             verdict = "NEUTRAL"
