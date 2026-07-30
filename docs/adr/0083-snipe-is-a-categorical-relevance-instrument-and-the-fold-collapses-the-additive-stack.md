@@ -846,7 +846,7 @@ chip a body that cannot attack yet.
 | gate | result |
 |---|---|
 | **Decision Gate** (`snipe_decider_sweep.py`, new) | **PASS** — 19/19 DAMAGE frames unchanged, 0 FIX, 0 regressions |
-| **Discrimination Gate** (`leaf_lab.py diff`) | **FAIL**, and **gate-identical to main** — see below |
+| **Discrimination Gate** (`leaf_lab.py diff`) | **PASS** — after the standing drift was ruled to Issue #165, see below |
 | Paired-A/B Tripwire | **NOT RUN** — the switch therefore ships OFF |
 
 The Decision Gate's "19/19 unchanged" is not vacuous: the `--legs` breakdown shows the scalar live and
@@ -855,14 +855,30 @@ discriminating (on `82756021-57` the Mega Lucario ex tops at `0.500` against Mak
 Both recorded misses stay missing, which the probe reports explicitly in both directions so a run that
 starts passing them is visible as the overfitting signal it would be.
 
-**The Discrimination Gate fails on a regression this branch does not cause.**
-`84071010|0|decision|15` flips `OK → MISS` (rank 1 → 2). A **control run with this branch's changes
-stashed reports the identical regression at the identical rank**, so the branch is gate-identical to
-main and the flip is pre-existing drift against the baseline pinned at `e4c46ca`. It is also
-**unowned** — it appears in no fixture's Held-out Ledger entry. Recorded here rather than worked
-around: ADR-0072 decision 5's prescription for exactly this is *"run the gate on `main` before the
-next swap, not after it"*, and the debt is now one swap older. It must be ruled before this switch is
-armed, because an armed swap cannot be distinguished from it while it stands.
+**The Discrimination Gate initially failed on a regression this branch does not cause, and the
+standing drift has now been RULED rather than worked around.** `84071010|0|decision|15` flips
+`OK → MISS` (rank 1 → 2). A **control run with this branch's changes stashed reported the identical
+regression at the identical rank**, so the branch was gate-identical to main and the flip is
+pre-existing drift against the baseline pinned at `e4c46ca`.
+
+**Ruled to Issue #165 (user, 2026-07-30), and it is not a snipe frame at all.** The endorsed play is
+the head of a five-step dependent chain: Team Rocket's Petrel searches Air Balloon (a Pokémon Tool
+*is* a Trainer card), attach it to the Active Makuhita (retreat 2) to make the retreat `2−2 = 0`,
+retreat free, promote the benched Mega Lucario ex already holding one `{F}`, and Aura Jab (`{F}`, 130)
+Knocks Out the opponent's Active Riolu (80 HP) — their Bench is 0 of 5, so `docs/rules.md` §7
+condition 2 ends the match on turn 3. ADR-0070 amendment J's discriminator settles the ownership
+without appeal to taste: playing Petrel is **not** individually valuable at the moment it becomes
+legal, and the steps **do not commute**, so it is a **Maneuver**, which is Issue #165's by definition
+rather than any equation's. It is also a `Main` select, so the DAMAGE-select instrument this ADR
+builds could never have scored it.
+
+`tests/fixtures/corrections/ml_dead_hand_full_refresh_f15.json` already declared the `frame_key` but
+carried **no owner**, which is exactly why the gate counted it unruled; the Decision Claim now carries
+`owner` / `ruled` / `why` per ADR-0072 decision 4, and the gate reports it under `HELD OUT` —
+**visible, never gating**. Re-run: **`GATE: PASS`, gated on 266 frames, 1 held out.**
+
+ADR-0072 decision 5's prescription — *"run the gate on `main` before the next swap, not after it"* —
+is what this discharges, one swap later than it should have been.
 
 ## Alternatives rejected
 

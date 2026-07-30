@@ -248,7 +248,10 @@
     "decision": {
       "correct": [
         0
-      ]
+      ],
+      "owner": "#165",
+      "ruled": "2026-07-30",
+      "why": "Re-ruled to the Turn Planner (user, 2026-07-30). The endorsed play is the HEAD of a five-step dependent chain whose value is the END STATE: Team Rocket's Petrel (1219) searches out Air Balloon (1174 -- a Pokemon Tool IS a Trainer card), attach it to the Active Makuhita (673, retreat 2) to make the retreat 2-2 = 0, retreat free, promote the benched Mega Lucario ex (678) which already holds one {F}, and Aura Jab ({F}, 130) Knocks Out the opponent's Active Riolu (677, 80 HP). Their Bench is 0 of 5, so docs/rules.md S7 condition 2 ends the match on turn 3. ADR-0070 amendment J's discriminator puts this squarely in #165 rather than in any equation: playing Petrel is NOT individually valuable at the moment it becomes legal -- it is a dig whose whole worth here is as the chain's head -- and the steps do not commute (no Balloon without the search, no free retreat without the Balloon, no Aura Jab without the promote). That is a Maneuver, not a Commutative Set. Held out because it is otherwise counted against every unrelated swap: the frame is a `Main` select, so it is out of reach of the DAMAGE-select instruments entirely -- Issue #188's Snipe Relevance never scores it, and a control run with that branch's changes stashed reproduced this exact OK->MISS at the identical rank, confirming the flip is baseline drift rather than any swap's doing. ADR-0072 decision 5's standing prescription is to rule the gate on `main` before the next swap; this entry is that ruling."
     }
   }
 }
