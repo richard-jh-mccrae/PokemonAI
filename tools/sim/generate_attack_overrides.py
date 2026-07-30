@@ -3,10 +3,16 @@
 The audit is the *generator*, not just a checker: engine-measured facts the text parsers can't
 derive are emitted as `build_attack_stats` overrides — measured coin bounds (the fork records),
 fixed effect damage (Telekinesis's printed-0/deals-70), and sweep-fitted visible-state scalers.
-Conservative by construction (REQ-AUDIT-0014..0017): only vanilla-panel forks (no W/R baked in),
-only cross-scenario-constant effect damage, only EXACT integer linear fits — everything else stays
-on the diff's gap ledger. Emitted overrides are DELTAS: a field the parser already got right is
-never re-stated, so the file stays a readable list of engine-only knowledge.
+Conservative by construction (REQ-AUDIT-0014..0017, 0019): only vanilla-panel forks (no W/R baked
+in), only cross-scenario-constant effect damage, only EXACT integer linear fits — everything else
+stays on the diff's gap ledger. Emitted overrides are DELTAS: a field the parser already got right
+is never re-stated, so the file stays a readable list of engine-only knowledge.
+
+A scaler's VARIABLE is named by measurement, never guessed (REQ-AUDIT-0019): the bench family needs
+two joined single-variable sweeps because one sweep cannot separate `atk_bench` from `both_bench`,
+and a fit may only claim a variable the harness actually controls. 274 Torcherto is the cautionary
+case — a combined-bench scaler that shipped an exact-looking `atk_hand`/5 fit purely because bench
+was the one variable the harness neither swept nor recorded.
 
     python tools/sim/generate_attack_overrides.py             # writes src/common/attack_overrides.json
     python tools/sim/generate_attack_overrides.py --dry-run   # print, don't write
@@ -24,6 +30,10 @@ _MEASUREMENTS = Path(__file__).resolve().parents[2] / "reports" / "attack_audit"
 _OUT = Path(__file__).resolve().parents[2] / "src" / "common" / "attack_overrides.json"
 _SWEEP_VARS = {"hand": ("atk_hand", "myHandSize"), "energy": ("atk_active_energy", "attackerEnergies")}
 _PANEL = ("vanilla", "weak", "resist", "prevent_ex")
+# The bench family is named by JOINING two single-variable sweeps, never by one (REQ-AUDIT-0019):
+# (sweep var, the seat it moves, the seat it pins).
+_BENCH_AXES = (("atk_bench", "attackerBench", "defenderBench"),
+               ("def_bench", "defenderBench", "attackerBench"))
 
 
 def _fit_linear(points: list[tuple[int, int]]) -> tuple[int, int] | None:
@@ -40,6 +50,57 @@ def _fit_linear(points: list[tuple[int, int]]) -> tuple[int, int] | None:
     if k <= 0 or any(base + k * x != y for x, y in pts):
         return None
     return base, k
+
+
+def _axis_points(recs: list[dict], sweep_var: str, swept: str, pinned: str):
+    """Controlled ``(count, dealt)`` points for ONE bench axis, or None when the axis is not
+    usable. Takes the vanilla, coin-free records that either carry no sweep (the panel point,
+    already pinned to the reference) or carry this axis's sweep.
+
+    Rejects unless the PINNED seat is provably constant across them — read off the records, not
+    trusted from the plan. Bench patience can run out and a seat can miss its target; an axis
+    where the other seat drifted is not single-variable, and trusting one is precisely how the
+    spurious 274 fit happened.
+    """
+    sel = [r for r in recs
+           if r.get("scenario") == "vanilla" and not r.get("coin") and not r.get("coinLogs")
+           and (r.get("sweep") or {}).get("var", sweep_var) == sweep_var]
+    if len({r.get(pinned) for r in sel}) != 1:
+        return None                                  # pinned seat drifted -> not single-variable
+    pts = [(int(r[swept]), int(r["dealtActive"])) for r in sel if r.get(swept) is not None]
+    return pts if len({x for x, _ in pts}) >= 3 else None      # _fit_linear needs >=3 distinct
+
+
+def _axis_slope(pts) -> int | None:
+    """Per-unit damage on one axis: 0 when the axis is provably FLAT (every measurement equal),
+    ``k`` on an exact fit, None when neither — i.e. noisy. Flat and noisy must not be conflated:
+    flat is the legitimate answer for the seat a one-sided scaler ignores, whereas noisy means
+    the measurement cannot name anything and the whole family stays on the gap ledger."""
+    if len({y for _, y in pts}) == 1:
+        return 0
+    fit = _fit_linear(pts)
+    return fit[1] if fit else None
+
+
+def _bench_family(recs: list[dict]) -> tuple[str, int] | None:
+    """Name the bench-scaling family from the two joined sweeps, or None (REQ-AUDIT-0019).
+
+    A single sweep cannot do this: moving the attacker's bench produces the SAME slope for an
+    attacker-bench scaler and a combined-bench one, and a defender-bench scaler produces none.
+    So both axes must be measured before anything is named — one axis alone is a guess, and the
+    conservative answer is silence.
+    """
+    axes = {var: _axis_points(recs, var, swept, pinned) for var, swept, pinned in _BENCH_AXES}
+    if any(pts is None for pts in axes.values()):
+        return None                                  # an unmeasured axis names nothing
+    a, d = _axis_slope(axes["atk_bench"]), _axis_slope(axes["def_bench"])
+    if a is None or d is None:
+        return None                                  # noisy -> gap ledger
+    if a and d:
+        return ("both_bench", a) if a == d else None  # unequal: not a family we can express
+    if a:
+        return "atk_bench", a
+    return ("def_bench", d) if d else None
 
 
 def derive_overrides(records: list[dict], parsed: dict,
@@ -83,8 +144,15 @@ def derive_overrides(records: list[dict], parsed: dict,
         if (st.damage == 0 and not st.scaleVar and len(plain) >= 2 and len(vals) == 1
                 and vals != {0}):
             delta["damage"] = vals.pop()
-        # 3) sweep-fitted visible-state scaler — exact linear fit parser missed
+        # 3) sweep-fitted visible-state scaler — exact linear fit parser missed. The BENCH family
+        # goes first: it is the only one whose variable takes two sweeps to name, and trying it
+        # ahead of the single-variable families keeps a bench scaler from being mis-named off a
+        # historical (bench-unpinned) hand or energy sweep.
         if not st.scaleVar:
+            bench = _bench_family(recs)
+            if bench:
+                delta["scaleVar"], delta["scalePerUnit"] = bench
+        if not st.scaleVar and not delta.get("scaleVar"):
             for var, (scale_var, field) in _SWEEP_VARS.items():
                 pts = [(int(r.get(field, 0)), int(r["dealtActive"])) for r in plain
                        if r.get("scenario") == "vanilla"]
