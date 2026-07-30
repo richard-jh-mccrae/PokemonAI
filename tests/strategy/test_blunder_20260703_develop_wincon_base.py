@@ -48,7 +48,7 @@ def test_critical_develops_the_wincon_base_over_an_offline_basic(name):
     """REQ-GEN-0072: on each captured ep83661652 state the shipped Pilot develops the board rather
     than feeding Meowth / attacking / shuffling Riolu away.
 
-    Since ADR-0084 the pick is the Deploy Marginal's, not `develop-the-wincon-base-first` (+6,
+    Since ADR-0086 the pick is the Deploy Marginal's, not `develop-the-wincon-base-first` (+6,
     deleted), so the assertion moved from "which rung fired" to "which option was chosen" plus the
     priced leg behind it. Two rulings are honoured rather than re-litigated:
 

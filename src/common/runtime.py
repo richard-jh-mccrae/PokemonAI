@@ -114,7 +114,7 @@ PROFILE = {
                                     # user-ruled (6 FIX, 0 regression) and the rungs it replaced are
                                     # DELETED, so OFF is DEGRADED MODE, not a rollback: evolve
                                     # endorsements go silent and only the _PLAY-side Gate speaks.
-    "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0084, #197): the Bench
+    "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0086, #197): the Bench
                                     # marginal — netted Needs assignment + bench-drop Ability,
                                     # both dimensionless ratios through DEPLOY_BAND, plus the
                                     # damage-native accel unlock and Prize-Path exposure. The nine

@@ -198,7 +198,7 @@ def test_deploy_heros_cape_fires_proactively_to_bank_a_survival_turn():
     assert "deploy-hp-tool" in _fired(_cape_pilot().explain(_attach_cape_vs(6666)).options[0])
 
 
-# REQ-MS-0005's three `develop-the-accel-recipient` tests stood here until ADR-0084 deleted the rung
+# REQ-MS-0005's three `develop-the-accel-recipient` tests stood here until ADR-0086 deleted the rung
 # (decision 8: the accel-recipient question folds onto the ATTACH axis). Their successor is
 # `test_deploy_value.py`'s accel-unlock leg, built on `_accel_fixture.py` — the REAL mega_lucario
 # pilot rather than these stubs, because the leg reads card facts (Aura Jab's rider, Mega Brave's

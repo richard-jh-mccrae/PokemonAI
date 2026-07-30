@@ -973,7 +973,7 @@ class Context:
     bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
                                         # strictly improves the opponent's cheapest Prize Path
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
-    bench_path_delta: float = 0.0       # ...and by HOW MUCH, in turns (ADR-0084 decision 5). The
+    bench_path_delta: float = 0.0       # ...and by HOW MUCH, in turns (ADR-0086 decision 5). The
                                         # Deploy Marginal's exposure leg: the magnitude the boolean
                                         # above is merely the sign of. `HORIZON`-graded when the play
                                         # completes a previously-uncompletable route; 0 when the
@@ -1090,7 +1090,7 @@ class OptionTrace:
                                  # refill that ARMS them). NOT in `score` — inert telemetry that makes the
                                  # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
                                  # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
-    deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0084): the per-leg
+    deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0086): the per-leg
                                  # breakdown for a Bench deployment. The decider sweep prints it on
                                  # BOTH sides of a flip and a human rules the Decision Gate by
                                  # reading it, so a bare total would make that gate unrulable.
@@ -1373,7 +1373,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # deleted, so OFF silences evolve endorsements
                                                         # and only the _PLAY-side Gate speaks.
         self.deploy_value = deploy_value            # the DEPLOY DECIDER's emergency lever
-                                                    # (ADR-0084, Issue #197). Ctor default OFF
+                                                    # (ADR-0086, Issue #197). Ctor default OFF
                                                     # keeps the raw-scoring substrate neutral;
                                                     # `make_agent` resolves the shipped ON from
                                                     # PROFILE, like every other switch.
@@ -1545,7 +1545,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # The empty-Bench guard applies HERE TOO. It is a soundness FILTER over the whole
             # decision, not a step of the scoring path, and this branch returns before the scoring
             # path reaches it — so without this the planner could end a post-setup turn with an empty
-            # Bench while a deploy sat on the menu, which is the exact obligation ADR-0084 decision 7
+            # Bench while a deploy sat on the menu, which is the exact obligation ADR-0086 decision 7
             # places on the rung ("must ALSO prevent `_finish_turn_last` from ending a post-setup turn
             # with an empty Bench while a deploy was available"). Silent whenever it has nothing to
             # force, so a planned line that already benches, or one at a select with no legal body,
@@ -1593,7 +1593,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
         # The empty-Bench guard runs LAST, above the sequencer: it is a soundness FILTER, so
-        # nothing downstream may re-order a deploy back below End (ADR-0084 decision 7).
+        # nothing downstream may re-order a deploy back below End (ADR-0086 decision 7).
         order = self._empty_bench_forced(obs, select, board, options, order)
         # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
         # trace reader doesn't misread "top-score not chosen" as a scoring bug. `reordered` = attack-last
@@ -1739,7 +1739,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return out
 
     def _never_pre_bench(self, select: dict, chosen: list) -> list:
-        """NEVER place a Pokémon on the Bench during Set Up (ADR-0084 decision 9). A sound rule read
+        """NEVER place a Pokémon on the Bench during Set Up (ADR-0086 decision 9). A sound rule read
         off the rulebook, not a price — so it filters the pick rather than scoring it, like decision
         7's empty-Bench guard.
 
@@ -1778,7 +1778,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _empty_bench_forced(self, obs: dict, select: dict, board: Board, options: list,
                             order: list) -> list:
-        """The post-setup EMPTY-BENCH guard (ADR-0084 decision 7): with nothing to promote, a single
+        """The post-setup EMPTY-BENCH guard (ADR-0086 decision 7): with nothing to promote, a single
         Knock-Out ends the match on the spot (`docs/rules.md` §7 case 2), so a legal Pokémon deploy is
         TAKEN rather than ranked.
 
@@ -1985,7 +1985,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # and the planner's spend account read it
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
         promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0073
-        deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0084 (#197)
+        deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0086 (#197)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -4785,11 +4785,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return self._attach_value(obs, select, board, option)
 
-    # ── the DEPLOY decider (ADR-0084, Issue #197) ────────────────────────────────────────────────
+    # ── the DEPLOY decider (ADR-0086, Issue #197) ────────────────────────────────────────────────
 
     def _deploy_supplier_rows(self, obs: dict, board: Board):
         """``(hand_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by ZONE
-        because the two are not interchangeable (ADR-0084 decision 2).
+        because the two are not interchangeable (ADR-0086 decision 2).
 
         Only POKÉMON: capacity here is BENCH capacity, and a Trainer covering a draw need costs no
         Bench slot.
@@ -4910,7 +4910,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return False
 
     def _deploy_decision(self, obs: dict, select: dict, board: Board, option: dict):
-        """Price ONE candidate Bench deployment — the Pilot half of ADR-0084: resolve board facts
+        """Price ONE candidate Bench deployment — the Pilot half of ADR-0086: resolve board facts
         into `DeployInputs` and delegate. None when the switch is off or the option is not a body
         reaching my Bench."""
         if not getattr(self, "deploy_value", False):

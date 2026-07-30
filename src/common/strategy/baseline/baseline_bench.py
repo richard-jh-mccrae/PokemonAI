@@ -1,12 +1,12 @@
-"""BASELINE cluster: BENCH — the empty-Bench reflex (ADR-0025, narrowed by ADR-0084).
+"""BASELINE cluster: BENCH — the empty-Bench reflex (ADR-0025, narrowed by ADR-0086).
 
 Once held six rules about *what* to bench and *when*. The Deploy Marginal (`common.deploy_value`,
-ADR-0084) prices that question as a value equation instead, so `dont-bench-multiprize`,
+ADR-0086) prices that question as a value equation instead, so `dont-bench-multiprize`,
 `pre-position-attacker`, `develop-a-basic-in-setup`, `develop-the-wincon-base-first`,
 `dont-bench-onto-their-path` and `develop-the-accel-recipient` are gone — each is a leg of the
 equation now (prize exposure, assignment relevance, the Prize-Path delta, the accel unlock).
 
-`keep-a-bench` STAYS, and is the whole file: ADR-0084 decision 7 rules it a **sound rung**, not a
+`keep-a-bench` STAYS, and is the whole file: ADR-0086 decision 7 rules it a **sound rung**, not a
 pricing question — an empty Bench with the Active Knocked Out loses on the spot, whatever the
 marginal says. `Pilot._empty_bench_forced` promotes it to a post-setup order FILTER; the rung below
 keeps scoring the same play so the two agree. Pure data, no Mixin; `_is_pokemon` lives here because

@@ -1,4 +1,4 @@
-"""Deploy DECIDER — ADR-0084 (grill: Issue #197), the fourth per-seam value equation.
+"""Deploy DECIDER — ADR-0086 (grill: Issue #197), the fourth per-seam value equation.
 
 What is putting ONE body into ONE Bench slot worth, right now? Beside the attach (ADR-0069), evolve
 (ADR-0070) and promote/retreat (ADR-0073) marginals, and owning every way a body reaches my Bench:

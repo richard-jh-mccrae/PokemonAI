@@ -279,7 +279,7 @@
       ],
       "owner": "#165",
       "ruled": "2026-07-30",
-      "why": "User ruling 2026-07-30 during the ADR-0084 Decision Gate sitting: held out to #165, the Turn Planner. The correction's complaint is Boss's Orders (`wrong_supporter`), and its prescription is a MULTI-STEP turn — \"Should have attached energy to Lunatone, played lillie's, eventually attacked with lunatone\" — while `correct` can index only the first action. With the Deploy Marginal armed the Pilot plays Riolu first; the attach still scores highest (50.0 vs Riolu's 14.84) and still happens the same turn, because a develop is TIER 0 and an attach is tier 2, so `_finish_turn_last` sequences the develop ahead without displacing it. What the frame actually tests is the ORDER of a whole turn, which no per-option price decides. Reports, does not gate."
+      "why": "User ruling 2026-07-30 during the ADR-0086 Decision Gate sitting: held out to #165, the Turn Planner. The correction's complaint is Boss's Orders (`wrong_supporter`), and its prescription is a MULTI-STEP turn — \"Should have attached energy to Lunatone, played lillie's, eventually attacked with lunatone\" — while `correct` can index only the first action. With the Deploy Marginal armed the Pilot plays Riolu first; the attach still scores highest (50.0 vs Riolu's 14.84) and still happens the same turn, because a develop is TIER 0 and an attach is tier 2, so `_finish_turn_last` sequences the develop ahead without displacing it. What the frame actually tests is the ORDER of a whole turn, which no per-option price decides. Reports, does not gate."
     }
   }
 }

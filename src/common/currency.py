@@ -67,7 +67,7 @@ PRIZE_DAMAGE_RATE = 100.0
 # entirely, by reformulating deny as a CATEGORICAL RELEVANCE instrument that never crosses a scale
 # boundary. Deny was the last consumer asking for the rate.
 #
-# ADR-0084 (Issue #197) asked the same question of the DEPLOY seam, which ADR-0078 decision 3 had
+# ADR-0086 (Issue #197) asked the same question of the DEPLOY seam, which ADR-0078 decision 3 had
 # nominated as more promising because its frames are natively play-side. `deploy_anchor_sweep.py`
 # answers no, and for a STRUCTURAL reason rather than a corpus gap: a deploy is never exclusive with
 # a damage-denominated option (benching consumes no attach, no Supporter slot, and does not end the
@@ -77,7 +77,7 @@ PRIZE_DAMAGE_RATE = 100.0
 # Consumers that would need this rate stay on their incumbent scale and say so.
 
 
-# ── The DEPLOY band — a SEAM-SCOPED rate, honestly labelled (ADR-0084 amendment C, Issue #197) ────
+# ── The DEPLOY band — a SEAM-SCOPED rate, honestly labelled (ADR-0086 amendment C, Issue #197) ────
 #
 # The Deploy Marginal's two Worth-denominated legs are dimensionless RATIOS — a marginal over the
 # `needs.py` assignment divided by `DEPLOY_WORTH_SCALE` — so the Worth points cancel and the Worth
@@ -122,7 +122,7 @@ DEPLOY_WORTH_SCALE = max(_ROLE_TIER.values())     # == 30.0 (win_condition / pri
 #: was wrong by ~8x and endorsed feeding a 3-prize body to save a 40-point band: same species of
 #: number, but this one is checked against recorded frames rather than asserted.
 #:
-#: One bound the corpus supplies directly (ADR-0084 amendment D, frame `85709280|1|match|`): the
+#: One bound the corpus supplies directly (ADR-0086 amendment D, frame `85709280|1|match|`): the
 #: human ruled Lillie's Determination (`dig-before-commit`, +20) OVER a redundant second Solrock
 #: into the last Bench slot, so `DEPLOY_BAND x relevance(that Solrock) < 20`. Weak — the relevance
 #: should be ~0 on that board anyway — but real, and gated.

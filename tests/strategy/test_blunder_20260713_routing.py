@@ -78,7 +78,7 @@ def test_f4_declines_pre_benching_a_redundant_utility_basic():
     ruled answer is to DECLINE — "we typically only ever need a single Munkidori in play. this second
     copy is a perfect fodder for Ultra Ball" (user, 2026-07-30).
 
-    Carried by ADR-0084 decision 9 — we never bench during Set Up — rather than by a price. This
+    Carried by ADR-0086 decision 9 — we never bench during Set Up — rather than by a price. This
     frame had three mechanisms in one day: `dont-pre-bench-a-redundant-utility` (−15), then the
     exposure leg charging a redundant pregame copy its full prize value, now the rule. The ruling
     never moved; only the reason did, and the rule is the one that reaches it without needing a
@@ -90,7 +90,7 @@ def test_f4_declines_pre_benching_a_redundant_utility_basic():
     assert _pilot("dragapult_ex").decide(fx["obs"]) == []
 
 
-# `test_f4_without_the_setup_log_the_basic_is_still_benched` stood here until ADR-0084 decision 9. It
+# `test_f4_without_the_setup_log_the_basic_is_still_benched` stood here until ADR-0086 decision 9. It
 # was the NEUTRALITY half of the redundancy fix — strip the pregame placement log and the same
 # Munkidori is benched again, proving the decline rode `setup_placed_ids` rather than being a blanket
 # refusal. Under decision 9 it IS a blanket refusal, deliberately and for reasons read off the

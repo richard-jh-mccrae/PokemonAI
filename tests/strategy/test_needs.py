@@ -272,7 +272,7 @@ def test_fuel_slots_ride_the_pitch_side_not_the_keep_side():
     assert picks == [1]                                 # the fuel energy out-pitches even the dreg
 
 
-# ── the DEPLOY assignment: capacity, and gain minus the marginal slot (ADR-0084, Issue #197) ──────
+# ── the DEPLOY assignment: capacity, and gain minus the marginal slot (ADR-0086, Issue #197) ──────
 
 
 @pytest.mark.req("REQ-NEEDS-0010")
@@ -305,7 +305,7 @@ def test_capacity_keeps_the_resupply_base_which_no_bench_slot_can_change():
 
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_deploy_marginal_is_gain_minus_the_marginal_slot_cost():
-    """ADR-0084 amendment E: `net(X) = gain(X) − displacement(X)`.
+    """ADR-0086 amendment E: `net(X) = gain(X) − displacement(X)`.
 
     Decision 2's written form (`V(C) − V(C, X pinned)`) is ≤ 0 for every candidate — forcing a card
     into an optimal assignment can only lower it — so it can rank bodies but can never clear the
