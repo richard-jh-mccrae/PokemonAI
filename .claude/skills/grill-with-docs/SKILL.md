@@ -81,6 +81,30 @@ Use `/domain-modeling` inline: the moment a term is pinned down, write it to the
 `CONTEXT.md`; when a hard-to-reverse, non-obvious, genuinely-traded-off decision is made, offer an
 ADR in `docs/adr/`. Don't batch these to the end — capture them as they resolve.
 
+### New ADRs get a temp name, not a number (until PR time)
+
+`docs/adr/README.md`'s collision log records the same failure eight times over: a number claimed at
+grill time is only a claim, and a long-lived branch reliably collides with some other branch's ADR
+at merge — forcing a renumber (sometimes twice) and a scramble to fix every cross-reference. Don't
+claim a number at grill time at all:
+
+- **Filename**: `docs/adr/temp-issue<N>-<slug>.md`, where `<N>` is the originating issue number and
+  `<slug>` is exactly the kebab-case title slug `ADR-FORMAT.md` would otherwise use for the final
+  file. Skip `ADR-FORMAT.md`'s "scan for the highest number" step entirely — issue numbers are
+  already unique, so a temp name can never collide with another branch's temp ADR.
+- **Title / self-reference**: use the tag `ADR-TEMP-<N>` everywhere the real `ADR-0NNN` number would
+  otherwise appear — the H1 title inside the file, and any cross-reference from another ADR or
+  `CONTEXT.md` written later in this same session. `ADR-TEMP-<N>` greps unambiguously and can't be
+  mistaken for a real ADR number.
+- **Don't touch `docs/adr/README.md` yet** — no Index row, no move of the "Next free number"
+  pointer. Both are only meaningful once a real number is assigned, which happens once, late,
+  during `/open-pr`'s rebase-onto-`main` step (see that skill) — right before the branch is pushed
+  and the PR opened, which is the last, truest moment to know what the next free number actually is.
+
+If a grill produces more than one ADR, give each its own issue-scoped temp name as usual (they share
+`<N>` but keep distinct slugs) — finalization assigns them consecutive real numbers in the order
+they were authored.
+
 When the grill is done — shared understanding reached, decisions locked — advance the issue's status
 chip from `status:1-grilling` to `status:2-spec` (grilling complete; see
 `docs/agents/issue-tracker.md`), then hand off to `/to-spec`.

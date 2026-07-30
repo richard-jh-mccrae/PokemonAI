@@ -83,6 +83,27 @@ because Issue #188's grill had claimed that number on an unmerged branch; by the
 out to be cheaper than renumbering after the fact, but it is luck rather than a rule — cite it as
 **ADR-0083, Issue #213** regardless.
 
+## Temp naming (2026-07-30) — the fix for the numbering saga above
+
+Eight collisions in eight days, several branches renumbered more than once, all because a number was
+claimed at grill time and only settled at merge time. As of 2026-07-30, `/grill-with-docs` no longer
+claims a number at grill time at all:
+
+- A new ADR is authored as `docs/adr/temp-issue<N>-<slug>.md` (`<N>` = the originating issue number),
+  tagged `ADR-TEMP-<N>` in its title and in any same-session cross-reference. Issue numbers are
+  already unique, so two branches' temp ADRs can never collide.
+- `/open-pr` assigns the real number exactly once, late — immediately after it rebases the branch
+  onto `main` and immediately before it pushes — by scanning disk for the true highest `NNNN-*.md`
+  and incrementing. It renames the file (prefix only; the slug is untouched), rewrites every
+  `ADR-TEMP-<N>` reference to the real `ADR-NNNN`, and updates the Index and the "Next free number"
+  pointer below in one mechanical commit.
+
+This shrinks the collision window from "however long the branch lives" down to the few seconds
+between one branch's rebase and its push — rare rather than routine. If that residual race still
+fires, the first-merged-keeps-it convention established above still applies: refetch `main`,
+recompute, rename again. See `.claude/skills/grill-with-docs/SKILL.md` and
+`.claude/skills/open-pr/SKILL.md` for the full mechanics.
+
 ## Index
 
 | # | Title | Status |
