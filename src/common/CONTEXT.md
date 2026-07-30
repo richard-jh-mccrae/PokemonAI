@@ -809,8 +809,12 @@ Hammer the human ruled against). The Brief sharpener and `_DENIAL_BENCH` likewis
 rank/keep side only; on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
 is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
-strip Δ / deny marginal (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
-typed-unlock leg, its two-term form does not), relevance as a bucket/category (it is a continuous
+strip Δ as deny's VALUE (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
+typed-unlock leg, its two-term form does not — Issue #217 revives `strip_shift` itself in ONE narrow
+role, the target pick's lexicographic TIEBREAK among equal-relevance options, and nowhere else: it may
+never GATE a slot, because the clock is blind to Ability mutes, to sub-turn setbacks, and to any strip
+that wrecks their plan without delaying MY death — measured, a `strip_shift > 0` keep-side gate would
+suppress 128 of 218 relevance-positive rows), relevance as a bucket/category (it is a continuous
 scalar — the Makuhita "maybe" is the case buckets cannot express)
 _(BUILT 2026-07-29 behind `deny_relevance`: `common/deny_relevance.py` scores, `Pilot._relevance_terms`
 plumbs, `_opponent_target_rows` emits. **CONSUMED since 2026-07-30 (Issue #187)** — all three deny
@@ -874,8 +878,22 @@ new decay rate. This is what makes a ZERO-Energy evolve worth something without 
 shortens the hop leg and lengthens the KO clock, and where it changes neither the value is
 legitimately zero (ADR-0070 §6). Note `turns_to_afford` is exposed on `TheirSide` only today, for
 deny slots; the mirror read on `MySide` is #140's to add.
+
+A clock **READING** and a clock **DELTA** are different types, and confusing them is a decision bug
+(Issue #217, 2026-07-30). A reading is a *when* — `turns_to_afford = 1` means "armed next turn", and
+that is what `deny_slot`'s `/2**t` discounts. A delta is a *how much* — `_strip_delta_terms`'
+`strip_shift = after - base` means "this strip buys N turns of survival", which is a PAYOFF on the
+turn scale, not a date. Measured, they disagree in both directions: on ms f21/f29's bench0 the
+reading grades `0.5` while the delta is `0`; on ms f15's Active the reading is the same `0.5` while
+the delta is `8`. So a delta may never be substituted for a deadline — doing so imports deny's VALUE
+into the keep price, the scale crossing ADR-0080 decision 1 found underivable. A delta may not GATE
+either: `strip_shift > 0` reads as *"this strip does something"* but only measures *"this strip delays
+my death by a whole turn or more"*, and the gap is 128 of 218 relevance-positive corpus rows wide
+(Issue #217, measured). Its one sound use is a LEXICOGRAPHIC TIEBREAK among options already equal on
+the primary read, where it orders without suppressing.
 _Avoid_: turns_to_ready (the `needs.py` primitive both wrap — name the wrapper you mean), readiness
-clock (unqualified — whose?), treating the two as summable (they are raced, not added)
+clock (unqualified — whose?), treating the two as summable (they are raced, not added), calling
+`strip_shift` a clock or a deadline (it is a delta OF one — say strip Δ)
 
 **Income Horizon**:
 The deliberately ASYMMETRIC accounting of a draw/dig Ability across an evolve. Because
