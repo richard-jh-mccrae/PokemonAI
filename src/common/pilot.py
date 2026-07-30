@@ -7805,11 +7805,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
 
         cid = body.get("id")
+        # `context=` is what makes the Damage Formula's `per_unit x count(variable)` term visible
+        # (Issue #213). WITHOUT it a bench-count scaler prices at its PRINTED base — Lillie's
+        # Clefairy ex reads 20 instead of the up-to-200 it actually hits for — so `imminence` and
+        # `forced`, which both take this number, under-read a whole card class by 10x. Every other
+        # decider-facing `incoming` call in this file passes the `_board` stash; this one must too.
+        # ADR-0084 decision 7 bar 4 named exactly this case and could only be met once Issue #213's
+        # combined-bench scaler family landed, which it now has.
         incoming = self.combat.incoming(ma, [body], 1, opp_active=oa,
+                                        context=getattr(self, "_opp_attack_context", None),
                                         switch_enabler=self._opp_switch_enabler())
         tta = self.combat.turns_to_afford(body)
-        fwd_fn = getattr(self.stats, "forward_max_damage", None)
-        forward_damage = (fwd_fn(cid) or 0) if (fwd_fn and cid is not None) else 0
+        # The forward leg reads through Issue #213's pair accessor for the same reason and behind the
+        # same `scaled_threat_rank` lever, rather than the provider's PRINTED forward index (which
+        # drops the scaling term outright — it returns 0 for card 272).
+        forward_damage = 0.0
+        if cid is not None:
+            _own, forward_damage = self._threat_damage_pair(cid, self.stats.get(cid))
 
         # The route side. `rider` is my repeatable bench reach; `my_energy` is what my Active carries
         # NOW, so `turns_to_ko` reads the attack I can actually afford (on `82756021-57` that is

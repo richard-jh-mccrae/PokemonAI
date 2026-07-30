@@ -175,6 +175,48 @@ def test_a_knock_out_dominates_every_relevance_score_structurally():
     assert K < KO_SCORE, "no relevance score may ever reach the KO band"
 
 
+@pytest.mark.req("REQ-SNIPECONS-0005")
+def test_a_bench_count_scaler_is_priced_at_its_board_effective_damage_not_its_printed_base():
+    """ADR-0084 decision 7 **bar 4's fourth authored fixture**, finally satisfiable.
+
+    The bar reads: *"Lillie's Clefairy ex reading its board-effective damage rather than 20 once the
+    combined-bench scaler family lands."* That family landed with Issue #213
+    (`CombatMath.threat_ceiling` prices the Damage Formula's `per_unit x count(variable)` term), and
+    the plumbing must actually PASS the board context for it to be visible — `context=None` silently
+    returns the printed base.
+
+    This is asserted at the seam rather than harvested from a frame **because the corpus cannot pose
+    it**: zero of the 23 committed `DAMAGE` frames offer a bench-count or hand-count scaler as a
+    snipe target, so `snipe_decider_sweep.py` is structurally blind here and would report 19/19
+    whether the context were passed or not. That blindness is precisely why bar 4 demanded AUTHORED
+    per-leg fixtures instead of the 19 the scorer's shape was selected against.
+
+    Card 272 is Lillie's Clefairy ex (Full Moon Rondo: printed 20, +20 per COMBINED bench body,
+    `data/EN_Card_Data.csv`). Missing the context under-reads it by 10x at a full bench, and both
+    `imminence` and `forced` take that number.
+    """
+    from common.strategy.combat import CombatMath  # noqa: F401  (documents the owning module)
+    CLEFAIRY_EX = 272
+    combat = _shipped_pilot().combat
+
+    printed = combat.threat_ceiling(CLEFAIRY_EX, context=None)
+    empty = combat.threat_ceiling(CLEFAIRY_EX, context={"both_bench": 0})
+    full = combat.threat_ceiling(CLEFAIRY_EX, context={"both_bench": 9})
+    assert printed == empty == 20, "no context / no bench both fall back to the printed base"
+    assert full == 200, "a full combined bench is 20 + 20x9 -- the term the printed read drops"
+
+    # The plumbing: the snipe scalar's `incoming` call must carry the stash, or the scaling term is
+    # invisible to it no matter how well `threat_ceiling` computes.
+    import inspect
+    src = inspect.getsource(_shipped_pilot().__class__._snipe_relevance_terms)
+    assert "_opp_attack_context" in src, (
+        "`_snipe_relevance_terms` must pass `context=` to `combat.incoming` -- without it every "
+        "bench-count scaler prices at its printed base (Issue #213 / ADR-0084 bar 4)")
+    assert "forward_max_damage" not in src, (
+        "the forward leg must read `_threat_damage_pair`, not the provider's PRINTED forward index "
+        "(which returns 0 for card 272)")
+
+
 @pytest.mark.req("REQ-SNIPECONS-0004")
 def test_the_ko_dominator_fires_only_when_armed_and_only_on_a_ko_target():
     """The dominator's own contract, asserted directly rather than through a fixture that happens to

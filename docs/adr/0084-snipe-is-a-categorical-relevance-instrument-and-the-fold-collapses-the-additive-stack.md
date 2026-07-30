@@ -1044,6 +1044,37 @@ for #204 to measure, not a finding. Recorded because the mechanism is specific a
 because "the deck whose wincon the clock under-rates is the deck the swap served worst" is the kind of
 coincidence that should be either confirmed or killed rather than left unremarked.
 
+**D4 — the rebase left the instrument reading PRINTED damage, and both gates were blind to it.**
+Found by auditing the build against decision 7's bars rather than by any test. Issue #213 made
+`context=` the thing that exposes the Damage Formula's `per_unit × count(variable)` term, and
+`_snipe_relevance_terms` was written before that existed:
+
+- `combat.incoming(...)` was called **without `context=`** — the only decider-facing `incoming` call
+  in `pilot.py` that omitted it (the other two omissions are the `discard_recur_fuel` diagnostic rows,
+  unread by any decider). Measured on card **272 Lillie's Clefairy ex** (Full Moon Rondo, printed 20,
+  +20 per COMBINED bench body): `context=None → 20`, `both_bench=9 → 200`. A **10× under-read**, and
+  both `imminence` and `forced` take that number.
+- `forward_damage` read `stats.forward_max_damage(cid)` — the provider's PRINTED forward index, the
+  exact read #213 replaced. It returns **0** for card 272. Now routed through `_threat_damage_pair`,
+  so it respects the `scaled_threat_rank` lever like every other threat read.
+
+**Neither gate could have caught this, and that is the structural point.** The Decision Gate compares
+OFF against ARMED, and **zero of the 23 committed `DAMAGE` frames offer a bench-count or hand-count
+scaler as a target** — so it reports 19/19 whether the context is passed or not. The Discrimination
+Gate compares against a baseline captured before #213. Two green gates, one whole card class
+mispriced. This is the precise reason decision 7 bar 4 demanded **authored** per-leg fixtures rather
+than fixtures harvested from the 19: the corpus cannot pose a question it contains no instance of.
+
+Bar 4's fourth fixture — *"Lillie's Clefairy ex reading its board-effective damage rather than 20 once
+the combined-bench scaler family lands"* — was deferred at build time as unsatisfiable, since the
+family had not landed. It landed with #213, so the bar is now **met**, asserted at the seam
+(`test_a_bench_count_scaler_is_priced_at_its_board_effective_damage_not_its_printed_base`) with the
+plumbing itself checked, not just `threat_ceiling`'s arithmetic — the arithmetic was already right;
+the caller was not passing the board.
+
+Re-run after the fix: Decision Gate **19/19 unchanged** (as expected — the corpus is blind here),
+Discrimination Gate **PASS** (0 unruled `OK → MISS`, 1 held out), suite **4103 passed**.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the
