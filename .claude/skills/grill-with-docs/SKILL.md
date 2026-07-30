@@ -34,6 +34,15 @@ For **each** question, structure it like this, in ordinary markdown:
    it — so this explicit line is the closest substitute: it turns "accept the recommendation"
    into a one-word reply instead of the developer having to reconstruct it.
 
+## Respond via `/caveman`
+
+Route your chat prose around the questions — the setup, the reasoning line, the wrap-up between
+one answer and the next question — through the `/caveman` skill: terse fragments, no fluff, facts
+stated plainly. The one carve-out is step 3 above, **"Explain each option twice"**: the *plain
+English* translation and the *technical* explanation both stay written out in full sentences,
+exactly as specified — that dual explanation is the whole point of the format, not filler to be
+trimmed.
+
 ## What "recommended" means (ranking criteria — not negotiable)
 
 **The recommended option is always the most sound, modular, best-practice option available** — the
