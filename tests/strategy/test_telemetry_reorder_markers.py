@@ -28,7 +28,8 @@ from pilot_helpers import DECK, PLAY, TO_HAND, attack_opt, card_opt, make_select
 
 ATTACKER = 900   # my Active: can attack, but not for a KO/win this turn
 OPPA = 678       # opponent's Active (high HP -> the attack doesn't KO -> no lethal/planner commit)
-BASIC = 800      # a basic Pokémon in hand -> a free tier-0 develop option (play to the Bench)
+BASIC = 800      # a basic Pokémon on the Bench (so the Bench is non-empty)
+BALL = 801       # a `search` Item in hand -> the free tier-0 action the attack is held behind
 ATK = 20         # attack id: cost 1, 100 dmg (chip, non-KO)
 
 
@@ -43,9 +44,11 @@ def _pilot(**kw):
                            minCostDamage=100, maxDamage=100, attacks=(ATK,)),
         OPPA: CardStat(OPPA, name="opp active", hp=200, energyType=7),
         BASIC: CardStat(BASIC, name="benchie", hp=60, energyType=3),
+        BALL: CardStat(BALL, name="search item", hp=0),
     }, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
     return Pilot(Strategy(roles={ATTACKER: ["primary_attacker"]}), deck=[1] * 60,
-                 general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}), **kw)
+                 general_strategy=GENERAL_STRATEGY, stats=stats,
+                 functions=CardFunctions({BALL: ["search"]}), **kw)
 
 
 @pytest.mark.req("REQ-SUB-0006")
@@ -93,14 +96,19 @@ def test_greedy_grab_decision_carries_a_top_level_flag():
 @pytest.mark.req("REQ-SUB-0006")
 def test_real_attack_last_decision_emits_deferred_and_reordered():
     """End-to-end plumbing: a real ``Pilot.explain`` on an attack-last board (chip attack + a free
-    develop) resequences the menu, so the emitted record chooses the develop, flags the held attack
-    ``deferred``, AND carries the top-level ``reordered`` — the full 'why' a trace reader needs."""
+    Item) resequences the menu, so the emitted record chooses the Item, flags the held attack
+    ``deferred``, AND carries the top-level ``reordered`` — the full 'why' a trace reader needs.
+
+    The free action is a `search` Item (`dig-before-commit` +20), not a bare Basic develop. Since
+    ADR-0081 a develop carries no flat endorsement — it is priced by the Deploy Marginal — and on this
+    board a roleless second body genuinely fills no need, so it scores 0 and nothing resequences. That
+    is the equation answering correctly; it just leaves nothing for a TELEMETRY test to observe."""
     board = state(active=poke(ATTACKER, energy=1, hp=200, max_hp=200),
                   bench=[poke(BASIC, hp=60, max_hp=60)],   # non-empty bench: the chip attack out-scores
-                  hand=[BASIC],                            # a bare develop, so the resequence really flips
+                  hand=[BALL],                             # one free tier-0 action, so the resequence flips
                   opp_active=poke(OPPA, hp=200, max_hp=200), prizes=2, opp_prizes=2)
     obs = make_select([attack_opt(ATK), {"type": PLAY, "index": 0}], current=board)
-    rec = to_record(_pilot().explain(obs))
+    rec = to_record(_pilot(deploy_value=True).explain(obs))
     assert rec["chosen"] == [1]                               # the free develop goes first (attack-last)
     assert rec["opts"][0].get("deferred") is True             # the held chip attack is flagged
     assert rec.get("reordered") is True                       # top-level: chosen != argmax(score)

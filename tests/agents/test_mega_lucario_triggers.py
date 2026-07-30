@@ -33,6 +33,7 @@ STRATEGY = _mod.STRATEGY
 RIOLU, MEGA_LUCARIO, SOLROCK, LUNATONE, MAKUHITA, HARIYAMA = 677, 678, 676, 675, 673, 674
 POWER_PRO, BLACK_BELTS, GRAVITY_MOUNTAIN, MEOWTH_EX = 1141, 1211, 1252, 1071
 BOSS_ORDERS, LILLIES = 1182, 1227     # supporter-tutor grab candidates (gust / draw)
+JUDGE = 1213                          # a `hand_disruption` draw Supporter: no draw-need stand-down
 F_ENERGY = 6                     # Basic Fighting Energy (cardType 5, energyType 6)
 FIGHTING = 6                     # EnergyType.FIGHTING
 STAB, AURA_JAB, MEGA_BRAVE, COSMIC_BEAM, WILD_PRESS = 981, 982, 983, 980, 978
@@ -131,22 +132,44 @@ def _tagged_pilot():
                                           BOSS_ORDERS: ["gust"], LILLIES: ["draw"]}))
 
 
+def _deploy_ability_relevance(hand):
+    """The Deploy Marginal's ABILITY leg for benching Meowth ex with `hand` held, on the REAL
+    mega_lucario pilot. Real, not the `_tagged_pilot()` stub: since ADR-0081 the leg matches the need
+    against the Supporters the DECK actually holds, and the stub's filler deck contains none — it
+    would measure 0 for the wrong reason and pass either assertion."""
+    from train.tune import _build_pilot
+    p, _ = _build_pilot("mega_lucario")
+    obs = make_select([opt(PLAY, index=0)], context=MAIN,
+                      current=state(active=poke(MAKUHITA, hp=80), hand=hand))
+    return p.explain(obs).options[0].deploy_working["ability_relevance"]
+
+
 @pytest.mark.req("REQ-ML-0015")
 def test_bench_the_supporter_tutor_when_supporterless_in_setup():
-    """SETUP, Meowth ex in hand, no Supporter held: bench it to fetch one (the free-Ability grab)."""
-    p = _tagged_pilot()
-    obs = make_select([opt(PLAY, index=0)], context=MAIN,
-                      current=state(active=poke(MAKUHITA, hp=80), hand=[MEOWTH_EX]))
-    assert "bench-the-supporter-tutor" in _fired(p.explain(obs).options[0])
+    """SETUP, Meowth ex in hand, no Supporter held: bench it to fetch one (the free-Ability grab).
+
+    `bench-the-supporter-tutor` (+25) is DELETED — ADR-0081 decision 3 makes the bench-drop Ability a
+    need-matched fetch yield, so what used to be a flat endorsement is now a priced leg."""
+    assert _deploy_ability_relevance([MEOWTH_EX]) > 0
 
 
 @pytest.mark.req("REQ-ML-0015")
 def test_bench_the_supporter_tutor_stands_down_with_a_supporter_in_hand():
-    """A Supporter already in hand -> no need to expose the 2-prize ex; the rule is silent."""
-    p = _tagged_pilot()
-    obs = make_select([opt(PLAY, index=0)], context=MAIN,
-                      current=state(active=poke(MAKUHITA, hp=80), hand=[MEOWTH_EX, LILLIES]))
-    assert "bench-the-supporter-tutor" not in _fired(p.explain(obs).options[0])
+    """A Supporter already in hand -> no need to expose the 2-prize ex; the leg prices ZERO.
+
+    This is the issue's own framing — "only bench it when we need a specific supporter" — and it is
+    now arithmetic rather than a hand-written gate: the draw need is COVERED, so the yield is 0
+    however certainly the deck still holds a Supporter."""
+    assert _deploy_ability_relevance([MEOWTH_EX, LILLIES]) == 0
+
+
+@pytest.mark.req("REQ-ML-0015")
+def test_the_supporter_tutor_still_pays_when_the_held_supporter_is_not_a_draw_engine():
+    """Soundness: the stand-down keys on the NEED, not on "any Supporter". Boss's Orders is a gust,
+    not fuel — holding it leaves the draw need open, so benching Meowth to dig still prices > 0.
+    Judge is likewise no stand-down (`hand_disruption`: a symmetric shuffle refills them too)."""
+    assert _deploy_ability_relevance([MEOWTH_EX, BOSS_ORDERS]) > 0
+    assert _deploy_ability_relevance([MEOWTH_EX, JUDGE]) > 0
 
 
 @pytest.mark.req("REQ-ML-0016")

@@ -28,8 +28,12 @@ def _pilot():
     stats = {RIOLU: CardStat(RIOLU, name="Riolu", hp=80),
              MEOWTH: CardStat(MEOWTH, name="Meowth ex", hp=170, ex=True),
              BALL: CardStat(BALL, name="Ultra Ball", hp=0)}
+    # `deploy_value=True` because the ctor defaults every feature OFF (the shipped state lives in
+    # `runtime.PROFILE`). The Set-Up scoping test below asserts the guard does NOT force a placement
+    # the Deploy Marginal declines — with no decider there is nothing to decline WITH, so the pilot
+    # would bench Meowth ex and the test would pass or fail on the ctor default rather than the rule.
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({MEOWTH: ["supporter_tutor"]}))
+                 functions=CardFunctions({MEOWTH: ["supporter_tutor"]}), deploy_value=True)
 
 
 def _main_obs(hand_ids, *, bench, turn=4):

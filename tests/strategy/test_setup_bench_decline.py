@@ -54,13 +54,35 @@ def _setup_bench_obs(hand_ids):
             "select": {"context": _SETUP_BENCH, "minCount": 0, "maxCount": 1, "option": opts}}
 
 
+def test_the_decline_is_the_deploy_marginals_exposure_leg():
+    """REQ-FETCH-0031: the trim fires because the pick scores < 0, and since ADR-0081 that negative is
+    the Deploy Marginal's EXPOSURE leg, not `dont-pre-bench-the-supporter-tutor` (−15, deleted).
+
+    On the real f3 board the Prize Path is unreadable (`their_path_turns is None` — the pregame
+    Actives are face down), so exposure falls back to the body's own liability: Meowth ex is a 2-prize
+    ex, one prize of EXCESS over an unavoidable 1-prize body. The Ability leg contributes nothing —
+    at Set Up "once during your turn" is unsatisfiable, so decision 3's zero is DERIVED — leaving the
+    exposure alone to sink the placement."""
+    fx = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    option = _build_mega_lucario_pilot().explain(fx["obs"]).options[0]
+    assert option.score < 0
+    row = option.deploy_working
+    assert row["exposure"] > 0 and row["ability_relevance"] == 0
+    assert row["total"] < 0
+
+
 def test_decline_only_drops_a_discouraged_pick_not_a_neutral_basic():
-    """REQ-FETCH-0031: the single-pick take-fewer trims a score-<0 pick (the supporter_tutor) but keeps
-    a plain startable Basic (bench-fill-a-basic +12) — an optional bench of a normal body still happens."""
-    MEOWTH, RIOLU = 1071, 677
-    stats = {MEOWTH: CardStat(MEOWTH, name="Meowth ex", hp=170, ex=True),
-             RIOLU: CardStat(RIOLU, name="Riolu", hp=80)}
-    funcs = CardFunctions({MEOWTH: ["supporter_tutor"]})
-    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
-    assert pilot.decide(_setup_bench_obs([MEOWTH])) == []          # supporter_tutor: declined
+    """REQ-FETCH-0031: the take-fewer trims only the DISCOURAGED pick — a plain startable Basic
+    (`bench-fill-a-basic` +12) is still placed, so the trim never becomes a blanket decline.
+
+    `deploy_value=True` is passed explicitly: the Pilot ctor defaults every feature OFF (the shipped
+    state lives in `runtime.PROFILE`, which `tune._build_pilot` applies), so without it this pilot has
+    no decider and the test would measure the ctor default. The DECLINE half lives in the two tests
+    above, on the real f3 board — a hand-built pregame with an opponent holding no Pokémon at all
+    reads `their_path_turns == 0.0` rather than None, which suppresses the exposure fallback the
+    decline depends on."""
+    RIOLU = 677
+    stats = {RIOLU: CardStat(RIOLU, name="Riolu", hp=80)}
+    pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                  functions=CardFunctions({}), deploy_value=True)
     assert pilot.decide(_setup_bench_obs([RIOLU])) == [0]          # a plain Basic: still benched

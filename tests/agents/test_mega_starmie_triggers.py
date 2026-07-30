@@ -198,55 +198,16 @@ def test_deploy_heros_cape_fires_proactively_to_bank_a_survival_turn():
     assert "deploy-hp-tool" in _fired(_cape_pilot().explain(_attach_cape_vs(6666)).options[0])
 
 
-# --- develop-the-accel-recipient (folded from develop-turbo-flare-recipient; enshrine: accelerator up + bare bench -> develop a recipient) ---
-# Cinderace's Turbo Flare attaches 3 Basic Energy to BENCHED Pokémon only; with no benched Staryu
-# acceleration is wasted. These pin deck doctrine "get accelerator a recipient first".
-POFFIN = 1086
-_REC_STATS = DictCardStatProvider({
-    STARYU: CardStat(STARYU, energyType=WATER, weakness=LIGHTNING, hp=70),
-    MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True, hp=330),
-    CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160,
-                        name="Cinderace", evolvesFrom="Raboot"),
-    POFFIN: CardStat(POFFIN, hp=0),   # Buddy-Buddy Poffin (Item)
-})
-_REC_TAGS = CardFunctions({CINDERACE: ["opener"], POFFIN: ["search", "bench_fill"]})
-
-
-def _rec_pilot():
-    return Pilot(STRATEGY, deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=_REC_STATS, functions=_REC_TAGS)
-
-
-@pytest.mark.req("REQ-MS-0005")
-def test_develop_recipient_fires_on_the_staryu_when_accelerator_up_and_bench_bare():
-    """Cinderace (accel_source) Active, empty Bench -> Turbo Flare has no recipient. Playing the Staryu
-    (the Line base + the recipient) is endorsed by the recipient-first rule, ahead of the attack."""
-    p = _rec_pilot()
-    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(1)],
-                      current=state(active=poke(CINDERACE, energy=1), bench=[], hand=[STARYU]))
-    opts = p.explain(obs).options
-    assert "develop-the-accel-recipient" in _fired(opts[0])   # endorses developing recipient
-    assert p.decide(obs) == [0]                                 # bench it before the turn-ending attack
-
-
-@pytest.mark.req("REQ-MS-0005")
-def test_develop_recipient_stands_down_when_a_recipient_is_already_benched():
-    """A Staryu already sits on the Bench (a Turbo Flare recipient) → the rule stands down; a 2nd
-    Staryu is the generic bench reflexes' call, not this rule's."""
-    p = _rec_pilot()
-    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(1)],
-                      current=state(active=poke(CINDERACE, energy=1), bench=[poke(STARYU)], hand=[STARYU]))
-    assert "develop-the-accel-recipient" not in _fired(p.explain(obs).options[0])
-
-
-@pytest.mark.req("REQ-MS-0005")
-def test_develop_recipient_stands_down_when_active_is_not_the_accelerator():
-    """Active is the Staryu, not the `accel_source` Cinderace → no Turbo Flare to feed, so the rule
-    stays silent (it is specifically about giving the bench-accelerator a recipient)."""
-    p = _rec_pilot()
-    obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(1)],
-                      current=state(active=poke(STARYU, energy=1), bench=[], hand=[STARYU]))
-    assert "develop-the-accel-recipient" not in _fired(p.explain(obs).options[0])
+# REQ-MS-0005's three `develop-the-accel-recipient` tests stood here until ADR-0081 deleted the rung
+# (decision 8: the accel-recipient question folds onto the ATTACH axis). Their successor is
+# `test_deploy_value.py`'s accel-unlock leg, built on `_accel_fixture.py` — the REAL mega_lucario
+# pilot rather than these stubs, because the leg reads card facts (Aura Jab's rider, Mega Brave's
+# {F}{F} bound) a stub would have to re-assert. It covers the same three cases: the leg pays when the
+# rider is stranded, and prices ZERO both when a recipient is already benched and when the Active is
+# not the accelerator — the two stand-downs DERIVED rather than hand-written.
+#
+# Deleted rather than left in place: with the rung gone, the two `not in _fired(...)` assertions pass
+# vacuously — they would have gone on reporting green while testing nothing at all.
 
 
 # --- Boss's Orders gust, end-to-end through the REAL mega_starmie Pilot (general doctrine, ADR-0022) ---

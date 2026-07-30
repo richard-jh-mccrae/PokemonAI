@@ -41,10 +41,13 @@ CLUSTERS = {
     # (13/14/16/40), untouched by decision 5's scope.
     "snipe": (SNIPE_HYPOTHESES, {
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
-    "bench": (BENCH_HYPOTHESES, {"keep-a-bench", "dont-bench-multiprize", "pre-position-attacker",
-                                 "develop-the-accel-recipient", "develop-a-basic-in-setup",
-                                 "develop-the-wincon-base-first",   # prefer the wincon Line base among develops
-                                 "dont-bench-onto-their-path"}),   # Tier-3 Path Denial (ADR-0040)
+    # ONE rule since the deploy-decider swap (#197, ADR-0081): six of the seven bench rungs were
+    # DELETED when `common.deploy_value` became the real decider — `dont-bench-multiprize` is now the
+    # exposure leg, `dont-bench-onto-their-path` the Prize-Path delta, `develop-the-accel-recipient`
+    # the accel unlock, and the three develop/prefer rungs the assignment relevance. `keep-a-bench`
+    # SURVIVES because decision 7 rules it a SOUND rung, not a pricing question: an empty Bench with
+    # the Active Knocked Out loses on the spot, whatever the marginal says.
+    "bench": (BENCH_HYPOTHESES, {"keep-a-bench"}),
     # EMPTY since ADR-0073 (#141): all seven promote rungs are DELETED — the promote/retreat DECIDER
     # prices the family as the Sub-lethal Residual, so the KO half is `_promote_ko_tactical` and the
     # rest is emergent from reachable damage and prize Exposure.

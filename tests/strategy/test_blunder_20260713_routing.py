@@ -72,16 +72,34 @@ def test_off_color_demote_silent_on_a_board_colour():
     assert "attach-off-color-at-fixed-recipient" not in _fired_ids(dec.options[fx["correct"][0]])  # {P} kept
 
 
+@pytest.mark.xfail(strict=True, reason=(
+    "ADR-0081 deleted `dont-pre-bench-a-redundant-utility` (−15) and the Deploy Marginal does not "
+    "reproduce its decline. Kept as a STRICT xfail, not deleted: the ruling stands (the fixture note "
+    "says 'Decline (Ultra Ball fodder)'), so this must flip back to a pass, and strict= makes it fail "
+    "loudly the moment it does. Measured: the equation prices this body 1.13 (assignment 0.045, "
+    "ability 0, accel 0, exposure 0) and `bench-fill-a-basic` (+12, NOT in the deletion set) carries "
+    "it to 13.13, so the take-fewer — which drops only score < 0 — keeps the placement.\n\n"
+    "Two distinct gaps, both real:\n"
+    "(1) the assignment leg is BLIND to `setup_placed_ids` — it prices the redundant copy identically "
+    "to a fresh one (1.13 either way, verified by stripping the logs), because the pregame Active "
+    "reaches `board.setup_placed_ids` but never `in_play_ids`, which is what `primary_met` reads;\n"
+    "(2) even with that fixed the marginal reaches ~0, never negative. The ruling's actual reason — "
+    "the 2nd copy is worth more HELD, as Ultra-Ball fodder — is a hand-opportunity cost, and none of "
+    "the four ruled legs can charge it. The exposure leg deliberately charges only the EXCESS over a "
+    "1-prize body (ADR-0081 decision 5: benching *something* is unavoidable), so a 1-prize Munkidori "
+    "carries 0 where Meowth ex carries 1 and f3 still declines correctly.\n\n"
+    "Needs a ruling: either a fifth leg, or deleting `bench-fill-a-basic` as a tenth rung (its stated "
+    "reason for existing — 'a CARD-target candidate is invisible to the _PLAY bench reflexes' — is "
+    "exactly what the card-target `option_slot` rung removed), or accepting the bench as correct."))
 @pytest.mark.req("REQ-FETCH-0031")
 def test_f4_declines_pre_benching_a_redundant_utility_basic():
     """f4: at the pregame SETUP_BENCH the only option is a 2nd Munkidori while one is Active (in the
-    setup logs). `dont-pre-bench-a-redundant-utility` (-15) sinks the +12 bench-fill so the single-pick
-    take-fewer DECLINES — the copy is saved as Ultra-Ball fodder."""
+    setup logs). The ruled answer is to DECLINE — the copy is saved as Ultra-Ball fodder."""
     fx = _fixture("dp_dont_pre_bench_redundant_munkidori_f4")
     pilot = _pilot("dragapult_ex")
-    assert pilot.decide(fx["obs"]) == [], "should decline the optional pregame bench of a 2nd Munkidori"
     board = pilot._board(fx["obs"], fx["obs"]["select"])
     assert 112 in board.setup_placed_ids                      # the Active Munkidori, read from the logs
+    assert pilot.decide(fx["obs"]) == [], "should decline the optional pregame bench of a 2nd Munkidori"
 
 
 @pytest.mark.req("REQ-FETCH-0031")

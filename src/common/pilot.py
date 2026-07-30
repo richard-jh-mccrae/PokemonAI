@@ -29,7 +29,6 @@ from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
 from common.grading import HORIZON as _HORIZON
-from common.needs import SUPPLIES as needs_SUPPLIES
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 from common.strategy.objectives import ObjectivesMixin
@@ -4881,7 +4880,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     and not self._last_ditch_spent(me))
         ability_marginal, ability_odds = 0.0, 0.0
         if can_fire:
-            ability_marginal, ability_odds = self._supporter_fetch_need(obs, board, slots, elig)
+            ability_marginal, ability_odds = self._supporter_fetch_need(obs, board)
 
         inp = DeployInputs(
             assignment_marginal=assignment,
@@ -4896,7 +4895,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         value = deploy_value(inp)
         return {"cid": cid, "capacity": capacity, **value.working()}
 
-    def _supporter_fetch_need(self, obs: dict, board: Board, slots: list, elig: list):
+    def _supporter_fetch_need(self, obs: dict, board: Board):
         """``(worth marginal, odds)`` for a bench-drop Supporter tutor — decision 3's Ability leg.
 
         WHAT the fetch is worth is the best need a Supporter can fill that nothing held already
@@ -4905,21 +4904,87 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         reads, so they weight the leg and never gate it (ADR-0074).
 
         This is what makes "bench it only when we need a SPECIFIC Supporter" arithmetic: a position
-        whose draw need is met leaves no slot, so the marginal is 0 however certainly the deck holds
-        one."""
-        covered = {j for e in elig for j in e}
-        kinds = set(needs_SUPPLIES.get("supporter_tutor", ()))
-        best = max((s.value for j, s in enumerate(slots)
-                    if s.kind in kinds and j not in covered), default=0.0)
-        if best <= 0:
+        whose draw need is met scores 0 however certainly the deck holds one.
+
+        The two slots are built HERE rather than looked up in `_resolve_needs`' output, and that is
+        the whole point. That resolver derives slots FROM THE HELD ROWS — `draw_engine` is emitted
+        only `if engines:` (I hold an engine) and `supply_wincon` only `if tutors:` (I hold a tutor).
+        Correct for keep-value, where a slot exists to price a card you have; exactly inverted for
+        this question, where the need exists BECAUSE I hold nothing that meets it. Asking the
+        resolver for an UNCOVERED slot of those kinds is therefore near-unsatisfiable, and the leg
+        measured 0 on every board — the real mega_lucario deck holding six Supporters included.
+        Slot VALUES still come from `needs`, so the two derivations cannot drift.
+
+        Odds range over the DECKLIST, not `board.deck_known_counts`: the counts are empty until the
+        tracker anchors, and iterating them zeroed the leg whenever tracking was unavailable —
+        gating on a missing signal, which is the fail direction ADR-0074 forbids. A provably-gone
+        Supporter is dropped (`deck_empty_ids`, the SOUND read); otherwise
+        `deck_contains_probability` already returns 1.0 when the odds are uncomputable."""
+        from common import needs
+        me = self._my_player(obs)
+        hand_ids = list(board.hand_ids or ())
+
+        def _held_engine_supporter() -> bool:
+            for cid in hand_ids:
+                st = self.stats.get(cid) if self.stats else None
+                tags = set(self.functions.tags(cid)) if self.functions else set()
+                if "engine" in self._roles_of(cid):
+                    return True
+                if (st is not None and getattr(st, "is_supporter", False)
+                        and (_ENGINE_KEEP_TAGS & tags) and "hand_disruption" not in tags):
+                    return True
+            return False
+
+        def _held_tutor() -> bool:
+            return any("tutor" in self._roles_of(cid)
+                       or ({"rush_evolve", "tutor_mega"}
+                           & (set(self.functions.tags(cid)) if self.functions else set()))
+                       for cid in hand_ids)
+
+        draw_need = 0.0
+        if not _held_engine_supporter():
+            online = sum(1 for pid in board.in_play_ids if "engine" in self._roles_of(pid))
+            draw_need = needs.draw_engine_slot(engines_online=online,
+                                               value=_ENGINE_SUPPORTER_KEEP).value
+        supply_need = 0.0
+        if not _held_tutor():
+            supply = needs.supply_wincon_slot(
+                wincon_in_hand=bool(getattr(board, "wincon_in_hand", False)), target_reachable=True)
+            supply_need = supply.value if supply is not None else 0.0
+        if draw_need <= 0 and supply_need <= 0:
             return 0.0, 0.0
-        odds = 0.0
-        for cid, n in (board.deck_known_counts or {}).items():
+
+        # Match the need against the Supporters the deck ACTUALLY holds, one at a time, instead of
+        # asserting the slot's tier and then asking separately whether "a Supporter" survives. A need
+        # no reachable Supporter can fill is not a need this Ability answers: neither deck's Supporter
+        # line reaches the win-condition (mega_lucario's Petrel is `tutor_trainer` — Trainers, not the
+        # Mega), so an unconditioned `supply_wincon` claim paid +10 on every board and made Meowth ex
+        # always worth benching, which is the opposite of "bench it only when we need a SPECIFIC
+        # Supporter". The wincon leg now requires a Supporter whose own fetch closure reaches it.
+        wincon = self._wincon_set()
+        empty = getattr(board, "deck_empty_ids", frozenset()) or frozenset()
+        best_value = best_odds = 0.0
+        for cid in set(self.deck or ()):
             st = self.stats.get(cid) if self.stats else None
-            if st is not None and getattr(st, "is_supporter", False) and n > 0:
-                odds = max(odds, board.deck_contains_probability(cid)
-                           if hasattr(board, "deck_contains_probability") else 1.0)
-        return float(best), float(max(0.0, min(1.0, odds)))
+            if st is None or not getattr(st, "is_supporter", False) or cid in empty:
+                continue
+            tags = set(self.functions.tags(cid)) if self.functions else set()
+            value = 0.0
+            if draw_need > 0 and (_ENGINE_KEEP_TAGS & tags) and "hand_disruption" not in tags:
+                value = draw_need
+            if supply_need > 0 and wincon and (self._chain_fetch_targets(cid) & wincon):
+                value = max(value, supply_need)
+            if value <= 0:
+                continue
+            odds = (board.deck_contains_probability(cid)
+                    if hasattr(board, "deck_contains_probability") else 1.0)
+            odds = max(0.0, min(1.0, float(odds)))
+            # Rank by the WEIGHTED yield: a slightly smaller need that is far likelier to be there is
+            # the better reason to bench. The leg then reports that candidate's own pair, so the odds
+            # never travel attached to a need some other Supporter would have filled.
+            if value * odds > best_value * best_odds:
+                best_value, best_odds = value, odds
+        return float(best_value), float(best_odds)
 
     def _needs_phase_scale(self, board: Board) -> float:
         """`needs.phase_scale` off the live board — the prize-proximity sharpener the exposure leg

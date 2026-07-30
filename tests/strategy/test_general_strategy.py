@@ -32,31 +32,10 @@ def test_dig_before_commit_prefers_search_in_setup_and_needs_the_tag_table():
     assert no_tags.decide(obs) == [0]
 
 
-@pytest.mark.req("REQ-GEN-0002")
-def test_dont_bench_multiprize_penalizes_a_nonwincon_ex_but_exempts_the_wincon():
-    stats = DictCardStatProvider({800: CardStat(800, ex=True), 900: CardStat(900, megaEx=True)})
-    # 900 = deck's win-condition; 800 = bare 2-prize liability.
-    pilot = Pilot(Strategy(roles={900: ["win_condition"]}), deck=[1] * 60,
-                  general_strategy=GENERAL_STRATEGY, stats=stats)
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(PLAY, area=HAND, index=1)],
-                      current=state(hand=[800, 900]))
-
-    liability, wincon = pilot.explain(obs).options
-    assert "dont-bench-multiprize" in _fired(liability)       # 800: ex, not win-con -> penalized
-    assert "dont-bench-multiprize" not in _fired(wincon)      # 900: Mega ex but win-con -> exempt
-
-
-@pytest.mark.req("REQ-GEN-0002")
-def test_dont_bench_multiprize_also_penalizes_evolving_into_a_nonwincon_ex():
-    # adversarial-review fix: evolving a Basic into a non-wincon ex also puts a multi-prizer
-    # into play, so gate must cover EVOLVE (option_type 9), not only PLAY.
-    _EVOLVE = 9
-    stats = DictCardStatProvider({888: CardStat(888, ex=True), 900: CardStat(900, megaEx=True)})
-    pilot = Pilot(Strategy(roles={900: ["win_condition"]}), deck=[1] * 60,
-                  general_strategy=GENERAL_STRATEGY, stats=stats)
-    # EVOLVE whose result (card in hand) is a loose 2-prize ex (888), not the win-condition.
-    obs = make_select([opt(_EVOLVE, area=HAND, index=0)], current=state(hand=[888]))
-    assert "dont-bench-multiprize" in _fired(pilot.explain(obs).options[0])
+# REQ-GEN-0002's two `dont-bench-multiprize` tests stood here until ADR-0086 deleted the rung. Its
+# job — a loose multi-prizer is a worse body to bench than a single-prizer, and the win-condition is
+# exempt — is the Deploy Marginal's EXPOSURE leg, which prices the same liability in prizes rather
+# than asserting a flat −15. `test_deploy_value.py` covers the leg; the corpus frames cover the pick.
 
 
 @pytest.mark.req("REQ-GEN-0003")
@@ -87,15 +66,9 @@ def test_attach_energy_last_defers_attachments_during_setup():
     assert order == [1, 0], "the free development no longer sequences ahead of the blind attach"
 
 
-@pytest.mark.req("REQ-GEN-0005")
-def test_pre_position_attacker_develops_the_bench_during_race():
-    stats = DictCardStatProvider({700: CardStat(700, hp=70)})
-    strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])
-    pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
-    # active = payoff w/ 1 energy -> Plan.RACE; benching a Pokémon pre-positions next attacker.
-    obs = make_select([opt(PLAY, area=HAND, index=0)],
-                      current=state(active=poke(700, energy=1), bench=[poke(800)], hand=[700]))
-    assert "pre-position-attacker" in _fired(pilot.explain(obs).options[0])
+# REQ-GEN-0005's `pre-position-attacker` test stood here until ADR-0086 deleted the rung. Keeping the
+# next attacker coming is now the ASSIGNMENT leg: a body that covers an unmet Line slot earns its
+# relevance, and one that covers nothing earns none — the rung's flat +25 could not tell those apart.
 
 
 @pytest.mark.req("REQ-GEN-0011")
