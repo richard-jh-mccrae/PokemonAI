@@ -710,6 +710,21 @@ benched, both collapse to `accel_recipient_missing` being False. And the yield i
 `develop-the-accel-recipient` (+20) may now be deleted with the other eight, because the leg that
 replaces it returns a real value.
 
+## Build hand-off (2026-07-30)
+
+The build is partly landed on `claude/bench-filling-pokemon-abilities-8otrk9` — the equation, the
+Pilot delegation (armed OFF), the sound rung, the sweep, and every corpus ruling. **The deletion is
+deliberately NOT applied**, because it must follow a fix the build surfaced.
+
+Full state, ordered next steps and the 16-failure triage:
+**[`docs/plans/deploy-decider-swap-review.md`](../plans/deploy-decider-swap-review.md)**.
+
+The blocking item is the **line-deadline gap**: `_resolve_needs` never supplies `line_slots`'
+`deadline` / `succ_deadline`, so every line slot sits at `dl=99` and `resupply` alone separates two
+equal-tier lines — which sinks a re-drawable win-condition base beneath a scarcer secondary line
+(`83661652-44`: Makuhita 16.67, Riolu 2.19). Frame **f40** is the test of it and is expected to fail
+until it is fixed.
+
 ## Open, deliberately not ruled here
 
 - Whether any deploy-corpus frame actually DISCRIMINATES the Worth Damage Rate (decision 4) — a
