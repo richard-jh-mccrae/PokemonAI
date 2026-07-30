@@ -211,6 +211,15 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
     could OVERRIDE the oracle's own hold and play a Hammer into a KO turn (ms 83968638 f17, CRITICAL).
     So the assertion moves off "which rung fired" and onto the thing that actually matters: an
     unfavored Read must make a real strip score strictly MORE.
+
+    Scoped to the ADR-0062 MAGNITUDE instrument deliberately. Lever A survived deny's move to Deny
+    Relevance by re-expression rather than retirement (ADR-0080 Amendment B), and the armed half of
+    that property is asserted in `test_energy_denial_guards.py` against REAL captured frames --
+    `test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign[relevance]`. It is not
+    re-asserted here because this board is synthetic: its attached Energy is a bare card id and its
+    attack carries no typed cost, so relevance correctly reads 0 on it, and arming this fixture would
+    mean inventing a typed cost -- an invented board manufacturing a fake result, which is the very
+    thing the denial guards file exists to avoid.
     """
     funcs = CardFunctions({HAMMER: ["energy_denial"]})
     obs = _obs_hammer_vs_energized_mega_lucario()

@@ -193,11 +193,18 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
     card-tier `TAG_TIER["gust"]` (~10) — `pilot._resolve_needs` — and the ADR-0062 oracle survives on
     that path only as a `> 0` BITE GATE (`_denial_at`), its damage magnitude discarded.
 
-    ADR-0078 (#187 grill) overturns that WP-N8 ruling in turn: deny is to read the shared per-body
-    `opponent_target_value` marginal on all three of its surfaces (this keep slot, the play rung, the
-    target pick), converted at a DERIVED rate rather than consumed raw — the Worth Damage Rate, which
-    is specified but **not yet derived** (it needs a keep-side corpus anchor that does not exist).
-    Until the S3c prerequisite lands, this stays the flat tier.
+    ADR-0078 (#187 grill) overturned that WP-N8 ruling in turn — deny was to read the shared per-body
+    `opponent_target_value` marginal converted at a DERIVED Worth Damage Rate. **That plan is
+    withdrawn** (ADR-0080, Issue #199): the rate is not derivable (the corpus holds exactly one
+    keep-side anchor and it prices 0 under both instruments, so the rate divides out) and deny turned
+    out not to need one, being a CATEGORICAL RELEVANCE instrument rather than a magnitude one.
+
+    So what the caller passes depends on the instrument, and this function stays agnostic:
+      * `deny_relevance` OFF — the flat disruption card-tier `TAG_TIER["gust"]` (~10), as shipped;
+      * ARMED (Issue #187) — `TAG_TIER["gust"] x relevance(this body)`, relevance being the [0,1]
+        Deny Relevance read. The `/2**t` grade below is retained under either (user ruling
+        2026-07-30): relevance is deliberately not imminence-gated, so the grade is the only term
+        pricing WHEN the threat lands.
 
     Resupply ruling (recorded for the closure-discount thread; vacuous while resupply is 0.0):
     a DEADLINE-0 deny slot must take resupply 0.0 — a deny needed NOW is not re-drawable in time,

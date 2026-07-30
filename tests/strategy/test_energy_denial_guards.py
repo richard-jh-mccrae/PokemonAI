@@ -38,10 +38,12 @@ def _fx(name):
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
-def _pilot(agent):
+def _pilot(agent, *, deny_relevance=False):
     sys.path.insert(0, str(REPO / "tools"))
     from train.tune import _build_pilot
-    return _build_pilot(agent)[0]
+    p = _build_pilot(agent)[0]
+    p.deny_relevance = deny_relevance
+    return p
 
 
 def _hammer_indices(pilot, obs):
@@ -56,16 +58,23 @@ def _hammer_indices(pilot, obs):
 
 # --- guard 1: a booster must SCALE the oracle, never ADD to it -------------------------------------
 
-def test_the_unfavored_booster_cannot_resurrect_a_hammer_the_oracle_declined():
+@pytest.mark.parametrize("armed", [False, True], ids=["magnitude", "relevance"])
+def test_the_unfavored_booster_cannot_resurrect_a_hammer_the_oracle_declined(armed):
     """ms 83968638 f17, CRITICAL. Their Active is an Abra on 1 Energy and their bench is bare; my
     Active can already KO. The oracle prices the Hammer at 0 (it stands down on `active_can_ko`) --
     and `disrupt-when-unfavored` fired +18 on top, so the Hammer was played right before the KO.
 
     Human: "Must use turn planner to see that using Crushing Hammer here is a waste. we will KO the
     opponents active."
+
+    Run on BOTH instruments (ADR-0080 Amendment B). This frame is the f17 RE-DERIVATION the ADR-0078
+    re-audit owed: armed, the hold no longer depends on the magnitude oracle standing down at all --
+    Deny Relevance reaches 0 structurally, because its liveness gate zeroes a bare bench and its
+    redundancy gate zeroes the Active we are about to Knock Out. Same verdict, derived rather than
+    guarded, which is why retiring the magnitude path later cannot regress this frame.
     """
     fx = _fx("ms_hammer_unfavored_override_f17.json")
-    pilot = _pilot("mega_starmie")
+    pilot = _pilot("mega_starmie", deny_relevance=armed)
     obs = fx["obs"]
     hammers = _hammer_indices(pilot, obs)
     assert hammers, "fixture no longer offers a Crushing Hammer"
@@ -80,18 +89,28 @@ class _HammerCtx:
     option_type, tags, card_id = 7, ["energy_denial"], HAMMER       # 7 = _PLAY
 
 
+@pytest.mark.parametrize("armed", [False, True], ids=["magnitude", "relevance"])
 @pytest.mark.parametrize("fixture, expect_positive", [
     ("ms_hammer_forward_form_riolu_f12.json", True),                # a real strip is on the table
     ("ms_hammer_unfavored_override_f17.json", False),               # a whiff: bare bench, doomed Active
 ])
-def test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign(fixture, expect_positive):
+def test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign(fixture, expect_positive,
+                                                                         armed):
     """The whole fix, stated as one property: `_DENIAL_UNFAVORED` is a MULTIPLIER, so it amplifies a
     denial that is already worth something and is powerless over one that is not.
 
     Multiplying cannot rescue a whiff (0 x anything is 0) or a hold (a negative stays negative) --
     which is precisely what the retired flat +18 did. Both directions are pinned on real boards.
+
+    Asserted on BOTH instruments, which is what makes it the LEVER A re-expression test (ADR-0080
+    Amendment B, user ruling 2026-07-30). ADR-0078 decision 6 would have retired `_DENIAL_UNFAVORED`
+    outright; that retirement is withdrawn, because deny reads `needs.phase_scale` on no surface and
+    this is Lever A's last live consumer. Instead its SUBJECT moved -- it now scales `K x relevance`
+    just as it scaled the damage magnitude. The property is scale-invariant, so the same assertion
+    holds verbatim against either instrument, and that invariance IS the evidence the re-expression
+    preserved the f17 discipline rather than quietly dropping it.
     """
-    pilot = _pilot("mega_starmie")
+    pilot = _pilot("mega_starmie", deny_relevance=armed)
     obs = _fx(fixture)["obs"]
     board = pilot._board(obs, obs["select"])
 

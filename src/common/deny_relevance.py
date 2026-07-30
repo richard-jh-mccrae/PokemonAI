@@ -140,26 +140,50 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
         heterogeneous claims.
     """
     blank = {"relevance": 0.0, "attack_leg": 0.0, "ability_leg": 0.0,
-             "setback_damage": 0, "forward_setback": 0}
+             "setback_damage": 0, "forward_setback": 0, "affordable_setback": 0,
+             "affordable_relevance": 0.0}
     if energy_type in (None, 0) or type_count <= 0:
         return blank
     counts = attached_counts or {}
 
-    setback = forward_setback = body_best = 0
+    setback = forward_setback = affordable_setback = body_best = 0
     for damage, need, total_cost, is_forward in line_attacks:
         body_best = max(body_best, int(damage))
-        if not need:                          # pure-colourless cost — any Energy substitutes into it
-            continue
-        typed_slot = type_count <= need.get(energy_type, 0)
-        # The binding count: every specific slot is already covered and the body sits exactly on the
-        # total, so losing ANY Energy drops it under. Guarded on full type coverage so a body still
-        # missing a colour (Dragapult ex without its {P}) is bound by the TYPE, not the count.
-        type_ready = all(counts.get(t, 0) >= n for t, n in need.items())
-        count_binds = type_ready and total_attached <= total_cost
-        if typed_slot or count_binds:
+        breaks_it = False
+        if not need:
+            # Pure-colourless cost. No Energy is on a TYPE critical path here — ANY Energy
+            # substitutes — but the COUNT can still bind, and only in one exact circumstance: the
+            # body is affording the attack right now and holds no spare, so a single strip drops it
+            # under. That equality is what separates the two colourless cases the doctrine rules
+            # OPPOSITE ways (Issue #187 measurement, ADR-0080 Amendment B):
+            #   * Mega Starmie ex on 3 {W} against Nebula Beam ``●●●`` 210 -> 3 == 3, RELEVANT.
+            #     ADR-0062 exists partly because a bench-loaded one sat "on 3 Energy unmolested".
+            #   * Meowth ex on 1 against Tuck Tail ``●●●`` -> 1 != 3, and it could not attack before
+            #     the strip either, so nothing is denied: the doctrine's flat *"ignore it"*.
+            # Before this clause the guard below skipped colourless costs outright, so the binding
+            # count was unreachable for them and every pure-colourless nuke read as a whiff.
+            if total_attached == total_cost:
+                breaks_it = True
+        else:
+            typed_slot = type_count <= need.get(energy_type, 0)
+            # The binding count: every specific slot is already covered and the body sits exactly on
+            # the total, so losing ANY Energy drops it under. Guarded on full type coverage so a body
+            # still missing a colour (Dragapult ex without its {P}) is bound by the TYPE, not the count.
+            type_ready = all(counts.get(t, 0) >= n for t, n in need.items())
+            count_binds = type_ready and total_attached <= total_cost
+            breaks_it = typed_slot or count_binds
+        if breaks_it:
             setback = max(setback, int(damage))
             if is_forward:
                 forward_setback = max(forward_setback, int(damage))
+            # AFFORDABLE-only mirror: the same setback restricted to attacks the body can pay for as
+            # it stands. Full relevance deliberately credits BANKED potential (a Riolu's {F} is worth
+            # taking before Mega Lucario ex exists), which is right for deciding whether a Hammer is
+            # worth KEEPING or which Energy to take — and wrong for deciding whether to SPEND the
+            # card NOW, where crediting an attack they cannot yet make fires at a threat that has not
+            # arrived. Consumers pick the reading their decision needs (ADR-0080 Amendment B).
+            if total_attached >= total_cost:
+                affordable_setback = max(affordable_setback, int(damage))
     attack = normalize(setback)
 
     # The mute. Only the LAST Energy of the gated type switches an Ability off: "any {D} attached"
@@ -172,4 +196,8 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
         ability = math.nextafter(normalize(body_best), 1.0)
 
     return {"relevance": max(attack, ability), "attack_leg": attack, "ability_leg": ability,
-            "setback_damage": setback, "forward_setback": forward_setback}
+            "setback_damage": setback, "forward_setback": forward_setback,
+            "affordable_setback": affordable_setback,
+            # The mute rides along: switching off a live Ability takes effect immediately, so it is
+            # never "potential" the way a banked attack is.
+            "affordable_relevance": max(normalize(affordable_setback), ability)}
