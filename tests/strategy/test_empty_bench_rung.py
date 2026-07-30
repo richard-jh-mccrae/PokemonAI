@@ -85,14 +85,18 @@ def test_the_guard_stands_down_once_a_body_is_benched():
 
 @pytest.mark.req("REQ-DEPLOY-0010")
 def test_the_guard_does_NOT_fire_during_set_up():
-    """Decision 7's scoping, and it is REQUIRED rather than merely safe.
+    """Decision 7's scoping: the guard is a statement about a loss that is REACHABLE NOW.
 
     Verified at source (`docs/rules.md` §2): the player going first cannot attack on turn 1, and the
     player going second acts only after that turn — so in either seat MY first turn precedes the
-    first legal attack of the game, and declining every pregame placement cannot lose before I can
-    bench. The converse is what makes it mandatory: an unscoped guard would fire on
-    `setup_bench_decline_f3` — bench empty, Meowth ex the sole option — and force exactly the
-    placement decision 3 derives us out of, burning Last-Ditch Catch."""
+    first legal attack of the game. At Set Up no Knock Out is legal yet, so there is nothing for a
+    loss-avoidance filter to be forced by.
+
+    Asserted on the FILTER itself rather than on the resulting pick. Those came apart in the
+    2026-07-30 re-ruling of `83661652|0|decision|3`: the pregame placement now happens (Amendment F —
+    with no other Pokémon in hand, declining leaves a one-body board), so a `decide(obs) == []`
+    assertion would now be reading the price, not the scoping. The guard must stay silent either
+    way — the placement is worth 0.0, chosen because nothing outranks it, never forced."""
     pilot = _pilot()
     obs = {"current": {"players": [{"active": [None], "bench": [], "hand": [{"id": MEOWTH}],
                                     "prize": [None] * 6, "deckCount": 47},
@@ -100,4 +104,7 @@ def test_the_guard_does_NOT_fire_during_set_up():
                        "yourIndex": 0, "turn": 0},
            "select": {"context": _SETUP_BENCH, "minCount": 0, "maxCount": 1,
                       "option": [{"type": 3, "area": 2, "index": 0, "playerIndex": 0}]}}
-    assert pilot.decide(obs) == []               # the decline survives the guard
+    select = obs["select"]
+    board = pilot._board(obs, select)
+    order = list(range(len(select["option"])))
+    assert pilot._empty_bench_forced(obs, select, board, select["option"], order) == order

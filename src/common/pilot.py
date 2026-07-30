@@ -1726,13 +1726,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         It ranks WHICH body, never WHETHER: the surviving order is the Deploy Marginal's, restricted
         to the deploys.
 
-        **Post-setup only, and that scoping is required rather than merely safe.** Verified at source
-        (`docs/rules.md` §2): the player going first cannot attack on turn 1 and the player going
-        second acts only after that turn, so in either seat my first turn precedes the first legal
-        attack — declining every pregame placement cannot lose the game before I can bench. The
-        converse is what makes the scoping mandatory: an unscoped guard fires at `_SETUP_BENCH` on
-        `setup_bench_decline_f3` (bench empty, Meowth ex the sole option) and forces exactly the
-        placement decision 3 derives us out of, burning Last-Ditch Catch.
+        **Post-setup only.** Verified at source (`docs/rules.md` §2): the player going first cannot
+        attack on turn 1 and the player going second acts only after that turn, so in either seat my
+        first turn precedes the first legal attack — declining a pregame placement cannot lose the
+        game before I can bench. Scoping it here keeps the guard a statement about a REACHABLE loss:
+        at Set Up no Knock Out is legal yet, so there is nothing to be forced by.
+
+        What the scoping does NOT license is treating a pregame decline as free. It defers the loss
+        past turn 1; it does not remove it, and with no other Pokémon in hand the decline is a bet on
+        drawing a body before the Active dies. That case is priced, not forced — the exposure leg
+        stands its Set-Up fallback down (ADR-0081 Amendment F, user ruling 2026-07-30 on
+        `83661652|0|decision|3`), so the placement survives at 0.0 without this filter ever firing.
+        Keeping the two separate is the point: the guard stays a sound rung about a legal-now loss,
+        and the pregame trade-off stays a price.
 
         Silent unless it has something to force, so an empty Bench with no legal body on the menu
         leaves the order untouched."""
@@ -5067,6 +5073,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Set Up, which is the fold of `dont-bench-multiprize` (−15) into the equation rather than a
         special case for the pregame.
 
+        AMENDMENT F (user ruling 2026-07-30, the Decision Gate sitting on `83661652|0|decision|3`):
+        the fallback STANDS DOWN when declining would leave me with no second body at all — a bare
+        Bench and not one other Pokémon in hand to bench instead. On that frame Lunatone is Active and
+        the hand is two {F}, two Lillie's, a Boss's and Meowth ex: the tutor is the ONLY Pokémon held,
+        so the choice is not "2-prize liability vs 1-prize liability", it is "2-prize liability vs a
+        one-body board". A single Knock Out then loses the game outright with nothing to promote.
+
+        Decision 7 scoped the empty-Bench guard to POST-setup, reasoning that declining a pregame
+        placement "cannot lose before I can bench" — sound about the FIRST turn (rules.md §2: the
+        player going first cannot attack on turn 1), but it silently assumes a later bench is
+        available. With no other body held that is a bet on drawing one before the Active dies, and
+        the equation was pricing the liability at −30 while pricing that risk at zero. Charging
+        nothing here is the narrow correction: the body still earns no positive, so it is placed only
+        because nothing outranks it — the pregame mirror of `keep-a-bench`, derived rather than
+        re-asserted as a rung.
+
         Never both: a readable Path already prices the liability in the currency that matters, so the
         fallback applies only when the Path is silent."""
         delta = self._bench_path_delta(obs, select, option, stat, board)
@@ -5074,8 +5096,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return delta
         if board.their_path_turns is not None:
             return 0.0                     # the Path IS readable and says this body gifts nothing
-        prizes = self._prize_value({"id": self._option_card_id(obs, select, option)})
+        cid = self._option_card_id(obs, select, option)
+        if int(board.my_bench or 0) == 0 and not self._other_benchable_in_hand(board, cid):
+            return 0.0                     # Amendment F: the alternative is a ONE-BODY board
+        prizes = self._prize_value({"id": cid})
         return float(max(0, int(prizes or 1) - 1))
+
+    def _other_benchable_in_hand(self, board: Board, cid) -> bool:
+        """Does my hand hold a Pokémon OTHER than ``cid`` that could take the Bench instead?
+
+        A Basic only — an evolution cannot be played to the Bench from hand, so it is no alternative
+        second body. One copy of ``cid`` is discounted (the one being placed); a SECOND copy counts,
+        because holding two means declining this one still leaves a body to bench."""
+        seen = False
+        for hid in (board.hand_ids or ()):
+            if hid == cid and not seen:
+                seen = True
+                continue                   # the copy under consideration is not its own alternative
+            st = self.stats.get(hid) if self.stats else None
+            if st is not None and getattr(st, "is_pokemon", False) and not getattr(st, "evolvesFrom", None):
+                return True
+        return False
 
     def _deploy_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The DEPLOY decider's contribution to an option's score (kill-switch `deploy_value`,
