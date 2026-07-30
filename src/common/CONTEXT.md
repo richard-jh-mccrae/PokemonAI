@@ -749,7 +749,7 @@ committed deny fixture is a play/hold frame, none a DISCARD select). Until that 
 adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0073's own
 `_PRIZE_UNIT = 12` — wrong by ~8×, and it endorsed feeding a 3-prize body to save a 40-point band — is
 the standing example of what guessing it costs.
-**MOOT for deny since ADR-0081 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
+**MOOT for deny since ADR-0080 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
 pending.** The corpus-wide DISCARD sweep found 12 `Discard` frames, exactly one holding a Hammer
 (`86091435-68`), and that one is DEGENERATE rather than merely directional: the strip prices `0.000`
 under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate DIVIDES OUT of
@@ -765,7 +765,7 @@ rate that converts it), calibration (a value chosen to preserve an incumbent is 
 
 **Deny Relevance**:
 Deny's value, and the answer to *"is this Energy doing important work for the opponent's plan?"* — a
-**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0081,
+**scalar in [0,1]** per `(body, energy)` pair, NOT a magnitude on the damage scale (ADR-0080,
 Issue #199, user doctrine 2026-07-29). 0 = dead (an Energy on a Meowth ex, whose Ability needs none and
 whose Tuck Tail is `●●●` for 60), 1 = critical (the `{M}` on an Archaludon ex that Metal Defender
 `{M}{M}{M}` needs). Two hard gates force it to 0 — **no Energy on their board at all**, and **this
@@ -778,18 +778,33 @@ nothing), and **ability fuel** (`CardStat.abilityEnergyTypes` — strip Munkidor
 Adrena-Brain, not its `{P}`). A matched Brief's `threats[]` MULTIPLIES the derived rank, never sources
 it: the Brief-free fallback (`Scout._target_role`) ranks the doctrine backwards, topping an unbriefed
 board with the very Meowth ex the doctrine ignores. Scales the incumbent constants rather than
-introducing a scale — keep price `TAG_TIER["gust"] 10.0 × max_relevance`, target pick
-`argmax relevance`.
+introducing a scale — keep price `TAG_TIER["gust"] 10.0 × max_relevance` (still graded `/2^t`, since
+relevance is not imminence-gated), target pick `argmax relevance` (no area weight).
+
+Two READINGS, and picking the wrong one is a decision bug (ADR-0080 Amendment B, Issue #187). The
+**banked** reading is the full scan and answers *"is this card worth KEEPING / which Energy do I
+take?"* — it credits an attack they cannot afford yet, which is the point of the forward leg. The
+**affordable** reading (`affordable_relevance`) restricts the same scan to attacks the body can pay
+for as it stands, and is the only one the FIRE rung may read: crediting an unaffordable attack there
+spends a finite Item on a threat that has not arrived (measured — ms f21/f29 flips to playing the
+Hammer the human ruled against). The Brief sharpener and `_DENIAL_BENCH` likewise apply to the
+rank/keep side only; on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
+is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
 strip Δ / deny marginal (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
 typed-unlock leg, its two-term form does not), relevance as a bucket/category (it is a continuous
 scalar — the Makuhita "maybe" is the case buckets cannot express)
-_(BUILT 2026-07-29 behind `deny_relevance`, compute-only and OFF: `common/deny_relevance.py` scores,
-`Pilot._relevance_terms` plumbs, `_opponent_target_rows` emits. Nothing consumes it — Issue #187 is
-the consumer. The **relevance normalizer** `MAX_ATTACK_DAMAGE = 350` is DERIVED — the largest attack
-damage in the set — and recomputed from the CSV by its test, never pinned; it is a `[0,1]` mapping,
-NOT an exchange rate. Known gap, recorded: Okidogi's static +100 HP / +100 damage buff makes its mute
-worth more than its own attacks imply, so the ability leg under-rates it — out of pool, so latent.)_
+_(BUILT 2026-07-29 behind `deny_relevance`: `common/deny_relevance.py` scores, `Pilot._relevance_terms`
+plumbs, `_opponent_target_rows` emits. **CONSUMED since 2026-07-30 (Issue #187)** — all three deny
+surfaces read it, still behind the same switch, OFF byte-identical. Armed, every Hammer-bearing frame
+in the corrections corpus reproduces the OFF decision. The **relevance normalizer**
+`MAX_ATTACK_DAMAGE = 350` is DERIVED — the largest attack damage in the set — and recomputed from the
+CSV by its test, never pinned; it is a `[0,1]` mapping, NOT an exchange rate. The fire rung's
+`_DENY_RELEVANCE_K` **is that same normalizer, imported not copied**, so `K × relevance` is the
+setback damage and the armed rung prices in the incumbent's own units — f21/f29 price exactly `−1.25`
+on both instruments. Known gaps, recorded: Okidogi's static +100 HP / +100 damage buff makes its mute
+worth more than its own attacks imply, so the ability leg under-rates it (out of pool, latent); and a
+rainbow-class Special Energy reads untyped, so it scores 0 even on a body exactly paying a `●●●` cost.)_
 
 **Bench Reach**:
 Any damage that can land on ONE benched opponent body this turn — the max of a single-target snipe

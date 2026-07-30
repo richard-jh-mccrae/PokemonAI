@@ -294,3 +294,110 @@ already being covered — which is precisely what keeps Dragapult's `{D}` out, s
   reads.
 - **A new issue for the doctrine, closing both #199 and #187.** Cleanest charter, but discards #187's
   grill history and the parts of the ADR-0078 re-audit that survive unchanged.
+
+## Amendment B — the consumer build (2026-07-30, Issue #187)
+
+Issue #187 wired the three deny surfaces onto the read. Three user rulings settled points where this
+ADR's decision-3 table is terser than the shipped code, and then **measuring the corpus with the
+switch armed exposed three defects that no compute-only test could have caught** — the read was
+correct in isolation and wrong at every consumer. That is the case for wiring an instrument before
+trusting it, and each finding is recorded here with the arithmetic rather than fixed silently.
+
+### The three rulings (2026-07-30)
+
+1. **The keep price KEEPS its `/2**t` turns-to-ready grade.** Decision 3's table omits it, but this
+   ADR never ruled it retired and relevance is deliberately not imminence-gated — it scans forward
+   forms precisely so a Riolu's banked `{F}` scores at all. The grade is therefore the only term
+   pricing *when* a threat lands. Emitted per body, so each keeps its own deadline.
+2. **The target pick DROPS `_DENIAL_BENCH` — a pure `argmax relevance`.** Relevance already prices a
+   benched body's slower clock through its own line scan, so discounting again double-counts. The
+   constant stays live on the OFF path and inside `_opp_denial_best`, so ADR-0062's derivation is
+   unread while armed, not deleted.
+   *Scope correction found by measurement:* the ruling covers the TARGET pick only. Applying it to
+   the FIRE rung as well deletes the bound ADR-0062 *derived* `_DENIAL_BENCH` from, and ms f21 flips
+   to playing the Hammer the human ruled against. Spending the card and choosing its target are two
+   decisions; only one of them prices the promotion delay.
+3. **`_DENIAL_UNFAVORED` is RE-EXPRESSED, not retired.** ADR-0078 decision 6 retired it on the
+   grounds that it and `needs.phase_scale` *"say the same thing multiplicatively"*. **That retirement
+   is withdrawn**: under this ADR deny reads `phase_scale` on no surface, so the substitution
+   justifying it no longer exists — and `_denial_play_tactical` is Lever A's (ADR-0026) LAST live
+   consumer, so retiring it unreplaced would have deleted Lever A from the codebase as a side effect
+   of a deny refactor. Its subject moves instead: it now scales `K x relevance` exactly as it scaled
+   the damage magnitude. The property is scale-invariant, which is why
+   `test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign` holds verbatim against
+   both instruments — and that invariance is the evidence the f17 discipline survived.
+
+### Finding A — the FIRE rung must price only what the opponent can afford NOW
+
+Full relevance credits banked potential on purpose (*"Dragapult ex holding `{D}` + `{R}` cannot
+afford Phantom Dive yet, and the `{R}` is still the Energy worth taking"*). Correct for deciding
+whether a Hammer is worth KEEPING, and wrong for deciding whether to SPEND one: it fires at a threat
+that has not arrived. On ms f21/f29 — the **same board**, ruled `[7]` and `[10]`, both against the
+Hammer — a benched Dragapult ex holds one `{R}`; Phantom Dive `{R}{P}` needs two.
+
+So `strip_relevance` now also reports `affordable_setback` / `affordable_relevance`, the same scan
+restricted to attacks the body can pay for as it stands, and the fire rung reads that while the keep
+price and target pick keep the full read. The mute rides with the affordable half: switching off a
+live Ability takes effect immediately, so it is never potential.
+
+### Finding B — the binding count was unreachable for pure-colourless costs
+
+`if not need: continue` skipped colourless attacks before clause (2) could evaluate, so every `●●●`
+nuke read as a whiff. That re-introduced the exact defect ADR-0062 was written to fix — *"a benched
+Mega Starmie ex sitting on 3 Energy unmolested"* (ms f26). The clause now fires on a colourless cost
+when `total_attached == total_cost`, which is what separates the two cases the doctrine rules
+opposite ways: Mega Starmie ex on 3 `{W}` against Nebula Beam `●●●` 210 is **relevant** (the strip
+drops it under), while Meowth ex on 1 against Tuck Tail `●●●` is **not** (it could not attack before
+the strip either — the doctrine's flat *"ignore it"*). The equality is doing the work, not the
+colourlessness.
+
+### Finding C — the Brief sharpener must not reach the FIRE reading
+
+Decision 2 makes a matched Brief a multiplier on the derived **rank**. Applied to the fire reading it
+becomes an override, because that reading alone is compared against `_DENIAL_ITEM_COST`: the 1.25x
+boost turns f21's `-1.25` into `+0.94` and plays the Hammer, on a board where the only thing that
+changed is that the body is Brief-named. That is the f17 ruling restated for a new booster — *a
+booster must scale the oracle, never override it* — so the sharpener is scoped to the rank and the
+keep price.
+
+### `_DENY_RELEVANCE_K` is DERIVED, not pinned
+
+Decision 3 called for a new constant *"pinned to the incumbent's observed range and recorded as a
+preservation choice, never dressed as a derivation."* Measurement produced something better: since
+relevance is `setback / MAX_ATTACK_DAMAGE`, setting `K = MAX_ATTACK_DAMAGE` makes `K x relevance` the
+setback **damage**, so the armed fire rung prices in the incumbent's own units and is a strict
+generalisation of it rather than a re-scaling. There is no free parameter, and `pilot.py` imports the
+normalizer rather than copying its value so a future set re-deriving it from the CSV carries K along.
+
+The identity is what makes the two instruments agree: on f21/f29 both price **exactly `-1.25`**, the
+figure ADR-0062 derived `_DENIAL_BENCH` from and ADR-0082 Amendment A re-verified. They diverge only
+upward, where relevance sees a setback `_denial_at` cannot — f12 `+55.00` vs `+22.50`, f26 `+16.25`
+vs `+1.25`: same sign, same decision, strictly better informed. An earlier pin of `K = 140` (the
+largest observed `opp_denial_best`) priced f21 at `-6.50` — still a hold, but no longer the
+incumbent's number, and it lost f12 outright.
+
+### Measured result
+
+With `deny_relevance` armed, **every Hammer-bearing frame in the corrections corpus reproduces the
+OFF decision** — 12 frames, 0 changed, so the deny 5/5 holds. Kill-switch OFF is byte-identical and
+the OFF path is pinned against the documented arithmetic recomputed independently
+(`test_off_reproduces_the_documented_incumbent_arithmetic_exactly`), because asserting OFF == OFF
+would be vacuous.
+
+### Two corrections to Issue #187's own spec
+
+- **`relevance_energy` cannot be matched against an engine option.** The spec assumed a positional
+  match. It indexes `energies` — what the attached cards PROVIDE
+  (`cgpy.options.provided_energy`, one entry per unit, so an Ignition Energy contributes three) —
+  while a `DISCARD_ENERGY` option's `energyIndex` indexes the attached **cards**. The two coincide
+  only on a body holding nothing but single-unit Basic Energy. Rows therefore also carry
+  `relevance_by_type`, and surface (c) keys off the option's Provider-resolved TYPE, which is what
+  relevance is actually a function of. `relevance_energy` stays as diagnosis.
+- **The Issue #199 layer was NOT consumed unchanged**, as the spec claimed. Findings A–C are all
+  changes to the read or its plumbing.
+
+### Known limitation, unchanged
+
+A rainbow-class Special Energy still reads untyped and returns the blank record before either clause,
+so a `●●●` body paying with one scores 0 even at `total_attached == total_cost`. Consistent with how
+`combat.attached_type_counts` already treats it, and recorded rather than fixed.
