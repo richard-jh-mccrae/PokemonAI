@@ -185,7 +185,7 @@ def test_accel_unlock_credits_the_energy_a_landing_spot_realises():
     Zero when the accelerator is not Active or a recipient already exists — the rule's hand-written
     stand-down conditions, now derived."""
     from common.strategy.context import ENERGY_RECOVER
-    from tests.strategy._accel_fixture import accel_pilot, accel_obs   # noqa: F401
+    from _accel_fixture import accel_pilot, accel_obs   # noqa: F401
 
     pilot, obs, option = accel_pilot()
     board = pilot._board(obs, obs["select"])
@@ -200,7 +200,7 @@ def test_accel_unlock_credits_the_energy_a_landing_spot_realises():
 def test_accel_unlock_is_zero_without_a_stranded_accelerator():
     """The two stand-downs the flat +20 rung wrote by hand, both derived here: no accelerator Active
     means nothing is stranded, and a recipient already benched means the Energy already lands."""
-    from tests.strategy._accel_fixture import accel_pilot
+    from _accel_fixture import accel_pilot
 
     pilot, obs, option = accel_pilot(recipient_benched=True)
     board = pilot._board(obs, obs["select"])

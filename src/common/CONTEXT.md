@@ -930,6 +930,12 @@ _because it blocks my route rather than threatening me), and_ `_SNIPE_THREAT_PRI
 inert even on the fixture written to cover it). 17/19 corpus + 4/4 held-out — both sanity floors, NOT the
 acceptance bar: ~12 shapes were measured against those same 19 frames, so the bar is the ADR-0072 pair
 plus authored per-leg fixtures.)_
+_(Issue #219, 2026-07-31 — a no-op refactor, sweep byte-identical and the gate unmoved:_
+`target_relevance` _now reads **two frozen `Inputs` dataclasses, one per side of the product** —_
+`TheirPlanInputs` _and_ `MyRouteInputs` _— rather than 18 loose kwargs, taking the shape_
+`EvolveInputs` _(ADR-0070) and_ `PromoteRetreatInputs` _(ADR-0073) already set. Why one object per
+SIDE rather than one bag, and why_ `brief_boost` _stays loose:_ `snipe_relevance.py`_'s module
+docstring, §"The inputs are TWO dataclasses".)_
 
 **Brief Tiebreak** (snipe):
 The ordering that runs BENEATH **Snipe Relevance** when relevance ties EXACTLY (ADR-0085 Amendment H,
