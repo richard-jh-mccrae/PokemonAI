@@ -294,7 +294,7 @@ def test_the_fan_out_gives_every_member_the_class_MAXIMUM():
     so raising the others corrects an omission. The minimum would discard a demonstrated line."""
     from common.option_equivalence import fan_out
     equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
-    assert fan_out({0: 5.0, 1: 1167.0}, equiv, 4) == [5.0, 1167.0, None, 1167.0]
+    assert fan_out([5.0, 1167.0, None, None], equiv) == [5.0, 1167.0, None, 1167.0]
 
 
 def test_the_fan_out_leaves_an_all_unscored_class_as_None():
@@ -302,4 +302,21 @@ def test_the_fan_out_leaves_an_all_unscored_class_as_None():
     genuinely negative option."""
     from common.option_equivalence import fan_out
     equiv = {0: frozenset({0, 1}), 1: frozenset({0, 1})}
-    assert fan_out({}, equiv, 2) == [None, None]
+    assert fan_out([None, None], equiv) == [None, None]
+
+
+def test_classes_is_the_ONE_walk_over_a_map():
+    """Three call sites had each written this themselves; a second definition of "these are one
+    decision" drifts silently, because every copy stays internally consistent."""
+    from common.option_equivalence import classes
+    equiv = {3: frozenset({1, 3}), 1: frozenset({1, 3}), 4: frozenset({4, 0}), 0: frozenset({4, 0})}
+    assert classes(equiv) == [[0, 4], [1, 3]]
+    assert classes({}) == [] and classes(None) == []
+
+
+def test_class_of_defaults_to_the_index_alone():
+    from common.option_equivalence import class_of
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert class_of(equiv, 1) == frozenset({1, 3})
+    assert class_of(equiv, 7) == frozenset({7})
+    assert class_of({}, 7) == frozenset({7})

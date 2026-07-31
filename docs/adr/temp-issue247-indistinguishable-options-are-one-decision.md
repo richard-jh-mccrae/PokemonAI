@@ -218,6 +218,39 @@ deferring, and the committed pick being the class's lowest index). Stated plainl
 gate that never ran the code reads as evidence otherwise — the exact misreading ADR-0085 Amendment I
 was written about.
 
+## Found by the two-axis review, after the build
+
+**A real defect, shipped and caught: one pick satisfied TWO ruled cards in one class.**
+`satisfies_human`'s first implementation asked only *"does some member of this card's class appear in
+the pick?"* — so a ruling of `[1, 3]` over two indistinguishable options was satisfied by `[1]` alone.
+Verified live before the fix: `satisfies_human([1], [1,3], equiv=…)` returned `True`. That contradicts
+the decision's own stated rule (*a class widens WHICH option satisfies a ruled card; it never excuses
+a missing one*) and the spec's user story 44. **Zero of the 372 committed frames hit it**, so it was
+latent rather than a live mis-grade — which is exactly why it needed a test rather than a corpus
+assertion. Now COUNTING, not membership: classes partition the menu (an option has one fingerprint,
+so it sits in exactly one class), which makes per-class counting an *exact* bipartite matching rather
+than an approximation.
+
+**A coverage hole:** `decider_lab_diff`'s `equiv` threading had no test — the very path that decides
+whether `main` goes red. Three added, including the one that reproduces the defect first
+(`REGRESSION` without the map, `NEUTRAL` with it) and one pinning that both sides of a diff are
+restated against a single map.
+
+**Duplication the module's own docstring forbids:** the "classes of a map" walk existed three times
+and "the class of an index" three times, each spelt slightly differently. Both are now single
+functions in `common.option_equivalence` (`classes`, `class_of`) that every caller reads — a second
+definition of *"these are one decision"* drifts silently, because each copy stays internally
+consistent. `fan_out` also became list-in/list-out, deleting a `{i: v for i, v ...}` adapter that both
+call sites were writing.
+
+**Deviation from the spec, accepted deliberately:** decision 4 said the asymmetry finding is rendered
+"in the lab readout **and in the shared gate report block**". It is rendered only in the lab readout.
+`print_gate_report` is shared by BOTH gates, and the Decision Gate has no leaf values and so can never
+populate the field — adding it there would be a parameter one of two callers can only ever pass empty,
+which is Speculative Generality in the one printer whose whole purpose is that the two gates cannot
+drift in shape. The effect the decision wanted is met: `_print_report` runs on the `diff` path, so CI
+prints the finding on every push.
+
 ## Consequences
 
 * An indistinguishable-options ruling can be **satisfied on purpose** — the title of Issue #247.

@@ -1465,3 +1465,51 @@ def test_a_capture_row_records_WHICH_options_were_one_decision():
     assert gates.classes_of(equiv) == [[0, 4], [1, 3]]
     assert gates.classes_of({}) == []
     assert gates.classes_of(None) == []
+
+
+def test_ONE_pick_cannot_satisfy_TWO_ruled_cards_in_the_same_class():
+    """The regression guard for a real defect this build shipped and the review caught.
+
+    The first implementation asked only *"does some member of this card's class appear in the
+    pick?"*, so a ruling of ``[1, 3]`` over two indistinguishable options was satisfied by taking
+    ``[1]`` alone — one pick answering for two ruled cards. A class widens WHICH option satisfies a
+    ruled card; it must never let one pick satisfy two of them.
+
+    Zero committed frames hit this today (all 372 checked), so it was latent rather than a live
+    mis-grade — which is precisely why it needs a test rather than a corpus assertion."""
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert satisfies_human([1], [1, 3], equiv=equiv) is False, "half the ruling is not the ruling"
+    assert satisfies_human([1, 3], [1, 3], equiv=equiv) is True
+    # and the widening it must still allow: two ruled cards in DIFFERENT classes
+    two = {0: frozenset({0, 2}), 2: frozenset({0, 2}), 1: frozenset({1, 4}), 4: frozenset({1, 4})}
+    assert satisfies_human([2, 4], [0, 1], equiv=two) is True, "each ruled card met by its own twin"
+
+
+def test_the_diff_classifies_a_SIBLING_pick_as_neutral_not_a_regression():
+    """The gate half of the fix, and the one that decides whether `main` goes red.
+
+    A build whose agent moves from one member of a class to another has changed nothing the ruling
+    can see. Before the oracle that read as a REGRESSION and failed `main`; it must now be NEUTRAL —
+    a real change in what was played, but not one the corpus adjudicates."""
+    before = _report([{"key": "e|0|decision|1", "chosen": [3], "correct": [3], "context": 0}])
+    after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
+    equiv = {"e|0|decision|1": {1: frozenset({1, 3}), 3: frozenset({1, 3})}}
+
+    blind = gates.decider_lab_diff(before, after)
+    assert [r["verdict"] for r in blind["rows"]] == ["REGRESSION"], "the defect, reproduced"
+
+    aware = gates.decider_lab_diff(before, after, equiv=equiv)
+    assert [r["verdict"] for r in aware["rows"]] == ["NEUTRAL"]
+    assert gates.decision_gate_verdict(aware["rows"], held_out={}) is True
+
+
+def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
+    """The equivalence is a property of the CORPUS, not of a capture: an old baseline carries no
+    `equiv` field at all, so if the diff read the map off each side it would grade its two halves
+    under two different oracles. The agree delta must move on both sides at once."""
+    before = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
+    after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
+    equiv = {"e|0|decision|1": {1: frozenset({1, 3}), 3: frozenset({1, 3})}}
+    assert gates.decider_lab_diff(before, after)["agree_delta"]["before"] == (0, 1)
+    aware = gates.decider_lab_diff(before, after, equiv=equiv)["agree_delta"]
+    assert aware["before"] == (1, 1) and aware["after"] == (1, 1)

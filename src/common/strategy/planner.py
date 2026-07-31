@@ -540,7 +540,7 @@ class PlannerMixin:
         # reachable from all), so it corrects an omission rather than inventing optimism; it is also
         # cheaper, a 3-member class costing one rollout instead of three.
         equiv = self._option_equivalence(obs, options)
-        scored: dict = {}
+        scored = [None] * len(options)
         for i in class_representatives(equiv, len(options)):
             self._planning = True                        # per-sim reentrancy guard (never nest a search)
             try:
@@ -551,15 +551,13 @@ class PlannerMixin:
                 self._planning = False
             if stream:
                 return None                              # unreproducible ranking -> defer (all-or-nothing)
-            if val is not None:
-                scored[i] = val
+            scored[i] = val
         # The rule is UNCHANGED and its population narrowed (decision 8): every value in the ranking
         # is one this rung actually consulted, and each is reproducible — which is exactly what
         # all-or-nothing asserts. It also removes an order-dependent defer, since a class used to
         # surrender the whole turn when one isomorphic sibling happened to roll a coin its twin did
         # not, and which sibling rolls is the cross-process variance #178 documents.
-        ranked = [(v, i) for i, v in enumerate(fan_out(scored, equiv, len(options)))
-                  if v is not None]
+        ranked = [(v, i) for i, v in enumerate(fan_out(scored, equiv)) if v is not None]
         if not ranked:
             return None                                  # nothing simmable at all — defer to the tuned
                                                          # scoring rather than pick blind

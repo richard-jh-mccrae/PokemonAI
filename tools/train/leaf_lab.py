@@ -88,7 +88,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     `class_asymmetry` reports any class the leaf priced two ways — see that function for why the two
     readings must not be collapsed.
     """
-    from common.option_equivalence import fan_out, option_equivalence
+    from common.option_equivalence import class_of, fan_out, option_equivalence
 
     obs = correction.obs or {}
     raw = board_leaf_values(pilot, obs)
@@ -102,7 +102,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     #     ranks, so grading the raw values would measure something the agent does not do, and the
     #     rung/instrument drift is how the decider sweeps rotted.
     # So: the finding is read off `raw`, every verdict off `values`.
-    values = fan_out({i: v for i, v in enumerate(raw) if v is not None}, equiv, len(raw))
+    values = fan_out(raw, equiv)
     correct = list(correction.correct or [])
     scored = [v for v in values if v is not None]
     correct_vals = [values[i] for i in correct if 0 <= i < len(values) and values[i] is not None]
@@ -125,7 +125,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     # the same decision tying is correct behaviour, not a leaf that cannot discriminate, and counting
     # them separately aimed leaf-enrichment work at a phantom.
     at_top = {i for i, v in enumerate(values) if v is not None and v == top}
-    top_tie = len({min(equiv.get(i, frozenset({i}))) for i in at_top})
+    top_tie = len({min(class_of(equiv, i)) for i in at_top})
     is_top = best_correct >= top
     return {**base, "unscorable": False, "correct_value": best_correct, "top_value": top,
             "correct_is_top": is_top, "correct_is_unique_top": is_top and top_tie == 1,
@@ -150,11 +150,13 @@ def class_asymmetry(values, equiv) -> list:
     docstring): a metric nobody has ruled on must not start failing `main`. With the develop rung's
     canonicalisation armed this should be empty for the rung's own frames; a non-empty finding means
     either the flag is off or a class is being scored somewhere that does not canonicalise."""
+    from common.option_equivalence import classes
+
     out = []
-    for members in sorted({frozenset(v) for v in (equiv or {}).values()}, key=sorted):
-        vals = [values[i] for i in sorted(members) if i < len(values) and values[i] is not None]
+    for members in classes(equiv):
+        vals = [values[i] for i in members if i < len(values) and values[i] is not None]
         if len(set(vals)) > 1:
-            out.append({"options": sorted(members), "spread": max(vals) - min(vals)})
+            out.append({"options": list(members), "spread": max(vals) - min(vals)})
     return sorted(out, key=lambda f: -f["spread"])
 
 

@@ -943,8 +943,12 @@ def classes_of(equiv) -> list:
 
     A row says WHICH options were equivalent rather than merely how many, on the precedent of the
     per-row ``voided`` marker: a reviewer of a re-capture needs to see the reason a frame scored as
-    agreement, not just that it did."""
-    return sorted(sorted(members) for members in {frozenset(v) for v in (equiv or {}).values()})
+    agreement, not just that it did.
+
+    Delegates rather than re-deriving: `option_equivalence.classes` is the ONE walk over an ``equiv``
+    map, for the same reason the fingerprint has one home."""
+    from common.option_equivalence import classes
+    return classes(equiv)
 
 
 def picks_as_set(pick):
@@ -1023,10 +1027,19 @@ def satisfies_human(chosen, correct, *, equiv=None) -> bool:
         return not chosen
     if not equiv:
         return picks_as_set(correct) <= picks_as_set(chosen)
+    from collections import Counter
+
+    from common.option_equivalence import class_of
+
+    # COUNTING, not membership. A class widens WHICH option satisfies a ruled card; it never lets one
+    # pick satisfy two of them. Ruling `[1, 3]` on two indistinguishable options demands BOTH be
+    # taken, and a bare `class & picked` test says yes to `[1]` alone — a partial answer passing as a
+    # whole one, the exact failure the DISCARD paragraph above exists to prevent one shape over.
+    # Classes PARTITION the menu (an option has one fingerprint, so it is in exactly one class), so
+    # per-class counting is an exact bipartite matching rather than an approximation of one.
     picked = picks_as_set(chosen)
-    # EVERY ruled card must still be matched — a class widens what satisfies each one, it never
-    # excuses a missing one. A two-card ruling half-answered stays a disagreement.
-    return all(bool(equiv.get(c, frozenset({c})) & picked) for c in correct)
+    want = Counter(frozenset(class_of(equiv, c)) for c in picks_as_set(correct))
+    return all(len(cls & picked) >= n for cls, n in want.items())
 
 
 def records_a_decline_it_cannot_state(correction, obs) -> bool:

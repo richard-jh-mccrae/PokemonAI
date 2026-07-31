@@ -154,6 +154,24 @@ def option_equivalence(options, frame: dict | None) -> dict:
             for i in members}
 
 
+def classes(equiv: dict) -> list:
+    """One frame's classes as a sorted list of sorted index lists.
+
+    The de-duplicating walk over an ``equiv`` map, which three callers had each written for
+    themselves — a capture row's JSON shape, the Leaf Lab's asymmetry scan, and this module. Same
+    reason the fingerprint lives here: a second copy is a second definition of "these are one
+    decision", and it drifts silently because each copy stays internally consistent."""
+    return sorted(sorted(members) for members in {frozenset(v) for v in (equiv or {}).values()})
+
+
+def class_of(equiv: dict, index: int) -> frozenset:
+    """The class ``index`` belongs to — itself alone when it is in none.
+
+    The other operation three call sites had inlined (`class_representatives`, the Leaf Lab's tie
+    count, `satisfies_human`), each spelling the singleton default slightly differently."""
+    return (equiv or {}).get(index) or frozenset({index})
+
+
 def class_representatives(equiv: dict, count: int) -> list:
     """The option indices worth evaluating — one per class, plus every unclassed option.
 
@@ -162,11 +180,10 @@ def class_representatives(equiv: dict, count: int) -> list:
     guarantee (#178, all-or-nothing) is worth nothing.
 
     Returned in ascending order, so a caller iterating them walks the menu in its natural order."""
-    return [i for i in range(count)
-            if i not in (equiv or {}) or min(equiv[i]) == i]
+    return [i for i in range(count) if min(class_of(equiv, i)) == i]
 
 
-def fan_out(values: dict, equiv: dict, count: int) -> list:
+def fan_out(values, equiv: dict) -> list:
     """Spread each representative's value across its whole class — the **class maximum**, index-aligned.
 
     Sound by isomorphism: after an identical first step onto interchangeable bodies the resulting
@@ -178,10 +195,13 @@ def fan_out(values: dict, equiv: dict, count: int) -> list:
 
     ``max`` rather than a bare copy so the function stays correct if a caller ever evaluates more
     than one member of a class — the value assigned is then the best DEMONSTRATED one, never a
-    silently-chosen arbitrary member."""
+    silently-chosen arbitrary member.
+
+    List in, list out, index-aligned: both callers hold a per-option list, and taking a dict here
+    made each of them write the same ``{i: v for i, v ...}`` adapter at its own call site."""
     out = []
-    for i in range(count):
-        members = (equiv or {}).get(i) or {i}
-        scored = [values[m] for m in members if values.get(m) is not None]
+    for i in range(len(values)):
+        scored = [values[m] for m in class_of(equiv, i)
+                  if m < len(values) and values[m] is not None]
         out.append(max(scored) if scored else None)
     return out
