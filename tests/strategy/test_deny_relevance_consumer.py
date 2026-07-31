@@ -506,7 +506,9 @@ def test_off_is_documented_DEGRADED_MODE_and_emits_ABSENT_not_a_measured_zero():
         "OFF is DEGRADED MODE: the fire rung stands down at exactly 0.0, ahead of the keep price — "
         "a board this loaded (Mega Brave's own {F}{F}) prices +125.00 armed")
     assert board.deny_relevance_best is None, "OFF must emit no relevance at all — ABSENT, not zero"
-    assert board.deny_relevance_rows == ()
+    assert board.deny_relevance_rows is None, (
+        "and the ROWS carry the same distinction one level up — `None` is not measured, `()` would "
+        "be measured and empty. Both fields say ABSENT, which is the whole point of this test")
     assert _deny_slots(p, _discard_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING, FIGHTING]))) == [], (
         "and the keep price stands down with it — OFF emits no deny slot at all")
 

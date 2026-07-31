@@ -509,10 +509,17 @@ class Board:
                                        # CLOSED to a RECOMPUTE (`_deny_relevance_best`'s ladder),
                                        # never to a whiff — it used to fall back to `opp_denial_best`,
                                        # which Issue #228 deleted along with the rest of that oracle.
-    deny_relevance_rows: tuple = ()    # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
+    deny_relevance_rows: tuple | None = None
+                                       # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
                                        # what the TARGET pick ranks on, plus the ADR-0084 clock DELTA
                                        # its lexicographic tiebreak reads (None when `deny_strip_delta`
-                                       # is off — absence, NOT a measured zero). One row set, so the
+                                       # is off — absence, NOT a measured zero). `None` on the
+                                       # FIELD is the same distinction one level up: not
+                                       # measured, versus measured and empty (Issue #228
+                                       # applied it to `deny_relevance_best`; it is the same
+                                       # rule here). Consumers already re-compute on falsy,
+                                       # so this is a typing correction, not a behaviour
+                                       # change. One row set, so the
                                        # rank and its tiebreak can never drift apart.
                                        # Keyed by TYPE, never by position: a
                                        # `DISCARD_ENERGY` option's `energyIndex` indexes attached CARDS
@@ -4038,11 +4045,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if self.gust_target_slots:
             gusters = [k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])]
             if gusters:
-                result = getattr(self, "_opponent_target_cache", None)
-                if result is None:
-                    result = self._opponent_target_rows(obs, board)
-                if result is not None:
-                    _phase, target_rows = result
+                # ONE ladder, `_deny_rows` — this used to open-code the cache-or-compute walk, a
+                # second spelling of the same three lines. Issue #228 extracted
+                # `_best_area_weighted_relevance` for
+                # exactly that reason and would have left this copy behind.
+                target_rows = self._deny_rows(obs, board)
+                if target_rows:
                     for r in target_rows:
                         if r["area"] != "bench" or r["value"] <= 0:
                             continue           # off-area, or a removal that isn't worth anything
@@ -5524,10 +5532,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         magnitude `opp_denial_best` until Issue #228 armed the flag and deleted that oracle; OFF now
         stands the rung down entirely — DEGRADED MODE, never a rollback.
 
-        Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy,
-        no affordable attack, or the only energized body is one I am about to KO) prices at 0 and is
-        held; `_finish_turn_last` tiers a free Item ahead of everything, so declining one REQUIRES a
-        non-positive score. Half of all Crushing Hammers do nothing whatever the board looks like, so
+        Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy, no affordable
+        attack, or the only energized body is one I am about to KO) still pays the keep price and so
+        prices at **-`_DENIAL_ITEM_COST`**, which DECLINES. It used to short-circuit to a bare 0.0,
+        and this docstring used to claim that "prices at 0 and is held" — it did not: `_finish_turn_last`
+        promotes only on `score > 0`, so a 0.0 free Item landed in the last tier TIED with End and
+        stable score order played it by option index (Issue #228; the asymmetry ADR-0084 decision 8
+        knowingly handed forward). Declining REQUIRES a STRICTLY negative score, not merely a
+        non-positive one. Half of all Crushing Hammers do nothing whatever the board looks like, so
         the coin is priced here rather than absorbed into a tuned constant.
 
         The unfavored Read (Lever A) SCALES this value and is never added beside it — see
@@ -6764,13 +6776,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # The three deny surfaces read these fields; none re-scores a body, so the ADR-0076
             # Amendment C "resolved once per decision" promise covers deny too.
             _rel_rows = self._opponent_target_cache[1]
-            # The AREA weighting and its ADR-0084 decision-5 derivation now live on `_deny_best_of`,
+            # The AREA weighting and its ADR-0084 decision-5 derivation now live on
+            # `_best_area_weighted_relevance`,
             # so the ladder `_denial_play_tactical` reads and this per-decision build cannot drift.
             # The reading is the AFFORDABLE one, not the full one: spending the card prices only what
             # they can do NOW (ADR-0080 Amendment B). Measured on the four ADR-0062 anchors, this is
             # what keeps all four signs: f21/f29 hold (-6.50), f12 plays (+16.00), f26 plays (+0.50).
             # Full relevance here fires on f21/f29 (+2.50) off an unaffordable Phantom Dive.
-            board.deny_relevance_best = self._deny_best_of(_rel_rows, opp, oa)
+            board.deny_relevance_best = self._best_area_weighted_relevance(_rel_rows, opp, oa)
             board.deny_relevance_rows = tuple(
                 (r["area"], r["bi"], dict(r.get("relevance_by_type") or {}), r.get("strip_shift"))
                 for r in _rel_rows)
@@ -8071,7 +8084,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             rows.append(row)
         return phase, rows
 
-    def _deny_best_of(self, rel_rows, opp: dict | None, oa: dict | None) -> float:
+    def _best_area_weighted_relevance(self, rel_rows, opp: dict | None,
+                                      oa: dict | None) -> float:
         """The best relevance achievable anywhere on their board — `Board.deny_relevance_best`.
 
         AREA-WEIGHTED, and deliberately so. The 2026-07-30 ruling dropped `_DENIAL_BENCH` from the
@@ -8110,7 +8124,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         yi = state.get("yourIndex", 0)
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
         oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
-        return self._deny_best_of(self._deny_rows(obs, board), opp, oa)
+        return self._best_area_weighted_relevance(self._deny_rows(obs, board), opp, oa)
 
     def _deny_relevance_map(self, obs: dict, board: Board) -> dict:
         """``{(area, bi): {EnergyType: relevance}}`` — the resolved Deny Relevance read, per body.

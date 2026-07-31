@@ -144,7 +144,8 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
     Returns:
         ``{"relevance", "attack_leg", "ability_leg", "setback_damage", "forward_setback"}``.
         ``setback_damage`` and ``affordable_setback`` are POST-discount — the instrument's answer,
-        the same quantity `_denial_at` returns. ``forward_setback`` stays RAW, so the forward
+        the quantity the retired ADR-0062 `_denial_at` used to return (deleted by Issue #228 —
+        this is now the only instrument). ``forward_setback`` stays RAW, so the forward
         contribution remains visible for diagnosis.
         Relevance is the MAX of the legs — the shape `card_worth.role_value` uses to combine
         heterogeneous claims.
@@ -206,9 +207,10 @@ def strip_relevance(*, energy_type, type_count: int, line_attacks, ability_types
                     forward_affordable = max(forward_affordable, int(damage))
                 else:
                     own_affordable = max(own_affordable, int(damage))
-    # `max(own, discount x forward)` — byte-for-byte the shape `_denial_at` uses on the OFF path
-    # (`max(now, _DENIAL_FORWARD * forward)`), so the two instruments price a forward threat the same
-    # way. A DISCOUNT, never a deletion: ADR-0063 derived the bound from two frames, and its lower
+    # `max(own, discount x forward)` — byte-for-byte the shape the retired ADR-0062 `_denial_at` used
+    # (`max(now, _DENIAL_FORWARD * forward)`). That was the agreement which let this instrument
+    # REPLACE it; Issue #228 then deleted it, so the shape is now load-bearing on its own rather than
+    # cross-checked. A DISCOUNT, never a deletion: ADR-0063 derived the bound from two frames, and its lower
     # leg is ms 82225643 f12, which must still PLAY the Hammer off a Riolu's banked {F}.
     setback = max(own_setback, forward_discount * forward_setback)
     affordable_setback = max(own_affordable, forward_discount * forward_affordable)

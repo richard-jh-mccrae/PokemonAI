@@ -217,7 +217,7 @@ def _denial_pilot(**kw):
         PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0),
-        OPP: CardStat(OPP, name="Mega Lucario ex", hp=440, megaEx=True, maxDamage=270,
+        OPP: CardStat(OPP, name="Mega Lucario ex", hp=340, megaEx=True, maxDamage=270,
                       energyType=FIGHTING,               # {F} (EN_Card_Data.csv row 678)
                       attacks=(13,)),                    # Aura Jab {F} 130 — an affordable threat at 1 Energy
         # The Energy the opponent's body actually holds, so the Provider can resolve card id -> type.

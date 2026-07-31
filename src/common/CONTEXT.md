@@ -854,8 +854,10 @@ take?"* — it credits an attack they cannot afford yet, which is the point of t
 **affordable** reading (`affordable_relevance`) restricts the same scan to attacks the body can pay
 for as it stands, and is the only one the FIRE rung may read: crediting an unaffordable attack there
 spends a finite Item on a threat that has not arrived (measured — ms f21/f29 flips to playing the
-Hammer the human ruled against). The Brief sharpener and `_DENIAL_BENCH` likewise apply to the
-rank/keep side only; on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
+Hammer the human ruled against). The Brief sharpener likewise applies to the rank/keep side only
+(`_DENIAL_BENCH` did too, until Issue #228 deleted it with the rest of the ADR-0062 magnitude path —
+its QUESTION, whether a benched body can reach the Active position at all, survives as ADR-0071's
+promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
 is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
 strip Δ as deny's VALUE (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the

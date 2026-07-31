@@ -361,6 +361,6 @@ Decision 3's cost measurement**, so it is settled by rule rather than by a separ
 - **No baseline is re-captured to clear a red.** A re-capture happens only at a ruling commit, per
   ADR-0072 decision 5 and `CLAUDE.md`'s *"auto-recapture would make the gate vacuous"*.
 - **The stale `reviewed.json` `covered` claim on `82225643-11` stays with Issue #238** (open; its
-  retest *"[1]→[0]=correct"* no longer holds). #228 posts the finding there as evidence.
+  retest *"[1]→[0]=correct"* no longer holds). Issue #228 posts the finding there as evidence.
 - **Issue #136's Phase 1e checkboxes are stale** — Issue #217 is closed `status:4-done` but unticked
-  and still described as *"not blocking anything"*. Corrected when #228 closes.
+  and still described as *"not blocking anything"*. Corrected when Issue #228 closes.
