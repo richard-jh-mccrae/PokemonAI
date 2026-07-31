@@ -44,6 +44,13 @@ was about*; a multi-pick select returns every index the engine demands. Equality
 vocabularies mis-reports: it read `DISCARD` at **1/12** purely because the agent picks `[2, 3]` where
 the ruling says `[2]`. On single-pick contexts the two tests are identical.
 
+A ruling naming one of an **indistinguishable** set of options is satisfied by a pick of ANY member
+of its **Option Equivalence Class** (ADR-TEMP-247, Issue #247) — two identical undamaged Riolu are one
+decision, so the agent picking the human's twin is agreement, not disagreement. The map is resolved
+from the CORPUS once and threaded through capture and diff, never read back off a capture; each row
+records its own classes so the artifact says WHY a frame agreed. That closes ADR-0088's deferral, and
+it is why the `transposition` ledger entry is gone while the disposition survives.
+
 A frame carrying a **Voided Ruling** — `refuted` (the ruling was disowned) or `transposition` (it
 stands but names one of an indistinguishable set) — is OUT of the rate entirely (ADR-0088). It is
 neither agreement nor disagreement, so the denominator is `gradeable`, not `labelled`, and both are
@@ -75,10 +82,11 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         held_out_frames, keyed_corrections, orphan_rulings, print_agree_delta,
-                         print_gate_report, print_ruling_moves, print_ruling_readout, ruling_index,
-                         satisfies_human, split_excused, voided_frames, write_json_artifact)
+from train.gates import (classes_of, decider_lab_diff, decision_gate_verdict,  # noqa: E402
+                         equivalence_index, held_out_frames, keyed_corrections, orphan_rulings,
+                         print_agree_delta, print_gate_report, print_ruling_moves,
+                         print_ruling_readout, ruling_index, satisfies_human, split_excused,
+                         voided_frames, write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -133,7 +141,7 @@ def _portable_error(exc: Exception) -> str:
     return text.replace(root + "/", "").replace(root, "")
 
 
-def build_report(store, agent=None, *, voided=()) -> dict:
+def build_report(store, agent=None, *, voided=(), equiv=None) -> dict:
     """Replay every record through a FRESH shipped Pilot and record its decision.
 
     Fresh per frame, deliberately: the Pilot is stateful (deck tracker, caches), and the
@@ -148,6 +156,7 @@ def build_report(store, agent=None, *, voided=()) -> dict:
     denominator read as a deliberate exclusion rather than a vanishing corpus.
     """
     voided = set(voided or ())
+    equiv = equiv or {}
     tune = _tune()
     rows, errors = [], 0
     for key, rec in _records(store, agent):
@@ -158,6 +167,9 @@ def build_report(store, agent=None, *, voided=()) -> dict:
                "correct": rec.correct}
         if key in voided:                  # recorded ON the row, so the artifact says WHICH, not just how many
             row["voided"] = True
+        eq = equiv.get(key)
+        if eq:                             # same reason: the row says WHICH options were one decision,
+            row["equiv"] = classes_of(eq)  # so a reviewer can see WHY a frame scored as agreement
         try:
             pilot = tune._build_pilot(rec.agent)[0]
             row["chosen"] = pilot.explain(rec.obs).chosen
@@ -168,13 +180,14 @@ def build_report(store, agent=None, *, voided=()) -> dict:
         rows.append(row)
     labelled = [r for r in rows if r.get("correct") is not None and r.get("chosen") is not None]
     gradeable = [r for r in labelled if r["key"] not in voided]
-    agree = sum(1 for r in gradeable if satisfies_human(r["chosen"], r["correct"]))
+    agree = sum(1 for r in gradeable
+                if satisfies_human(r["chosen"], r["correct"], equiv=equiv.get(r["key"])))
     return {"rows": rows, "n": len(rows), "errors": errors,
             "labelled": len(labelled), "voided": len(labelled) - len(gradeable),
             "gradeable": len(gradeable), "agree": agree}
 
 
-def _print_summary(rpt: dict) -> None:
+def _print_summary(rpt: dict, equiv=None) -> None:
     by_ctx = {}
     for r in rpt["rows"]:
         by_ctx.setdefault(r.get("context"), []).append(r)
@@ -182,14 +195,17 @@ def _print_summary(rpt: dict) -> None:
     # a diff against an older committed baseline still reads.
     gradeable = rpt.get("gradeable", rpt["labelled"])
     voided = rpt.get("voided", 0)
+    classed = sum(1 for r in rpt["rows"] if r.get("equiv"))
     print(f"{rpt['n']} frames replayed, {rpt['errors']} unreplayable; "
           f"{rpt['agree']}/{gradeable} agree with the human"
-          + (f" ({voided} voided, out of the rate)" if voided else ""))
+          + (f" ({voided} voided, out of the rate)" if voided else "")
+          + (f"; {classed} carry indistinguishable options" if classed else ""))
     for ctx in sorted(by_ctx, key=lambda c: (c is None, c)):
         rs = by_ctx[ctx]
         lab = [r for r in rs if r.get("correct") is not None and r.get("chosen") is not None
                and not r.get("voided")]
-        ok = sum(1 for r in lab if satisfies_human(r["chosen"], r["correct"]))
+        ok = sum(1 for r in lab
+                 if satisfies_human(r["chosen"], r["correct"], equiv=(equiv or {}).get(r["key"])))
         print(f"  context {str(ctx):<5} {len(rs):>4} frames   {ok}/{len(lab)} agree")
 
 
@@ -217,18 +233,22 @@ def main(argv=None) -> int:
     index = ruling_index(args.store)
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)
-    rpt = build_report(args.store, args.agent, voided=set(voided))
+    # The **Option Equivalence Class** map, read once for the same reason and threaded the same way
+    # (ADR-TEMP-247 decision 2): it is a property of the CORPUS, so a capture and the diff reading it
+    # must not resolve two different ideas of which options are one decision.
+    equiv = equivalence_index(args.store)
+    rpt = build_report(args.store, args.agent, voided=set(voided), equiv=equiv)
 
     if args.cmd == "capture":
         write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
-        _print_summary(rpt)
+        _print_summary(rpt, equiv)
         print_ruling_readout(index, voided, orphans=orphans, detail=True)
         print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
         return 0
 
     if args.cmd == "diff":
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
-        diff = decider_lab_diff(before, rpt, voided=set(voided))
+        diff = decider_lab_diff(before, rpt, voided=set(voided), equiv=equiv)
         rows = diff["rows"]
         if args.context is not None:
             rows = [r for r in rows if r.get("context") == args.context]
@@ -236,7 +256,7 @@ def main(argv=None) -> int:
         passed = decision_gate_verdict(rows, held_out=held_out, voided=set(voided))
         regressions = [r for r in rows if r["verdict"] == "REGRESSION"]
         gating, ruled, void_hits = split_excused(regressions, held_out, voided)
-        _print_summary(rpt)
+        _print_summary(rpt, equiv)
         for v in ("FIX", "NEUTRAL", "UNLABELLED"):
             hits = [r for r in rows if r["verdict"] == v]
             if hits:
@@ -273,7 +293,7 @@ def main(argv=None) -> int:
                 "orphan_rulings": [k for k, _e in orphans]})
         return 0 if passed else 1
 
-    _print_summary(rpt)
+    _print_summary(rpt, equiv)
     return 0
 
 

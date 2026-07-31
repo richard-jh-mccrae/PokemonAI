@@ -80,15 +80,40 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     option order, not by you), `correct_rank` (1 = best; ties don't demote), `outscored_by` (options
     strictly above the best correct), and `top_tie` (how many share the top value — a large tie is a leaf
     that can't discriminate). `scored` is None-free option count; `unscorable` when no correct option scored.
+
+    Every verdict is computed on the **canonicalised** values — options a board cannot tell apart are
+    one decision, so each carries its class maximum, exactly as the develop rung ranks them
+    (ADR-TEMP-247). `top_tie` therefore counts CLASSES: two identical Riolu tying is correct
+    behaviour, not a leaf that cannot discriminate. The recorded `values` column stays RAW, and
+    `class_asymmetry` reports any class the leaf priced two ways — see that function for why the two
+    readings must not be collapsed.
     """
-    values = board_leaf_values(pilot, correction.obs or {})
+    from common.option_equivalence import fan_out, option_equivalence
+
+    obs = correction.obs or {}
+    raw = board_leaf_values(pilot, obs)
+    equiv = option_equivalence((obs.get("select") or {}).get("option") or [], obs)
+    # TWO readings of one sim, deliberately (ADR-TEMP-247 decisions 4 + 6), because collapsing them
+    # breaks one of the lab's two jobs:
+    #   * RAW is the evidence — canonicalising first would make `class_asymmetry` empty BY
+    #     CONSTRUCTION, an instrument that can only ever report "nothing", which is the vacuous-gate
+    #     failure `decider_lab_diff`'s docstring exists about;
+    #   * CANONICAL is what the agent sees — the develop rung fans the class maximum out before it
+    #     ranks, so grading the raw values would measure something the agent does not do, and the
+    #     rung/instrument drift is how the decider sweeps rotted.
+    # So: the finding is read off `raw`, every verdict off `values`.
+    values = fan_out({i: v for i, v in enumerate(raw) if v is not None}, equiv, len(raw))
     correct = list(correction.correct or [])
     scored = [v for v in values if v is not None]
     correct_vals = [values[i] for i in correct if 0 <= i < len(values) and values[i] is not None]
     base = {"key": frame_key(correction),
             "episode_id": getattr(correction, "episode_id", None),
             "agent": getattr(correction, "agent", None), "correct": correct,
-            "values": values, "scored": len(scored), "n_options": len(values)}
+            "values": raw,            # RAW stays the recorded column: it is the asymmetry's evidence
+            "scored": len(scored), "n_options": len(values)}
+    asymmetry = class_asymmetry(raw, equiv)
+    if asymmetry:
+        base["class_asymmetry"] = asymmetry
     if not scored or not correct_vals:
         return {**base, "unscorable": True, "correct_value": None, "top_value": None,
                 "correct_is_top": None, "correct_is_unique_top": None, "correct_rank": None,
@@ -96,11 +121,41 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     top = max(scored)
     best_correct = max(correct_vals)
     outscored = sum(1 for v in scored if v > best_correct)
-    top_tie = sum(1 for v in scored if v == top)
+    # Ties are counted over CLASSES, not raw options (ADR-TEMP-247 decision 4): two options that are
+    # the same decision tying is correct behaviour, not a leaf that cannot discriminate, and counting
+    # them separately aimed leaf-enrichment work at a phantom.
+    at_top = {i for i, v in enumerate(values) if v is not None and v == top}
+    top_tie = len({min(equiv.get(i, frozenset({i}))) for i in at_top})
     is_top = best_correct >= top
     return {**base, "unscorable": False, "correct_value": best_correct, "top_value": top,
             "correct_is_top": is_top, "correct_is_unique_top": is_top and top_tie == 1,
             "correct_rank": outscored + 1, "outscored_by": outscored, "top_tie": top_tie}
+
+
+def class_asymmetry(values, equiv) -> list:
+    """Every **Option Equivalence Class** whose members do NOT all score the same — the leaf pricing
+    one decision two ways (ADR-TEMP-247 decision 4).
+
+    ``[{"options": [i, ...], "spread": high - low}, ...]``, worst spread first.
+
+    This is a genuine defect and the Discrimination Gate is structurally blind to it: `correct_is_top`
+    is tie-LENIENT, so a frame where the leaf ranks one of two identical options 12x above the other
+    still reads ``OK``. Measured 2026-07-31: five classes, worst `81903490|0|decision|49` at
+    ``1167.0 / 95.4 / 95.4`` on three byte-identical Riolu, reproducible across fresh Pilots. The
+    cause is `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO from one bench
+    slot and missing the isomorphic line from another — search incompleteness presenting as a value
+    difference (**Issue #254**).
+
+    **Reported, never gating** — the doctrine the tie metrics already carry (`gates.py` module
+    docstring): a metric nobody has ruled on must not start failing `main`. With the develop rung's
+    canonicalisation armed this should be empty for the rung's own frames; a non-empty finding means
+    either the flag is off or a class is being scored somewhere that does not canonicalise."""
+    out = []
+    for members in sorted({frozenset(v) for v in (equiv or {}).values()}, key=sorted):
+        vals = [values[i] for i in sorted(members) if i < len(values) and values[i] is not None]
+        if len(set(vals)) > 1:
+            out.append({"options": sorted(members), "spread": max(vals) - min(vals)})
+    return sorted(out, key=lambda f: -f["spread"])
 
 
 def is_leaf_frame(c) -> bool:
@@ -147,6 +202,8 @@ def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
     leaf_strict = [r for r in gradeable if r["correct_is_unique_top"]]   # honest: SOLE max (rung's pick)
     return {"n": len(rows), "scorable": len(scorable), "unscorable": len(rows) - len(scorable),
             "skipped_agent": skipped,
+            # Reported beside the rates, never in them and never in the verdict (decision 4).
+            "class_asymmetry": sum(1 for r in rows if r.get("class_asymmetry")),
             "voided": len(scorable) - len(gradeable), "gradeable": len(gradeable),
             "leaf_correct": len(leaf_correct),
             "leaf_correct_rate": (len(leaf_correct) / len(gradeable)) if gradeable else None,
@@ -215,6 +272,14 @@ def _print_report(rpt) -> None:
     print(f"leaf picks `correct` (SOLE top): {rpt['leaf_correct_strict']}/{gradeable}{_pct(strict)}"
           f"   | shared-top: {rpt['leaf_correct']}/{gradeable}{_pct(lenient)}"
           f"   | avg top-tie: {tie_s}")
+    asym = [r for r in rpt["rows"] if r.get("class_asymmetry")]
+    if asym:
+        print(f"\n  CLASS ASYMMETRY ({len(asym)}) — the leaf prices ONE decision two ways; "
+              f"reported, never gating (Issue #254):")
+        for r in asym:
+            for f in r["class_asymmetry"]:
+                print(f"    {r['key']}  options {f['options']}  spread {f['spread']:.2f}")
+        print("")
     for r in rpt["rows"]:
         if r["unscorable"]:
             print(f"  ep{r['episode_id']} correct={r['correct']}: UNSCORABLE ({r['scored']}/{r['n_options']} sim'd)")

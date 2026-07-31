@@ -1232,7 +1232,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False):
+                 snipe_relevance=False, leaf_option_equivalence=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1385,6 +1385,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # so OFF means attach endorsements go silent and only
                                                         # the surviving structure rungs speak. An incident
                                                         # lever, never a comparison baseline.
+        self.leaf_option_equivalence = leaf_option_equivalence   # ADR-TEMP-247 (Issue #247) kill-switch:
+                                                        # options a board cannot tell apart are ONE
+                                                        # decision, so the develop rung sims one
+                                                        # representative per class and gives every member
+                                                        # the class MAXIMUM. Fixes a measured 1167.0-vs-95.4
+                                                        # split on three byte-identical Riolu, caused by an
+                                                        # index-order-dependent greedy rollout (Issue #254).
+                                                        # OFF = byte-identical to the pre-#247 rung.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,

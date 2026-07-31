@@ -109,6 +109,18 @@ PROFILE = {
                                     # (ADR-0050), so the rung fires on them and its pick was decided by
                                     # the engine's shuffle. Since #178 it defers whenever ANY candidate's
                                     # sim rode that shuffle, so a retest is reproducible again.
+    "leaf_option_equivalence": True,  # ADR-TEMP-247 (Issue #247), ON at build: options a board cannot
+                                    # tell apart are ONE decision, so the develop rung sims one
+                                    # representative per Option Equivalence Class and fans the class
+                                    # MAXIMUM out to every member. ON rather than armed-off because this
+                                    # is not a new positive leaf term awaiting ladder evidence (the
+                                    # `leaf_hand_value` shape) — it DELETES an inconsistency, and the
+                                    # corrected value is one the simulator itself proved reachable:
+                                    # `81903490|0|decision|49` scored 1167.0 / 95.4 / 95.4 on three
+                                    # byte-identical Riolu. Evidence gate = both ADR-0072 instruments
+                                    # plus the human flip review, not a win-rate run. Also narrows #178's
+                                    # all-or-nothing defer to the sims the rung actually consults, so it
+                                    # defers LESS often. Root cause (the order-dependent rollout) = #254.
     "evolve_value": True,           # the EVOLVE DECIDER, shipped ON 2026-07-25 (ADR-0070, #140): the body-substituted
                                     # deploy delta + the odds-priced income. The sweep's 10 flips were
                                     # user-ruled (6 FIX, 0 regression) and the rungs it replaced are

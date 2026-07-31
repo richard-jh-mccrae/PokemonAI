@@ -289,10 +289,14 @@ one of an **indistinguishable** set of options, so no agent can be scored on pic
 Voiding, for a different reason than `refuted` — and the distinction is load-bearing, because
 ADR-0085 decision 4 cites `81905522-75`'s pick (two identical Riolu, no board signal splits them,
 design-doc R3) to justify leg-scoped rather than whole-target guards. Filing it `refuted` would write
-an assertion into the ledger that a shipped ADR contradicts. Only the *instance* is handled; making
-`satisfies_human` transposition-AWARE (an equivalence class over options, so either pick satisfies)
-is **Issue #247** — it needs an indistinguishability oracle read off `obs`, which is a
-board-reading problem, not a corpus-record one.
+an assertion into the ledger that a shipped ADR contradicts.
+
+**The last entry is gone** (**ADR-TEMP-247** decision 3, Issue #247): `satisfies_human` is now
+transposition-AWARE via the **Option Equivalence Class**, so `81905522-75` is satisfied on purpose and
+re-enters the graded population — along with `86091728|0|decision|19`, a second instance nobody had
+ruled. The WORD survives with no corpus entry behind it, as the human escape hatch for
+indistinguishability the snapshot cannot express: a face-down DECK option can never be fingerprinted,
+so an equivalence turning on information outside `obs` would otherwise be unrecordable.
 _Avoid_: tie (the scores tying is the symptom; the cause is the options being the same), ambiguous
 label, refuted
 
@@ -385,3 +389,34 @@ so a stale `correct` *is* a stale Claim wherever it is reached.
 _Avoid_: sync, parity, drift check (the failure is an *undeclared* disagreement, not drift as such —
 note the separate `obs_mismatch` finding is about the two BOARDS not matching, a different referent),
 label check (a **Correction**'s `correct` is one layer down)
+
+**Class Asymmetry**:
+A frame where the leaf assigns **different values to members of one Option Equivalence Class** — the
+same decision priced two ways (**ADR-TEMP-247** decision 4). Measured 2026-07-31: **five** across the
+81 leaf frames that carry a class, the worst being `81903490|0|decision|49`, where attaching one
+energy card to three byte-identical Riolu scores `1167.0 / 95.4 / 95.4`. Reproducible across fresh
+pilots, so not RNG and not state leakage: `_engine_leaf_value`'s within-turn rollout is greedy and
+index-order dependent, and reaches a KO continuation from bench 0 that it misses from bench 1. Since
+the boards are isomorphic, the miss is **search incompleteness presenting as a value difference**.
+
+The Discrimination Gate is structurally blind to it — `correct_is_top` is tie-lenient, so a frame
+where the leaf ranks one of two identical options 12× above the other still reads `OK`. Hence the Leaf
+Lab reports it per row, and **never gates on it** (the doctrine the tie metrics already carry): a
+metric nobody has ruled on must not start failing `main`. Decision 5 canonicalises the leaf to the
+class MAXIMUM, which removes the asymmetry without touching the rollout; the rollout's own
+order-dependence is **Issue #254**, which also carries the five frames.
+_Avoid_: leaf noise (it is deterministic), scoring bug (the board scorer is fine — the ROLLOUT that
+reaches the board is incomplete), tie-break
+
+**Class Asymmetry — measured at the build (2026-07-31)**: 4 frames / 5 classes survive in the Leaf
+Lab, worst spread 2097.25 on `82749168|1|decision|29`. The lab reads its sim TWICE to keep the
+finding alive: **RAW** values are the evidence (canonicalising first would make the report empty by
+construction — an instrument that can only ever say "nothing"), while every graded verdict is
+computed on the **CANONICAL** copy, because that is what the develop rung actually ranks. Collapsing
+the two readings breaks one job or the other.
+
+⚠️ **Neither gate exercises the develop rung.** Zero of the 372 committed Corrections carry
+`search_begin_input`, so `_develop_rollout_line` is inert during a Decision Gate replay, and the Leaf
+Lab calls `_engine_leaf_value` per option rather than through the rung. A green Decision Gate is
+therefore silent about the rung's canonicalisation — that rests on unit coverage in
+`tests/strategy/test_develop_rollout_rung.py`, not on either gate.

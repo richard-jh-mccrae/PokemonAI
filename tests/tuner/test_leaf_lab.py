@@ -94,3 +94,75 @@ def test_shared_top_is_lenient_hit_but_not_a_unique_top():
     assert v["correct_is_top"] is True                  # shares the max → lenient hit
     assert v["correct_is_unique_top"] is False          # but NOT the sole max → not the rung's guaranteed pick
     assert v["top_tie"] == 2
+
+
+# ── Option Equivalence Class awareness (ADR-TEMP-247 decision 4, Issue #247) ─────────────────────
+
+def _body(cid=1030, *, serial=1, hp=70):
+    return {"appearThisTurn": False, "energies": [], "energyCards": [], "hp": hp, "id": cid,
+            "maxHp": 70, "playerIndex": 0, "preEvolution": [], "serial": serial, "tools": []}
+
+
+def _twin_obs(bodies, n_extra=0):
+    """A MAIN-select board whose first options each pick one bench body, plus optional distinct
+    filler options that can never join a class."""
+    opts = [{"area": 5, "index": i, "playerIndex": 0, "type": 3} for i in range(len(bodies))]
+    opts += [{"type": 14 + j} for j in range(n_extra)]
+    return {"select": {"context": 0, "option": opts},
+            "current": {"yourIndex": 0, "looking": None,
+                        "players": [{"active": [], "bench": list(bodies), "hand": [], "discard": []},
+                                    {"active": [], "bench": [], "hand": [], "discard": []}]}}
+
+
+def test_a_tie_WITHIN_one_class_reports_as_SOLE_top():
+    """The measure this fixes. Two options that are the same decision tying is correct behaviour, not
+    a leaf that cannot discriminate — scoring it as a discrimination failure aimed leaf-enrichment
+    work at a phantom."""
+    obs = _twin_obs([_body(serial=1), _body(serial=2)])
+    row = evaluate_leaf_on_correction(_pilot({0: 65.0, 1: 65.0}), _frame(obs=obs, correct=[0]))
+    assert row["correct_is_top"] is True
+    assert row["correct_is_unique_top"] is True, "one decision, tied with itself"
+    assert row["top_tie"] == 1, "ties count CLASSES, not raw options"
+
+
+def test_a_tie_ACROSS_two_classes_is_still_not_sole_top():
+    """The negative half — the measure must not become vacuous. Two genuinely different bodies tying
+    at the top is a leaf that cannot discriminate, exactly as before."""
+    obs = _twin_obs([_body(serial=1), _body(cid=1031, serial=2)])
+    row = evaluate_leaf_on_correction(_pilot({0: 65.0, 1: 65.0}), _frame(obs=obs, correct=[0]))
+    assert row["correct_is_top"] is True
+    assert row["correct_is_unique_top"] is False
+    assert row["top_tie"] == 2
+
+
+def test_a_class_tying_with_an_unrelated_option_counts_both():
+    obs = _twin_obs([_body(serial=1), _body(serial=2)], n_extra=1)
+    row = evaluate_leaf_on_correction(_pilot({0: 65.0, 1: 65.0, 2: 65.0}),
+                                      _frame(obs=obs, correct=[0]))
+    assert row["top_tie"] == 2, "the twins are one, the stranger is another"
+    assert row["correct_is_unique_top"] is False
+
+
+def test_a_class_scored_TWO_WAYS_is_reported_as_CLASS_ASYMMETRY():
+    """`81903490|0|decision|49`'s shape, reduced: three byte-identical Riolu the leaf prices at
+    1167.0 / 95.4 / 95.4. Deterministic, and caused by an index-order-dependent greedy rollout
+    (Issue #254) rather than by the board — so the lab reports it."""
+    obs = _twin_obs([_body(serial=1), _body(serial=2), _body(serial=3)])
+    row = evaluate_leaf_on_correction(_pilot({0: 1167.0, 1: 95.4, 2: 95.4}),
+                                      _frame(obs=obs, correct=[0]))
+    assert row["class_asymmetry"] == [{"options": [0, 1, 2], "spread": pytest.approx(1071.6)}]
+
+
+def test_a_symmetric_class_reports_NO_asymmetry():
+    obs = _twin_obs([_body(serial=1), _body(serial=2)])
+    row = evaluate_leaf_on_correction(_pilot({0: 65.0, 1: 65.0}), _frame(obs=obs, correct=[0]))
+    assert "class_asymmetry" not in row
+
+
+def test_asymmetry_does_not_touch_the_gated_verdict():
+    """Reported, never gating — the doctrine the tie metrics already carry. The gate reads
+    `correct_is_top`, and an asymmetric class must not change it."""
+    obs = _twin_obs([_body(serial=1), _body(serial=2)])
+    row = evaluate_leaf_on_correction(_pilot({0: 95.4, 1: 1167.0}), _frame(obs=obs, correct=[0]))
+    assert row["class_asymmetry"]
+    assert row["correct_is_top"] is True, "the human's option IS top, up to indistinguishability"

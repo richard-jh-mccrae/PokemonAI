@@ -1389,3 +1389,24 @@ if no it is a planner defect. Verified empirically on `81905522|0|decision|64` �
 candidate openings.
 _Avoid_: sequence / line (a **Maneuver** is the ordered, dependent kind — say which), combo, turn
 plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a pricing bug)
+
+**Option Equivalence Class**:
+A set of select-menu options that are **the same decision** — the board cannot tell them apart, so
+picking any one of them is picking all of them (**ADR-TEMP-247** decision 1). Membership is a
+FULL-OPTION fingerprint: `(type, seat, [(area, card-state-minus-serial) for EVERY zone reference the
+option carries])`. "Every" is load-bearing — a `type 8` attach names TWO cards, the hand card
+(`area/index`) and the recipient body (`inPlayArea/inPlayIndex`), and fingerprinting only the body
+produced **6 false equivalences** on the committed corpus (different energies onto one body reading as
+one decision). A reference the snapshot does not reveal (face-down DECK, 262 options) makes the whole
+option unfingerprintable, so it joins no class: **blind ⇒ conservative, structurally.** Distinct from
+`option_slot`, which answers *"which one identity does this option target"* and stays untouched.
+Measured 2026-07-31: 101 of 372 corpus frames carry one.
+
+Consumed in two places that must not drift, so both read one helper: the develop rung sims ONE
+representative per class (lowest index — deterministic, so the ranking is reproducible) and assigns
+its value to every member, and the graders treat a class member as satisfying a ruling that names its
+sibling. Kill-switch `leaf_option_equivalence` (ON).
+_Avoid_: tie (options scoring equal is the SYMPTOM; being the same decision is the cause — and a leaf
+can score one class member 12× above another, see **Class Asymmetry**), duplicate (the cards are
+distinct objects with distinct serials; it is the DECISION that is one), transposition table (that is
+`transposition_probe.py`'s deliberately lossy search key, which drops `hp` — never reuse it to grade)
