@@ -352,7 +352,7 @@ def _read_json(path: Path) -> dict:
 
 
 def _corrections_in(path: Path):
-    """Every Correction in one log file, CONSTRUCTED (ADR-TEMP-241 decision 1).
+    """Every Correction in one log file, CONSTRUCTED (ADR-0087 decision 1).
 
     Per-file rather than through `gates.keyed_corrections` because the viewer is addressed by the
     ``<episode>-<frame>`` shorthand a human types, not by a **Frame Key**, and it displays the source
@@ -487,14 +487,14 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():
         searched.append(f"{corrections}/**/corrections.jsonl")
-        # CONSTRUCT the records (ADR-TEMP-241 decision 1) rather than re-parsing the raw lines: a
+        # CONSTRUCT the records (ADR-0087 decision 1) rather than re-parsing the raw lines: a
         # record with an empty `agent` carries a populated `agent_build`, and only `from_dict`
         # backfills the deck from that stem. 40 committed records are that shape, and a raw read
         # renders every one of them with a blank agent. Per-file so the source path survives.
         # The store owns where the logs live (`store.jsonl_files`) as well as how a record is
         # constructed - re-deriving the layout with a local glob is a second idea of what the
         # corpus IS, one level below the second idea of what a RECORD is that cost the Decision
-        # Gate 40 records (ADR-TEMP-241). Equivalent to the rglob it replaces: same 28 files,
+        # Gate 40 records (ADR-0087). Equivalent to the rglob it replaces: same 28 files,
         # and the store additionally knows the legacy root-level log.
         for path in jsonl_files(corrections):
             for c in _corrections_in(path):

@@ -60,7 +60,7 @@ def diff_records(before: dict | None, after: dict | None, *, mode: str = "scores
 
 def corrections_corpus(root: Path | str):
     """Yield ``("corr:<episode>:<frame>", obs)`` for every committed Correction carrying obs."""
-    # The store owns both HOW a record is constructed and WHERE the logs live (ADR-TEMP-241
+    # The store owns both HOW a record is constructed and WHERE the logs live (ADR-0087
     # decision 1). This already constructed correctly; asking for the file list too removes the last
     # local copy of the layout.
     from train.blunder.store import jsonl_files, load_corrections

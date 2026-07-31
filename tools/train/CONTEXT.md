@@ -145,7 +145,7 @@ report and exit 0.
 records every frame it captured as the reference, including the 101 where the agent contradicts a
 human ruling (`docs/plans/decider-disagreement-triage.md` tiers them).
 
-⚠️ Its corpus is **372** frames, not the 332 the pre-ADR-TEMP-241 capture reported, and the 101/331
+⚠️ Its corpus is **372** frames, not the 332 the pre-ADR-0087 capture reported, and the 101/331
 figures are readings of that reduced, mis-keyed set. It is a **Corpus Reader** and bound by that
 term's rules — the defect Issue #241 fixes was one raw-JSONL walk plus one hand-built key, which
 between them left only 169 of 372 frames correctly named and put 4 of the 11 **Held-out Ledger**
@@ -164,7 +164,7 @@ predicate, deliberately, so they cannot drift apart.
 _Avoid_: "the agent agrees with the correction" as a synonym for equality — say **satisfies**
 
 **Corpus Reader**:
-Any code that reads `data/corrections/`. Under **ADR-TEMP-241** (Issue #241) it **constructs**
+Any code that reads `data/corrections/`. Under **ADR-0087** (Issue #241) it **constructs**
 `Correction` objects via `train.blunder.store.load_corrections` and derives every **Frame Key** as
 `frame_key_of(*identity_key(c))` — never a raw-JSONL walk, never a hand-built key. Both shortcuts are
 the same defect: a *second idea of what a record is*, which is what silently cost the **Decision
@@ -177,7 +177,7 @@ walk (**`iter_keyed_fixtures`** is the *fixture* walk — a different corpus)
 
 **Ruling Move**:
 A frame present in both captures whose **Correction**'s `correct` CHANGED between them — the human
-re-ruled (`gates.ruling_moves`, ADR-TEMP-241 decision 7). Reported by both the **Decision Gate** and
+re-ruled (`gates.ruling_moves`, ADR-0087 decision 7). Reported by both the **Decision Gate** and
 the **Discrimination Gate** beside `added`/`removed`, and **never gating**: a re-ruling is a
 deliberate human act, not an agent regression. It exists because both diffs emit a row only when
 `chosen` (resp. `correct_is_top`) moves, so a re-ruling on a frame the agent plays identically
@@ -245,7 +245,7 @@ block while none of the 34 do), which is the defect
 back-fills. Several fixtures may legally share one Frame Key — they assert different things about the
 same board — so a consumer keys on it without assuming uniqueness.
 
-**Always DERIVED, never hand-built** (ADR-TEMP-241 decision 2): `frame_key_of(*identity_key(c))` off
+**Always DERIVED, never hand-built** (ADR-0087 decision 2): `frame_key_of(*identity_key(c))` off
 a constructed `Correction`, which is what makes one **Held-out Ledger** ruling hold a frame out of
 *both* gates (ADR-0072 decision 4). A key assembled from raw dict lookups is a second implementation,
 and it drifts silently because both sides of a diff share the same wrong key — `decider_lab` read

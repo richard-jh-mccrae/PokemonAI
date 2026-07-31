@@ -1,4 +1,4 @@
-# ADR-TEMP-241 — A corpus reader CONSTRUCTS Corrections and keys a frame by IDENTITY
+# ADR-0087 — A corpus reader CONSTRUCTS Corrections and keys a frame by IDENTITY
 
 **Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #241 — nine locked decisions,
 one of them a mid-grill correction of an earlier one).

@@ -92,7 +92,7 @@ def _records(store: Path, agent: str | None):
     """Every replayable Correction, already paired with its **Frame Key**.
 
     One line, because it must be: this is `gates.keyed_corrections`, THE Corpus Reader
-    (ADR-TEMP-241 decision 1). What used to live here was a private raw-JSONL walk with a
+    (ADR-0087 decision 1). What used to live here was a private raw-JSONL walk with a
     hand-built key, and it cost 40 dropped records plus 163 mis-keyed ones — see that function's
     docstring for the measurement. The predicate runs on the CONSTRUCTED record, so an empty
     ``agent`` has already been backfilled from ``agent_build`` before anything filters on it.
@@ -132,7 +132,7 @@ def build_report(store, agent=None) -> dict:
     `needs_sweep` / `threat_sweep` discipline is one pilot per frame so a replay cannot inherit a
     previous frame's board. Unreplayable frames are recorded with `error` rather than dropped —
     a shrinking gated set must be visible, not silent. The *unreadable* ones used to be dropped
-    silently, one layer earlier, which is what ADR-TEMP-241 fixes.
+    silently, one layer earlier, which is what ADR-0087 fixes.
     """
     tune = _tune()
     rows, errors = [], 0

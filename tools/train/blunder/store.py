@@ -73,7 +73,7 @@ def jsonl_files(source: Path | str) -> list[Path]:
     """Log file(s) a source denotes: a ``.jsonl`` path -> itself; a directory -> every
     ``<build>/corrections.jsonl`` under it (plus a legacy root-level ``corrections.jsonl``).
 
-    **Public because the store owns where the logs LIVE** (ADR-TEMP-241 decision 1). A caller that
+    **Public because the store owns where the logs LIVE** (ADR-0087 decision 1). A caller that
     needs per-file provenance — the frame viewer prints the source path — must not re-derive the
     layout with its own glob: that is a second idea of what the corpus IS, one level below the second
     idea of what a *record* is that cost the Decision Gate 40 records. Ask here instead."""

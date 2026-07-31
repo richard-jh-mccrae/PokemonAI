@@ -63,7 +63,7 @@ def frame_key(correction) -> str:
     under-reports is the exact failure it exists to prevent.
 
     Delegates to `gates.correction_frame_key`, the single derivation the **Corpus Reader** uses
-    (ADR-TEMP-241 decision 2) — so a frame carries ONE name across both gates and a ruling held out
+    (ADR-0087 decision 2) — so a frame carries ONE name across both gates and a ruling held out
     of one is held out of the other. The Decision Gate hand-built its own and read ``seat`` off the
     ``decision`` snapshot, which has no such field: 163 of its 332 keys were wrong, and four standing
     Held-out Ledger rulings could not reach it."""
@@ -271,7 +271,7 @@ def main(argv=None) -> int:
                 "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
                 "added": diff["added"], "removed": diff["removed"],
-                "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-TEMP-241 d7)
+                "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-0087 d7)
                 "held_out": held_out})
             print(f"-> {args.out}")
         return 0 if passed else 1

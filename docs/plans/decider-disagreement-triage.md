@@ -14,7 +14,7 @@
 > | Tier B (`covered`, still missing) | 28 | **43** |
 >
 > **The Tier B delta is fully attributed**, which is the point of landing the re-key separately
-> (ADR-TEMP-241 decision 5):
+> (ADR-0087 decision 5):
 >
 > ```
 > 43  =  28 (as written)  +  14 (frames the 332 could not see)  +  1 (agent drift)   0 resolved

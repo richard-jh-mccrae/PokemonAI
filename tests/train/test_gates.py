@@ -804,7 +804,7 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
     assert [r["verdict"] for r in decider_lab_diff(before, after)["rows"]] == ["NEUTRAL"]
 
 
-# ── the Corpus Reader — ONE reader, ONE key (ADR-TEMP-241, Issue #241) ────────────────────────────
+# ── the Corpus Reader — ONE reader, ONE key (ADR-0087, Issue #241) ────────────────────────────
 #
 # The defect these tests assert against, measured 2026-07-31 on the committed corpus:
 #
@@ -927,7 +927,7 @@ def test_every_held_out_ruling_names_a_frame_the_committed_store_carries():
     assert missing == []
 
 
-# ── Ruling Moves — the channel for a corpus whose RULING moved (ADR-TEMP-241 decision 7) ──────────
+# ── Ruling Moves — the channel for a corpus whose RULING moved (ADR-0087 decision 7) ──────────
 
 
 @pytest.mark.req("REQ-GATE-0008")

@@ -285,7 +285,7 @@ correction rounds (Issue #146), not by this job.
 | 2026-07-31 | *(relabel only)* | **nothing — zero row changes** | re-key 332 rows to the Correction's real identity; 163 keys were wrong (Issue #241) |
 | 2026-07-31 | `c38abef` | **2 ruled `chosen` moves + 1 Ruling Move** | the corpus widened 332 → 372 (Issue #241) |
 
-The 2026-07-31 pair is the shape ADR-TEMP-241 decision 5 prescribes, and the reason it is two
+The 2026-07-31 pair is the shape ADR-0087 decision 5 prescribes, and the reason it is two
 entries rather than one. The Decision Gate's keys had been built by hand, reading `seat` off a
 snapshot with no `seat` field, so only **169 of 372** frames were named correctly and four standing
 Held-out Ledger rulings could not reach the gate at all. Re-keying and widening in one step would

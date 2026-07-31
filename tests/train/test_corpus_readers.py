@@ -1,4 +1,4 @@
-"""**One Corpus Reader** — the contract, ENFORCED (ADR-TEMP-241 decision 4, Issue #241).
+"""**One Corpus Reader** — the contract, ENFORCED (ADR-0087 decision 4, Issue #241).
 
 The Decision Gate lost 40 records and mis-keyed 163 more because it kept a private raw-JSONL walk
 instead of constructing Corrections. Fixing that one module fixes one module. What stops it
@@ -74,7 +74,7 @@ def test_no_unlisted_module_globs_the_corrections_log():
                        and _GLOB_RE.search(path.read_text(encoding="utf-8")))
     assert offenders == [], (
         "these read data/corrections/ directly instead of via train.blunder.store / "
-        "gates.keyed_corrections (ADR-TEMP-241 decision 1). Route them through the Corpus Reader, "
+        "gates.keyed_corrections (ADR-0087 decision 1). Route them through the Corpus Reader, "
         f"or add them to ALLOWED_RAW_READERS with the issue that owns them: {offenders}")
 
 

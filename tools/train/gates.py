@@ -440,7 +440,7 @@ def write_json_artifact(path, doc) -> None:
 
 def correction_frame_key(correction) -> str:
     """One Correction's **Frame Key** — ``frame_key_of(*identity_key(c))``, and the ONLY way any
-    instrument derives one (ADR-TEMP-241 decision 2).
+    instrument derives one (ADR-0087 decision 2).
 
     Split out of `keyed_corrections` so a caller holding a single record cannot be tempted to
     re-assemble the shape by hand, which is exactly how the Decision Gate ended up reading ``seat``
@@ -452,7 +452,7 @@ def correction_frame_key(correction) -> str:
 
 def keyed_corrections(store=None, *, predicate=None) -> list:
     """**THE Corpus Reader** — every committed Correction, already paired with its **Frame Key**
-    (ADR-TEMP-241 decisions 1–2, Issue #241). Returns ``[(frame_key, Correction), ...]``.
+    (ADR-0087 decisions 1–2, Issue #241). Returns ``[(frame_key, Correction), ...]``.
 
     Two rules, and they are the same rule twice:
 
@@ -684,7 +684,7 @@ def _scorable(row) -> bool:
 
 def ruling_moves(before: dict, after: dict, *, keep=None) -> list:
     """Every frame present in BOTH captures whose **Correction**'s ``correct`` changed — the human
-    re-ruled it (**Ruling Move**, ADR-TEMP-241 decision 7). ``[{key, before, after}, ...]``.
+    re-ruled it (**Ruling Move**, ADR-0087 decision 7). ``[{key, before, after}, ...]``.
 
     Emitted **independently of whether the agent's pick moved**, and that independence IS the fix.
     Both diffs emit a verdict row only on a moved pick, so a frame the agent plays identically whose
