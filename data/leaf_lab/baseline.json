@@ -1,18 +1,18 @@
 {
-  "git_rev": "aceb433",
+  "git_rev": "a8da62d",
   "agent": null,
   "n": 277,
   "scorable": 268,
   "unscorable": 9,
   "skipped_agent": 1,
   "class_asymmetry": 4,
-  "voided": 19,
-  "gradeable": 249,
-  "leaf_correct": 183,
-  "leaf_correct_rate": 0.7349397590361446,
+  "voided": 20,
+  "gradeable": 248,
+  "leaf_correct": 182,
+  "leaf_correct_rate": 0.7338709677419355,
   "leaf_correct_strict": 40,
-  "leaf_correct_strict_rate": 0.1606425702811245,
-  "avg_top_tie": 2.751004016064257,
+  "leaf_correct_strict_rate": 0.16129032258064516,
+  "avg_top_tie": 2.7379032258064515,
   "rows": [
     {
       "key": "83686860|1|decision|13",
@@ -935,7 +935,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 6
+      "top_tie": 6,
+      "voided": true
     },
     {
       "key": "86091728|0|decision|19",
