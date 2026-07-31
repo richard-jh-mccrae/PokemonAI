@@ -206,19 +206,25 @@ PROFILE = {
                                     # -11.5pp — the Tripwire screens catastrophes, not regressions,
                                     # so this is flagged for the ladder-corrections loop to watch,
                                     # not a reason to hold the flag back given the aggregate clears.
-    "deny_strip_delta": False,       # ADR-0078 / Issue #199 (S3c). ADR-0084 (Issue #217) gave it its first
+    "deny_strip_delta": True,       # ADR-0078 / Issue #199 (S3c). ADR-0084 (Issue #217) gave it its first
                                     # and only consumer — the target pick's lexicographic tiebreak,
                                     # which orders a tie on the clock and never GATES one (a
                                     # `strip_shift > 0` keep-price gate would suppress 128 of 218
                                     # relevance-positive corpus rows: the clock is blind to Ability
                                     # mutes, sub-turn setbacks, and plan damage that does not delay MY
                                     # defeat — decision 7, recommended, ACCEPTED, then REVERSED on
-                                    # measurement). ⚠️ STILL SHIPS OFF, so that consumer is INERT.
-                                    # Arming was chartered by decision 6 and blocked by the
-                                    # Discrimination Gate; ADR-0084's pre-registered ship-dark
-                                    # fallback was taken. **Owed by Issue #228** (Phase 1e's last
-                                    # item) — the gate reports one flip predating deny (Issue #213's,
-                                    # against a stale baseline) and one leaf interaction. Originally: adds the deny
+                                    # measurement). **ARMED-ON 2026-07-31 (Issue #228), so that
+                                    # consumer is LIVE.** Arming was chartered by ADR-0084 decision 6
+                                    # and blocked by the Discrimination Gate; the pre-registered
+                                    # ship-dark fallback was taken and Issue #228 discharged it.
+                                    # Armed TOGETHER with `deny_relevance` and never alone: this
+                                    # flag's only consumer lives inside `if self.deny_relevance:`, so
+                                    # alone it is inert — and `deny_relevance` alone would leave the
+                                    # target pick's tie resolved by engine option order, the exact
+                                    # ADR-0062 defect ("the argmax fell through to index 0 and we
+                                    # stripped whatever Energy happened to land first") the tiebreak
+                                    # was built to close. Evidence is on `deny_relevance` below.
+                                    # Originally: adds the deny
                                     # instrument's STRIP delta to `_opponent_target_rows` beside the
                                     # removal delta #186 built (a Hammer strips one Energy off a body
                                     # that STAYS, so the removal delta is not its slice). Nothing
@@ -248,24 +254,40 @@ PROFILE = {
                                     # `promote_retreat_value` precedent. See Amendment E3 for the one
                                     # OPEN consequence: the Brief steer is a MULTIPLIER, so it goes
                                     # inert when `their_plan` is 0 for every offered target.
-    "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
-                                    # ⚠️ **STILL SHIPS OFF, and that is a KNOWN DEBT, not a decision.**
-                                    # Tracker directive 1 says a kill-switch ships ON and exists only
-                                    # as a revert lever, so this flag is in violation and Phase 1e is
-                                    # not complete while it is False. ADR-0084 (Issue #217) chartered
-                                    # the arming, the Discrimination Gate blocked it, and the ADR's
-                                    # pre-registered ship-dark fallback was taken. **Owed by
-                                    # Issue #228.** Two flips block it: `84071010|0|decision|15`
-                                    # regresses on a CLEAN tree (Issue #213's `scaled_threat_rank`
-                                    # against a baseline captured at `e4c46ca`), and
-                                    # `82225643|1|decision|11` is a LEAF card-worth interaction in
-                                    # which every deny component is individually correct — the armed
-                                    # keep price legitimately falls 5.0 -> 1.929, which makes playing a
-                                    # Hammer cheaper than the Pokégear dig the user ruled correct.
-                                    # Rule 11's warning is now 4-for-4: Issue #187's arming exposed
-                                    # three defects its pure tests could not reach, and Issue #217's
+    "deny_relevance": True,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
+                                    # **ARMED-ON 2026-07-31 (Issue #228, ADR-TEMP-228), closing
+                                    # Phase 1e.** ADR-0084 (Issue #217) chartered the arming, the
+                                    # Discrimination Gate blocked it, and the ADR's pre-registered
+                                    # ship-dark fallback was taken. Issue #228 re-measured against
+                                    # the `a8da62d` baseline and found the blocker was a DEFECT, not
+                                    # the leaf card-worth interaction ADR-0084 Amendment B point 3
+                                    # diagnosed (that reading — "every deny component is individually
+                                    # correct, the keep price legitimately falls 5.0 -> 1.929" — is
+                                    # WRONG; the keep price is a different surface and is not what
+                                    # moved the leaf). THREE frames moved, not one, every one by
+                                    # exactly `_PLANNER_SURVIVAL_W` 50.0: `_opponent_target_rows`
+                                    # returned None mid-sim, `deny_relevance_best` could not express
+                                    # absence, and the fire rung read the dataclass default as a
+                                    # measured whiff — declining strips worth +22.50 and +74.50, one
+                                    # of which the human ruled a correct Hammer play. Fixed, then
+                                    # armed. Evidence, all at `baed389` vs baseline `a8da62d`:
+                                    #   fix in / flags OFF   Discrimination PASS, 0 picks moved
+                                    #   fix in / flags ARMED Discrimination PASS, 0 unruled, 0 ruled
+                                    #   armed                Decision Gate  PASS, 372 frames,
+                                    #                        agree 250/346 -> 250/346, 0 picks moved
+                                    # The staged OFF run is what makes the armed run attributable
+                                    # (ADR-TEMP-228 decision 5) — the fix and the arming share one
+                                    # branch, so the OFF arm accounts for everything the repair moved
+                                    # before the arming is measured at all. Mid-sim read cost 101s ->
+                                    # 118s (~1.17x), well under decision 3's pre-registered 2x
+                                    # fallback trigger, so the read stays LIVE mid-sim.
+                                    # Rule 11's warning is now 5-for-5: Issue #187's arming exposed
+                                    # three defects its pure tests could not reach, Issue #217's
                                     # exposed a fourth (ADR-0080's mandated `_DENIAL_FORWARD` discount
-                                    # was never applied to the armed read at all). Emits the
+                                    # was never applied to the armed read at all), and Issue #228's
+                                    # exposed a fifth — plus a sixth SURFACE, since `gust_target`
+                                    # went silent mid-sim the same way with its flag shipped ON.
+                                    # Emits the
                                     # **Deny Relevance** read — *is this Energy doing important work
                                     # for the opponent's plan?* — on `_opponent_target_rows`. The
                                     # read that REPLACED deny's magnitude: Issue #199's grill measured the
