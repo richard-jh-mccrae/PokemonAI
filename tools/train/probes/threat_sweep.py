@@ -13,26 +13,24 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
     clock (turns_to_afford) and the incoming to my Active.
   * TARGET   (S3a, `opp_target_shadow`) — the two-term removal value per opponent body (prize +
     phase × survival), the Option-B currency, for eyeballing vs the shipped snipe/gust/deny pick.
-  * SLOTS    (S3b/S2 live, ADR-0076) — for every frame, replays the SAME decision through a shipped
-    pilot (both new flags OFF, today's default) and two forced-ON variants — `gust_target_slots`
-    (the generalized `needs.py` slot family) and `recur_fuel_relax` (the quantified doom-relax
-    refinement) — and flags any frame where either forced variant's DECIDED pick differs from the
-    shipped one. Localizes the disagreements this issue's own charter commits to adjudicating
-    before closing (and is the actual corpus evidence backing "swept clean" for BOTH flags, not
-    just `gust_target_slots` — a gap the code-review Spec pass on #186 caught).
+SLOTS and RANK were DELETED by Issue #243 (ADR-0089 decision 1), for opposite reasons:
 
-  * RANK     (Issue #213) — the scaled threat rank A/B: each frame decided by a forced-OFF pilot
-    (the retired printed-`maxDamage` read plus its flat hand-size boost) and a forced-ON one (each
-    body priced through the Damage Formula against the live board), flagging any DECIDED-pick
-    difference. This is the ADR-0072 Decision Gate for that swap; both sides are forced explicitly
-    so it stays an A/B after the PROFILE ships the flag ON.
+  * SLOTS was **same-vs-same**. It compared a shipped pilot it described as "both new flags OFF,
+    today's default" against `_forced(gust_target_slots=True)` / `_forced(recur_fuel_relax=True)` —
+    but the PROFILE has shipped BOTH ON since 2026-07-27 (`runtime.py`, ADR-0076 / Issue #186). So
+    both arms were the same pilot and it reported 0 flips BY CONSTRUCTION: a green light with the
+    bulb removed. `sweep_rank`, in the same file, forced both sides explicitly and its docstring
+    said exactly why ("so it stays an A/B after the PROFILE ships the flag ON") — the mistake was
+    made next to its own correction.
+  * RANK was ANSWERED. ADR-0083 records 0 decided-pick flips over 331 frames, and the substance is
+    covered by `tests/strategy/test_scaled_rank_corpus.py`, which exercises the read on every real
+    frame the corpus contains. A ruling is a ruling; carrying it as a probe mode too is the fourth
+    Probe Fate this repo keeps having to delete.
 
-    python tools/train/probes/threat_sweep.py            # all five
+    python tools/train/probes/threat_sweep.py            # all three
     python tools/train/probes/threat_sweep.py --doom     # doom only
     python tools/train/probes/threat_sweep.py --recur
     python tools/train/probes/threat_sweep.py --target
-    python tools/train/probes/threat_sweep.py --slots
-    python tools/train/probes/threat_sweep.py --rank     # Issue #213 Decision Gate
 
 Offline and read-only.
 """
@@ -40,7 +38,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -49,13 +46,9 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
+    from train.probes._corpus import frames
+    return frames()
 
 
 def _tune():
@@ -67,7 +60,7 @@ def _tune():
 
 def _decide(tune, rec):
     try:
-        return tune._build_pilot(rec["agent"])[0].explain(rec["obs"])
+        return tune._build_pilot(rec.agent)[0].explain(rec.obs)
     except Exception as e:                       # a frame the shipped pilot can't replay — skip, note
         return e
 
@@ -90,7 +83,7 @@ def sweep_doom(tune, frames) -> None:
         flipped += flip
         if not s["agree"] or flip:
             chg = s.get("doom_charged")
-            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} {str(s['doom_old']):<6} "
+            print(f"{ep + '-' + str(fr):<16} {rec.agent:<14} {str(s['doom_old']):<6} "
                   f"{str(s['doom_curve']):<6} {s['doom_incoming']:>5} {s['my_hp']:>5} "
                   f"{'-' if chg is None else chg:>5} {str(bool(s.get('decided'))):<5} "
                   f"{str(s.get('doom_final', s['doom_old'])):<6} "
@@ -112,7 +105,7 @@ def sweep_recur(tune, frames) -> None:
         for b in s["bodies"]:
             moved = b["ttr_fuel"] < b["ttr_plain"] or b.get("inc_fuel", 0) > b.get("inc_plain", 0)
             accel += bool(moved)
-            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} body {b['id']:<6} fuel {b['fuel']} "
+            print(f"{ep + '-' + str(fr):<16} {rec.agent:<14} body {b['id']:<6} fuel {b['fuel']} "
                   f"ttr {b['ttr_plain']}->{b['ttr_fuel']}  inc {b.get('inc_plain')}->{b.get('inc_fuel')}")
     print(f"\nRECUR: frames-with-refueler={fired}  body-reads-where-fuel-moved-the-clock={accel}\n")
 
@@ -126,72 +119,11 @@ def sweep_target(tune, frames) -> None:
             continue
         fired += 1
         top = max(s["bodies"], key=lambda b: b["value"])
-        print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} phase {s['phase']:<5} "
+        print(f"{ep + '-' + str(fr):<16} {rec.agent:<14} phase {s['phase']:<5} "
               f"top-removal id={top['id']} value={top['value']} "
               f"(prize={top['prize']} surv_shift={top['survival_shift']})  "
               f"bodies={len(s['bodies'])}")
     print(f"\nTARGET: frames-with-opp-bodies={fired}\n")
-
-
-def _forced(tune, rec, **flags):
-    pilot = tune._build_pilot(rec["agent"])[0]
-    for k, v in flags.items():
-        setattr(pilot, k, v)
-    return pilot.explain(rec["obs"])
-
-
-def sweep_slots(tune, frames) -> None:
-    total = gust_flips = recur_flips = errors = 0
-    for (ep, fr), rec in frames:
-        d_off = _decide(tune, rec)
-        if isinstance(d_off, Exception):
-            errors += 1
-            continue
-        try:
-            d_gust = _forced(tune, rec, gust_target_slots=True)
-            d_recur = _forced(tune, rec, recur_fuel_relax=True)
-        except Exception:
-            errors += 1
-            continue
-        total += 1
-        if d_off.chosen != d_gust.chosen:
-            gust_flips += 1
-            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} gust_target_slots "
-                  f"off={d_off.chosen} on={d_gust.chosen}  DISAGREE")
-        if d_off.chosen != d_recur.chosen:
-            recur_flips += 1
-            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} recur_fuel_relax "
-                  f"off={d_off.chosen} on={d_recur.chosen}  DISAGREE")
-    print(f"\nSLOTS: frames checked={total}  gust_target_slots flips={gust_flips}  "
-          f"recur_fuel_relax flips={recur_flips}  (unreplayable={errors})\n")
-
-
-def sweep_rank(tune, frames) -> None:
-    """RANK (Issue #213) — the ADR-0072 Decision Gate for the scaled threat rank.
-
-    Replays each frame through a forced-OFF and a forced-ON pilot and flags any frame whose DECIDED
-    pick differs. OFF is the retired printed-only read (`CardStat.maxDamage` + the provider's
-    printed forward index, plus the flat `_HAND_SIZE_ATTACKER_BOOST` that shipped with it); ON
-    prices each body through the Damage Formula against the live board.
-
-    Both sides are forced explicitly rather than leaning on the shipped default, so the comparison
-    stays an A/B even after the PROFILE flips the flag ON.
-    """
-    total = flips = errors = 0
-    for (ep, fr), rec in frames:
-        try:
-            d_off = _forced(tune, rec, scaled_threat_rank=False)
-            d_on = _forced(tune, rec, scaled_threat_rank=True)
-        except Exception:
-            errors += 1
-            continue
-        total += 1
-        if d_off.chosen != d_on.chosen:
-            flips += 1
-            print(f"{ep + '-' + str(fr):<16} {rec['agent']:<14} scaled_threat_rank "
-                  f"off={d_off.chosen} on={d_on.chosen}  DISAGREE")
-    print(f"\nRANK: frames checked={total}  scaled_threat_rank flips={flips}  "
-          f"(unreplayable={errors})\n")
 
 
 def main(argv=None) -> int:
@@ -203,10 +135,8 @@ def main(argv=None) -> int:
     ap.add_argument("--doom", action="store_true")
     ap.add_argument("--recur", action="store_true")
     ap.add_argument("--target", action="store_true")
-    ap.add_argument("--slots", action="store_true")
-    ap.add_argument("--rank", action="store_true")
     args = ap.parse_args(argv)
-    run_all = not (args.doom or args.recur or args.target or args.slots or args.rank)
+    run_all = not (args.doom or args.recur or args.target)
     tune, frames = _tune(), _frames()
     if args.doom or run_all:
         sweep_doom(tune, frames)
@@ -214,10 +144,6 @@ def main(argv=None) -> int:
         sweep_recur(tune, frames)
     if args.target or run_all:
         sweep_target(tune, frames)
-    if args.slots or run_all:
-        sweep_slots(tune, frames)
-    if args.rank or run_all:
-        sweep_rank(tune, frames)
     return 0
 
 

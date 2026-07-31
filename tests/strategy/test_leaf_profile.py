@@ -187,16 +187,14 @@ _ATTACH_FRAMES = (("82523811", 59), ("83664340", 45), ("82750161", 59))
 
 
 def _attach_frames():
-    wanted, out = {(e, f) for e, f in _ATTACH_FRAMES}, []
-    for jf in sorted((REPO / "data" / "corrections").glob("*/corrections.jsonl")):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if (str(d.get("episode_id")), d.get("decision", {}).get("frame")) in wanted:
-                out.append(d["obs"])
-    assert len(out) == len(wanted), "an attach profile frame went missing from data/corrections/"
-    return out
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089).
+
+    `corpus_record` raises on a missing frame, which is what the old `len(out) == len(wanted)` guard
+    was for — and it names WHICH frame, where the count could only say one went missing. The raw walk
+    also appended per matching line, so a duplicated frame would have inflated the count into a
+    silent pass; `load_corrections` dedups."""
+    from corpus_helpers import corpus_records
+    return [c.obs for c in corpus_records(_ATTACH_FRAMES)]
 
 
 @pytest.fixture(scope="module")

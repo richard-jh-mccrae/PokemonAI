@@ -393,6 +393,16 @@ magnitude survives (decision 5).
 (decision 2); a `bench_harvest` sibling exposing `_harvest_optima`'s objective prize total
 (decision 5); `_bench_shortens_their_path` returns a delta rather than a sign (decision 5).
 
+> **Amendment, Issue #243 / ADR-0089 (2026-07-31): `deploy_decider_sweep.py` was DELETED.** The
+> reading below stands as recorded — it was taken when the nine rungs its OLD arm zeroed still
+> existed, so OLD was the real incumbent pile and the comparison was genuine. Every one of those nine
+> ids has since been removed from `src/` (tracker directive 1 requires the deletion; nothing
+> re-pointed the sweep), leaving `baseline_bench` holding one rung, so OLD came to score a near-empty
+> scorer whose argmax falls to option index — the sweep could only ever report FIX. It was the fourth
+> sibling ADR-0085 Amendment J retired, missed then **because it was the only one that gated**, and a
+> passing exit code read as evidence of health. The Decision Gate is `tools/train/decider_lab.py`;
+> use that, not a re-run of this.
+
 **Gates (ADR-0072 / #136 directive 6) — both PASS.** The
 `tools/train/probes/deploy_decider_sweep.py` **Decision Gate**: 3 FIX, 0 unruled `REGRESSION`, one
 frame held out to #165 (`83661652|0|decision|19` — a multi-step turn-plan complaint whose `correct`
@@ -453,7 +463,9 @@ adding one would require deleting a test that exists to prevent exactly that.
 
 **The measurement.** ADR-0078 decision 3 noted the deploy seam is natively play-side, which is the
 shape deny lacked, so decision 4 committed this seam's corpus to the anchor hunt. That sweep is now
-built and run — `tools/train/probes/deploy_anchor_sweep.py`, offline and read-only:
+built and run — `tools/train/probes/deploy_anchor_sweep.py`, offline and read-only *(deleted by
+Issue #243: the script itself recorded "NO USABLE ANCHOR, and the reason is structural… Capturing
+more frames cannot change this", which is a RULING — this ADR is its artifact)*:
 
 - 508 ruled records; **11** deploy-involved frames in the tracked `data/corrections/` corpus (19
   counting the `tests/fixtures/corrections/` duplicates); **2** cross-scale candidates, both from

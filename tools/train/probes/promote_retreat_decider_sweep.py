@@ -48,7 +48,6 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.util
-import json
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -74,19 +73,18 @@ def _names() -> dict:
 
 
 def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
+    from train.probes._corpus import frames
+    return frames()
 
 
 
 def _agent(rec) -> str:
-    a = rec.get("agent") or ""
-    return a if a in {"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"} else "mega_starmie"
+    """The shared replay fallback (`_corpus.replay_agent`). It is no longer papering over a missing
+    `agent` — `from_dict` backfills that from `agent_build` — but it is not cosmetic either: the
+    corpus holds one `SkiChu` record with no agent directory."""
+    from train.probes._corpus import replay_agent
+    return replay_agent(rec)
 
 
 def _strategy_and_deck(agent: str):
@@ -155,20 +153,20 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
     tally = defaultdict(int)
     misses = []
     for (ep, fr), rec in frames:
-        options = (rec["obs"].get("select") or {}).get("option") or []
-        ctx = (rec["obs"].get("select") or {}).get("context")
+        options = (rec.obs.get("select") or {}).get("option") or []
+        ctx = (rec.obs.get("select") or {}).get("context")
         site = _site(options, ctx)
         if site is None:
             continue                                   # outside this family
         agent = _agent(rec)
         try:
-            dec = _pilot(agent, seams=seams).explain(rec["obs"])
+            dec = _pilot(agent, seams=seams).explain(rec.obs)
         except Exception as exc:                       # a frame the shipped build can't replay
             tally["error"] += 1
             if show_all:
                 print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {site:<8} ERROR {exc}")
             continue
-        correct = rec.get("correct")
+        correct = rec.correct
         if site == "pick":
             got = lane_slots(dec.chosen, options, lane=PROMOTE_LANE, select_context=ctx)
             cor_v = lane_slots(correct or [], options, lane=PROMOTE_LANE, select_context=ctx)
@@ -209,7 +207,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
             print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {site:<8} {_cell(got):<14} "
                   f"{(_cell(cor_v) if labelled else '(none)'):<14} {reading:<12}")
             if reading != "agrees":
-                lbl = rec.get("correct_label") or ""
+                lbl = rec.correct_label or ""
                 if lbl:
                     print(f"      correct_label: {lbl}")
                 for row in sorted(rows, key=lambda r: -r["total"]):

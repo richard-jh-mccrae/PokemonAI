@@ -14,7 +14,14 @@ Two roles, one corpus (the TDD ratchet):
 Provenance & filtering (spec): ids are `<episode_id>-f<frame>`, drawn verbatim from the spec's family
 lists; every record is read from the committed `data/corrections/`; `reviewed.json` is joined first —
 `refuted` and `covered` corrections do NOT become fixtures (`test_excluded_ids_are_provably_out` proves
-each exclusion). One id (`82228640-9`) carries no `agent`/obs and is unreplayable — excluded, noted.
+each exclusion), and `refuted`/`covered` are now the ONLY grounds.
+
+`82228640-9` used to be excluded as "carries no `agent`/obs — unreplayable". That was false on both
+counts, and only a raw-JSONL walk could believe it: the record backfills to `mega_starmie` from its
+`agent_build` and carries an `obs` (ADR-0087, Issue #241 — the 40 dropped records). Replayed through
+the shipped Pilot it picks `[1]`, which IS the human's `correct`, so Issue #243 moved it into PINS
+rather than inventing a new ground to keep it out. An exclusion whose stated reason is untrue is the
+failure this file's own `test_excluded_ids_are_provably_out` exists to prevent.
 """
 from __future__ import annotations
 
@@ -31,6 +38,11 @@ CORR = REPO / "data" / "corrections"
 #    PIN  = the shipped agent already ranks `correct` top today (a regression guard).
 #    TGT  = an open blunder; the staged convergence must flip it (xfail-strict target).
 PINS = {
+    # Recovered by ADR-0087's backfill (Issue #243): EXCLUDED here as "no-agent / unreplayable" until
+    # the raw walk was retired. The record is replayable and the shipped Pilot already makes the
+    # human's pick, so it belongs in PINS rather than TARGETS — a free regression guard the corpus
+    # was hiding.
+    "82228640-9": "recovered from the 40 dropped records — the agent already makes the human pick",
     # discard-pair valuation (sets, not sums; role floors)
     "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",
     # These five record a SINGLE flagged discard for a 2-card forced pitch (correct ⊆ chosen, the
@@ -132,32 +144,19 @@ EXCLUDED = {
     "83661652-30":  "covered",
     "83661652-31":  "covered",
     "83967840-54":  "covered",
-    "82228640-9":   "no-agent",   # record carries no `agent`/obs — unreplayable
 }
 
 
-def _build_index() -> dict:
-    """Every committed correction keyed by (episode_id, frame). Last write wins — the same decision
-    tagged across builds is one correction."""
-    index = {}
-    for jf in CORR.glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return index
-
-
-_INDEX = _build_index()
 _REVIEWED = json.loads((CORR / "reviewed.json").read_text(encoding="utf-8"))
 
 
-def _record(cid: str) -> dict:
+def _record(cid: str):
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The private
+    module-level raw index this replaced dropped 40 records on a falsy `agent` — one of which,
+    `82228640-9`, this file EXCLUDED as "unreplayable" on exactly that evidence."""
+    from corpus_helpers import corpus_record
     ep, fr = cid.split("-")
-    rec = _INDEX.get((ep, int(fr)))
-    assert rec is not None, f"correction {cid} not found in data/corrections/"
-    return rec
+    return corpus_record(ep, int(fr))
 
 
 def _pilot(agent: str):
@@ -224,13 +223,13 @@ def _replay_picks_correct(cid: str) -> bool:
     byte-identical bodies is satisfied by the other (86091728 f19 pins the SECOND of two bare benched
     Dreepy; either receives the {P} identically — `_matches_up_to_interchangeability`)."""
     rec = _record(cid)
-    d = _pilot(rec["agent"]).explain(rec["obs"])
-    chosen, correct = set(d.chosen), set(rec["correct"])
-    sel = rec["obs"].get("select") or {}
+    d = _pilot(rec.agent).explain(rec.obs)
+    chosen, correct = set(d.chosen), set(rec.correct)
+    sel = rec.obs.get("select") or {}
     picks = sel.get("minCount") or sel.get("maxCount") or len(correct) or 1
     if 0 < len(correct) < picks:                 # a partial discard correction: the flagged card(s) only
         return correct <= chosen
-    return _matches_up_to_interchangeability(rec["obs"], chosen, correct)
+    return _matches_up_to_interchangeability(rec.obs, chosen, correct)
 
 
 def _param(cid, reason, *, xfail):
@@ -249,8 +248,8 @@ def test_correction_ranks_the_human_pick_top(cid):
     PINS assert it (regression net for the staged convergences); TARGETS xfail-strict until a flip
     lands (then the XPASS says: promote this id from a target to a pin)."""
     assert _replay_picks_correct(cid), (
-        f"{cid}: expected {_record(cid)['correct_label']!r}, "
-        f"got {_record(cid)['chosen_label']!r}")
+        f"{cid}: expected {_record(cid).correct_label!r}, "
+        f"got {_record(cid).chosen_label!r}")
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
@@ -260,9 +259,9 @@ def test_substance_pin_the_tagged_blunder_is_dead(cid):
     without pinning the alternative line (which is separately adjudicated / designed; see
     SUBSTANCE_PINS notes)."""
     rec = _record(cid)
-    d = _pilot(rec["agent"]).explain(rec["obs"])
-    blunder = set(rec["chosen"])
-    assert not (blunder & set(d.chosen)), f"{cid}: still makes the tagged pick {rec['chosen_label']!r}"
+    d = _pilot(rec.agent).explain(rec.obs)
+    blunder = set(rec.chosen)
+    assert not (blunder & set(d.chosen)), f"{cid}: still makes the tagged pick {rec.chosen_label!r}"
     for t in d.options:
         if t.index in blunder:
             assert t.score <= 0, (f"{cid}: the tagged blunder option [{t.index}] still prices "
@@ -279,11 +278,11 @@ def test_deploy_now_drakloak_is_not_pitched():
     a plain pin 2026-07-19: the deploy-now spike + the seam-D swap (`discard_keep_value`) landed, so
     the equation now keeps the Drakloak."""
     rec = _record("86091435-68")
-    p = _pilot(rec["agent"])
-    d = p.explain(rec["obs"])
-    sel = rec["obs"]["select"]
+    p = _pilot(rec.agent)
+    d = p.explain(rec.obs)
+    sel = rec.obs["select"]
     drakloak = [i for i, o in enumerate(sel.get("option") or [])
-                if p._option_card_id(rec["obs"], sel, o) == 120]
+                if p._option_card_id(rec.obs, sel, o) == 120]
     assert drakloak, "fixture drift: no Drakloak option in the recorded select"
     assert not (set(drakloak) & set(d.chosen)), \
         f"the deploy-now Drakloak {drakloak} was pitched: chosen={d.chosen}"
@@ -298,8 +297,8 @@ def test_excluded_ids_are_provably_out(cid, why):
     if why in ("refuted", "covered"):
         disp = _REVIEWED.get(f"{ep}-{fr}", {}).get("disposition")
         assert disp == why, f"{cid}: claimed {why}, reviewed.json says {disp!r}"
-    elif why == "no-agent":
-        assert not _record(cid).get("agent"), f"{cid}: claimed no-agent but a record agent exists"
+    else:                                       # no third ground survives — see the 82228640-9 note
+        raise AssertionError(f"{cid}: unrecognised exclusion ground {why!r}")
 
 
 def test_corpus_families_are_disjoint_and_ided():

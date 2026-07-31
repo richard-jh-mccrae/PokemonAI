@@ -41,7 +41,6 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.util
-import json
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -67,19 +66,18 @@ def _names() -> dict:
 
 
 def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
+    from train.probes._corpus import frames
+    return frames()
 
 
 
 def _agent(rec) -> str:
-    a = rec.get("agent") or ""
-    return a if a in {"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"} else "mega_starmie"
+    """The shared replay fallback (`_corpus.replay_agent`). It is no longer papering over a missing
+    `agent` — `from_dict` backfills that from `agent_build` — but it is not cosmetic either: the
+    corpus holds one `SkiChu` record with no agent directory."""
+    from train.probes._corpus import replay_agent
+    return replay_agent(rec)
 
 
 def _strategy_and_deck(agent: str):
@@ -152,11 +150,11 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
     misses = []
     for (ep, fr), rec in frames:
         agent = _agent(rec)
-        options = (rec["obs"].get("select") or {}).get("option") or []
+        options = (rec.obs.get("select") or {}).get("option") or []
         if not any(o.get("type") == _EVOLVE for o in options):
             continue                                   # no evolve on the menu — outside this lane
         try:
-            dec = _pilot(agent, seams=seams).explain(rec["obs"])
+            dec = _pilot(agent, seams=seams).explain(rec.obs)
         except Exception as exc:                       # a frame the shipped build can't replay
             tally["error"] += 1
             if show_all:
@@ -166,7 +164,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
                                      if in_lane(options[i], EVOLVE_LANE) else None))
                 for i, t in enumerate(dec.options)
                 if i < len(options) and t.evolve_working is not None]
-        correct = rec.get("correct")
+        correct = rec.correct
         chosen_slots = lane_slots(dec.chosen, options, lane=EVOLVE_LANE)
         correct_slots = lane_slots(correct or [], options, lane=EVOLVE_LANE)
         tally["frames"] += 1
@@ -186,7 +184,7 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
             print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {_cell(chosen_slots):<14} "
                   f"{_cell(correct_slots):<14} {reading:<12}")
             if reading != "agrees":
-                lbl = rec.get("correct_label") or ""
+                lbl = rec.correct_label or ""
                 if lbl:
                     print(f"      correct_label: {lbl}")
                 for row in sorted(rows, key=lambda r: -r["tactical"]):

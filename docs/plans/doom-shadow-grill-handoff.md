@@ -246,3 +246,19 @@ the promote stand-down — never the doom path) across all 332 corpus frames: **
 attach on this corpus — `_incoming_budget` KEEPS `base_attach: 1`; the stricter `_DOOM_CHARGED`
 stays a doom-consumer-only budget. The residual flagged in the RULED appendix is closed with
 evidence, not changed code.
+
+> **Corpus Provenance** (ADR-0089 decision 2). The ruling above was a COUNT over the whole
+> corpus, and it was measured through a raw-JSONL walk that was short **40** records — 332 frames of
+> a 372-frame corpus (ADR-0087, Issue #241). Such a ruling is a claim about a corpus that will not
+> exist next week, so it is re-derived and stamped rather than inherited:
+>
+> * **original:** measured at the pre-ADR-0087 corpus, **332 frames** — 331 SAME, 1 SKIP.
+> * **re-confirmed 2026-07-31, measured at `4be1db3`, 372 frames** — **371 SAME, 0 IMPROVED,
+>   0 REGRESSED, 0 MOVED, 1 SKIP.** The ruling is unchanged by the widening: the forty records the
+>   backfill restores move nothing on this seam.
+>
+> The sweep's **runner was then deleted** (ADR-0089 decision 1 — a one-shot investigation whose
+> answer is written down becomes a RULING, and the script is scaffolding). Its pure core
+> (`upgrade_charged` / `wrap_reachable` / `verdict`, `REQ-BUDGETSWEEP`) survives in the same module,
+> reading no corpus. Re-deriving this ruling again means re-writing ~20 lines of runner against
+> `gates.keyed_corrections`, which is the trade this ADR takes deliberately.

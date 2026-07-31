@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import copy
 import importlib.util
-import json
 from dataclasses import replace
 from pathlib import Path
 
@@ -31,16 +30,11 @@ POKE_PAD, ULTRA_BALL = 1152, 1121
 _FIGHTING = 6
 
 
-def _record() -> dict:
-    """The recorded ml 85059103 f9 correction (the corpus target this seam flips)."""
-    for jf in CORR.glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if str(d.get("episode_id")) == "85059103" and d.get("decision", {}).get("frame") == 9:
-                return d
-    raise AssertionError("correction 85059103-9 not found in data/corrections/")
+def _record():
+    """The recorded ml 85059103 f9 correction (the corpus target this seam flips), through THE
+    Corpus Reader (ADR-0087 / ADR-0089)."""
+    from corpus_helpers import corpus_record
+    return corpus_record("85059103", 9)
 
 
 def _pilot():
@@ -64,7 +58,7 @@ def pilot():
 
 @pytest.fixture()
 def board(pilot, rec):
-    return pilot._board(rec["obs"], rec["obs"].get("select"))
+    return pilot._board(rec.obs, rec.obs.get("select"))
 
 
 @pytest.mark.req("REQ-GEN-0077")
@@ -72,9 +66,9 @@ def test_petrel_outranks_the_draw_supporter_at_the_grab(pilot, rec):
     """The acceptance flip: Petrel (the chain opener) is chosen over Judge (+10). The chain rung
     fires on Petrel and stays silent on the draw Supporters (one currency zone: a card rides the
     draw band OR the chain band, never both)."""
-    dec = pilot.explain(rec["obs"])
-    assert dec.chosen == rec["correct"], (
-        f"expected {rec['correct_label']!r}, got {rec['chosen_label'] if dec.chosen == rec['chosen'] else dec.chosen!r}")
+    dec = pilot.explain(rec.obs)
+    assert dec.chosen == rec.correct, (
+        f"expected {rec.correct_label!r}, got {rec.chosen_label if dec.chosen == rec.chosen else dec.chosen!r}")
     by_card = {}
     for t in dec.options:
         by_card.setdefault(t.card_id, t)
@@ -151,7 +145,7 @@ def test_hop_two_petrel_select_takes_a_free_item_tutor(pilot, rec):
     demoted below them (`demote-the-costly-chain-opener` −2: the flat band is cost-blind, the
     tie-break is not). The Supporters are dead this turn (`grab-what-i-can-play-this-turn`)."""
     is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
-    obs = _hop_obs(rec["obs"], (PETREL, 55), is_trainer, pilot)
+    obs = _hop_obs(rec.obs, (PETREL, 55), is_trainer, pilot)
     dec = pilot.explain(obs)
     assert len(dec.chosen) == 1
     picked = dec.options[dec.chosen[0]]
@@ -171,7 +165,7 @@ def test_hop_three_gong_select_takes_the_solrock(pilot, rec):
     Makuhita line piece (+18), the {F} Energy (+3, a copy is already in hand) and the redundant
     engine/base pieces. The chain the human named lands on its END target."""
     is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
-    obs1 = _hop_obs(rec["obs"], (PETREL, 55), is_trainer, pilot)
+    obs1 = _hop_obs(rec.obs, (PETREL, 55), is_trainer, pilot)
     gong = next(c for c in obs1["select"]["deck"] if c["id"] == FIGHTING_GONG)
 
     def gong_target(st):
@@ -194,7 +188,7 @@ def _petrel_select(rec, pilot, *, makuhita_in_hand=False, poke_pads_in_pool=None
     """Petrel's Trainer select (hop 2), optionally with Makuhita in hand (Hariyama becomes the
     wanted evolution) and the pool thinned to ``poke_pads_in_pool`` Poké Pad copies (None = all)."""
     is_trainer = lambda st: st is not None and not st.is_pokemon and not st.is_energy
-    obs = _hop_obs(rec["obs"], (PETREL, 55), is_trainer, pilot)
+    obs = _hop_obs(rec.obs, (PETREL, 55), is_trainer, pilot)
     me = obs["current"]["players"][0]
     sel = obs["select"]
     if makuhita_in_hand:

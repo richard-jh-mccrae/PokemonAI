@@ -94,7 +94,12 @@ construction was wrong.
 - **Discrimination Gate BEFORE the arming decision** (ADR-0072 decision 5 is explicit about the
   ordering): `python tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json`.
 - **Decision Gate** — already PASS, but re-run after step 1 since the equation changes:
-  `python tools/train/probes/deploy_decider_sweep.py`.
+  `python tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`.
+  (Was `probes/deploy_decider_sweep.py`, **deleted by Issue #243 / ADR-0089**: every one of the
+  nine ids it zeroed for its OLD arm had since been removed from `src/`, leaving `baseline_bench`
+  holding one rung, so OLD scored a near-empty pile and the sweep could only ever report FIX. It was
+  the fourth sibling ADR-0085 Amendment J retired — missed then only because it was the one that
+  gated, and a passing exit code read as evidence of health. `decider_lab` is the Decision Gate.)
 - **Tripwire A/B** — `gauntlet_swap_ab.py --stage mid-build` (this swap DELETES what its flag would
   fall back to, so the two-build harness is the right instrument, not `gauntlet_ab.py --overlay`).
 - The **Leaf Profile** field-set pin WILL move (the ability and accel legs add reads) — re-measure

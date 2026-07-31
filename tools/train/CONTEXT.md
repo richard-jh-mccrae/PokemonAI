@@ -170,10 +170,40 @@ Any code that reads `data/corrections/`. Under **ADR-0087** (Issue #241) it **co
 the same defect: a *second idea of what a record is*, which is what silently cost the **Decision
 Gate** 40 records (an empty `agent` is *recoverable* from `agent_build`, and only `from_dict`
 backfills it) and mis-keyed 163 more (`seat` is top-level, so `decision.get("seat", 0)` was always
-0). Enforced, not asserted: a test fails on any raw `corrections.jsonl` glob outside the store module
-that is not on an allowlist, and an allowlist entry must name a live issue.
+0). Enforced, not asserted: `tests/train/test_corpus_readers.py` fails on **any** construction of a
+`data/corrections` path outside the store module, across `tools/` **and** `tests/` — the rule forbids
+reaching the corpus, not one spelling of it (**ADR-0089** decision 5; the earlier glob-only,
+`tools/`-only check missed nine globbing tests and two fixed-path readers). The `ALLOWED_RAW_READERS`
+work queue was paid to empty by Issue #243 and deleted. A **test** reaches the corpus through
+`tests/corpus_helpers.py` (`corpus_record` / `corpus_index` / `replay_agent`) — the one door, so that
+routing a new corpus test is easier than re-inventing a walk, which is the only durable way an
+enforcement like this stays green.
 _Avoid_: loader (fine in prose, but the noun that matters is *what it constructs*), parser, corpus
 walk (**`iter_keyed_fixtures`** is the *fixture* walk — a different corpus)
+
+**Probe Fate**:
+The three things a corpus-reading module is allowed to be (**ADR-0089** decision 1, Issue #243) —
+a **GATE** (committed baseline that is a *ruling record*, plus a CI watchdog that turns red), a
+**RULING** (one-shot investigation whose answer is written down and whose script is then DELETED), or
+a routed **DIAGNOSTIC** (re-runnable, answers what the gates deliberately do not — e.g. the per-axis
+*term breakdown* the **Decision Gate** records the outcome of but never the terms of — and reads
+through the **Corpus Reader**). The fourth category, *a runnable script nobody watches*, is the
+failure mode, not an option: it is unfalsifiable by construction, which is how four
+`*_decider_sweep.py` reported PASS for weeks in a state where PASS could not be distinguished from
+FAIL. Reading the corpus correctly is necessary and **not sufficient** — all four satisfied ADR-0087
+and were still worthless.
+_Avoid_: probe (the file; this is its *disposition*), sweep (one shape of diagnostic), "keep it
+around in case" (that is the fourth category)
+
+**Corpus Provenance**:
+The `measured at <commit>, N frames` stamp a ruling carries when it was reached by **counting across
+the whole corpus** (**ADR-0089** decision 2). Such a ruling is a claim about a corpus that will
+not exist next week — `budget_sweep`'s "zero decision flips" was ruled over 332 frames while the
+corpus held 372. A ruling reached **structurally**, or from a handful of **named frames**, does not
+carry the stamp (decision 3): corpus growth cannot move it, and a stamp applied where it cannot
+matter trains people to apply it without reading.
+_Avoid_: timestamp (the date does not identify the corpus — the commit does), "as of" prose without
+the frame count
 
 **Ruling Move**:
 A frame present in both captures whose **Correction**'s `correct` CHANGED between them — the human

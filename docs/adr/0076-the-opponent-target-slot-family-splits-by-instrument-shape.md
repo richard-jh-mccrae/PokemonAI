@@ -123,6 +123,22 @@ Resolved from the code itself (`_active_doomed`, `_doom_recur_fueled`, `combat.a
 re-litigated with the user — it doesn't change the ruling (S2 stays survival-only, fail-scared-safe),
 only which function it wires into.
 
+> **Amendment, Issue #243 / ADR-0089 (2026-07-31): `threat_sweep.py --slots` was DELETED, and the
+> distinction matters for how the readings below should be read.**
+>
+> Every `--slots` measurement recorded in this ADR was a **valid A/B when it was run**: at that time
+> `gust_target_slots` and `recur_fuel_relax` both shipped OFF, so "shipped pilot vs forced-ON" was a
+> genuine comparison. Those readings keep their standing exactly as recorded.
+>
+> What killed the mode was Amendment E arming both flags ON in the PROFILE (2026-07-27). From that
+> commit the sweep compared the shipped pilot against a forced-ON copy of itself — same-vs-same, so
+> its 0 flips became true **by construction** rather than by measurement, and a re-run could only ever
+> report clean. Its sibling `sweep_rank` forced *both* sides explicitly and its docstring said why
+> ("so it stays an A/B after the PROFILE ships the flag ON"); `sweep_slots` is precisely the mistake
+> that comment was written to prevent. So: **do not re-run these numbers to re-confirm them** — the
+> instrument that produced them cannot produce them honestly any more. Rebuild it forcing both sides,
+> on `sweep_rank`'s pattern, if the question is ever reopened.
+
 **The sweep found nothing to adjudicate.** `tools/train/probes/threat_sweep.py --slots` (new: replays
 every corpus frame through a shipped pilot and a second one with `gust_target_slots` forced ON, and
 flags any decided-pick disagreement) ran clean: **331 frames checked, 0 flips, 1 unreplayable.** The

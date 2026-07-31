@@ -168,6 +168,21 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
 - **Every number is reproducible offline**: `tools/train/probes/needs_sweep.py` (the 12/12 and the
   refresh split), `tools/train/leaf_lab.py` (the 267-frame board-value bench), the corpus suite
   (`tests/strategy/test_hyperclosure_corpus.py`). No ladder round-trip needed.
+
+  > **Corpus Provenance** (ADR-0089 decision 2). `needs_sweep.py` read the corpus through a raw
+  > JSONL walk that was short **40** records (ADR-0087, Issue #241), so "reproducible" was not quite
+  > true — the sweep saw 332 frames of a 372-frame corpus. It now routes through
+  > `gates.keyed_corrections`, and both readings are re-derived and stamped rather than inherited:
+  >
+  > * **`discard agree_v2` — the acceptance number — HOLDS: 12/12**, measured at `4be1db3`, full
+  >   corpus. This is the one that gates a claim, and the widening does not move it.
+  > * **The refresh split is a DIAGNOSTIC, and its population grew with the corpus**: 83 refresh
+  >   decisions before, **96** now (measured at `4be1db3`) — sign-flips 16, v2 under-prices 51,
+  >   v2 over-prices 41. ADR-0065's figures (83 frames; sign-flips 13→11 across its amendments) are
+  >   historical readings *of their own corpus* and stay as recorded; they are not restated here.
+  >
+  > This is precisely why a corpus-wide ruling carries its commit and frame count. An unstamped "the
+  > numbers reproduce" would have quietly meant a different set of numbers.
 - **The teacher stayed in the loop both directions**: corrections trained the features; the
   equation's emitted working, in one case (`86091435-68`), out-argued the correction itself and
   the human amended the label. That closed loop — legible reasoning a human can audit and be

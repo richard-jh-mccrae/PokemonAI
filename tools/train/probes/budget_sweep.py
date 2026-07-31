@@ -1,4 +1,4 @@
-"""`_incoming_budget` base_attach sweep — does the Crispin finding move the OTHER consumers?
+"""`_incoming_budget` base_attach — the pure core of a RULED sweep (its runner is deleted).
 
 The doom-shadow grill (2026-07-23) proved generic supporter accel (Crispin/Waitress — pool-generic
 `energy_accel` Supporters) beats an `attached + 1` affordability read by one in ANY deck, and the
@@ -8,33 +8,22 @@ consumers still run `{base_attach: 1}` behind a matched Read: the ±50 survival 
 promote stand-down (`opp_cannot_punish_wincon`). All of them — and none of the doom path — flow
 through ONE seam: `combat.reachable_incoming(charged=...)`.
 
-This sweep replays every committed correction TWICE through fresh shipped Pilots (the cross-game
-fresh-per-frame discipline): stock, and with `reachable_incoming` wrapped so a matched
-`{base_attach: 1}` budget is upgraded to `{base_attach: 2}` (unmatched `None` passes through — the
-worst-case ceiling is never touched). Decision flips are adjudicated against the recorded human
-`correct`:
+**The question is ANSWERED and the answer is written down**, so under ADR-0089 decision 1 this
+is a RULING, not a runnable diagnostic: the sweep replayed every committed correction twice through
+fresh shipped Pilots — stock, and with `reachable_incoming` wrapped so a matched `{base_attach: 1}`
+budget is upgraded to `{base_attach: 2}` — and found **zero decision flips**. Ruling:
+`_incoming_budget` KEEPS `base_attach: 1`; the stricter `_DOOM_CHARGED` stays doom-consumer-only.
 
-  IMPROVED  — the upgraded budget reaches the human pick the stock build missed
-  REGRESSED — the upgrade loses a human pick the stock build had
-  MOVED     — the pick changed with no label signal (both wrong, or no `correct` recorded)
-  SAME      — no decision change (the overwhelming expectation: the budget only prices
-              sub-prize survival nudges and two gated vetoes)
+Re-confirmed against the WIDENED corpus before the runner was deleted, because the original was a
+count over 332 frames of a 372-frame corpus (ADR-0087's 40 missing records): **measured at `4be1db3`,
+372 frames — 371 SAME, 1 SKIP, 0 IMPROVED / REGRESSED / MOVED.** Recorded with its **Corpus
+Provenance** stamp in `docs/plans/doom-shadow-grill-handoff.md`.
 
-    python tools/train/probes/budget_sweep.py            # full corrections corpus
-    python tools/train/probes/budget_sweep.py --limit 40
-
-Offline and read-only — a ruling input, not a behavior change.
+What survives here is the pure core the ruling was computed with — engine-free, corpus-free, and
+covered by `REQ-BUDGETSWEEP`. It reads no corpus at all, which is why this module carries no Corpus
+Reader and needs none.
 """
 from __future__ import annotations
-
-import argparse
-import importlib.util
-import json
-import sys
-from pathlib import Path
-
-REPO = Path(__file__).resolve().parents[3]
-sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 # ------------------------------------------------------------------------------ pure core
@@ -69,60 +58,3 @@ def verdict(chosen_stock, chosen_up, *, correct) -> str:
     if correct is not None and chosen_stock == correct:
         return "REGRESSED"
     return "MOVED"
-
-
-# ------------------------------------------------------------------------------ the runner
-def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
-
-
-def _tune():
-    spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
-
-
-def main(argv=None) -> int:
-    try:
-        sys.stdout.reconfigure(encoding="utf-8")
-    except (AttributeError, ValueError):
-        pass
-    ap = argparse.ArgumentParser(description="base_attach 1→2 sweep over the _incoming_budget seam")
-    ap.add_argument("--limit", type=int, default=0, help="max frames (0 = all)")
-    args = ap.parse_args(argv)
-    tune = _tune()
-    frames = _frames()
-    if args.limit:
-        frames = frames[:args.limit]
-    counts = {"SAME": 0, "IMPROVED": 0, "REGRESSED": 0, "MOVED": 0, "SKIP": 0}
-    for (ep, fr), rec in frames:
-        try:
-            stock = tune._build_pilot(rec["agent"])[0]
-            d1 = stock.explain(rec["obs"])
-            upgraded = tune._build_pilot(rec["agent"])[0]
-            wrap_reachable(upgraded.combat)
-            d2 = upgraded.explain(rec["obs"])
-        except Exception:
-            counts["SKIP"] += 1
-            continue
-        v = verdict(d1.chosen, d2.chosen, correct=rec.get("correct"))
-        counts[v] += 1
-        if v != "SAME":
-            print(f"  {ep}-{fr:<4} {rec['agent']:<14} {v:<9} stock={d1.chosen} up={d2.chosen} "
-                  f"correct={rec.get('correct')} ({rec.get('correct_label') or ''})", flush=True)
-    total = sum(counts.values())
-    print(f"\nBUDGET SWEEP (base_attach 1→2 on the reachable_incoming seam): frames={total}")
-    for k, n in counts.items():
-        print(f"  {k:<9} {n}")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())

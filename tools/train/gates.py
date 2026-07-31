@@ -961,6 +961,54 @@ def satisfies_human(chosen, correct) -> bool:
     return picks_as_set(correct) <= picks_as_set(chosen)
 
 
+def records_a_decline_it_cannot_state(correction, obs) -> bool:
+    """Does this Correction sit on an OPTIONAL select while asserting only the agent's own pick?
+
+    Such a record cannot grade a decline, and a decline is precisely what an optional select puts on
+    the table. At **`decision` scope** `build_correction` requires `correct` to be non-empty and to
+    index a legal option, so "take none" has no encoding; `chosen == correct` then means "no
+    preference was recordable", NOT "taking it was right". Grading against it turns a correct decline
+    into a REGRESSION.
+
+    Deliberately narrow, in **two** ways:
+
+    * ``minCount`` must be 0. On a MANDATORY select, `chosen == correct` states a real preference —
+      the pick was right — and a decider that flips away from one is a genuine regression worth
+      failing on. Only `minCount == 0` carries the encoding gap.
+    * The scope must be **`decision`**. This is the guard the deploy sweep never needed and a shared
+      predicate does: at `turn`/`match` scope `correct: []` IS encodable and IS a statable ruling — a
+      recorded DECLINE that `satisfies_human` grades exactly. Measured on the committed corpus, three
+      records carry the `chosen == correct` shape on an optional select, and one of them
+      (``86088989|0|turn|0``, `correct: []`) is a real turn-scope decline. Without the scope guard
+      this predicate would swallow it, blinding a ruling instead of protecting one — the opposite of
+      what it is for.
+
+    UNWIRED as of Issue #243, and kept deliberately. Its only caller was `deploy_decider_sweep`,
+    deleted by ADR-0089 as a gate that could only report FIX. The **Decision Gate** has the same
+    exposure on two `decision`-scope frames, but which frames stop gating is a *ruling*, not a
+    refactor, so wiring it is owned by **Issue #251** rather than taken as a side effect of a
+    cleanup. That issue argues the priority is LOW on purpose: the gap is DORMANT (ADR-0086 decision
+    9 — both frames decline by rule, so the tally reads `unstatable 0`), it can only fire on a
+    deliberate future flip, and it fails LOUD and correctly attributed. Wiring it wrong makes a gate
+    quieter, which is unfalsifiable from outside — the property that let four `*_decider_sweep.py`
+    report PASS for weeks in a state where PASS could not be told from FAIL.
+    The encoding gap is a property of the Correction schema rather than of any frame, so it holds for
+    any future optional select. Its tests exercise the predicate directly, not through the corpus, so
+    they keep working while it is unexercised.
+
+    Accepts anything carrying ``scope``/``chosen``/``correct`` — a `Correction` in practice. Reads
+    defensively: a malformed record must not take a gate down mid-run, and reading as *unstatable*
+    only ever REMOVES a frame from grading, so it can never fabricate a FIX."""
+    if getattr(correction, "scope", None) != "decision":
+        return False
+    select = ((obs or {}).get("select") or {})
+    if int(select.get("minCount") or 0) != 0:
+        return False
+    chosen = getattr(correction, "chosen", None) or []
+    correct = getattr(correction, "correct", None) or []
+    return sorted(chosen) == sorted(correct)
+
+
 def rows_by_key(rpt: dict, *, keep=None) -> dict:
     """A capture's rows indexed by **Frame Key** — the one place a capture is turned into a lookup.
 

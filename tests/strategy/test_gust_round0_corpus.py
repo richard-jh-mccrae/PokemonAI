@@ -20,7 +20,6 @@ pin below locks that line in.
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -55,19 +54,13 @@ ADJUDICATED = {
 }
 
 
-def _record(cid: str) -> dict:
+def _record(cid: str):
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). `load_corrections`
+    dedups, so the old "last write wins" walk and this agree — measured, all 372 committed records
+    carry a unique (episode, frame)."""
+    from corpus_helpers import corpus_record
     ep, fr = cid.split("-")
-    for jf in CORR.glob("*/corrections.jsonl"):
-        rec = None
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if str(d.get("episode_id")) == ep and d.get("decision", {}).get("frame") == int(fr):
-                rec = d                              # last write wins, like the hyperclosure harness
-        if rec is not None:
-            return rec
-    raise AssertionError(f"correction {cid} not found in data/corrections/")
+    return corpus_record(ep, int(fr))
 
 
 def _pilot(agent: str):
@@ -80,8 +73,12 @@ def _pilot(agent: str):
 
 def _explain(cid: str):
     rec = _record(cid)
-    # ep82224509 f46 predates the agent field — the episode is a mega_starmie game (Round-0 grep).
-    return rec, _pilot(rec["agent"] or "mega_starmie").explain(rec["obs"])
+    # `replay_agent` is the shared fallback, and it is no longer papering over a missing `agent`:
+    # `Correction.from_dict` backfills it from `agent_build`, so ep82224509 f46 — one of the 40
+    # records the raw walk dropped — now reads `mega_starmie` on its own (ADR-0087, Issue #241). The
+    # fallback survives for the corpus's one `SkiChu` record, which has no agent directory.
+    from corpus_helpers import replay_agent
+    return rec, _pilot(replay_agent(rec)).explain(rec.obs)
 
 
 def _boss_options(decision):
@@ -92,8 +89,8 @@ def _boss_options(decision):
 @pytest.mark.parametrize("cid", [pytest.param(c, id=c) for c in PINS])
 def test_round0_correction_ranks_the_human_pick_top(cid):
     rec, d = _explain(cid)
-    assert set(d.chosen) == set(rec["correct"]), (
-        f"{cid}: expected {rec['correct_label']!r}, got options {sorted(d.chosen)}")
+    assert set(d.chosen) == set(rec.correct), (
+        f"{cid}: expected {rec.correct_label!r}, got options {sorted(d.chosen)}")
 
 
 @pytest.mark.req("REQ-CORPUS-0002")
