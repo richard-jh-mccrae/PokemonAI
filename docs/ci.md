@@ -276,14 +276,15 @@ correction rounds (Issue #146), not by this job.
 
 ### Baseline provenance
 
-`data/decider_lab/baseline.json` is currently pinned at **`c38abef` (2026-07-31)**, **372 frames**.
+`data/decider_lab/baseline.json` is currently pinned at **`7d0a97f` (2026-07-31)**, **372 frames**.
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
 | 2026-07-30 | `6328ab7` | — (first capture) | the instrument's own build (ADR-0085 Amendment I) |
 | 2026-07-30 | `e50735a` | **nothing — zero row changes** | move off a feature-branch commit onto `main`, + Amendment J's agree predicate |
 | 2026-07-31 | *(relabel only)* | **nothing — zero row changes** | re-key 332 rows to the Correction's real identity; 163 keys were wrong (Issue #241) |
-| 2026-07-31 | `c38abef` | **2 ruled `chosen` moves + 1 Ruling Move** | the corpus widened 332 → 372 (Issue #241) |
+| 2026-07-31 | *(pre-rebase)* | **2 ruled `chosen` moves + 1 Ruling Move** | the corpus widened 332 → 372 (Issue #241) |
+| 2026-07-31 | `7d0a97f` | **nothing — `git_rev` only, zero row changes** | rebase onto `main` orphaned the capture's SHA (Issue #241) |
 
 The 2026-07-31 pair is the shape ADR-0087 decision 5 prescribes, and the reason it is two
 entries rather than one. The Decision Gate's keys had been built by hand, reading `seat` off a
@@ -304,8 +305,15 @@ What the second entry absorbed, each ruled before the file moved:
   (re-ruled in `b6d7483`, ADR-0081 Amendment D).
 
 Neither `chosen` move is caused by the widening. 24 commits touched `src/` between `e50735a` and
-`c38abef` (Issue #197's Deploy Marginal build), and `_build_pilot` is uncached, so the reader's new
-key ordering cannot move a decision.
+the widening capture (Issue #197's Deploy Marginal build), and `_build_pilot` is uncached, so the
+reader's new key ordering cannot move a decision.
+
+The fourth entry is the *other* shape of bookkeeping re-capture, and worth distinguishing from the
+second. Rebasing this branch onto `main` rewrote the capture's own commit, leaving `git_rev` naming
+a SHA `git show` could no longer resolve — a provenance pointer into nothing. The re-capture moved
+**exactly one field** and **zero rows**, verified before committing. `main` had meanwhile changed
+`src/common/pilot.py` and `src/common/snipe_relevance.py` (PR #242) and the gate ran silent against
+them, so there was nothing to rule.
 
 The second re-capture is the one worth reading, because it is what a *bookkeeping* re-capture looks
 like and the contrast is the point. The first pin, `6328ab7`, was a commit on the Issue #188 feature
