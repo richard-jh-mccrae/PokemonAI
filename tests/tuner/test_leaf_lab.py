@@ -96,7 +96,7 @@ def test_shared_top_is_lenient_hit_but_not_a_unique_top():
     assert v["top_tie"] == 2
 
 
-# ── Option Equivalence Class awareness (ADR-TEMP-247 decision 4, Issue #247) ─────────────────────
+# ── Option Equivalence Class awareness (ADR-0091 decision 4, Issue #247) ─────────────────────
 
 def _body(cid=1030, *, serial=1, hp=70):
     return {"appearThisTurn": False, "energies": [], "energyCards": [], "hp": hp, "id": cid,

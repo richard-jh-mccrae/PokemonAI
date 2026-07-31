@@ -912,7 +912,7 @@ def orphan_rulings(store=None, *, reviewed_path=None) -> list:
 
 def equivalence_index(store=None) -> dict:
     """``{Frame Key: {option index: class}}`` over the committed corpus — the **Option Equivalence
-    Class** map, read ONCE and threaded (ADR-TEMP-247 decision 2).
+    Class** map, read ONCE and threaded (ADR-0091 decision 2).
 
     The sibling of `ruling_index`, and here for the same reason it is: both gates need it, and a
     frame's equivalence must be resolved identically wherever it is consulted. It rides the SAME
@@ -1005,7 +1005,7 @@ def satisfies_human(chosen, correct, *, equiv=None) -> bool:
       until `ruling_moves` existed. A wrong keyspace propagating into an ADR-backed docstring is
       the clearest argument for `correction_frame_key` being the only derivation.
 
-    ``equiv`` — an **Option Equivalence Class** map (`common.option_equivalence`, ADR-TEMP-247) — is
+    ``equiv`` — an **Option Equivalence Class** map (`common.option_equivalence`, ADR-0091) — is
     the fourth case, and the one Issue #247 exists for. A ruling naming one of an *indistinguishable*
     set of options is satisfied by a pick of ANY member: two identical undamaged Riolu, the same
     Energy onto either of two identical Basics. Without it such a ruling can never be satisfied on
@@ -1209,7 +1209,7 @@ def decider_lab_diff(before: dict, after: dict, *, voided=(), equiv=None) -> dic
         # Resolved from TODAY's corpus, never from either capture: the board a frame poses is a
         # property of the corpus, so restating both sides against one map is what keeps a diff from
         # grading its two halves under two different oracles (the same argument `agree_delta` makes
-        # for `voided`). A capture predating ADR-TEMP-247 simply has no `equiv` to disagree with.
+        # for `voided`). A capture predating ADR-0091 simply has no `equiv` to disagree with.
         eq = (equiv or {}).get(k)
         if correct is None:
             verdict = "UNLABELLED"

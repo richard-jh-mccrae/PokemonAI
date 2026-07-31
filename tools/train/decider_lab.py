@@ -45,7 +45,7 @@ vocabularies mis-reports: it read `DISCARD` at **1/12** purely because the agent
 the ruling says `[2]`. On single-pick contexts the two tests are identical.
 
 A ruling naming one of an **indistinguishable** set of options is satisfied by a pick of ANY member
-of its **Option Equivalence Class** (ADR-TEMP-247, Issue #247) — two identical undamaged Riolu are one
+of its **Option Equivalence Class** (ADR-0091, Issue #247) — two identical undamaged Riolu are one
 decision, so the agent picking the human's twin is agreement, not disagreement. The map is resolved
 from the CORPUS once and threaded through capture and diff, never read back off a capture; each row
 records its own classes so the artifact says WHY a frame agreed. That closes ADR-0088's deferral, and
@@ -234,7 +234,7 @@ def main(argv=None) -> int:
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)
     # The **Option Equivalence Class** map, read once for the same reason and threaded the same way
-    # (ADR-TEMP-247 decision 2): it is a property of the CORPUS, so a capture and the diff reading it
+    # (ADR-0091 decision 2): it is a property of the CORPUS, so a capture and the diff reading it
     # must not resolve two different ideas of which options are one decision.
     equiv = equivalence_index(args.store)
     rpt = build_report(args.store, args.agent, voided=set(voided), equiv=equiv)

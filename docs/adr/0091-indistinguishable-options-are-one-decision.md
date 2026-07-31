@@ -1,4 +1,4 @@
-# ADR-TEMP-247 — Indistinguishable options are ONE decision, to the graders AND to the leaf
+# ADR-0091 — Indistinguishable options are ONE decision, to the graders AND to the leaf
 
 **Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #247 — nine locked decisions).
 **Build = Issue #247.**

@@ -531,7 +531,7 @@ class PlannerMixin:
         if not options:
             return None
         greedy_idx = max(range(len(traces)), key=lambda i: traces[i].score) if traces else 0
-        # **Option Equivalence Class** canonicalisation (ADR-TEMP-247 decisions 5-6, Issue #247).
+        # **Option Equivalence Class** canonicalisation (ADR-0091 decisions 5-6, Issue #247).
         # Options a board cannot tell apart are ONE decision, so sim one representative per class and
         # give every member its value. Measured cause: the rollout is greedy and index-order
         # dependent, so it reached a KO from bench 0 and missed the isomorphic line from bench 1 —

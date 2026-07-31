@@ -83,7 +83,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
 
     Every verdict is computed on the **canonicalised** values — options a board cannot tell apart are
     one decision, so each carries its class maximum, exactly as the develop rung ranks them
-    (ADR-TEMP-247). `top_tie` therefore counts CLASSES: two identical Riolu tying is correct
+    (ADR-0091). `top_tie` therefore counts CLASSES: two identical Riolu tying is correct
     behaviour, not a leaf that cannot discriminate. The recorded `values` column stays RAW, and
     `class_asymmetry` reports any class the leaf priced two ways — see that function for why the two
     readings must not be collapsed.
@@ -93,7 +93,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     obs = correction.obs or {}
     raw = board_leaf_values(pilot, obs)
     equiv = option_equivalence((obs.get("select") or {}).get("option") or [], obs)
-    # TWO readings of one sim, deliberately (ADR-TEMP-247 decisions 4 + 6), because collapsing them
+    # TWO readings of one sim, deliberately (ADR-0091 decisions 4 + 6), because collapsing them
     # breaks one of the lab's two jobs:
     #   * RAW is the evidence — canonicalising first would make `class_asymmetry` empty BY
     #     CONSTRUCTION, an instrument that can only ever report "nothing", which is the vacuous-gate
@@ -121,7 +121,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
     top = max(scored)
     best_correct = max(correct_vals)
     outscored = sum(1 for v in scored if v > best_correct)
-    # Ties are counted over CLASSES, not raw options (ADR-TEMP-247 decision 4): two options that are
+    # Ties are counted over CLASSES, not raw options (ADR-0091 decision 4): two options that are
     # the same decision tying is correct behaviour, not a leaf that cannot discriminate, and counting
     # them separately aimed leaf-enrichment work at a phantom.
     at_top = {i for i, v in enumerate(values) if v is not None and v == top}
@@ -134,7 +134,7 @@ def evaluate_leaf_on_correction(pilot, correction) -> dict:
 
 def class_asymmetry(values, equiv) -> list:
     """Every **Option Equivalence Class** whose members do NOT all score the same — the leaf pricing
-    one decision two ways (ADR-TEMP-247 decision 4).
+    one decision two ways (ADR-0091 decision 4).
 
     ``[{"options": [i, ...], "spread": high - low}, ...]``, worst spread first.
 

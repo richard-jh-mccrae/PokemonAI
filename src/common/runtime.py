@@ -109,7 +109,7 @@ PROFILE = {
                                     # (ADR-0050), so the rung fires on them and its pick was decided by
                                     # the engine's shuffle. Since #178 it defers whenever ANY candidate's
                                     # sim rode that shuffle, so a retest is reproducible again.
-    "leaf_option_equivalence": True,  # ADR-TEMP-247 (Issue #247), ON at build: options a board cannot
+    "leaf_option_equivalence": True,  # ADR-0091 (Issue #247), ON at build: options a board cannot
                                     # tell apart are ONE decision, so the develop rung sims one
                                     # representative per Option Equivalence Class and fans the class
                                     # MAXIMUM out to every member. ON rather than armed-off because this

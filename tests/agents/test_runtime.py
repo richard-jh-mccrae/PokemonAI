@@ -75,7 +75,7 @@ EXPECTED_SHIPPED = {
     "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung leaf's hand-value
                                     # term (readiness consumes needs), gated on the leaf-lab bench before arming
     "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): within-turn rollout rung
-    "leaf_option_equivalence": True,  # ADR-TEMP-247 (#247) ON at build: indistinguishable options are ONE
+    "leaf_option_equivalence": True,  # ADR-0091 (#247) ON at build: indistinguishable options are ONE
                                     # decision — sim one representative per class, fan the class MAX out.
                                     # Not a new leaf term awaiting ladder evidence; it deletes an
                                     # inconsistency the simulator itself disproved (1167.0 vs 95.4).

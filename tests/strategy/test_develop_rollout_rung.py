@@ -131,7 +131,7 @@ def test_rung_captures_every_rolled_out_candidate_for_the_corpus():
     assert steps == {(0,), (1,), (2,), (3,), (4,)}              # all five leaf values captured
 
 
-# ── Option Equivalence Class canonicalisation (ADR-TEMP-247 decisions 5+8, Issue #247) ───────────
+# ── Option Equivalence Class canonicalisation (ADR-0091 decisions 5+8, Issue #247) ───────────
 
 def _twin_frame(bodies):
     """A board whose option i picks bench body i — the shape that produced the measured asymmetry."""

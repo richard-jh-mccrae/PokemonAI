@@ -291,7 +291,7 @@ ADR-0085 decision 4 cites `81905522-75`'s pick (two identical Riolu, no board si
 design-doc R3) to justify leg-scoped rather than whole-target guards. Filing it `refuted` would write
 an assertion into the ledger that a shipped ADR contradicts.
 
-**The last entry is gone** (**ADR-TEMP-247** decision 3, Issue #247): `satisfies_human` is now
+**The last entry is gone** (**ADR-0091** decision 3, Issue #247): `satisfies_human` is now
 transposition-AWARE via the **Option Equivalence Class**, so `81905522-75` is satisfied on purpose and
 re-enters the graded population — along with `86091728|0|decision|19`, a second instance nobody had
 ruled. The WORD survives with no corpus entry behind it, as the human escape hatch for
@@ -392,7 +392,7 @@ label check (a **Correction**'s `correct` is one layer down)
 
 **Class Asymmetry**:
 A frame where the leaf assigns **different values to members of one Option Equivalence Class** — the
-same decision priced two ways (**ADR-TEMP-247** decision 4). Measured 2026-07-31: **five** across the
+same decision priced two ways (**ADR-0091** decision 4). Measured 2026-07-31: **five** across the
 81 leaf frames that carry a class, the worst being `81903490|0|decision|49`, where attaching one
 energy card to three byte-identical Riolu scores `1167.0 / 95.4 / 95.4`. Reproducible across fresh
 pilots, so not RNG and not state leakage: `_engine_leaf_value`'s within-turn rollout is greedy and

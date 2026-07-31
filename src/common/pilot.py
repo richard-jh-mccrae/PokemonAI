@@ -1385,7 +1385,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # so OFF means attach endorsements go silent and only
                                                         # the surviving structure rungs speak. An incident
                                                         # lever, never a comparison baseline.
-        self.leaf_option_equivalence = leaf_option_equivalence   # ADR-TEMP-247 (Issue #247) kill-switch:
+        self.leaf_option_equivalence = leaf_option_equivalence   # ADR-0091 (Issue #247) kill-switch:
                                                         # options a board cannot tell apart are ONE
                                                         # decision, so the develop rung sims one
                                                         # representative per class and gives every member

@@ -1392,7 +1392,7 @@ plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a p
 
 **Option Equivalence Class**:
 A set of select-menu options that are **the same decision** — the board cannot tell them apart, so
-picking any one of them is picking all of them (**ADR-TEMP-247** decision 1). Membership is a
+picking any one of them is picking all of them (**ADR-0091** decision 1). Membership is a
 FULL-OPTION fingerprint: `(type, seat, [(area, card-state-minus-serial) for EVERY zone reference the
 option carries])`. "Every" is load-bearing — a `type 8` attach names TWO cards, the hand card
 (`area/index`) and the recipient body (`inPlayArea/inPlayIndex`), and fingerprinting only the body

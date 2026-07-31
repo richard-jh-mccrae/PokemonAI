@@ -1339,7 +1339,7 @@ def test_the_excused_split_prefers_the_held_out_label_when_a_frame_is_both():
 @pytest.mark.req("REQ-GATE-0010")
 def test_the_transposition_frame_is_now_GRADED_and_SATISFIED_not_voided():
     """`81905522|0|decision|75` — the frame this whole vocabulary was invented for — is graded again
-    (ADR-TEMP-247 decision 3, Issue #247).
+    (ADR-0091 decision 3, Issue #247).
 
     This test used to assert the frame was *recorded and voided*, i.e. it pinned the WORKAROUND. The
     oracle makes the ruling satisfiable on purpose: the agent picks index 1, the human ruled index 3,
@@ -1393,7 +1393,7 @@ def test_importing_gates_never_maps_the_native_engine():
     """`train.gates` must stay loadable with **no DLL** — the offline cross-platform suite depends on
     it, and `cg.api` maps the native library on a bare import (`libcg` in /proc/self/maps).
 
-    Until ADR-TEMP-247 that constraint was a COMMENT. Decision 7 has `gates` import shipped code
+    Until ADR-0091 that constraint was a COMMENT. Decision 7 has `gates` import shipped code
     (`common.option_equivalence`), which is exactly the kind of edge that turns a documented
     invariant into a broken one three refactors later — a shipped module gains an innocuous
     convenience import and the gates stop loading on a machine with no engine. So it is a test now.

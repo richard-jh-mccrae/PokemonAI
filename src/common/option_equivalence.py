@@ -1,4 +1,4 @@
-"""The **Option Equivalence Class** — which select-menu options are THE SAME DECISION (ADR-TEMP-247).
+"""The **Option Equivalence Class** — which select-menu options are THE SAME DECISION (ADR-0091).
 
 Two options are one decision when the board cannot tell them apart: two identical undamaged Riolu on
 the bench, the same Energy card onto either of two identical Basics. Picking one is picking the

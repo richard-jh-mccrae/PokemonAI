@@ -1,4 +1,4 @@
-"""The **Option Equivalence Class** oracle (ADR-TEMP-247 decision 1, Issue #247).
+"""The **Option Equivalence Class** oracle (ADR-0091 decision 1, Issue #247).
 
 Every case here is built from plain dicts — no engine, no Pilot, no corpus — because the oracle is
 pure and its whole job is to be provable without any of them. The corpus-level assertions (the two
@@ -103,7 +103,7 @@ def test_the_two_seats_are_never_one_decision():
 # ── the rejected body-only design's six false equivalences ───────────────────────────────────────
 
 def test_two_attaches_of_DIFFERENT_hand_cards_to_one_body_are_NOT_one_decision():
-    """The measured failure of the rejected design (ADR-TEMP-247 decision 1).
+    """The measured failure of the rejected design (ADR-0091 decision 1).
 
     An ATTACH names TWO cards — `area`/`index` is the Energy in hand, `inPlayArea`/`inPlayIndex` the
     recipient body. Fingerprinting only the body called *different Energies onto one Pokémon* the
