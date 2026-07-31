@@ -59,9 +59,27 @@ confirmed a third time. The upstream term is `Pilot._denial_play_tactical`
 | `82225643-11` | **+22.5** = 0.5 × 1.0 × **65.0** − 10 | **0.0** |
 | `82224509-67` | **+74.5** = 0.5 × 1.0 × **169.0** − 10 | **0.0** |
 
-`board.deny_relevance_best` is 0.0 on all three boards, so the armed rung always takes its whiff
-branch. The Hammer decision flips inside the rollout, one Energy moves on the opponent's board,
-`_incoming_worst` crosses my Active's HP, and the survival term toggles.
+`board.deny_relevance_best` reads 0.0 **mid-sim** on all three boards, so the armed rung takes its
+whiff branch there. The Hammer decision flips inside the rollout, one Energy moves on the opponent's
+board, `_incoming_worst` crosses my Active's HP, and the survival term toggles.
+
+**At the ROOT board the armed read is correct and agrees with the incumbent to the cent** —
+`_DENY_RELEVANCE_K × deny_relevance_best == opp_denial_best`, the identity
+`K = _DENY_RELEVANCE_NORM = MAX_ATTACK_DAMAGE` exists to guarantee (`pilot.py:160-180`):
+
+| frame | `opp_denial_best` | armed `deny_relevance_best` | `K ×` | fire rung, BOTH arms |
+|---|---|---|---|---|
+| `83686860-13` | 10.0 | 0.0285714 | **10.0** | −5.00 (hold) |
+| `82225643-11` | 65.0 | 0.1857143 | **65.0** | +22.50 (play) |
+| `82224509-67` | 130.0 | 0.3714286 | **130.0** | +74.50 (play) |
+
+So the instrument is not wrong. The **169.0** first attributed to the oracle on `82224509-67` is
+Lever A's unfavored weight, `_DENIAL_PLAY_W × (1.0 + _DENIAL_UNFAVORED) × 130.0 = 1.3 × 130.0`
+(`pilot.py:5606`; measured `favorability=0.2733`, `matchup_coverage=1.0`). Card facts verified in
+`data/EN_Card_Data.csv`, including the single-hop **Riolu (677) → Mega Lucario ex (678)** line
+(Aura Jab `{F}` 130 / Mega Brave `{F}{F}` 270). On `82224509-67` the human ruled the Hammer play
+**correct** — *"opponents active is their main attacker with an energy on it, thats a huge threat.
+use crushing hammer."* Armed, mid-sim, the agent declines it.
 
 **ADR-0084 Amendment B point 3 is therefore wrong.** It attributes this frame to the keep price
 falling `5.0 -> 1.929` and concludes *"every deny component is individually correct."* The keep
@@ -86,7 +104,79 @@ close enough to be uncomfortable — it is *again* a rung returning exactly 0.0 
 *declines* a 169-damage strip the incumbent takes; that demotes a rival option and the human's
 `correct` wins by default. Counting it as upside would count a defect as a benefit.
 
-## Decision 2 — the armed whiff must DECLINE strictly, not return 0.0
+## Decision 2 — an ABSENT armed read must never be readable as a MEASURED ZERO
+
+⚠️ **This decision replaces an earlier, wrong Decision 2** (*"the armed whiff must decline
+strictly"*), committed at `f0124de` before the root cause was found. That repair — early-return
+deleted so a whiff prices `−_DENIAL_ITEM_COST` — would have made the armed rollout **always hold**
+the Hammer, where the incumbent correctly plays it at +22.50 and +74.50. It is the opposite error,
+and it would have looked like a fix because the three gate frames would have moved. Recorded rather
+than silently overwritten, because a plausible repair that moves the gate the right way for the
+wrong reason is the exact failure this ADR's Decision 1 exists to prevent.
+
+**The root defect.** `_opponent_target_rows` returns `None` mid-sim, by design and by docstring
+(`src/common/pilot.py:8093-8095`):
+
+```
+None when sparse: mid-sim (`self._planning`), no live my Active, or no opponent in-play bodies.
+```
+```python
+if getattr(self, "_planning", False):
+    return None
+```
+
+`_planning` is the never-nest-a-search reentrancy guard (`planner.py:473`), set for every rollout
+step and by `leaf_lab.board_leaf_values`. So mid-sim the cache is `None`, `pilot.py:6816`'s
+`and self._opponent_target_cache is not None` fails, and `board.deny_relevance_best` keeps its
+dataclass default — `deny_relevance_best: float = 0.0` (`pilot.py:508`). The fire rung reads that
+default as a measured zero and whiffs.
+
+**The OFF path has no equivalent hole:** `opp_denial_best` is computed unconditionally at
+`pilot.py:6753`, with no `_planning` guard. So arming does not replace one value with another
+mid-sim — it replaces a value with *nothing*, and nothing is spelt `0.0`.
+
+**Ruled: absence is typed as absence.** `deny_relevance_best` becomes `float | None`, and every
+consumer distinguishes "measured zero" from "not measured". This is ADR-0084 decision 4's own rule —
+*"a value of `None` means **absent, not zero**"*, already quoted in `_deny_strip_shift_map` — applied
+to the one field that could not express it.
+
+**The codebase already defends this failure mode on the sibling surfaces.** `_deny_rows`, verbatim:
+
+> *"Falls back to a fresh compute for a hand-built `board` that never went through `_board()`;
+> without it an armed hand-built board would emit NO deny slots and **read as a whiff, which is a
+> silent behaviour change rather than a fail-closed one**."*
+
+Three deny surfaces. The two target-pick maps carry that cache-or-compute ladder. The fire rung does
+not, and it is the one that moved three gate frames. Note the ladder alone would **not** fix this:
+its fallback calls `_opponent_target_rows`, which returns `None` mid-sim for the same reason — it
+rescues hand-built test boards, not rollouts.
+
+## Decision 3 — the armed read goes LIVE mid-sim, with a pre-registered cost fallback
+
+The agent must not evaluate a policy differently inside its own rollout than outside it. That split
+is the third confirmed source of continuation collateral in this repo (ADR-0072 finding 2, ADR-0070
+amendment H, and now this), and failing closed to the incumbent would make it permanent and
+load-bearing.
+
+**Ruled: drop the `_planning` early return for the deny read.** `_opponent_target_rows` calls only
+`combat.turns_to_ko_me` (the closed-form S1 curve) and `combat.prize_value` — it starts no nested
+engine search — so the guard is a **cost** decision (`pilot.py:8001`: *"no shadow work in
+rollouts"*), not a correctness one.
+
+**The cost is UNMEASURED and the fallback is pre-registered, not discovered.** N+1
+`turns_to_ko_me` per board per sim step, on the hottest path in the codebase; memoising on board
+identity is the first lever. **If a Discrimination Gate arm exceeds ~2× its current ~20 minutes,
+Decision 3 falls back to fail-closed-to-the-incumbent** (`None` → `opp_denial_best`), and the split
+policy is accepted with that cost recorded. Pre-registering the fallback follows ADR-0084's own
+ship-dark idiom: the escape is chosen before the number is known, so it cannot be chosen *because*
+of the number.
+
+**Falsifiable prediction.** With the absence fixed, the armed fire rung returns −5.00 / +22.50 /
++74.50 mid-sim — identical to the incumbent — so all three frames stop moving and the
+Discrimination Gate passes armed. If it does not, Decision 2's diagnosis is incomplete and the
+adjudication reopens.
+
+## Decision 4 — a genuine whiff still ties End, and that is a SEPARATE defect
 
 `_denial_play_tactical` (`src/common/pilot.py:5602-5606`) short-circuits before the keep price:
 
@@ -112,9 +202,16 @@ flags True    step3 chose [0] = PLAY Crushing Hammer       (Hammer scored  0.0)
               step4 DISCARD_ENERGY -> opp Active energyIndex 0
 ```
 
-**Ruled: the early return is deleted, so a whiff prices `−_DENIAL_ITEM_COST` and declines strictly.**
-`0.5 × 1.0 × 0 − 10 = −10.0` is what the formula already says; the guard was suppressing its own
-answer. A test pins whiff < End.
+**Ruled: the early return is deleted, so a genuine whiff prices `−_DENIAL_ITEM_COST` and declines
+strictly.** `0.5 × 1.0 × 0 − 10 = −10.0` is what the formula already says; the guard was suppressing
+its own answer. A test pins whiff < End.
+
+⚠️ **This fix must land only alongside Decisions 2 and 3, never instead of them.** Applied on its
+own it makes the armed rollout hold the Hammer on every board where the read is merely *absent* —
+including the two where the human ruled the play correct — and it would move all three gate frames
+while doing so. A repair that greens the gate by suppressing a value it never measured is worse than
+the defect: the gate would then certify the split policy rather than catch it. Decision 4 is
+correct only once absence and measurement are distinguishable, which is Decision 2's job.
 
 **Why this was invisible until arming.** The guard is on both paths, but reachable only when `value`
 is exactly 0. The ADR-0062 magnitude is rarely exactly 0 while a Hammer is playable; a **categorical
@@ -128,16 +225,26 @@ Tracker build rule 11 — *"a compute-only layer is not a verified layer"* — i
 Issue #187's arming exposed three defects its pure tests could not reach, Issue #217's exposed a
 fourth (the missing forward discount, ADR-0084 Amendment A), and this is the fifth.
 
+## Settled by measurement — relevance is NOT blind
+
+The open question in this ADR's first draft — *"is relevance correctly zero, or blind?"* — is
+answered **neither**. Armed, the read is 0.0286 / 0.1857 / 0.3714 and `K ×` it reproduces the
+incumbent exactly (table above). The 0.0 was the **unarmed** reading all along.
+
+`combat._promotion_open` is **not** what shuts, either. It is consulted only for bench rows
+(`pilot.py:6849-6850` weights `area == "active"` at 1.0 unconditionally) and the argmax row is the
+opponent's **Active** on all three frames. ADR-0084 decision 8's f21/f29 note describes a board
+whose only energized body is *benched*; that shape does not occur here.
+
+Ground truth, verified at source, agrees with the armed read on every frame: `83686860-13` strips
+Snover's only `{W}` (retreat 3, CSV line 1255) and delays the Abomasnow line exactly one attach-turn
+— honestly small at 10.0; `82225643-11` is ADR-0062's own `_DENIAL_FORWARD` anchor; `82224509-67`
+buys exactly one turn against a lethal Mega Brave 270 into our 200 remaining HP.
+
 ## Open — not yet ruled
 
-- **Is `deny_relevance_best == 0.0` correct on these boards?** The incumbent oracle reads 65.0 and
-  169.0 of denial on two of them. Either relevance is correctly categorical-zero and the oracle is
-  pricing something relevance deliberately ignores, or relevance is **blind**. ADR-0084 decision 8
-  records the same shape on f21/f29 (`combat._promotion_open` shuts → `deny_relevance_best` 0 →
-  whiff at 0.00) and ruled it *"same decision, different number"* — here it moves three frames.
-  Under investigation; **decision 2 does not depend on the answer**.
 - **Does arming also owe the DELETION of the OFF magnitude path?** Directive 1's *"Rungs an equation
   replaces are DELETED, not suppressed"* and the `snipe_relevance` precedent (ADR-0085 Amendment E)
-  say yes; Issue #228's scope item 3 says the OFF path stays live. Held open, because on all three
-  measured frames the OFF path is currently the **correct** one — deleting it now would delete the
-  better behaviour.
+  say yes; Issue #228's scope item 3 says the OFF path stays live. Held open pending Decision 3's
+  cost measurement: if the pre-registered fallback is taken, `opp_denial_best` becomes the armed
+  path's own mid-sim value and **cannot** be deleted, so the two questions are coupled.
