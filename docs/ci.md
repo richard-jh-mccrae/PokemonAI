@@ -59,6 +59,14 @@ test, that test runs.
 | docs / any `*.md` | **nothing** (job passes green) | No runtime surface |
 | anything unmatched | **full suite** | A new top-level area is never silently skipped |
 
+Every row above names test *directories*, which is why a selective run also appends the one
+root-level test **file**, `tests/test_import_hygiene.py`, unconditionally. That file bans
+`tests.*` package imports — shadowable by any installed distribution shipping a top-level
+`tests` package, and therefore a failure CI can never reproduce on its own (see the file's
+docstring, and *Scope & extending* below). Before it was appended, a PR touching only
+`tests/strategy/**` planned exactly `tests/strategy` and skipped the guard — on precisely the
+diffs that introduce the violation. It scans 555 files in 0.33 s, so it always runs.
+
 The plan step unions the sets for a multi-area diff, and any *foundation* filter (or a
 change that matches no filter — the `any`-but-nothing-recognised case) forces the full
 suite. `.github/filters.yml` is the source-area map; the reverse-dependency unions (e.g.
@@ -361,6 +369,15 @@ watchdogs are a deliberate, narrow widening of "tests only" (the Discrimination 
 Decision Gate 2026-07-30): each runs an existing deterministic instrument the repo already owed on
 main, not a new toolchain. Neither ever re-captures its baseline — that is what would make them
 vacuous, and ADR-0085 Amendment I is the record of a gate that went vacuous exactly that way.
+
+One thing CI **cannot** gate, by construction: `tests/test_import_hygiene.py` exists because a
+`from tests.<subdir>._helper import ...` resolves on a *clean* runner and raises
+`ModuleNotFoundError` on a dirtier dev box, where an installed distribution (`kaleido`) ships its own
+top-level `tests` package that outranks this repo's PEP 420 namespace one. The failure needs a
+dirtier environment than CI's, so a green CI was never evidence — the guard is the substitute, which
+is why a selective run appends it unconditionally. Its scan is driven by `git ls-files`, not a
+filesystem walk: an earlier `REPO.rglob("*.py")` reached `.venv/` and the sibling checkouts under
+`.claude/worktrees/`, taking 643 s and failing `main` on a *foreign branch's* file.
 
 - **Add a new subsystem?** Add a filter to `.github/filters.yml` and a matching
   `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any
