@@ -243,6 +243,11 @@ the runtime before proposing it." Measured back-to-back on one box (2026-07-30, 
 ~2.2× **faster** than the gate that already had a watchdog. The objection was a guess and the
 measurement retired it.
 
+Issue #241 widened the corpus to **372** frames (and the leaf lab's to 268), which scales the
+decider figure to roughly 35 s on the same box. The ordering is unchanged and the margin is still
+wide, so the conclusion above stands — but the numbers in the table are the 2026-07-30 measurement
+over the pre-widening corpus, not a claim about today's.
+
 **It never writes the baseline**, for exactly the reason the leaf watchdog doesn't: auto-recapture on
 merge would redefine the "before" picture to whatever just landed, so every regression would bless
 itself and the job would pass forever by construction — the same shape the old sweeps went vacuous
@@ -271,12 +276,44 @@ correction rounds (Issue #146), not by this job.
 
 ### Baseline provenance
 
-`data/decider_lab/baseline.json` is currently pinned at **`e50735a` (2026-07-30)**, 332 frames.
+`data/decider_lab/baseline.json` is currently pinned at **`7d0a97f` (2026-07-31)**, **372 frames**.
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
 | 2026-07-30 | `6328ab7` | — (first capture) | the instrument's own build (ADR-0085 Amendment I) |
 | 2026-07-30 | `e50735a` | **nothing — zero row changes** | move off a feature-branch commit onto `main`, + Amendment J's agree predicate |
+| 2026-07-31 | *(relabel only)* | **nothing — zero row changes** | re-key 332 rows to the Correction's real identity; 163 keys were wrong (Issue #241) |
+| 2026-07-31 | *(pre-rebase)* | **2 ruled `chosen` moves + 1 Ruling Move** | the corpus widened 332 → 372 (Issue #241) |
+| 2026-07-31 | `7d0a97f` | **nothing — `git_rev` only, zero row changes** | rebase onto `main` orphaned the capture's SHA (Issue #241) |
+
+The 2026-07-31 pair is the shape ADR-0087 decision 5 prescribes, and the reason it is two
+entries rather than one. The Decision Gate's keys had been built by hand, reading `seat` off a
+snapshot with no `seat` field, so only **169 of 372** frames were named correctly and four standing
+Held-out Ledger rulings could not reach the gate at all. Re-keying and widening in one step would
+have produced `+372 / −332` — a diff comparing **nothing**, at exactly the commit that most needed
+comparing. Split, the relabel is provably a relabel (163 changed lines, every one a `"key"` line, no
+Pilot run) and the widening then reads **`added: 40, removed: 0`**.
+
+What the second entry absorbed, each ruled before the file moved:
+
+- `86090147|0|decision|22` — `chosen [4] → [6]`, **NEUTRAL** (the human ruled `[7] Retreat`; both
+  picks are bench plays, so the corpus does not adjudicate between them).
+- `83661652|0|decision|44` — `chosen [2] → [0]`, a **REGRESSION held out to Issue #165**. Worth
+  naming rather than letting the `HELD OUT` block absorb it: this is a *new* regression, shielded by
+  a ruling made before it existed.
+- `85709280|1|match|` — `correct [] → [0]`, a **Ruling Move**, not a decision change at all
+  (re-ruled in `b6d7483`, ADR-0081 Amendment D).
+
+Neither `chosen` move is caused by the widening. 24 commits touched `src/` between `e50735a` and
+the widening capture (Issue #197's Deploy Marginal build), and `_build_pilot` is uncached, so the
+reader's new key ordering cannot move a decision.
+
+The fourth entry is the *other* shape of bookkeeping re-capture, and worth distinguishing from the
+second. Rebasing this branch onto `main` rewrote the capture's own commit, leaving `git_rev` naming
+a SHA `git show` could no longer resolve — a provenance pointer into nothing. The re-capture moved
+**exactly one field** and **zero rows**, verified before committing. `main` had meanwhile changed
+`src/common/pilot.py` and `src/common/snipe_relevance.py` (PR #242) and the gate ran silent against
+them, so there was nothing to rule.
 
 The second re-capture is the one worth reading, because it is what a *bookkeeping* re-capture looks
 like and the contrast is the point. The first pin, `6328ab7`, was a commit on the Issue #188 feature

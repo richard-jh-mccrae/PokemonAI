@@ -328,11 +328,12 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
     ``episode_id`` alone silently merged frames from one episode — it collapsed a real 276-row diff
     to 221 — and an under-reporting gate is the precise failure mode this exists to prevent. Frames
     present on only one side are surfaced (``added``/``removed``) rather than quietly skipped, so a
-    capture taken against a different corpus shape is visible."""
-    def index(rpt):
-        return {r["key"]: r for r in (rpt.get("rows") or []) if not r.get("unscorable")}
-
-    b, a = index(before), index(after)
+    capture taken against a different corpus shape is visible — and a frame whose *ruling* moved is
+    surfaced as a **Ruling Move** (`ruling_moves`), which neither of those pairs can see because the
+    frame exists on both sides. This diff compares ``correct_is_top``, computed FROM ``correct``, so
+    a re-ruling silently changes its verdict exactly as it does the Decision Gate's."""
+    b = rows_by_key(before, keep=_scorable)
+    a = rows_by_key(after, keep=_scorable)
     shared = b.keys() & a.keys()
     ok_to_miss, miss_to_ok = [], []
     for k in sorted(shared):
@@ -343,7 +344,10 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
             miss_to_ok.append({"key": k, "before": b[k], "after": a[k]})
     return {"ok_to_miss": ok_to_miss, "miss_to_ok": miss_to_ok,
             "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
-            "compared": len(shared)}
+            "compared": len(shared),
+            # SAME row filter as `compared` above, so the two numbers in one report describe one
+            # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
+            "ruling_moves": ruling_moves(before, after, keep=_scorable)}
 
 
 def discrimination_gate_verdict(diff: dict, *, held_out: dict) -> bool:
@@ -416,6 +420,71 @@ def held_out_map(claims_by_key: dict) -> dict:
 SEEDED_OBS_KEYS = ("own_prizes", "search_begin_input")
 
 
+def write_json_artifact(path, doc) -> None:
+    """Write a gate artifact (a capture, a verdict) as **LF-framed UTF-8 bytes**.
+
+    Both labs write JSON artifacts and both used ``Path.write_text``, which on Windows rewrites every
+    ``\\n`` to ``\\r\\n``. `data/decider_lab/baseline.json` and `data/leaf_lab/baseline.json` are
+    committed LF, so a re-capture from a Windows box turned a 40-row data change into a 4835-line
+    whole-file rewrite — burying the one thing a reviewer of a re-capture needs to see. Dev is on
+    Windows and the grader is Linux (CLAUDE.md), so the framing has to be chosen, not inherited.
+
+    Shared rather than fixed twice for this module's own reason: a second implementation drifts, and
+    a re-capture is exactly the moment nobody re-reads the writer."""
+    from pathlib import Path
+    import json as _json
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_json.dumps(doc, indent=2).encode("utf-8"))
+
+
+def correction_frame_key(correction) -> str:
+    """One Correction's **Frame Key** — ``frame_key_of(*identity_key(c))``, and the ONLY way any
+    instrument derives one (ADR-0087 decision 2).
+
+    Split out of `keyed_corrections` so a caller holding a single record cannot be tempted to
+    re-assemble the shape by hand, which is exactly how the Decision Gate ended up reading ``seat``
+    from a snapshot that has no ``seat`` field. Both gates route through here, so ADR-0072 decision
+    4's *one ruling holds a frame out of BOTH gates* is structural rather than a convention."""
+    from train.blunder.correction import identity_key
+    return frame_key_of(*identity_key(correction))
+
+
+def keyed_corrections(store=None, *, predicate=None) -> list:
+    """**THE Corpus Reader** — every committed Correction, already paired with its **Frame Key**
+    (ADR-0087 decisions 1–2, Issue #241). Returns ``[(frame_key, Correction), ...]``.
+
+    Two rules, and they are the same rule twice:
+
+    * **Records are CONSTRUCTED**, via ``load_corrections`` — never walked as raw JSONL. That is what
+      inherits ``Correction.from_dict``'s ``agent_build`` backfill, and every future normalisation,
+      for both gates at once. The Decision Gate kept its own raw walk and dropped **40** records on a
+      falsy ``agent`` — a *recoverable* field, not a missing one — before a row existed, so they
+      landed in neither capture and ``added``/``removed`` could never surface them.
+    * **The key is DERIVED**, via ``frame_key_of(*identity_key(c))`` — never hand-assembled. The gate
+      built its own from raw dict lookups and read ``seat`` off the ``decision`` snapshot, which has
+      no ``seat`` field (it is top-level), so every key it produced said seat 0 against a corpus that
+      is 201/171. Scope and subject were hardcoded too. Net: **169 of 372 keys correct**, and four of
+      the eleven Held-out Ledger rulings unreachable — a frame ruled by a human failing `main` behind
+      their back. It drifted undetectably because BOTH sides of a diff shared the same wrong key, so
+      the diff stayed self-consistent and nothing ever went red.
+
+    Returning **pairs, not a dict**, is deliberate. A dict silently collapses two Corrections sharing
+    a key; today that is measurably zero, but ``load_corrections`` deliberately keeps *conflicts*
+    (same identity, different ``correct``/``category`` — what ``find_conflicts`` surfaces), and a
+    reader that drops one would commit this issue's own defect at the seam built to remove it. A
+    caller wanting a mapping builds one and owns that choice.
+
+    ``predicate`` filters on the CONSTRUCTED record (e.g. ``lambda c: c.obs and c.agent`` for the
+    replayable set), so a filter can never again be applied to a field the raw shape had not yet
+    normalised."""
+    from train.blunder.store import DEFAULT_ROOT, load_corrections
+
+    corrections = load_corrections(store if store is not None else DEFAULT_ROOT)
+    return [(correction_frame_key(c), c)
+            for c in corrections if predicate is None or predicate(c)]
+
+
 def iter_keyed_fixtures(fixtures_dir=None):
     """Yield ``(path, fixture, frame_key, Claims)`` per committed fixture declaring a ``frame_key``.
 
@@ -481,11 +550,7 @@ def claim_agreement(fixtures_dir=None, store=None) -> list[dict]:
     deriving one from the loose ``episode``+``frame`` pair would be guessing at ADR-0049's identity
     (the Scope's *subject*, not the Anchor frame). Several fixtures may share one key — legal and
     load-bearing — so each is judged independently."""
-    from train.blunder.correction import identity_key
-    from train.blunder.store import DEFAULT_ROOT, load_corrections
-
-    by_key = {frame_key_of(*identity_key(c)): c
-              for c in load_corrections(store if store is not None else DEFAULT_ROOT)}
+    by_key = dict(keyed_corrections(store))     # THE Corpus Reader; last wins, as this join always did
 
     found: list[dict] = []
     for path, fx, key, claims in iter_keyed_fixtures(fixtures_dir):
@@ -577,17 +642,96 @@ def satisfies_human(chosen, correct) -> bool:
       as ``UNLABELLED`` rather than as disagreement.
     * ``correct == []`` — a recorded **DECLINE**: the ruling is *"take none of these"*, satisfied
       only by an empty pick. Subset is WRONG here and dangerously so — the empty set is a subset of
-      everything, so reading a DECLINE through ``⊆`` would make every frame vacuously agree. Eleven
-      such frames sit in the corpus today (nine at ``MAIN``, one ``SETUP_BENCH_POKEMON``, one
-      ``TO_HAND``), and `86088989|0|decision|3` is genuinely satisfied — the agent declines too. They
-      are rulings, so they stay labelled and stay gated; Issue #229 owns whether the *writer* should
-      keep rejecting the shape the corpus already contains.
+      everything, so reading a DECLINE through ``⊆`` would make every frame vacuously agree. **Ten**
+      such frames sit in the corpus, all ``turn`` scope (eight at ``MAIN``, one ``TO_HAND``, one
+      ``SETUP_BENCH_POKEMON``), and `86088989|0|turn|0` is genuinely satisfied — the agent
+      declines too. They are rulings, so they stay labelled and stay gated; Issue #229 owns whether
+      the *writer* should keep rejecting the shape the corpus already contains.
+
+      ⚠️ This paragraph previously said *eleven*, and named that frame `86088989|0|decision|3`.
+      Both were readings of the **mis-keyed** Decision Gate baseline (Issue #241): its keys were
+      built by hand with ``seat`` read off a snapshot that has no ``seat`` field and ``scope``
+      hardcoded to ``decision``, and its eleventh DECLINE row was `85709280`, whose ``correct`` had
+      since been re-ruled ``[] -> [0]`` in `b6d7483` — a **Ruling Move** no instrument could report
+      until `ruling_moves` existed. A wrong keyspace propagating into an ADR-backed docstring is
+      the clearest argument for `correction_frame_key` being the only derivation.
     """
     if chosen is None or correct is None:
         return False
     if not correct:                       # a recorded DECLINE — exact, never subset
         return not chosen
     return picks_as_set(correct) <= picks_as_set(chosen)
+
+
+def rows_by_key(rpt: dict, *, keep=None) -> dict:
+    """A capture's rows indexed by **Frame Key** — the one place a capture is turned into a lookup.
+
+    Both diffs and `ruling_moves` need this, and all three had written their own closure. That is
+    the shape this module keeps having to remove: three copies differing only by a filter clause,
+    which is how `ruling_moves` came to index a different row population than the `leaf_lab_diff`
+    it reports beside. ``keep`` is that filter, passed in rather than baked in.
+
+    A row with no key is dropped: it cannot be diffed, and keeping it would collide every such row
+    onto a single ``None`` bucket."""
+    return {r["key"]: r for r in (rpt.get("rows") or [])
+            if r.get("key") and (keep is None or keep(r))}
+
+
+def _scorable(row) -> bool:
+    """The Leaf Lab's row filter — an unscorable frame has no verdict to compare."""
+    return not row.get("unscorable")
+
+
+def ruling_moves(before: dict, after: dict, *, keep=None) -> list:
+    """Every frame present in BOTH captures whose **Correction**'s ``correct`` changed — the human
+    re-ruled it (**Ruling Move**, ADR-0087 decision 7). ``[{key, before, after}, ...]``.
+
+    Emitted **independently of whether the agent's pick moved**, and that independence IS the fix.
+    Both diffs emit a verdict row only on a moved pick, so a frame the agent plays identically whose
+    ruling was re-written produces *no row at all* — while its verdict silently flips. Measured:
+    ``85709280`` went ``[] -> [0]`` in ``b6d7483`` (ADR-0081 Amendment D) and moved the agree rate
+    230 -> 231 with no decision changed. ``added``/``removed`` cannot see it either, because the frame
+    is on both sides; it is the same *"a thing that moved that the instrument cannot report"* family
+    as Issue #239.
+
+    It sits beside ``added``/``removed`` because it is the same idea one level in — those report a
+    frame appearing or leaving, this reports the *ruling about* a frame moving — and the module's
+    doctrine is that a corpus-shape move must never read as a quiet green.
+
+    **It never gates.** A re-ruling is a deliberate human act, not an agent regression, so
+    `decision_gate_verdict` and `discrimination_gate_verdict` do not consult it.
+
+    Shared by both diffs for `frame_key_of`'s reason: `leaf_lab_diff` compares ``correct_is_top``,
+    which is computed FROM ``correct``, so it carries the identical blindness, and a second
+    implementation would drift. Normalised by `picks_as_set` — the same predicate the verdict uses,
+    so re-ordering ``correct`` is not a re-ruling and the two cannot form different ideas of "moved".
+
+    ``keep`` must be the SAME row filter the diff reporting this uses, so the two numbers printed
+    side by side describe one population: `leaf_lab_diff` compares only scorable rows, and a
+    ``ruling_moves`` drawn from all of them would report frames its own ``compared`` count excludes.
+
+    A ``None`` on one side and a ruling on the other counts as a move: the frame gained or lost its
+    ruling, which changes what the gate can adjudicate there — an ``UNLABELLED`` frame becoming
+    gateable is exactly as worth reporting as a ruling being rewritten.
+    """
+    b, a = rows_by_key(before, keep=keep), rows_by_key(after, keep=keep)
+    moved = []
+    for k in sorted(b.keys() & a.keys()):
+        was, now = b[k].get("correct"), a[k].get("correct")
+        if was is None and now is None:
+            continue
+        if was is None or now is None or picks_as_set(was) != picks_as_set(now):
+            moved.append({"key": k, "before": was, "after": now})
+    return moved
+
+
+def print_ruling_moves(moves) -> None:
+    """The shared readout, so the two gates cannot describe a **Ruling Move** differently."""
+    if not moves:
+        return
+    print(f"\n  ⚠️ RULING MOVED ({len(moves)}) — the human re-ruled these frames; reported, never gating:")
+    for m in moves:
+        print(f"    {m['key']}  correct {m['before']} -> {m['after']}")
 
 
 def decider_lab_diff(before: dict, after: dict) -> dict:
@@ -622,12 +766,9 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
                      change, but not one the corpus adjudicates.
       ``UNLABELLED`` the frame carries no ``correct``, so no direction can be claimed
     """
-    def index(rpt):
-        return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
-
     norm = picks_as_set
 
-    b, a = index(before), index(after)
+    b, a = rows_by_key(before), rows_by_key(after)
     rows = []
     for k in sorted(b.keys() & a.keys()):
         was, now = b[k].get("chosen"), a[k].get("chosen")
@@ -645,4 +786,5 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
         rows.append({"key": k, "agent": a[k].get("agent"), "context": a[k].get("context"),
                      "before": was, "after": now, "correct": correct, "verdict": verdict})
     return {"rows": rows, "compared": len(b.keys() & a.keys()),
-            "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys())}
+            "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
+            "ruling_moves": ruling_moves(before, after)}

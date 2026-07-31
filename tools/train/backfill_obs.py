@@ -21,7 +21,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from meta_tracker.parse import load_replay  # noqa: E402
 from train.blunder.decisions import _film  # noqa: E402
 from train.blunder.provenance import build_identity  # noqa: E402
-from train.blunder.store import DEFAULT_ROOT, _jsonl_files, load_corrections  # noqa: E402
+from train.blunder.store import DEFAULT_ROOT, jsonl_files, load_corrections  # noqa: E402
 from train.blunder.telemetry_log import find_log_any, load_log, record_for  # noqa: E402
 
 
@@ -76,7 +76,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     cache, logcache, missing, total, filled = {}, {}, set(), 0, 0
-    for f in _jsonl_files(Path(args.store)):                  # one log file per build (or one file)
+    for f in jsonl_files(Path(args.store)):                  # one log file per build (or one file)
         corrections = load_corrections(f, dedup=False)
         total += len(corrections)
         out = [_fill(c, args.replays, cache, logcache, missing) for c in corrections]

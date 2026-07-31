@@ -18,7 +18,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.blunder.store import (DEFAULT_ROOT, _jsonl_files, dedup_corrections,  # noqa: E402
+from train.blunder.store import (DEFAULT_ROOT, jsonl_files, dedup_corrections,  # noqa: E402
                                  find_conflicts, load_corrections)
 
 
@@ -29,7 +29,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
 
     union, removed = [], 0
-    for f in _jsonl_files(Path(args.store)):         # dedup within each build's file
+    for f in jsonl_files(Path(args.store)):         # dedup within each build's file
         raw = load_corrections(f, dedup=False)
         union += raw
         kept = dedup_corrections(raw)

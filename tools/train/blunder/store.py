@@ -69,9 +69,14 @@ def _is_file(source: Path | str) -> bool:
     return str(source).endswith(".jsonl")
 
 
-def _jsonl_files(source: Path | str) -> list[Path]:
+def jsonl_files(source: Path | str) -> list[Path]:
     """Log file(s) a source denotes: a ``.jsonl`` path -> itself; a directory -> every
-    ``<build>/corrections.jsonl`` under it (plus a legacy root-level ``corrections.jsonl``)."""
+    ``<build>/corrections.jsonl`` under it (plus a legacy root-level ``corrections.jsonl``).
+
+    **Public because the store owns where the logs LIVE** (ADR-0087 decision 1). A caller that
+    needs per-file provenance — the frame viewer prints the source path — must not re-derive the
+    layout with its own glob: that is a second idea of what the corpus IS, one level below the second
+    idea of what a *record* is that cost the Decision Gate 40 records. Ask here instead."""
     source = Path(source)
     if _is_file(source):
         return [source] if source.exists() else []
@@ -94,7 +99,7 @@ def append_correction(correction: Correction, dest: Path | str = DEFAULT_ROOT) -
 def delete_correction(corr_id: str, source: Path | str = DEFAULT_ROOT) -> int:
     """Remove the Correction with ``corr_id`` wherever it lives (file or tree). Returns count removed."""
     removed = 0
-    for f in _jsonl_files(source):
+    for f in jsonl_files(source):
         items = load_corrections(f, dedup=False)
         keep = [c for c in items if c.id != corr_id]
         if len(keep) != len(items):
@@ -109,7 +114,7 @@ def load_corrections(source: Path | str = DEFAULT_ROOT, *, dedup: bool = True) -
     """Load Corrections from a ``.jsonl`` file or an entire correction tree (directory). Dedup by
     default (see module docstring); ``dedup=False`` for the raw append history. Missing -> []."""
     out: list[Correction] = []
-    for f in _jsonl_files(source):
+    for f in jsonl_files(source):
         with f.open(encoding="utf-8") as fh:
             for line in fh:
                 line = line.strip()

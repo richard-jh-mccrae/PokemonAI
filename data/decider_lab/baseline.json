@@ -1,5 +1,5 @@
 {
-  "git_rev": "e50735a",
+  "git_rev": "7d0a97f",
   "agent": null,
   "rows": [
     {
@@ -94,32 +94,6 @@
       ]
     },
     {
-      "key": "81903490|0|decision|5",
-      "episode": "81903490",
-      "frame": 5,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "81903490|0|decision|8",
-      "episode": "81903490",
-      "frame": 8,
-      "agent": "mega_starmie",
-      "context": 7,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
       "key": "81903490|0|decision|10",
       "episode": "81903490",
       "frame": 10,
@@ -159,6 +133,19 @@
       ]
     },
     {
+      "key": "81903490|0|decision|5",
+      "episode": "81903490",
+      "frame": 5,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
       "key": "81903490|0|decision|67",
       "episode": "81903490",
       "frame": 67,
@@ -185,6 +172,19 @@
       ]
     },
     {
+      "key": "81903490|0|decision|8",
+      "episode": "81903490",
+      "frame": 8,
+      "agent": "mega_starmie",
+      "context": 7,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
       "key": "81903490|0|decision|93",
       "episode": "81903490",
       "frame": 93,
@@ -195,19 +195,6 @@
       ],
       "chosen": [
         2
-      ]
-    },
-    {
-      "key": "81904064|0|decision|9",
-      "episode": "81904064",
-      "frame": 9,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
       ]
     },
     {
@@ -289,21 +276,8 @@
       ]
     },
     {
-      "key": "81904451|0|decision|6",
-      "episode": "81904451",
-      "frame": 6,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        2
-      ]
-    },
-    {
-      "key": "81904451|0|decision|9",
-      "episode": "81904451",
+      "key": "81904064|0|decision|9",
+      "episode": "81904064",
       "frame": 9,
       "agent": "mega_starmie",
       "context": 0,
@@ -406,7 +380,33 @@
       ]
     },
     {
-      "key": "81905063|0|decision|10",
+      "key": "81904451|0|decision|6",
+      "episode": "81904451",
+      "frame": 6,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "81904451|0|decision|9",
+      "episode": "81904451",
+      "frame": 9,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "81905063|1|decision|10",
       "episode": "81905063",
       "frame": 10,
       "agent": "mega_starmie",
@@ -419,7 +419,7 @@
       ]
     },
     {
-      "key": "81905063|0|decision|16",
+      "key": "81905063|1|decision|16",
       "episode": "81905063",
       "frame": 16,
       "agent": "mega_starmie",
@@ -497,7 +497,7 @@
       ]
     },
     {
-      "key": "81906131|0|decision|25",
+      "key": "81906131|1|decision|25",
       "episode": "81906131",
       "frame": 25,
       "agent": "mega_starmie",
@@ -510,7 +510,7 @@
       ]
     },
     {
-      "key": "81906131|0|decision|26",
+      "key": "81906131|1|decision|26",
       "episode": "81906131",
       "frame": 26,
       "agent": "mega_starmie",
@@ -523,20 +523,7 @@
       ]
     },
     {
-      "key": "81906755|0|decision|9",
-      "episode": "81906755",
-      "frame": 9,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "81906755|0|decision|77",
+      "key": "81906755|1|decision|77",
       "episode": "81906755",
       "frame": 77,
       "agent": "mega_starmie",
@@ -549,7 +536,20 @@
       ]
     },
     {
-      "key": "81906755|0|decision|93",
+      "key": "81906755|1|decision|9",
+      "episode": "81906755",
+      "frame": 9,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "81906755|1|decision|93",
       "episode": "81906755",
       "frame": 93,
       "agent": "mega_starmie",
@@ -562,7 +562,527 @@
       ]
     },
     {
-      "key": "82522698|0|decision|36",
+      "key": "82224509|1|decision|29",
+      "episode": "82224509",
+      "frame": 29,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        7
+      ]
+    },
+    {
+      "key": "82224509|1|decision|31",
+      "episode": "82224509",
+      "frame": 31,
+      "agent": "mega_starmie",
+      "context": 21,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82224509|1|decision|40",
+      "episode": "82224509",
+      "frame": 40,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        8
+      ]
+    },
+    {
+      "key": "82224509|1|decision|41",
+      "episode": "82224509",
+      "frame": 41,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        4
+      ]
+    },
+    {
+      "key": "82224509|1|decision|46",
+      "episode": "82224509",
+      "frame": 46,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82224509|1|decision|47",
+      "episode": "82224509",
+      "frame": 47,
+      "agent": "mega_starmie",
+      "context": 15,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "82224509|1|decision|56",
+      "episode": "82224509",
+      "frame": 56,
+      "agent": "mega_starmie",
+      "context": 15,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82224509|1|decision|67",
+      "episode": "82224509",
+      "frame": 67,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        5
+      ],
+      "chosen": [
+        5
+      ]
+    },
+    {
+      "key": "82224509|1|decision|71",
+      "episode": "82224509",
+      "frame": 71,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        6
+      ]
+    },
+    {
+      "key": "82225138|0|decision|19",
+      "episode": "82225138",
+      "frame": 19,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82225138|0|decision|46",
+      "episode": "82225138",
+      "frame": 46,
+      "agent": "mega_starmie",
+      "context": 15,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82225138|0|decision|82",
+      "episode": "82225138",
+      "frame": 82,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82225643|1|decision|11",
+      "episode": "82225643",
+      "frame": 11,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82225643|1|decision|12",
+      "episode": "82225643",
+      "frame": 12,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82225643|1|decision|34",
+      "episode": "82225643",
+      "frame": 34,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82225643|1|decision|57",
+      "episode": "82225643",
+      "frame": 57,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        11
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82226116|0|decision|100",
+      "episode": "82226116",
+      "frame": 100,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        13
+      ],
+      "chosen": [
+        13
+      ]
+    },
+    {
+      "key": "82226116|0|decision|48",
+      "episode": "82226116",
+      "frame": 48,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        13
+      ],
+      "chosen": [
+        13
+      ]
+    },
+    {
+      "key": "82226116|0|decision|7",
+      "episode": "82226116",
+      "frame": 7,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82226116|0|decision|70",
+      "episode": "82226116",
+      "frame": 70,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        11
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82226116|0|decision|94",
+      "episode": "82226116",
+      "frame": 94,
+      "agent": "mega_starmie",
+      "context": 4,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82226759|1|decision|16",
+      "episode": "82226759",
+      "frame": 16,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82226759|1|decision|29",
+      "episode": "82226759",
+      "frame": 29,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82226759|1|decision|51",
+      "episode": "82226759",
+      "frame": 51,
+      "agent": "mega_starmie",
+      "context": 15,
+      "correct": [
+        3
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82226759|1|decision|64",
+      "episode": "82226759",
+      "frame": 64,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        3
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82227388|0|decision|22",
+      "episode": "82227388",
+      "frame": 22,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        8
+      ]
+    },
+    {
+      "key": "82227388|0|decision|30",
+      "episode": "82227388",
+      "frame": 30,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82227388|0|decision|43",
+      "episode": "82227388",
+      "frame": 43,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        7
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82227388|0|decision|50",
+      "episode": "82227388",
+      "frame": 50,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "82227388|0|decision|7",
+      "episode": "82227388",
+      "frame": 7,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        4
+      ]
+    },
+    {
+      "key": "82228017|0|decision|16",
+      "episode": "82228017",
+      "frame": 16,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82228017|0|decision|4",
+      "episode": "82228017",
+      "frame": 4,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82228640|0|decision|25",
+      "episode": "82228640",
+      "frame": 25,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        5
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82228640|0|decision|48",
+      "episode": "82228640",
+      "frame": 48,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82228640|0|decision|53",
+      "episode": "82228640",
+      "frame": 53,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82228640|0|decision|7",
+      "episode": "82228640",
+      "frame": 7,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82228640|0|decision|9",
+      "episode": "82228640",
+      "frame": 9,
+      "agent": "mega_starmie",
+      "context": 7,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82229122|0|decision|17",
+      "episode": "82229122",
+      "frame": 17,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        4
+      ]
+    },
+    {
+      "key": "82229122|0|decision|33",
+      "episode": "82229122",
+      "frame": 33,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        5
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82229122|0|decision|45",
+      "episode": "82229122",
+      "frame": 45,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        16
+      ],
+      "chosen": [
+        16
+      ]
+    },
+    {
+      "key": "82522698|1|decision|36",
       "episode": "82522698",
       "frame": 36,
       "agent": "mega_starmie",
@@ -575,7 +1095,7 @@
       ]
     },
     {
-      "key": "82522698|0|decision|62",
+      "key": "82522698|1|decision|62",
       "episode": "82522698",
       "frame": 62,
       "agent": "mega_starmie",
@@ -588,20 +1108,7 @@
       ]
     },
     {
-      "key": "82522726|0|decision|7",
-      "episode": "82522726",
-      "frame": 7,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82522726|0|decision|23",
+      "key": "82522726|1|decision|23",
       "episode": "82522726",
       "frame": 23,
       "agent": "mega_starmie",
@@ -614,7 +1121,20 @@
       ]
     },
     {
-      "key": "82523164|0|decision|11",
+      "key": "82522726|1|decision|7",
+      "episode": "82522726",
+      "frame": 7,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82523164|1|decision|11",
       "episode": "82523164",
       "frame": 11,
       "agent": "mega_starmie",
@@ -627,7 +1147,7 @@
       ]
     },
     {
-      "key": "82523164|0|decision|55",
+      "key": "82523164|1|decision|55",
       "episode": "82523164",
       "frame": 55,
       "agent": "mega_starmie",
@@ -640,7 +1160,7 @@
       ]
     },
     {
-      "key": "82523164|0|decision|75",
+      "key": "82523164|1|decision|75",
       "episode": "82523164",
       "frame": 75,
       "agent": "mega_starmie",
@@ -653,111 +1173,7 @@
       ]
     },
     {
-      "key": "82523811|0|decision|15",
-      "episode": "82523811",
-      "frame": 15,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        3
-      ],
-      "chosen": [
-        3
-      ]
-    },
-    {
-      "key": "82523811|0|decision|41",
-      "episode": "82523811",
-      "frame": 41,
-      "agent": "mega_starmie",
-      "context": 15,
-      "correct": [
-        4
-      ],
-      "chosen": [
-        4
-      ]
-    },
-    {
-      "key": "82523811|0|decision|59",
-      "episode": "82523811",
-      "frame": 59,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "82523811|0|decision|61",
-      "episode": "82523811",
-      "frame": 61,
-      "agent": "mega_starmie",
-      "context": 15,
-      "correct": [
-        3
-      ],
-      "chosen": [
-        3
-      ]
-    },
-    {
-      "key": "82523811|0|decision|79",
-      "episode": "82523811",
-      "frame": 79,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82523811|0|decision|84",
-      "episode": "82523811",
-      "frame": 84,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        4
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82523811|0|decision|93",
-      "episode": "82523811",
-      "frame": 93,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82523811|0|decision|95",
-      "episode": "82523811",
-      "frame": 95,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82523811|0|decision|105",
+      "key": "82523811|1|decision|105",
       "episode": "82523811",
       "frame": 105,
       "agent": "mega_starmie",
@@ -770,20 +1186,111 @@
       ]
     },
     {
-      "key": "82524455|0|decision|6",
-      "episode": "82524455",
-      "frame": 6,
+      "key": "82523811|1|decision|15",
+      "episode": "82523811",
+      "frame": 15,
       "agent": "mega_starmie",
       "context": 0,
       "correct": [
         3
       ],
       "chosen": [
-        2
+        3
       ]
     },
     {
-      "key": "82524455|0|decision|27",
+      "key": "82523811|1|decision|41",
+      "episode": "82523811",
+      "frame": 41,
+      "agent": "mega_starmie",
+      "context": 15,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        4
+      ]
+    },
+    {
+      "key": "82523811|1|decision|59",
+      "episode": "82523811",
+      "frame": 59,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "82523811|1|decision|61",
+      "episode": "82523811",
+      "frame": 61,
+      "agent": "mega_starmie",
+      "context": 15,
+      "correct": [
+        3
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82523811|1|decision|79",
+      "episode": "82523811",
+      "frame": 79,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82523811|1|decision|84",
+      "episode": "82523811",
+      "frame": 84,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82523811|1|decision|93",
+      "episode": "82523811",
+      "frame": 93,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82523811|1|decision|95",
+      "episode": "82523811",
+      "frame": 95,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82524455|1|decision|27",
       "episode": "82524455",
       "frame": 27,
       "agent": "mega_starmie",
@@ -796,7 +1303,7 @@
       ]
     },
     {
-      "key": "82524455|0|decision|55",
+      "key": "82524455|1|decision|55",
       "episode": "82524455",
       "frame": 55,
       "agent": "mega_starmie",
@@ -809,7 +1316,46 @@
       ]
     },
     {
-      "key": "82525101|0|decision|14",
+      "key": "82524455|1|decision|6",
+      "episode": "82524455",
+      "frame": 6,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        3
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "82525101|1|decision|102",
+      "episode": "82525101",
+      "frame": 102,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82525101|1|decision|110",
+      "episode": "82525101",
+      "frame": 110,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "82525101|1|decision|14",
       "episode": "82525101",
       "frame": 14,
       "agent": "mega_starmie",
@@ -823,7 +1369,7 @@
       ]
     },
     {
-      "key": "82525101|0|decision|69",
+      "key": "82525101|1|decision|69",
       "episode": "82525101",
       "frame": 69,
       "agent": "mega_starmie",
@@ -836,7 +1382,7 @@
       ]
     },
     {
-      "key": "82525101|0|decision|87",
+      "key": "82525101|1|decision|87",
       "episode": "82525101",
       "frame": 87,
       "agent": "mega_starmie",
@@ -849,7 +1395,7 @@
       ]
     },
     {
-      "key": "82525101|0|decision|92",
+      "key": "82525101|1|decision|92",
       "episode": "82525101",
       "frame": 92,
       "agent": "mega_starmie",
@@ -862,29 +1408,16 @@
       ]
     },
     {
-      "key": "82525101|0|decision|102",
-      "episode": "82525101",
-      "frame": 102,
+      "key": "82525741|0|decision|100",
+      "episode": "82525741",
+      "frame": 100,
       "agent": "mega_starmie",
       "context": 0,
       "correct": [
-        0
+        10
       ],
       "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82525101|0|decision|110",
-      "episode": "82525101",
-      "frame": 110,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        4
-      ],
-      "chosen": [
-        3
+        10
       ]
     },
     {
@@ -937,19 +1470,6 @@
       ],
       "chosen": [
         1
-      ]
-    },
-    {
-      "key": "82525741|0|decision|100",
-      "episode": "82525741",
-      "frame": 100,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        10
-      ],
-      "chosen": [
-        10
       ]
     },
     {
@@ -1018,7 +1538,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|21",
+      "key": "82749168|1|decision|21",
       "episode": "82749168",
       "frame": 21,
       "agent": "mega_starmie",
@@ -1031,7 +1551,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|29",
+      "key": "82749168|1|decision|29",
       "episode": "82749168",
       "frame": 29,
       "agent": "mega_starmie",
@@ -1044,7 +1564,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|38",
+      "key": "82749168|1|decision|38",
       "episode": "82749168",
       "frame": 38,
       "agent": "mega_starmie",
@@ -1057,7 +1577,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|50",
+      "key": "82749168|1|decision|50",
       "episode": "82749168",
       "frame": 50,
       "agent": "mega_starmie",
@@ -1070,7 +1590,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|61",
+      "key": "82749168|1|decision|61",
       "episode": "82749168",
       "frame": 61,
       "agent": "mega_starmie",
@@ -1083,7 +1603,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|62",
+      "key": "82749168|1|decision|62",
       "episode": "82749168",
       "frame": 62,
       "agent": "mega_starmie",
@@ -1096,7 +1616,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|65",
+      "key": "82749168|1|decision|65",
       "episode": "82749168",
       "frame": 65,
       "agent": "mega_starmie",
@@ -1109,7 +1629,7 @@
       ]
     },
     {
-      "key": "82749168|0|decision|88",
+      "key": "82749168|1|decision|88",
       "episode": "82749168",
       "frame": 88,
       "agent": "mega_starmie",
@@ -1162,7 +1682,7 @@
       ]
     },
     {
-      "key": "82750161|0|decision|16",
+      "key": "82750161|1|decision|16",
       "episode": "82750161",
       "frame": 16,
       "agent": "mega_starmie",
@@ -1175,7 +1695,7 @@
       ]
     },
     {
-      "key": "82750161|0|decision|29",
+      "key": "82750161|1|decision|29",
       "episode": "82750161",
       "frame": 29,
       "agent": "mega_starmie",
@@ -1188,7 +1708,7 @@
       ]
     },
     {
-      "key": "82750161|0|decision|59",
+      "key": "82750161|1|decision|59",
       "episode": "82750161",
       "frame": 59,
       "agent": "mega_starmie",
@@ -1201,7 +1721,7 @@
       ]
     },
     {
-      "key": "82750161|0|decision|60",
+      "key": "82750161|1|decision|60",
       "episode": "82750161",
       "frame": 60,
       "agent": "mega_starmie",
@@ -1214,7 +1734,7 @@
       ]
     },
     {
-      "key": "82751468|0|decision|14",
+      "key": "82751468|1|decision|14",
       "episode": "82751468",
       "frame": 14,
       "agent": "mega_starmie",
@@ -1227,7 +1747,7 @@
       ]
     },
     {
-      "key": "82751468|0|decision|57",
+      "key": "82751468|1|decision|57",
       "episode": "82751468",
       "frame": 57,
       "agent": "mega_starmie",
@@ -1240,7 +1760,7 @@
       ]
     },
     {
-      "key": "82751468|0|decision|68",
+      "key": "82751468|1|decision|68",
       "episode": "82751468",
       "frame": 68,
       "agent": "mega_starmie",
@@ -1253,7 +1773,7 @@
       ]
     },
     {
-      "key": "82751468|0|decision|70",
+      "key": "82751468|1|decision|70",
       "episode": "82751468",
       "frame": 70,
       "agent": "mega_starmie",
@@ -1266,7 +1786,20 @@
       ]
     },
     {
-      "key": "82752045|0|decision|18",
+      "key": "82752045|1|decision|115",
+      "episode": "82752045",
+      "frame": 115,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        5
+      ],
+      "chosen": [
+        5
+      ]
+    },
+    {
+      "key": "82752045|1|decision|18",
       "episode": "82752045",
       "frame": 18,
       "agent": "mega_starmie",
@@ -1279,7 +1812,7 @@
       ]
     },
     {
-      "key": "82752045|0|decision|80",
+      "key": "82752045|1|decision|80",
       "episode": "82752045",
       "frame": 80,
       "agent": "mega_starmie",
@@ -1292,7 +1825,7 @@
       ]
     },
     {
-      "key": "82752045|0|decision|94",
+      "key": "82752045|1|decision|94",
       "episode": "82752045",
       "frame": 94,
       "agent": "mega_starmie",
@@ -1305,7 +1838,7 @@
       ]
     },
     {
-      "key": "82752045|0|decision|97",
+      "key": "82752045|1|decision|97",
       "episode": "82752045",
       "frame": 97,
       "agent": "mega_starmie",
@@ -1318,16 +1851,16 @@
       ]
     },
     {
-      "key": "82752045|0|decision|115",
-      "episode": "82752045",
-      "frame": 115,
+      "key": "82752604|0|decision|106",
+      "episode": "82752604",
+      "frame": 106,
       "agent": "mega_starmie",
       "context": 0,
       "correct": [
-        5
+        6
       ],
       "chosen": [
-        5
+        6
       ]
     },
     {
@@ -1396,33 +1929,33 @@
       ]
     },
     {
-      "key": "82752604|0|decision|106",
-      "episode": "82752604",
-      "frame": 106,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        6
-      ],
-      "chosen": [
-        6
-      ]
-    },
-    {
-      "key": "82753102|0|decision|9",
+      "key": "82753102|1|decision|109",
       "episode": "82753102",
-      "frame": 9,
+      "frame": 109,
       "agent": "mega_starmie",
       "context": 0,
       "correct": [
-        0
+        5
       ],
       "chosen": [
         2
       ]
     },
     {
-      "key": "82753102|0|decision|16",
+      "key": "82753102|1|decision|120",
+      "episode": "82753102",
+      "frame": 120,
+      "agent": "mega_starmie",
+      "context": 4,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82753102|1|decision|16",
       "episode": "82753102",
       "frame": 16,
       "agent": "mega_starmie",
@@ -1436,7 +1969,7 @@
       ]
     },
     {
-      "key": "82753102|0|decision|17",
+      "key": "82753102|1|decision|17",
       "episode": "82753102",
       "frame": 17,
       "agent": "mega_starmie",
@@ -1449,7 +1982,7 @@
       ]
     },
     {
-      "key": "82753102|0|decision|37",
+      "key": "82753102|1|decision|37",
       "episode": "82753102",
       "frame": 37,
       "agent": "mega_starmie",
@@ -1462,7 +1995,7 @@
       ]
     },
     {
-      "key": "82753102|0|decision|63",
+      "key": "82753102|1|decision|63",
       "episode": "82753102",
       "frame": 63,
       "agent": "mega_starmie",
@@ -1475,7 +2008,7 @@
       ]
     },
     {
-      "key": "82753102|0|decision|85",
+      "key": "82753102|1|decision|85",
       "episode": "82753102",
       "frame": 85,
       "agent": "mega_starmie",
@@ -1488,29 +2021,16 @@
       ]
     },
     {
-      "key": "82753102|0|decision|109",
+      "key": "82753102|1|decision|9",
       "episode": "82753102",
-      "frame": 109,
+      "frame": 9,
       "agent": "mega_starmie",
       "context": 0,
       "correct": [
-        5
+        0
       ],
       "chosen": [
         2
-      ]
-    },
-    {
-      "key": "82753102|0|decision|120",
-      "episode": "82753102",
-      "frame": 120,
-      "agent": "mega_starmie",
-      "context": 4,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
       ]
     },
     {
@@ -1528,7 +2048,7 @@
       ]
     },
     {
-      "key": "82754241|0|decision|11",
+      "key": "82754241|1|decision|11",
       "episode": "82754241",
       "frame": 11,
       "agent": "mega_starmie",
@@ -1541,7 +2061,7 @@
       ]
     },
     {
-      "key": "82754241|0|decision|12",
+      "key": "82754241|1|decision|12",
       "episode": "82754241",
       "frame": 12,
       "agent": "mega_starmie",
@@ -1554,7 +2074,7 @@
       ]
     },
     {
-      "key": "82754241|0|decision|41",
+      "key": "82754241|1|decision|41",
       "episode": "82754241",
       "frame": 41,
       "agent": "mega_starmie",
@@ -1567,11 +2087,24 @@
       ]
     },
     {
-      "key": "82754241|0|decision|45",
+      "key": "82754241|1|decision|45",
       "episode": "82754241",
       "frame": 45,
       "agent": "mega_starmie",
       "context": 15,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82754875|0|decision|52",
+      "episode": "82754875",
+      "frame": 52,
+      "agent": "mega_starmie",
+      "context": 0,
       "correct": [
         0
       ],
@@ -1593,33 +2126,7 @@
       ]
     },
     {
-      "key": "82754875|0|decision|52",
-      "episode": "82754875",
-      "frame": 52,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "82756021|0|decision|57",
-      "episode": "82756021",
-      "frame": 57,
-      "agent": "mega_starmie",
-      "context": 15,
-      "correct": [
-        2
-      ],
-      "chosen": [
-        2
-      ]
-    },
-    {
-      "key": "82756021|0|decision|101",
+      "key": "82756021|1|decision|101",
       "episode": "82756021",
       "frame": 101,
       "agent": "mega_starmie",
@@ -1632,20 +2139,33 @@
       ]
     },
     {
-      "key": "82756664|0|decision|9",
-      "episode": "82756664",
-      "frame": 9,
+      "key": "82756021|1|decision|57",
+      "episode": "82756021",
+      "frame": 57,
       "agent": "mega_starmie",
-      "context": 0,
+      "context": 15,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "82756664|1|decision|103",
+      "episode": "82756664",
+      "frame": 103,
+      "agent": "mega_starmie",
+      "context": 15,
       "correct": [
         1
       ],
       "chosen": [
-        0
+        1
       ]
     },
     {
-      "key": "82756664|0|decision|35",
+      "key": "82756664|1|decision|35",
       "episode": "82756664",
       "frame": 35,
       "agent": "mega_starmie",
@@ -1658,7 +2178,7 @@
       ]
     },
     {
-      "key": "82756664|0|decision|36",
+      "key": "82756664|1|decision|36",
       "episode": "82756664",
       "frame": 36,
       "agent": "mega_starmie",
@@ -1671,7 +2191,7 @@
       ]
     },
     {
-      "key": "82756664|0|decision|37",
+      "key": "82756664|1|decision|37",
       "episode": "82756664",
       "frame": 37,
       "agent": "mega_starmie",
@@ -1684,7 +2204,7 @@
       ]
     },
     {
-      "key": "82756664|0|decision|74",
+      "key": "82756664|1|decision|74",
       "episode": "82756664",
       "frame": 74,
       "agent": "mega_starmie",
@@ -1697,7 +2217,20 @@
       ]
     },
     {
-      "key": "82756664|0|decision|97",
+      "key": "82756664|1|decision|9",
+      "episode": "82756664",
+      "frame": 9,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "82756664|1|decision|97",
       "episode": "82756664",
       "frame": 97,
       "agent": "mega_starmie",
@@ -1707,19 +2240,6 @@
       ],
       "chosen": [
         0
-      ]
-    },
-    {
-      "key": "82756664|0|decision|103",
-      "episode": "82756664",
-      "frame": 103,
-      "agent": "mega_starmie",
-      "context": 15,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
       ]
     },
     {
@@ -1815,72 +2335,7 @@
       ]
     },
     {
-      "key": "83007714|0|decision|7",
-      "episode": "83007714",
-      "frame": 7,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        3
-      ]
-    },
-    {
-      "key": "83007714|0|decision|8",
-      "episode": "83007714",
-      "frame": 8,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        2
-      ],
-      "chosen": [
-        2
-      ]
-    },
-    {
-      "key": "83007714|0|decision|22",
-      "episode": "83007714",
-      "frame": 22,
-      "agent": "mega_starmie",
-      "context": 21,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "83007714|0|decision|65",
-      "episode": "83007714",
-      "frame": 65,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        7
-      ],
-      "chosen": [
-        7
-      ]
-    },
-    {
-      "key": "83007714|0|decision|92",
-      "episode": "83007714",
-      "frame": 92,
-      "agent": "mega_starmie",
-      "context": 3,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "83007714|0|decision|104",
+      "key": "83007714|1|decision|104",
       "episode": "83007714",
       "frame": 104,
       "agent": "mega_starmie",
@@ -1893,7 +2348,7 @@
       ]
     },
     {
-      "key": "83007714|0|decision|135",
+      "key": "83007714|1|decision|135",
       "episode": "83007714",
       "frame": 135,
       "agent": "mega_starmie",
@@ -1903,6 +2358,71 @@
       ],
       "chosen": [
         9
+      ]
+    },
+    {
+      "key": "83007714|1|decision|22",
+      "episode": "83007714",
+      "frame": 22,
+      "agent": "mega_starmie",
+      "context": 21,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "83007714|1|decision|65",
+      "episode": "83007714",
+      "frame": 65,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        7
+      ],
+      "chosen": [
+        7
+      ]
+    },
+    {
+      "key": "83007714|1|decision|7",
+      "episode": "83007714",
+      "frame": 7,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "83007714|1|decision|8",
+      "episode": "83007714",
+      "frame": 8,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "83007714|1|decision|92",
+      "episode": "83007714",
+      "frame": 92,
+      "agent": "mega_starmie",
+      "context": 3,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
       ]
     },
     {
@@ -1932,18 +2452,6 @@
       ]
     },
     {
-      "key": "83037962|0|decision|70",
-      "episode": "83037962",
-      "frame": 70,
-      "agent": "SkiChu",
-      "context": 0,
-      "correct": [
-        2
-      ],
-      "chosen": null,
-      "error": "FileNotFoundError: [Errno 2] No such file or directory: '/home/user/PokemonAI/src/agents/SkiChu/strategy.py'"
-    },
-    {
       "key": "83037962|0|decision|78",
       "episode": "83037962",
       "frame": 78,
@@ -1955,6 +2463,18 @@
       "chosen": [
         9
       ]
+    },
+    {
+      "key": "83037962|1|decision|70",
+      "episode": "83037962",
+      "frame": 70,
+      "agent": "SkiChu",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": null,
+      "error": "FileNotFoundError: [Errno 2] No such file or directory: 'src/agents/SkiChu/strategy.py'"
     },
     {
       "key": "83038055|0|decision|40",
@@ -1983,20 +2503,7 @@
       ]
     },
     {
-      "key": "83053965|0|decision|6",
-      "episode": "83053965",
-      "frame": 6,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        5
-      ]
-    },
-    {
-      "key": "83053965|0|decision|28",
+      "key": "83053965|1|decision|28",
       "episode": "83053965",
       "frame": 28,
       "agent": "mega_starmie",
@@ -2009,7 +2516,7 @@
       ]
     },
     {
-      "key": "83053965|0|decision|32",
+      "key": "83053965|1|decision|32",
       "episode": "83053965",
       "frame": 32,
       "agent": "mega_starmie",
@@ -2022,7 +2529,20 @@
       ]
     },
     {
-      "key": "83053965|0|decision|91",
+      "key": "83053965|1|decision|6",
+      "episode": "83053965",
+      "frame": 6,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        5
+      ]
+    },
+    {
+      "key": "83053965|1|decision|91",
       "episode": "83053965",
       "frame": 91,
       "agent": "mega_starmie",
@@ -2035,7 +2555,7 @@
       ]
     },
     {
-      "key": "83054602|0|decision|17",
+      "key": "83054602|1|decision|17",
       "episode": "83054602",
       "frame": 17,
       "agent": "mega_starmie",
@@ -2048,7 +2568,7 @@
       ]
     },
     {
-      "key": "83054602|0|decision|32",
+      "key": "83054602|1|decision|32",
       "episode": "83054602",
       "frame": 32,
       "agent": "mega_starmie",
@@ -2232,7 +2752,7 @@
       ]
     },
     {
-      "key": "83457493|0|decision|20",
+      "key": "83457493|1|decision|20",
       "episode": "83457493",
       "frame": 20,
       "agent": "mega_starmie",
@@ -2245,7 +2765,7 @@
       ]
     },
     {
-      "key": "83457493|0|decision|31",
+      "key": "83457493|1|decision|31",
       "episode": "83457493",
       "frame": 31,
       "agent": "mega_starmie",
@@ -2258,7 +2778,7 @@
       ]
     },
     {
-      "key": "83457493|0|decision|33",
+      "key": "83457493|1|decision|33",
       "episode": "83457493",
       "frame": 33,
       "agent": "mega_starmie",
@@ -2310,17 +2830,6 @@
       ]
     },
     {
-      "key": "83661652|0|decision|3",
-      "episode": "83661652",
-      "frame": 3,
-      "agent": "mega_lucario",
-      "context": 2,
-      "correct": [
-        0
-      ],
-      "chosen": []
-    },
-    {
       "key": "83661652|0|decision|19",
       "episode": "83661652",
       "frame": 19,
@@ -2345,6 +2854,17 @@
       "chosen": [
         0
       ]
+    },
+    {
+      "key": "83661652|0|decision|3",
+      "episode": "83661652",
+      "frame": 3,
+      "agent": "mega_lucario",
+      "context": 2,
+      "correct": [
+        0
+      ],
+      "chosen": []
     },
     {
       "key": "83661652|0|decision|30",
@@ -2409,11 +2929,11 @@
         2
       ],
       "chosen": [
-        2
+        0
       ]
     },
     {
-      "key": "83662396|0|decision|19",
+      "key": "83662396|1|decision|19",
       "episode": "83662396",
       "frame": 19,
       "agent": "mega_starmie",
@@ -2426,7 +2946,7 @@
       ]
     },
     {
-      "key": "83663053|0|decision|22",
+      "key": "83663053|1|decision|22",
       "episode": "83663053",
       "frame": 22,
       "agent": "mega_starmie",
@@ -2439,7 +2959,7 @@
       ]
     },
     {
-      "key": "83664340|0|decision|24",
+      "key": "83664340|1|decision|24",
       "episode": "83664340",
       "frame": 24,
       "agent": "mega_starmie",
@@ -2452,7 +2972,7 @@
       ]
     },
     {
-      "key": "83664340|0|decision|45",
+      "key": "83664340|1|decision|45",
       "episode": "83664340",
       "frame": 45,
       "agent": "mega_starmie",
@@ -2491,7 +3011,7 @@
       ]
     },
     {
-      "key": "83665798|0|decision|12",
+      "key": "83665798|1|decision|12",
       "episode": "83665798",
       "frame": 12,
       "agent": "mega_starmie",
@@ -2504,7 +3024,7 @@
       ]
     },
     {
-      "key": "83665798|0|decision|39",
+      "key": "83665798|1|decision|39",
       "episode": "83665798",
       "frame": 39,
       "agent": "mega_starmie",
@@ -2517,22 +3037,9 @@
       ]
     },
     {
-      "key": "83666442|0|decision|27",
+      "key": "83666442|1|decision|27",
       "episode": "83666442",
       "frame": 27,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        2
-      ],
-      "chosen": [
-        2
-      ]
-    },
-    {
-      "key": "83667237|0|decision|87",
-      "episode": "83667237",
-      "frame": 87,
       "agent": "mega_starmie",
       "context": 0,
       "correct": [
@@ -2569,7 +3076,20 @@
       ]
     },
     {
-      "key": "83686860|0|decision|11",
+      "key": "83667237|0|decision|87",
+      "episode": "83667237",
+      "frame": 87,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "83686860|1|decision|11",
       "episode": "83686860",
       "frame": 11,
       "agent": "dragapult_ex",
@@ -2583,7 +3103,7 @@
       ]
     },
     {
-      "key": "83686860|0|decision|13",
+      "key": "83686860|1|decision|13",
       "episode": "83686860",
       "frame": 13,
       "agent": "dragapult_ex",
@@ -2596,7 +3116,7 @@
       ]
     },
     {
-      "key": "83686860|0|decision|18",
+      "key": "83686860|1|decision|18",
       "episode": "83686860",
       "frame": 18,
       "agent": "dragapult_ex",
@@ -2610,7 +3130,7 @@
       ]
     },
     {
-      "key": "83686860|0|decision|29",
+      "key": "83686860|1|decision|29",
       "episode": "83686860",
       "frame": 29,
       "agent": "dragapult_ex",
@@ -2623,7 +3143,7 @@
       ]
     },
     {
-      "key": "83686860|0|decision|33",
+      "key": "83686860|1|decision|33",
       "episode": "83686860",
       "frame": 33,
       "agent": "dragapult_ex",
@@ -2636,7 +3156,7 @@
       ]
     },
     {
-      "key": "83686860|0|decision|35",
+      "key": "83686860|1|decision|35",
       "episode": "83686860",
       "frame": 35,
       "agent": "dragapult_ex",
@@ -2649,7 +3169,7 @@
       ]
     },
     {
-      "key": "83686860|0|decision|45",
+      "key": "83686860|1|decision|45",
       "episode": "83686860",
       "frame": 45,
       "agent": "dragapult_ex",
@@ -2659,19 +3179,6 @@
       ],
       "chosen": [
         6
-      ]
-    },
-    {
-      "key": "83966336|0|decision|9",
-      "episode": "83966336",
-      "frame": 9,
-      "agent": "mega_lucario",
-      "context": 7,
-      "correct": [
-        2
-      ],
-      "chosen": [
-        2
       ]
     },
     {
@@ -2711,6 +3218,19 @@
       ],
       "chosen": [
         0
+      ]
+    },
+    {
+      "key": "83966336|0|decision|9",
+      "episode": "83966336",
+      "frame": 9,
+      "agent": "mega_lucario",
+      "context": 7,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
       ]
     },
     {
@@ -2767,7 +3287,7 @@
       ]
     },
     {
-      "key": "83967841|0|decision|14",
+      "key": "83967841|1|decision|14",
       "episode": "83967841",
       "frame": 14,
       "agent": "mega_lucario",
@@ -2780,7 +3300,7 @@
       ]
     },
     {
-      "key": "83967841|0|decision|17",
+      "key": "83967841|1|decision|17",
       "episode": "83967841",
       "frame": 17,
       "agent": "mega_lucario",
@@ -2793,7 +3313,7 @@
       ]
     },
     {
-      "key": "83968638|0|decision|17",
+      "key": "83968638|1|decision|17",
       "episode": "83968638",
       "frame": 17,
       "agent": "mega_starmie",
@@ -2898,19 +3418,6 @@
       ]
     },
     {
-      "key": "84889011|0|decision|7",
-      "episode": "84889011",
-      "frame": 7,
-      "agent": "mega_lucario",
-      "context": 7,
-      "correct": [
-        4
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
       "key": "84889011|0|decision|12",
       "episode": "84889011",
       "frame": 12,
@@ -2937,7 +3444,20 @@
       ]
     },
     {
-      "key": "84889539|0|decision|26",
+      "key": "84889011|0|decision|7",
+      "episode": "84889011",
+      "frame": 7,
+      "agent": "mega_lucario",
+      "context": 7,
+      "correct": [
+        4
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "84889539|1|decision|26",
       "episode": "84889539",
       "frame": 26,
       "agent": "mega_lucario",
@@ -2950,7 +3470,7 @@
       ]
     },
     {
-      "key": "84889539|0|decision|30",
+      "key": "84889539|1|decision|30",
       "episode": "84889539",
       "frame": 30,
       "agent": "mega_lucario",
@@ -2963,7 +3483,7 @@
       ]
     },
     {
-      "key": "84889539|0|decision|48",
+      "key": "84889539|1|decision|48",
       "episode": "84889539",
       "frame": 48,
       "agent": "mega_lucario",
@@ -2976,7 +3496,7 @@
       ]
     },
     {
-      "key": "84889539|0|decision|87",
+      "key": "84889539|1|decision|87",
       "episode": "84889539",
       "frame": 87,
       "agent": "mega_lucario",
@@ -2989,7 +3509,7 @@
       ]
     },
     {
-      "key": "84890060|0|decision|1",
+      "key": "84890060|1|decision|1",
       "episode": "84890060",
       "frame": 1,
       "agent": "mega_lucario",
@@ -3002,7 +3522,7 @@
       ]
     },
     {
-      "key": "84890060|0|decision|11",
+      "key": "84890060|1|decision|11",
       "episode": "84890060",
       "frame": 11,
       "agent": "mega_lucario",
@@ -3015,7 +3535,7 @@
       ]
     },
     {
-      "key": "84890060|0|decision|12",
+      "key": "84890060|1|decision|12",
       "episode": "84890060",
       "frame": 12,
       "agent": "mega_lucario",
@@ -3028,7 +3548,7 @@
       ]
     },
     {
-      "key": "84890060|0|decision|26",
+      "key": "84890060|1|decision|26",
       "episode": "84890060",
       "frame": 26,
       "agent": "mega_lucario",
@@ -3041,7 +3561,7 @@
       ]
     },
     {
-      "key": "84890060|0|decision|48",
+      "key": "84890060|1|decision|48",
       "episode": "84890060",
       "frame": 48,
       "agent": "mega_lucario",
@@ -3054,7 +3574,7 @@
       ]
     },
     {
-      "key": "84897262|0|decision|100",
+      "key": "84897262|1|decision|100",
       "episode": "84897262",
       "frame": 100,
       "agent": "mega_starmie",
@@ -3067,37 +3587,11 @@
       ]
     },
     {
-      "key": "84897262|0|decision|110",
+      "key": "84897262|1|decision|110",
       "episode": "84897262",
       "frame": 110,
       "agent": "mega_starmie",
       "context": 7,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "85045840|0|decision|6",
-      "episode": "85045840",
-      "frame": 6,
-      "agent": "dragapult_ex",
-      "context": 0,
-      "correct": [
-        2
-      ],
-      "chosen": [
-        2
-      ]
-    },
-    {
-      "key": "85045840|0|decision|8",
-      "episode": "85045840",
-      "frame": 8,
-      "agent": "dragapult_ex",
-      "context": 0,
       "correct": [
         1
       ],
@@ -3137,6 +3631,32 @@
       "frame": 14,
       "agent": "dragapult_ex",
       "context": 7,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "85045840|0|decision|6",
+      "episode": "85045840",
+      "frame": 6,
+      "agent": "dragapult_ex",
+      "context": 0,
+      "correct": [
+        2
+      ],
+      "chosen": [
+        2
+      ]
+    },
+    {
+      "key": "85045840|0|decision|8",
+      "episode": "85045840",
+      "frame": 8,
+      "agent": "dragapult_ex",
+      "context": 0,
       "correct": [
         1
       ],
@@ -3262,20 +3782,7 @@
       ]
     },
     {
-      "key": "85058051|0|decision|4",
-      "episode": "85058051",
-      "frame": 4,
-      "agent": "mega_lucario",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        2
-      ]
-    },
-    {
-      "key": "85058051|0|decision|13",
+      "key": "85058051|1|decision|13",
       "episode": "85058051",
       "frame": 13,
       "agent": "mega_lucario",
@@ -3288,72 +3795,20 @@
       ]
     },
     {
-      "key": "85058574|0|decision|16",
-      "episode": "85058574",
-      "frame": 16,
-      "agent": "mega_lucario",
-      "context": 0,
-      "correct": [
-        6
-      ],
-      "chosen": [
-        6
-      ]
-    },
-    {
-      "key": "85058574|0|decision|69",
-      "episode": "85058574",
-      "frame": 69,
+      "key": "85058051|1|decision|4",
+      "episode": "85058051",
+      "frame": 4,
       "agent": "mega_lucario",
       "context": 0,
       "correct": [
         1
       ],
       "chosen": [
-        1
+        2
       ]
     },
     {
-      "key": "85058574|0|decision|71",
-      "episode": "85058574",
-      "frame": 71,
-      "agent": "mega_lucario",
-      "context": 7,
-      "correct": [
-        11
-      ],
-      "chosen": [
-        11
-      ]
-    },
-    {
-      "key": "85058574|0|decision|87",
-      "episode": "85058574",
-      "frame": 87,
-      "agent": "mega_lucario",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        7
-      ]
-    },
-    {
-      "key": "85058574|0|decision|88",
-      "episode": "85058574",
-      "frame": 88,
-      "agent": "mega_lucario",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "85058574|0|decision|109",
+      "key": "85058574|1|decision|109",
       "episode": "85058574",
       "frame": 109,
       "agent": "mega_lucario",
@@ -3366,7 +3821,7 @@
       ]
     },
     {
-      "key": "85058574|0|decision|114",
+      "key": "85058574|1|decision|114",
       "episode": "85058574",
       "frame": 114,
       "agent": "mega_lucario",
@@ -3379,7 +3834,72 @@
       ]
     },
     {
-      "key": "85058574|0|decision|121",
+      "key": "85058574|1|decision|16",
+      "episode": "85058574",
+      "frame": 16,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [
+        6
+      ],
+      "chosen": [
+        6
+      ]
+    },
+    {
+      "key": "85058574|1|decision|69",
+      "episode": "85058574",
+      "frame": 69,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "85058574|1|decision|71",
+      "episode": "85058574",
+      "frame": 71,
+      "agent": "mega_lucario",
+      "context": 7,
+      "correct": [
+        11
+      ],
+      "chosen": [
+        11
+      ]
+    },
+    {
+      "key": "85058574|1|decision|87",
+      "episode": "85058574",
+      "frame": 87,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        7
+      ]
+    },
+    {
+      "key": "85058574|1|decision|88",
+      "episode": "85058574",
+      "frame": 88,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        1
+      ]
+    },
+    {
+      "key": "85058574|1|turn|10",
       "episode": "85058574",
       "frame": 121,
       "agent": "mega_lucario",
@@ -3405,19 +3925,6 @@
       ]
     },
     {
-      "key": "85059103|0|decision|9",
-      "episode": "85059103",
-      "frame": 9,
-      "agent": "mega_lucario",
-      "context": 7,
-      "correct": [
-        3
-      ],
-      "chosen": [
-        3
-      ]
-    },
-    {
       "key": "85059103|0|decision|39",
       "episode": "85059103",
       "frame": 39,
@@ -3436,6 +3943,19 @@
       "frame": 84,
       "agent": "mega_lucario",
       "context": 0,
+      "correct": [
+        3
+      ],
+      "chosen": [
+        3
+      ]
+    },
+    {
+      "key": "85059103|0|decision|9",
+      "episode": "85059103",
+      "frame": 9,
+      "agent": "mega_lucario",
+      "context": 7,
       "correct": [
         3
       ],
@@ -3470,7 +3990,7 @@
       ]
     },
     {
-      "key": "85163634|0|decision|17",
+      "key": "85163634|1|decision|17",
       "episode": "85163634",
       "frame": 17,
       "agent": "mega_starmie",
@@ -3483,7 +4003,7 @@
       ]
     },
     {
-      "key": "85163634|0|decision|41",
+      "key": "85163634|1|decision|41",
       "episode": "85163634",
       "frame": 41,
       "agent": "mega_starmie",
@@ -3496,7 +4016,7 @@
       ]
     },
     {
-      "key": "85164131|0|decision|22",
+      "key": "85164131|1|decision|22",
       "episode": "85164131",
       "frame": 22,
       "agent": "mega_starmie",
@@ -3509,7 +4029,7 @@
       ]
     },
     {
-      "key": "85164131|0|decision|31",
+      "key": "85164131|1|decision|31",
       "episode": "85164131",
       "frame": 31,
       "agent": "mega_starmie",
@@ -3522,20 +4042,7 @@
       ]
     },
     {
-      "key": "85164605|0|decision|6",
-      "episode": "85164605",
-      "frame": 6,
-      "agent": "mega_starmie",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "85164605|0|decision|41",
+      "key": "85164605|1|decision|41",
       "episode": "85164605",
       "frame": 41,
       "agent": "mega_starmie",
@@ -3548,7 +4055,7 @@
       ]
     },
     {
-      "key": "85164605|0|decision|48",
+      "key": "85164605|1|decision|48",
       "episode": "85164605",
       "frame": 48,
       "agent": "mega_starmie",
@@ -3561,7 +4068,20 @@
       ]
     },
     {
-      "key": "85164605|0|decision|64",
+      "key": "85164605|1|decision|6",
+      "episode": "85164605",
+      "frame": 6,
+      "agent": "mega_starmie",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "85164605|1|decision|64",
       "episode": "85164605",
       "frame": 64,
       "agent": "mega_starmie",
@@ -3574,7 +4094,7 @@
       ]
     },
     {
-      "key": "85164605|0|decision|68",
+      "key": "85164605|1|decision|68",
       "episode": "85164605",
       "frame": 68,
       "agent": "mega_starmie",
@@ -3587,18 +4107,20 @@
       ]
     },
     {
-      "key": "85709280|0|decision|17",
+      "key": "85709280|1|decision|111",
       "episode": "85709280",
-      "frame": 17,
+      "frame": 111,
       "agent": "mega_lucario",
       "context": 0,
-      "correct": [],
+      "correct": [
+        6
+      ],
       "chosen": [
-        0
+        1
       ]
     },
     {
-      "key": "85709280|0|decision|42",
+      "key": "85709280|1|decision|42",
       "episode": "85709280",
       "frame": 42,
       "agent": "mega_lucario",
@@ -3611,18 +4133,7 @@
       ]
     },
     {
-      "key": "85709280|0|decision|51",
-      "episode": "85709280",
-      "frame": 51,
-      "agent": "mega_lucario",
-      "context": 0,
-      "correct": [],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "85709280|0|decision|55",
+      "key": "85709280|1|decision|55",
       "episode": "85709280",
       "frame": 55,
       "agent": "mega_lucario",
@@ -3635,16 +4146,27 @@
       ]
     },
     {
-      "key": "85709280|0|decision|111",
+      "key": "85709280|1|match|",
       "episode": "85709280",
-      "frame": 111,
+      "frame": 51,
       "agent": "mega_lucario",
       "context": 0,
       "correct": [
-        6
+        0
       ],
       "chosen": [
-        1
+        0
+      ]
+    },
+    {
+      "key": "85709280|1|turn|2",
+      "episode": "85709280",
+      "frame": 17,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [],
+      "chosen": [
+        0
       ]
     },
     {
@@ -3739,17 +4261,6 @@
       ]
     },
     {
-      "key": "85785609|0|decision|4",
-      "episode": "85785609",
-      "frame": 4,
-      "agent": "dragapult_ex",
-      "context": 2,
-      "correct": [
-        0
-      ],
-      "chosen": []
-    },
-    {
       "key": "85785609|0|decision|22",
       "episode": "85785609",
       "frame": 22,
@@ -3763,7 +4274,18 @@
       ]
     },
     {
-      "key": "85785609|0|decision|82",
+      "key": "85785609|0|decision|4",
+      "episode": "85785609",
+      "frame": 4,
+      "agent": "dragapult_ex",
+      "context": 2,
+      "correct": [
+        0
+      ],
+      "chosen": []
+    },
+    {
+      "key": "85785609|0|turn|8",
       "episode": "85785609",
       "frame": 82,
       "agent": "dragapult_ex",
@@ -3779,19 +4301,6 @@
       "key": "85786096|0|decision|24",
       "episode": "85786096",
       "frame": 24,
-      "agent": "dragapult_ex",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "85786096|0|decision|25",
-      "episode": "85786096",
-      "frame": 25,
       "agent": "dragapult_ex",
       "context": 0,
       "correct": [
@@ -3841,22 +4350,13 @@
       ]
     },
     {
-      "key": "86088989|0|decision|3",
-      "episode": "86088989",
-      "frame": 3,
-      "agent": "mega_lucario",
-      "context": 2,
-      "correct": [],
-      "chosen": []
-    },
-    {
-      "key": "86088989|0|decision|4",
-      "episode": "86088989",
-      "frame": 4,
-      "agent": "mega_lucario",
+      "key": "85786096|0|turn|2",
+      "episode": "85786096",
+      "frame": 25,
+      "agent": "dragapult_ex",
       "context": 0,
       "correct": [
-        1
+        0
       ],
       "chosen": [
         0
@@ -3873,6 +4373,19 @@
       ],
       "chosen": [
         3
+      ]
+    },
+    {
+      "key": "86088989|0|decision|4",
+      "episode": "86088989",
+      "frame": 4,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        0
       ]
     },
     {
@@ -3902,6 +4415,15 @@
       ]
     },
     {
+      "key": "86088989|0|turn|0",
+      "episode": "86088989",
+      "frame": 3,
+      "agent": "mega_lucario",
+      "context": 2,
+      "correct": [],
+      "chosen": []
+    },
+    {
       "key": "86089120|0|decision|14",
       "episode": "86089120",
       "frame": 14,
@@ -3915,7 +4437,7 @@
       ]
     },
     {
-      "key": "86089617|0|decision|4",
+      "key": "86089617|1|decision|4",
       "episode": "86089617",
       "frame": 4,
       "agent": "mega_lucario",
@@ -3941,7 +4463,20 @@
       ]
     },
     {
-      "key": "86090147|0|decision|5",
+      "key": "86090147|0|decision|22",
+      "episode": "86090147",
+      "frame": 22,
+      "agent": "mega_lucario",
+      "context": 0,
+      "correct": [
+        7
+      ],
+      "chosen": [
+        6
+      ]
+    },
+    {
+      "key": "86090147|0|turn|1",
       "episode": "86090147",
       "frame": 5,
       "agent": "mega_lucario",
@@ -3952,7 +4487,7 @@
       ]
     },
     {
-      "key": "86090147|0|decision|20",
+      "key": "86090147|0|turn|3",
       "episode": "86090147",
       "frame": 20,
       "agent": "mega_lucario",
@@ -3965,33 +4500,7 @@
       ]
     },
     {
-      "key": "86090147|0|decision|22",
-      "episode": "86090147",
-      "frame": 22,
-      "agent": "mega_lucario",
-      "context": 0,
-      "correct": [
-        7
-      ],
-      "chosen": [
-        4
-      ]
-    },
-    {
-      "key": "86090164|0|decision|17",
-      "episode": "86090164",
-      "frame": 17,
-      "agent": "dragapult_ex",
-      "context": 0,
-      "correct": [
-        0
-      ],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "86090164|0|decision|40",
+      "key": "86090164|1|decision|40",
       "episode": "86090164",
       "frame": 40,
       "agent": "dragapult_ex",
@@ -4004,20 +4513,7 @@
       ]
     },
     {
-      "key": "86090164|0|decision|52",
-      "episode": "86090164",
-      "frame": 52,
-      "agent": "dragapult_ex",
-      "context": 0,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        25
-      ]
-    },
-    {
-      "key": "86090164|0|decision|67",
+      "key": "86090164|1|decision|67",
       "episode": "86090164",
       "frame": 67,
       "agent": "dragapult_ex",
@@ -4030,7 +4526,7 @@
       ]
     },
     {
-      "key": "86090164|0|decision|78",
+      "key": "86090164|1|turn|10",
       "episode": "86090164",
       "frame": 78,
       "agent": "dragapult_ex",
@@ -4041,7 +4537,33 @@
       ]
     },
     {
-      "key": "86090666|0|decision|9",
+      "key": "86090164|1|turn|2",
+      "episode": "86090164",
+      "frame": 17,
+      "agent": "dragapult_ex",
+      "context": 0,
+      "correct": [
+        0
+      ],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "86090164|1|turn|6",
+      "episode": "86090164",
+      "frame": 52,
+      "agent": "dragapult_ex",
+      "context": 0,
+      "correct": [
+        1
+      ],
+      "chosen": [
+        25
+      ]
+    },
+    {
+      "key": "86090666|1|turn|2",
       "episode": "86090666",
       "frame": 9,
       "agent": "mega_lucario",
@@ -4052,18 +4574,7 @@
       ]
     },
     {
-      "key": "86090676|0|decision|18",
-      "episode": "86090676",
-      "frame": 18,
-      "agent": "dragapult_ex",
-      "context": 0,
-      "correct": [],
-      "chosen": [
-        0
-      ]
-    },
-    {
-      "key": "86090676|0|decision|39",
+      "key": "86090676|1|decision|39",
       "episode": "86090676",
       "frame": 39,
       "agent": "dragapult_ex",
@@ -4076,7 +4587,18 @@
       ]
     },
     {
-      "key": "86091172|0|decision|8",
+      "key": "86090676|1|turn|2",
+      "episode": "86090676",
+      "frame": 18,
+      "agent": "dragapult_ex",
+      "context": 0,
+      "correct": [],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "86091172|1|turn|2",
       "episode": "86091172",
       "frame": 8,
       "agent": "mega_lucario",
@@ -4087,7 +4609,7 @@
       ]
     },
     {
-      "key": "86091172|0|decision|30",
+      "key": "86091172|1|turn|4",
       "episode": "86091172",
       "frame": 30,
       "agent": "mega_lucario",
@@ -4147,17 +4669,6 @@
       ],
       "chosen": [
         1
-      ]
-    },
-    {
-      "key": "86091435|0|decision|49",
-      "episode": "86091435",
-      "frame": 49,
-      "agent": "dragapult_ex",
-      "context": 7,
-      "correct": [],
-      "chosen": [
-        0
       ]
     },
     {
@@ -4229,7 +4740,7 @@
       ]
     },
     {
-      "key": "86091435|0|decision|119",
+      "key": "86091435|0|turn|14",
       "episode": "86091435",
       "frame": 119,
       "agent": "dragapult_ex",
@@ -4242,24 +4753,11 @@
       ]
     },
     {
-      "key": "86091728|0|decision|2",
-      "episode": "86091728",
-      "frame": 2,
+      "key": "86091435|0|turn|8",
+      "episode": "86091435",
+      "frame": 49,
       "agent": "dragapult_ex",
-      "context": 1,
-      "correct": [
-        1
-      ],
-      "chosen": [
-        1
-      ]
-    },
-    {
-      "key": "86091728|0|decision|12",
-      "episode": "86091728",
-      "frame": 12,
-      "agent": "dragapult_ex",
-      "context": 0,
+      "context": 7,
       "correct": [],
       "chosen": [
         0
@@ -4279,17 +4777,15 @@
       ]
     },
     {
-      "key": "86091728|0|decision|43",
+      "key": "86091728|0|decision|2",
       "episode": "86091728",
-      "frame": 43,
+      "frame": 2,
       "agent": "dragapult_ex",
-      "context": 5,
+      "context": 1,
       "correct": [
-        2,
-        3
+        1
       ],
       "chosen": [
-        0,
         1
       ]
     },
@@ -4305,10 +4801,36 @@
       "chosen": [
         0
       ]
+    },
+    {
+      "key": "86091728|0|turn|2",
+      "episode": "86091728",
+      "frame": 12,
+      "agent": "dragapult_ex",
+      "context": 0,
+      "correct": [],
+      "chosen": [
+        0
+      ]
+    },
+    {
+      "key": "86091728|0|turn|4",
+      "episode": "86091728",
+      "frame": 43,
+      "agent": "dragapult_ex",
+      "context": 5,
+      "correct": [
+        2,
+        3
+      ],
+      "chosen": [
+        0,
+        1
+      ]
     }
   ],
-  "n": 332,
+  "n": 372,
   "errors": 1,
-  "labelled": 331,
-  "agree": 230
+  "labelled": 371,
+  "agree": 253
 }

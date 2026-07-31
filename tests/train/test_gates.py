@@ -14,7 +14,14 @@ Everything here is dict-in/value-out with no engine, no cgpy, no DLL and no Pilo
 the gates run in the offline cross-platform suite. Prior art for the style: `tests/sim/test_paired_ab.py`
 (hand-built aggregates -> a verdict) and `tests/sim/test_score_diff.py` (hand-built records -> a diff).
 """
+import json
+from pathlib import Path
+
 import pytest
+
+#: Spelled from ordinals so this file can never itself be normalised into asserting nothing — the
+#: literal it looks for is exactly the byte pair a Windows `write_text` would introduce.
+CRLF = bytes((13, 10))
 
 from train import gates
 from train.gates import (EVOLVE_LANE, OWNER_RE, RULED_RE, AxisClaim, DecisionClaim, EndorsementClaim,
@@ -795,3 +802,304 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
     before = _dcap([_drow("k", [2, 3], [2], context=8)])
     after = _dcap([_drow("k", [2, 5], [2], context=8)])
     assert [r["verdict"] for r in decider_lab_diff(before, after)["rows"]] == ["NEUTRAL"]
+
+
+# ── the Corpus Reader — ONE reader, ONE key (ADR-0087, Issue #241) ────────────────────────────
+#
+# The defect these tests assert against, measured 2026-07-31 on the committed corpus:
+#
+#     raw records                                   372
+#     the Decision Gate's private walk saw          332      (-40, every one recoverable)
+#     keys it named CORRECTLY                       169      (45% — `seat` was ALWAYS 0)
+#     Held-out Ledger rulings it could reach        7 of 11
+#
+# Two shortcuts caused all of it, and they are the same shortcut: a raw-JSONL walk is a second idea
+# of what a record IS, and a hand-built key is a second idea of what a frame is CALLED. The second
+# drifts undetectably, because both sides of a diff share the same wrong key — so a self-consistent
+# diff over a wrong keyspace still reports flips and nothing ever goes red.
+
+
+def _rec(episode, frame, *, seat=0, scope="decision", subject=None, agent="mega_starmie",
+         agent_build=None, correct=None, obs=True, category="wasted_resource"):
+    """One raw corrections.jsonl record, in the on-disk shape. ``seat`` is TOP-LEVEL — the whole
+    point: the ``decision`` snapshot has no ``seat`` field, which is why reading it off there
+    yielded 0 forever."""
+    return {"id": f"{episode}-{frame}", "source": "own", "episode_id": episode, "seat": seat,
+            "agent": agent, "agent_build": agent_build, "submission_id": None,
+            "agent_version": None, "episode_time": None, "tagged_at": "2026-07-31T00:00:00+00:00",
+            "decision": {"frame": frame, "turn": 1, "select_context": 0, "select_type": 0,
+                         "options": [], "current": {}},
+            "chosen": [0], "chosen_label": "", "correct": [1] if correct is None else correct,
+            "correct_label": "", "category": category, "attribution": None, "rationale": "",
+            "obs": {"select": {"context": 0, "option": []}} if obs else None,
+            "scope": scope, "subject": subject if subject is not None else (
+                frame if scope == "decision" else (1 if scope == "turn" else None))}
+
+
+def _store(tmp_path, records, build="mega_starmie_20260101_abc1234"):
+    d = tmp_path / build
+    d.mkdir(parents=True, exist_ok=True)
+    (d / "corrections.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_the_corpus_reader_returns_the_stores_replayable_set(tmp_path):
+    """`keyed_corrections` IS the corpus, and the expectation is derived independently — the raw file
+    walked in the test itself through `Correction.from_dict`, never by calling the thing under test.
+
+    Set equality, not a count. The issue's own acceptance proposed a count assertion; a count passes
+    happily on 332 mis-keyed rows, so it would have caught only the smaller half of this bug."""
+    from train.blunder.correction import Correction, identity_key
+    recs = [_rec(1, 3), _rec(1, 9, seat=1), _rec(2, 4, scope="turn", subject=2),
+            _rec(3, 5, obs=False)]
+    root = _store(tmp_path, recs)
+
+    got = {k for k, _c in gates.keyed_corrections(root, predicate=lambda c: c.obs and c.agent)}
+    want = {gates.frame_key_of(*identity_key(Correction.from_dict(r)))
+            for r in recs if r["obs"] and r["agent"]}
+    assert got == want
+    assert len(got) == 3                       # the obs-less record is the only one excluded
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_a_record_with_an_empty_agent_and_a_build_stem_is_recovered(tmp_path):
+    """**The reported bug, in one assertion.** 40 records carry ``agent: ""`` with a populated
+    ``agent_build``; ``Correction.from_dict`` backfills the deck from the stem, but only for a reader
+    that CONSTRUCTS a Correction. A raw walk sees a falsy ``agent`` and drops the record before a row
+    exists — so it lands in neither capture and ``added``/``removed`` can never surface it.
+
+    An empty ``agent`` is a RECOVERABLE field, not a missing one."""
+    root = _store(tmp_path, [_rec(1, 3, agent="", agent_build="mega_starmie_20260627_93a70be")],
+                  build="mega_starmie_20260627_93a70be")
+    got = gates.keyed_corrections(root, predicate=lambda c: c.obs and c.agent)
+    assert [c.agent for _k, c in got] == ["mega_starmie"]
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_the_reader_keys_by_identity_not_by_the_anchor_frame(tmp_path):
+    """``seat`` is top-level and the Scope's SUBJECT is the identity (ADR-0049) — not seat 0, and not
+    the Anchor frame. The Decision Gate read ``decision.get("seat", 0)`` against a snapshot with no
+    ``seat`` field, so every key it ever built said seat 0 over a corpus that is 201/171."""
+    root = _store(tmp_path, [_rec(7, 51, seat=1), _rec(8, 82, seat=0, scope="turn", subject=8)])
+    keys = {k for k, _c in gates.keyed_corrections(root)}
+    assert keys == {"7|1|decision|51", "8|0|turn|8"}
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_both_gates_key_a_frame_identically(tmp_path):
+    """ADR-0072 decision 4 — *one ruling holds a frame out of BOTH gates* — as an executable
+    assertion rather than a docstring claim.
+
+    It was FALSE for 4 of 11 committed rulings: three seat-1 keys against a keyspace that was
+    entirely seat-0, and one ``turn``-scope key the Decision Gate filed as ``decision``. A held-out
+    frame that regressed would have failed `main` against a standing human ruling."""
+    from train.leaf_lab import frame_key
+    root = _store(tmp_path, [_rec(7, 51, seat=1), _rec(8, 82, seat=0, scope="turn", subject=8)])
+    for key, c in gates.keyed_corrections(root):
+        assert key == frame_key(c)
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_two_corrections_sharing_a_key_both_survive_the_reader(tmp_path):
+    """Pairs, not a dict — asserted against a future "simplification".
+
+    A dict silently collapses two Corrections on one key. Today that is measurably zero, but
+    ``load_corrections`` deliberately KEEPS conflicts (same identity, different ``correct``/
+    ``category`` — what ``find_conflicts`` exists to surface), and a reader that drops one is
+    committing this issue's own defect at the seam built to remove it."""
+    root = _store(tmp_path, [_rec(1, 3, correct=[1], category="wasted_resource"),
+                             _rec(1, 3, correct=[2], category="sequencing_error")])
+    got = gates.keyed_corrections(root)
+    assert [k for k, _c in got] == ["1|0|decision|3", "1|0|decision|3"]
+    assert sorted(tuple(c.correct) for _k, c in got) == [(1,), (2,)]
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_every_held_out_ruling_names_a_frame_the_committed_store_carries():
+    """The detachment guard, over the REAL corpus. Deliberately NOT ``baseline keys == store keys``:
+    corrections are tagged continuously and re-capture is a deliberate human act, so strict equality
+    would redden `main` on every new tag and apply exactly the pressure toward auto-recapture that
+    `decider-gate-main.yml` argues at length against."""
+    keys = {k for k, _c in gates.keyed_corrections()}
+    missing = sorted(k for k in gates.held_out_frames() if k not in keys)
+    assert missing == []
+
+
+# ── Ruling Moves — the channel for a corpus whose RULING moved (ADR-0087 decision 7) ──────────
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_a_moved_ruling_is_reported_even_when_the_agents_pick_did_not_move():
+    """**The blindness, asserted directly.** Both diffs emit a row only when the agent's pick moves, so a frame
+    the agent plays identically whose ``correct`` was re-ruled produces NO row at all — while its
+    verdict silently flips from unsatisfied to satisfied.
+
+    Measured on the real corpus: ``85709280`` went ``[] -> [0]`` in ``b6d7483`` (ADR-0081 Amendment D)
+    and moved the agree rate 230 -> 231 with no decision changed. ``added``/``removed`` cannot see it
+    either, because the frame exists on both sides."""
+    before = _dcap([_drow("k", [0], [])])
+    after = _dcap([_drow("k", [0], [0])])
+    d = decider_lab_diff(before, after)
+    assert d["rows"] == []                                   # the pick did not move — no verdict row
+    assert d["added"] == [] and d["removed"] == []           # and the frame is on both sides
+    assert d["ruling_moves"] == [{"key": "k", "before": [], "after": [0]}]
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_an_unmoved_ruling_is_not_reported_however_the_pick_moves():
+    before = _dcap([_drow("a", [0], [0]), _drow("b", [1], [2])])
+    after = _dcap([_drow("a", [3], [0]), _drow("b", [1], [2])])
+    assert decider_lab_diff(before, after)["ruling_moves"] == []
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_a_ruling_move_never_gates_either_gate():
+    """A re-ruling is a deliberate human act, not an agent regression. It is reported beside
+    ``added``/``removed`` and blocks nothing — the same treatment ``FIX`` gets."""
+    before, after = _dcap([_drow("k", [0], [])]), _dcap([_drow("k", [0], [0])])
+    d = decider_lab_diff(before, after)
+    assert d["ruling_moves"] and decision_gate_verdict(d["rows"], held_out={}) is True
+
+    lb = _report([{**_row("k", "OK"), "correct": [1]}])
+    la = _report([{**_row("k", "OK"), "correct": [2]}])
+    ld = leaf_lab_diff(lb, la)
+    assert ld["ruling_moves"] and discrimination_gate_verdict(ld, held_out={}) is True
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_the_leaf_diff_reports_a_moved_ruling_too():
+    """``leaf_lab_diff`` compares ``correct_is_top``, which is computed FROM ``correct`` — so it
+    carries the identical blindness. Shared implementation for ``frame_key_of``'s reason: a second
+    one would drift."""
+    before = _report([{**_row("k", "OK"), "correct": [1]}])
+    after = _report([{**_row("k", "OK"), "correct": [1, 2]}])
+    assert leaf_lab_diff(before, after)["ruling_moves"] == [{"key": "k", "before": [1],
+                                                             "after": [1, 2]}]
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_a_ruling_move_is_pick_set_normalised_not_order_sensitive():
+    """``correct`` is a SET of option indices; re-ordering it is not a re-ruling. Same normalisation
+    the verdict test uses, so the two cannot drift into different ideas of "the ruling changed"."""
+    before, after = _dcap([_drow("k", [0], [2, 3])]), _dcap([_drow("k", [0], [3, 2])])
+    assert decider_lab_diff(before, after)["ruling_moves"] == []
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_a_frame_on_only_one_side_is_not_a_ruling_move():
+    """``added``/``removed`` already own that case. Reporting it twice would double-count a
+    corpus-shape change as a re-ruling — the widening this issue lands adds 40 frames, and every one
+    of them has no ``before`` ruling to have moved from."""
+    before, after = _dcap([_drow("a", [0], [0])]), _dcap([_drow("b", [0], [1])])
+    d = decider_lab_diff(before, after)
+    assert d["ruling_moves"] == [] and d["added"] == ["b"] and d["removed"] == ["a"]
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_a_gate_artifact_is_written_LF_framed_not_the_platforms_newline(tmp_path):
+    """Both committed baselines are LF, dev is Windows and the grader is Linux (CLAUDE.md).
+
+    ``Path.write_text`` rewrites every newline to CRLF on Windows, which is how a 40-row re-capture
+    became a 4835-line whole-file rewrite — burying the one thing a reviewer of a re-capture needs to
+    see. Both labs wrote their captures that way; `write_json_artifact` is the single writer, so the
+    framing is CHOSEN rather than inherited from whichever platform ran the capture."""
+    out = tmp_path / "nested" / "artifact.json"
+    doc = {"rows": [{"key": "1|0|decision|3"}]}
+    gates.write_json_artifact(out, doc)
+    raw = out.read_bytes()
+    assert CRLF not in raw
+    assert raw == json.dumps(doc, indent=2).encode("utf-8")     # exact framing, no trailing newline
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_committed_baselines_are_LF_framed():
+    """The artifacts themselves, asserted — a writer fixed in code but a file left CRLF on disk would
+    still show every future re-capture as a whole-file diff, which is the harm."""
+    root = Path(__file__).resolve().parents[2] / "data"
+    for rel in ("decider_lab/baseline.json", "leaf_lab/baseline.json"):
+        assert CRLF not in (root / rel).read_bytes(), rel
+
+
+# ── the capture must be reproducible on any box ───────────────────────────────────────────────────
+
+
+@pytest.mark.req("REQ-GATE-0011")
+def test_an_unreplayable_frames_error_carries_no_machine_specific_path():
+    """The baseline is a COMMITTED ruling record, so nothing it embeds may depend on who ran the
+    capture. It was embedding an absolute path — ``/home/user/PokemonAI/...`` from the Linux capture
+    and ``C:\\Users\\...`` from a Windows one — so the same build re-captured elsewhere produced a
+    different artifact for a frame whose verdict had not moved. Dev is Windows and the grader is
+    Linux (CLAUDE.md), so that is the normal case, not an edge one.
+
+    The slash normalisation has to happen BEFORE the root is stripped: an exception's ``str`` carries
+    the path already repr-escaped, so matching the raw root silently fails on Windows — the shape
+    that let this survive."""
+    from train.decider_lab import REPO, _portable_error
+    try:
+        raise FileNotFoundError(2, "No such file or directory",
+                                str(REPO / "src" / "agents" / "SkiChu" / "strategy.py"))
+    except OSError as exc:
+        got = _portable_error(exc)
+    assert str(REPO) not in got
+    assert str(REPO).replace("\\", "/") not in got
+    assert got.startswith("FileNotFoundError:")
+    assert "src/agents/SkiChu/strategy.py" in got      # the diagnostic survives
+
+
+@pytest.mark.req("REQ-GATE-0011")
+def test_the_committed_capture_embeds_no_absolute_path():
+    """The artifact itself. A normaliser in code cannot help a file captured before it existed."""
+    root = Path(__file__).resolve().parents[2] / "data" / "decider_lab" / "baseline.json"
+    text = root.read_text(encoding="utf-8")
+    for probe in ("/home/", "C:/Users", "C:\\\\Users"):
+        assert probe not in text, probe
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_a_frame_gaining_or_losing_a_ruling_counts_as_a_moved_ruling():
+    """``None -> [x]`` is a frame becoming gateable, and ``[x] -> None`` a frame ceasing to be. Both
+    change what the corpus can adjudicate there, so both are reported — an `UNLABELLED` frame turning
+    into a gated one is exactly as worth knowing as a ruling being rewritten, and neither shows up in
+    `added`/`removed` because the frame is on both sides throughout."""
+    gained = decider_lab_diff(_dcap([_drow("k", [0], None)]), _dcap([_drow("k", [0], [1])]))
+    assert gained["ruling_moves"] == [{"key": "k", "before": None, "after": [1]}]
+    lost = decider_lab_diff(_dcap([_drow("k", [0], [1])]), _dcap([_drow("k", [0], None)]))
+    assert lost["ruling_moves"] == [{"key": "k", "before": [1], "after": None}]
+    # ...and a frame that never carried a ruling on either side has not moved.
+    never = decider_lab_diff(_dcap([_drow("k", [0], None)]), _dcap([_drow("k", [1], None)]))
+    assert never["ruling_moves"] == []
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_the_leaf_diffs_ruling_moves_and_compared_describe_ONE_population():
+    """`leaf_lab_diff` compares only SCORABLE rows, so its `ruling_moves` must use the same filter.
+
+    Drawn from all rows instead, it would name a frame the report's own `compared` count excludes —
+    two numbers printed side by side describing different populations, which is the confusion this
+    module keeps existing to remove. The Decision Gate has no such filter, so it passes none."""
+    unscorable = {"key": "u", "correct_is_top": None, "unscorable": True, "correct": [1]}
+    before = _report([_row("s", "OK"), {**unscorable, "correct": [1]}])
+    after = _report([_row("s", "OK"), {**unscorable, "correct": [2]}])
+    d = leaf_lab_diff(before, after)
+    assert d["compared"] == 1                      # only the scorable frame is compared...
+    assert d["ruling_moves"] == []                 # ...so the unscorable frame's move is not claimed
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
+    """The invariant over the real corpus, not a fixture: the Decision Gate replays exactly the
+    store's replayable set. A capture that shrinks — the 40-record drop this issue fixes — breaks
+    this, and it is the assertion the issue's own acceptance asked for.
+
+    Set equality, not a count: a count assertion passes on a mis-keyed corpus, which was the larger
+    half of the defect. Independent of `data/decider_lab/baseline.json` on purpose — corrections are
+    tagged continuously and re-capture is a deliberate human act, so asserting against the committed
+    capture would redden `main` on every new tag."""
+    from train.blunder.store import DEFAULT_ROOT
+    from train.decider_lab import _records
+    want = {k for k, _c in gates.keyed_corrections(predicate=lambda c: c.obs and c.agent)}
+    got = {k for k, _c in _records(DEFAULT_ROOT, None)}
+    assert got == want
+    assert len(got) == len(want) > 300              # a plausible corpus, not an empty walk

@@ -60,10 +60,15 @@ def frame_key(correction) -> str:
     repo's answer to "are these two records the same blunder" (ADR-0049). It matters because the
     Discrimination Gate diffs captures per frame, and ``episode_id`` alone is NOT unique: keying on
     it merged frames from one episode and collapsed a real 276-row diff to 221. A gate that
-    under-reports is the exact failure it exists to prevent."""
-    from train.blunder.correction import identity_key
-    from train.gates import frame_key_of
-    return frame_key_of(*identity_key(correction))
+    under-reports is the exact failure it exists to prevent.
+
+    Delegates to `gates.correction_frame_key`, the single derivation the **Corpus Reader** uses
+    (ADR-0087 decision 2) — so a frame carries ONE name across both gates and a ruling held out
+    of one is held out of the other. The Decision Gate hand-built its own and read ``seat`` off the
+    ``decision`` snapshot, which has no such field: 163 of its 332 keys were wrong, and four standing
+    Held-out Ledger rulings could not reach it."""
+    from train.gates import correction_frame_key
+    return correction_frame_key(correction)
 
 
 def evaluate_leaf_on_correction(pilot, correction) -> dict:
@@ -243,32 +248,31 @@ def main(argv=None) -> int:
     rpt = _build_report(args.store, args.agent)
 
     if args.cmd == "capture":
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps({"git_rev": _git_rev(), "agent": args.agent, **rpt},
-                                       indent=2), encoding="utf-8")
+        from train.gates import write_json_artifact
+        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
         _print_report(rpt)
         print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
         return 0
 
     if args.cmd == "diff":
         from train.gates import (discrimination_gate_verdict, held_out_frames,
-                                 leaf_lab_diff)
-        import json as _json
+                                 leaf_lab_diff, print_ruling_moves, write_json_artifact)
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
         diff = leaf_lab_diff(before, rpt)
         held_out = held_out_frames()
         passed = discrimination_gate_verdict(diff, held_out=held_out)
         _print_report(rpt)
         _print_diff(diff, held_out, before)
+        print_ruling_moves(diff["ruling_moves"])
         if args.out:                      # US6: the gate's verdict as a machine-readable artifact
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(_json.dumps(
-                {"gate": "discrimination", "passed": passed, "git_rev": _git_rev(),
-                 "baseline_git_rev": before.get("git_rev"), "compared": diff["compared"],
-                 "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
-                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
-                 "added": diff["added"], "removed": diff["removed"],
-                 "held_out": held_out}, indent=2), encoding="utf-8")
+            write_json_artifact(args.out, {
+                "gate": "discrimination", "passed": passed, "git_rev": _git_rev(),
+                "baseline_git_rev": before.get("git_rev"), "compared": diff["compared"],
+                "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
+                "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
+                "added": diff["added"], "removed": diff["removed"],
+                "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-0087 d7)
+                "held_out": held_out})
             print(f"-> {args.out}")
         return 0 if passed else 1
 

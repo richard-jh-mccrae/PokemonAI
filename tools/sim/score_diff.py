@@ -60,8 +60,11 @@ def diff_records(before: dict | None, after: dict | None, *, mode: str = "scores
 
 def corrections_corpus(root: Path | str):
     """Yield ``("corr:<episode>:<frame>", obs)`` for every committed Correction carrying obs."""
-    from train.blunder.store import load_corrections
-    for f in sorted(Path(root).rglob("corrections.jsonl")):
+    # The store owns both HOW a record is constructed and WHERE the logs live (ADR-0087
+    # decision 1). This already constructed correctly; asking for the file list too removes the last
+    # local copy of the layout.
+    from train.blunder.store import jsonl_files, load_corrections
+    for f in jsonl_files(root):
         for c in load_corrections(f):
             if c.obs is not None:
                 yield f"corr:{c.episode_id}:{(c.decision or {}).get('frame')}", c.obs
