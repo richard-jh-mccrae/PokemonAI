@@ -188,6 +188,58 @@ reports the *ruling about* a frame moving.
 _Avoid_: re-rule (the human act — this is the instrument's report of it), label change (a
 **Correction**'s `correct` is the ruling, not a label), corpus drift (that is `added`/`removed`)
 
+**Ruling Index**:
+The ONE query that spans every store a ruling can live in — `gates.ruling_index()`, `{Frame Key:
+Ruling}` (**ADR-TEMP-239**, Issue #239). Built on `keyed_corrections`, so the `review_key` ↔ **Frame
+Key** join is *derived per record inside the one walk* (ADR-0087 decision 2) — both keys come off
+the same `Correction`, neither derives from the other, so the walk is the only honest join point. It
+merges `data/corrections/reviewed.json` and the **Held-out Ledger**; `RECORDED_MISSES` is retired
+into them rather than read as a third source. Read-only: no **Correction** record is ever rewritten.
+Exists because a frame could be ruled four different ways and still read as unreviewed —
+`81905522-75` and `82749168-38` carry the same ADR-0085 ruling and were triaged Tier C vs Tier A
+purely by which store held them.
+_Avoid_: ledger (the **Held-out Ledger** and `reviewed.json` are *stores*; this is the index over
+them), registry, disposition map (it returns a **Ruling**, not a string)
+
+**Ruling** / **Voided Ruling**:
+What the **Ruling Index** returns for one frame: the raw `disposition` plus its `source`
+(`reviewed` / `held_out`, extensible) and `reason` — and one DERIVED predicate,
+`gates.voids_the_label`. A **Voided Ruling** is one where that predicate is true: `refuted` (the
+ruling is disowned) or **Transposition** (the ruling stands but cannot grade). Consumers key on the
+predicate, **never** on the disposition string, so the vocabulary can grow without every grader
+re-learning it — `reviewed.json` already carries `fixed` and `deferred-multi-turn`, neither of which
+`DISPOSITIONS` lists, so that drift is measured rather than hypothetical. An unrecognised disposition
+is non-voiding and **surfaced loudly** in both gate readouts. Precedence when two stores hit one
+frame: **any voiding source wins**; all matches are kept so the readout can name every store.
+A voided frame leaves the agree-rate DENOMINATOR (`agree / (labelled − voided)`) and is held out of
+gating — reported, never failing `main`, the same treatment ADR-0072 decision 4 gives a **Held-out
+Frame**, for a different reason. `satisfies_human` is NOT touched; only what the callers count.
+_Avoid_: refuted (one of two voiding dispositions, not the category), excluded / skipped (it is still
+read and still printed), disagreement (a voided frame is neither agreement nor disagreement)
+
+**Transposition**:
+A disposition (**ADR-TEMP-239** decision 6): the human's ruling is correct, but its `correct` names
+one of an **indistinguishable** set of options, so no agent can be scored on picking "the right one".
+Voiding, for a different reason than `refuted` — and the distinction is load-bearing, because
+ADR-0085 decision 4 cites `81905522-75`'s pick (two identical Riolu, no board signal splits them,
+design-doc R3) to justify leg-scoped rather than whole-target guards. Filing it `refuted` would write
+an assertion into the ledger that a shipped ADR contradicts. Only the *instance* is handled; making
+`satisfies_human` transposition-AWARE (an equivalence class over options, so either pick satisfies)
+is **Issue #247** — it needs an indistinguishability oracle read off `obs`, which is a
+board-reading problem, not a corpus-record one.
+_Avoid_: tie (the scores tying is the symptom; the cause is the options being the same), ambiguous
+label, refuted
+
+**Agree Delta**:
+The aggregate half of the **Ruling Move** fix (**ADR-TEMP-239** decision 7): `agree_delta` on both
+diffs — `{before: (agree, denom), after: (agree, denom), moved, reruled, voided}` — printed by one
+shared printer beside `print_ruling_moves`, so the two gates cannot describe it differently. It
+exists because offsetting moves can present as stillness: `230/331 -> 230/331` was printed while
+three rows moved, one re-ruling exactly cancelling one held-out regression. Deliberately COUNTS, not
+a causal decomposition — a frame can be re-ruled, voided and moved at once, so no point of the delta
+has a single honest owner, and a confidently-wrong instrument is this module's expensive failure.
+_Avoid_: attribution / breakdown (rejected — it claims causality this does not), summary line
+
 **Leaf Frame**:
 A **Correction** the **Leaf Lab** can score: a reseedable MAIN-select (context 0) board carrying
 something to rank — either a `turn_plan` payload or any MAIN-select pick correction naming a

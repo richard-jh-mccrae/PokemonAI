@@ -321,7 +321,7 @@ def evaluate_endorsement_claim(claim: EndorsementClaim, *, options, scores,
     return (best[claim.slot] > 0) is claim.endorsed
 
 
-def leaf_lab_diff(before: dict, after: dict) -> dict:
+def leaf_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
     """Per-frame verdict movement between two Leaf Lab captures.
 
     Rows are matched on their stable ``key`` (the Correction's ``identity_key``). Keying on
@@ -331,7 +331,11 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
     capture taken against a different corpus shape is visible — and a frame whose *ruling* moved is
     surfaced as a **Ruling Move** (`ruling_moves`), which neither of those pairs can see because the
     frame exists on both sides. This diff compares ``correct_is_top``, computed FROM ``correct``, so
-    a re-ruling silently changes its verdict exactly as it does the Decision Gate's."""
+    a re-ruling silently changes its verdict exactly as it does the Decision Gate's.
+
+    ``voided`` frames are still compared and still reported — only the gate verdict and the
+    **Agree Delta** exclude them. A voided frame silently vanishing from the diff would be the
+    shrinking-gated-set failure ``added``/``removed`` exist to prevent."""
     b = rows_by_key(before, keep=_scorable)
     a = rows_by_key(after, keep=_scorable)
     shared = b.keys() & a.keys()
@@ -347,22 +351,40 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
             "compared": len(shared),
             # SAME row filter as `compared` above, so the two numbers in one report describe one
             # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
-            "ruling_moves": ruling_moves(before, after, keep=_scorable)}
+            "ruling_moves": ruling_moves(before, after, keep=_scorable),
+            "agree_delta": agree_delta(
+                before, after, keep=_scorable, voided=voided,
+                # The Leaf Lab's ruling is `correct_is_top`; an unscorable row is already filtered out
+                # by `keep`, so every surviving row is gradeable.
+                agrees=lambda r: bool(r.get("correct_is_top")),
+                moved=lambda x, y: bool(x.get("correct_is_top")) != bool(y.get("correct_is_top")))}
 
 
-def discrimination_gate_verdict(diff: dict, *, held_out: dict) -> bool:
+def discrimination_gate_verdict(diff: dict, *, held_out: dict, voided=()) -> bool:
     """PASS iff no frame degraded ``OK -> MISS`` without a ruling.
 
     Improvements never block, and the aggregate metrics (SOLE-top / shared-top / avg top-tie) are not
-    consulted at all — on 1b they moved the *good* way while six frames broke."""
-    return all(f["key"] in held_out for f in diff.get("ok_to_miss") or [])
+    consulted at all — on 1b they moved the *good* way while six frames broke.
+
+    ``voided`` frames do not block either (ADR-TEMP-239 decision 4): their ruling can no longer say
+    the agent is wrong. Passed alongside ``held_out`` rather than folded into it because the two are
+    different acts — one holds a STANDING ruling out of this gate's scope, the other says the ruling
+    itself cannot grade — and the readout names them separately."""
+    excused = set(held_out) | set(voided or ())
+    return all(f["key"] in excused for f in diff.get("ok_to_miss") or [])
 
 
-def decision_gate_verdict(rows, *, held_out: dict) -> bool:
+def decision_gate_verdict(rows, *, held_out: dict, voided=()) -> bool:
     """PASS iff no frame carries an unruled ``REGRESSION``. ``FIX`` and ``DIVERGENT`` never block —
     the sweep puts every flip in front of the human, and only a regression they have not ruled is a
-    blocker."""
-    return all(r["key"] in held_out
+    blocker.
+
+    A ``REGRESSION`` on a **voided** frame is reported and never blocks (ADR-TEMP-239 decision 4).
+    That is the live hazard this closes: 18 of 101 recorded disagreements carried a refuted label, so
+    a build that corrected one of them failed `main` for moving away from a ruling the human had
+    already disowned."""
+    excused = set(held_out) | set(voided or ())
+    return all(r["key"] in excused
                for r in rows or [] if r.get("verdict") == "REGRESSION")
 
 
@@ -375,13 +397,19 @@ def frame_key_of(episode_id, seat, scope, subject) -> str:
     return "|".join("" if p is None else str(p) for p in (episode_id, seat, scope, subject))
 
 
-def print_gate_report(title, *, gating, ruled, held_out, total, rule, line) -> bool:
+def print_gate_report(title, *, gating, ruled, held_out, total, rule, line,
+                      voided=(), voided_by=None) -> bool:
     """Print one gate's verdict block and return whether it PASSED — shared by both gates so their
     reports cannot drift in shape or in what they claim.
 
     ``ruled`` frames are printed in an always-visible ``HELD OUT`` section and excluded from the
     verdict (ADR-0072 decision 4): a re-ruling is a state the gate reads, and a frame broken for
-    three phases must not become scenery. ``line(item)`` renders one row."""
+    three phases must not become scenery. ``line(item)`` renders one row.
+
+    ``voided`` frames get their own always-visible section for the same reason and a different cause
+    (ADR-TEMP-239 decision 4) — a HELD-OUT ruling STANDS and is merely out of this gate's scope,
+    while a voided one cannot grade at all. Collapsing them into one section would print
+    ``owner=None`` against a frame nobody held out and lose which of the two acts excused it."""
     print(f"\n=== {title} ===")
     for item in gating:
         print(f"  {line(item)}")
@@ -389,10 +417,16 @@ def print_gate_report(title, *, gating, ruled, held_out, total, rule, line) -> b
         print(f"\n  HELD OUT ({len(ruled)}) — reported, not gated:")
         for item in ruled:
             print(f"    {line(item)}  owner={held_out.get(_key_of(item))}")
-    print(f"\n  gated on {total - len(ruled)} frame(s), held out {len(ruled)}")
+    if voided:
+        print(f"\n  VOIDED ({len(voided)}) — the ruling cannot grade these; reported, not gated:")
+        for item in voided:
+            r = (voided_by or {}).get(_key_of(item))
+            print(f"    {line(item)}  voided={getattr(r, 'disposition', '?')}")
+    excused = len(ruled) + len(voided)
+    print(f"\n  gated on {total - excused} frame(s), held out {len(ruled)}, voided {len(voided)}")
     passed = not gating
-    print(f"GATE: {'PASS' if passed else 'FAIL'}  "
-          f"(rule: {rule}; {len(gating)} unruled, {len(ruled)} ruled)")
+    print(f"GATE: {'PASS' if passed else 'FAIL'}  (rule: {rule}; {len(gating)} unruled, "
+          f"{len(ruled)} ruled, {len(voided)} voided)")
     return passed
 
 
@@ -404,6 +438,170 @@ def held_out_map(claims_by_key: dict) -> dict:
     """``{frame key: owner}`` for every claim that has been ruled onto an owner — the Held-out
     Ledger both gates consult."""
     return {k: held_out_owner(c) for k, c in claims_by_key.items() if held_out_owner(c)}
+
+
+#: A **Ruling** the human recorded about a frame, wherever it was recorded. `source` names the store
+#: it came from, so the **Ruling Index** doubles as the *"where is this ruled?"* register rather than
+#: a bare skip-list. `owner`/`ruled` are populated only by the **Held-out Ledger**, which is the one
+#: store that carries them.
+@dataclass(frozen=True)
+class Ruling:
+    disposition: str
+    source: str                       # "reviewed" | "held_out"
+    reason: str = ""
+    owner: str | None = None
+    ruled: str | None = None
+
+
+#: The dispositions that VOID a label — the ruling can no longer grade the agent, for two different
+#: reasons. Both leave the agree-rate denominator and both stop gating (ADR-TEMP-239 decision 4).
+#:
+#: * ``refuted``       — the ruling is DISOWNED. It said the wrong thing.
+#: * ``transposition`` — the ruling STANDS, but its ``correct`` names one of an *indistinguishable*
+#:   set of options, so no agent can be scored on picking "the right one" (ADR-TEMP-239 decision 6).
+#:   Kept distinct from ``refuted`` because ADR-0085 decision 4 cites `81905522-75`'s pick to justify
+#:   leg-scoped rather than whole-target guards — filing it as a refutation would write into the
+#:   ledger an assertion a shipped ADR contradicts. Only the instance is handled here; teaching
+#:   `satisfies_human` an equivalence class over options is Issue #247.
+VOIDING_DISPOSITIONS = frozenset({"refuted", "transposition"})
+
+#: Every disposition the index UNDERSTANDS. Anything outside this is non-voiding and reported loudly
+#: (`unrecognised_rulings`) rather than swallowed — the failure this guards is measured, not
+#: hypothetical: `reviewed.json` carried ``fixed`` and ``deferred-multi-turn`` for weeks while
+#: `blunder.reviewed.DISPOSITIONS` listed neither, so the writer's validator would have rejected
+#: rows the loader accepted in silence. Both are adopted here (they are plainly rulings that STAND),
+#: which is what keeps the loud path quiet today and available for the next unknown word.
+RECOGNISED_DISPOSITIONS = VOIDING_DISPOSITIONS | frozenset({
+    "covered", "deferred", "deferred-multi-turn", "fixed", "held_out"})
+
+
+def voids_the_label(ruling) -> bool:
+    """Does this **Ruling** void the human's label — the ONE predicate every grader keys on.
+
+    Never branch on ``ruling.disposition`` at a call site. The vocabulary grows (it grew twice before
+    anyone noticed), and a consumer that hardcodes *which words void* is the "each consumer needs its
+    own copy" shape ADR-0087 exists to remove. Ask this instead.
+
+    A voided frame is neither agreement nor disagreement: a ruling the human took back cannot say the
+    agent was right and cannot say it was wrong. So it leaves the agree-rate DENOMINATOR and stops
+    gating — the same treatment ADR-0072 decision 4 gives a **Held-out Frame**, arrived at for a
+    different reason. Measured on `data/decider_lab/baseline.json` @ `e50735a`: **18 of 101 recorded
+    disagreements were refuted labels**, so a build that corrected one of them failed `main` as a
+    ``REGRESSION`` — a fix wearing a regression's label."""
+    return getattr(ruling, "disposition", None) in VOIDING_DISPOSITIONS
+
+
+def voiding_ruling(rulings):
+    """The **Ruling** that voids a frame, or None — the precedence rule, in one place.
+
+    **Any voiding source wins.** A refutation is a strictly later, stronger act than a ``covered``, so
+    a merge that let a weaker disposition mask it would re-open exactly the hole this closes. Every
+    ruling is retained by `ruling_index` regardless, so a readout can still name every store that
+    ruled the frame."""
+    for r in rulings or ():
+        if voids_the_label(r):
+            return r
+    return None
+
+
+def voided_frames(index: dict) -> dict:
+    """``{frame key: the voiding Ruling}`` over a **Ruling Index** — what the gates actually consume."""
+    out = {}
+    for key, rulings in (index or {}).items():
+        hit = voiding_ruling(rulings)
+        if hit is not None:
+            out[key] = hit
+    return out
+
+
+def unrecognised_rulings(index: dict) -> list:
+    """``[(frame key, Ruling), ...]`` for every ruling whose disposition is outside
+    `RECOGNISED_DISPOSITIONS` — surfaced LOUDLY, never dropped.
+
+    An unknown word is non-voiding (the safe direction: it keeps grading), but it must not be silent.
+    A disposition nobody registered is a ruling nobody's grader is honouring, and the ledger has
+    already demonstrated that drift happening unnoticed."""
+    return [(key, r) for key, rulings in sorted((index or {}).items())
+            for r in rulings if r.disposition not in RECOGNISED_DISPOSITIONS]
+
+
+def print_voided(voided: dict) -> None:
+    """The shared readout for **Voided Rulings**, so the two gates cannot describe one differently.
+
+    Reasons are TRUNCATED. The corpus carries 25 voided frames whose ledger reasons run to full
+    paragraphs, and both gates print this on every push to `main` — the Held-out Ledger's own entry
+    already warns that such a section is *"useful only while small: past ~a dozen frames it becomes
+    wallpaper, which is the failure mode it exists to prevent"*. The frame key and the disposition are
+    what a reader acts on; the full reason lives in `data/corrections/reviewed.json`, one grep away."""
+    if not voided:
+        return
+    by_disposition = {}
+    for r in voided.values():
+        by_disposition[r.disposition] = by_disposition.get(r.disposition, 0) + 1
+    tally = ", ".join(f"{n} {d}" for d, n in sorted(by_disposition.items()))
+    print(f"\n  VOIDED ({len(voided)}: {tally}) — the ruling cannot grade these frames; "
+          f"out of the agree rate, never gating. Reasons: data/corrections/reviewed.json")
+    for key, r in sorted(voided.items()):
+        reason = " ".join((r.reason or "").split())
+        print(f"    {key:<26} {r.disposition:<14} {reason[:90]}{'…' if len(reason) > 90 else ''}")
+
+
+def print_unrecognised_rulings(unknown) -> None:
+    """The loud path for a disposition nobody registered. Printed by both gates."""
+    if not unknown:
+        return
+    print(f"\n  ⚠️ UNRECOGNISED DISPOSITION ({len(unknown)}) — non-voiding, so these frames still "
+          f"grade; add the word to gates.RECOGNISED_DISPOSITIONS or fix the ledger:")
+    for key, r in unknown:
+        print(f"    {key}  {r.disposition!r} ({r.source})")
+
+
+def agree_delta(before: dict, after: dict, *, agrees, moved, voided=(), keep=None) -> dict:
+    """The **Agree Delta** — the agree rate on both sides WITH the counts of what moved beside it.
+
+    The aggregate half of the fix `ruling_moves` made per-frame (ADR-TEMP-239 decision 7). Measured:
+    re-capturing the baseline moved **three** rows and the headline printed ``230/331 -> 230/331``,
+    because one re-ruling flipped a frame disagree->agree and exactly cancelled a held-out
+    regression's agree->disagree. Offsetting moves presenting as stillness is the same class of event
+    as a quietly shrinking corpus, which `added`/`removed` are surfaced deliberately to prevent.
+
+    **Counts, never a causal decomposition.** A frame can be re-ruled, voided AND moved at once, so no
+    point of the delta has a single honest owner; ``+1 reruled, -1 regressed`` would be a confident
+    claim this cannot support. This module's history — a mis-keyed baseline, a diff that under-reported
+    — says a confidently-wrong instrument is the expensive failure, and a count cannot be
+    confidently wrong.
+
+    Both sides are restated against TODAY's voided set, deliberately: the rulings are one corpus, not
+    a property of the capture, so restating the baseline is what makes ``230/331 -> 231/313``
+    legible rather than an unexplained denominator jump.
+
+    ``agrees(row) -> True | False | None`` (None = the row carries no gradeable ruling) and
+    ``moved(before_row, after_row) -> bool`` are the caller's, because the Decision Gate reads
+    ``chosen``/``correct`` and the Discrimination Gate reads ``correct_is_top``. ``keep`` is the same
+    row filter the reporting diff uses, so every number in one report describes one population."""
+    voided = set(voided or ())
+    b, a = rows_by_key(before, keep=keep), rows_by_key(after, keep=keep)
+
+    def rate(rows):
+        graded = [r for k, r in rows.items() if k not in voided and agrees(r) is not None]
+        return sum(1 for r in graded if agrees(r)), len(graded)
+
+    shared = b.keys() & a.keys()
+    return {"before": rate(b), "after": rate(a),
+            "moved": sum(1 for k in shared if moved(b[k], a[k])),
+            "reruled": len(ruling_moves(before, after, keep=keep)),
+            "voided": len(voided & (b.keys() | a.keys()))}
+
+
+def print_agree_delta(delta: dict) -> None:
+    """The shared one-line readout. Printed by BOTH gates from one implementation, for the reason
+    `frame_key_of` is one function: a second copy drifts, and a re-capture is exactly the moment
+    nobody re-reads the printer."""
+    if not delta:
+        return
+    (ba, bn), (aa, an) = delta["before"], delta["after"]
+    print(f"\n  agree {ba}/{bn} -> {aa}/{an}  ({delta['moved']} picks moved, "
+          f"{delta['reruled']} rulings moved, {delta['voided']} voided)")
 
 
 # ── the filesystem-facing functions ───────────────────────────────────────────────────────────────
@@ -602,6 +800,59 @@ def held_out_frames(fixtures_dir=None) -> dict:
     return out
 
 
+def ruling_index(store=None, *, reviewed_path=None, fixtures_dir=None) -> dict:
+    """**THE Ruling Index** — ``{frame key: (Ruling, ...)}`` over every store a ruling can live in
+    (ADR-TEMP-239 decision 2, Issue #239). The ONE query answering *"has this frame been ruled, and
+    where?"*.
+
+    It exists because a frame could be ruled four different ways and still read as unreviewed.
+    `82749168-38` sits in `reviewed.json` AND ADR-0085 decision 7 and was triaged Tier A;
+    `81905522-75` sat in ADR-0085 decision 7 AND the snipe sweep's private ``RECORDED_MISSES``,
+    never in `reviewed.json`, and was triaged Tier C — *"never reviewed"*. Same ruling, same ADR,
+    same permanence, different tier, purely by which store happened to hold it.
+
+    **Read-only. No Correction record is rewritten.** Putting the refutation ON the record (a
+    ``refuted`` flag, a ``superseded_by``) was rejected for now: it makes a record mutable under the
+    C2 provenance contract, needs a migration of committed JSONL, and lands on ADR-0082's Claim
+    Agreement. If Issue #229 forces a schema change anyway, this absorbs it as one more source rather
+    than becoming a rewrite of every grader.
+
+    **The join is DERIVED, inside the one corpus walk.** `reviewed.json` keys by ADR-0049's Scope
+    subject (`review_key`: ``<ep>-<frame>`` / ``<ep>-t<turn>s<seat>`` / ``<ep>-m<seat>``); the gates
+    key by **Frame Key** (`correction_frame_key`: ``<ep>|<seat>|<scope>|<subject>``). Both come off the
+    same `Correction` and NEITHER derives from the other, so the walk is the only honest join point —
+    translating between the two string shapes anywhere else is the hand-built key ADR-0087 decision 2
+    forbids, and the one that cost the Decision Gate 203 of its 372 keys.
+
+    Two sources, not three: the snipe sweep's ``RECORDED_MISSES`` is RETIRED into these (decision 5)
+    rather than read as a fourth store — reading it would make this module import from
+    `tools/train/probes/`, inverting the layering, to consult a store with no disposition vocabulary
+    at all.
+
+    Stores are injectable so the whole index tests against a ``tmp_path`` corpus, the same seam
+    `claim_agreement` is asserted at."""
+    from train.blunder.reviewed import load_reviewed, review_key
+
+    reviewed = load_reviewed(reviewed_path) if reviewed_path is not None else load_reviewed()
+
+    out: dict = {}
+    for key, c in keyed_corrections(store):
+        entry = reviewed.get(review_key(c))
+        if entry:
+            out.setdefault(key, []).append(
+                Ruling(disposition=str(entry.get("disposition") or ""), source="reviewed",
+                       reason=str(entry.get("reason") or "")))
+
+    for key, owner in held_out_frames(fixtures_dir).items():
+        out.setdefault(key, []).append(
+            Ruling(disposition="held_out", source="held_out",
+                   reason=f"ruled onto {owner}", owner=owner))
+
+    # Voiding first, so `voiding_ruling` reads the strongest ruling without re-sorting, and a readout
+    # that prints only the first entry prints the one that changed the frame's fate.
+    return {k: tuple(sorted(v, key=lambda r: not voids_the_label(r))) for k, v in out.items()}
+
+
 def picks_as_set(pick):
     """A pick compared as a SET, not a sequence.
 
@@ -734,7 +985,7 @@ def print_ruling_moves(moves) -> None:
         print(f"    {m['key']}  correct {m['before']} -> {m['after']}")
 
 
-def decider_lab_diff(before: dict, after: dict) -> dict:
+def decider_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
     """Per-frame DECISION movement between two Decider Lab captures, classified against the human.
 
     The Decision Gate's comparison after ADR-0085 Amendment I. It replaces the sweeps' live
@@ -765,6 +1016,10 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
       ``NEUTRAL``    the ruling does not separate the two — both satisfy it, or both miss it. A real
                      change, but not one the corpus adjudicates.
       ``UNLABELLED`` the frame carries no ``correct``, so no direction can be claimed
+
+    ``voided`` frames are still classified and still reported — only `decision_gate_verdict` and the
+    **Agree Delta** exclude them, so a voided ``REGRESSION`` reads as the visible non-event it is
+    rather than vanishing.
     """
     norm = picks_as_set
 
@@ -787,4 +1042,12 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
                      "before": was, "after": now, "correct": correct, "verdict": verdict})
     return {"rows": rows, "compared": len(b.keys() & a.keys()),
             "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
-            "ruling_moves": ruling_moves(before, after)}
+            "ruling_moves": ruling_moves(before, after),
+            "agree_delta": agree_delta(
+                before, after, voided=voided,
+                # `satisfies_human` is the SAME predicate the verdicts above key on, deliberately: the
+                # gate and its readout must not form two ideas of "matches the human". None = the row
+                # carries no gradeable ruling (unlabelled, or unreplayable so `chosen` is null).
+                agrees=lambda r: (None if r.get("correct") is None or r.get("chosen") is None
+                                  else satisfies_human(r["chosen"], r["correct"])),
+                moved=lambda x, y: norm(x.get("chosen")) != norm(y.get("chosen")))}

@@ -23,6 +23,11 @@
     "reason": "forgoes a 209-damage attack — over-eager",
     "round": "2026-06-27"
   },
+  "81905522-75": {
+    "disposition": "transposition",
+    "reason": "two identical Riolu, no board signal splits them (design-doc R3, ADR-0085 decision 7) — the ruling STANDS (decision 4 cites this pick for leg-scoped guards) but its index is arbitrary, so it cannot grade. Migrated out of snipe_decider_sweep.RECORDED_MISSES by ADR-TEMP-239 decision 5; the transposition CLASS is Issue #247",
+    "round": "2026-07-31"
+  },
   "81906755-93": {
     "disposition": "refuted",
     "reason": "forgoes a KO (tactical ~1000) — over-eager",

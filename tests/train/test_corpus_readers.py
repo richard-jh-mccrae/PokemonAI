@@ -42,8 +42,11 @@ ALLOWED_RAW_READERS = {
     "tools/train/probes/evolve_decider_sweep.py": "#243",
     "tools/train/probes/needs_sweep.py": "#243",
     "tools/train/probes/promote_retreat_decider_sweep.py": "#243",
-    "tools/train/probes/snipe_decider_sweep.py": "#243",
     "tools/train/probes/threat_sweep.py": "#243",
+    # `snipe_decider_sweep.py` PAID this debt (Issue #239, ADR-TEMP-239 decision 5): retiring its
+    # private RECORDED_MISSES store meant it had to join the Ruling Index by Frame Key, which a
+    # hand-built `<ep>-<frame>` key cannot do — so the raw walk went with it. That is the intended
+    # shape of a payoff: an entry leaves this dict, and the census below moves deliberately.
 }
 
 #: The store module IS the reader — it is the one place allowed to open the files.
@@ -115,10 +118,12 @@ def test_the_two_gates_are_not_on_the_allowlist():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_allowlist_census_matches_what_the_grill_measured():
-    """Eleven, and they are the eleven Issue #241 named. A silent change to this number means either
-    the debt was paid (delete the entry) or a new reader was waved through (don't) — both are worth a
-    deliberate edit rather than a quiet drift."""
-    assert len(ALLOWED_RAW_READERS) == 11
+    """TEN — the eleven Issue #241 named, less `snipe_decider_sweep.py`, which Issue #239 converted
+    to `keyed_corrections` when it retired that file's private ruling store. A silent change to this
+    number means either the debt was paid (delete the entry) or a new reader was waved through
+    (don't) — both are worth a deliberate edit rather than a quiet drift."""
+    assert len(ALLOWED_RAW_READERS) == 10
+    assert "tools/train/probes/snipe_decider_sweep.py" not in ALLOWED_RAW_READERS
     assert all(rel.startswith("tools/train/probes/") for rel in ALLOWED_RAW_READERS)
 
 
