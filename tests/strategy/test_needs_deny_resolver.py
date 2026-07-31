@@ -2,14 +2,31 @@
 
 `pilot._resolve_needs` emits DENY slots for the opponent's IN-PLAY bodies from VISIBLE facts only.
 VALUE = the disruption CARD-tier (`TAG_TIER["gust"]` ≈ 10 in the ONE currency — the grill's
-currency ruling, 2026-07-20), GRADED by the ruled basic lookahead (`_opp_turns_to_ready` →
-`needs.turns_to_ready`: energy deficit at the 1-attach/turn quota, rules.md §3, in parallel with
-the forward evolution hops still owed, rules.md §4). The shipped ADR-0062 oracle (`_denial_at`) is
-now a GATE only (`> 0` = the strip bites this body); its DAMAGE magnitude (~140) stays on the
-play-side gust rungs, never the keep price. Eligibility routes through the `needs.SUPPLIES` net (the
-deny-supplying tags: gust / energy_denial), so the Hammer/gust classes stop riding the WP-N3 hedge.
-Fail-closed everywhere: unknown stats, absent opponent read, a strip that bites nothing, or no
-deny-capable held row → NO slot (the shipped hedge keeps pricing those rows).
+currency ruling, 2026-07-20) SCALED BY DENY RELEVANCE, then GRADED by the ruled basic lookahead
+(`_opp_turns_to_ready` → `needs.turns_to_ready`: energy deficit at the 1-attach/turn quota,
+rules.md §3, in parallel with the forward evolution hops still owed, rules.md §4). Eligibility
+routes through the `needs.SUPPLIES` net (the deny-supplying tags: gust / energy_denial), so the
+Hammer/gust classes stop riding the WP-N3 hedge. Fail-closed everywhere: unknown stats, absent
+opponent read, a strip that bites nothing, or no deny-capable held row → NO slot (the shipped hedge
+keeps pricing those rows).
+
+**The instrument moved (ADR-0080 / Issue #187, armed and the incumbent DELETED by Issue #228).**
+The ADR-0062 oracle (`_denial_at`) used to be a pure GATE here — `> 0` meant "the strip bites this
+body" — and the card tier was then paid FLAT. Armed, the tier is multiplied by that body's
+relevance, so a Hammer is worth keeping in proportion to how much the Energy it would take is
+actually doing; the tier survives as the CEILING rather than the value. This is still not a damage
+magnitude: relevance is a ``[0, 1]`` scalar, so the currency ruling ("never the play-side damage
+swing on the keep price") is intact, which is the claim these tests carry. The gate survives too —
+relevance is 0 for a bare body, for surplus Energy and for one dying to my KO this turn, so the
+whiff cases below arrive structurally rather than through a separate predicate.
+
+Two fixture consequences, named rather than discovered:
+  * the read resolves an Energy's TYPE through the Stat Provider, so an opponent body must carry a
+    real Basic ``{F}`` Energy **card id** and each attack must declare its per-slot cost types —
+    a colourless placeholder is on no plan's critical path and scores 0;
+  * the rows are built by `_opponent_target_rows`, which needs MY Active as well as theirs (its
+    clock legs are differences of `turns_to_ko_me`). A board with an empty Active spot returns NO
+    rows at all, where the old opponent-only oracle happily priced one.
 
 Synthetic boards mirror `test_discard_shadow._setup`; the captured-board case replays a REAL
 recorded correction through the real shipped pilot (`test_gust_round0_corpus` pattern — fresh
@@ -26,7 +43,7 @@ import pytest
 from common import needs
 from common.card_worth import TAG_TIER
 from common.cards import CardFunctions
-from common.pilot import Pilot
+from common.pilot import _DENIAL_FORWARD, _DENY_RELEVANCE_K, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
@@ -35,13 +52,33 @@ REPO = Path(__file__).resolve().parents[2]
 DISCARD = 8
 MEGA, HAMMER, BOSS, FILLER = 1031, 1120, 1182, 999
 RIOLU, MLUC = 677, 660
+FIGHTING = 6                # EnergyType.FIGHTING (cg/api.py)
+FIGHTING_ENERGY = 6         # Basic {F} Energy (SVE 6). Card id and EnergyType coincide by
+                            # COINCIDENCE in the data — the read resolves the type through the
+                            # Provider, never from the card id.
+
+
+def _deny_value(setback_damage: float, turns: int) -> float:
+    """The armed keep price of a deny slot: the disruption card tier, scaled by the body's relevance,
+    halved once per turn the body is still short of attacking.
+
+    ``setback_damage`` is spelled out from CARD FACTS at each call site rather than read back off the
+    pilot, so these tests pin the FORMULA instead of restating whatever the pilot computed."""
+    return TAG_TIER["gust"] * (setback_damage / _DENY_RELEVANCE_K) / (2.0 ** turns)
 
 
 def _setup(hand_ids, *, opp_active=None, opp_bench=(), minc=1):
     """A forced Discard over ``hand_ids`` against a visible opponent board — the
     `test_discard_shadow` fixture shape plus the opponent side the deny leg reads. The Riolu →
     Mega Lucario ex forward line (single hop — rulebook Appendix 1) carries real attack records so
-    the ADR-0062 oracle prices strips: Riolu {F}=30; Mega Lucario ex {F}=130 / {F}{F}=270."""
+    the deny read prices strips: Riolu Accelerating Stab {F}=30; Mega Lucario ex Aura Jab {F}=130 /
+    Mega Brave {F}{F}=270 (verified, data/EN_Card_Data.csv).
+
+    ``energyTypes`` on each attack record and a real Basic {F} Energy card in the Provider are what
+    the ARMED read needs and the retired magnitude oracle did not: relevance is a function of an
+    Energy's TYPE against a cost's typed slots, so an untyped placeholder scores 0 everywhere. My
+    own Active is present for the same reason — `_opponent_target_rows` builds the deny rows off
+    differences of `turns_to_ko_me`, and returns nothing at all when my Active spot is empty."""
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         HAMMER: CardStat(HAMMER, name="Crushing Hammer", cardType=1),
@@ -50,20 +87,29 @@ def _setup(hand_ids, *, opp_active=None, opp_bench=(), minc=1):
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
         MLUC: CardStat(MLUC, name="Mega Lucario ex", hp=340, megaEx=True, evolvesFrom="Riolu",
                        maxDamageCost=2, maxDamage=270, attacks=(21, 22)),
-    }, attacks={11: AttackStat(11, damage=30, cost=1),
-                21: AttackStat(21, damage=130, cost=1), 22: AttackStat(22, damage=270, cost=2)})
+        FIGHTING_ENERGY: CardStat(FIGHTING_ENERGY, name="Basic {F} Energy", energyType=FIGHTING),
+    }, attacks={11: AttackStat(11, damage=30, cost=1, energyTypes=(FIGHTING,)),
+                21: AttackStat(21, damage=130, cost=1, energyTypes=(FIGHTING,)),
+                22: AttackStat(22, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING))})
     funcs = CardFunctions({HAMMER: ["energy_denial"], BOSS: ["gust"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                  deny_relevance=True, deny_strip_delta=True,
                   functions=funcs)
     hand = [{"id": cid} for cid in hand_ids]
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
     obs = {"current": {"players": [
-                {"active": [None], "bench": [], "hand": hand},
+                {"active": [{"id": MEGA, "hp": 330, "maxHp": 330, "energies": []}],
+                 "bench": [], "hand": hand},
                 {"active": [opp_active], "bench": list(opp_bench)}],
                 "yourIndex": 0, "turn": 4},
            "select": {"context": DISCARD, "minCount": minc, "maxCount": minc, "option": opts}}
     return pilot, obs
+
+
+def _energized(cid: int, hp: int, n: int = 1) -> dict:
+    """An opponent body holding ``n`` real Basic {F} Energy cards."""
+    return {"id": cid, "hp": hp, "energies": [FIGHTING_ENERGY] * n}
 
 
 def _deny_slots(pilot, obs, board=None):
@@ -93,63 +139,86 @@ def test_opp_turns_to_ready_is_the_visible_parallel_lookahead():
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_resolver_emits_a_graded_deny_slot_at_the_disruption_card_tier():
     """The graded Hammer, wired at the CURRENCY ruling: a banked opponent Riolu (1 Energy toward
-    Mega Lucario ex) opens ONE deny slot — value = the disruption CARD-tier (`TAG_TIER["gust"]` =
-    10), graded by turns-to-ready (1 turn out → halved to 5.0, `needs.deny_slot`), NOT the ADR-0062
-    damage swing. The oracle only GATES (the strip bites). ONLY the deny-supplying rows
-    (energy_denial Hammer, gust Boss's) are eligible, via the `needs.SUPPLIES` net."""
-    pilot, obs = _setup([HAMMER, FILLER, BOSS],
-                        opp_active={"id": RIOLU, "hp": 70, "energies": [0]})
+    Mega Lucario ex) opens ONE deny slot, priced in the ONE currency off the disruption CARD-tier
+    (`TAG_TIER["gust"]` = 10) and graded by turns-to-ready (1 turn out → halved, `needs.deny_slot`).
+    Never the play-side damage swing.
+
+    **The tier is now the CEILING, not the value (ADR-0080 / Issue #187).** Armed, it is scaled by
+    the body's relevance before the grade: that Riolu's lone {F} is banked toward Mega Brave
+    ({F}{F}, 270) — "Evolving keeps attached cards", rules.md:98 — credited at the mandated
+    `_DENIAL_FORWARD` discount because the payoff is a turn away and contingent, so the setback is
+    135 of a 350 normalizer. 10 x (135/350) / 2¹ ≈ 1.93. The ADR-0062 oracle that used to supply
+    the bare bite GATE here is deleted (Issue #228); relevance > 0 subsumes it.
+
+    ONLY the deny-supplying rows (energy_denial Hammer, gust Boss's) are eligible, via the
+    `needs.SUPPLIES` net."""
+    pilot, obs = _setup([HAMMER, FILLER, BOSS], opp_active=_energized(RIOLU, 70))
     rows, slots, elig, denys = _deny_slots(pilot, obs)
     assert len(denys) == 1
     j, slot = denys[0]
-    assert slot.value == pytest.approx(TAG_TIER["gust"] / 2.0) and slot.deadline == 1  # 10 / 2¹
+    assert slot.value == pytest.approx(_deny_value(_DENIAL_FORWARD * 270, 1)) and slot.deadline == 1
     suppliers = [rows[k]["cid"] for k in range(len(rows)) if j in elig[k]]
     assert sorted(suppliers) == [HAMMER, BOSS]                # the FILLER is never deny-eligible
     # the deny credit reaches keep_v2 through the assignment (sets-not-sums: with the Boss's also
     # covering, the Hammer's solo marginal is the Boss's displaced next-best slot, not the full 5.0)
     keeps, pick = pilot._needs_v2(obs, pilot._board(obs), rows, 1)
-    assert keeps[0] > 0.0 and pick == [1]                     # the filler sheds, never the Hammer
+    assert keeps[0] > 0.0 and pick == [1], (                  # the filler sheds, never the Hammer
+        f"the deny credit must reach keep_v2 (keeps={keeps}, pick={pick})")
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_deny_leg_is_fail_closed():
     """Every unknown reads as NO slot (erring toward the shipped hedge): an unknown-stats body, a
     surplus-Energy body (the ADR-0062 whiff — stripping denies 0), an absent opponent read, and a
-    hand with no deny-capable row each emit nothing."""
+    hand with no deny-capable row each emit nothing.
+
+    The surplus case is the one that changed CHARACTER rather than outcome: it used to be the
+    ADR-0062 oracle pricing the strip at 0 and the gate declining, and it is now the relevance read
+    reaching 0 STRUCTURALLY — a Mega Lucario ex on 3 {F} is surplus in the typed slot of both its
+    attacks and over the total cost of both, so no strip puts either further out of reach."""
     # unknown body id -> `_opp_turns_to_ready` is None -> no slot
-    pilot, obs = _setup([HAMMER], opp_active={"id": 424242, "energies": [0]})
+    pilot, obs = _setup([HAMMER], opp_active=_energized(424242, 0))
     assert _deny_slots(pilot, obs)[3] == []
     # surplus Energy: Mega Lucario ex on 3 Energy still affords Mega Brave after a strip -> 0-priced
-    pilot, obs = _setup([HAMMER], opp_active={"id": MLUC, "hp": 340, "energies": [0, 0, 0]})
+    pilot, obs = _setup([HAMMER], opp_active=_energized(MLUC, 340, 3))
     assert _deny_slots(pilot, obs)[3] == []
     # no opponent board at all
     pilot, obs = _setup([HAMMER])
     assert _deny_slots(pilot, obs)[3] == []
     # no deny-capable held row: the same juicy target, but nothing in hand supplies deny
-    pilot, obs = _setup([FILLER, MEGA], opp_active={"id": RIOLU, "hp": 70, "energies": [0]})
+    pilot, obs = _setup([FILLER, MEGA], opp_active=_energized(RIOLU, 70))
     assert _deny_slots(pilot, obs)[3] == []
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
 def test_deny_drops_the_doomed_active_and_grades_by_timing():
     """The `active_can_ko` drop, consumed intact: with my Active able to KO theirs the doomed Active
-    denies nothing and emits NO slot, while every biting body still opens a card-tier slot graded by
-    its OWN turns-to-ready — the ready Mega Lucario ex Active at the full band (10 / 2⁰), the banked
-    bench Riolu one turn out at half (10 / 2¹). Bench vs Active is now a TIMING grade, not a fixed
-    weight (the damage-model `_DENIAL_BENCH` discount is retired from the keep price)."""
-    bench_body = {"id": RIOLU, "hp": 70, "energies": [0]}
-    pilot, obs = _setup([HAMMER], opp_active={"id": MLUC, "hp": 340, "energies": [0, 0]},
-                        opp_bench=[bench_body])
+    denies nothing and emits NO slot, while every biting body still opens a slot graded by its OWN
+    turns-to-ready — the ready Mega Lucario ex Active at the full band (2⁰), the banked bench Riolu
+    one turn out at half (2¹). Bench vs Active is a TIMING grade, not a fixed weight: the
+    damage-model `_DENIAL_BENCH` discount was retired from the keep price and Issue #228 deleted it.
+
+    Each slot's ceiling is the card tier scaled by that body's own relevance (ADR-0080): the Active
+    Mega Lucario ex sits on exactly the {F}{F} Mega Brave needs, so the strip puts its full 270 out
+    of reach; the bench Riolu's lone {F} is banked one evolution away, so it takes the
+    `_DENIAL_FORWARD` discount on the same 270. Nothing in either figure is an AREA term — the
+    deadlines asserted below are where bench-vs-Active shows up, and they come from each body's own
+    turns-to-ready."""
+    pilot, obs = _setup([HAMMER], opp_active=_energized(MLUC, 340, 2),
+                        opp_bench=[_energized(RIOLU, 70)])
     board = pilot._board(obs)
     _rows, _slots, _elig, denys = _deny_slots(pilot, obs, board)
     by_key = {s.key: s for _j, s in denys}
     assert set(by_key) == {f"deny:active0:{MLUC}", f"deny:bench0:{RIOLU}"}
-    assert by_key[f"deny:active0:{MLUC}"].value == pytest.approx(TAG_TIER["gust"])        # ready → 10
-    assert by_key[f"deny:bench0:{RIOLU}"].value == pytest.approx(TAG_TIER["gust"] / 2.0)  # 1 out → 5
+    assert by_key[f"deny:active0:{MLUC}"].deadline == 0, "the ready Active is at the full band"
+    assert by_key[f"deny:bench0:{RIOLU}"].deadline == 1, "the banked bench body is one turn out"
+    assert by_key[f"deny:active0:{MLUC}"].value == pytest.approx(_deny_value(270, 0))
+    assert by_key[f"deny:bench0:{RIOLU}"].value == pytest.approx(
+        _deny_value(_DENIAL_FORWARD * 270, 1))
     doomed = dataclasses.replace(board, active_can_ko=True)
     _rows, _slots, _elig, denys = _deny_slots(pilot, obs, doomed)
     assert [s.key for _j, s in denys] == [f"deny:bench0:{RIOLU}"]
-    assert denys[0][1].value == pytest.approx(TAG_TIER["gust"] / 2.0)
+    assert denys[0][1].value == pytest.approx(_deny_value(_DENIAL_FORWARD * 270, 1))
 
 
 @pytest.mark.req("REQ-NEEDS-0007")

@@ -4,10 +4,16 @@ instrument).
 `pilot._resolve_needs` emits `gust_target` slots for the opponent's BENCH bodies (verified at source,
 `doctrine_gust.py`: a gust effect only ever forces a switch of a BENCHED Pokémon, never the Active) —
 gated by the `gust_target_slots` kill-switch. VALUE is the real per-body removal value
-(`_opponent_target_rows`, the shared S3 computation), not the flat disruption card-tier `deny_slot`
-still uses. OFF (default) leaves gust-tagged cards routing through `deny` exactly as shipped — the
-existing `test_needs_deny_resolver.py` coverage already pins that byte-identical behavior; this file
-only asserts the ON-path and the OFF/ON boundary.
+(`_opponent_target_rows`, the shared S3 computation), not the disruption card-tier `deny_slot`
+still prices against. OFF (default) leaves gust-tagged cards routing through `deny` exactly as
+shipped — the existing `test_needs_deny_resolver.py` coverage already pins that byte-identical
+behavior; this file only asserts the ON-path and the OFF/ON boundary.
+
+The `deny` slots this file counts are read on the ARMED instrument (Deny Relevance, ADR-0080 /
+Issue #187 — the ADR-0062 magnitude oracle it replaced was deleted by Issue #228), which prices an
+Energy against a cost's typed slots. That is why the opponent bodies here hold real Basic {F} Energy
+cards and the attack records declare `energyTypes`: this file is about ROUTING — which KIND of slot
+a held card opens — so its boards have to be ones the deny read can actually see.
 """
 from __future__ import annotations
 
@@ -23,22 +29,37 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 DISCARD = 8
 MEGA, HAMMER, BOSS, FILLER = 1031, 1120, 1182, 999
 RIOLU = 677
+FIGHTING = 6                # EnergyType.FIGHTING (cg/api.py)
+FIGHTING_ENERGY = 6         # Basic {F} Energy (SVE 6) — card id and type coincide by coincidence
+
+
+def _banked(cid: int, hp: int, n: int = 1) -> dict:
+    """An opponent bench body holding ``n`` real Basic {F} Energy cards. The `deny` slot's ARMED
+    read (Deny Relevance) resolves an Energy's TYPE through the Provider and scores a colourless
+    placeholder at 0, so the untyped `energies: [0]` this fixture used to carry now means "holding
+    nothing that matters" rather than "holding one Energy"."""
+    return {"id": cid, "hp": hp, "energies": [FIGHTING_ENERGY] * n}
 
 
 def _setup(hand_ids, *, opp_bench=(), gust_target_slots=False):
     """MY Active (Mega Starmie ex, 330 HP) vs an opponent BENCH — the deny-resolver fixture shape,
-    with a real `ma` so `_opponent_target_rows` (needing MY Active) has something to compute against."""
+    with a real `ma` so `_opponent_target_rows` (needing MY Active) has something to compute against.
+
+    Riolu's Accelerating Stab is {F} for 30 (verified, data/EN_Card_Data.csv); its cost TYPES are
+    declared because the armed deny read prices an Energy against a cost's typed slots."""
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         HAMMER: CardStat(HAMMER, name="Crushing Hammer", cardType=1),
         BOSS: CardStat(BOSS, name="Boss's Orders", cardType=3),
         FILLER: CardStat(FILLER, name="Filler", cardType=1),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
-    }, attacks={11: AttackStat(11, damage=30, cost=1)})
+        FIGHTING_ENERGY: CardStat(FIGHTING_ENERGY, name="Basic {F} Energy", energyType=FIGHTING),
+    }, attacks={11: AttackStat(11, damage=30, cost=1, energyTypes=(FIGHTING,))})
     funcs = CardFunctions({HAMMER: ["energy_denial"], BOSS: ["gust"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                  functions=funcs, gust_target_slots=gust_target_slots)
+                  functions=funcs, gust_target_slots=gust_target_slots,
+                  deny_relevance=True, deny_strip_delta=True)
     hand = [{"id": cid} for cid in hand_ids]
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
     obs = {"current": {"players": [
@@ -60,9 +81,10 @@ def _slots(pilot, obs):
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_off_routes_gust_through_deny_exactly_as_shipped():
     """The kill-switch OFF (default): a held Boss's Orders (`gust`-tagged) still opens ONLY a `deny`
-    slot at the flat disruption tier — no `gust_target` slot exists at all, byte-identical to the
-    pre-ADR-0076 behavior `test_needs_deny_resolver.py` already pins."""
-    pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
+    slot — no `gust_target` slot exists at all, byte-identical to the pre-ADR-0076 behavior
+    `test_needs_deny_resolver.py` already pins. The routing is the claim; that sibling file owns
+    what the `deny` slot is WORTH."""
+    pilot, obs = _setup([BOSS], opp_bench=[_banked(RIOLU, 70)],
                         gust_target_slots=False)
     _rows, _slots_, _elig, denys, gusts = _slots(pilot, obs)
     assert len(denys) == 1 and gusts == []
@@ -72,7 +94,7 @@ def test_off_routes_gust_through_deny_exactly_as_shipped():
 def test_on_routes_gust_to_its_own_kind_instead_of_deny():
     """Armed: the SAME held Boss's Orders no longer opens a `deny` slot for that body — it opens a
     `gust_target` slot instead, valued by the real per-body removal value, never both at once."""
-    pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
+    pilot, obs = _setup([BOSS], opp_bench=[_banked(RIOLU, 70)],
                         gust_target_slots=True)
     _rows, _slots_, elig, denys, gusts = _slots(pilot, obs)
     assert denys == []
@@ -87,7 +109,7 @@ def test_on_routes_gust_to_its_own_kind_instead_of_deny():
 def test_on_still_denies_true_energy_denial_cards_unaffected():
     """Armed: a Hammer (`energy_denial`-tagged, not `gust`) is untouched by the migration — it still
     opens a `deny` slot exactly as before, since only the `gust` tag's routing moved."""
-    pilot, obs = _setup([HAMMER], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
+    pilot, obs = _setup([HAMMER], opp_bench=[_banked(RIOLU, 70)],
                         gust_target_slots=True)
     _rows, _slots_, _elig, denys, gusts = _slots(pilot, obs)
     assert len(denys) == 1 and gusts == []
@@ -96,7 +118,7 @@ def test_on_still_denies_true_energy_denial_cards_unaffected():
 @pytest.mark.req("REQ-NEEDS-0011")
 def test_on_opens_no_gust_target_slot_with_no_gust_supplier_held():
     """Fail-closed: armed, but the hand holds no gust-tagged row (a Filler) — no slot, no crash."""
-    pilot, obs = _setup([FILLER], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
+    pilot, obs = _setup([FILLER], opp_bench=[_banked(RIOLU, 70)],
                         gust_target_slots=True)
     _rows, _slots_, _elig, denys, gusts = _slots(pilot, obs)
     assert denys == [] and gusts == []
@@ -107,7 +129,7 @@ def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
     """ADR-0076: `_board()` resolves `_opponent_target_rows` ONCE per decision and caches it
     (`_opponent_target_cache`) — the gust_target emission and the S3a diagnostic shadow both read
     that cache rather than each re-running the per-body `turns_to_ko_me` simulation from scratch."""
-    pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": [0]}],
+    pilot, obs = _setup([BOSS], opp_bench=[_banked(RIOLU, 70)],
                         gust_target_slots=True)
     board = pilot._board(obs)
     assert pilot._opponent_target_cache is not None

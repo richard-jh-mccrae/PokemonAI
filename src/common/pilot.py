@@ -118,6 +118,82 @@ _HAND_READINESS_CAP = 40.0
 # the damage was tie-splits, not magnitude — so the ε only helps once the VALUATION is right (N5d).
 _HAND_TIEBREAK_W = 0.0001
 _HAND_TIEBREAK_CAP = 0.02
+_DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLACES `play-energy-denial`'s
+                           # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
+                           # off a benched body. Same lesson as ADR-0060: price the quantity, don't
+                           # threshold it.
+_DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite, and a free Item is tiered
+                           # ahead of everything by `_finish_turn_last` — so a purely positive term could
+                           # never decline one: any score above zero gets it played. The strip must beat
+                           # the hold (ms f29: "wasted crushing hammer").
+_BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0080 decision 2, Issue #199): a body
+                           # the matched Matchup Brief names among its `threats` is scored up, then
+                           # clipped back into [0,1]. A MULTIPLIER, never a source — authored scouting
+                           # sharpens a read that already works without it, which is what keeps the
+                           # instrument correct against the unbriefed decks the Kaggle grader is made
+                           # of (only 8 Briefs exist). It cannot promote a whiff: 0 x anything is 0,
+                           # so a Brief can never make an irrelevant Energy worth taking — the same
+                           # discipline `_DENIAL_UNFAVORED` follows below ("a booster must scale the
+                           # oracle, never add to it", ADR-0063).
+_DENIAL_TARGET_W = 1.0     # points per damage-point denied, at the DISCARD_ENERGY select. Ranks the
+                           # Hammer's TARGET once its coin comes up heads; nothing scored that select
+                           # before, so a won flip stripped option [0] — the OLDEST-attached Energy.
+#: ADR-0080 / Issue #187: the factor standing where `opp_denial_best` supplied a damage MAGNITUDE, now
+#: that relevance is a [0,1] scalar. **DERIVED, not chosen** — it is exactly the normalizer relevance
+#: was divided by, so `K x relevance == the setback damage` and the armed fire rung is a strict
+#: GENERALISATION of the incumbent's own arithmetic rather than a re-scaling of it. There is no free
+#: parameter here: pin it to anything else and `K x relevance` stops being a damage figure at all.
+#:
+#: Measured on the ADR-0062 anchors AT ISSUE #187, the identity reproduced the incumbent to the cent
+#: where the readings coincided, and diverged only upward where relevance saw a setback `_denial_at`
+#: could not — **f12 +55.0 vs +22.50, f26 +16.25 vs +1.25**, same sign, same decision, strictly
+#: better informed.
+#: ⚠️ That comparison is the DERIVATION RECORD, not a live cross-check, and **both armed figures have
+#: since moved** — do not read them as current. f12 now prices +22.50 (ADR-0084 Amendment A applied
+#: the mandated `_DENIAL_FORWARD` discount to the armed read, which had been crediting the forward
+#: form at double) and f26 now prices +95.00 (decision 5 dropped the bench weight in favour of the
+#: promotion gate). Issue #228 then armed the flag and DELETED the ADR-0062 magnitude rung
+#: (`opp_denial_best` / `_denial_at`), so there is no second instrument left to compare against at
+#: all. K stays pinned to the normalizer for the reason it was derived — it cancels the division
+#: relevance performs — and that is now the only thing holding it. The live pin is
+#: `test_deny_relevance_consumer.py::test_the_fire_factor_is_the_normalizer_so_it_prices_in_damage_units`.
+#:
+#: ⚠️ **The witness moved (ADR-0084 decision 8).** This note used to cite f21/f29's benched Dragapult
+#: ex pricing **-1.25 on both**. That figure was `70 x _DENIAL_BENCH`, and decision 5 retired the
+#: constant from this rung in favour of ADR-0071's promotion GATE (Issue #228 then deleted the
+#: constant outright with the rest of the OFF path). On that board the gate SHUTS (their Terapagos ex
+#: holds 0 Energy against retreat cost 2, and no switch survives the read), so the bench carries no
+#: weight, `deny_relevance_best` is 0, and the rung takes its whiff branch at **0.00** — same
+#: decision, different number. f12 and f26 are the surviving witnesses; f21/f29 now witness the
+#: GATE instead. K itself is untouched: decision 5 changed an area WEIGHT, which multiplies outside
+#: this normalizer, so there was never a free parameter here to re-derive.
+#:
+#: It is **NOT an exchange rate** and must never be reused as one: that is the Worth Damage Rate, which
+#: ADR-0080 decision 1 rules MOOT for deny and `common/currency.py`'s guard test keeps absent by design.
+#: The distinction is that this factor cancels a normalizer inside ONE instrument's own units; a rate
+#: would carry a value ACROSS two currencies.
+_DENY_RELEVANCE_K = _DENY_RELEVANCE_NORM
+_DENIAL_UNFAVORED = 0.3    # Lever A (ADR-0026), as a MULTIPLIER on the priced denial rather than a flat
+                           # rung beside it: when the Read says the race is lost, a strip that already
+                           # denies something is worth MORE. It can never make a whiff worth playing —
+                           # scaling 0 leaves 0, and scaling a negative play value leaves it negative.
+                           # This is the whole point (ms 83968638 f17, CRITICAL): the old flat
+                           # `disrupt-when-unfavored` (+18) rode `opp_denial_best > 0` (the raw PRESENCE
+                           # of denial) and so OVERRODE the oracle's own hold — a free Item at score > 0
+                           # is tiered ahead of everything. A booster must scale the oracle, never add to it.
+                           # RE-EXPRESSED ON RELEVANCE (user ruling 2026-07-30, ADR-0080 Amendment B): its
+                           # SUBJECT is now "deny's value, whichever instrument supplies it" rather than
+                           # "the priced denial magnitude". It multiplies the whole product, so it is
+                           # scale-invariant — a 30% amplification is 30% whether the term it scales is a
+                           # damage figure or `K x relevance`, and the f17 discipline survives verbatim
+                           # (relevance 0 -> 0, so it still cannot resurrect a whiff). Since Issue #228
+                           # deleted the ADR-0062 magnitude rung, `K x relevance` is the ONLY term it
+                           # scales; the scale-invariance argument is what made that deletion safe.
+                           # ADR-0078 decision 6 had retired this outright, on the grounds that it and
+                           # `needs.phase_scale` "say the same thing multiplicatively". That retirement is
+                           # **WITHDRAWN**: under ADR-0080 deny reads `phase_scale` on NO surface, so the
+                           # substitution justifying it no longer exists, and retiring it unreplaced would
+                           # have deleted Lever A from the live codebase (this is its last consumer).
 _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped Energy would pay for on the
                            # target's FORWARD form. "Evolving keeps attached cards" (rules.md:98), so
                            # Energy on a pre-evolution is BANKED, not spent: a Riolu's own Accelerating
@@ -430,7 +506,9 @@ class Board:
                                        # until Issue #228, which made absence indistinguishable from a
                                        # measured whiff — and mid-sim absence was routine, so the fire
                                        # rung declined strips worth +22.50 and +74.50. A `None` fails
-                                       # CLOSED to `opp_denial_best`, never to a whiff.
+                                       # CLOSED to a RECOMPUTE (`_deny_relevance_best`'s ladder),
+                                       # never to a whiff — it used to fall back to `opp_denial_best`,
+                                       # which Issue #228 deleted along with the rest of that oracle.
     deny_relevance_rows: tuple = ()    # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
                                        # what the TARGET pick ranks on, plus the ADR-0084 clock DELTA
                                        # its lexicographic tiebreak reads (None when `deny_strip_delta`
@@ -3897,9 +3975,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # ADR-0062 DAMAGE swing ~140; whether to FIRE the strip is a line evaluation the play-side
         # gust rungs own, not a keep price) and GRADED by the body's visible turns-to-ready
         # (`needs.deny_slot` — a ready threat's strip is worth its full card tier, a far-off one
-        # discounts; the 86091435-68 ruling with timing). The ADR-0062 oracle (`_denial_at`) is now
-        # a GATE only: `> 0` = the strip BITES this body (it has energy to strip / is worth reaching),
-        # and a KO-able Active denies nothing (`active_can_ko` drop, consumed intact). Eligibility
+        # discounts; the 86091435-68 ruling with timing). The ADR-0062 oracle (`_denial_at`) was a
+        # GATE only here — `> 0` = the strip BITES this body — and Issue #228 deleted it: relevance
+        # > 0 SUBSUMES that gate (it is already 0 for a bare body, for surplus Energy and for one
+        # dying to my KO this turn, the `active_can_ko` drop consumed intact). Eligibility
         # routes through the SUPPLIES net: any held row carrying a deny-supplying tag
         # (gust / energy_denial). Fail-closed everywhere: no deny-capable row, no opponent read,
         # unknown stats (`_opp_turns_to_ready` → None) or a strip that bites nothing → NO slot —
@@ -5441,8 +5520,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
             coin_odds(card) * _DENIAL_PLAY_W * (unfavored?) * value  -  _DENIAL_ITEM_COST
 
-        where ``value`` is `K x relevance` when `deny_relevance` is armed (ADR-0080, Issue #187) and
-        the ADR-0062 damage magnitude `opp_denial_best` when it is OFF.
+        where ``value`` is `K x relevance` (ADR-0080, Issue #187). It was the ADR-0062 damage
+        magnitude `opp_denial_best` until Issue #228 armed the flag and deleted that oracle; OFF now
+        stands the rung down entirely — DEGRADED MODE, never a rollback.
 
         Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy,
         no affordable attack, or the only energized body is one I am about to KO) prices at 0 and is
@@ -5482,9 +5562,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         on a benched support mon while their Active sat one Energy above its nuke. That is the literal
         waste. Score each option by what removing it actually denies.
 
-        The DOOMED Active scores 0 here for the same reason it is dropped from `_opp_denial_best`:
-        Energy on a body I am about to knock out is not worth taking. A won flip should land on the
-        bench instead of shaving a corpse.
+        The DOOMED Active scores 0 here for the same reason Deny Relevance's redundancy gate zeroes
+        its row: Energy on a body I am about to knock out is not worth taking. A won flip should land
+        on the bench instead of shaving a corpse.
 
         ARMED (ADR-0080, Issue #187) this is a **pure `argmax relevance`**, scored per OPTION rather
         than per body — which is what makes the within-body rulings expressible at all: on a Munkidori
