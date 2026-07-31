@@ -225,6 +225,54 @@ Tracker build rule 11 — *"a compute-only layer is not a verified layer"* — i
 Issue #187's arming exposed three defects its pure tests could not reach, Issue #217's exposed a
 fourth (the missing forward discount, ADR-0084 Amendment A), and this is the fifth.
 
+## Decision 5 — the fix and the arming land in ONE issue, attribution recovered by a STAGED gate
+
+The defect and the arming stay in Issue #228 (user ruling, against the recommendation to split —
+the house style is aggressive splitting: Issue #199 out of Issue #187's grill, Issue #204 out of
+Issue #199's, Issue #228 out of Issue #217's).
+
+**The cost is real and is mitigated rather than accepted.** ADR-0072's premise is that a gate's red
+is attributable to *the swap being measured*; one branch carrying both a repair and an arming gives
+that up. So the Discrimination Gate runs at **three** points, not two:
+
+| # | tree | required |
+|---|---|---|
+| i | fix in, flags **OFF** | byte-identical to the `a8da62d` baseline, or every difference ruled as the FIX's |
+| ii | fix in, flags **ARMED** | the arming's own measurement, now against a repaired incumbent |
+| iii | post-battery | the shipped state |
+
+Step (i) is what recovers attribution without a blocker chain: any red at (ii) is provably the
+arming's, because (i) has already accounted for everything the repair moved. It is not a formality —
+see decision 6, which step (i) is the detector for.
+
+## Decision 6 — the mid-sim read covers GUST as well as deny
+
+`_opponent_target_rows`' `_planning` guard is not deny's alone. The **`gust_target` slot emission**
+(`pilot.py:4041-4048`) already carries the cache-or-compute ladder and hits the same guard, so
+**gust also goes silent mid-sim today** — and `gust_target_slots` ships **`True`**.
+
+```python
+if self.gust_target_slots:
+    gusters = [k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])]
+    if gusters:
+        result = getattr(self, "_opponent_target_cache", None)
+        if result is None:
+            result = self._opponent_target_rows(obs, board)   # None mid-sim
+        if result is not None:
+```
+
+**Ruled: `_board()`'s cache build (`pilot.py:6815`) becomes mid-sim-capable, and both consumers get
+a real read.** Decision 3's rationale — *the agent must not evaluate a policy differently inside its
+own rollout than outside it* — carries no deny-shaped exception, and both instruments read the same
+shared ADR-0076 rows by construction. Scoping the fix to deny would have required a parameter whose
+only purpose is to preserve a known defect in the sibling.
+
+**Accepted cost, stated plainly.** Issue #228 now touches a shipped, ladder-validated instrument it
+never set out to touch. `runtime.py` records gust clearing the ADR-0072 tripwire at −0.75%
+aggregate with **one matchup swinging −11.5 pp**, already flagged for the ladder-corrections loop —
+this is not a quiet corner. Decision 5's step (i) surfaces gust's delta with zero deny involvement,
+before any arming decision is taken; frames it moves are ruled as gust's, on gust's own evidence.
+
 ## Settled by measurement — relevance is NOT blind
 
 The open question in this ADR's first draft — *"is relevance correctly zero, or blind?"* — is
@@ -241,10 +289,33 @@ Snover's only `{W}` (retreat 3, CSV line 1255) and delays the Abomasnow line exa
 — honestly small at 10.0; `82225643-11` is ADR-0062's own `_DENIAL_FORWARD` anchor; `82224509-67`
 buys exactly one turn against a lethal Mega Brave 270 into our 200 remaining HP.
 
-## Open — not yet ruled
+## Deferred to a measurement, with the rule pre-registered
 
-- **Does arming also owe the DELETION of the OFF magnitude path?** Directive 1's *"Rungs an equation
-  replaces are DELETED, not suppressed"* and the `snipe_relevance` precedent (ADR-0085 Amendment E)
-  say yes; Issue #228's scope item 3 says the OFF path stays live. Held open pending Decision 3's
-  cost measurement: if the pre-registered fallback is taken, `opp_denial_best` becomes the armed
-  path's own mid-sim value and **cannot** be deleted, so the two questions are coupled.
+**Does arming also owe the DELETION of the OFF magnitude path?** Directive 1's *"Rungs an equation
+replaces are DELETED, not suppressed"* and the `snipe_relevance` precedent (ADR-0085 Amendment E)
+say yes; Issue #228's scope item 3 says the OFF path stays live. The question is **coupled to
+Decision 3's cost measurement**, so it is settled by rule rather than by a separate call:
+
+- **Read goes live mid-sim** → `opp_denial_best` has no remaining consumer → **DELETE** it,
+  `_denial_at`'s magnitude use and `_DENIAL_BENCH`, and document OFF as degraded mode (the
+  `snipe_relevance` / `attach_value` / `evolve_value` precedent).
+- **Pre-registered fallback taken** → `opp_denial_best` becomes the armed path's own mid-sim value.
+  Nothing is replaced, so directive 1's deletion clause is satisfied vacuously and it **stays**.
+
+## Also ruled, without a sitting
+
+- **Both flags arm together.** `deny_strip_delta`'s only consumer lives inside
+  `if self.deny_relevance:`; alone it is inert. `deny_relevance` alone would leave the target pick's
+  tie resolved by engine option order — the exact ADR-0062 defect (*"the argmax fell through to
+  index 0"*) ADR-0084 decision 2 built the tiebreak to close.
+- **Both ADR-0072 gates run, not just the Discrimination Gate.** Decision 2 there makes both
+  mandatory per mid-build swap, and `82225643|1|decision|11` is now IN
+  `data/decider_lab/baseline.json` (372 rows since ADR-0087) where it was invisible when Issue #228
+  was written. The gauntlet is graded `--stage mid-build` (ADR-0072 decision 1): `crashes == 0`,
+  `ci_lo >= -5 pp`, `delta >= 0` deleted.
+- **No baseline is re-captured to clear a red.** A re-capture happens only at a ruling commit, per
+  ADR-0072 decision 5 and `CLAUDE.md`'s *"auto-recapture would make the gate vacuous"*.
+- **The stale `reviewed.json` `covered` claim on `82225643-11` stays with Issue #238** (open; its
+  retest *"[1]→[0]=correct"* no longer holds). #228 posts the finding there as evidence.
+- **Issue #136's Phase 1e checkboxes are stale** — Issue #217 is closed `status:4-done` but unticked
+  and still described as *"not blocking anything"*. Corrected when #228 closes.
