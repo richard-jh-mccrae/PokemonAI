@@ -806,7 +806,7 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
 
 # ── the Corpus Reader — ONE reader, ONE key (ADR-TEMP-241, Issue #241) ────────────────────────────
 #
-# The defect these pin, measured 2026-07-31 on the committed corpus:
+# The defect these tests assert against, measured 2026-07-31 on the committed corpus:
 #
 #     raw records                                   372
 #     the Decision Gate's private walk saw          332      (-40, every one recoverable)
@@ -817,8 +817,6 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
 # of what a record IS, and a hand-built key is a second idea of what a frame is CALLED. The second
 # drifts undetectably, because both sides of a diff share the same wrong key — so a self-consistent
 # diff over a wrong keyspace still reports flips and nothing ever goes red.
-
-import json as _json
 
 
 def _rec(episode, frame, *, seat=0, scope="decision", subject=None, agent="mega_starmie",
@@ -842,7 +840,7 @@ def _store(tmp_path, records, build="mega_starmie_20260101_abc1234"):
     d = tmp_path / build
     d.mkdir(parents=True, exist_ok=True)
     (d / "corrections.jsonl").write_text(
-        "".join(_json.dumps(r) + "\n" for r in records), encoding="utf-8")
+        "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
     return tmp_path
 
 
@@ -905,7 +903,7 @@ def test_both_gates_key_a_frame_identically(tmp_path):
 
 @pytest.mark.req("REQ-GATE-0007")
 def test_two_corrections_sharing_a_key_both_survive_the_reader(tmp_path):
-    """Pairs, not a dict — pinned against a future "simplification".
+    """Pairs, not a dict — asserted against a future "simplification".
 
     A dict silently collapses two Corrections on one key. Today that is measurably zero, but
     ``load_corrections`` deliberately KEEPS conflicts (same identity, different ``correct``/
@@ -934,7 +932,7 @@ def test_every_held_out_ruling_names_a_frame_the_committed_store_carries():
 
 @pytest.mark.req("REQ-GATE-0008")
 def test_a_moved_ruling_is_reported_even_when_the_agents_pick_did_not_move():
-    """**The blindness, pinned.** Both diffs emit a row only when the agent's pick moves, so a frame
+    """**The blindness, asserted directly.** Both diffs emit a row only when the agent's pick moves, so a frame
     the agent plays identically whose ``correct`` was re-ruled produces NO row at all — while its
     verdict silently flips from unsatisfied to satisfied.
 
@@ -1057,3 +1055,51 @@ def test_the_committed_capture_embeds_no_absolute_path():
     text = root.read_text(encoding="utf-8")
     for probe in ("/home/", "C:/Users", "C:\\\\Users"):
         assert probe not in text, probe
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_a_frame_gaining_or_losing_a_ruling_counts_as_a_moved_ruling():
+    """``None -> [x]`` is a frame becoming gateable, and ``[x] -> None`` a frame ceasing to be. Both
+    change what the corpus can adjudicate there, so both are reported — an `UNLABELLED` frame turning
+    into a gated one is exactly as worth knowing as a ruling being rewritten, and neither shows up in
+    `added`/`removed` because the frame is on both sides throughout."""
+    gained = decider_lab_diff(_dcap([_drow("k", [0], None)]), _dcap([_drow("k", [0], [1])]))
+    assert gained["ruling_moves"] == [{"key": "k", "before": None, "after": [1]}]
+    lost = decider_lab_diff(_dcap([_drow("k", [0], [1])]), _dcap([_drow("k", [0], None)]))
+    assert lost["ruling_moves"] == [{"key": "k", "before": [1], "after": None}]
+    # ...and a frame that never carried a ruling on either side has not moved.
+    never = decider_lab_diff(_dcap([_drow("k", [0], None)]), _dcap([_drow("k", [1], None)]))
+    assert never["ruling_moves"] == []
+
+
+@pytest.mark.req("REQ-GATE-0008")
+def test_the_leaf_diffs_ruling_moves_and_compared_describe_ONE_population():
+    """`leaf_lab_diff` compares only SCORABLE rows, so its `ruling_moves` must use the same filter.
+
+    Drawn from all rows instead, it would name a frame the report's own `compared` count excludes —
+    two numbers printed side by side describing different populations, which is the confusion this
+    module keeps existing to remove. The Decision Gate has no such filter, so it passes none."""
+    unscorable = {"key": "u", "correct_is_top": None, "unscorable": True, "correct": [1]}
+    before = _report([_row("s", "OK"), {**unscorable, "correct": [1]}])
+    after = _report([_row("s", "OK"), {**unscorable, "correct": [2]}])
+    d = leaf_lab_diff(before, after)
+    assert d["compared"] == 1                      # only the scorable frame is compared...
+    assert d["ruling_moves"] == []                 # ...so the unscorable frame's move is not claimed
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
+    """The invariant over the real corpus, not a fixture: the Decision Gate replays exactly the
+    store's replayable set. A capture that shrinks — the 40-record drop this issue fixes — breaks
+    this, and it is the assertion the issue's own acceptance asked for.
+
+    Set equality, not a count: a count assertion passes on a mis-keyed corpus, which was the larger
+    half of the defect. Independent of `data/decider_lab/baseline.json` on purpose — corrections are
+    tagged continuously and re-capture is a deliberate human act, so asserting against the committed
+    capture would redden `main` on every new tag."""
+    from train.blunder.store import DEFAULT_ROOT
+    from train.decider_lab import _records
+    want = {k for k, _c in gates.keyed_corrections(predicate=lambda c: c.obs and c.agent)}
+    got = {k for k, _c in _records(DEFAULT_ROOT, None)}
+    assert got == want
+    assert len(got) == len(want) > 300              # a plausible corpus, not an empty walk

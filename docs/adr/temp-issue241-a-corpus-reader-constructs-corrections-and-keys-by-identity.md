@@ -80,7 +80,7 @@ wrong answer and deletion the right one.
 
 ### A ruling can move and NO instrument can report it
 
-Found while pinning an apparent count mismatch (the baseline shows 11 `correct: []` rows where the
+Found while chasing an apparent count mismatch (the baseline shows 11 `correct: []` rows where the
 store has 10). The extra row is `85709280`:
 
 ```
@@ -156,7 +156,7 @@ test asserts it directly rather than a docstring asserting it in prose.
 **3. No scope FILTER, and NO new labelling rule — `satisfies_human` already IS the contract.**
 
 The gate replays all 372 records, unfiltered. *"The gate's corpus equals the store's replayable
-set"* is the invariant decision 4's test pins, and a scope filter would force that test to encode a
+set"* is the invariant decision 4's test asserts, and a scope filter would force that test to encode a
 second hand-maintained rule for a third divergence to hide behind.
 
 ⚠️ **This decision replaces a wrong one made earlier in the same grill.** The first version added a
@@ -233,7 +233,7 @@ re-ruling is a deliberate human act, not an agent regression. `decision_gate_ver
 
 Shared, not per-gate, for decision 2's reason: the Discrimination Gate has the identical blindness
 (`leaf_lab_diff` compares `correct_is_top`, computed *from* `correct`), and a second implementation
-would drift. `85709280` (`[] → [0]`) is the worked first case and pins the test.
+would drift. `85709280` (`[] → [0]`) is the worked first case the test asserts on.
 
 Without this, Q5's re-derived numbers cannot separate *"moved because the corpus widened"* from
 *"moved because a ruling changed"* — the separability decision 5 exists to protect.
@@ -241,7 +241,7 @@ Without this, Q5's re-derived numbers cannot separate *"moved because the corpus
 `82225643-11` is the worked example: closed in `reviewed.json` as `covered` with the note
 *"retest [1]→[0]=correct"*, while the shipped Pilot returns `[3]` Play Crushing Hammer. It is not a
 regression the widening causes — it is a pre-existing disagreement no gate could see, and it belongs
-to #238's Tier B once that count is re-derived.
+to Issue #238's Tier B once that count is re-derived.
 
 ## What the build measured (2026-07-31)
 

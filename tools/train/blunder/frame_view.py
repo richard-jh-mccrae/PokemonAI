@@ -58,6 +58,8 @@ import textwrap
 from dataclasses import dataclass
 from pathlib import Path
 
+from .store import jsonl_files          # the store owns where the correction logs live
+
 REPO = Path(__file__).resolve().parents[3]
 DEFAULT_CORRECTIONS = REPO / "data" / "corrections"
 DEFAULT_REPLAYS = REPO / "data" / "replays"
@@ -349,18 +351,6 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _correction_logs(root: Path) -> list:
-    """Every correction log under ``root``, as the STORE defines that layout — never a local glob.
-
-    The store owns where the logs live (`store.jsonl_files`), and re-deriving it here would be a
-    second idea of what the corpus *is*, one level below the second idea of what a *record* is that
-    cost the Decision Gate 40 records (ADR-TEMP-241). Verified equivalent to the `rglob` this
-    replaces: both resolve the same 28 files, and the store's version additionally knows about the
-    legacy root-level log."""
-    from train.blunder.store import jsonl_files
-    return jsonl_files(root)
-
-
 def _corrections_in(path: Path):
     """Every Correction in one log file, CONSTRUCTED (ADR-TEMP-241 decision 1).
 
@@ -372,7 +362,7 @@ def _corrections_in(path: Path):
 
     A malformed line is skipped rather than raised on — the same tolerance the raw read had, and the
     viewer is a diagnostic that must still answer when one record is broken."""
-    from train.blunder.correction import Correction
+    from .correction import Correction
     for line in path.read_text(encoding="utf-8").splitlines():
         line = line.strip()
         if not line:
@@ -501,7 +491,12 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
         # record with an empty `agent` carries a populated `agent_build`, and only `from_dict`
         # backfills the deck from that stem. 40 committed records are that shape, and a raw read
         # renders every one of them with a blank agent. Per-file so the source path survives.
-        for path in _correction_logs(corrections):
+        # The store owns where the logs live (`store.jsonl_files`) as well as how a record is
+        # constructed - re-deriving the layout with a local glob is a second idea of what the
+        # corpus IS, one level below the second idea of what a RECORD is that cost the Decision
+        # Gate 40 records (ADR-TEMP-241). Equivalent to the rglob it replaces: same 28 files,
+        # and the store additionally knows the legacy root-level log.
+        for path in jsonl_files(corrections):
             for c in _corrections_in(path):
                 if c.episode_id != episode_id:
                     continue
@@ -1101,7 +1096,7 @@ def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRE
     keys: set[str] = set()
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():
-        for path in _correction_logs(corrections):
+        for path in jsonl_files(corrections):        # the store's layout, not ours
             for c in _corrections_in(path):        # constructed, not raw — see `find_frame`
                 ep, fr = c.episode_id, (c.decision or {}).get("frame")
                 if ep is None or fr is None:

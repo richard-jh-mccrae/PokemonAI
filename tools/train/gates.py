@@ -332,10 +332,8 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
     surfaced as a **Ruling Move** (`ruling_moves`), which neither of those pairs can see because the
     frame exists on both sides. This diff compares ``correct_is_top``, computed FROM ``correct``, so
     a re-ruling silently changes its verdict exactly as it does the Decision Gate's."""
-    def index(rpt):
-        return {r["key"]: r for r in (rpt.get("rows") or []) if not r.get("unscorable")}
-
-    b, a = index(before), index(after)
+    b = rows_by_key(before, keep=_scorable)
+    a = rows_by_key(after, keep=_scorable)
     shared = b.keys() & a.keys()
     ok_to_miss, miss_to_ok = [], []
     for k in sorted(shared):
@@ -346,7 +344,10 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
             miss_to_ok.append({"key": k, "before": b[k], "after": a[k]})
     return {"ok_to_miss": ok_to_miss, "miss_to_ok": miss_to_ok,
             "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
-            "compared": len(shared), "ruling_moves": ruling_moves(before, after)}
+            "compared": len(shared),
+            # SAME row filter as `compared` above, so the two numbers in one report describe one
+            # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
+            "ruling_moves": ruling_moves(before, after, keep=_scorable)}
 
 
 def discrimination_gate_verdict(diff: dict, *, held_out: dict) -> bool:
@@ -662,7 +663,26 @@ def satisfies_human(chosen, correct) -> bool:
     return picks_as_set(correct) <= picks_as_set(chosen)
 
 
-def ruling_moves(before: dict, after: dict) -> list:
+def rows_by_key(rpt: dict, *, keep=None) -> dict:
+    """A capture's rows indexed by **Frame Key** — the one place a capture is turned into a lookup.
+
+    Both diffs and `ruling_moves` need this, and all three had written their own closure. That is
+    the shape this module keeps having to remove: three copies differing only by a filter clause,
+    which is how `ruling_moves` came to index a different row population than the `leaf_lab_diff`
+    it reports beside. ``keep`` is that filter, passed in rather than baked in.
+
+    A row with no key is dropped: it cannot be diffed, and keeping it would collide every such row
+    onto a single ``None`` bucket."""
+    return {r["key"]: r for r in (rpt.get("rows") or [])
+            if r.get("key") and (keep is None or keep(r))}
+
+
+def _scorable(row) -> bool:
+    """The Leaf Lab's row filter — an unscorable frame has no verdict to compare."""
+    return not row.get("unscorable")
+
+
+def ruling_moves(before: dict, after: dict, *, keep=None) -> list:
     """Every frame present in BOTH captures whose **Correction**'s ``correct`` changed — the human
     re-ruled it (**Ruling Move**, ADR-TEMP-241 decision 7). ``[{key, before, after}, ...]``.
 
@@ -685,11 +705,16 @@ def ruling_moves(before: dict, after: dict) -> list:
     which is computed FROM ``correct``, so it carries the identical blindness, and a second
     implementation would drift. Normalised by `picks_as_set` — the same predicate the verdict uses,
     so re-ordering ``correct`` is not a re-ruling and the two cannot form different ideas of "moved".
-    """
-    def index(rpt):
-        return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
 
-    b, a = index(before), index(after)
+    ``keep`` must be the SAME row filter the diff reporting this uses, so the two numbers printed
+    side by side describe one population: `leaf_lab_diff` compares only scorable rows, and a
+    ``ruling_moves`` drawn from all of them would report frames its own ``compared`` count excludes.
+
+    A ``None`` on one side and a ruling on the other counts as a move: the frame gained or lost its
+    ruling, which changes what the gate can adjudicate there — an ``UNLABELLED`` frame becoming
+    gateable is exactly as worth reporting as a ruling being rewritten.
+    """
+    b, a = rows_by_key(before, keep=keep), rows_by_key(after, keep=keep)
     moved = []
     for k in sorted(b.keys() & a.keys()):
         was, now = b[k].get("correct"), a[k].get("correct")
@@ -741,12 +766,9 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
                      change, but not one the corpus adjudicates.
       ``UNLABELLED`` the frame carries no ``correct``, so no direction can be claimed
     """
-    def index(rpt):
-        return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
-
     norm = picks_as_set
 
-    b, a = index(before), index(after)
+    b, a = rows_by_key(before), rows_by_key(after)
     rows = []
     for k in sorted(b.keys() & a.keys()):
         was, now = b[k].get("chosen"), a[k].get("chosen")

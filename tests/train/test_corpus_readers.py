@@ -30,7 +30,7 @@ REPO = Path(__file__).resolve().parents[2]
 #: disposition. Removing a file from this dict is how the debt gets paid; adding one needs a reason
 #: a reviewer will read.
 ALLOWED_RAW_READERS = {
-    # The eleven diagnostic sweeps. Every one is short the same 40 records. #243 asks fix-or-delete
+    # The eleven diagnostic sweeps. Every one is short the same 40 records. Issue #243 asks fix-or-delete
     # per reader; for the four `*_decider_sweep.py` the expected answer is DELETE (ADR-0085
     # Amendment I already replaced them, and a gate that can only report FIX is worse than absent).
     "tools/train/probes/attach_decider_sweep.py": "#243",
@@ -135,7 +135,7 @@ def test_modules_that_only_mention_the_log_in_prose_are_not_flagged():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_constructing_records_is_not_enough_the_layout_is_the_stores_too():
-    """`tools/sim/score_diff.py` was the near-miss worth pinning: it CONSTRUCTED its records through
+    """`tools/sim/score_diff.py` was the near-miss worth asserting on: it CONSTRUCTED its records through
     `load_corrections` — decision 1 satisfied — while still `rglob`-ing for the files itself. That is
     a second idea of what the corpus *is*, one level below the second idea of what a *record* is, and
     it is the shape a future reader is most likely to get half-right. Both halves come from the

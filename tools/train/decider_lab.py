@@ -68,9 +68,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train import gates as gates_mod                          # noqa: E402  — THE Corpus Reader lives here
 from train.gates import (decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         held_out_frames, print_gate_report,
+                         held_out_frames, keyed_corrections, print_gate_report,
                          print_ruling_moves, satisfies_human, write_json_artifact)
 
 
@@ -102,7 +101,7 @@ def _records(store: Path, agent: str | None):
     def keep(c):
         return bool(c.obs and c.agent) and (not agent or c.agent == agent)
 
-    return sorted(gates_mod.keyed_corrections(store, predicate=keep), key=lambda kc: kc[0])
+    return sorted(keyed_corrections(store, predicate=keep), key=lambda kc: kc[0])
 
 
 def _portable_error(exc: Exception) -> str:
