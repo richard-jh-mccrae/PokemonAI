@@ -293,6 +293,13 @@ PROFILE = {
                                     # was never applied to the armed read at all), and Issue #228's
                                     # exposed a fifth — plus a sixth SURFACE, since `gust_target`
                                     # went silent mid-sim the same way with its flag shipped ON.
+                                    # ⚠️ **OFF is DEGRADED MODE, never a rollback.** Issue #228 also
+                                    # DELETED the ADR-0062 magnitude oracle this replaced (directive
+                                    # 1: "rungs an equation replaces are DELETED, not suppressed"),
+                                    # so OFF no longer restores the incumbent — all three deny
+                                    # surfaces simply stand down. The switch survives as the
+                                    # emergency lever directive 1 permits, and nothing more. Same
+                                    # contract as `snipe_relevance` / `attach_value` / `evolve_value`.
                                     # Emits the
                                     # **Deny Relevance** read — *is this Energy doing important work
                                     # for the opponent's plan?* — on `_opponent_target_rows`. The

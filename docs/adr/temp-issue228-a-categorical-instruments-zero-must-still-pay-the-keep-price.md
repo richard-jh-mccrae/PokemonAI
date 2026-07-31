@@ -359,6 +359,33 @@ run"* is the one thing that must not have two definitions.
 Build rule 11 is **6-for-6** if this is counted, and it is the second defect this issue found in an
 instrument rather than in the agent (Issue #241's excluded records was the first).
 
+## Deviations from the spec, ruled rather than drifted
+
+Found by the Spec axis of the two-axis review. Each is a deliberate departure; recording them is the
+point, since an unruled deviation is indistinguishable from a mistake.
+
+**User story 17 is NOT implemented, deliberately.** It asked that *"the nine tests that currently set
+the deny flags explicitly stop doing so once the flags ship ON."* They still set them. The codebase
+already carries the counter-argument, written before this branch existed
+(`tests/strategy/test_deny_relevance_consumer.py`, `_pilot`): *"Set EXPLICITLY rather than inherited
+from PROFILE: these tests state their own preconditions, so they keep meaning the same thing
+whichever way the shipped flag goes. Guarding the shipped value is `test_runtime`'s job
+(`PROFILE == EXPECTED_SHIPPED`), not this file's."* That reasoning is sound and survives arming: a
+consumer test that inherited the profile would silently stop exercising the armed path the day
+anyone reverted the flag, which is exactly when it is most needed. The story is withdrawn.
+
+**The deletion took `_denial_at`'s GATE use, not only its magnitude use.** The pre-registered rule
+named *"`_denial_at`'s magnitude use"*; the deny-slot emission also read it as a `> 0` bite gate. The
+armed path's own comment states that `relevance > 0` **subsumes** that gate — it is already 0 for a
+body with no Energy, for surplus Energy, and for one dying to my Knock Out this turn — so keeping the
+gate would have meant keeping a whole oracle to re-ask a question relevance already answers. Taking
+it is what makes OFF a clean stand-down rather than a half-instrument. Recorded because the rule's
+wording was narrower than the deletion.
+
+**The `--stage` work is scope beyond the arming.** A breaking CLI change on `gauntlet_ab.py` landed
+because this issue's own battery could not otherwise name the rule that graded it. It is recorded as
+the seventh defect above rather than folded in silently.
+
 ## Deferred to a measurement, with the rule pre-registered
 
 **Does arming also owe the DELETION of the OFF magnitude path?** Directive 1's *"Rungs an equation
