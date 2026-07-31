@@ -76,10 +76,9 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.gates import (decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         held_out_frames, keyed_corrections, print_agree_delta,
-                         print_gate_report, print_ruling_moves, print_unrecognised_rulings,
-                         print_voided, ruling_index, satisfies_human, unrecognised_rulings,
-                         voided_frames, write_json_artifact)
+                         held_out_frames, keyed_corrections, orphan_rulings, print_agree_delta,
+                         print_gate_report, print_ruling_moves, print_ruling_readout, ruling_index,
+                         satisfies_human, split_excused, voided_frames, write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -217,13 +216,13 @@ def main(argv=None) -> int:
     # two different voided sets (ADR-TEMP-239 decision 2).
     index = ruling_index(args.store)
     voided = voided_frames(index)
+    orphans = orphan_rulings(args.store)
     rpt = build_report(args.store, args.agent, voided=set(voided))
 
     if args.cmd == "capture":
         write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
         _print_summary(rpt)
-        print_voided(voided)
-        print_unrecognised_rulings(unrecognised_rulings(index))
+        print_ruling_readout(index, voided, orphans=orphans, detail=True)
         print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
         return 0
 
@@ -236,11 +235,7 @@ def main(argv=None) -> int:
         held_out = held_out_frames()
         passed = decision_gate_verdict(rows, held_out=held_out, voided=set(voided))
         regressions = [r for r in rows if r["verdict"] == "REGRESSION"]
-        # Three-way, and the order matters: a HELD-OUT ruling STANDS and is merely out of scope, so it
-        # is the more informative label when a frame is both. Voided is the fallback, not the default.
-        gating = [r for r in regressions if r["key"] not in held_out and r["key"] not in voided]
-        ruled = [r for r in regressions if r["key"] in held_out]
-        void_hits = [r for r in regressions if r["key"] in voided and r["key"] not in held_out]
+        gating, ruled, void_hits = split_excused(regressions, held_out, voided)
         _print_summary(rpt)
         for v in ("FIX", "NEUTRAL", "UNLABELLED"):
             hits = [r for r in rows if r["verdict"] == v]
@@ -251,8 +246,7 @@ def main(argv=None) -> int:
         if diff["added"] or diff["removed"]:
             print(f"\n  ⚠️ corpus shape moved: +{len(diff['added'])} / -{len(diff['removed'])} frames")
         print_ruling_moves(diff["ruling_moves"])
-        print_voided(voided)
-        print_unrecognised_rulings(unrecognised_rulings(index))
+        print_ruling_readout(index, voided, orphans=orphans)
         if args.context is None:
             print_agree_delta(diff["agree_delta"])
         else:
@@ -271,9 +265,12 @@ def main(argv=None) -> int:
                            f"(human {r['correct']})",
             voided=void_hits, voided_by=voided)
         if args.out:
-            write_json_artifact(args.out, {"passed": passed, "rows": rows,
-                                           "agree_delta": diff["agree_delta"],
-                                           "voided": sorted(voided)})
+            write_json_artifact(args.out, {
+                "passed": passed, "rows": rows, "agree_delta": diff["agree_delta"],
+                # `{key: disposition}`, not a bare key list: a machine consumer must be able to tell a
+                # `transposition` exclusion from a `refuted` one without re-reading the ledger.
+                "voided": {k: r.disposition for k, r in sorted(voided.items())},
+                "orphan_rulings": [k for k, _e in orphans]})
         return 0 if passed else 1
 
     _print_summary(rpt)

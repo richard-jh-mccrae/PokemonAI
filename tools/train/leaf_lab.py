@@ -142,17 +142,17 @@ def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
             row["voided"] = True
         rows.append(row)
     scorable = [r for r in rows if not r["unscorable"]]
-    graded = [r for r in scorable if not r.get("voided")]                # the honest denominator
-    leaf_correct = [r for r in graded if r["correct_is_top"]]            # lenient: shared max counts
-    leaf_strict = [r for r in graded if r["correct_is_unique_top"]]      # honest: SOLE max (rung's pick)
+    gradeable = [r for r in scorable if not r.get("voided")]             # the honest denominator
+    leaf_correct = [r for r in gradeable if r["correct_is_top"]]         # lenient: shared max counts
+    leaf_strict = [r for r in gradeable if r["correct_is_unique_top"]]   # honest: SOLE max (rung's pick)
     return {"n": len(rows), "scorable": len(scorable), "unscorable": len(rows) - len(scorable),
             "skipped_agent": skipped,
-            "voided": len(scorable) - len(graded), "graded": len(graded),
+            "voided": len(scorable) - len(gradeable), "gradeable": len(gradeable),
             "leaf_correct": len(leaf_correct),
-            "leaf_correct_rate": (len(leaf_correct) / len(graded)) if graded else None,
+            "leaf_correct_rate": (len(leaf_correct) / len(gradeable)) if gradeable else None,
             "leaf_correct_strict": len(leaf_strict),
-            "leaf_correct_strict_rate": (len(leaf_strict) / len(graded)) if graded else None,
-            "avg_top_tie": (sum(r["top_tie"] for r in graded) / len(graded)) if graded else None,
+            "leaf_correct_strict_rate": (len(leaf_strict) / len(gradeable)) if gradeable else None,
+            "avg_top_tie": (sum(r["top_tie"] for r in gradeable) / len(gradeable)) if gradeable else None,
             "rows": rows}
 
 
@@ -188,7 +188,7 @@ def _git_rev() -> str:
         return "unknown"
 
 
-def _build_report(store, agent, voided=()):
+def _build_report(store, agent, *, voided=()):
     from train.blunder.store import load_corrections
     corrs = [c for c in load_corrections(store) if is_leaf_frame(c)]
     if agent:
@@ -197,9 +197,10 @@ def _build_report(store, agent, voided=()):
 
 
 def _print_report(rpt) -> None:
-    # `graded` is absent from a capture taken before ADR-TEMP-239; fall back rather than crash, so a
-    # diff against an older committed baseline still reads.
-    graded = rpt.get("graded", rpt["scorable"])
+    # `gradeable` is absent from a capture taken before ADR-TEMP-239; fall back rather than crash,
+    # so a diff against an older committed baseline still reads. Same field name the Decision Gate
+    # uses — one concept, one word.
+    gradeable = rpt.get("gradeable", rpt["scorable"])
     voided = rpt.get("voided", 0)
     print(f"\n=== leaf lab: {rpt['n']} leaf frames "
           f"({rpt['scorable']} scorable, {rpt['unscorable']} unscorable, {rpt['skipped_agent']} agent-skip"
@@ -211,8 +212,8 @@ def _print_report(rpt) -> None:
         return f" ({x:.0%})" if x is not None else ""
     tie_s = f"{tie:.1f}" if tie is not None else "n/a"
     # HEADLINE = strict (the argmax rung would actually pick `correct`); shared-top (lenient) + tie for context
-    print(f"leaf picks `correct` (SOLE top): {rpt['leaf_correct_strict']}/{graded}{_pct(strict)}"
-          f"   | shared-top: {rpt['leaf_correct']}/{graded}{_pct(lenient)}"
+    print(f"leaf picks `correct` (SOLE top): {rpt['leaf_correct_strict']}/{gradeable}{_pct(strict)}"
+          f"   | shared-top: {rpt['leaf_correct']}/{gradeable}{_pct(lenient)}"
           f"   | avg top-tie: {tie_s}")
     for r in rpt["rows"]:
         if r["unscorable"]:
@@ -234,12 +235,9 @@ def _print_diff(diff, held_out, before_meta, voided=None) -> None:
               f"-{len(diff['removed'])} removed since the capture — re-capture the baseline.")
     for f in diff["miss_to_ok"]:
         print(f"  IMPROVED  {f['key']}  MISS -> OK")
+    from train.gates import split_excused
     voided = voided or {}
-    # Same three-way split, same precedence, as the Decision Gate: a HELD-OUT ruling STANDS and is the
-    # more informative label when a frame is both.
-    gating = [f for f in diff["ok_to_miss"] if f["key"] not in held_out and f["key"] not in voided]
-    ruled = [f for f in diff["ok_to_miss"] if f["key"] in held_out]
-    void_hits = [f for f in diff["ok_to_miss"] if f["key"] in voided and f["key"] not in held_out]
+    gating, ruled, void_hits = split_excused(diff["ok_to_miss"], held_out, voided)
     print_gate_report(
         f"DISCRIMINATION GATE (ADR-0072) — {diff['compared']} frames compared "
         f"vs {before_meta.get('git_rev', '?')}",
@@ -269,25 +267,24 @@ def main(argv=None) -> int:
 
     # Read ONCE and threaded through both subcommands — the rulings are one corpus, not a property of
     # a capture, so a capture and the diff reading it must not resolve two different voided sets.
-    from train.gates import ruling_index, voided_frames
+    from train.gates import orphan_rulings, ruling_index, voided_frames
     index = ruling_index(args.store)
     voided = voided_frames(index)
+    orphans = orphan_rulings(args.store)
     rpt = _build_report(args.store, args.agent, voided=set(voided))
 
     if args.cmd == "capture":
-        from train.gates import print_unrecognised_rulings, print_voided, unrecognised_rulings, write_json_artifact
+        from train.gates import print_ruling_readout, write_json_artifact
         write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
         _print_report(rpt)
-        print_voided(voided)
-        print_unrecognised_rulings(unrecognised_rulings(index))
+        print_ruling_readout(index, voided, orphans=orphans, detail=True)
         print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
         return 0
 
     if args.cmd == "diff":
         from train.gates import (discrimination_gate_verdict, held_out_frames, leaf_lab_diff,
-                                 print_agree_delta, print_ruling_moves,
-                                 print_unrecognised_rulings, print_voided,
-                                 unrecognised_rulings, write_json_artifact)
+                                 print_agree_delta, print_ruling_moves, print_ruling_readout,
+                                 write_json_artifact)
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
         diff = leaf_lab_diff(before, rpt, voided=set(voided))
         held_out = held_out_frames()
@@ -297,8 +294,7 @@ def main(argv=None) -> int:
         # PASS/FAIL line, and a reader who stops there must not have skipped the delta that explains
         # the numbers above it.
         print_ruling_moves(diff["ruling_moves"])
-        print_voided(voided)
-        print_unrecognised_rulings(unrecognised_rulings(index))
+        print_ruling_readout(index, voided, orphans=orphans)
         print_agree_delta(diff["agree_delta"])
         _print_diff(diff, held_out, before, voided)
         if args.out:                      # US6: the gate's verdict as a machine-readable artifact
@@ -310,7 +306,10 @@ def main(argv=None) -> int:
                 "added": diff["added"], "removed": diff["removed"],
                 "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-0087 d7)
                 "agree_delta": diff["agree_delta"],     # the aggregate half (ADR-TEMP-239 d7)
-                "voided": sorted(voided),               # reported, never gating (ADR-TEMP-239 d4)
+                # `{key: disposition}`, not a bare key list: a machine consumer must tell a
+                # `transposition` exclusion from a `refuted` one without re-reading the ledger.
+                "voided": {k: r.disposition for k, r in sorted(voided.items())},
+                "orphan_rulings": [k for k, _e in orphans],
                 "held_out": held_out})
             print(f"-> {args.out}")
         return 0 if passed else 1

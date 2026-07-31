@@ -98,6 +98,29 @@ Keeping the raw disposition is what makes the index also the *"has this frame be
 where?"* register Issue #239 asks for; deriving one boolean is what stops every grader from having
 to learn that `refuted` voids and `covered` does not.
 
+**3a. The index owes a DETACHMENT GUARD, and it must be walked from the ledger's side.**
+Added during the two-axis code review, which caught that the property *"a ledger entry naming a frame
+the store does not carry is reported rather than silently voiding nothing"* had no production code
+behind it — and that the test standing in for it was **tautological**: `ruling_index` walks the
+corpus and looks each record up, so `voided_frames(index) ⊆ keyed_corrections()` holds *by
+construction* and can never fail. `orphan_rulings` walks the other way, from `reviewed.json` toward
+the corpus, and both gates print what it finds.
+
+It immediately found two, live in the committed ledger — and **one of them, `86091435-119`, is a
+`refuted`**: a human refutation voiding nothing, silently, which is Issue #239's own defect one layer
+in. Fixing them is a re-key or the deletion of a human ruling, so they are pinned by a test rather
+than changed here; a *third* turns the suite red.
+
+**3b. `fixed` and `deferred-multi-turn` are ADOPTED into the vocabulary, not left unregistered.**
+The spec left this open (*"whether they get formally adopted, renamed, or migrated is a judgement
+call for the build"*). Adopted, because the alternative is a permanent warning on every push to
+`main` — wallpaper, the exact failure the loud path exists to avoid — and because a writer that
+rejects words the loader already accepts is simply broken. The loud path stays armed for the *next*
+unknown word, which is what it is for. The writer's tuple and `RECOGNISED_DISPOSITIONS` are pinned
+equal by a test, and `blunder/report.py`'s census now derives from the same tuple rather than
+re-typing it: that consumer was ALREADY dropping `transposition` and `deferred-multi-turn` from its
+counts, which is this decision's own drift showing up in a third place.
+
 **4. A voided frame leaves the agree-rate DENOMINATOR and is held out of the gate. Both counts are
 reported.**
 A ruling the human took back is no longer a ruling: it cannot say the agent agreed and it cannot say
@@ -159,6 +182,18 @@ expensive failure; a count cannot be confidently wrong.
 
 Rejected — **before/after rate only**: `230/331 -> 230/331` with three rows moved is verbatim the
 state Issue #239 calls dishonest.
+
+Two readout details, decided at build time rather than in the grill:
+
+* **`--context` withholds the delta.** The delta is corpus-wide while `--context` reports one
+  `SelectContext`'s frames; printing it there would put two populations in one report — the exact
+  trap `ruling_moves`' `keep` argument exists to avoid. Withheld with a one-line note rather than
+  mislabelled.
+* **Voided frames list on `capture`, tally on `diff`.** 25 frames with paragraph-length reasons on
+  every push to `main` is wallpaper — the failure the Held-out Ledger's own glossary entry warns
+  about. The verdict block still names any voided frame that actually MOVED (the actionable subset),
+  and the machine-readable artifact carries `{frame key: disposition}` rather than a bare key list, so
+  a consumer can tell a `transposition` exclusion from a `refuted` one.
 
 ## Measured at the build (2026-07-31, not recalled)
 

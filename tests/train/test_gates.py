@@ -1302,11 +1302,47 @@ def test_every_disposition_in_the_committed_ledger_is_recognised_vocabulary():
 
 
 @pytest.mark.req("REQ-GATE-0010")
-def test_every_voided_frame_keys_onto_a_correction_the_committed_store_carries():
-    """A typo'd ledger key voids NOTHING and reads exactly like a frame nobody refuted, so the join is
-    asserted rather than assumed — the same detachment guard the Held-out Ledger already carries."""
-    keys = {k for k, _c in gates.keyed_corrections()}
-    assert sorted(k for k in gates.voided_frames(gates.ruling_index()) if k not in keys) == []
+def test_an_orphaned_ledger_entry_is_reported_rather_than_ruling_on_nothing(tmp_path):
+    """A ledger key matching no committed Correction voids NOTHING, silently — `ruling_index` walks
+    the CORPUS and looks each record up, so an unreachable entry never enters the index and nothing
+    reports that it rules on nothing.
+
+    Asserting it via the index is IMPOSSIBLE and the attempt is a trap: ``voided_frames(index)`` is a
+    subset of ``keyed_corrections`` **by construction**, so a test written that way can never fail.
+    The join has to be walked from the LEDGER's side, which is what `orphan_rulings` does — the same
+    detachment guard `claim_agreement`'s ``no_record`` finding is one store over."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3)])
+    led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "real"},
+                               "9-99": {"disposition": "refuted", "reason": "rules on nothing"}})
+    index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
+    assert sorted(gates.voided_frames(index)) == ["1|0|decision|3"]      # the orphan voids nothing...
+    assert [k for k, _e in gates.orphan_rulings(root, reviewed_path=led)] == ["9-99"]   # ...but is SEEN
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_committed_ledgers_orphans_are_the_two_that_are_known():
+    """Over the REAL ledger. Two entries rule on no committed Correction, and one of them
+    (`86091435-119`) is a **refutation** — a human ruling voiding nothing, which is exactly the class
+    of defect Issue #239 was opened about, found one layer in.
+
+    Pinned to the known two rather than asserted empty: fixing them is a re-key or a delete of a human
+    ruling, which is the user's call and not this build's. A THIRD appearing turns this red, which is
+    the property that matters."""
+    assert [k for k, _e in gates.orphan_rulings()] == ["85046350-10", "86091435-119"]
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_excused_split_prefers_the_held_out_label_when_a_frame_is_both():
+    """One precedence, shared by both gates. A HELD-OUT ruling STANDS and is merely out of this gate's
+    scope; a voided one cannot grade at all — so when a frame carries both, HELD OUT is the more
+    informative thing to print. Written once because both gates had the same three comprehensions,
+    which is how the two would eventually disagree about what excuses a frame."""
+    rows = [{"key": "both"}, {"key": "held"}, {"key": "void"}, {"key": "bare"}]
+    gating, ruled, void_hits = gates.split_excused(
+        rows, {"both": "#1", "held": "#1"}, {"both": object(), "void": object()})
+    assert [r["key"] for r in gating] == ["bare"]
+    assert [r["key"] for r in ruled] == ["both", "held"]
+    assert [r["key"] for r in void_hits] == ["void"]
 
 
 @pytest.mark.req("REQ-GATE-0010")

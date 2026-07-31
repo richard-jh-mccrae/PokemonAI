@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Iterable
 
 from .correction import Correction, is_critical
-from .reviewed import load_reviewed, review_key
+from .reviewed import DISPOSITIONS, load_reviewed, review_key
 from .store import load_corrections
 
 
@@ -74,8 +74,15 @@ def avg_blunders_per_game(corrections) -> dict:
 # `fixed` implicit — auto-reconciliation (ADR-0018) dropped it from `open[]` since a committed
 # rule now satisfies it; `covered`/`refuted`/`deferred` come from reviewed ledger; `open` still
 # needs a rule; `skipped` = tactical / no-obs pile the tuner can't route.
-_RESOLVED = ("fixed", "covered", "refuted", "deferred")
-_DISP_ORDER = ("fixed", "covered", "refuted", "deferred", "open", "skipped")
+# `_disposition` returns the ledger's RAW string, so these tuples must cover the ledger's whole
+# vocabulary or a census row silently vanishes: `present` filters on `_DISP_ORDER`, so a word missing
+# here drops those Corrections out of the report without a trace. That is the consumer-drift this
+# module's own ledger already suffered — `transposition` and `deferred-multi-turn` were live in
+# `reviewed.json` and absent from every list that reads it (Issue #239, ADR-TEMP-239 decision 3).
+# Derived from the writer's vocabulary rather than re-typed, so the next word added cannot skip here.
+_LEDGER_RESOLVED = tuple(DISPOSITIONS)                     # every disposition the ledger may carry
+_RESOLVED = ("fixed", *(d for d in _LEDGER_RESOLVED if d != "fixed"))
+_DISP_ORDER = (*_RESOLVED, "open", "skipped")
 
 
 def _entry_key(entry: dict) -> str:

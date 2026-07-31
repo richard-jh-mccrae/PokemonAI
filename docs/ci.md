@@ -180,7 +180,7 @@ precondition, *"only when a swap's flips have been ruled"*:
 | 2026-07-28 | `38ca76f` | 6 × `MISS → OK`, 3 × `OK → MISS` | move off the long-stale `81eac82` pin (details below) |
 | 2026-07-29 | `fa86dcb` | 1 × `MISS → OK` (`85046350\|0\|decision\|21`) | the user re-ruling of that frame's `correct` (`[2] → [1]`) |
 | 2026-07-29 | `e4c46ca` | 1 × `MISS → OK` (`82752604\|0\|decision\|88`) | rebase onto `96da320`; the gain is **main's** (Issue #172's `ENERGY_RECOVER` work), absorbed so it is protected |
-| 2026-07-31 | `e834272` | **19 frames VOIDED out of the rates** + 1 × `MISS → OK` (`83686860\|1\|decision\|13`) + 1 × ruled `OK → MISS` (`86091435\|0\|decision\|35`, owner `#165`) | Issue #239: a **Voided Ruling** leaves the agree rate. The two flips are **main's**, not this issue's — the pin was stale by 32 rows of `values` drift, the `OK → MISS` was already held out, and zero unruled `OK → MISS` were outstanding |
+| 2026-07-31 | `e834272` | **19 frames VOIDED out of the rates** + 1 × `MISS → OK` (`83686860\|1\|decision\|13`) + 1 × ruled `OK → MISS` (`86091435\|0\|decision\|35`, owner `#165`) | Issue #239: a **Voided Ruling** leaves the agree rate. The two flips are **main's**, not this issue's — the baseline was stale by 32 rows of `values` drift, the `OK → MISS` was already held out, and zero unruled `OK → MISS` were outstanding |
 
 Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
 same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to

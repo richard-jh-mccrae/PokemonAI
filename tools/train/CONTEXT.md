@@ -214,8 +214,24 @@ frame: **any voiding source wins**; all matches are kept so the readout can name
 A voided frame leaves the agree-rate DENOMINATOR (`agree / (labelled − voided)`) and is held out of
 gating — reported, never failing `main`, the same treatment ADR-0072 decision 4 gives a **Held-out
 Frame**, for a different reason. `satisfies_human` is NOT touched; only what the callers count.
+A frame that survives voiding is **gradeable** — the honest denominator both labs report
+(`agree / gradeable`), carried in every capture beside the raw `labelled`/`scorable` count so a
+smaller denominator reads as a deliberate exclusion rather than a vanishing corpus. One word in both
+instruments, deliberately.
 _Avoid_: refuted (one of two voiding dispositions, not the category), excluded / skipped (it is still
-read and still printed), disagreement (a voided frame is neither agreement nor disagreement)
+read and still printed), disagreement (a voided frame is neither agreement nor disagreement),
+graded (say **gradeable** — the two labs used different words for one concept and it drifted at once)
+
+**Orphaned Ruling**:
+A `reviewed.json` entry whose `review_key` matches NO committed **Correction** (`gates.orphan_rulings`,
+**ADR-TEMP-239** decision 3a). It rules on nothing, silently: the **Ruling Index** walks the *corpus*
+and looks each record up, so an entry the corpus cannot reach never enters the index at all. It must
+therefore be walked from the LEDGER's side — a test that asks the index instead is **tautological**,
+because `voided_frames(index)` is a subset of `keyed_corrections` by construction and can never fail.
+Two exist today, and one (`86091435-119`) is a `refuted`: a human refutation voiding nothing. Same
+dangling-join family as **Claim Agreement**'s `no_record` finding, one store over.
+_Avoid_: stale ruling (a ruling can be stale AND reachable), dangling key, missing correction (the
+Correction is not missing — the ledger names one that never existed under that key)
 
 **Transposition**:
 A disposition (**ADR-TEMP-239** decision 6): the human's ruling is correct, but its `correct` names

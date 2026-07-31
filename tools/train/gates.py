@@ -449,8 +449,7 @@ class Ruling:
     disposition: str
     source: str                       # "reviewed" | "held_out"
     reason: str = ""
-    owner: str | None = None
-    ruled: str | None = None
+    owner: str | None = None          # the Held-out Ledger's field; `reviewed.json` carries none
 
 
 #: The dispositions that VOID a label — the ruling can no longer grade the agent, for two different
@@ -525,35 +524,62 @@ def unrecognised_rulings(index: dict) -> list:
             for r in rulings if r.disposition not in RECOGNISED_DISPOSITIONS]
 
 
-def print_voided(voided: dict) -> None:
-    """The shared readout for **Voided Rulings**, so the two gates cannot describe one differently.
+def split_excused(items, held_out, voided, key=None):
+    """Split flagged frames into ``(gating, ruled, voided)`` — the ONE place that precedence lives.
 
-    Reasons are TRUNCATED. The corpus carries 25 voided frames whose ledger reasons run to full
-    paragraphs, and both gates print this on every push to `main` — the Held-out Ledger's own entry
-    already warns that such a section is *"useful only while small: past ~a dozen frames it becomes
-    wallpaper, which is the failure mode it exists to prevent"*. The frame key and the disposition are
-    what a reader acts on; the full reason lives in `data/corrections/reviewed.json`, one grep away."""
-    if not voided:
-        return
-    by_disposition = {}
-    for r in voided.values():
-        by_disposition[r.disposition] = by_disposition.get(r.disposition, 0) + 1
-    tally = ", ".join(f"{n} {d}" for d, n in sorted(by_disposition.items()))
-    print(f"\n  VOIDED ({len(voided)}: {tally}) — the ruling cannot grade these frames; "
-          f"out of the agree rate, never gating. Reasons: data/corrections/reviewed.json")
-    for key, r in sorted(voided.items()):
-        reason = " ".join((r.reason or "").split())
-        print(f"    {key:<26} {r.disposition:<14} {reason[:90]}{'…' if len(reason) > 90 else ''}")
+    Both gates need it and both had written the same three comprehensions, differing only in which
+    list they ran over; a fourth copy is how the two would eventually disagree about what excuses a
+    frame. **A HELD-OUT ruling wins when a frame is both**: it STANDS and is merely out of this gate's
+    scope, which is the more informative label than "the ruling cannot grade at all"."""
+    keyof = key or _key_of
+    gating, ruled, void_hits = [], [], []
+    for item in items or []:
+        k = keyof(item)
+        if k in held_out:
+            ruled.append(item)
+        elif k in voided:
+            void_hits.append(item)
+        else:
+            gating.append(item)
+    return gating, ruled, void_hits
 
 
-def print_unrecognised_rulings(unknown) -> None:
-    """The loud path for a disposition nobody registered. Printed by both gates."""
-    if not unknown:
-        return
-    print(f"\n  ⚠️ UNRECOGNISED DISPOSITION ({len(unknown)}) — non-voiding, so these frames still "
-          f"grade; add the word to gates.RECOGNISED_DISPOSITIONS or fix the ledger:")
-    for key, r in unknown:
-        print(f"    {key}  {r.disposition!r} ({r.source})")
+def print_ruling_readout(index: dict, voided: dict, *, orphans=(), detail=False) -> None:
+    """The **Ruling Index**'s whole readout — voided frames, unregistered words, orphaned entries —
+    from ONE call, so the two gates cannot print three sections in two different combinations.
+
+    ``detail`` lists every voided frame; without it only the tally prints. The corpus carries 25
+    voided frames whose ledger reasons run to full paragraphs, and both gates print this on every push
+    to `main` — the Held-out Ledger's own glossary entry warns that such a section is *"useful only
+    while small: past ~a dozen frames it becomes wallpaper, which is the failure mode it exists to
+    prevent"*. So a **capture** (rare, deliberate, read closely) lists them; a **diff** (every push)
+    prints the tally and points at the file. The verdict block still names any voided frame that
+    actually MOVED, which is the actionable subset."""
+    if voided:
+        by_disposition = {}
+        for r in voided.values():
+            by_disposition[r.disposition] = by_disposition.get(r.disposition, 0) + 1
+        tally = ", ".join(f"{n} {d}" for d, n in sorted(by_disposition.items()))
+        print(f"\n  VOIDED ({len(voided)}: {tally}) — the ruling cannot grade these frames; "
+              f"out of the agree rate, never gating. Reasons: data/corrections/reviewed.json")
+        if detail:
+            for key, r in sorted(voided.items()):
+                reason = " ".join((r.reason or "").split())
+                print(f"    {key:<26} {r.disposition:<14} "
+                      f"{reason[:90]}{'…' if len(reason) > 90 else ''}")
+
+    unknown = unrecognised_rulings(index)
+    if unknown:
+        print(f"\n  ⚠️ UNRECOGNISED DISPOSITION ({len(unknown)}) — non-voiding, so these frames still "
+              f"grade; add the word to gates.RECOGNISED_DISPOSITIONS or fix the ledger:")
+        for key, r in unknown:
+            print(f"    {key}  {r.disposition!r} ({r.source})")
+
+    if orphans:
+        print(f"\n  ⚠️ ORPHANED RULING ({len(orphans)}) — these ledger entries match NO committed "
+              f"Correction, so they rule on nothing; re-key or delete them:")
+        for rkey, entry in orphans:
+            print(f"    {rkey:<26} {entry.get('disposition')!r}")
 
 
 def agree_delta(before: dict, after: dict, *, agrees, moved, voided=(), keep=None) -> dict:
@@ -851,6 +877,27 @@ def ruling_index(store=None, *, reviewed_path=None, fixtures_dir=None) -> dict:
     # Voiding first, so `voiding_ruling` reads the strongest ruling without re-sorting, and a readout
     # that prints only the first entry prints the one that changed the frame's fate.
     return {k: tuple(sorted(v, key=lambda r: not voids_the_label(r))) for k, v in out.items()}
+
+
+def orphan_rulings(store=None, *, reviewed_path=None) -> list:
+    """``[(review_key, entry), ...]`` for every `reviewed.json` entry matching NO committed
+    Correction — the **Ruling Index**'s detachment guard.
+
+    `ruling_index` walks the CORPUS and looks each record up in the ledger, so an entry the corpus
+    cannot reach never enters the index and would be invisible in both directions: it rules on
+    nothing, and nothing reports that it rules on nothing. That is the same dangling-join failure
+    `claim_agreement`'s ``no_record`` finding exists to surface one store over, and
+    `held_out_frames` is asserted against for the other — a ruling detached from its record reads
+    exactly like a frame nobody ruled.
+
+    Measured 2026-07-31: **two** entries are orphaned, and one of them (`86091435-119`) is a
+    ``refuted`` — a human refutation voiding nothing, silently, which is precisely the class of
+    defect Issue #239 was opened about."""
+    from train.blunder.reviewed import load_reviewed, review_key
+
+    reviewed = load_reviewed(reviewed_path) if reviewed_path is not None else load_reviewed()
+    reachable = {review_key(c) for _key, c in keyed_corrections(store)}
+    return [(k, entry) for k, entry in sorted(reviewed.items()) if k not in reachable]
 
 
 def picks_as_set(pick):
