@@ -1,5 +1,5 @@
 {
-  "git_rev": "e50735a",
+  "git_rev": "f1c7c53",
   "agent": null,
   "rows": [
     {
@@ -2409,7 +2409,7 @@
         2
       ],
       "chosen": [
-        2
+        0
       ]
     },
     {
@@ -3616,7 +3616,9 @@
       "frame": 51,
       "agent": "mega_lucario",
       "context": 0,
-      "correct": [],
+      "correct": [
+        0
+      ],
       "chosen": [
         0
       ]
@@ -3974,7 +3976,7 @@
         7
       ],
       "chosen": [
-        4
+        6
       ]
     },
     {
