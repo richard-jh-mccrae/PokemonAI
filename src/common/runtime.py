@@ -278,9 +278,14 @@ PROFILE = {
                                     # Both gates were RE-RUN on the final post-deletion tree (the
                                     # runs above predate it) and PASS unchanged. Mid-build Tripwire
                                     # (ADR-0072 decision 1), 2400 games from a worktree pinned at the
-                                    # final commit: delta +1.17 pp, 95% CI [-2.36, +4.70],
-                                    # crashes 0 -> TRIPWIRE True. Excludes catastrophes only; merit
-                                    # is the two per-frame gates, not this number.
+                                    # a commit pinned PRE-DELETION (baed389), so the OFF arm is the
+                                    # real ADR-0062 incumbent rather than degraded mode: delta
+                                    # +0.83 pp, 95% CI [-2.73, +4.39], crashes 0 -> TRIPWIRE True.
+                                    # (A second run at the post-deletion tip measures armed vs
+                                    # DEGRADED MODE — +1.17 pp, CI [-2.36, +4.70], 0 crashes — which
+                                    # is a weaker claim and is NOT the one that discharges the bar.)
+                                    # Excludes catastrophes only; merit is the two per-frame gates,
+                                    # not this number.
                                     # The staged OFF run is what makes the armed run attributable
                                     # (ADR-TEMP-228 decision 5) — the fix and the arming share one
                                     # branch, so the OFF arm accounts for everything the repair moved

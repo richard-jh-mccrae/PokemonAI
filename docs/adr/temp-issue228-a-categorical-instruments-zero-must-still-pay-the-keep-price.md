@@ -315,29 +315,47 @@ item 1 asked for evaporated without a single frame being ruled. Nothing entered 
 moves **zero** frames, so touching a shipped, ladder-validated instrument cost nothing measurable —
 and the OFF arm is what proves it, exactly as decision 5 intended.
 
-Both gates were then **re-run on the final post-deletion tree**, because the runs above predate the
-OFF-path deletion and so describe a tree that is not what ships. Both PASS unchanged.
+Both gates were then **re-run on the final tip** (`79c12d9`), because the runs above predate the
+OFF-path deletion, the over-cut and its repair, the test migration and the review fixes — and so
+describe a tree that is not what ships. Both PASS unchanged: Discrimination `0 unruled, 0 ruled,
+0 voided`; Decision `372 frames, agree 250/346 -> 250/346, 0 picks moved`.
 
-### The mid-build Tripwire (ADR-0072 decision 1)
+### The mid-build Tripwire (ADR-0072 decision 1) — run TWICE, against two different incumbents
 
-`gauntlet_ab.py --stage mid-build`, n=200/arm/directed matchup, 2400 games, shipped side OFF with the
-overlay arming both flags so the CI reads in the direction the bound is written against:
+`gauntlet_ab.py --stage mid-build`, n=200/arm/directed matchup, 2400 games per run, shipped side OFF
+with the overlay arming both flags so the CI reads in the direction the bound is written against.
+
+**The run that DISCHARGES the acceptance criterion** — `src/` pinned at `baed389`: the three repairs
+in, the ADR-0062 magnitude oracle **still alive**, so the OFF arm is the real incumbent.
 
 ```
-AGGREGATE delta=+0.0117  95% CI [-0.0236, +0.0470]  crashes=0
+AGGREGATE delta=+0.0083  95% CI [-0.0273, +0.0439]  crashes=0
 STAGE: mid-build
 TRIPWIRE: True  (rule: CI-lo>=-0.05 AND crashes==0 (NO delta clause))
 ```
 
-`ci_lo = -2.36 pp` clears the −5 pp floor and `crashes == 0`. Per the rule's own note this excludes
-CATASTROPHES only and is **not** a claim of non-regression; merit is the two per-frame gates above.
+**A second run, against DEGRADED MODE** — taken at the post-deletion tip, where OFF is a stand-down
+rather than the incumbent: `delta=+0.0117`, CI `[-0.0236, +0.0470]`, `crashes=0`, TRIPWIRE True.
+
+**Both clear, and the distinction is the point.** The spec's ordering clause — *"deletion, if taken,
+happens AFTER the battery — the overlay A/B needs the OFF path to exist while it runs"* — was NOT
+honoured: the deletion landed first, so the tip run compares armed against *no deny at all*. That
+answers "deny beats no deny", not "the new deny is no worse than the old", which is a materially
+weaker claim than the criterion asks for. Found by the Spec axis of the two-axis review and repaired
+by re-running with `src/` pinned pre-deletion and only `tools/sim/` taken from the tip — the runner
+is the INSTRUMENT, not the code under test, so staging it forward is legitimate where staging `src/`
+forward would not be. **The +0.83 pp figure is the one that counts.**
+
+Per the rule's own note both runs exclude CATASTROPHES only and neither is a claim of non-regression;
+merit is the two per-frame gates above.
 
 ⚠️ **A first attempt at this run was VOID and its numbers must not be cited.** It was launched from
 the main working tree and then `pilot.py` was edited underneath it mid-run, so later matchups
 imported a half-deleted module: it reported 394 crashes and a 0.990 → 0.155 collapse on
-`dragapult_ex vs mega_starmie`. The valid run above was taken from a **git worktree detached at the
-final commit**, and that same matchup comes back `on 31/200 = 0.155, off 31/200 = 0.155, delta 0.000,
-crashes 0` — confirming the catastrophe was entirely a measurement artefact. Recorded because a
+`dragapult_ex vs mega_starmie`. Both valid runs above were taken from a **git worktree detached at a
+pinned commit**, and that same matchup comes back `delta 0.000, crashes 0` against degraded mode and
+`+0.045, crashes 0` against the incumbent — confirming the catastrophe was entirely a measurement
+artefact. Recorded because a
 discarded measurement that looked this alarming should be findable, not silently dropped.
 
 ### A seventh defect, found at the build — the overlay runner could not name its stage
