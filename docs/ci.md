@@ -171,7 +171,7 @@ so it was not born red.
 
 ### Baseline provenance
 
-`data/leaf_lab/baseline.json` is currently pinned at **`e4c46ca` (2026-07-29)**. Three deliberate
+`data/leaf_lab/baseline.json` is currently pinned at **`e138881` (2026-07-31)**. Five deliberate
 re-captures, each taken only with **zero unruled `OK → MISS`** outstanding — the ADR-0072 decision 2
 precondition, *"only when a swap's flips have been ruled"*:
 
@@ -180,6 +180,8 @@ precondition, *"only when a swap's flips have been ruled"*:
 | 2026-07-28 | `38ca76f` | 6 × `MISS → OK`, 3 × `OK → MISS` | move off the long-stale `81eac82` pin (details below) |
 | 2026-07-29 | `fa86dcb` | 1 × `MISS → OK` (`85046350\|0\|decision\|21`) | the user re-ruling of that frame's `correct` (`[2] → [1]`) |
 | 2026-07-29 | `e4c46ca` | 1 × `MISS → OK` (`82752604\|0\|decision\|88`) | rebase onto `96da320`; the gain is **main's** (Issue #172's `ENERGY_RECOVER` work), absorbed so it is protected |
+| 2026-07-31 | `e138881` | **nothing — a field relabel (`graded` → `gradeable`) + `git_rev`, zero row changes** | the code review settled one word for one concept across both labs (Issue #239) |
+| 2026-07-31 | `e834272` | **19 frames VOIDED out of the rates** + 1 × `MISS → OK` (`83686860\|1\|decision\|13`) + 1 × ruled `OK → MISS` (`86091435\|0\|decision\|35`, owner `#165`) | Issue #239: a **Voided Ruling** leaves the agree rate. The two flips are **main's**, not this issue's — the baseline was stale by 32 rows of `values` drift, the `OK → MISS` was already held out, and zero unruled `OK → MISS` were outstanding |
 
 Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
 same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to
@@ -278,13 +280,16 @@ as the `decider-gate-main` artifact.
 
 **What a green run does not mean.** It means nothing regressed against the last blessed build. It
 does **not** mean the agent is right: the baseline records every frame it captured as the reference,
-including the **101** where the agent contradicts a human ruling. Those are ranked in
+including the **98** where the agent contradicts a human ruling that still stands. (It was 101 over a
+332-frame corpus, and the figure is now taken over the **gradeable** set — the 25 **Voided Rulings**
+are neither agreement nor disagreement, ADR-0088.) Those are ranked in
 [`docs/plans/decider-disagreement-triage.md`](plans/decider-disagreement-triage.md) and owned by the
 correction rounds (Issue #146), not by this job.
 
 ### Baseline provenance
 
-`data/decider_lab/baseline.json` is currently pinned at **`7d0a97f` (2026-07-31)**, **372 frames**.
+`data/decider_lab/baseline.json` is currently pinned at **`e138881` (2026-07-31)**, **372 frames**
+(346 gradeable — 25 carry a **Voided Ruling**, ADR-0088).
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
@@ -293,6 +298,8 @@ correction rounds (Issue #146), not by this job.
 | 2026-07-31 | *(relabel only)* | **nothing — zero row changes** | re-key 332 rows to the Correction's real identity; 163 keys were wrong (Issue #241) |
 | 2026-07-31 | *(pre-rebase)* | **2 ruled `chosen` moves + 1 Ruling Move** | the corpus widened 332 → 372 (Issue #241) |
 | 2026-07-31 | `7d0a97f` | **nothing — `git_rev` only, zero row changes** | rebase onto `main` orphaned the capture's SHA (Issue #241) |
+| 2026-07-31 | `e138881` | **nothing — `git_rev` only, zero row changes** | re-captured beside its sibling after the code review (Issue #239) |
+| 2026-07-31 | `e834272` | **25 frames VOIDED out of the rate; zero `chosen` moves, zero Ruling Moves** | Issue #239: a ruling the human took back can no longer grade, so it leaves the denominator and stops gating. Agree `253/371 → 248/346` — **5 of the 25 had been scored as agreements**, so this is not a one-way flatter of the number |
 
 The 2026-07-31 pair is the shape ADR-0087 decision 5 prescribes, and the reason it is two
 entries rather than one. The Decision Gate's keys had been built by hand, reading `seat` off a

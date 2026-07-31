@@ -11,6 +11,14 @@ two-identical-Riolu transposition the design doc's own risk R3 says not to chase
 (a `refuted` label). A run that "fixes" either has almost certainly overfitted — the scorer's shape
 was selected against these same 19 frames.
 
+Both are now read from the **Ruling Index** (`gates.ruling_index`, ADR-0088 decision 5) rather
+than a private ``RECORDED_MISSES`` dict that lived here. That constant was a *fourth store* for
+rulings, sitting in a probe where no gate could see it, with free-text values and no disposition
+vocabulary — and it is exactly why `81905522-75` was triaged *"never reviewed"* while `82749168-38`,
+carrying the same ADR-0085 ruling, was triaged as ruled. The frames themselves now come through
+`gates.keyed_corrections`, THE Corpus Reader, so this probe no longer carries the raw-JSONL walk
+(and its silent 40-record loss) that ADR-0087 named.
+
     python tools/train/probes/snipe_decider_sweep.py            # the per-frame reading
     python tools/train/probes/snipe_decider_sweep.py --legs     # ...plus the per-leg breakdown
 
@@ -40,35 +48,32 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import satisfies_human            # noqa: E402  one predicate, shared with the gate
+# One predicate and one corpus, shared with the gate — this probe and the Decision Gate must not form
+# two ideas of what a record is, which is the whole of ADR-0087.
+from train.gates import (keyed_corrections, ruling_index,  # noqa: E402
+                         satisfies_human, voided_frames)
 
 DAMAGE = 15
 
-#: Frames ADR-0085 decision 7 records as PERMANENT misses, with the reason. Reported separately so a
-#: run that starts passing them is visible as the overfitting signal it is, rather than as progress.
-RECORDED_MISSES = {
-    "81905522-75": "transposition — two identical Riolu, no board signal splits them (design-doc R3)",
-    "82749168-38": "refuted label — the correction itself is wrong (reviewed.json)",
-}
-
 
 def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(f"{k[0]}-{k[1]}", v) for k, v in sorted(index.items())
-            if v.get("obs") and v.get("agent")
-            and ((v.get("obs") or {}).get("select") or {}).get("context") == DAMAGE]
+    """Every replayable `DAMAGE(15)` Correction, paired with its **Frame Key**.
+
+    `gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1). This used to be a private
+    raw-JSONL glob with a hand-built ``<ep>-<frame>`` key, which is short the same 40 records every
+    other raw reader is and cannot join the **Ruling Index** at all."""
+    def keep(c):
+        return (bool(c.obs and c.agent)
+                and ((c.obs or {}).get("select") or {}).get("context") == DAMAGE)
+
+    return sorted(keyed_corrections(REPO / "data" / "corrections", predicate=keep),
+                  key=lambda kc: kc[0])
 
 
 def _tune():
@@ -82,9 +87,9 @@ def _decide(tune, rec):
     """A FRESH pilot per frame — the Pilot is stateful (deck tracker, per-decision caches), so a
     reused one leaks a previous frame's board. The kill-switch is not touched: `common/runtime.py`
     resolves the shipped PROFILE, and reading anything else would report an agent nobody runs."""
-    pilot = tune._build_pilot(rec["agent"])[0]
+    pilot = tune._build_pilot(rec.agent)[0]
     try:
-        return pilot.explain(rec["obs"]).chosen, None
+        return pilot.explain(rec.obs).chosen, None
     except Exception as e:                       # a frame the shipped pilot cannot replay
         return None, f"{type(e).__name__}: {e}"
 
@@ -92,8 +97,8 @@ def _decide(tune, rec):
 def _legs(tune, rec):
     """Per-option leg breakdown for the shipped reading — the diagnosis half, and the reason this
     probe outlived the gate it used to be."""
-    pilot = tune._build_pilot(rec["agent"])[0]
-    obs, select = rec["obs"], rec["obs"]["select"]
+    pilot = tune._build_pilot(rec.agent)[0]
+    obs, select = rec.obs, rec.obs["select"]
     board = pilot._board(obs, select)
     out = []
     for oi, o in enumerate(select.get("option") or []):
@@ -109,15 +114,18 @@ def main(argv=None) -> int:
     ap.add_argument("--legs", action="store_true", help="print the per-leg breakdown per frame")
     args = ap.parse_args(argv)
     tune = _tune()
+    # The recorded misses are RULINGS, so they are read from the one store that holds rulings.
+    voided = voided_frames(ruling_index(REPO / "data" / "corrections"))
+    frames = _frames()
 
     agree, miss, unlabelled, unreplayable = [], [], [], []
-    print(f"{'frame':<16} {'agent':<14} {'human':<7} {'shipped':<9} reading")
-    for key, rec in _frames():
-        human = rec.get("correct")
+    print(f"{'frame':<26} {'agent':<14} {'human':<7} {'shipped':<9} reading")
+    for key, rec in frames:
+        human = rec.correct
         chosen, err = _decide(tune, rec)
         if err:
             unreplayable.append((key, err))
-            print(f"{key:<16} {rec['agent']:<14} UNREPLAYABLE {err}")
+            print(f"{key:<26} {rec.agent:<14} UNREPLAYABLE {err}")
             continue
         if human is None:
             unlabelled.append((key, chosen))
@@ -128,7 +136,7 @@ def main(argv=None) -> int:
         else:
             miss.append((key, chosen))
             reading = "MISSES"
-        print(f"{key:<16} {rec['agent']:<14} {str(human):<7} {str(chosen):<9} {reading}")
+        print(f"{key:<26} {rec.agent:<14} {str(human):<7} {str(chosen):<9} {reading}")
         if args.legs:
             for oi, cid, got in _legs(tune, rec):
                 if got:
@@ -147,19 +155,20 @@ def main(argv=None) -> int:
     if unreplayable:
         print(f"  unreplayable   {len(unreplayable)}")
 
-    # The recorded misses, reported explicitly in BOTH directions.
-    print("\nRECORDED MISSES (ADR-0085 decision 7 — these must STAY missing):")
-    for key, why in RECORDED_MISSES.items():
-        rec = dict(_frames()).get(key)
-        if rec is None:
-            print(f"  {key:<16} not in corpus")
-            continue
+    # The recorded misses, reported explicitly in BOTH directions — the overfitting signal survives
+    # the constant's retirement; only where the ruling is READ FROM changed.
+    recorded = {k: r for k, r in voided.items() if k in dict(frames)}
+    print("\nRECORDED MISSES (Ruling Index — these must STAY missing):")
+    for key, ruling in sorted(recorded.items()):
+        rec = dict(frames)[key]
         chosen, _e = _decide(tune, rec)
-        state = ("!! NOW PASSING — suspect overfitting" if satisfies_human(chosen, rec.get("correct"))
+        state = ("!! NOW PASSING — suspect overfitting" if satisfies_human(chosen, rec.correct)
                  else "still missing (expected)")
-        print(f"  {key:<16} {state}   ({why})")
+        print(f"  {key:<26} {state}   ({ruling.disposition}: {ruling.reason})")
+    if not recorded:
+        print("  (none — no DAMAGE frame carries a voided ruling)")
 
-    unexplained = [m for m in miss if m[0] not in RECORDED_MISSES]
+    unexplained = [m for m in miss if m[0] not in recorded]
     print(f"\nThis probe REPORTS, it does not gate — the Decision Gate is "
           f"`decider_lab.py diff --baseline data/decider_lab/baseline.json` (ADR-0085 Amendment I). "
           f"{len(agree)}/{labelled} agree, {len(unexplained)} miss without a recorded reason.")

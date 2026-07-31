@@ -1,15 +1,17 @@
 {
-  "git_rev": "ac5b5b9",
+  "git_rev": "e138881",
   "agent": null,
   "n": 277,
   "scorable": 268,
   "unscorable": 9,
   "skipped_agent": 1,
-  "leaf_correct": 193,
-  "leaf_correct_rate": 0.7201492537313433,
-  "leaf_correct_strict": 36,
-  "leaf_correct_strict_rate": 0.13432835820895522,
-  "avg_top_tie": 3.08955223880597,
+  "voided": 19,
+  "gradeable": 249,
+  "leaf_correct": 183,
+  "leaf_correct_rate": 0.7349397590361446,
+  "leaf_correct_strict": 35,
+  "leaf_correct_strict_rate": 0.14056224899598393,
+  "avg_top_tie": 3.0240963855421685,
   "rows": [
     {
       "key": "83686860|1|decision|13",
@@ -19,19 +21,19 @@
         1
       ],
       "values": [
-        50.025,
+        48.0,
         48.0
       ],
       "scored": 2,
       "n_options": 2,
       "unscorable": false,
       "correct_value": 48.0,
-      "top_value": 50.025,
-      "correct_is_top": false,
+      "top_value": 48.0,
+      "correct_is_top": true,
       "correct_is_unique_top": false,
-      "correct_rank": 2,
-      "outscored_by": 1,
-      "top_tie": 1
+      "correct_rank": 1,
+      "outscored_by": 0,
+      "top_tie": 2
     },
     {
       "key": "83686860|1|decision|29",
@@ -41,20 +43,20 @@
         0
       ],
       "values": [
-        174.0,
-        174.0,
-        174.0,
-        174.0,
-        174.0,
-        174.0,
-        174.0,
+        178.0,
+        178.0,
+        178.0,
+        178.0,
+        178.0,
+        178.0,
+        178.0,
         48.0
       ],
       "scored": 8,
       "n_options": 8,
       "unscorable": false,
-      "correct_value": 174.0,
-      "top_value": 174.0,
+      "correct_value": 178.0,
+      "top_value": 178.0,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
@@ -222,18 +224,18 @@
         2
       ],
       "values": [
-        107.05,
-        2152.05,
-        119.19999999999999,
         105.025,
-        34.775,
+        2150.025,
+        117.175,
+        105.025,
+        32.75,
         105.025
       ],
       "scored": 6,
       "n_options": 6,
       "unscorable": false,
-      "correct_value": 119.19999999999999,
-      "top_value": 2152.05,
+      "correct_value": 117.175,
+      "top_value": 2150.025,
       "correct_is_top": false,
       "correct_is_unique_top": false,
       "correct_rank": 2,
@@ -249,21 +251,21 @@
       ],
       "values": [
         14.75,
+        117.75,
         77.75,
-        77.75,
-        77.75,
+        117.75,
         12.05
       ],
       "scored": 5,
       "n_options": 5,
       "unscorable": false,
-      "correct_value": 77.75,
-      "top_value": 77.75,
+      "correct_value": 117.75,
+      "top_value": 117.75,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 3
+      "top_tie": 2
     },
     {
       "key": "85046350|0|decision|79",
@@ -439,8 +441,8 @@
         0
       ],
       "values": [
-        136.025,
-        136.025,
+        138.5,
+        138.5,
         102.5,
         136.025,
         102.5
@@ -448,13 +450,13 @@
       "scored": 5,
       "n_options": 5,
       "unscorable": false,
-      "correct_value": 136.025,
-      "top_value": 136.025,
+      "correct_value": 138.5,
+      "top_value": 138.5,
       "correct_is_top": true,
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 3
+      "top_tie": 2
     },
     {
       "key": "85786096|0|decision|70",
@@ -600,24 +602,24 @@
         1120.2775,
         6000,
         1217.025,
-        329.5,
+        246.525,
         242.025,
         242.025,
-        307.0,
-        1422.025,
+        246.525,
+        1339.05,
         242.025,
-        329.5,
+        246.525,
         242.025,
         242.025,
-        307.0,
-        1422.025,
+        246.525,
+        1339.05,
         242.025,
-        307.0,
-        321.175,
-        321.175,
-        307.0,
-        329.5,
-        315.505,
+        246.525,
+        258.45000000000005,
+        258.45000000000005,
+        246.525,
+        246.525,
+        255.03,
         242.025,
         1055.025,
         242.025,
@@ -642,14 +644,14 @@
         1
       ],
       "values": [
-        169.275,
+        129.275,
         217.025,
         217.025,
         116.0,
         138.5,
         219.5,
         1059.2775,
-        217.025,
+        262.025,
         59.277499999999996
       ],
       "scored": 9,
@@ -659,8 +661,8 @@
       "top_value": 1059.2775,
       "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 3,
-      "outscored_by": 2,
+      "correct_rank": 4,
+      "outscored_by": 3,
       "top_tie": 1
     },
     {
@@ -671,7 +673,7 @@
       "values": [
         111.1,
         1150.025,
-        1107.05,
+        1105.025,
         1113.53,
         1113.53,
         1105.025,
@@ -798,21 +800,21 @@
       ],
       "values": [
         78.25,
-        159.25,
+        222.25,
         96.25,
-        159.25,
+        229.0,
         105.025
       ],
       "scored": 5,
       "n_options": 5,
       "unscorable": false,
-      "correct_value": 159.25,
-      "top_value": 159.25,
-      "correct_is_top": true,
+      "correct_value": 222.25,
+      "top_value": 229.0,
+      "correct_is_top": false,
       "correct_is_unique_top": false,
-      "correct_rank": 1,
-      "outscored_by": 0,
-      "top_tie": 2
+      "correct_rank": 2,
+      "outscored_by": 1,
+      "top_tie": 1
     },
     {
       "key": "86091435|0|turn|8",
@@ -979,7 +981,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 3
+      "top_tie": 3,
+      "voided": true
     },
     {
       "key": "83661652|0|decision|29",
@@ -1045,7 +1048,7 @@
         3
       ],
       "values": [
-        157.5,
+        140.175,
         157.5,
         157.5,
         157.5,
@@ -1064,7 +1067,7 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 6
+      "top_tie": 5
     },
     {
       "key": "83661652|0|decision|44",
@@ -1565,7 +1568,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 2,
       "outscored_by": 1,
-      "top_tie": 1
+      "top_tie": 1,
+      "voided": true
     },
     {
       "key": "85058574|1|decision|109",
@@ -1948,7 +1952,7 @@
       "correct": [],
       "values": [
         36.0,
-        8.0,
+        48.0,
         48.0,
         0.0
       ],
@@ -1971,8 +1975,8 @@
         4
       ],
       "values": [
-        157.175,
-        157.175,
+        170.3375,
+        170.3375,
         98.0,
         157.175,
         143.0,
@@ -1982,12 +1986,12 @@
       "n_options": 6,
       "unscorable": false,
       "correct_value": 143.0,
-      "top_value": 157.175,
+      "top_value": 170.3375,
       "correct_is_top": false,
       "correct_is_unique_top": false,
       "correct_rank": 4,
       "outscored_by": 3,
-      "top_tie": 3
+      "top_tie": 2
     },
     {
       "key": "86090147|0|decision|22",
@@ -2024,13 +2028,13 @@
       "agent": "mega_lucario",
       "correct": [],
       "values": [
-        126.0,
-        126.0,
-        126.0,
-        126.0,
-        126.0,
-        114.0,
-        101.0,
+        86.0,
+        86.0,
+        86.0,
+        86.0,
+        86.0,
+        74.0,
+        53.0,
         -1000.0
       ],
       "scored": 8,
@@ -2674,7 +2678,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 3
+      "top_tie": 3,
+      "voided": true
     },
     {
       "key": "81904451|0|decision|50",
@@ -2752,7 +2757,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 6
+      "top_tie": 6,
+      "voided": true
     },
     {
       "key": "81904451|0|decision|58",
@@ -2791,7 +2797,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 7
+      "top_tie": 7,
+      "voided": true
     },
     {
       "key": "81905063|1|decision|10",
@@ -2966,7 +2973,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 8
+      "top_tie": 8,
+      "voided": true
     },
     {
       "key": "81906131|1|decision|25",
@@ -3100,7 +3108,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 6
+      "top_tie": 6,
+      "voided": true
     },
     {
       "key": "82224509|1|decision|29",
@@ -3213,7 +3222,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 2,
       "outscored_by": 1,
-      "top_tie": 1
+      "top_tie": 1,
+      "voided": true
     },
     {
       "key": "82224509|1|decision|67",
@@ -3681,7 +3691,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 2,
       "outscored_by": 1,
-      "top_tie": 1
+      "top_tie": 1,
+      "voided": true
     },
     {
       "key": "82227388|0|decision|22",
@@ -4300,7 +4311,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 4,
       "outscored_by": 3,
-      "top_tie": 3
+      "top_tie": 3,
+      "voided": true
     },
     {
       "key": "82523811|1|decision|79",
@@ -4457,7 +4469,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 4
+      "top_tie": 4,
+      "voided": true
     },
     {
       "key": "82524455|1|decision|27",
@@ -4662,7 +4675,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 2,
       "outscored_by": 1,
-      "top_tie": 1
+      "top_tie": 1,
+      "voided": true
     },
     {
       "key": "82525741|0|decision|77",
@@ -4747,7 +4761,8 @@
       "correct_is_unique_top": true,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 1
+      "top_tie": 1,
+      "voided": true
     },
     {
       "key": "82525741|0|decision|100",
@@ -4996,7 +5011,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 10,
       "outscored_by": 9,
-      "top_tie": 9
+      "top_tie": 9,
+      "voided": true
     },
     {
       "key": "82748422|0|decision|26",
@@ -5842,7 +5858,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 2,
       "outscored_by": 1,
-      "top_tie": 1
+      "top_tie": 1,
+      "voided": true
     },
     {
       "key": "82753102|1|decision|37",
@@ -6047,7 +6064,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 7,
       "outscored_by": 6,
-      "top_tie": 6
+      "top_tie": 6,
+      "voided": true
     },
     {
       "key": "82756664|1|decision|35",
@@ -6107,7 +6125,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 4
+      "top_tie": 4,
+      "voided": true
     },
     {
       "key": "82756664|1|decision|37",
@@ -6887,7 +6906,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 2
+      "top_tie": 2,
+      "voided": true
     },
     {
       "key": "83663053|1|decision|22",
@@ -7431,7 +7451,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 12,
       "outscored_by": 11,
-      "top_tie": 4
+      "top_tie": 4,
+      "voided": true
     },
     {
       "key": "83968638|1|decision|17",

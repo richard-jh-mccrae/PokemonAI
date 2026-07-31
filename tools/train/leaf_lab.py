@@ -119,9 +119,16 @@ def is_leaf_frame(c) -> bool:
     return bool(getattr(c, "correct", None)) and (obs.get("select") or {}).get("context") == 0
 
 
-def leaf_lab_report(pilot_for, corrections) -> dict:
+def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
     """Aggregate the leaf verdict across a batch. `pilot_for(agent)` builds/returns the cgpy-wired Pilot
-    for an agent (memoised by the caller). Only leaf frames (``is_leaf_frame``) are considered."""
+    for an agent (memoised by the caller). Only leaf frames (``is_leaf_frame``) are considered.
+
+    A **Voided Ruling** frame is still scored and still carried in ``rows`` — it is marked ``voided``
+    and left out of the RATES only (ADR-0088 decision 4). It deliberately stays *scorable*, so the
+    diff still compares it and `ruling_moves` still sees it: a voided ruling stops grading, it does not
+    stop existing, and a frame vanishing from ``compared`` would be the shrinking-gated-set failure
+    ``added``/``removed`` exist to prevent."""
+    voided = set(voided or ())
     rows, skipped = [], 0
     for c in corrections:
         if not is_leaf_frame(c):
@@ -130,17 +137,22 @@ def leaf_lab_report(pilot_for, corrections) -> dict:
         if pilot is None:
             skipped += 1
             continue
-        rows.append(evaluate_leaf_on_correction(pilot, c))
+        row = evaluate_leaf_on_correction(pilot, c)
+        if row["key"] in voided:
+            row["voided"] = True
+        rows.append(row)
     scorable = [r for r in rows if not r["unscorable"]]
-    leaf_correct = [r for r in scorable if r["correct_is_top"]]           # lenient: shared max counts
-    leaf_strict = [r for r in scorable if r["correct_is_unique_top"]]     # honest: SOLE max (rung's pick)
+    gradeable = [r for r in scorable if not r.get("voided")]             # the honest denominator
+    leaf_correct = [r for r in gradeable if r["correct_is_top"]]         # lenient: shared max counts
+    leaf_strict = [r for r in gradeable if r["correct_is_unique_top"]]   # honest: SOLE max (rung's pick)
     return {"n": len(rows), "scorable": len(scorable), "unscorable": len(rows) - len(scorable),
             "skipped_agent": skipped,
+            "voided": len(scorable) - len(gradeable), "gradeable": len(gradeable),
             "leaf_correct": len(leaf_correct),
-            "leaf_correct_rate": (len(leaf_correct) / len(scorable)) if scorable else None,
+            "leaf_correct_rate": (len(leaf_correct) / len(gradeable)) if gradeable else None,
             "leaf_correct_strict": len(leaf_strict),
-            "leaf_correct_strict_rate": (len(leaf_strict) / len(scorable)) if scorable else None,
-            "avg_top_tie": (sum(r["top_tie"] for r in scorable) / len(scorable)) if scorable else None,
+            "leaf_correct_strict_rate": (len(leaf_strict) / len(gradeable)) if gradeable else None,
+            "avg_top_tie": (sum(r["top_tie"] for r in gradeable) / len(gradeable)) if gradeable else None,
             "rows": rows}
 
 
@@ -176,17 +188,23 @@ def _git_rev() -> str:
         return "unknown"
 
 
-def _build_report(store, agent):
+def _build_report(store, agent, *, voided=()):
     from train.blunder.store import load_corrections
     corrs = [c for c in load_corrections(store) if is_leaf_frame(c)]
     if agent:
         corrs = [c for c in corrs if c.agent == agent]
-    return leaf_lab_report(_cgpy_pilot_builder(), corrs)
+    return leaf_lab_report(_cgpy_pilot_builder(), corrs, voided=voided)
 
 
 def _print_report(rpt) -> None:
+    # `gradeable` is absent from a capture taken before ADR-0088; fall back rather than crash,
+    # so a diff against an older committed baseline still reads. Same field name the Decision Gate
+    # uses — one concept, one word.
+    gradeable = rpt.get("gradeable", rpt["scorable"])
+    voided = rpt.get("voided", 0)
     print(f"\n=== leaf lab: {rpt['n']} leaf frames "
-          f"({rpt['scorable']} scorable, {rpt['unscorable']} unscorable, {rpt['skipped_agent']} agent-skip) ===")
+          f"({rpt['scorable']} scorable, {rpt['unscorable']} unscorable, {rpt['skipped_agent']} agent-skip"
+          + (f", {voided} voided" if voided else "") + ") ===")
     strict, lenient = rpt["leaf_correct_strict_rate"], rpt["leaf_correct_rate"]
     tie = rpt["avg_top_tie"]
 
@@ -194,8 +212,8 @@ def _print_report(rpt) -> None:
         return f" ({x:.0%})" if x is not None else ""
     tie_s = f"{tie:.1f}" if tie is not None else "n/a"
     # HEADLINE = strict (the argmax rung would actually pick `correct`); shared-top (lenient) + tie for context
-    print(f"leaf picks `correct` (SOLE top): {rpt['leaf_correct_strict']}/{rpt['scorable']}{_pct(strict)}"
-          f"   | shared-top: {rpt['leaf_correct']}/{rpt['scorable']}{_pct(lenient)}"
+    print(f"leaf picks `correct` (SOLE top): {rpt['leaf_correct_strict']}/{gradeable}{_pct(strict)}"
+          f"   | shared-top: {rpt['leaf_correct']}/{gradeable}{_pct(lenient)}"
           f"   | avg top-tie: {tie_s}")
     for r in rpt["rows"]:
         if r["unscorable"]:
@@ -206,7 +224,7 @@ def _print_report(rpt) -> None:
                   f"  correct={r['correct_value']} top={r['top_value']} top_tie={r['top_tie']}")
 
 
-def _print_diff(diff, held_out, before_meta) -> None:
+def _print_diff(diff, held_out, before_meta, voided=None) -> None:
     """The Discrimination Gate's report. The aggregate metrics are printed by `_print_report` for
     context and are deliberately absent from the verdict — over 1b they moved the GOOD way while six
     frames broke, so a gate keyed on them would have passed the swap that motivated this gate."""
@@ -217,15 +235,17 @@ def _print_diff(diff, held_out, before_meta) -> None:
               f"-{len(diff['removed'])} removed since the capture — re-capture the baseline.")
     for f in diff["miss_to_ok"]:
         print(f"  IMPROVED  {f['key']}  MISS -> OK")
-    gating = [f for f in diff["ok_to_miss"] if f["key"] not in held_out]
-    ruled = [f for f in diff["ok_to_miss"] if f["key"] in held_out]
+    from train.gates import split_excused
+    voided = voided or {}
+    gating, ruled, void_hits = split_excused(diff["ok_to_miss"], held_out, voided)
     print_gate_report(
         f"DISCRIMINATION GATE (ADR-0072) — {diff['compared']} frames compared "
         f"vs {before_meta.get('git_rev', '?')}",
         gating=gating, ruled=ruled, held_out=held_out, total=diff["compared"],
         rule="zero unruled OK->MISS",
         line=lambda f: (f"REGRESSED {f['key']}  OK -> MISS   "
-                        f"rank {f['before'].get('correct_rank')} -> {f['after'].get('correct_rank')}"))
+                        f"rank {f['before'].get('correct_rank')} -> {f['after'].get('correct_rank')}"),
+        voided=void_hits, voided_by=voided)
 
 
 def main(argv=None) -> int:
@@ -245,25 +265,38 @@ def main(argv=None) -> int:
                      help="write the gate verdict as JSON (machine-readable, for a phase checklist)")
     args = ap.parse_args(argv)
 
-    rpt = _build_report(args.store, args.agent)
+    # Read ONCE and threaded through both subcommands — the rulings are one corpus, not a property of
+    # a capture, so a capture and the diff reading it must not resolve two different voided sets.
+    from train.gates import orphan_rulings, ruling_index, voided_frames
+    index = ruling_index(args.store)
+    voided = voided_frames(index)
+    orphans = orphan_rulings(args.store)
+    rpt = _build_report(args.store, args.agent, voided=set(voided))
 
     if args.cmd == "capture":
-        from train.gates import write_json_artifact
+        from train.gates import print_ruling_readout, write_json_artifact
         write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
         _print_report(rpt)
+        print_ruling_readout(index, voided, orphans=orphans, detail=True)
         print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
         return 0
 
     if args.cmd == "diff":
-        from train.gates import (discrimination_gate_verdict, held_out_frames,
-                                 leaf_lab_diff, print_ruling_moves, write_json_artifact)
+        from train.gates import (discrimination_gate_verdict, held_out_frames, leaf_lab_diff,
+                                 print_agree_delta, print_ruling_moves, print_ruling_readout,
+                                 write_json_artifact)
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
-        diff = leaf_lab_diff(before, rpt)
+        diff = leaf_lab_diff(before, rpt, voided=set(voided))
         held_out = held_out_frames()
-        passed = discrimination_gate_verdict(diff, held_out=held_out)
+        passed = discrimination_gate_verdict(diff, held_out=held_out, voided=set(voided))
         _print_report(rpt)
-        _print_diff(diff, held_out, before)
+        # Context BEFORE the verdict, matching the Decision Gate: `_print_diff` ends with the
+        # PASS/FAIL line, and a reader who stops there must not have skipped the delta that explains
+        # the numbers above it.
         print_ruling_moves(diff["ruling_moves"])
+        print_ruling_readout(index, voided, orphans=orphans)
+        print_agree_delta(diff["agree_delta"])
+        _print_diff(diff, held_out, before, voided)
         if args.out:                      # US6: the gate's verdict as a machine-readable artifact
             write_json_artifact(args.out, {
                 "gate": "discrimination", "passed": passed, "git_rev": _git_rev(),
@@ -272,6 +305,11 @@ def main(argv=None) -> int:
                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
                 "added": diff["added"], "removed": diff["removed"],
                 "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-0087 d7)
+                "agree_delta": diff["agree_delta"],     # the aggregate half (ADR-0088 d7)
+                # `{key: disposition}`, not a bare key list: a machine consumer must tell a
+                # `transposition` exclusion from a `refuted` one without re-reading the ledger.
+                "voided": {k: r.disposition for k, r in sorted(voided.items())},
+                "orphan_rulings": [k for k, _e in orphans],
                 "held_out": held_out})
             print(f"-> {args.out}")
         return 0 if passed else 1

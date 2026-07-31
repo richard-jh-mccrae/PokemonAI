@@ -1103,3 +1103,258 @@ def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
     got = {k for k, _c in _records(DEFAULT_ROOT, None)}
     assert got == want
     assert len(got) == len(want) > 300              # a plausible corpus, not an empty walk
+
+
+# ── the Ruling Index — one query over every store a ruling can live in (ADR-0088, Issue #239) ──
+
+
+def _reviewed(tmp_path, entries):
+    """A `reviewed.json` ledger on disk, keyed the way that store keys — by ADR-0049's Scope subject
+    (`review_key`), NOT by Frame Key. The two keyspaces differing is the whole reason the index has to
+    derive its join inside the corpus walk."""
+    path = tmp_path / "reviewed.json"
+    path.write_text(json.dumps({"_note": "a comment key, dropped by the loader", **entries}),
+                    encoding="utf-8")
+    return path
+
+
+def _held_out_fixture(fixtures_dir, frame_key, owner="#165"):
+    """One committed-corpus fixture shape that opts a frame into the Held-out Ledger."""
+    fixtures_dir.mkdir(parents=True, exist_ok=True)
+    (fixtures_dir / "f.json").write_text(json.dumps(
+        {"frame_key": frame_key,
+         "claims": {"decision": {"correct": [1], "owner": owner, "ruled": "2026-07-25",
+                                 "why": "ruled out of scope"}}}), encoding="utf-8")
+    return fixtures_dir
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_a_refuted_ruling_voids_the_label_and_a_covered_one_does_not(tmp_path):
+    """**The issue, in one assertion.** A refutation says the ruling was wrong; ``covered`` says it
+    stands and is already handled. Only the first can stop grading — voiding is not "anything that
+    appears in the ledger", and reading the ledger as a skip-list would drop 112 ``covered`` frames
+    out of the corpus."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3), _rec(2, 4)])
+    led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "forgoes a KO"},
+                               "2-4": {"disposition": "covered", "reason": "already handled"}})
+    index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
+    assert sorted(gates.voided_frames(index)) == ["1|0|decision|3"]
+    assert index["2|0|decision|4"][0].disposition == "covered"
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_a_transposition_voids_for_a_DIFFERENT_reason_than_a_refutation(tmp_path):
+    """Both void; the readout must still say WHICH. ADR-0085 decision 4 cites `81905522-75`'s human
+    pick to justify leg-scoped rather than whole-target guards, so recording that frame as ``refuted``
+    would write into the ledger an assertion a shipped ADR contradicts. The distinction is why
+    `voids_the_label` is derived instead of the disposition being compared at call sites."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3)])
+    led = _reviewed(tmp_path, {"1-3": {"disposition": "transposition",
+                                       "reason": "two identical Riolu"}})
+    index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
+    ruling = gates.voided_frames(index)["1|0|decision|3"]
+    assert gates.voids_the_label(ruling)
+    assert ruling.disposition == "transposition"        # NOT laundered into "refuted"
+    assert ruling.source == "reviewed"
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_index_derives_its_join_rather_than_assuming_the_decision_keyspace(tmp_path):
+    """The two stores key differently and NEITHER derives from the other: `reviewed.json` keys by
+    Scope subject (``<ep>-t<turn>s<seat>`` for a turn Correction), the gates by Frame Key
+    (``<ep>|<seat>|<scope>|<subject>``). A translation written anywhere but inside the corpus walk is
+    the hand-built key ADR-0087 decision 2 forbids — and the seat-0 / scope-``decision`` assumption is
+    exactly the one that cost the Decision Gate 203 of its 372 keys."""
+    root = _store(tmp_path / "corpus", [_rec(7, 51, seat=1),
+                                        _rec(8, 82, seat=1, scope="turn", subject=8)])
+    led = _reviewed(tmp_path, {"7-51": {"disposition": "refuted", "reason": "x"},
+                               "8-t8s1": {"disposition": "refuted", "reason": "y"}})
+    index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
+    assert sorted(gates.voided_frames(index)) == ["7|1|decision|51", "8|1|turn|8"]
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_a_voiding_source_wins_over_a_non_voiding_one_and_both_are_retained(tmp_path):
+    """The precedence rule. A refutation is a strictly later, stronger act than a ``covered`` or a
+    hold-out, so a merge letting the weaker disposition win would re-open the hole. Every ruling is
+    kept regardless, so the readout can still name every store that ruled the frame — which is what
+    makes this an index rather than a skip-list."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3)])
+    led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "bad label"}})
+    fixtures = _held_out_fixture(tmp_path / "fixtures", "1|0|decision|3")
+    rulings = gates.ruling_index(root, reviewed_path=led, fixtures_dir=fixtures)["1|0|decision|3"]
+    assert gates.voiding_ruling(rulings).disposition == "refuted"
+    assert {r.source for r in rulings} == {"reviewed", "held_out"}
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_a_held_out_ruling_alone_never_voids(tmp_path):
+    """Holding a frame out of a gate's SCOPE is not disowning the ruling. If it voided, the eleven
+    Held-out Ledger frames would silently leave the agree rate too — a denominator change nobody
+    ruled on."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3)])
+    fixtures = _held_out_fixture(tmp_path / "fixtures", "1|0|decision|3")
+    index = gates.ruling_index(root, reviewed_path=_reviewed(tmp_path, {}), fixtures_dir=fixtures)
+    assert gates.voided_frames(index) == {}
+    assert index["1|0|decision|3"][0].owner == "#165"
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_an_unrecognised_disposition_is_non_voiding_and_reported_not_swallowed(tmp_path):
+    """The loud path. An unknown word keeps grading (the safe direction) but must not be silent: a
+    disposition nobody registered is a ruling nobody's grader is honouring, and the committed ledger
+    already demonstrated that drift running unnoticed with ``fixed`` and ``deferred-multi-turn``."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3)])
+    led = _reviewed(tmp_path, {"1-3": {"disposition": "probably-fine", "reason": "?"}})
+    index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
+    assert gates.voided_frames(index) == {}
+    assert [k for k, _r in gates.unrecognised_rulings(index)] == ["1|0|decision|3"]
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_writers_vocabulary_and_the_graders_vocabulary_are_the_same_words():
+    """A word `review_correction.py` accepts that the graders do not recognise is precisely the
+    silence that let ``fixed`` sit in the ledger unregistered. Pinned rather than trusted."""
+    from train.blunder.reviewed import DISPOSITIONS
+    assert set(DISPOSITIONS) | {"held_out"} == set(gates.RECOGNISED_DISPOSITIONS)
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_a_voided_regression_is_reported_and_does_NOT_fail_either_gate():
+    """**The live hazard, closed.** 18 of 101 recorded disagreements carried a refuted label, so a
+    build that corrected one of them failed `main` as a REGRESSION — a fix wearing a regression's
+    label. The row must still EXIST (a vanishing frame is the shrinking-gated-set failure
+    ``added``/``removed`` exist to prevent); only the verdict is excused."""
+    before = _dcap([_drow("void", [0], [0]), _drow("real", [0], [0])])
+    after = _dcap([_drow("void", [3], [0]), _drow("real", [3], [0])])
+    rows = decider_lab_diff(before, after, voided={"void"})["rows"]
+    assert {r["key"]: r["verdict"] for r in rows} == {"void": "REGRESSION", "real": "REGRESSION"}
+    assert not decision_gate_verdict(rows, held_out={}, voided=set())
+    assert not decision_gate_verdict(rows, held_out={}, voided={"void"})       # `real` still gates
+    assert decision_gate_verdict(rows, held_out={"real": "#1"}, voided={"void"})
+
+    lb = _report([_row("void", "OK"), _row("real", "OK")])
+    la = _report([_row("void", "MISS"), _row("real", "MISS")])
+    d = leaf_lab_diff(lb, la, voided={"void"})
+    assert sorted(f["key"] for f in d["ok_to_miss"]) == ["real", "void"]
+    assert not discrimination_gate_verdict(d, held_out={}, voided={"void"})
+    assert discrimination_gate_verdict(d, held_out={"real": "#1"}, voided={"void"})
+
+
+# ── the Agree Delta — the aggregate half of the Ruling Move fix (ADR-0088 decision 7) ─────────
+
+
+@pytest.mark.req("REQ-GATE-0011")
+def test_offsetting_moves_cannot_present_as_stillness():
+    """**The measured failure, asserted directly.** Re-capturing the baseline moved three rows and
+    printed ``230/331 -> 230/331``, because a re-ruling flipped one frame disagree->agree and exactly
+    cancelled a regression's agree->disagree. The rate legitimately does not move; what must not
+    happen is the report implying nothing did."""
+    before = _dcap([_drow("regressed", [1], [1]), _drow("reruled", [0], [9])])
+    after = _dcap([_drow("regressed", [4], [1]), _drow("reruled", [0], [0])])
+    delta = decider_lab_diff(before, after)["agree_delta"]
+    assert delta["before"] == delta["after"] == (1, 2)     # the rate is genuinely unchanged...
+    assert (delta["moved"], delta["reruled"]) == (1, 1)    # ...and the report says two things moved
+
+
+@pytest.mark.req("REQ-GATE-0011")
+def test_the_delta_restates_BOTH_sides_against_todays_voided_set():
+    """The rulings are one corpus, not a property of a capture. Restating the baseline is what makes
+    ``230/331 -> 231/313`` legible instead of an unexplained denominator jump — applying the voided
+    set to only the new side would print a rate change no agent caused."""
+    rows = [_drow("kept", [1], [1]), _drow("void", [0], [1])]
+    delta = decider_lab_diff(_dcap(rows), _dcap(rows), voided={"void"})["agree_delta"]
+    assert delta["before"] == delta["after"] == (1, 1)     # 1/2 -> 1/1 on BOTH sides
+    assert delta["voided"] == 1
+
+
+@pytest.mark.req("REQ-GATE-0011")
+def test_an_unlabelled_or_unreplayable_frame_is_outside_the_delta_entirely():
+    """Neither agreement nor disagreement, and neither is a void: ``correct is None`` was never ruled,
+    ``chosen is None`` could not be replayed. Counting either in the denominator would report the
+    agent as wrong about a frame nobody asked it about."""
+    rows = [_drow("ok", [1], [1]), _drow("unlabelled", [0], None), _drow("dead", None, [1])]
+    delta = decider_lab_diff(_dcap(rows), _dcap(rows))["agree_delta"]
+    assert delta["before"] == delta["after"] == (1, 1)
+
+
+@pytest.mark.req("REQ-GATE-0011")
+def test_the_leaf_delta_is_drawn_from_the_SAME_population_as_its_compared_count():
+    """The trap `ruling_moves` already documents, re-checked one function along: a delta drawn from
+    all rows would report a rate over frames the diff's own ``compared`` excludes, and two numbers in
+    one report must describe one population."""
+    unscorable = {"key": "u", "correct_is_top": None, "unscorable": True, "correct": [1]}
+    rpt = _report([_row("s", "OK"), unscorable])
+    d = leaf_lab_diff(rpt, rpt)
+    assert d["compared"] == 1
+    assert d["agree_delta"]["before"] == d["agree_delta"]["after"] == (1, 1)
+
+
+# ── the committed corpus, read through the index ──────────────────────────────────────────────────
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_every_disposition_in_the_committed_ledger_is_recognised_vocabulary():
+    """Over the REAL ledger. This is the assertion whose absence let ``fixed`` and
+    ``deferred-multi-turn`` sit unregistered — the file and the vocabulary drifting apart in silence
+    is the defect, not either word."""
+    assert gates.unrecognised_rulings(gates.ruling_index()) == []
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_an_orphaned_ledger_entry_is_reported_rather_than_ruling_on_nothing(tmp_path):
+    """A ledger key matching no committed Correction voids NOTHING, silently — `ruling_index` walks
+    the CORPUS and looks each record up, so an unreachable entry never enters the index and nothing
+    reports that it rules on nothing.
+
+    Asserting it via the index is IMPOSSIBLE and the attempt is a trap: ``voided_frames(index)`` is a
+    subset of ``keyed_corrections`` **by construction**, so a test written that way can never fail.
+    The join has to be walked from the LEDGER's side, which is what `orphan_rulings` does — the same
+    detachment guard `claim_agreement`'s ``no_record`` finding is one store over."""
+    root = _store(tmp_path / "corpus", [_rec(1, 3)])
+    led = _reviewed(tmp_path, {"1-3": {"disposition": "refuted", "reason": "real"},
+                               "9-99": {"disposition": "refuted", "reason": "rules on nothing"}})
+    index = gates.ruling_index(root, reviewed_path=led, fixtures_dir=tmp_path / "none")
+    assert sorted(gates.voided_frames(index)) == ["1|0|decision|3"]      # the orphan voids nothing...
+    assert [k for k, _e in gates.orphan_rulings(root, reviewed_path=led)] == ["9-99"]   # ...but is SEEN
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_committed_ledgers_orphans_are_the_two_that_are_known():
+    """Over the REAL ledger. Two entries rule on no committed Correction, and one of them
+    (`86091435-119`) is a **refutation** — a human ruling voiding nothing, which is exactly the class
+    of defect Issue #239 was opened about, found one layer in.
+
+    Pinned to the known two rather than asserted empty: fixing them is a re-key or a delete of a human
+    ruling, which is the user's call and not this build's. A THIRD appearing turns this red, which is
+    the property that matters."""
+    assert [k for k, _e in gates.orphan_rulings()] == ["85046350-10", "86091435-119"]
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_excused_split_prefers_the_held_out_label_when_a_frame_is_both():
+    """One precedence, shared by both gates. A HELD-OUT ruling STANDS and is merely out of this gate's
+    scope; a voided one cannot grade at all — so when a frame carries both, HELD OUT is the more
+    informative thing to print. Written once because both gates had the same three comprehensions,
+    which is how the two would eventually disagree about what excuses a frame."""
+    rows = [{"key": "both"}, {"key": "held"}, {"key": "void"}, {"key": "bare"}]
+    gating, ruled, void_hits = gates.split_excused(
+        rows, {"both": "#1", "held": "#1"}, {"both": object(), "void": object()})
+    assert [r["key"] for r in gating] == ["bare"]
+    assert [r["key"] for r in ruled] == ["both", "held"]
+    assert [r["key"] for r in void_hits] == ["void"]
+
+
+@pytest.mark.req("REQ-GATE-0010")
+def test_the_transposition_frame_ADR_0085_relies_on_is_recorded_and_voided():
+    """`81905522-75` was ruled by ADR-0085 decision 7 and lived only in a probe script's private
+    constant, so the triage read it as *"never reviewed"* while `82749168-38` — same ADR, same
+    permanence — read as ruled. Retiring that constant (decision 5) is only real if the ruling
+    survived the move.
+
+    Note the SEAT: `82749168-38` is seat **1**. The probe's retired constant keyed it
+    ``"82749168-38"`` with no seat at all, which is precisely why that store could never join the
+    gates' keyspace — and why the key here is derived by the index rather than written by hand."""
+    voided = gates.voided_frames(gates.ruling_index())
+    assert voided["81905522|0|decision|75"].disposition == "transposition"
+    assert voided["82749168|1|decision|38"].disposition == "refuted"
