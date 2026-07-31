@@ -84,6 +84,39 @@ and state it**, don't ask the developer to recall it. Per `CLAUDE.md`, verify ru
 at source, never from memory. The *decisions*, though, are the developer's: put each one to them and
 wait for their answer. Do not act on the plan until they confirm a shared understanding is reached.
 
+## What to ask vs. what to just decide (side issues)
+
+The test is **margin, not stakes**: would a competent reviewer look at option 1 vs. the runner-up
+under the §"What 'recommended' means" ranking and see a clear, obvious winner — or a real
+trade-off worth someone's input? Blast radius and reversibility do NOT decide this on their own; a
+low-blast-radius, easily-reversible choice can still be genuinely contested (ask), and a
+hard-to-reverse choice can still have an obvious best answer (just decide).
+
+**Ask:** option 1 beats the alternatives by judgment call, taste, or a trade-off a reviewer could
+reasonably weigh differently — the ranking criteria narrow it down but don't fully settle it.
+
+**Just decide (state it, don't wait):** option 1 is the obvious, undisputed best option — nothing
+else is a serious contender once the ranking criteria are applied, or an existing ADR /
+`CONTEXT.md` entry / `CLAUDE.md` convention already dictates it.
+
+When a side issue clears the "just decide" bar: state the decision and a one-line reason in the
+same terse `/caveman` prose used between questions, then keep moving — do not phrase it as a
+question, do not wait for a reply, do not use the numbered question format above. Record it (see
+end-of-session summary below) so the developer still sees it, just not as a stop-and-answer.
+
+When genuinely unsure which bucket a decision falls in, ask — the cost of one extra question is
+lower than silently deciding something that turns out to matter. This is a bias toward fewer
+*trivial* questions, not toward fewer questions overall.
+
+## End-of-session summary
+
+When the grill concludes (shared understanding reached, before advancing the issue's status chip),
+give a brief summary of every decision made in the session — both the ones the developer answered
+and the ones auto-decided under "just decide" above. Keep it a scannable list: one line per
+decision, decision + one-line reason, grouped or ordered however the grill unfolded. Flag the
+auto-decided ones distinctly (e.g. a marker like *(auto)*) so the developer can spot-check them at
+a glance and object before `/to-spec` runs.
+
 ## Capture as you go
 
 Use `/domain-modeling` inline: the moment a term is pinned down, write it to the relevant
