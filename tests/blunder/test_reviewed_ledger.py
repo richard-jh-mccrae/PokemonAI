@@ -148,6 +148,27 @@ def test_a_near_miss_names_the_episodes_own_rulings_when_the_subject_is_unknown(
 
 
 @pytest.mark.req("REQ-TUNE-0036")
+def test_the_two_near_miss_rules_UNION_and_the_operators_own_episode_leads():
+    """The rules must never suppress each other, and the episode the operator got RIGHT is the
+    stronger signal.
+
+    Found by review, reproduced on the real corpus: with the rules as a fallback chain
+    (``same_frame or same_episode``), `near_misses("86091435-120")` returned
+    ``['82753102-120', '83667237-120']`` — two UNRELATED episodes that happen to carry a frame 120 —
+    while all eleven rulings in the operator's OWN episode were suppressed. Confident, wrong, and
+    hiding the right candidate: precisely the failure the no-fuzzy-matching rule exists to prevent,
+    arrived at from the other direction.
+
+    The stub that first covered rule 2 passed only because its corpus had no other episode carrying
+    that frame, i.e. the setup guaranteed the result. This one supplies exactly that other episode."""
+    keyed = _keyed(_TURN, _DEC, _Corr(86091435, 60), _Corr(82753102, 120), _Corr(83667237, 120))
+    assert near_misses("86091435-120", keyed) == [
+        "86091435-60", "86091435-t14s0",          # the operator's OWN episode, first
+        "82753102-120", "83667237-120",           # then the same-frame candidates
+    ]
+
+
+@pytest.mark.req("REQ-TUNE-0036")
 def test_a_near_miss_is_silent_rather_than_wrong():
     """No edit distance, no fuzzy matching. A confident wrong suggestion points at SOMEONE ELSE's
     human ruling, and the entry it produces would be correctly-formed and therefore invisible to
@@ -234,3 +255,32 @@ def test_cli_remove_resolves_a_locator_too(tmp_path):
                  encoding="utf-8")
     assert cli(["--remove", "86091435-119", "--path", str(p), "--store", str(store)]) == 0
     assert json.loads(p.read_text(encoding="utf-8")) == {}
+
+
+@pytest.mark.req("REQ-TUNE-0035")
+def test_cli_remove_can_still_delete_an_ORPHANED_entry(tmp_path):
+    """Found by review. Resolving `--remove` against the corpus made the one entry that most needs
+    deleting — an ORPHAN, the thing `gates.orphan_rulings` exists to surface — un-deletable, because
+    by definition no Correction resolves it.
+
+    Removal is an operation on the LEDGER, so the ledger's own keys are a legitimate second source
+    for it. Resolution still wins when it succeeds (that is what makes the Anchor form work); the
+    literal key is the fallback, not the other way round."""
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    p.write_text(json.dumps({"85046350-10": {"disposition": "covered", "reason": "", "round": "x"}}),
+                 encoding="utf-8")
+    assert cli(["--remove", "85046350-10", "--path", str(p), "--store", str(store)]) == 0
+    assert json.loads(p.read_text(encoding="utf-8")) == {}
+
+
+@pytest.mark.req("REQ-TUNE-0035")
+def test_cli_still_refuses_to_RECORD_under_an_unresolvable_key(tmp_path):
+    """The ledger-key fallback is scoped to `--remove` alone. Recording must never accept a key the
+    corpus cannot reach, or the whole guard is back to free text — including the case where the
+    operator is 'correcting' an existing orphan in place."""
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    p.write_text(json.dumps({"85046350-10": {"disposition": "covered", "reason": "", "round": "x"}}),
+                 encoding="utf-8")
+    before = p.read_text(encoding="utf-8")
+    assert cli(["85046350-10", "refuted", "x", "--path", str(p), "--store", str(store)]) != 0
+    assert p.read_text(encoding="utf-8") == before

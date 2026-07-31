@@ -59,6 +59,18 @@ DEFAULT_REVIEWED = DEFAULT_ROOT / "reviewed.json"
 DISPOSITIONS = ("refuted", "transposition", "deferred", "deferred-multi-turn", "covered", "fixed")
 
 
+def anchor_form(correction) -> str:
+    """``"<episode_id>-<frame>"`` — the **Anchor** frame spelling, for ANY scope.
+
+    On a decision-scope record this IS the `review_key`, which is why that function ends by calling
+    this one: the ``<ep>-<frame>`` shape is written down once. Off decision scope the two diverge,
+    and the gap is the whole of Issue #250 — `tuner/report_md._at` printed *this* for every scope
+    while the ledger was keyed by `review_key`, so `86091435-119` named a record keyed
+    `86091435-t14s0`.
+    """
+    return f"{correction.episode_id}-{correction.decision.get('frame')}"
+
+
 def review_key(correction) -> str:
     """The ledger key for a Correction — its Scope's subject, matching the report ids (ADR-0049):
 
@@ -73,16 +85,7 @@ def review_key(correction) -> str:
         return f"{correction.episode_id}-t{correction.subject}s{correction.seat}"
     if scope == "match":
         return f"{correction.episode_id}-m{correction.seat}"
-    return f"{correction.episode_id}-{correction.decision.get('frame')}"
-
-
-def _anchor_form(correction) -> str:
-    """``"<episode_id>-<frame>"`` — the Anchor frame spelling, for ANY scope.
-
-    On a decision-scope record this is byte-identical to `review_key`. Off it, it is what
-    `tuner/report_md._at` printed for years, which is where `86091435-119` came from.
-    """
-    return f"{correction.episode_id}-{correction.decision.get('frame')}"
+    return anchor_form(correction)          # decision scope: the key IS the Anchor form
 
 
 def _locator_maps(keyed) -> dict:
@@ -100,7 +103,7 @@ def _locator_maps(keyed) -> dict:
         maps["frame_key"][frame_key] = canonical
         if getattr(c, "id", None):
             maps["id"][c.id] = canonical
-        maps["anchor"].setdefault(_anchor_form(c), canonical)
+        maps["anchor"].setdefault(anchor_form(c), canonical)
     return maps
 
 
@@ -145,7 +148,7 @@ def resolve_locator(locator: str, keyed) -> str | None:
 def near_misses(locator: str, keyed) -> list[str]:
     """Canonical keys a REJECTED locator plausibly meant — sorted, possibly empty.
 
-    Two deterministic rules, both read off the two real orphans:
+    Two deterministic rules, both read off the two real orphans, **UNIONED — never chained**:
 
     1. **Same frame number, different episode** — catches `85046350-10` → `85045840-10`, a digit
        slip between two episodes that live in the same store file.
@@ -154,10 +157,21 @@ def near_misses(locator: str, keyed) -> list[str]:
        suggested, which is rule 2 succeeding instead of guessing; what is left for it to catch is a
        locator naming a real episode and a subject nothing carries.
 
+    Rule 2's block is listed **first**: getting the episode right is the stronger signal, because
+    the operator was demonstrably looking at that episode's report.
+
+    **The union is load-bearing, and was got wrong first.** Written as ``same_frame or
+    same_episode``, rule 1 silently suppressed rule 2 whenever any other episode happened to carry
+    the same frame number — on the real corpus `near_misses("86091435-120")` answered
+    ``['82753102-120', '83667237-120']``, two unrelated episodes, while all eleven rulings in the
+    operator's OWN episode were hidden. Confident, wrong, and concealing the right candidate.
+
     **No edit distance, no fuzzy matching, ever.** A confident wrong suggestion points at *someone
     else's human ruling*, and the entry it produces would be correctly-formed — therefore invisible
     to `gates.orphan_rulings`, which only sees keys that reach nothing. Silence is the safe failure;
-    a plausible wrong answer is not.
+    a plausible wrong answer is not. Note the shape that keeps this honest: several *candidates* are
+    a prompt to look, whereas one confident answer invites a blind paste — so the rules widen the
+    list rather than trying to pick.
     """
     if not locator or resolve_locator(locator, keyed):
         return []
@@ -171,7 +185,7 @@ def near_misses(locator: str, keyed) -> list[str]:
             same_frame.add(review_key(c))                          # rule 1
         if str(c.episode_id) == episode:
             same_episode.add(review_key(c))                        # rule 2
-    return sorted(same_frame or same_episode)
+    return sorted(same_episode) + sorted(same_frame - same_episode)
 
 
 def load_reviewed(path: Path | str = DEFAULT_REVIEWED) -> dict:

@@ -42,8 +42,19 @@ def _load_raw(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
-def _resolve(locator: str, store) -> str | None:
-    """The canonical ledger key ``locator`` names, or None — printing the refusal on the way out.
+#: Shared by the positional and by ``--remove``, so the two can never document different vocabularies
+#: — which is the drift that produced this build (the ledger accepted three ADR-0049 key shapes while
+#: the writer's help named one).
+_LOCATOR_HELP = ("how to find the Correction — any of: its ledger key ('86091435-t14s0'), its "
+                 "Frame Key ('86091435|0|turn|14'), its Correction id ('948537a24fb2'), or the "
+                 "Anchor form the reports print ('86091435-119'). Resolved to the canonical "
+                 "ledger key before anything is written.")
+
+
+def _resolve_or_report(locator: str, store, *, quiet: bool = False) -> str | None:
+    """The canonical ledger key ``locator`` names, or None — printing the refusal on the way out
+    unless ``quiet`` (``--remove``, which has a legitimate ledger-key fallback and must not announce
+    a failure it is about to recover from).
 
     The corpus is loaded HERE rather than at import, so `--list` never pays for it, and it is loaded
     through `gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1) — so this tool can
@@ -53,7 +64,7 @@ def _resolve(locator: str, store) -> str | None:
 
     keyed = keyed_corrections(store)
     key = resolve_locator(locator, keyed)
-    if key is not None:
+    if key is not None or quiet:
         return key
 
     print(f"no committed Correction matches {locator!r} — nothing written.")
@@ -75,10 +86,6 @@ def main(argv=None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")          # reasons carry em-dashes -> cp1252 would crash
     except (AttributeError, ValueError):
         pass
-    _LOCATOR_HELP = ("how to find the Correction — any of: its ledger key ('86091435-t14s0'), its "
-                     "Frame Key ('86091435|0|turn|14'), its Correction id ('948537a24fb2'), or the "
-                     "Anchor form the reports print ('86091435-119'). Resolved to the canonical "
-                     "ledger key before anything is written.")
     ap = argparse.ArgumentParser(description="Record a Correction as reviewed (exclude from blunder-busting)")
     ap.add_argument("locator", nargs="?", help=_LOCATOR_HELP)
     ap.add_argument("disposition", nargs="?", choices=DISPOSITIONS, help="refuted | deferred | covered")
@@ -105,11 +112,13 @@ def main(argv=None) -> int:
     if not locator or not (args.remove or args.disposition):
         ap.error("provide '<locator> <disposition> [reason]', or --list / --remove")
 
-    key = _resolve(locator, args.store)
-    if key is None:
-        return 1
-
     if args.remove:
+        # Removal is an operation on the LEDGER, so the ledger's own keys are a legitimate second
+        # source for it — and a necessary one. Resolving `--remove` against the corpus alone made the
+        # one entry that most needs deleting, an ORPHAN, un-deletable: no Correction resolves it, by
+        # definition. Resolution still wins where it succeeds (that is what makes the Anchor form
+        # work); the literal key is only the fallback.
+        key = _resolve_or_report(locator, args.store, quiet=True) or locator
         if data.pop(key, None) is None:
             print(f"no ledger entry for {key}"
                   + ("" if key == locator else f" (resolved from {locator!r})"))
@@ -117,6 +126,12 @@ def main(argv=None) -> int:
         _save(path, data)
         print(f"removed {key}")
         return 0
+
+    # RECORDING, by contrast, admits no fallback: accepting a key the corpus cannot reach is the
+    # free-text writer this build exists to remove, orphan-in-place "corrections" included.
+    key = _resolve_or_report(locator, args.store)
+    if key is None:
+        return 1
 
     data[key] = {"disposition": args.disposition, "reason": args.reason, "round": args.round}
     _save(path, data)

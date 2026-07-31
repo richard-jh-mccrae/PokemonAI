@@ -19,6 +19,13 @@ from pathlib import Path
 
 import pytest
 
+# The corpus's on-disk shape lives in ONE place, because a second test file needed a `tmp_path`
+# corpus (Issue #250) and would otherwise re-encode it — the same second-idea-of-a-record defect
+# ADR-0087 is about, one layer down. Aliased to the original private names, so the 18 call sites
+# below read unchanged.
+from corrections_helpers import correction_record as _rec
+from corrections_helpers import corrections_store as _store
+
 #: Spelled from ordinals so this file can never itself be normalised into asserting nothing — the
 #: literal it looks for is exactly the byte pair a Windows `write_text` would introduce.
 CRLF = bytes((13, 10))
@@ -819,12 +826,7 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
 # diff over a wrong keyspace still reports flips and nothing ever goes red.
 
 
-# The corpus's on-disk shape lives in ONE place (`tests/corrections_helpers.py`), because a second
-# test file needing a `tmp_path` corpus (Issue #250) would otherwise re-encode it — the same
-# second-idea-of-a-record defect ADR-0087 is about, one layer down. Aliased to the original private
-# names so the 18 call sites below read unchanged.
-from corrections_helpers import correction_record as _rec        # noqa: E402
-from corrections_helpers import corrections_store as _store      # noqa: E402
+
 
 
 @pytest.mark.req("REQ-GATE-0007")
@@ -1307,9 +1309,9 @@ def test_no_committed_ledger_entry_rules_on_nothing():
     """Over the REAL ledger, and the strongest form: **zero** entries rule on no committed
     Correction.
 
-    This was pinned to two known orphans while fixing them was still the user's call. Both are now
-    repaired (Issue #250) — and neither was stale, which is why the pin could be lifted rather than
-    merely re-measured: `85046350-10` had the wrong EPISODE (the record is ep 85045840 f10, in the
+    This asserted the two known orphans by name while fixing them was still the user's call. Both are
+    now repaired (Issue #250) — and neither was stale, which is why the assertion could be tightened
+    rather than merely re-measured: `85046350-10` had the wrong EPISODE (the record is ep 85045840 f10, in the
     same store file) and `86091435-119` the wrong key SHAPE (the record is turn-scoped, so its
     `review_key` is `86091435-t14s0`; 119 is the Anchor frame the report used to print).
 

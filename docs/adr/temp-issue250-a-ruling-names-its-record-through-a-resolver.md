@@ -118,9 +118,9 @@ typo'd repairs nothing. Re-keying the data *alone* was also rejected — `orphan
 **detector**, and a detector plus a free-text writer means this repo's answer to "don't hand-build
 keys" is "we will notice afterwards."
 
-`tests/train/test_gates.py::test_the_committed_ledgers_orphans_are_the_two_that_are_known` flips
-from pinning the known two to asserting **empty**. It also proves, in one assertion, that all 145
-committed entries resolve.
+`tests/train/test_gates.py::test_the_committed_ledgers_orphans_are_the_two_that_are_known` changes
+from asserting the known two by name to asserting **empty**. It also proves, in one assertion, that
+all 145 committed entries resolve.
 
 ### 2. The writer RESOLVES a locator; it never accepts a key
 
@@ -132,20 +132,46 @@ committed entries resolve.
 * the **anchor form** the report prints (`86091435-119`)
 
 All four resolve to the one canonical `review_key`, which is what gets written. An unresolvable
-locator **exits non-zero** with near-miss candidates. `--remove` resolves identically.
+locator **exits non-zero** with near-miss candidates.
+
+`--remove` resolves identically **but falls back to the literal ledger key**, and the asymmetry is
+deliberate. Removal is an operation on the *ledger*, so the ledger's own keys are a legitimate second
+source for it — and a necessary one: resolving `--remove` against the corpus alone made the one entry
+that most needs deleting, an **Orphaned Ruling**, un-deletable, since by definition no Correction
+resolves it. (Also caught by `/code-review`'s Spec axis.) Resolution still wins where it succeeds,
+which is what keeps the Anchor form working. **Recording admits no such fallback** — accepting a key
+the corpus cannot reach is the free-text writer this ADR exists to remove.
 
 A locator is not a relaxation of ADR-0087 decision 2 — it is that rule applied to the writer. The
 key is still *derived from the record*; the operator merely supplies a way to find the record.
 
-### 3. Near-misses are two deterministic rules, never fuzzy matching
+### 3. Near-misses are two deterministic rules, UNIONED, never fuzzy matching
 
 * **same frame number under a different episode** → catches `85046350-10` → `85045840-10`
-* **same episode, anchor↔Scope-subject translation** → catches `86091435-119` → `86091435-t14s0`
+* **same episode, unknown subject** → the *generalisation* of "anchor↔Scope-subject translation".
+  Orphan 2's literal spelling (`86091435-119`) now **resolves** via decision 2's Anchor form rather
+  than being suggested — that rule succeeding instead of guessing — so the literal translation rule
+  would be a branch that can never fire. What is left for it to catch is a locator naming a real
+  episode and a subject nothing carries.
 
 Both are read off the two real cases. Edit-distance/fuzzy suggestion was rejected outright: a
 confident wrong suggestion that points at *someone else's human ruling* is strictly worse than no
 suggestion, and the failure would be silent — a correctly-formed entry ruling on the wrong record,
 which `orphan_rulings` by construction cannot see.
+
+**The rules UNION; they never chain — and this was got wrong first.** Implemented as
+``same_frame or same_episode``, rule 1 suppressed rule 2 whenever any *other* episode happened to
+carry the same frame number. Measured on the committed corpus, `near_misses("86091435-120")`
+answered `['82753102-120', '83667237-120']` — two unrelated episodes — while all eleven rulings in
+the operator's **own** episode were hidden. That is the banned failure mode arrived at from the
+other direction: confident, wrong, and concealing the right candidate. `/code-review`'s Spec axis
+caught it; the stub test that first covered rule 2 had passed only because its fixture corpus
+contained no other episode carrying that frame, i.e. the setup guaranteed its own result.
+
+Rule 2's block is listed **first**, because getting the episode right is the stronger signal — the
+operator was demonstrably reading that episode's report. And the *shape* is part of the safety
+argument: several labelled candidates are a prompt to go and look, whereas one confident answer
+invites a blind paste, so the rules widen the list rather than trying to pick a winner.
 
 ### 4. Every surface prints the ledger key
 

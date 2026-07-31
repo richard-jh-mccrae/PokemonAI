@@ -270,15 +270,15 @@ existed under that key)
 
 **Ruling Locator**:
 Any string that names a **Correction** well enough for the ledger writer to find it — the canonical
-`review_key`, the **Frame Key**, the `Correction.id`, or the **anchor form** the reports print
+`review_key`, the **Frame Key**, the `Correction.id`, or the **Anchor** form the reports print
 (**ADR-TEMP-250**, Issue #250). `reviewed.resolve_locator(locator, keyed)` maps all four onto the one
 canonical `review_key`, which is what is written; an unresolvable locator is REFUSED with near-misses
-(two deterministic rules — same frame under a different episode; same episode, anchor↔Scope-subject —
+(two deterministic rules — same frame under a different episode; same episode, Anchor↔Scope-subject —
 never fuzzy matching, because a confident wrong suggestion points at someone else's human ruling and
 `orphan_rulings` cannot see that). The corpus is INJECTED (`keyed_corrections()`'s pairs), so
 `blunder/` still never imports `gates`. Exists because a hand-typed ledger key **is** a hand-built key
 (ADR-0087 decision 2, one store over): the writer took free text, its `--help` and `reviewed.json`'s
-`_note` documented the *decision* shape only, and `report_md._at` printed the scope-blind anchor frame
+`_note` documented the *decision* shape only, and `report_md._at` printed the scope-blind Anchor frame
 — so the operator who wrote `86091435-119` was copying what the report showed them.
 _Avoid_: key (a locator is what you *type*; the **review_key** is what gets *written*), alias,
 lookup string, id (`Correction.id` is only one of the four accepted forms)
