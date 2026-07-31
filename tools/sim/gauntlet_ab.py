@@ -3,8 +3,10 @@
 For each DIRECTED matchup (our deck D vs a fixed baseline opponent O≠D), measure D's win-rate with
 ``value_model`` ON vs OFF against the SAME O, and aggregate the on−off deltas (`sim.paired_ab`) — the
 paired difference subtracts out the raw deck matchup (D may beat O 55% regardless), leaving only the
-switch's effect. Prints the aggregate delta + 95% CI and the grilled flip decision (ON iff aggregate
-delta ≥ 0 AND CI lower bound ≥ −1% AND zero crashes).
+switch's effect. Prints the aggregate delta + 95% CI and the verdict of whichever stage rule the
+caller names via the REQUIRED ``--stage`` (ADR-0072 decision 1): ``mid-build`` is the Tripwire
+(crashes==0 AND CI-lo >= -5%, no delta clause), ``post-composition`` is `flips_on` verbatim
+(delta >= 0 AND CI-lo >= -1% AND crashes==0).
 """
 from __future__ import annotations
 
@@ -17,7 +19,7 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from sim.battle import read_deck, run_battle          # noqa: E402
-from sim.paired_ab import flips_on, paired_delta       # noqa: E402
+from sim.paired_ab import STAGES, paired_delta          # noqa: E402
 
 
 def _wins(results):
@@ -28,8 +30,17 @@ def _wins(results):
     return a_wins, n, crashes
 
 
-def run(agents, n, *, jobs, overlay, out_dir):
-    """Run the 6 directed matchups (both battles each) and report the aggregate paired delta + flip."""
+def run(agents, n, *, jobs, overlay, out_dir, stage):
+    """Run the 6 directed matchups (both battles each) and report the aggregate paired delta,
+    graded under the ``stage`` rule the caller names (ADR-0072 decision 1).
+
+    ``--stage`` is REQUIRED, for the reason ADR-0072 Amendment B gave the swap runner: a
+    post-composition run must never be silently graded by the looser mid-build bound, and — the
+    half this runner was missing until Issue #228 — a MID-BUILD run must never be graded by
+    `flips_on`. This runner printed "FLIP ... (rule: delta>=0 AND CI-lo>=-0.01 ...)" for every
+    run regardless of stage, which is both the wrong bound and a phrase on the Tripwire's own
+    _Avoid_ list (tools/sim/CONTEXT.md)."""
+    verdict_fn, reg_tol, rule_text, verdict_label = STAGES[stage]
     agents_root = REPO / "src" / "agents"
     src = [REPO / "src"]
     matchups, table, total_crashes = [], [], 0
@@ -49,15 +60,21 @@ def run(agents, n, *, jobs, overlay, out_dir):
               f"off {off_w}/{off_n}={off_w/off_n:.3f}  delta={delta:+.3f}  crashes={on_c + off_c}",
               flush=True)
     result = paired_delta(matchups)
-    flip = flips_on(result, crashes=total_crashes)
+    verdict = verdict_fn(result, crashes=total_crashes)
     print(f"\nAGGREGATE delta={result['delta']:+.4f}  95% CI "
           f"[{result['ci_lo']:+.4f}, {result['ci_hi']:+.4f}]  crashes={total_crashes}")
-    print(f"FLIP value_model ON: {flip}  (rule: delta>=0 AND CI-lo>=-0.01 AND crashes==0)")
+    print(f"STAGE: {stage}")
+    print(f"{verdict_label}: {verdict}  (rule: {rule_text})")
+    if stage == "mid-build":
+        print("NOTE: mid-build excludes CATASTROPHES only — this is NOT a claim of non-regression. "
+              "Merit is the Decision Gate + Discrimination Gate (train.gates), not this number.")
     out = Path(out_dir) / "t5_paired_ab.json"
     out.write_text(json.dumps({"table": table, "result": result, "crashes": total_crashes,
-                               "flip": flip, "n_per_battle": n}, indent=2), encoding="utf-8")
+                               "verdict": verdict, "verdict_label": verdict_label, "stage": stage,
+                               "rule": rule_text, "reg_tol": reg_tol,
+                               "n_per_battle": n}, indent=2), encoding="utf-8")
     print(f"-> {out}")
-    return result, flip
+    return result, verdict
 
 
 def main(argv=None) -> int:
@@ -68,9 +85,12 @@ def main(argv=None) -> int:
     ap.add_argument("-j", "--jobs", type=int, default=10)
     ap.add_argument("--overlay", required=True, help="value-on overlay JSON ({'params':{'value_model':true}})")
     ap.add_argument("--out", default=str(REPO / "reports"))
+    ap.add_argument("--stage", choices=sorted(STAGES), required=True,
+                    help="which rule grades this run (ADR-0072 decision 1)")
     args = ap.parse_args(argv)
     Path(args.out).mkdir(parents=True, exist_ok=True)
-    run(args.agents, args.games, jobs=args.jobs, overlay=args.overlay, out_dir=args.out)
+    run(args.agents, args.games, jobs=args.jobs, overlay=args.overlay, out_dir=args.out,
+        stage=args.stage)
     return 0
 
 

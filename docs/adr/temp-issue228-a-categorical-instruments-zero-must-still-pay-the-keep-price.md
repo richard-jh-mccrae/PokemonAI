@@ -165,11 +165,17 @@ rollouts"*), not a correctness one.
 
 **The cost is UNMEASURED and the fallback is pre-registered, not discovered.** N+1
 `turns_to_ko_me` per board per sim step, on the hottest path in the codebase; memoising on board
-identity is the first lever. **If a Discrimination Gate arm exceeds ~2× its current ~20 minutes,
+identity is the first lever. **If a Discrimination Gate arm exceeds ~2× its current runtime,
 Decision 3 falls back to fail-closed-to-the-incumbent** (`None` → `opp_denial_best`), and the split
 policy is accepted with that cost recorded. Pre-registering the fallback follows ADR-0084's own
 ship-dark idiom: the escape is chosen before the number is known, so it cannot be chosen *because*
 of the number.
+
+> **Measured (2026-07-31): 101 s → 118 s, ~1.17×. The fallback is NOT taken; the read stays live
+> mid-sim.** No memoisation was needed. *(The trigger was originally written against "~20 minutes",
+> an estimate inherited from the grill and never checked — a gate arm actually runs in ~2 minutes.
+> The ratio is what the rule turns on, so the trigger is unaffected, but the figure is corrected
+> here rather than left to mislead the next reader.)*
 
 **Falsifiable prediction.** With the absence fixed, the armed fire rung returns −5.00 / +22.50 /
 +74.50 mid-sim — identical to the incumbent — so all three frames stop moving and the
@@ -288,6 +294,45 @@ Ground truth, verified at source, agrees with the armed read on every frame: `83
 Snover's only `{W}` (retreat 3, CSV line 1255) and delays the Abomasnow line exactly one attach-turn
 — honestly small at 10.0; `82225643-11` is ADR-0062's own `_DENIAL_FORWARD` anchor; `82224509-67`
 buys exactly one turn against a lethal Mega Brave 270 into our 200 remaining HP.
+
+## Measured AT THE BUILD (2026-07-31, `baed389` vs baseline `a8da62d`)
+
+Decision 5's three stages, run in order:
+
+```
+(i)   fix in, flags OFF     Discrimination PASS   0 unruled, 0 picks moved
+                            SOLE-top 40/248, shared-top 182/248, agree 182/248 -> 182/248
+(ii)  fix in, flags ARMED   Discrimination PASS   0 unruled, 0 ruled
+(iii) armed via PROFILE     Decision Gate  PASS   372 frames, agree 250/346 -> 250/346,
+                                                 0 picks moved  (= the corpus decide() retest)
+```
+
+**Decision 3's falsifiable prediction held exactly.** All three frames — `82225643|1|decision|11`,
+`83686860|1|decision|13`, `82224509|1|decision|67` — stopped moving, and the adjudication scope
+item 1 asked for evaporated without a single frame being ruled. Nothing entered the Held-out Ledger.
+
+**Step (i) discharges decision 6's accepted cost.** Restoring the `gust_target` emission mid-sim
+moves **zero** frames, so touching a shipped, ladder-validated instrument cost nothing measurable —
+and the OFF arm is what proves it, exactly as decision 5 intended.
+
+### A seventh defect, found at the build — the overlay runner could not name its stage
+
+ADR-0072 decision 1 put the two stage rules *"in code, so a run names which one it was graded
+under"*, and Amendment B made `--stage` **required** on `gauntlet_swap_ab.py` so a post-composition
+run could never be graded by the looser mid-build bound. The `STAGES` table was private to that one
+runner. **The OVERLAY runner — `gauntlet_ab.py`, the instrument this issue is required to use —
+had no `--stage` at all** and unconditionally printed `flips_on`'s verdict as
+`FLIP … (rule: delta>=0 AND CI-lo>=-0.01 …)`. For a mid-build swap that is both the wrong bound and
+a phrase on the Tripwire's own *Avoid* list (`tools/sim/CONTEXT.md`) — the precise mislabelling
+Amendment B fixed on one runner while its sibling kept it.
+
+Fixed by moving `STAGES` into `sim/paired_ab.py` beside the two verdict functions both runners
+already import, and giving `gauntlet_ab.py` the same **required** `--stage`. Copying the table into
+the second runner would have been the smaller change and the wrong one: *"which rule graded this
+run"* is the one thing that must not have two definitions.
+
+Build rule 11 is **6-for-6** if this is counted, and it is the second defect this issue found in an
+instrument rather than in the agent (Issue #241's excluded records was the first).
 
 ## Deferred to a measurement, with the rule pre-registered
 
