@@ -641,11 +641,19 @@ def satisfies_human(chosen, correct) -> bool:
       as ``UNLABELLED`` rather than as disagreement.
     * ``correct == []`` — a recorded **DECLINE**: the ruling is *"take none of these"*, satisfied
       only by an empty pick. Subset is WRONG here and dangerously so — the empty set is a subset of
-      everything, so reading a DECLINE through ``⊆`` would make every frame vacuously agree. Eleven
-      such frames sit in the corpus today (nine at ``MAIN``, one ``SETUP_BENCH_POKEMON``, one
-      ``TO_HAND``), and `86088989|0|decision|3` is genuinely satisfied — the agent declines too. They
-      are rulings, so they stay labelled and stay gated; Issue #229 owns whether the *writer* should
-      keep rejecting the shape the corpus already contains.
+      everything, so reading a DECLINE through ``⊆`` would make every frame vacuously agree. **Ten**
+      such frames sit in the corpus, all ``turn`` scope (eight at ``MAIN``, one ``TO_HAND``, one
+      ``SETUP_BENCH_POKEMON``), and `86088989|0|turn|0` is genuinely satisfied — the agent
+      declines too. They are rulings, so they stay labelled and stay gated; Issue #229 owns whether
+      the *writer* should keep rejecting the shape the corpus already contains.
+
+      ⚠️ This paragraph previously said *eleven*, and named that frame `86088989|0|decision|3`.
+      Both were readings of the **mis-keyed** Decision Gate baseline (Issue #241): its keys were
+      built by hand with ``seat`` read off a snapshot that has no ``seat`` field and ``scope``
+      hardcoded to ``decision``, and its eleventh DECLINE row was `85709280`, whose ``correct`` had
+      since been re-ruled ``[] -> [0]`` in `b6d7483` — a **Ruling Move** no instrument could report
+      until `ruling_moves` existed. A wrong keyspace propagating into an ADR-backed docstring is
+      the clearest argument for `correction_frame_key` being the only derivation.
     """
     if chosen is None or correct is None:
         return False

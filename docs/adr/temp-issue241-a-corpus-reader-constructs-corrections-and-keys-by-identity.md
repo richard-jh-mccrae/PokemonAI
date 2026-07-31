@@ -243,6 +243,68 @@ Without this, Q5's re-derived numbers cannot separate *"moved because the corpus
 regression the widening causes — it is a pre-existing disagreement no gate could see, and it belongs
 to #238's Tier B once that count is re-derived.
 
+## What the build measured (2026-07-31)
+
+Every prediction in decisions 1–7 held, and the two commits landed as specified.
+
+```
+decider corpus                332 -> 372      added 40, removed 0
+held-out rulings reachable      7 -> 11        (of 11)
+agree                     230/331 -> 253/371
+leaf frames outside the decider keyspace:  0
+both gates:  Decision PASS (372 compared, 0 unruled) · Discrimination PASS (268, 0 unruled)
+```
+
+**The relabel was provably a relabel.** 163 of 332 keys changed; the diff is 163 lines and
+`git diff -U0 | grep -v '"key"'` is **empty**. Independently re-confirmed downstream: Issue #238's
+Tier B join computes to **28** on both the original capture and the relabelled one — a re-key that
+moved a ruling would have moved that number.
+
+**The widening's effect is fully attributed**, which is what decision 5's sequencing bought:
+
+```
+Tier B:  43  =  28 (as published)  +  14 (frames the 332 could not see)  +  1 (agent drift)
+                                                                            0 resolved
+```
+
+**`ruling_moves` fired on its worked case on the first real run** — `85709280|1|match|`,
+`correct [] -> [0]` — a frame the agent plays identically, which produced no diff row at all before
+this existed.
+
+**Two `chosen` moves were ruled before the capture was committed** (decision 5), neither caused by
+this work — 24 commits touched `src/` between `e50735a` and now, and `_build_pilot` is uncached so
+the reader's new key ordering cannot move a decision:
+
+| frame | move | verdict | disposition |
+|---|---|---|---|
+| `86090147\|0\|decision\|22` | `[4] -> [6]` | NEUTRAL (human ruled `[7] Retreat`) | absorbed; candidate for Issue #238 |
+| `83661652\|0\|decision\|44` | `[2] -> [0]` | REGRESSION | held out to Issue #165 |
+
+### Two defects found while landing, fixed here
+
+Both are the same class as the issue itself — a committed artifact that silently depended on who
+produced it.
+
+* **`write_text` wrote the re-captured baseline as CRLF.** Both committed baselines are LF, dev is
+  Windows and the grader is Linux, so a 40-row change appeared as a **4835-line whole-file rewrite**
+  — burying the only thing a reviewer of a re-capture needs to see. `gates.write_json_artifact` is
+  now the single LF-framed writer behind all four capture/verdict sites across both labs.
+* **The capture embedded an absolute path** in the one unreplayable frame's error
+  (`/home/user/PokemonAI/...` from the Linux capture vs `C:\Users\...` from a Windows one), so the
+  same build re-captured elsewhere produced a different committed ruling record. Now repo-relative.
+  The bug survived because the path arrives already repr-escaped, so matching `str(REPO)` against
+  the raw text silently fails on Windows — the normalisation has to precede the strip.
+
+### One decision the build revisited
+
+`frame_view.py` was to be *"audited and either cleaned or listed"*. Audited: it re-parsed raw JSON,
+so all 40 records rendered with a **blank agent** — a real user-visible defect, not a latent one.
+Cleaned rather than listed. `82225643-11` now reads `agent mega_starmie`. Cleaning it needed
+`store.jsonl_files` made public, which turned out to be overdue anyway: three modules were already
+reaching into the private `_jsonl_files`, and `tools/sim/score_diff.py` was the instructive
+near-miss — it CONSTRUCTED its records correctly while still globbing for the files itself, i.e.
+decision 1 satisfied and the corpus *layout* still duplicated. Both halves come from the store.
+
 ## Consequences
 
 - **The agree rate moves for TWO independent reasons and decision 7 is what separates them.** The
@@ -264,3 +326,12 @@ to #238's Tier B once that count is re-derived.
   `turn` scope. Fixing prose that quotes a wrong key is part of fixing the key.
 - **One corpus record needs a scope re-tag** (`85709280`, `match` → `decision|51`), which is a
   ruling-record edit and stays outside this PR per decision 5.
+- **A Held-out ruling can shelter a regression it was never ruled against.** `83661652|0|decision|44`
+  regressed *after* the ruling that holds it out, and the gate excused it automatically — correctly
+  by ADR-0072 decision 4 as written, and still worth knowing. The ledger records *"this frame is out
+  of this decider's scope"*, not *"this frame may degrade without limit"*, and nothing distinguishes
+  the two today. Named here rather than fixed: it is a general property of decision 4's design, not a
+  fact about this frame, and reddening `main` mid-landing would have been the wrong instrument for
+  it. A candidate shape, if it is ever worth closing: record the held-out frame's *verdict at ruling
+  time* alongside the owner, so a further degradation is reportable even while the frame stays
+  ungated — the same move `ruling_moves` makes for a corpus whose ruling shifts.

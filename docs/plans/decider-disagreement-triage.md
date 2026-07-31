@@ -1,5 +1,34 @@
 # The Decision Gate's blessed disagreements — a triage
 
+> ## ⚠️ Re-derived 2026-07-31 over the FULL corpus (Issue #241)
+>
+> Every count below was computed over a **332-frame** capture that was missing 40 replayable records
+> and mis-naming 163 more. The instrument moved, so the readings moved with it. The originals are
+> kept, not overwritten — they were correct about the corpus they described.
+>
+> | | as written (`e50735a`, 332 frames) | re-derived (372 frames) |
+> |---|---|---|
+> | labelled frames | 331 | **371** |
+> | agree | 230 | **253** |
+> | **disagreements** | **101** | **118** |
+> | Tier B (`covered`, still missing) | 28 | **43** |
+>
+> **The Tier B delta is fully attributed**, which is the point of landing the re-key separately
+> (ADR-TEMP-241 decision 5):
+>
+> ```
+> 43  =  28 (as written)  +  14 (frames the 332 could not see)  +  1 (agent drift)   0 resolved
+> ```
+>
+> The method reproduces **28 exactly** against the original `e50735a` capture, and the re-key commit
+> moves it by **0** — independent confirmation that the relabel changed no ruling. The 14 newly
+> visible frames are appended to Issue #238 as *unadjudicated candidates*; this document does not
+> rule them, and neither does the issue that widened the corpus.
+>
+> Tier A's 18 `refuted` labels re-derive to **20** over the full set. Sections below are unedited
+> apart from this block — where a number in them disagrees with this table, this table is the later
+> reading and the section is the original one.
+
 **What this is.** `data/decider_lab/baseline.json` records what the shipped agent DECIDES on every
 replayable Correction, and the Decision Gate defends that record against regression. On **101** of
 its 331 labelled frames the recorded decision **contradicts a human ruling**. Nothing about that is
