@@ -54,3 +54,6 @@ htmlcov/
 *.pdf
 .claude/settings.local.json# regenerable parity-trace corpus (ADR-0050) - curated fixtures live in tests/fixtures/parity/
 /data/parity/
+
+# Transient subagent worktrees (harness scratch, auto-removed) — never committable
+.claude/worktrees/
