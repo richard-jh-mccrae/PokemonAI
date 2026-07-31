@@ -1030,6 +1030,23 @@ either: `strip_shift > 0` reads as *"this strip does something"* but only measur
 my death by a whole turn or more"*, and the gap is 128 of 218 relevance-positive corpus rows wide
 (Issue #217, measured). Its one sound use is a LEXICOGRAPHIC TIEBREAK among options already equal on
 the primary read, where it orders without suppressing.
+
+**ABSENT is not ZERO, and a categorical instrument makes the difference bite** (Issue #228,
+2026-07-31; ADR-TEMP-228). `_opponent_target_rows` returns `None` **mid-sim** by design — the
+`_planning` reentrancy guard, `pilot.py:8095` — so every read off the per-decision
+`_opponent_target_cache` is *absent* inside a rollout, not zero. Any field typed to carry the read as
+a bare `float` with a `0.0` default silently converts that absence into a measured zero: armed,
+`deny_relevance_best` did exactly this and the fire rung whiffed on boards where the root read is
+correct to the cent (`K x relevance == opp_denial_best`, 10.0 / 65.0 / 130.0). The incumbent had no
+such hole only because `opp_denial_best` is computed unconditionally.
+
+Two rules follow. **One**, a read that can be absent is typed `| None` and every consumer
+distinguishes the cases — the same rule ADR-0084 decision 4 already states for `strip_shift`.
+**Two**, when a MAGNITUDE instrument is replaced by a CATEGORICAL one, every *"is it zero"* branch
+changes **frequency class**: a damage magnitude is rarely exactly 0 while the card is playable, a
+`[0,1]` relevance scalar is 0 routinely and by design. Behaviour that was safe only because zero was
+rare becomes a live defect on the day the instrument is armed. Check those branches before arming,
+not after.
 _Avoid_: turns_to_ready (the `needs.py` primitive both wrap — name the wrapper you mean), readiness
 clock (unqualified — whose?), treating the two as summable (they are raced, not added), calling
 `strip_shift` a clock or a deadline (it is a delta OF one — say strip Δ)
