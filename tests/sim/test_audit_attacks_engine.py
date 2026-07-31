@@ -34,17 +34,27 @@ def _measure(attack_id, plan, attempts=3, need_bench=False, want_bench=None, **k
     fires anyway when bench patience runs out — deliberately, so a missed target degrades to a
     duplicate fit point rather than a wrong one — but a test asserting exact counts has to wait
     for the draw that makes them reachable.
+
+    An unbroken streak of ERROR records is a different animal from a missed bench target: it is a
+    harness fault, not a shuffle, so it fails here NAMING the underlying message. Falling through
+    to ``return recs`` surfaced it downstream as a bare ``'error' not in {...}``, which hid the
+    one string that says what actually went wrong.
     """
+    errors = []
     for _ in range(attempts):
         recs = measure_attack(attack_id, plan, **kw)
         r = recs[0]
         if "error" in r:
+            errors.append(r["error"])
             continue
         if need_bench and not r["defenderBench"]:
             continue
         if want_bench and (r["attackerBench"], r["defenderBench"]) != tuple(want_bench):
             continue
         return recs
+    if len(errors) == attempts:
+        raise AssertionError(f"attack {attack_id} errored on all {attempts} attempts; "
+                             f"last: {errors[-1]}")
     return recs
 
 
