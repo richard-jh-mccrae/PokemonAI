@@ -15,6 +15,8 @@ import csv
 import statistics
 from pathlib import Path
 
+import inspect
+
 import pytest
 
 from common import currency
@@ -60,7 +62,10 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     keep-side corpus anchor the corpus does not yet hold.
 
     This test FAILS the moment someone adds the constant, which is the point: it must arrive with
-    #199's derivation, not ahead of it."""
+    a derivation, not ahead of it. **It survived Issue #199** — ADR-0080 ran the anchor gate, found
+    the corpus's one candidate priced 0.000 on both instruments (so the rate divided out), and ruled
+    the rate MOOT for deny rather than deriving it. The guard therefore stays, permanently rather
+    than pending, and ADR-0086's seam-scoped `DEPLOY_BAND` below is explicitly NOT this constant."""
     assert not hasattr(currency, "WORTH_DAMAGE_RATE")
     assert not hasattr(currency, "prize_to_worth")
 
@@ -73,3 +78,40 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     assert trainer_rate == pytest.approx(1.0)
     assert energy_rate == pytest.approx(160 / 3 / 8)      # ADR-0078 (#172): the derived rate
     assert energy_rate / trainer_rate > 6          # same two scales, two answers — no single rate
+
+
+@pytest.mark.req("REQ-CURRENCY-0004")
+def test_the_deploy_band_is_present_pinned_and_labelled_as_a_preservation_choice():
+    """ADR-0086 (Issue #197) amendment C — the honest half of the guard above.
+
+    The Deploy Marginal's two Worth legs are dimensionless RATIOS (`marginal / DEPLOY_WORTH_SCALE`),
+    so the Worth scale never escapes the Needs assignment and no universal rate is needed. But
+    `DEPLOY_BAND / DEPLOY_WORTH_SCALE` still has units of damage-per-worth-point: it IS a
+    worth<->damage rate, scoped to one seam. Amendment B made the rate local, small and honestly
+    labelled — not unnecessary — and this test is where "honestly labelled" is enforced rather than
+    merely asserted in prose.
+
+    Three things are pinned:
+
+    * the SCALE is the shipped ceiling on a single card's assignment contribution, not a fresh
+      number — a ratio divided by an invented divisor would be the fudge wearing a different hat;
+    * the BAND reproduces the incumbent rung range it replaces (+12..+25), which is what makes it a
+      PRESERVATION choice the Decision Gate can check, and the check ADR-0073's `_PRIZE_UNIT = 12`
+      (wrong by ~8x) never had;
+    * the module says so in prose, so the third entry in ADR-0078's catalogue cannot be mistaken for
+      a derivation by the next reader.
+    """
+    from common.card_worth import ROLE_TIER
+
+    assert currency.DEPLOY_WORTH_SCALE == max(ROLE_TIER.values())   # derived, not invented
+    assert currency.DEPLOY_WORTH_SCALE == pytest.approx(30.0)
+
+    # The band lands a FULL-relevance deploy inside the range of the rungs it replaces, so the swap
+    # starts behaviour-preserving. The incumbent range is the deleted bench/fetch rung weights.
+    assert 12.0 <= currency.DEPLOY_BAND <= 25.0
+
+    # ...and the honesty is in the file, not only in the ADR.
+    src = inspect.getsource(currency)
+    assert "preservation" in src.lower()
+    assert "never a derivation" in src.lower() or "not a derivation" in src.lower()
+    assert "reconcil" in src.lower()          # the debt, should a general rate ever land

@@ -25,7 +25,8 @@ sys.path.insert(0, str(REPO / "tools"))
 
 from meta_tracker.parse import load_replay  # noqa: E402
 from submit.package import package  # noqa: E402
-from pilot_helpers import ATTACH, MAIN, NO, PLAY, make_select, opt, poke, state  # noqa: E402
+from pilot_helpers import (ATTACH, CARD, MAIN, NO, PLAY, TO_HAND, make_select, opt, poke,  # noqa: E402
+                           state)
 from train.blunder.correction import build_correction  # noqa: E402
 from train.blunder.decisions import Decision, iter_decisions  # noqa: E402
 from train.blunder.provenance import build_identity  # noqa: E402
@@ -40,6 +41,7 @@ REAL_REPLAY = (REPO / "tests" / "fixtures" / "replays" / "mega_starmie_20260625_
                / "episode-81903490-replay.json.gz")
 OWN_SEAT = 0                       # episode-81903490 is our agent-0 game
 STARYU, CINDERACE = 1030, 666
+MEGA_STARMIE, POFFIN = 1031, 1086   # the W-route grab pair: win-condition vs bench-fill
 
 pytestmark = pytest.mark.skipif(
     not (REPO / "src" / "agents" / AGENT / "main.py").exists(),
@@ -146,23 +148,31 @@ def test_correction_translates_to_a_weight_change(real_pilot):
     correction overturn a strong doctrine weight; see ``fit.DEFAULT_REG``); this exercises the W-route
     mechanism end to end, and the fit is *adopted* only because it satisfies the correction."""
     pilot, seeds = real_pilot
-    play = {"type": PLAY, "area": 2, "index": 0, "playerIndex": 0}     # play Staryu from hand
-    # A real ATTACH names its TARGET (`inPlayArea`/`inPlayIndex`), not just the hand slot — without it
-    # the attach decider abstains and the W route has no Hypothesis on that option to move.
-    attach = {"type": ATTACH, "area": 2, "index": 0, "playerIndex": 0,
-              "inPlayArea": 4, "inPlayIndex": 0}                    # attach to Active
-    obs = make_select([play, attach], context=MAIN,
-                      current=state(hand=[STARYU], active=poke(CINDERACE, hp=70)))
-    d = Decision(episode_id="synthetic", frame=0, seat=0, turn=2, select_context="Main",
-                 select_type="Main", options=[play, attach], chosen=[0],
+    # A TO_HAND grab of one of two revealed deck cards: the win-condition Mega (`prefer-payoff-over-
+    # preevo` +5) or the bench-fill Poffin. Chosen the Mega, corrected to the Poffin.
+    #
+    # Deliberately a SAME-TIER select, and this test used to be a Main-phase play-vs-attach pair until
+    # ADR-0086 made that shape unable to exercise the W route at all. Two reasons, both structural
+    # rather than a weight being merely too strong: `_finish_turn_last` sequences a Main menu by TIER
+    # before score, so a develop is chosen over a higher-scoring attach whatever the weights say; and
+    # on a bare Bench the post-setup empty-Bench guard (decision 7) FILTERS the order, forcing the
+    # develop outright. A fit that cannot satisfy the correction correctly refuses to adopt, so the
+    # old board would have made this assert the wrong mechanism. At one select, in one tier, score
+    # alone decides — which is exactly what a weight delta moves.
+    grab_mega = {"type": CARD, "area": 1, "index": 0, "playerIndex": 0}
+    grab_poffin = {"type": CARD, "area": 1, "index": 1, "playerIndex": 0}
+    obs = make_select([grab_mega, grab_poffin], context=TO_HAND,
+                      deck=[{"id": MEGA_STARMIE}, {"id": POFFIN}],
+                      current=state(active=poke(STARYU, hp=70), bench=[poke(STARYU, hp=70)]))
+    d = Decision(episode_id="synthetic", frame=0, seat=0, turn=2, select_context="ToHand",
+                 select_type="ToHand", options=[grab_mega, grab_poffin], chosen=[0],
                  current=obs["current"], obs=obs)
-    corr = build_correction(d, source="own", agent=AGENT, correct=[1], category="misattachment",
-                            rationale="develop the attack instead of over-benching")
+    corr = build_correction(d, source="own", agent=AGENT, correct=[1], category="wasted_resource",
+                            rationale="take the bench-fill, not a second Mega")
 
-    # reg responsive enough to overturn the chosen option's weight. The play-Staryu side fires TWO
-    # benching rules here (keep-a-bench + general develop-the-accel-recipient, since Cinderace is
-    # the Active with a bare Bench), so the gap is wider than one rule - needs a more responsive reg
-    # than the conservative production default to demonstrate the W-route (mechanism, not doctrine).
+    # reg responsive enough to overturn the chosen option's weight — the production default is
+    # deliberately conservative about one correction overturning a doctrine weight (see
+    # ``fit.DEFAULT_REG``); this is the W-route mechanism, not doctrine.
     res = tune([corr], pilot, seeds, reg=0.08)
 
     changed = sparse_overrides(res.overrides, seeds)

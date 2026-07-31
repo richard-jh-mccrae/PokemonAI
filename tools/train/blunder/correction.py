@@ -87,6 +87,16 @@ class Correction:
     category: str               # closed human vocab (mandatory)
     attribution: str | None     # learning-surface link (derived by Tuner; ADR-0017)
     rationale: str              # free prose
+    #: OPTIONAL alternative correct picks — a SET of option-index lists the human ruled EQUALLY
+    #: correct, where the single `correct` list over-specifies (ADR-0086, Issue #197). First case:
+    #: `83661652` f29, ruled "bench Riolu, Makuhita, and Solrock, ordering doesn't matter, just
+    #: don't play ultra ball" — the rationale distinguishes a basic from the Ultra Ball, not one
+    #: basic from another, so scoring only `correct` marks a REGRESSION for a pick the human
+    #: explicitly called right. `correct` is left untouched, so every existing consumer is unchanged
+    #: and only a reader that knows about alternatives widens its verdict.
+    correct_alternatives: list | None = None
+    alternatives_ruled: str = ""     # ISO date the alternatives were ruled
+    alternatives_why: str = ""       # the ruling, verbatim
     provenance: str = "human"   # who TAGGED this: "human" (blunder-inspector) | "machine" (the ML
                                 # labeler, ADR-0053 WP3). Orthogonal to `source` (whose GAME it was —
                                 # still "own"/"peer"): a machine label of our own game is

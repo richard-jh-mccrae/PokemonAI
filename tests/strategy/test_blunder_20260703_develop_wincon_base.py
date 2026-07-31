@@ -45,22 +45,36 @@ def _fired_ids(option):
     "ml0703_develop_riolu_over_makuhita_f44",    # CRITICAL: stop resisting basics — bench the wincon base
 ])
 def test_critical_develops_the_wincon_base_over_an_offline_basic(name):
-    """REQ-GEN-0072: on each captured ep83661652 state the shipped Pilot benches Riolu — the wincon
-    Line pre-evolution — rather than an off-line support Basic (Solrock / Makuhita) or the chip attack.
-    The develop rides tier 0 (ahead of the tier-4 attack) and `develop-the-wincon-base-first` breaks
-    the develop tie toward the wincon base."""
+    """REQ-GEN-0072: on each captured ep83661652 state the shipped Pilot develops the board rather
+    than feeding Meowth / attacking / shuffling Riolu away.
+
+    Since ADR-0086 the pick is the Deploy Marginal's, not `develop-the-wincon-base-first` (+6,
+    deleted), so the assertion moved from "which rung fired" to "which option was chosen" plus the
+    priced leg behind it. Two rulings are honoured rather than re-litigated:
+
+    * an ACCEPTED SET (`correct_alternatives`) — f33's rationale names both basics and bench drops
+      COMMUTE (rulebook L120-122), so Solrock and Riolu are equally correct there;
+    * a HELD-OUT frame (`claims.decision.owner`) — f44 is #165's, the Turn Planner's: the attach and
+      the Supporter were already spent before this decision, so no per-option price can fix it."""
     fx = _fixture(name)
+    held = ((fx.get("claims") or {}).get("decision") or {}).get("owner")
+    if held:
+        pytest.skip(f"held out to {held}: {((fx['claims']['decision']).get('why') or '')[:160]}")
     dec = _shipped_pilot().explain(fx["obs"])
-    assert dec.chosen == fx["correct"]                          # Play Riolu
-    riolu = fx["correct"][0]
-    assert "develop-the-wincon-base-first" in _fired_ids(dec.options[riolu])
+    accepted = [list(a) for a in (fx.get("correct_alternatives") or [fx["correct"]])]
+    assert dec.chosen in accepted, f"chose {dec.chosen}, accepted {accepted}"
+    assert dec.options[dec.chosen[0]].deploy_working["total"] > 0   # the develop is PRICED, not tied
 
 
 def test_offline_basic_does_not_get_the_wincon_edge():
-    """REQ-GEN-0072: the boost fires ONLY on the Line pre-evolution — an off-line Basic (Solrock at
-    f40) still scores at the bare `develop-a-basic-in-setup` +12, so it is Riolu's edge, not a blanket
-    develop bump."""
+    """REQ-GEN-0072: the wincon base's edge over an off-line Basic is REAL, not a tie broken by menu
+    position — the failure mode this round was built to kill.
+
+    `develop-the-wincon-base-first` (+6) is deleted, so the assertion is now on the equation: at f40
+    Riolu (the Riolu → Mega Lucario ex pre-evolution) must out-price Solrock (an off-line engine base)
+    on the Deploy Marginal itself. Asserting the deleted rung no longer fires would pass vacuously."""
     fx = _fixture("ml0703_develop_riolu_not_shuffle_f40")
     dec = _shipped_pilot().explain(fx["obs"])
-    solrock = 2                                                 # opt[2] = Play Solrock (off-line engine base)
-    assert "develop-the-wincon-base-first" not in _fired_ids(dec.options[solrock])
+    riolu, solrock = 3, 2                       # opt[3] = Play Riolu, opt[2] = Play Solrock
+    assert (dec.options[riolu].deploy_working["total"]
+            > dec.options[solrock].deploy_working["total"])

@@ -114,6 +114,13 @@ PROFILE = {
                                     # user-ruled (6 FIX, 0 regression) and the rungs it replaced are
                                     # DELETED, so OFF is DEGRADED MODE, not a rollback: evolve
                                     # endorsements go silent and only the _PLAY-side Gate speaks.
+    "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0086, #197): the Bench
+                                    # marginal — netted Needs assignment + bench-drop Ability,
+                                    # both dimensionless ratios through DEPLOY_BAND, plus the
+                                    # damage-native accel unlock and Prize-Path exposure. The nine
+                                    # rungs it replaces are DELETED (`keep-a-bench` excepted — decision 7
+                                    # keeps it as a sound rung), so OFF is DEGRADED MODE, not a rollback:
+                                    # bench endorsements go silent and only the empty-Bench guard speaks.
     "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069, the FIRST
                                     # no-shadow decider swap): the axes-sum marginal (`_attach_value`)
                                     # IS the energy-attach decision — attack axis (tonight's

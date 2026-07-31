@@ -64,6 +64,19 @@ ATTACH_LANE: Lane = ((OPTION_TYPE_ATTACH, None),
 PROMOTE_LANE: Lane = ((OPTION_TYPE_CARD, SELECT_CONTEXT_SWITCH),
                       (OPTION_TYPE_CARD, SELECT_CONTEXT_TO_ACTIVE))
 
+OPTION_TYPE_PLAY = 7                                # cg.api.OptionType.PLAY
+SELECT_CONTEXT_SETUP_BENCH = 2                      # cg.api.SelectContext.SETUP_BENCH_POKEMON
+SELECT_CONTEXT_TO_BENCH = 5                         # cg.api.SelectContext.TO_BENCH
+AREA_HAND = 2                                       # cg.api.AreaType.HAND
+
+#: The DEPLOY lane (ADR-0086, Issue #197) — every way a body reaches MY Bench, which the Deploy
+#: Marginal owns as one decision: a mid-game `PLAY` from hand at the main menu, the pregame
+#: placement (`CARD` under SETUP_BENCH_POKEMON), and a fetch straight onto the Bench (`CARD` under
+#: TO_BENCH). `PLAY` needs no context qualifier — it is only ever posed at the main menu.
+DEPLOY_LANE: Lane = ((OPTION_TYPE_PLAY, None),
+                     (OPTION_TYPE_CARD, SELECT_CONTEXT_SETUP_BENCH),
+                     (OPTION_TYPE_CARD, SELECT_CONTEXT_TO_BENCH))
+
 #: A held-out claim must name its owner as an issue reference — the shape CI can check offline.
 #: Whether that issue is still OPEN cannot be checked here (the suite is offline, CLAUDE.md) and
 #: belongs on the phase checklist.
@@ -74,16 +87,59 @@ OWNER_RE = re.compile(r"^#\d+$")
 RULED_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
-def option_slot(option: dict) -> tuple | None:
-    """The board **slot** an option targets — ``(inPlayArea, inPlayIndex)``, falling back to
-    ``(area, index)`` — or None when it targets no slot at all (END, YES/NO, …).
+def _hand_card_id(option: dict, frame: dict | None):
+    """The id of the HAND card an option names, or None when the frame cannot resolve it.
+
+    Fail-soft by construction — an out-of-range index, a face-down (``None``) entry or a truncated
+    frame yields None rather than raising, because a probe reads whatever the corpus recorded."""
+    if not frame:
+        return None
+    cur = frame.get("current") or {}
+    players = cur.get("players") or []
+    seat = option.get("playerIndex", cur.get("yourIndex", 0))     # whose zone the option indexes
+    if not isinstance(seat, int) or not 0 <= seat < len(players):
+        return None
+    hand = (players[seat] or {}).get("hand") or []
+    idx = option.get("index")
+    if not isinstance(idx, int) or not 0 <= idx < len(hand):
+        return None
+    return (hand[idx] or {}).get("id")
+
+
+def option_slot(option: dict, frame: dict | None = None) -> tuple | None:
+    """The **identity** an option targets, for comparison across two deciders' picks.
+
+    Resolution order, most specific first:
+
+    1. a BODY in play -> ``(inPlayArea, inPlayIndex)`` — the board slot;
+    2. a card in MY HAND, when ``frame`` is given -> ``("card", cardId)``;
+    3. anything else naming a zone -> ``(area, index)``;
+    4. otherwise None (END, YES/NO, …).
 
     Comparison is by slot and **never** by raw option index: two Dreepy->Drakloak evolves differ only
     in which body they evolve, and the index says nothing about which one
     (`evolve_decider_sweep.py`, ADR-0069 §8). Both decider sweeps resolved this themselves; one
-    implementation here is what keeps them from drifting apart."""
+    implementation here is what keeps them from drifting apart.
+
+    **Rung 2 is ADR-0086's (Issue #197) extension, and it is why the parameter exists.** A mid-game
+    bench play is `OptionType.PLAY` carrying a BARE hand index and no ``area``
+    (`strategy/context.py`), so rungs 1 and 3 both miss it and the positional resolver returned None
+    for exactly the options the Deploy Marginal ranks. The identity that survives a menu re-ordering
+    is the CARD — "play Solrock" is one decision however the engine lists it — and the pregame Bench
+    poses the same decision as `CARD` + ``area = HAND``, so both entry points must land on one
+    identity or the lane compares apples to oranges.
+
+    ``frame`` is OPTIONAL and defaults to the historical behaviour: with no frame this is
+    byte-identical to the positional resolver, which is what lets the three shipped sweeps and every
+    committed Axis Claim (all naming ``(4, n)`` / ``(5, n)`` board slots) keep their meaning with no
+    edit. Rung 1 deliberately outranks rung 2 for the same reason — evolve, attach-from and promote
+    all compare BODIES, and re-pointing them at a card id would silently re-base three sweeps."""
     if option.get("inPlayArea") is not None:
         return (option.get("inPlayArea"), option.get("inPlayIndex"))
+    if frame is not None and (option.get("area") in (None, AREA_HAND)):
+        cid = _hand_card_id(option, frame)
+        if cid is not None:
+            return ("card", cid)
     if option.get("area") is not None:
         return (option.get("area"), option.get("index"))
     return None
@@ -97,13 +153,16 @@ def in_lane(option: dict, lane: Lane, select_context=None) -> bool:
                for want_type, want_ctx in lane)
 
 
-def lane_slots(indices, options, *, lane: Lane, select_context=None) -> set:
+def lane_slots(indices, options, *, lane: Lane, select_context=None, frame: dict | None = None) -> set:
     """The slots ``indices`` resolve to **within** ``lane`` (options outside the lane, and lane
-    options that target no slot, contribute nothing)."""
+    options that target no slot, contribute nothing).
+
+    ``frame`` is forwarded to :func:`option_slot`, which is how the DEPLOY lane compares CARDS rather
+    than menu positions; omitted, the resolution is the historical positional one."""
     out = set()
     for i in indices or []:
         if 0 <= i < len(options) and in_lane(options[i], lane, select_context):
-            slot = option_slot(options[i])
+            slot = option_slot(options[i], frame)
             if slot is not None:
                 out.add(slot)
     return out

@@ -857,12 +857,15 @@ HYPOTHESES = [
         weight=30, status="assumed"),
     Hypothesis(
         id="bench-fill-a-basic",
-        rationale="At a bench-PLACEMENT grab (`_TO_BENCH`/`_SETUP_BENCH`), take a startable Basic — the "
+        rationale="At an in-game bench-PLACEMENT grab (`_TO_BENCH`), take a startable Basic — the "
                   "bench-context mirror of `fetch-a-starter`. Needed because a CARD-target candidate is invisible "
                   "to the `option_type==_PLAY` bench reflexes, so every candidate would score 0 and greedy "
                   "take-fewer benches NOTHING (the Buddy-Poffin whiff that cost ~3:1 in the mirror); skips a "
-                  "multi-prizer (ex/Mega ex) and stands down once the Bench is full.",
-        when=lambda c: c.select_context in (_TO_BENCH, _SETUP_BENCH) and c.card_is_starter
+                  "multi-prizer (ex/Mega ex) and stands down once the Bench is full. `_SETUP_BENCH` was DROPPED "
+                  "from the scope by ADR-0086 decision 9 — we never bench during Set Up, so a +12 that could only "
+                  "argue for a placement the rule already refuses is dead weight, and leaving it would let a "
+                  "reader think the pregame is still being scored.",
+        when=lambda c: c.select_context == _TO_BENCH and c.card_is_starter
         and c.board.my_bench < _BENCH_MAX
         and not (c.stat and getattr(c.stat, "is_ex_body", False)),
         weight=12, status="testing"),
@@ -943,50 +946,13 @@ HYPOTHESES = [
                   "unliftable by any normal-band endorsement — never pitch an irreplaceable to dig.",
         when=lambda c: c.option_type == _PLAY and "cost_discard" in c.tags and c.fetch_sheds_key,
         weight=-25, status="testing"),
-    Hypothesis(
-        id="bench-the-supporter-tutor",
-        rationale="Bench a `supporter_tutor` Pokémon (Meowth ex — Last-Ditch Catch: on the bench-drop "
-                  "from hand, search your deck for a SUPPORTER to hand) during SETUP when you hold NO "
-                  "Supporter, to guarantee one. Its tutor is a free ABILITY, so you bench it AND still "
-                  "play a Supporter + attack the same turn — its edge over a Supporter-tutor Trainer "
-                  "(Petrel), which costs the slot. SETUP is the safety proxy (opponents rarely have a "
-                  "gust + a 170-KO online that early); the 2-prize bench liability is accepted for the "
-                  "consistency/tempo. Stands down once a Supporter is in hand (no need — save the "
-                  "2-prize exposure). NOTE: this REPLACES routing Meowth through a `tutor` Role, which "
-                  "`play-a-tutor-for-the-unfound-wincon` (+25) mis-read as a WINCON dig — but Last-Ditch "
-                  "fetches a Supporter, not the wincon, so it benched the 2-prize ex for the wrong "
-                  "reason (mega_lucario STRATEGY.md §3, grill 2026-07-03). Splashable: Meowth ex runs "
-                  "in many decks (mega_lucario, dragapult_ex), so the model is general (tag-keyed).",
-        when=lambda c: not c.board.line_ready and c.option_type == _PLAY
-        and "supporter_tutor" in c.tags and c.board.no_supporter_in_hand,
-        weight=25, status="assumed"),
-    Hypothesis(
-        id="dont-pre-bench-the-supporter-tutor",
-        rationale="At the PREGAME bench placement (`_SETUP_BENCH`, minCount 0), DON'T place a "
-                  "`supporter_tutor` Pokémon (Meowth ex — Last-Ditch Catch) on the Bench: its tutor "
-                  "Ability triggers on an IN-GAME bench-from-hand, NOT a pregame setup placement, so "
-                  "benching it now wastes the free Supporter fetch — and when it is the only Basic it "
-                  "should take the Active Spot, not sit benched. Negative so the Pilot DECLINES the "
-                  "optional placement (decide()'s single-pick take-fewer; ep83661652 f3). The in-game "
-                  "half is `bench-the-supporter-tutor` (+25, a Main-phase PLAY when holding no "
-                  "Supporter) — the two never fire together (different select contexts).",
-        when=lambda c: c.select_context == _SETUP_BENCH and "supporter_tutor" in c.tags,
-        weight=-15, status="assumed"),
-    Hypothesis(
-        id="dont-pre-bench-a-redundant-utility",
-        rationale="At the PREGAME bench placement (`_SETUP_BENCH`, minCount 0), DON'T bench a 2nd copy of a "
-                  "standalone utility Basic already placed on my board (`card_id in board.setup_placed_ids`) — "
-                  "a 2nd Munkidori while one is Active is a prize liability + a scarce bench slot, worth more "
-                  "kept as Ultra-Ball discard fodder (dragapult f4). The `not card_is_line_preevo` guard keeps "
-                  "benching a 2nd Dreepy (a win-condition LINE base you DO want multiples of). Setup-aware: the "
-                  "just-placed Active shows only in the setup logs, so `card_is_redundant` (obs-zone `in_play_ids`) "
-                  "reads False here — `setup_placed_ids` reads the placement from the logs. −15 mirrors the "
-                  "supporter-tutor sibling: `bench-fill-a-basic` (+12) is the only positive, so 12−15 declines "
-                  "the optional pick (`_greedy_grab` take-fewer). The _SETUP_BENCH generalization of mega_lucario's "
-                  "`dont-bench-a-redundant-engine-piece` (−25, _PLAY).",
-        when=lambda c: c.select_context == _SETUP_BENCH and c.card_id is not None
-        and c.card_id in c.board.setup_placed_ids and not c.card_is_line_preevo,
-        weight=-15, status="assumed"),
+    # `bench-the-supporter-tutor` (+25), `dont-pre-bench-the-supporter-tutor` (−15) and
+    # `dont-pre-bench-a-redundant-utility` (−15) stood here until ADR-0086. All three answered the
+    # SAME question — is this body worth a Bench slot right now? — from the fetch side, and the
+    # Deploy Marginal now prices it: the tutor's Supporter fetch is the ability leg's need-matched
+    # yield (zero at `_SETUP_BENCH` by derivation, since a pregame placement never triggers the
+    # bench-drop Ability — the hand-written stand-down, derived), and a redundant utility body
+    # prices its own displacement against the slot it would occupy.
     Hypothesis(
         id="grab-a-gust-supporter-for-the-ko",
         rationale="At a TO_HAND Supporter grab (Meowth ex Last-Ditch Catch, or any supporter tutor), "

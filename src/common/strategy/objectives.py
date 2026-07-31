@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 
+from common.grading import HORIZON as _HORIZON
 from common.strategy.context import _PLAY
 
 _RACE_HORIZON = 8        # give up beyond this many turns — no wall math on an unbounded grind
@@ -564,13 +565,34 @@ class ObjectivesMixin:
         """Playing THIS Pokémon to my Bench would strictly IMPROVE the opponent's cheapest Prize
         Path — completing a previously-uncompletable route or shortening the existing one (the
         'benching the second Mega hands them their exact 6' case — ADR-0040 Path Denial,
-        REQ-OBJ-0006). A soft per-option signal; gated by ``objectives_path``."""
+        REQ-OBJ-0006). A soft per-option signal; gated by ``objectives_path``.
+
+        DERIVED from :meth:`_bench_path_delta` since ADR-0086: the sign of the magnitude, so the two
+        readings cannot drift apart."""
+        return self._bench_path_delta(obs, select, option, stat, board) > 0.0
+
+    def _bench_path_delta(self, obs, select, option, stat, board) -> float:
+        """**How much** benching this body shortens the opponent's cheapest Prize Path, in turns.
+
+        The Deploy Marginal's exposure leg (ADR-0086 decision 5). This magnitude was already being
+        computed here and **thrown away** — the method returned `new_turns < old_turns`, a boolean,
+        to a flat −10 rung — so the change is to return the delta rather than its sign.
+
+        Grading: completing a previously-UNCOMPLETABLE route is the biggest case the doctrine names
+        ("the second Mega hands them their exact 6"), so `their_path_turns is None` cannot report as
+        a bare one-turn improvement. It grades against the shared `HORIZON` — `turns_to_ko_me`'s own
+        "survives the horizon" answer — rather than a constant invented for this leg.
+
+        0 when the play gifts nothing: they cannot damage the body, the path is no shorter, the
+        option is not a Pokémon play, they have no prizes left to take, or `objectives_path` is off.
+        That last one matters because the Deploy Marginal needs a DEFINED exposure when the
+        Prize-Path machinery is dark — fail-closed, never an estimate (ADR-0069 decision 5)."""
         if not getattr(self, "objectives_path", False):
-            return False
+            return 0.0
         if option.get("type") != _PLAY or not stat or getattr(stat, "hp", 0) <= 0:
-            return False
+            return 0.0
         if board.opp_prizes_remaining <= 0:
-            return False
+            return 0.0
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -587,11 +609,15 @@ class ObjectivesMixin:
         hypo = {"id": cid, "hp": getattr(stat, "hp", 0)}
         t_new = self._their_turns_to_ko(opp, hypo)
         if t_new is None:
-            return False                     # they can't even damage it — benching gifts nothing
+            return 0.0                       # they can't even damage it — benching gifts nothing
         _keys, new_turns = prize_paths(
             theirs + [("hypo", self._prize_value(hypo), t_new + _PATH_BENCH_EXTRA)],
             board.opp_prizes_remaining)
         old_turns = board.their_path_turns
         if new_turns is None:
-            return False
-        return old_turns is None or new_turns < old_turns
+            return 0.0                       # still uncompletable even WITH the body — no gift
+        if old_turns is None:
+            # Uncompletable -> completable: the doctrine's headline case. Graded against the shared
+            # horizon so it dominates a mere shortening without being unbounded.
+            return float(max(0.0, _HORIZON - new_turns))
+        return float(max(0.0, old_turns - new_turns))

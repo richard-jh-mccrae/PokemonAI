@@ -379,3 +379,56 @@ def test_objectives_trace_rides_the_decision_and_telemetry():
     assert decision.objectives is not None and "my" in decision.objectives   # path resolved on this board
     rec = to_record(decision, tier=0)
     assert rec["objectives"] == decision.objectives
+
+
+@pytest.mark.req("REQ-OBJ-0006")
+def test_the_path_delta_survives_as_a_MAGNITUDE_not_only_its_sign():
+    """ADR-0086 decision 5: the exposure leg of the Deploy Marginal is the AMOUNT by which benching
+    this body shortens the opponent's cheapest Prize Path — and that amount was already being
+    computed here and thrown away, with only `new_turns < old_turns` returned to a flat −10 rung.
+
+    Completing a previously-UNCOMPLETABLE route is the biggest case ("the second Mega hands them
+    their exact 6"), so it cannot report as a bare 1-turn improvement; `their_path_turns is None`
+    grades against the shared `HORIZON` rather than a constant invented here.
+
+    Silent when the play gifts nothing, so a body they cannot even damage costs zero."""
+    from common.grading import HORIZON
+    from common.strategy.context import _PLAY
+    pilot = _shipped_pilot()
+    me = {"active": [{"id": 666, "hp": 210, "energies": []}],
+          "bench": [], "hand": [{"id": 272}], "prize": [None] * 6}
+    opp = {"active": [{"id": 678, "hp": 440, "energies": []}],
+           "bench": [], "prize": [None] * 3, "hand": []}
+    obs = _obs(me, opp)
+    select = {"context": 0, "option": [{"type": _PLAY, "index": 0}]}
+    board = pilot._board(obs, select)
+    assert board.their_path_turns is None                    # uncompletable before the bench play
+    ctx = pilot._context(obs, select, board, select["option"][0])
+    assert ctx.bench_path_delta > 0                          # ...and completing it is a real gift
+    assert ctx.bench_path_delta <= HORIZON                   # graded, never unbounded
+    assert ctx.bench_shortens_their_path is (ctx.bench_path_delta > 0)   # the boolean is derived
+
+    opp_close = dict(opp, prize=[None])                      # they need 1: the play improves nothing
+    ctx2 = pilot._context(obs, select, pilot._board(_obs(me, opp_close), select),
+                          select["option"][0])
+    assert ctx2.bench_path_delta == 0.0
+    assert ctx2.bench_shortens_their_path is False
+
+
+@pytest.mark.req("REQ-OBJ-0006")
+def test_the_path_delta_is_zero_when_the_objectives_kill_switch_is_off():
+    """The leg inherits `objectives_path`, so the Deploy Marginal has a DEFINED exposure of zero when
+    the Prize-Path machinery is dark — fail-closed, never an estimate (ADR-0069 decision 5)."""
+    from common.strategy.context import _PLAY
+    pilot = _shipped_pilot()
+    me = {"active": [{"id": 666, "hp": 210, "energies": []}],
+          "bench": [], "hand": [{"id": 272}], "prize": [None] * 6}
+    opp = {"active": [{"id": 678, "hp": 440, "energies": []}],
+           "bench": [], "prize": [None] * 3, "hand": []}
+    obs, select = _obs(me, opp), {"context": 0, "option": [{"type": _PLAY, "index": 0}]}
+    pilot.objectives_path = False
+    try:
+        ctx = pilot._context(obs, select, pilot._board(obs, select), select["option"][0])
+        assert ctx.bench_path_delta == 0.0
+    finally:
+        pilot.objectives_path = True

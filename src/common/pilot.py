@@ -8,6 +8,9 @@ engine passes, so the fast unit suite needs no native lib.
 """
 from __future__ import annotations
 
+import copy
+import dataclasses
+
 from collections import Counter
 from dataclasses import dataclass, field, replace
 
@@ -25,6 +28,7 @@ from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
+from common.grading import HORIZON as _HORIZON
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 from common.strategy.objectives import ObjectivesMixin
@@ -969,6 +973,12 @@ class Context:
     bench_shortens_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): benching THIS Pokémon
                                         # strictly improves the opponent's cheapest Prize Path
                                         # (completes/shortens their route) — `dont-bench-onto-their-path`
+    bench_path_delta: float = 0.0       # ...and by HOW MUCH, in turns (ADR-0086 decision 5). The
+                                        # Deploy Marginal's exposure leg: the magnitude the boolean
+                                        # above is merely the sign of. `HORIZON`-graded when the play
+                                        # completes a previously-uncompletable route; 0 when the
+                                        # `objectives_path` switch is off, so exposure is DEFINED
+                                        # rather than estimated when the machinery is dark.
     promote_target_on_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): this promote/switch
                                         # candidate sits on THEIR cheapest path — bringing it up walks
                                         # it into the KO they want (rung DELETED as subsumed, ADR-0073 §7c)
@@ -1080,6 +1090,10 @@ class OptionTrace:
                                  # refill that ARMS them). NOT in `score` — inert telemetry that makes the
                                  # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
                                  # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
+    deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0086): the per-leg
+                                 # breakdown for a Bench deployment. The decider sweep prints it on
+                                 # BOTH sides of a flip and a human rules the Decision Gate by
+                                 # reading it, so a bare total would make that gate unrulable.
     evolve_working: dict | None = None  # the EVOLVE DECIDER's legible working (ADR-0070): the per-option
                                  # TERM row — deploy (with each body's this_turn / payoff / the two clocks),
                                  # income_gain, income_loss, and the `tactical` the option actually scored.
@@ -1184,6 +1198,15 @@ class Decision:
                                      # slot-assignment fold. Sparse: None mid-sim / no opp bodies
 
 
+def _slot_cid(slot):
+    """The card id a `line:<cid>` slot belongs to, or None for any other slot kind."""
+    key = getattr(slot, "key", "") or ""
+    if getattr(slot, "kind", "") != "line" or not key.startswith("line:"):
+        return None
+    head = key.split(":")[1]
+    return int(head) if head.isdigit() else None
+
+
 class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
     """Composed from the Turn Planner — whose sound top rung IS the Lethal Solver (ADR-0030/0031/0037,
     one entry point) — the Tier-3 Match Objectives (ADR-0040: the KO Race), and four doctrine mixins
@@ -1205,7 +1228,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
                  develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
-                 leaf_hand_value=False, attach_value=True, evolve_value=True,
+                 leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
@@ -1349,6 +1372,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # a rollback — the four rungs it replaced are
                                                         # deleted, so OFF silences evolve endorsements
                                                         # and only the _PLAY-side Gate speaks.
+        self.deploy_value = deploy_value            # the DEPLOY DECIDER's emergency lever
+                                                    # (ADR-0086, Issue #197). Ctor default OFF
+                                                    # keeps the raw-scoring substrate neutral;
+                                                    # `make_agent` resolves the shipped ON from
+                                                    # PROFILE, like every other switch.
         self.attach_value = attach_value                # the ATTACH DECIDER's emergency lever (ADR-0069 §9,
                                                         # shipped ON): the axes-sum marginal (`_attach_value`)
                                                         # IS the energy-attach decision, scaled into the rung
@@ -1514,8 +1542,35 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         planned = self.plan_turn(obs, select, board, options, traces)  # ADR-0037: the ONE planning
         refuted = self._lethal_refutes                  # entry — win rung (take the win now) first, then
         if planned is not None:                         # the below-win Goal Ladder. Refutes kept on every
-            return Decision(chosen=planned.next_step,   # Decision shape so a lethal_verify drop is countable
-                            options=traces, read=board.read, planned=planned,
+            # The empty-Bench guard applies HERE TOO. It is a soundness FILTER over the whole
+            # decision, not a step of the scoring path, and this branch returns before the scoring
+            # path reaches it — so without this the planner could end a post-setup turn with an empty
+            # Bench while a deploy sat on the menu, which is the exact obligation ADR-0086 decision 7
+            # places on the rung ("must ALSO prevent `_finish_turn_last` from ending a post-setup turn
+            # with an empty Bench while a deploy was available"). Silent whenever it has nothing to
+            # force, so a planned line that already benches, or one at a select with no legal body,
+            # is returned untouched and the planner keeps its ordering.
+            # Handed the FULL menu, not just `next_step`: the guard reorders within the order it is
+            # given, and the planned step is precisely the case where the deploy is NOT in it. When
+            # the guard moves a body to the front, that body becomes this decision's whole step and
+            # the planner re-plans from the benched board next call.
+            #
+            # And when it overrides, the line is DROPPED (`planned=None`) rather than reported
+            # alongside a pick it does not name. `planned.next_step == chosen` is a well-formedness
+            # invariant of the emitted record — `test_planner_engine.py:275`, and the whole
+            # `plan_candidates` / `committed` telemetry rests on it — so reporting a committed line we
+            # did not follow would make every planner trace unreadable. Overridden IS "no line
+            # committed this decision": the guard took the turn's next action, and the planner
+            # re-plans from the benched board on the next call. Caught by the CI determinism backstop
+            # on repeat 6 of 15, because whether a live drive reaches an empty Bench varies per run.
+            _rest = [i for i in range(len(options)) if i not in set(planned.next_step)]
+            _guarded = self._empty_bench_forced(obs, select, board, options,
+                                                list(planned.next_step) + _rest)
+            _overridden = bool(_guarded) and _guarded[0] not in planned.next_step
+            planned_steps = [_guarded[0]] if _overridden else list(planned.next_step)
+            return Decision(chosen=planned_steps,       # Decision shape so a lethal_verify drop is countable
+                            options=traces, read=board.read,
+                            planned=None if _overridden else planned,
                             # The doom shadow is a per-decision DIAGNOSTIC, so it must not depend on
                             # which branch decided. #177 made more KO lines reachable, which sent
                             # frames like 82749168-29 down this branch for the first time and
@@ -1537,6 +1592,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         by_score = self._prefer_soonest_arming_evolve(by_score, options, traces)
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
+        # The empty-Bench guard runs LAST, above the sequencer: it is a soundness FILTER, so
+        # nothing downstream may re-order a deploy back below End (ADR-0086 decision 7).
+        order = self._empty_bench_forced(obs, select, board, options, order)
         # Telemetry legibility (ADR-0019): flag when `chosen` did NOT come from argmax(score), so a
         # trace reader doesn't misread "top-score not chosen" as a scoring bug. `reordered` = attack-last
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
@@ -1567,6 +1625,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             min_count = select.get("minCount", 0)
             while len(chosen) > min_count and traces[chosen[-1]].score < 0:
                 chosen = chosen[:-1]
+        chosen = self._never_pre_bench(select, chosen)
         return Decision(chosen=chosen, options=traces, read=board.read, lethal_refuted=refuted,
                         posture=self._posture_record(board),
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
@@ -1678,6 +1737,90 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     out[slot] = opt
             i = j + 1
         return out
+
+    def _never_pre_bench(self, select: dict, chosen: list) -> list:
+        """NEVER place a Pokémon on the Bench during Set Up (ADR-0086 decision 9). A sound rule read
+        off the rulebook, not a price — so it filters the pick rather than scoring it, like decision
+        7's empty-Bench guard.
+
+        Deferring to my own first turn is WEAKLY DOMINANT: never worse, sometimes better. Three facts
+        make it safe, each checked at source rather than recalled:
+
+        1. **The placement is optional.** "Put **up to** 5 more Basic Pokémon face down on your Bench"
+           (`docs/rulebook.txt` L97) — which is why the select carries `minCount 0` and this can be a
+           filter at all.
+        2. **No ATTACK reaches me first, in either seat.** Going first, my turn 1 precedes any
+           opponent action at all; going second, their turn 1 cannot attack (`docs/rules.md` §2,
+           rulebook L152), so their turn 2 is the first legal attack — after my turn 1 either way.
+        3. **No ABILITY damage reaches me either**, which is the leg that makes 2 sufficient rather
+           than merely suggestive. Only Basics can be in play on turn 1, because neither player may
+           evolve on their own first turn (`docs/rules.md` §4, rulebook L123-128) — and of the 21
+           damage-counter Abilities in `data/EN_Card_Data.csv`, ZERO are on a Basic. Dusknoir's 130,
+           Froslass's checkup counters and Tyranitar's Sand Stream are all evolutions.
+
+        And the Basics I keep in hand cannot be stripped in the meantime: the player going first
+        cannot play a Supporter (rulebook L133), so no Judge or Iono shuffles them away.
+
+        What deferring BUYS: the pregame placement wastes every bench-drop Ability, since "once during
+        your turn" is unsatisfiable before the game starts — Meowth ex's Last-Ditch Catch is the case
+        that opened Issue #197. Benching the same body on turn 1 fires it. Going second it also buys
+        information: I draw a card and see their committed board before spending any of my own.
+
+        This SUBSUMES three Set-Up special cases that were separately bolted onto the equation — the
+        exposure fallback's pregame branch, the redundancy charge keyed on `setup_placed_ids`, and
+        `bench-fill-a-basic`'s `_SETUP_BENCH` half. Three approximations of one rule.
+
+        Scoped to `_SETUP_BENCH` only. The Set-Up ACTIVE choice is untouched (a Basic there is
+        mandatory), and every in-game bench play is still the Deploy Marginal's to price."""
+        if select.get("context") != _SETUP_BENCH:
+            return chosen
+        return []
+
+    def _empty_bench_forced(self, obs: dict, select: dict, board: Board, options: list,
+                            order: list) -> list:
+        """The post-setup EMPTY-BENCH guard (ADR-0086 decision 7): with nothing to promote, a single
+        Knock-Out ends the match on the spot (`docs/rules.md` §7 case 2), so a legal Pokémon deploy is
+        TAKEN rather than ranked.
+
+        A FILTER on the option order, never a score. `keep-a-bench` was the one rule in the bench
+        table guarding a WIN CONDITION rather than a preference, and `_LINE_CAP`'s band invariant is
+        why it cannot stay a weight: max positional (readiness 300 + survival 50 + threat 100 + value
+        40 + line 100) = 590 < 1000 = KO_SCORE, deliberately, so no positional term can outrank a real
+        prize — and a loss-avoidance value cannot be simultaneously bounded under that band AND
+        un-outbiddable. A filter is the only shape that is both.
+
+        It ranks WHICH body, never WHETHER: the surviving order is the Deploy Marginal's, restricted
+        to the deploys.
+
+        **Post-setup only.** Verified at source (`docs/rules.md` §2): the player going first cannot
+        attack on turn 1 and the player going second acts only after that turn, so in either seat my
+        first turn precedes the first legal attack — declining a pregame placement cannot lose the
+        game before I can bench. Scoping it here keeps the guard a statement about a REACHABLE loss:
+        at Set Up no Knock Out is legal yet, so there is nothing to be forced by.
+
+        The converse is what makes the scoping mandatory: an unscoped guard fires at `_SETUP_BENCH`
+        on `setup_bench_decline_f3` (bench empty, Meowth ex the sole option) and forces exactly the
+        placement decision 3 derives us out of, burning Last-Ditch Catch — which can be had one turn
+        later, from hand, WITH the fetch.
+
+        OPEN (2026-07-30): the same reasoning is being asked of this filter's own trigger — whether an
+        empty Bench should force a body unconditionally, or only when the Active is DOOMED. Not
+        changed here, and deliberately: the filter guards a LOSS, and gating a loss-guard on a
+        prediction trades a bounded cost for an unbounded one. See
+        `docs/plans/deploy-decider-swap-review.md`.
+
+        Silent unless it has something to force, so an empty Bench with no legal body on the menu
+        leaves the order untouched."""
+        if select.get("context") != _MAIN or int(board.my_bench or 0) > 0 or not self.stats:
+            return order
+        deploys = [i for i in order
+                   if options[i].get("type") == _PLAY
+                   and getattr(self.stats.get(self._option_card_id(obs, select, options[i])),
+                               "is_pokemon", False)]
+        if not deploys:
+            return order
+        seen = set(deploys)
+        return deploys + [i for i in order if i not in seen]
 
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
@@ -1842,6 +1985,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                            # and the planner's spend account read it
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
         promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0073
+        deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0086 (#197)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -1864,7 +2008,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._attach_retreat_tool_lethal_tactical(obs, select, board, option)
                     + (attach_row["tactical"] if attach_row is not None else 0.0)
                     + (evolve_row["tactical"] if evolve_row is not None else 0.0)
-                    + (promote_row["tactical"] if promote_row is not None else 0.0))
+                    + (promote_row["tactical"] if promote_row is not None else 0.0)
+                    + (deploy_row["total"] if deploy_row is not None else 0.0))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
@@ -1878,6 +2023,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                          if attach_row is not None else 0.0),
                            hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
                            evolve_working=evolve_row,
+                           deploy_working=deploy_row,
                            promote_retreat_working=promote_row)
 
     def _evolve_side(self, obs: dict, board: Board, raw: dict | None, card_id, *,
@@ -4639,6 +4785,372 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return self._attach_value(obs, select, board, option)
 
+    # ── the DEPLOY decider (ADR-0086, Issue #197) ────────────────────────────────────────────────
+
+    def _deploy_supplier_rows(self, obs: dict, board: Board):
+        """``(hand_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by ZONE
+        because the two are not interchangeable (ADR-0086 decision 2).
+
+        Only POKÉMON: capacity here is BENCH capacity, and a Trainer covering a draw need costs no
+        Bench slot.
+
+        **The split is the whole point, and the first build got it wrong.** Deck-reachable bodies
+        were handed to the assignment as full rival SUPPLIERS, so every hand copy had a deck twin
+        covering the same slot — and a body whose slot a sibling already covers prices 0 (the
+        sets-not-sums rule, working exactly as designed). With the deck always holding a twin, that
+        zeroed nearly every deploy in the corpus and the sweep read `(no-deploy)` on frames the agent
+        obviously should bench.
+
+        A deck copy is NOT a substitute for one in hand: you have to draw it. So the deck leg enters
+        as slot **RESUPPLY** — the odds the closure re-fills that slot anyway, which discounts the
+        held copy to ``v × (1 − r)`` — which is what `resupply` exists for and what decision 2's
+        "weighted by Deck-Content Odds" describes."""
+        from collections import Counter
+        me = self._my_player(obs)
+        counts = board.deck_known_counts
+        if not counts:
+            unseen = Counter(self.deck)
+            unseen.subtract(self._visible_card_counts(me))
+            counts = {cid: n for cid, n in unseen.items() if n > 0}
+
+        def _is_body(cid) -> bool:
+            st = self.stats.get(cid) if (self.stats and cid is not None) else None
+            return bool(st is not None and getattr(st, "is_pokemon", False))
+
+        hand_rows = []
+        for c in (me.get("hand") or []):
+            cid = (c or {}).get("id")
+            if cid is not None and _is_body(cid):
+                hand_rows.append({"i": len(hand_rows), "cid": cid, "zone": "hand",
+                                  "worth": round(self._role_value(cid), 1),
+                                  "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        deck_rows = []
+        for cid in sorted(c for c in counts if _is_body(c)):
+            deck_rows.append({"i": len(hand_rows) + len(deck_rows), "cid": cid, "zone": "deck",
+                              "worth": round(self._role_value(cid), 1),
+                              "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        return hand_rows, deck_rows
+
+    def _deploy_line_deadline(self, me: dict, cid) -> int:
+        """When the line THIS held body belongs to comes online, in turns — the deploy path's
+        readiness read.
+
+        `_line_readiness_deadline` answers the held-PAYOFF direction ("is my Riolu in play, so this
+        Mega is live?"). For a held BASE it is structurally 99: nothing in play forward-evolves INTO
+        a Basic, so no base is ever found. Correct for the shed question it was built for, and
+        useless for this one — deploying a base is precisely what STARTS its clock.
+
+        So a held body that is itself a line pre-evolution reads its own hop instead: benching it now
+        means evolving next turn, so a single-hop base (Riolu -> Mega Lucario ex) is deadline 1.
+        Anything else defers to the payoff-direction helper unchanged."""
+        if cid is None:
+            return 99
+        if cid in self._line_preevo_set():
+            forward = self._forward_card_ids(cid) or ()
+            if any(f in self._wincon_set() or f in self._line_member_set() for f in forward):
+                return 1                       # bench now, evolve next turn
+        return self._line_readiness_deadline(me, cid)
+
+    def _deploy_resupply(self, board: Board, slots: list, elig_all: list, hand_n: int,
+                         deck_rows: list) -> list:
+        """Per-slot RESUPPLY from the deck leg: how likely the closure re-fills each slot without
+        spending a Bench slot on a held body now.
+
+        The odds a deck body actually arrives, not merely that it exists: its Deck-Content Odds
+        (`deck_contains_probability` — could it be prized?) times the `deploy` gate the resolver
+        already applies per row (a dead evolution re-supplies nothing). A RANKED read, so it weights
+        the marginal and never gates it (ADR-0074)."""
+        resupply = [0.0] * len(slots)
+        for k, row in enumerate(deck_rows):
+            j_set = elig_all[hand_n + k] if hand_n + k < len(elig_all) else ()
+            if not j_set:
+                continue
+            p = 1.0
+            if hasattr(board, "deck_contains_probability"):
+                try:
+                    p = float(board.deck_contains_probability(row["cid"]))
+                except Exception:
+                    p = 1.0
+            odds = max(0.0, min(1.0, p * float(row.get("deploy", 1.0))))
+            for j in j_set:
+                if 0 <= j < len(resupply):
+                    resupply[j] = max(resupply[j], odds)
+        # The CLOSING EDGE — whether the deck delivers IN TIME, not merely whether it delivers.
+        # `_resolve_needs`' own docstring specifies this rule and records it as not yet landed: "a
+        # deadline-0 slot must take resupply 0.0 regardless of how many the deck could re-draw,
+        # because one needed THIS turn is not re-drawable in time" — the same reasoning behind the
+        # deploy-now spike and the deadline-0 answer-doom slot.
+        #
+        # It is what stops SCARCITY standing in for URGENCY. Without it two equal-tier lines are
+        # separated by re-drawability alone, so a win-condition base the deck holds more of sinks
+        # beneath a scarcer secondary line — 83661652-44, where Makuhita priced 16.67 against Riolu's
+        # 2.19 because the deck held no more Makuhita and 87% odds of another Riolu. Both facts are
+        # true; they are answers to different questions.
+        #
+        # Graded against the shared HORIZON rather than a constant invented here: a latent slot
+        # (deadline 99) keeps its full re-access credit, a deadline-1 slot keeps ~1/9 of it.
+        for j, s in enumerate(slots):
+            dl = max(0, int(getattr(s, "deadline", 99) or 0))
+            resupply[j] *= min(1.0, dl / float(_HORIZON))
+        return resupply
+
+    def _last_ditch_spent(self, me: dict) -> bool:
+        """Has a "Last-Ditch" Ability already fired this turn?
+
+        Read SOUNDLY off the board rather than tracked: the card's own text caps it at one per turn
+        ("You can't use more than 1 Ability that has 'Last-Ditch' in its name each turn"), and the
+        Ability fires on the bench-drop — so a `supporter_tutor` body that ``appearThisTurn`` IS the
+        spent use. Same field `_deploy_now_ids` reads for evolution eligibility."""
+        for b in (me.get("bench") or []):
+            if not b or not b.get("appearThisTurn"):
+                continue
+            tags = set(self.functions.tags(b.get("id"))) if self.functions else set()
+            if "supporter_tutor" in tags:
+                return True
+        return False
+
+    def _deploy_decision(self, obs: dict, select: dict, board: Board, option: dict):
+        """Price ONE candidate Bench deployment — the Pilot half of ADR-0086: resolve board facts
+        into `DeployInputs` and delegate. None when the switch is off or the option is not a body
+        reaching my Bench."""
+        if not getattr(self, "deploy_value", False):
+            return None
+        ctx = select.get("context")
+        if ctx not in (_MAIN, _SETUP_BENCH, _TO_BENCH):
+            return None
+        if ctx == _MAIN and option.get("type") != _PLAY:
+            return None
+        cid = self._option_card_id(obs, select, option)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        if stat is None or not getattr(stat, "is_pokemon", False):
+            return None
+
+        from common import needs
+        from common.deploy_value import DeployInputs, deploy_value
+
+        me = self._my_player(obs)
+        hand_rows, deck_rows = self._deploy_supplier_rows(obs, board)
+        index = next((r["i"] for r in hand_rows if r["cid"] == cid), None)
+        if index is None:
+            return None
+        # One resolve over BOTH zones so the slot indices line up, then the hand rows are the
+        # SUPPLIERS and the deck rows become per-slot RESUPPLY (they are not substitutes — you have
+        # to draw a deck copy).
+        slots, elig_all = self._resolve_needs(obs, board, hand_rows + deck_rows,
+                                              include_general=False)
+        elig = elig_all[:len(hand_rows)]
+        # Re-stamp each LINE slot with the deploy-path deadline before the resupply clamp reads
+        # it: `_resolve_needs` supplies the held-PAYOFF direction, which is structurally 99 for
+        # a held base. Scoped here so the discard and refresh sites are untouched.
+        slots = [dataclasses.replace(s, deadline=self._deploy_line_deadline(me, _slot_cid(s)))
+                 if _slot_cid(s) is not None else s for s in slots]
+        resupply = self._deploy_resupply(board, slots, elig_all, len(hand_rows), deck_rows)
+        capacity = max(0, _BENCH_MAX - int(board.my_bench or 0))
+        assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity)
+
+        tags = set(self.functions.tags(cid)) if self.functions else set()
+        # Set Up precedes the first turn, so "once during your turn" is unsatisfiable there — the
+        # pregame zero is DERIVED, which is what makes the old -15 veto deletable (decision 3).
+        can_fire = ("supporter_tutor" in tags and ctx != _SETUP_BENCH
+                    and not self._last_ditch_spent(me))
+        ability_marginal, ability_odds = 0.0, 0.0
+        if can_fire:
+            ability_marginal, ability_odds = self._supporter_fetch_need(obs, board)
+
+        inp = DeployInputs(
+            assignment_marginal=assignment,
+            ability_marginal=ability_marginal,
+            ability_odds=ability_odds,
+            ability_can_fire=can_fire,
+            supporter_quota_spent=bool((obs.get("current") or {}).get("supporterPlayed")),
+            accel_unlock=self._deploy_accel_unlock(obs, board, cid),
+            exposure_prizes=self._deploy_exposure_prizes(obs, select, board, option, stat),
+            phase=self._needs_phase_scale(board),
+        )
+        value = deploy_value(inp)
+        return {"cid": cid, "capacity": capacity, **value.working()}
+
+    def _supporter_fetch_need(self, obs: dict, board: Board):
+        """``(worth marginal, odds)`` for a bench-drop Supporter tutor — decision 3's Ability leg.
+
+        WHAT the fetch is worth is the best need a Supporter can fill that nothing held already
+        covers (`draw_engine` / `supply_wincon`, the kinds `supporter_tutor` supplies). WHETHER it
+        lands is the Deck-Content Odds that such a Supporter is still in deck. Both are RANKED
+        reads, so they weight the leg and never gate it (ADR-0074).
+
+        This is what makes "bench it only when we need a SPECIFIC Supporter" arithmetic: a position
+        whose draw need is met scores 0 however certainly the deck holds one.
+
+        The two slots are built HERE rather than looked up in `_resolve_needs`' output, and that is
+        the whole point. That resolver derives slots FROM THE HELD ROWS — `draw_engine` is emitted
+        only `if engines:` (I hold an engine) and `supply_wincon` only `if tutors:` (I hold a tutor).
+        Correct for keep-value, where a slot exists to price a card you have; exactly inverted for
+        this question, where the need exists BECAUSE I hold nothing that meets it. Asking the
+        resolver for an UNCOVERED slot of those kinds is therefore near-unsatisfiable, and the leg
+        measured 0 on every board — the real mega_lucario deck holding six Supporters included.
+        Slot VALUES still come from `needs`, so the two derivations cannot drift.
+
+        Odds range over the DECKLIST, not `board.deck_known_counts`: the counts are empty until the
+        tracker anchors, and iterating them zeroed the leg whenever tracking was unavailable —
+        gating on a missing signal, which is the fail direction ADR-0074 forbids. A provably-gone
+        Supporter is dropped (`deck_empty_ids`, the SOUND read); otherwise
+        `deck_contains_probability` already returns 1.0 when the odds are uncomputable."""
+        from common import needs
+        me = self._my_player(obs)
+        hand_ids = list(board.hand_ids or ())
+
+        def _held_engine_supporter() -> bool:
+            for cid in hand_ids:
+                st = self.stats.get(cid) if self.stats else None
+                tags = set(self.functions.tags(cid)) if self.functions else set()
+                if "engine" in self._roles_of(cid):
+                    return True
+                if (st is not None and getattr(st, "is_supporter", False)
+                        and (_ENGINE_KEEP_TAGS & tags) and "hand_disruption" not in tags):
+                    return True
+            return False
+
+        def _held_tutor() -> bool:
+            return any("tutor" in self._roles_of(cid)
+                       or ({"rush_evolve", "tutor_mega"}
+                           & (set(self.functions.tags(cid)) if self.functions else set()))
+                       for cid in hand_ids)
+
+        draw_need = 0.0
+        if not _held_engine_supporter():
+            online = sum(1 for pid in board.in_play_ids if "engine" in self._roles_of(pid))
+            draw_need = needs.draw_engine_slot(engines_online=online,
+                                               value=_ENGINE_SUPPORTER_KEEP).value
+        supply_need = 0.0
+        if not _held_tutor():
+            supply = needs.supply_wincon_slot(
+                wincon_in_hand=bool(getattr(board, "wincon_in_hand", False)), target_reachable=True)
+            supply_need = supply.value if supply is not None else 0.0
+        if draw_need <= 0 and supply_need <= 0:
+            return 0.0, 0.0
+
+        # Match the need against the Supporters the deck ACTUALLY holds, one at a time, instead of
+        # asserting the slot's tier and then asking separately whether "a Supporter" survives. A need
+        # no reachable Supporter can fill is not a need this Ability answers: neither deck's Supporter
+        # line reaches the win-condition (mega_lucario's Petrel is `tutor_trainer` — Trainers, not the
+        # Mega), so an unconditioned `supply_wincon` claim paid +10 on every board and made Meowth ex
+        # always worth benching, which is the opposite of "bench it only when we need a SPECIFIC
+        # Supporter". The wincon leg now requires a Supporter whose own fetch closure reaches it.
+        wincon = self._wincon_set()
+        empty = getattr(board, "deck_empty_ids", frozenset()) or frozenset()
+        best_value = best_odds = 0.0
+        for cid in set(self.deck or ()):
+            st = self.stats.get(cid) if self.stats else None
+            if st is None or not getattr(st, "is_supporter", False) or cid in empty:
+                continue
+            tags = set(self.functions.tags(cid)) if self.functions else set()
+            value = 0.0
+            if draw_need > 0 and (_ENGINE_KEEP_TAGS & tags) and "hand_disruption" not in tags:
+                value = draw_need
+            if supply_need > 0 and wincon and (self._chain_fetch_targets(cid) & wincon):
+                value = max(value, supply_need)
+            if value <= 0:
+                continue
+            odds = (board.deck_contains_probability(cid)
+                    if hasattr(board, "deck_contains_probability") else 1.0)
+            odds = max(0.0, min(1.0, float(odds)))
+            # Rank by the WEIGHTED yield: a slightly smaller need that is far likelier to be there is
+            # the better reason to bench. The leg then reports that candidate's own pair, so the odds
+            # never travel attached to a need some other Supporter would have filled.
+            if value * odds > best_value * best_odds:
+                best_value, best_odds = value, odds
+        return float(best_value), float(best_odds)
+
+    def _needs_phase_scale(self, board: Board) -> float:
+        """`needs.phase_scale` off the live board — the prize-proximity sharpener the exposure leg
+        rides. Neutral (1.0) when the race read is unavailable, so a missing signal never inflates
+        or deletes the term."""
+        from common import needs
+        try:
+            return float(needs.phase_scale(
+                race_ahead=getattr(board, "race_ahead", None),
+                opp_prizes_remaining=int(getattr(board, "opp_prizes_remaining", 0) or 0)))
+        except Exception:
+            return 1.0
+
+    def _deploy_accel_unlock(self, obs: dict, board: Board, cid) -> float:
+        """Decision 8's accel-unlock leg: the DAMAGE the Attach Budget realises because a legal
+        landing spot now exists.
+
+        The value belongs to the ACCELERATOR's stranded Energy, not to the recipient's own role —
+        which is why this is not a tier bump on the body's line slot. `_recover_units` already prices
+        a rider's real yield under three bounds (printed ceiling, matching fuel in the source zone,
+        and the recipients' remaining NEED), and its need bound is exactly what makes a bench-targeted
+        rider credit 0 on an empty Bench. So the counterfactual is that same function evaluated on the
+        board WITH the candidate benched, which is ADR-0069's `this_turn` shape applied to a deploy.
+
+        Three behaviours fall out instead of being asserted, and they are the flat +20 rung's
+        hand-written stand-down conditions:
+
+        * 0 when the accelerator is not Active (`accel_recipient_missing` is False — nothing stranded);
+        * 0 when a recipient is already benched (same signal — the Energy already lands);
+        * PROPORTIONAL to the rider's real yield, so a 3-Energy Aura Jab pays more than a 1-Energy
+          trickle, which the flat rung could not express at all.
+
+        Priced per Energy at `ENERGY_RECOVER` — the shipped, DERIVED median damage-per-Energy over
+        every attack costing >= 2 (`160/3`, ADR-0078 via Issue #172) — rather than a constant invented
+        for this leg. Damage-denominated already, so it does NOT ride the deploy band."""
+        if not board.accel_recipient_missing or not self.stats or cid is None:
+            return 0.0
+        stat = self.stats.get(cid)
+        if stat is None or not getattr(stat, "is_pokemon", False):
+            return 0.0
+        if cid not in self._line_member_set():        # only a Line member receives (the glossary term)
+            return 0.0
+        active = self._my_active(obs)
+        aid, best = None, 0.0
+        for candidate in (getattr(self.stats.get((active or {}).get("id")), "attacks", None) or ()):
+            st = self._attack_stat(candidate)
+            if st is not None and getattr(st, "recoverN", 0) > 0:
+                aid = candidate
+                break
+        if aid is None:
+            return 0.0
+        # The hypothetical board: the candidate is on the Bench, so the rider has somewhere to land.
+        hypo = copy.deepcopy(obs)
+        me = hypo["current"]["players"][hypo["current"].get("yourIndex", 0)]
+        me["bench"] = list(me.get("bench") or []) + [{"id": cid, "hp": getattr(stat, "hp", 0),
+                                                      "energies": [], "appearThisTurn": True}]
+        units = self._recover_units(aid, {}, board, hypo)   # dmg_ctx unused by the fuel/need bounds
+        best = max(0.0, float(units)) * ENERGY_RECOVER
+        return best
+
+    def _deploy_exposure_prizes(self, obs: dict, select: dict, board: Board, option: dict,
+                                stat) -> float:
+        """The exposure leg's prize-equivalents (decision 5): the Prize-Path DELTA, and nothing else.
+
+        How much does benching this body shorten the opponent's cheapest route (`_bench_path_delta`)?
+        Sharp, board-aware, and zero against a body they cannot reach.
+
+        **Where the Path cannot be read, this contributes ZERO** — decision 6, verbatim: *"a term that
+        cannot be computed contributes ZERO, never a guess."* That matters in practice rather than in
+        principle: the Path is unreadable on 189 of the corpus's non-Set-Up frames (both pregame
+        Actives face down is the obvious case, but far from the only one).
+
+        A FALLBACK stood here and is now DELETED, and the history is worth keeping because it is a
+        lesson about scope. It guessed the body's own prize liability — the excess over a 1-prize
+        body — and was added for ONE reason: at `_SETUP_BENCH` a derived-zero Ability leg plus a zero
+        exposure lands at exactly 0.0, and the optional-select take-fewer drops only `score < 0`, so
+        Meowth ex survived the pregame on `setup_bench_decline_f3`. Decision 9 now refuses every
+        pregame placement by RULE, so that reason is gone — and with it went two more pregame patches
+        that had accreted on the same spot (a `setup_placed_ids` redundancy charge, and before it a
+        flat full-prize Set-Up charge measured and rejected for also declining the win-condition Line
+        base). Amendment F was a fourth, proposed and withdrawn the same day.
+
+        Removing it was checked, not assumed: both ADR-0072 gates still PASS and the suite stays
+        green, so the guess was carrying none of the rulings. Four patches on one context, none of
+        them load-bearing, is what a missing rule looks like from the inside.
+        """
+        delta = self._bench_path_delta(obs, select, option, stat, board)
+        if delta > 0.0:
+            return delta
+        return 0.0                         # unreadable Path: decision 6 says ZERO, never a guess
+
     def _attach_value_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """The ATTACH decider's contribution to an option's score (kill-switch `attach_value`,
         shipped ON). 0 when the switch is OFF — DEGRADED MODE, not a rollback: the rungs this
@@ -5449,7 +5961,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         target_kos = bool(board.snipe_damage and target_hp and board.snipe_damage >= target_hp
                           and not target_is_bench_tera)   # Tera: no damage while Benched
         target_on_path = self._target_on_path(obs, select, option, board)   # Tier-3 (ADR-0040)
-        bench_shortens = self._bench_shortens_their_path(obs, select, option, stat, board)
+        bench_path_delta = self._bench_path_delta(obs, select, option, stat, board)
+        bench_shortens = bench_path_delta > 0.0     # the sign; one source, no drift
         promote_on_their_path = (select.get("context") in (_TO_ACTIVE, _SWITCH)
                                  and self._promote_target_on_their_path(obs, select, option, board))
         target_rank = self._target_threat_rank(
@@ -5572,6 +6085,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        target_is_forced_promotion=target_is_forced_promotion,
                        target_promotion_mirage=target_promotion_mirage,
                        bench_shortens_their_path=bench_shortens,
+                       bench_path_delta=bench_path_delta,
                        promote_target_on_their_path=promote_on_their_path,
                        counter_is_best_placement=(
                            board.best_counter_slot is not None

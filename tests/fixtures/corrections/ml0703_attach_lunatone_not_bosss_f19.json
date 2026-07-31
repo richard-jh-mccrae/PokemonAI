@@ -1,7 +1,7 @@
 {
   "obs": {
     "current": {
-      "energyAttached": true,
+      "energyAttached": false,
       "firstPlayer": 0,
       "looking": null,
       "players": [
@@ -10,7 +10,6 @@
             {
               "appearThisTurn": false,
               "energies": [
-                6,
                 6
               ],
               "energyCards": [
@@ -18,11 +17,6 @@
                   "id": 6,
                   "playerIndex": 0,
                   "serial": 8
-                },
-                {
-                  "id": 6,
-                  "playerIndex": 0,
-                  "serial": 7
                 }
               ],
               "hp": 110,
@@ -44,16 +38,8 @@
           "bench": [
             {
               "appearThisTurn": false,
-              "energies": [
-                6
-              ],
-              "energyCards": [
-                {
-                  "id": 6,
-                  "playerIndex": 0,
-                  "serial": 11
-                }
-              ],
+              "energies": [],
+              "energyCards": [],
               "hp": 170,
               "id": 1071,
               "maxHp": 170,
@@ -66,17 +52,19 @@
           "benchMax": 5,
           "burned": false,
           "confused": false,
-          "deckCount": 36,
+          "deckCount": 44,
           "discard": [
             {
               "id": 1142,
               "playerIndex": 0,
               "serial": 42
-            },
+            }
+          ],
+          "hand": [
             {
-              "id": 1182,
+              "id": 6,
               "playerIndex": 0,
-              "serial": 51
+              "serial": 7
             },
             {
               "id": 1227,
@@ -84,46 +72,14 @@
               "serial": 59
             },
             {
-              "id": 1141,
-              "playerIndex": 0,
-              "serial": 37
-            },
-            {
-              "id": 1152,
-              "playerIndex": 0,
-              "serial": 47
-            },
-            {
-              "id": 677,
-              "playerIndex": 0,
-              "serial": 25
-            },
-            {
-              "id": 673,
-              "playerIndex": 0,
-              "serial": 14
-            },
-            {
-              "id": 1121,
-              "playerIndex": 0,
-              "serial": 31
-            }
-          ],
-          "hand": [
-            {
               "id": 1227,
               "playerIndex": 0,
               "serial": 57
             },
             {
-              "id": 1252,
+              "id": 1182,
               "playerIndex": 0,
-              "serial": 61
-            },
-            {
-              "id": 676,
-              "playerIndex": 0,
-              "serial": 21
+              "serial": 51
             },
             {
               "id": 677,
@@ -131,7 +87,7 @@
               "serial": 24
             }
           ],
-          "handCount": 4,
+          "handCount": 5,
           "paralyzed": false,
           "poisoned": false,
           "prize": [
@@ -149,12 +105,12 @@
               "appearThisTurn": false,
               "energies": [],
               "energyCards": [],
-              "hp": 60,
-              "id": 676,
-              "maxHp": 110,
+              "hp": 80,
+              "id": 677,
+              "maxHp": 80,
               "playerIndex": 1,
               "preEvolution": [],
-              "serial": 82,
+              "serial": 85,
               "tools": []
             }
           ],
@@ -164,18 +120,12 @@
               "appearThisTurn": false,
               "energies": [],
               "energyCards": [],
-              "hp": 340,
-              "id": 678,
-              "maxHp": 340,
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
               "playerIndex": 1,
-              "preEvolution": [
-                {
-                  "id": 677,
-                  "playerIndex": 1,
-                  "serial": 85
-                }
-              ],
-              "serial": 88,
+              "preEvolution": [],
+              "serial": 82,
               "tools": []
             },
             {
@@ -194,7 +144,7 @@
           "benchMax": 5,
           "burned": false,
           "confused": false,
-          "deckCount": 43,
+          "deckCount": 44,
           "discard": [
             {
               "id": 1142,
@@ -240,22 +190,26 @@
       "retreated": false,
       "stadium": [],
       "stadiumPlayed": false,
-      "supporterPlayed": true,
-      "turn": 5,
-      "turnActionCount": 9,
+      "supporterPlayed": false,
+      "turn": 3,
+      "turnActionCount": 3,
       "yourIndex": 0
     },
     "logs": [
       {
-        "cardId": 6,
-        "cardIdTarget": 1071,
+        "cardId": 677,
+        "fromArea": 1,
         "playerIndex": 0,
-        "serial": 11,
-        "serialTarget": 29,
-        "type": 11
+        "serial": 24,
+        "toArea": 2,
+        "type": 6
+      },
+      {
+        "playerIndex": 0,
+        "type": 0
       }
     ],
-    "remainingOverageTime": 598.68442,
+    "remainingOverageTime": 599.0914379999999,
     "select": {
       "context": 0,
       "contextCard": null,
@@ -264,6 +218,20 @@
       "maxCount": 1,
       "minCount": 1,
       "option": [
+        {
+          "area": 2,
+          "inPlayArea": 4,
+          "inPlayIndex": 0,
+          "index": 0,
+          "type": 8
+        },
+        {
+          "area": 2,
+          "inPlayArea": 5,
+          "inPlayIndex": 0,
+          "index": 0,
+          "type": 8
+        },
         {
           "index": 1,
           "type": 7
@@ -277,8 +245,8 @@
           "type": 7
         },
         {
-          "attackId": 979,
-          "type": 13
+          "index": 4,
+          "type": 7
         },
         {
           "type": 12
@@ -291,26 +259,27 @@
       "remainEnergyCost": 0,
       "type": 0
     },
-    "step": 34
+    "step": 20
   },
   "chosen": [
-    3
+    4
   ],
   "correct": [
-    2
+    0
   ],
   "episode_id": 83661652,
-  "frame": 33,
-  "category": "misattachment",
-  "rationale": "CRITICAL: typically dont feed Meowth ex. should have played solrock, riolu, then attached to riolu.",
-  "correct_alternatives": [
-    [
-      1
-    ],
-    [
-      2
-    ]
-  ],
-  "alternatives_ruled": "2026-07-30",
-  "alternatives_why": "User ruling 2026-07-30: the rationale is correct. It names BOTH basics — \"should have played solrock, riolu, then attached to riolu\" — and bench drops commute (rulebook L120-122), so options [1] Solrock and [2] Riolu are both correct this decision; the error is [3] Attack (and feeding Meowth ex). `correct` stays [2] so existing consumers are unchanged. Mirrored here from the corpus record (data/corrections/mega_lucario_20260703_194dc40-dirty) so the test honours the same ruling the Decision Gate does."
+  "frame": 19,
+  "category": "wrong_supporter",
+  "rationale": "Poor use of Boss's Orders. i get that it is a stall tactic, but a poor one. Should have attached energy to Lunatone, played lillie's, eventually attacked with lunatone.",
+  "frame_key": "83661652|0|decision|19",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ],
+      "owner": "#165",
+      "ruled": "2026-07-30",
+      "why": "User ruling 2026-07-30 during the ADR-0086 Decision Gate sitting: held out to #165, the Turn Planner. The correction's complaint is Boss's Orders (`wrong_supporter`), and its prescription is a MULTI-STEP turn — \"Should have attached energy to Lunatone, played lillie's, eventually attacked with lunatone\" — while `correct` can index only the first action. With the Deploy Marginal armed the Pilot plays Riolu first; the attach still scores highest (50.0 vs Riolu's 14.84) and still happens the same turn, because a develop is TIER 0 and an attach is tier 2, so `_finish_turn_last` sequences the develop ahead without displacing it. What the frame actually tests is the ORDER of a whole turn, which no per-option price decides. Reports, does not gate."
+    }
+  }
 }

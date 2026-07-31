@@ -297,6 +297,13 @@ SUPPLIES: dict = {
     # `deny_tags` once armed, so one card is never priced through two instruments at once).
     "gust":               ("deny", "gust_target"),
     "recycle":            ("supply_wincon", "fund_attack"),
+    # ADR-0086 (Issue #197): a bench-drop tutor (Meowth ex's Last-Ditch Catch) fetches a SUPPORTER,
+    # so what it supplies is the DRAW/ENGINE need that Supporter serves — plus the wincon dig, when
+    # the Supporter the deck holds is a tutor. It was absent from this table entirely, so the
+    # coverage lint's promise ("no card class is silently priced 0 by a missed slot") did not hold
+    # for it: the tag carried a `_READINESS_ABILITY_VALUE` but no slot kind, so the Needs assignment
+    # priced a Meowth drop at nothing.
+    "supporter_tutor":    ("draw_engine", "supply_wincon"),
     # fallback classes
     "typed_basic_energy": ("fund_attack", "fuel"),
     "ace_spec":           ("line", "answer_doom"),
@@ -311,12 +318,21 @@ _MAX_KEEP_SLOTS = 16    # bitmask-DP bound; beyond it the lowest-weight slots ar
                         # under-count of V on BOTH sides of a marginal — never a crash)
 
 
-def _keep_slot_dp(slots, eligibility, resupply, exclude):
+def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
     """The exact-coverage core: over the KEEP slots (``supplied_by_pitch`` excluded), maximise
     Σ_covered v_j·(1−r_j) by assigning each non-excluded card to ≤1 eligible slot — lib-free
     bitmask DP over slot subsets (≤ `_MAX_KEEP_SLOTS` × ≤ ~10 cards ⇒ trivial). Returns
     (base, best): ``base`` = Σ_j v_j·r_j (what the closure re-supplies even with no held card) and
-    ``best`` = the optimal held coverage on top. V = base + best."""
+    ``best`` = the optimal held coverage on top. V = base + best.
+
+    ``capacity`` (ADR-0086, Issue #197) bounds how many cards may be assigned AT ONCE — the Bench
+    holds 5, and that cap is the only reason a deploy displaces anything. Because each card takes at
+    most one slot, the number of cards assigned is exactly the number of slots covered, so the bound
+    is a **popcount bound on the mask** — an exact restriction of the same DP, not a heuristic.
+    ``None`` means unbounded, which is every pre-existing caller (the keep/discard family has no
+    capacity: holding a card costs no board slot). ``base`` is deliberately untouched by it: the
+    closure re-supplies a slot whether or not a body is deployed."""
+    cap = None if capacity is None else max(0, int(capacity))
     keep = [(j, s) for j, s in enumerate(slots) if not s.supplied_by_pitch]
     weighted = []
     for j, s in keep:
@@ -339,6 +355,8 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude):
             continue
         ndp = dict(dp)
         for mask, val in dp.items():
+            if cap is not None and mask.bit_count() >= cap:
+                continue                     # capacity spent — this card cannot also be deployed
             free = mask_i & ~mask
             while free:
                 low = free & -free
@@ -351,12 +369,16 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude):
     return base, max(dp.values())
 
 
-def assignment_value(slots, eligibility, resupply, *, exclude=frozenset()) -> float:
+def assignment_value(slots, eligibility, resupply, *, exclude=frozenset(),
+                     capacity=None) -> float:
     """V(held \\ exclude) — expected slot coverage: a slot covered by a held card counts full; an
     uncovered slot counts value × its closure RESUPPLY odds (the re-access discount, derived); fuel
     slots (``supplied_by_pitch``) never enter the keep side. Exact (no greedy order-dependence —
-    the Round-2 counterexample is the pinned proof)."""
-    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude))
+    the Round-2 counterexample is the pinned proof).
+
+    ``capacity`` caps how many cards may be assigned simultaneously (see :func:`_keep_slot_dp`);
+    ``None``, the default, is the unbounded keep-side reading every pre-existing caller wants."""
+    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude), capacity)
     return base + best
 
 
@@ -369,6 +391,64 @@ def keep_v2(slots, eligibility, resupply, index: int, *, intrinsic: float = 0.0)
     marginal = (assignment_value(slots, eligibility, resupply)
                 - assignment_value(slots, eligibility, resupply, exclude={index}))
     return max(marginal, float(intrinsic))
+
+
+def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> float:
+    """What DEPLOYING card ``index`` into one of ``capacity`` free Bench slots is worth, in Worth
+    points — the Deploy Marginal's assignment leg (ADR-0086, Issue #197, amendment E).
+
+        net(X) = V(X deployed now, cap=K) − V(C \\ X, cap=K)
+
+    — "the board's coverage if I spend a slot on X now" minus "its coverage if I don't, and the other
+    candidates have all K slots." Deploying X consumes one capacity unit and covers at most one of
+    X's eligible slots, so the left side is
+    ``max_j∈elig(X) [ w_j + V(C \\ X, slots≠j, cap=K−1) ]``, floored by ``V(C \\ X, cap=K−1)`` for the
+    case where X covers nothing at all but still eats the slot.
+
+    Gain and displacement are NOT two subtractable terms — at tight capacity the gain already nets
+    the displacement, and subtracting it again double-counts. They are two readings of this one
+    difference, which is the Amendment-B correction restated at the arithmetic level.
+
+    **Why not the ADR's written form.** Decision 2 spells the marginal `V(C) − V(C, X pinned)`, which
+    is ≤ 0 for every candidate — forcing a card into an already-optimal assignment can only lower it,
+    and the best candidate prices exactly 0. That ranks bodies against each other but can never clear
+    `_finish_turn_last`'s floor, which is precisely `ms_free_bench_evolve_f17`'s failure mode (a good
+    develop netting 0.0 and being starved by the `score <= 0` gate). The form above is the one under
+    which decision 2's OWN sentence — "the cost of the 5th slot is emergent: exactly the contribution
+    of the supplier it displaces" — is literally true of a computed quantity.
+
+    Both properties the ADR asks for fall out rather than being asserted:
+
+    * **emergent, never a constant** — displacement is whatever the displaced supplier was worth, so
+      a last slot contested by a 25 is dearer than the same slot contested by a 5;
+    * **zero on an empty Bench** — with slack capacity, dropping one unit costs the others nothing,
+      so `displacement == 0` and a deploy nets its full gain.
+
+    A REDUNDANT body prices 0 gain however free the Bench, because redundancy is a property of the
+    board (a sibling already covers the slot) rather than of scarcity — the f51 shape. Deliberately
+    signed: a body worth less than what it displaces nets NEGATIVE, which is how the take-fewer
+    decline and the turn-ender floor come to refuse it.
+
+    Worth-denominated, like everything else in this module. The caller divides by
+    `currency.DEPLOY_WORTH_SCALE` to get the dimensionless relevance that crosses into the damage
+    scale (ADR-0086 amendment B) — this function must never be handed to a damage-scale consumer raw.
+    """
+    k = max(0, int(capacity))
+    without = frozenset({index})
+    tight = max(0, k - 1)
+    # Not deploying X: the other candidates have every free slot.
+    v_without = assignment_value(slots, eligibility, resupply, exclude=without, capacity=k)
+    # Deploying X: it eats one slot whether or not it covers anything (the floor), and may cover one
+    # of its own — in which case that slot is no longer available to the rest.
+    best = assignment_value(slots, eligibility, resupply, exclude=without, capacity=tight)
+    for j in (eligibility[index] if 0 <= index < len(eligibility) else ()):
+        if not (0 <= j < len(slots)) or slots[j].supplied_by_pitch:
+            continue
+        r = min(1.0, max(0.0, float(resupply[j]) if j < len(resupply) else 0.0))
+        taken = [set(e) - {j} for e in eligibility]      # X took slot j; nobody else may cover it
+        best = max(best, slots[j].value * (1.0 - r)
+                   + assignment_value(slots, taken, resupply, exclude=without, capacity=tight))
+    return best - v_without
 
 
 def set_keep_v2(slots, eligibility, resupply, indices) -> float:

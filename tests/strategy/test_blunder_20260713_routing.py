@@ -74,28 +74,29 @@ def test_off_color_demote_silent_on_a_board_colour():
 
 @pytest.mark.req("REQ-FETCH-0031")
 def test_f4_declines_pre_benching_a_redundant_utility_basic():
-    """f4: at the pregame SETUP_BENCH the only option is a 2nd Munkidori while one is Active (in the
-    setup logs). `dont-pre-bench-a-redundant-utility` (-15) sinks the +12 bench-fill so the single-pick
-    take-fewer DECLINES — the copy is saved as Ultra-Ball fodder."""
+    """f4: at the pregame SETUP_BENCH the only option is a 2nd Munkidori while one is Active. The
+    ruled answer is to DECLINE — "we typically only ever need a single Munkidori in play. this second
+    copy is a perfect fodder for Ultra Ball" (user, 2026-07-30).
+
+    Carried by ADR-0086 decision 9 — we never bench during Set Up — rather than by a price. This
+    frame had three mechanisms in one day: `dont-pre-bench-a-redundant-utility` (−15), then the
+    exposure leg charging a redundant pregame copy its full prize value, now the rule. The ruling
+    never moved; only the reason did, and the rule is the one that reaches it without needing a
+    per-frame signal to notice the redundancy.
+
+    The `setup_placed_ids` assertion this carried is gone WITH that mechanism: the redundancy read no
+    longer produces the decline, so asserting it would fix a signal the behaviour does not use."""
     fx = _fixture("dp_dont_pre_bench_redundant_munkidori_f4")
-    pilot = _pilot("dragapult_ex")
-    assert pilot.decide(fx["obs"]) == [], "should decline the optional pregame bench of a 2nd Munkidori"
-    board = pilot._board(fx["obs"], fx["obs"]["select"])
-    assert 112 in board.setup_placed_ids                      # the Active Munkidori, read from the logs
+    assert _pilot("dragapult_ex").decide(fx["obs"]) == []
 
 
-@pytest.mark.req("REQ-FETCH-0031")
-def test_f4_without_the_setup_log_the_basic_is_still_benched():
-    """Neutrality: strip the pregame placement log and the same Munkidori bench is no longer redundant
-    (`setup_placed_ids` empty) -> the rung stays silent and the optional bench happens. Proves the
-    fix rides the setup-log signal, not a blanket decline."""
-    fx = _fixture("dp_dont_pre_bench_redundant_munkidori_f4")
-    obs = json.loads(json.dumps(fx["obs"]))
-    obs["logs"] = []                                          # drop the pregame MOVE_CARD placements
-    pilot = _pilot("dragapult_ex")
-    board = pilot._board(obs, obs["select"])
-    assert board.setup_placed_ids == frozenset()
-    assert pilot.decide(obs) == [0], "without the redundancy signal a startable Basic is still benched"
+# `test_f4_without_the_setup_log_the_basic_is_still_benched` stood here until ADR-0086 decision 9. It
+# was the NEUTRALITY half of the redundancy fix — strip the pregame placement log and the same
+# Munkidori is benched again, proving the decline rode `setup_placed_ids` rather than being a blanket
+# refusal. Under decision 9 it IS a blanket refusal, deliberately and for reasons read off the
+# rulebook, so the property that test existed to DENY is now the intended behaviour. Its replacement
+# asserts the same shape from the other side: `test_setup_bench_decline.py::
+# test_the_refusal_is_unconditional_even_for_the_wincon_line_base`.
 
 
 @pytest.mark.req("REQ-GEN-0074")
