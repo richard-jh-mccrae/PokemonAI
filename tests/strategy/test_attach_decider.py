@@ -11,7 +11,6 @@ Two styles:
   * Style B — replay committed correction frames and assert the DECISION, on decider semantics.
 """
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -438,19 +437,17 @@ def _tune():
 
 
 def _frame(ep, fr):
-    for jf in sorted((REPO / "data" / "corrections").glob("*/corrections.jsonl")):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if str(d.get("episode_id")) == ep and d.get("decision", {}).get("frame") == fr:
-                return d
-    raise AssertionError(f"correction {ep}-{fr} not found")
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243)."""
+    from corpus_helpers import corpus_record
+    return corpus_record(ep, fr)
 
 
 def _agent(rec) -> str:
-    a = rec.get("agent") or ""
-    return a if a in {"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"} else "mega_starmie"
+    """The shared replay fallback. It is no longer papering over a missing `agent` — `from_dict`
+    backfills that from `agent_build`, and `('82227388', 7)` below is one of the 40 records the raw
+    walk dropped. It survives for the corpus's one `SkiChu` record, which has no agent dir."""
+    from corpus_helpers import replay_agent
+    return replay_agent(rec)
 
 
 # The ATTACH the decider must rank first at each frame, on decider semantics — its own lane, which is
@@ -487,7 +484,7 @@ _CORPUS = {
 def test_corpus_decision(ep, fr):
     expected = _CORPUS[(ep, fr)]
     rec = _frame(ep, fr)
-    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec["obs"])
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
     # Read the decision through the decider's OWN working rows, so an ATTACH_FROM recipient pick (a
     # type-3 _CARD option) is compared exactly as a type-8 ATTACH is.
     rows = (dec.attach_working or {}).get("eq", ())
@@ -501,7 +498,7 @@ def test_corpus_decision(ep, fr):
     top = max(rows, key=lambda r: r["tactical"])
     assert top["tactical"] > 0, f"{ep}-{fr}: the decider declined, expected {expected}"
     if expected is None:
-        expected = {by_index[i] for i in (rec.get("correct") or []) if i in by_index}
+        expected = {by_index[i] for i in (rec.correct or []) if i in by_index}
         assert tuple(top["slot"]) in expected, f"{ep}-{fr}: {top['slot']} not in correct {expected}"
     else:
         assert tuple(top["slot"]) == expected, f"{ep}-{fr}: {top['slot']} != {expected}"
@@ -512,7 +509,7 @@ def test_accel_routing_drives_the_feed_not_the_accelerators_own_attack():
     """83037962-70: feeding the Active Cinderace wins because Turbo Flare ROUTES ~3 Basic onto the
     survivable bench carrier (a full Nebula build) — NOT because of Cinderace's own 50 attack."""
     rec = _frame("83037962", 70)
-    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec["obs"])
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
     picked = max(dec.attach_working["eq"], key=lambda r: r["tactical"])
     assert picked["target"] == 666                            # Cinderace, the accelerator
     assert picked["accel_value"] > picked["this_turn"]
@@ -523,4 +520,4 @@ def test_the_working_is_silent_on_a_supporter_selection_frame():
     """85786096-70: a WHICH-SUPPORTER decision. Every option is _PLAY; there is no ATTACH, so the
     decider prices nothing and stays silent rather than pretending to own the frame."""
     rec = _frame("85786096", 70)
-    assert _tune()._build_pilot(_agent(rec))[0].explain(rec["obs"]).attach_working is None
+    assert _tune()._build_pilot(_agent(rec))[0].explain(rec.obs).attach_working is None

@@ -157,8 +157,12 @@ PROFILE = {
                                     # `_doom_recur_fueled`'s all-or-nothing relax-block — augments a
                                     # possible refueler's Energy with its real discard-recur reload
                                     # before the CHARGED relax check runs, instead of always standing
-                                    # down. Corpus-swept clean (0/331 decision flips,
-                                    # `threat_sweep.py --slots`) AND cleared the ADR-0072 mid-build
+                                    # down. Corpus-swept clean (0/331 decision flips, by
+                                    # `threat_sweep.py --slots` — a mode DELETED by Issue #243: once
+                                    # this flag shipped ON here, the sweep compared the PROFILE
+                                    # against a forced-ON copy of itself, so its 0 flips became true
+                                    # by construction rather than by measurement) AND cleared the
+                                    # ADR-0072 mid-build
                                     # paired-A/B gauntlet tripwire (`gauntlet_ab.py`, flag-overlay
                                     # variant — this swap deletes nothing, so the flag-overlay
                                     # instrument is the correct fit, not the build-vs-build
@@ -207,8 +211,11 @@ PROFILE = {
                                     # reads the new fields — Issue #187 is the consumer and is itself
                                     # blocked on Issue #199 — so ON changes no decision; it only costs one
                                     # extra `turns_to_ko_me` per ENERGIZED opponent body per
-                                    # decision. OFF until Issue #199's gate 1 rules the read admissible;
-                                    # `deny_gate1.py` forces it ON to run that measurement.
+                                    # decision. OFF until Issue #199's gate 1 rules the read
+                                    # admissible. That measurement was RUN and the answer recorded in
+                                    # ADR-0080 ("deny is a categorical relevance instrument, not a
+                                    # magnitude one" — the rate ruled MOOT); its probe `deny_gate1.py`
+                                    # was deleted by Issue #243, the ADR being the artifact.
     "snipe_relevance": True,        # ADR-0085 / Issue #188 (S4-snipe), armed-ON 2026-07-30: the **Snipe
                                     # Relevance** scalar DECIDES the DAMAGE bench-target select in
                                     # place of `baseline_snipe.py`'s six additive target rungs + the

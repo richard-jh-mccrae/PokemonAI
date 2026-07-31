@@ -14,7 +14,6 @@ committed corpus (`tune._build_pilot` — the strict retest bar; a fresh Pilot p
      value itself is still pinned (synthetically) in `test_needs.py` and
      `test_needs_deny_resolver.py`, which remain the deny leg's home.
 """
-import json
 import sys
 from pathlib import Path
 
@@ -30,14 +29,9 @@ def _shipped_pilot(agent):
 
 
 def _corpus_frame(ep, fr):
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if str(d.get("episode_id")) == ep and d.get("decision", {}).get("frame") == fr:
-                return d
-    raise AssertionError(f"frame {ep}-{fr} not in the corpus")
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243)."""
+    from corpus_helpers import corpus_record
+    return corpus_record(ep, fr)
 
 
 def _refresh_hand_slots(pilot, obs, exclude_cid):
@@ -54,7 +48,7 @@ def test_answer_doom_prices_the_switch_by_the_doomed_bodys_worth():
     flat clutch_heal tier (20) and not the Switch's ~0 catalog worth — saving the engine is worth
     what the engine is worth. The correction plays the develop line, not the refresh."""
     pilot = _shipped_pilot("mega_lucario")
-    obs = _corpus_frame("83661652", 40)["obs"]
+    obs = _corpus_frame("83661652", 40).obs
     board = pilot._board_hypothetical(obs)
     assert board.active_doomed
     active_id = next(b["id"] for b in obs["current"]["players"][obs["current"]["yourIndex"]]["active"] if b)
@@ -74,7 +68,7 @@ def test_doomed_successor_rides_a_full_tier_this_turn_succession_slot():
     answer-doom successor spike re-derived — so shuffling it away (Harlequin) is expensive: the
     refresh shed prices the hand up and the refresh swing is NEGATIVE (don't Harlequin)."""
     pilot = _shipped_pilot("mega_starmie")
-    obs = _corpus_frame("83037962", 49)["obs"]
+    obs = _corpus_frame("83037962", 49).obs
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)  # exclude the played Harlequin
     succ = [s for s in slots if s.key.endswith(":succ")]
     assert succ and succ[0].value == pytest.approx(30.0) and succ[0].deadline == 0
@@ -91,7 +85,7 @@ def test_duplicate_supporter_second_copy_is_worth_zero():
     a shuffle for free". The ruling survives the reclassification; the shed drops accordingly."""
     from common import needs
     pilot = _shipped_pilot("mega_starmie")
-    obs = _corpus_frame("82522698", 36)["obs"]
+    obs = _corpus_frame("82522698", 36).obs
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)
     wally_rows = [k for k, r in enumerate(rows) if r["cid"] == 1229]
     assert len(wally_rows) == 2, "the frame holds two Wally's"
@@ -112,7 +106,7 @@ def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     ADR-0062 DAMAGE swing (~140), so Boss's is a good card, never a whole-hand anchor. The damage
     math stays on the play side; the correction plays Harlequin either way (the slot never towers)."""
     pilot = _shipped_pilot("mega_starmie")
-    obs = _corpus_frame("83457493", 31)["obs"]
+    obs = _corpus_frame("83457493", 31).obs
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)
     gust_target = [s for s in slots if s.kind == "gust_target"]
     assert gust_target, "a fueled opponent bench opens gust_target slots (armed default, ADR-0076)"

@@ -17,7 +17,6 @@ the Active in the acceptance record is BARE, so that predicate is false and coul
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -29,14 +28,14 @@ _PSYCHIC_ENERGY, _DREEPY, _MUNKIDORI = 5, 119, 112
 
 
 def _record():
-    corr = REPO / "data" / "corrections" / "dragapult_ex_20260715_32530b9" / "corrections.jsonl"
-    for line in corr.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        d = json.loads(line)
-        if str(d.get("episode_id")) == "86091728" and d.get("decision", {}).get("frame") == 19:
-            return d
-    raise AssertionError("correction 86091728-19 not found in data/corrections/")
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243).
+
+    What this replaced named a BUILD DIRECTORY outright — `dragapult_ex_20260715_32530b9` — which no
+    glob pattern can see and which breaks silently the day that directory is renamed. That is why
+    ADR-TEMP-243 decision 5 widened the rule from "no raw glob" to "nothing outside the store reaches
+    the corpus": a check that forbids a spelling teaches people to find another one."""
+    from corpus_helpers import corpus_record
+    return corpus_record("86091728", 19)
 
 
 def _pilot(agent: str):
@@ -50,11 +49,11 @@ def _pilot(agent: str):
 @pytest.fixture(scope="module")
 def decision():
     rec = _record()
-    return rec, _pilot(rec["agent"]).explain(rec["obs"])
+    return rec, _pilot(rec.agent).explain(rec.obs)
 
 
 def _me(rec):
-    return rec["obs"]["current"]["players"][rec["obs"]["current"].get("yourIndex", 0)]
+    return rec.obs["current"]["players"][rec.obs["current"].get("yourIndex", 0)]
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
@@ -64,7 +63,7 @@ def test_the_psychic_goes_to_a_bare_benched_dreepy(decision):
     (the 074df7c interchangeability precedent)."""
     rec, d = decision
     assert len(d.chosen) == 1
-    opt = rec["decision"]["options"][d.chosen[0]]
+    opt = rec.decision["options"][d.chosen[0]]
     assert opt["type"] == "Attach", f"picked {opt} — not an attach"
     card = _me(rec)["hand"][opt["index"]]
     assert card["id"] == _PSYCHIC_ENERGY, f"attached {card['name']}, not the Basic {{P}}"
@@ -81,9 +80,9 @@ def test_prefer_active_stands_down_for_the_roleless_offline_active(decision):
     is what silences it, not an incidental gate."""
     rec, d = decision
     active_p = next(t for t in d.options
-                    if rec["decision"]["options"][t.index].get("type") == "Attach"
-                    and rec["decision"]["options"][t.index].get("inPlayArea") == 4
-                    and _me(rec)["hand"][rec["decision"]["options"][t.index]["index"]]["id"]
+                    if rec.decision["options"][t.index].get("type") == "Attach"
+                    and rec.decision["options"][t.index].get("inPlayArea") == 4
+                    and _me(rec)["hand"][rec.decision["options"][t.index]["index"]]["id"]
                     == _PSYCHIC_ENERGY)
     fired = {h.id for h, _ in active_p.fired}
     assert "prefer-active-attach-in-setup" not in fired, (

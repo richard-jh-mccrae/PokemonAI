@@ -453,7 +453,9 @@ adding one would require deleting a test that exists to prevent exactly that.
 
 **The measurement.** ADR-0078 decision 3 noted the deploy seam is natively play-side, which is the
 shape deny lacked, so decision 4 committed this seam's corpus to the anchor hunt. That sweep is now
-built and run — `tools/train/probes/deploy_anchor_sweep.py`, offline and read-only:
+built and run — `tools/train/probes/deploy_anchor_sweep.py`, offline and read-only *(deleted by
+Issue #243: the script itself recorded "NO USABLE ANCHOR, and the reason is structural… Capturing
+more frames cannot change this", which is a RULING — this ADR is its artifact)*:
 
 - 508 ruled records; **11** deploy-involved frames in the tracked `data/corrections/` corpus (19
   counting the `tests/fixtures/corrections/` duplicates); **2** cross-scale candidates, both from

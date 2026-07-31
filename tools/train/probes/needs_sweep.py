@@ -24,7 +24,6 @@ from __future__ import annotations
 
 import argparse
 import importlib.util
-import json
 import sys
 from pathlib import Path
 
@@ -35,13 +34,16 @@ _DISCARD = 8
 
 
 def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
+    """`gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1, Issue #243). The private
+    raw-JSONL walk this replaced was short **40** records: a falsy `agent` is *recoverable* from
+    `agent_build`, and only `Correction.from_dict` backfills it. Keyed by `(episode, frame)` for the
+    display id this probe prints; the derived **Frame Key** is discarded here rather than
+    hand-rebuilt, which is the half of ADR-0087 that cost the Decision Gate 163 keys."""
+    from train.gates import keyed_corrections
+    index = {(str(c.episode_id), (c.decision or {}).get("frame")): c
+             for _key, c in keyed_corrections(REPO / "data" / "corrections")
+             if c.obs and c.agent}
+    return sorted(index.items())
 
 
 def _tune():
@@ -55,17 +57,17 @@ def sweep_discard(tune, frames) -> None:
     print(f"{'id':<14} {'agent':<14} {'chosen':<12} {'v1':<12} {'v2':<12} agree_v2  correct")
     agree = total = 0
     for (ep, fr), rec in frames:
-        if (rec["obs"].get("select") or {}).get("context") != _DISCARD:
+        if (rec.obs.get("select") or {}).get("context") != _DISCARD:
             continue
-        d = tune._build_pilot(rec["agent"])[0].explain(rec["obs"])
+        d = tune._build_pilot(rec.agent)[0].explain(rec.obs)
         s = d.discard_shadow
         if s is None:
             continue
         total += 1
         agree += s["agree_v2"]
-        print(f"{ep + '-' + str(fr):<14} {rec['agent']:<14} {str(sorted(d.chosen)):<12} "
+        print(f"{ep + '-' + str(fr):<14} {rec.agent:<14} {str(sorted(d.chosen)):<12} "
               f"{str(s['eq_pick']):<12} {str(s['eq2_pick']):<12} {str(s['agree_v2']):<8}  "
-              f"{rec.get('correct')}")
+              f"{rec.correct}")
     print(f"\ndiscard agree_v2: {agree}/{total}\n")
 
 
@@ -74,10 +76,10 @@ def sweep_refresh(tune, frames) -> None:
           f"{'swing_v1':>9} {'swing_v2':>9} sign_agree")
     fired = flips = under = over = 0
     for (ep, fr), rec in frames:
-        if (rec["obs"].get("select") or {}).get("context") == _DISCARD:
+        if (rec.obs.get("select") or {}).get("context") == _DISCARD:
             continue
         try:
-            s = tune._build_pilot(rec["agent"])[0].explain(rec["obs"]).refresh_shadow
+            s = tune._build_pilot(rec.agent)[0].explain(rec.obs).refresh_shadow
         except Exception:
             continue
         if s is None:
@@ -87,7 +89,7 @@ def sweep_refresh(tune, frames) -> None:
         under += delta < -0.05
         over += delta > 0.05
         flips += not s["sign_agree"]
-        print(f"{ep + '-' + str(fr):<14} {rec['agent']:<14} {s['cid']:<6} {s['v1_shed']:>8} "
+        print(f"{ep + '-' + str(fr):<14} {rec.agent:<14} {s['cid']:<6} {s['v1_shed']:>8} "
               f"{s['v2_shed']:>8} {s['swing_v1']:>9} {s['swing_v2']:>9} {s['sign_agree']}")
     print(f"\nrefresh: fired={fired}  sign-flips={flips}  "
           f"v2-under-prices(UNSAFE)={under}  v2-over-prices(safe; the missing resupply)={over}")

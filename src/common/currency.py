@@ -69,7 +69,8 @@ PRIZE_DAMAGE_RATE = 100.0
 #
 # ADR-0086 (Issue #197) asked the same question of the DEPLOY seam, which ADR-0078 decision 3 had
 # nominated as more promising because its frames are natively play-side. `deploy_anchor_sweep.py`
-# answers no, and for a STRUCTURAL reason rather than a corpus gap: a deploy is never exclusive with
+# (deleted by Issue #243 — it declared itself terminal, and a ruling's artifact is the record, not
+# the script) answers no, and for a STRUCTURAL reason rather than a corpus gap: a deploy is never exclusive with
 # a damage-denominated option (benching consumes no attach, no Supporter slot, and does not end the
 # turn), so it cannot TRADE against one, and the only genuine competitor for a Bench slot is another
 # deploy — worth versus worth, carrying no rate information.

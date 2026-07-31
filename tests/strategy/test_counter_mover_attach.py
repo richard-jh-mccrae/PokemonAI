@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import copy
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -38,14 +37,14 @@ _P_ENERGY, _D_ENERGY, _MUNKIDORI, _DREEPY = 5, 7, 112, 119
 
 
 def _record():
-    corr = REPO / "data" / "corrections" / "dragapult_ex_20260715_32530b9" / "corrections.jsonl"
-    for line in corr.read_text(encoding="utf-8").splitlines():
-        if not line.strip():
-            continue
-        d = json.loads(line)
-        if str(d.get("episode_id")) == "86091728" and d.get("decision", {}).get("frame") == 19:
-            return d
-    raise AssertionError("correction 86091728-19 not found in data/corrections/")
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243).
+
+    What this replaced named a BUILD DIRECTORY outright — `dragapult_ex_20260715_32530b9` — which no
+    glob pattern can see and which breaks silently the day that directory is renamed. That is why
+    ADR-TEMP-243 decision 5 widened the rule from "no raw glob" to "nothing outside the store reaches
+    the corpus": a check that forbids a spelling teaches people to find another one."""
+    from corpus_helpers import corpus_record
+    return corpus_record("86091728", 19)
 
 
 def _pilot(agent: str):
@@ -91,9 +90,9 @@ def test_the_dark_is_priced_as_ability_fuel_never_as_waste():
     colourless-blind waste boolean's verdict is structurally unreachable), and it wakes Adrena-Brain
     (the Ability Fuel channel). So the {D} out-prices the same-build {P} on the SAME body outright."""
     rec = _record()
-    obs = copy.deepcopy(rec["obs"])
+    obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
-    d = _pilot(rec["agent"]).explain(obs)
+    d = _pilot(rec.agent).explain(obs)
     [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
     [psy_active] = _attach_options(rec, obs, card=_P_ENERGY, area=_ACTIVE_AREA)
     rows = {r["i"]: r for r in d.attach_working["eq"]}
@@ -112,9 +111,9 @@ def test_dark_fuel_wins_the_turn_once_the_line_is_fed():
     nothing. Munkidori's attack axis is still gated, but Retreat Equity + Ability Fuel are additive
     and survive the attack-axis gate — which is exactly enough when every alternative is zero."""
     rec = _record()
-    obs = copy.deepcopy(rec["obs"])
+    obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
-    d = _pilot(rec["agent"]).explain(obs)
+    d = _pilot(rec.agent).explain(obs)
     [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
     assert d.chosen == [dark_active], (
         f"expected the {{D}}→Munkidori fuel attach [{dark_active}], got {d.chosen}")
@@ -127,12 +126,12 @@ def test_the_line_still_eats_first_in_setup():
     Munkidori only `counter_mover`, so while a Line member is in play its ATTACK AXIS is zero and only
     its mobility/fuel channels speak — which the line's real build step comfortably outbids."""
     rec = _record()
-    d = _pilot(rec["agent"]).explain(rec["obs"])
-    [dark_active] = _attach_options(rec, rec["obs"], card=_D_ENERGY, area=_ACTIVE_AREA)
+    d = _pilot(rec.agent).explain(rec.obs)
+    [dark_active] = _attach_options(rec, rec.obs, card=_D_ENERGY, area=_ACTIVE_AREA)
     row = next(r for r in d.attach_working["eq"] if r["i"] == dark_active)
     assert row["role_gated"] is True and row["attack_axis"] == 0.0
     assert row["ability_fuel"] > 0, "the fuel channel survives the attack-axis gate (per-axis gating)"
-    assert d.chosen[0] in _attach_options(rec, rec["obs"], card=_P_ENERGY, area=_BENCH_AREA), (
+    assert d.chosen[0] in _attach_options(rec, rec.obs, card=_P_ENERGY, area=_BENCH_AREA), (
         f"the setup pick moved off the benched line: {d.chosen}")
 
 
@@ -145,12 +144,12 @@ def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
     (two 1-Energy Dreepy): the user doctrine says the {P} goes to Munkidori so Mind Bend (60 +
     Confusion) is live."""
     rec = _record()
-    obs = copy.deepcopy(rec["obs"])
+    obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
     active = _me(obs)["active"][0]
     active["energies"] = [_D_ENERGY]
     active["energyCards"] = [{"id": _D_ENERGY, "playerIndex": 0, "serial": 99}]
-    d = _pilot(rec["agent"]).explain(obs)
+    d = _pilot(rec.agent).explain(obs)
     [psy_active] = _attach_options(rec, obs, card=_P_ENERGY, area=_ACTIVE_AREA)
     assert d.chosen == [psy_active], (
         f"expected the {{P}}→Active-Munkidori arm-up [{psy_active}], got {d.chosen}")

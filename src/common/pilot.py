@@ -6832,7 +6832,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # replaces (their Active holds 0 Energy against retreat cost 2 and no switch survives
             # the read, so the gate SHUTS and the rung takes its whiff branch). Measured over all 21
             # Hammer-ruled corpus frames: ZERO sign changes vs the constant
-            # (`tools/train/probes/deny_gate217.py`). `_DENIAL_BENCH` stays live on the OFF path.
+            # (ADR-0084, via `deny_gate217.py` at commit `809c6d5`; the probe itself was deleted by
+            # Issue #243 once its question was answered). `_DENIAL_BENCH` stays live on the OFF path.
             _opp_bodies = [b for b in ([oa] if oa else []) + list(opp.get("bench") or []) if b]
             promotion_open = bool(_opp_bodies) and self.combat._promotion_open(
                 _opp_bodies, oa, switch_enabler=self._opp_switch_enabler())
@@ -8587,8 +8588,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         is measurably inert, while raising cost from 2 simulations per body per decision to
         `1 + Ntypes`. That is an EMPIRICAL rather than a provable guarantee: if a board ever appears
         where a body holds one critical and one surplus Energy AND sets the clock, re-run that
-        measurement rather than re-deriving the question — the harness is
-        `tools/train/probes/deny_gate217.py`.
+        measurement rather than re-deriving the question. The harness was
+        `tools/train/probes/deny_gate217.py`, deleted by Issue #243 once ADR-0084 recorded its
+        answer; rebuild it from that ADR's description rather than editing a stale one — a harness
+        whose six hardcoded anchors have gone quietly out of date is a trap, not a head start.
 
         **Consumer (ADR-0084 decision 7).** Exactly ONE: the target pick's lexicographic tiebreak
         (`_deny_strip_delta_tiebreak`). This Δ may order a tie; it may never GATE one. It reads *"does this

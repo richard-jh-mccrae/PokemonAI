@@ -16,7 +16,6 @@ disruptor-jurisdiction claim: Lillie's ≻ Judge among the draw Supporters.
 from __future__ import annotations
 
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -27,15 +26,11 @@ CORR = REPO / "data" / "corrections"
 PETREL, JUDGE, LILLIES = 1219, 1213, 1227
 
 
-def _record(episode: str, frame: int) -> dict:
-    for jf in CORR.glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if str(d.get("episode_id")) == episode and d.get("decision", {}).get("frame") == frame:
-                return d
-    raise AssertionError(f"correction {episode}-{frame} not found in data/corrections/")
+def _record(episode: str, frame: int):
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243). The private
+    raw-JSONL walk this replaced was a second idea of where the corpus lives."""
+    from corpus_helpers import corpus_record
+    return corpus_record(episode, frame)
 
 
 def _pilot():
@@ -51,7 +46,7 @@ def test_lillies_outranks_judge_at_the_grab():
     """ep86088989 f29: among the tied draw Supporters, Lillie's (redraws more) now out-scores Judge,
     and both still ride the `grab-a-draw-supporter-in-setup` band."""
     rec = _record("86088989", 29)
-    dec = _pilot().explain(rec["obs"])
+    dec = _pilot().explain(rec.obs)
     by_card = {}
     for t in dec.options:
         by_card.setdefault(t.card_id, t)
@@ -67,7 +62,7 @@ def test_the_grab_tie_break_stays_below_the_chain_opener_band():
     seam-C chain opener (Petrel, +15). The overall pick is unchanged — the Petrel-vs-Lillie's
     residual is a re-review item, not this build's claim."""
     rec = _record("86088989", 29)
-    dec = _pilot().explain(rec["obs"])
+    dec = _pilot().explain(rec.obs)
     by_card = {}
     for t in dec.options:
         by_card.setdefault(t.card_id, t)

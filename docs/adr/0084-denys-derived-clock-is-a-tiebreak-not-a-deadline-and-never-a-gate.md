@@ -250,7 +250,12 @@ Fixing that changes every zero-value frame, predates this issue, and is handed f
 - **Three measurements are now on the record as reusable negatives** — the 109-body Δ-policy
   equivalence, the 128/218 bite-gate suppression, and gate 2's whole-corpus non-separation. Each names
   the probe and the sample size so the next grill re-runs rather than re-derives.
-- **`tools/train/probes/deny_gate217.py` is the harness** for all of it, alongside `deny_gate1.py`.
+- **`tools/train/probes/deny_gate217.py` was the harness** for all of it, alongside `deny_gate1.py`.
+  Both were **deleted by Issue #243 / ADR-TEMP-243 (2026-07-31)**: their questions are answered and
+  recorded here and in ADR-0080, they were short 40 corpus records apiece, `deny_gate217` selected
+  six hardcoded `(episode, frame)` literals, and both force flags that still ship OFF — so what they
+  measured was not the shipped agent. The measurements above keep their standing; re-derive from
+  this ADR's description rather than editing a stale harness.
 - **Issue #188 / Issue #189 unaffected.** Verified deny-scoped: `gust_target_slot` carries no timing
   grade of its own because its two-term marginal already embeds timing through `turns_to_ko_me`, so
   ADR-0076 decision 3 does not route this away from a deny issue. `discard_recur_fuel` on

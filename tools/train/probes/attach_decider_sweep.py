@@ -44,7 +44,6 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib.util
-import json
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -71,17 +70,20 @@ def _names() -> dict:
 
 
 def _frames():
-    index = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                d = json.loads(line)
-                index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
+    """`gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1, Issue #243). The private
+    raw-JSONL walk this replaced was short **40** records: a falsy `agent` is *recoverable* from
+    `agent_build`, and only `Correction.from_dict` backfills it. Keyed by `(episode, frame)` for the
+    display id this probe prints; the derived **Frame Key** is discarded here rather than
+    hand-rebuilt, which is the half of ADR-0087 that cost the Decision Gate 163 keys."""
+    from train.gates import keyed_corrections
+    index = {(str(c.episode_id), (c.decision or {}).get("frame")): c
+             for _key, c in keyed_corrections(REPO / "data" / "corrections")
+             if c.obs and c.agent}
+    return sorted(index.items())
 
 
 def _agent(rec) -> str:
-    a = rec.get("agent") or ""
+    a = rec.agent or ""
     return a if a in {"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"} else "mega_starmie"
 
 
@@ -170,7 +172,7 @@ def sweep(show_all: bool, scale=None, pref_weight=None, quiet: bool = False) -> 
     for (ep, fr), rec in frames:
         agent = _agent(rec)
         try:
-            dec = _pilot(agent, seams=seams).explain(rec["obs"])
+            dec = _pilot(agent, seams=seams).explain(rec.obs)
         except Exception as exc:                       # a frame the shipped build can't replay
             tally["error"] += 1
             if show_all:
@@ -179,9 +181,9 @@ def sweep(show_all: bool, scale=None, pref_weight=None, quiet: bool = False) -> 
         working = dec.attach_working
         if working is None:                            # not an attach menu — outside this swap's lane
             continue
-        options = rec["obs"]["select"]["option"]
-        ctx = (rec["obs"].get("select") or {}).get("context")
-        correct = rec.get("correct")
+        options = rec.obs["select"]["option"]
+        ctx = (rec.obs.get("select") or {}).get("context")
+        correct = rec.correct
         chosen_slots = _slots(dec.chosen, options, ctx)
         correct_slots = _slots(correct or [], options, ctx)
         tally["frames"] += 1

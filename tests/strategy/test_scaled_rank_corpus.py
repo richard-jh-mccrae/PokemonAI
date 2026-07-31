@@ -1,16 +1,21 @@
 """Seam 4 (Issue #213): the scaled threat rank on REAL corpus frames, through a real Pilot.
 
-`threat_sweep.py --rank` reports 0 decided-pick flips over 331 frames. That is the ADR-0072
+`threat_sweep.py --rank` reported 0 decided-pick flips over 331 frames. That was the ADR-0072
 Decision Gate and it proves the swap is SAFE — but zero flips proves nothing about the fix
 *firing*, and a rank change that never fires is indistinguishable from a rank change that isn't
 wired. These tests close that gap from the other side: on frames the corpus really contains, the
 scaled read must differ from the printed one for the cards the issue is about.
 
+That mode was deleted by Issue #243 (ADR-0083 records its answer; a ruling's artifact is the record,
+not the script), which makes THIS file the surviving instrument for the swap. It also widened what
+runs: routed through THE Corpus Reader the corpus is 372 frames, not the 332 the raw walk saw, so the
+Kadabra/Alakazam loop below covers 18 frames rather than 11 — measured 2026-07-31, all 7 newly
+visible frames satisfy every in-loop invariant.
+
 Everything here is driven by `train.tune._build_pilot` against the real card provider and a real
 captured `obs`, per the spec's testing rule — a hand-built stat table can describe a board that
 cannot exist and will happily manufacture a passing test.
 """
-import json
 import pathlib
 
 import pytest
@@ -21,16 +26,18 @@ KADABRA, ALAKAZAM = 742, 743          # Powerful Hand: printed 0, 20 per card in
 
 
 def _corpus():
-    """Every committed Correction carrying a replayable `obs`, keyed by frame."""
-    out = {}
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if d.get("obs") and d.get("agent"):
-                out[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return out
+    """Every committed Correction carrying a replayable `obs`, keyed by frame — through THE Corpus
+    Reader (ADR-0087 / ADR-TEMP-243).
+
+    This file was the one test carrying the raw walk's `d.get("obs") and d.get("agent")` filter
+    VERBATIM, so it was short the same **40** records: a falsy `agent` is *recoverable* from
+    `agent_build`, and only `Correction.from_dict` backfills it. Unlike its ten siblings this is a
+    corpus-WIDE reader — it selects frames by board content, not by literal ids — so the widening
+    changes what runs. Measured 2026-07-31 before the swap: Lillie's Clefairy ex 8 frames (0 new),
+    Kadabra/Alakazam 18 frames (**7 new**), and all seven satisfy every in-loop invariant. A coverage
+    widening, not a behaviour change."""
+    from corpus_helpers import corpus_index
+    return corpus_index()
 
 
 def _opp_bodies(obs):
@@ -43,7 +50,7 @@ def _opp_bodies(obs):
 
 def _frames_containing(corpus, card_ids):
     return [(k, r) for k, r in sorted(corpus.items())
-            if any(b.get("id") in card_ids for b in _opp_bodies(r["obs"]))]
+            if any(b.get("id") in card_ids for b in _opp_bodies(r.obs))]
 
 
 @pytest.fixture(scope="module")
@@ -61,12 +68,12 @@ def _pair_on_real_frame(rec, card_ids):
     card fact, so the second copy would only ever repeat the first.
     """
     from train.tune import _build_pilot
-    wanted = {b.get("id") for b in _opp_bodies(rec["obs"]) if b.get("id") in card_ids}
+    wanted = {b.get("id") for b in _opp_bodies(rec.obs) if b.get("id") in card_ids}
     out = {cid: [] for cid in wanted}
     for on in (False, True):
-        pilot = _build_pilot(rec["agent"])[0]
+        pilot = _build_pilot(rec.agent)[0]
         pilot.scaled_threat_rank = on
-        pilot.explain(rec["obs"])                     # builds the per-decision damage context
+        pilot.explain(rec.obs)                     # builds the per-decision damage context
         for cid in wanted:
             out[cid].extend(pilot._threat_damage_pair(cid, pilot.stats.get(cid)))
     return {cid: tuple(v) for cid, v in out.items()}

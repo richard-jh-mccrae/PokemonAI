@@ -170,7 +170,10 @@ printed-only read exactly, pinned in both directions.
   correction rests on engine measurement alone and no corpus gate can see it. Stated rather than
   papered over.
 - **Gates.** Decision Gate (`threat_sweep.py --rank`, both sides forced): **0 decided-pick flips
-  over 331 frames**. Discrimination Gate (`leaf_lab diff` vs the committed baseline): **PASS, 0
+  over 331 frames**. *(The `--rank` mode was deleted by Issue #243: the question is answered here and
+  the substance is pinned by `tests/strategy/test_scaled_rank_corpus.py`, which since that issue runs
+  over the full 372-frame corpus — 7 more Kadabra/Alakazam frames than the 331 measured here, all
+  passing.)* Discrimination Gate (`leaf_lab diff` vs the committed baseline): **PASS, 0
   unruled `OK → MISS` over 267 frames**. Doom sweep: 304/319, the same 15 one-directional
   disagreements as before on a larger corpus.
 

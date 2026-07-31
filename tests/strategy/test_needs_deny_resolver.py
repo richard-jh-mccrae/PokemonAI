@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import dataclasses
 import importlib.util
-import json
 from pathlib import Path
 
 import pytest
@@ -163,27 +162,23 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     its general floor). Under the pre-ruling damage-denominated value the same board priced the
     strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
     original ruling retired, and the ADR-0076 migration does not reopen."""
-    rec = None
-    for jf in (REPO / "data" / "corrections").glob("*/corrections.jsonl"):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if str(d.get("episode_id")) == "82867148" and d.get("decision", {}).get("frame") == 48:
-                rec = d                                      # last write wins
-    if rec is None:
-        pytest.skip("correction 82867148-48 not in data/corrections/")
+    # THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243). The inline raw walk
+    # this replaced `pytest.skip`ped when the frame was absent — a skip on a test that names a
+    # literal frame it asserts real behaviour about is a green nobody can notice, so the helper
+    # RAISES instead.
+    from corpus_helpers import corpus_record
+    rec = corpus_record("82867148", 48)
     spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    pilot = mod._build_pilot(rec["agent"])[0]                # fresh shipped pilot (stateful lesson)
-    dec = pilot.explain(rec["obs"])
+    pilot = mod._build_pilot(rec.agent)[0]                # fresh shipped pilot (stateful lesson)
+    dec = pilot.explain(rec.obs)
     s = dec.discard_shadow
     assert s is not None and s["agree_v2"] is True           # the decided pick is unmoved
-    board = pilot._board(rec["obs"])
-    rows, _ = pilot._discard_equation_rows(rec["obs"], rec["obs"]["select"], board,
-                                           rec["obs"]["select"]["option"])
-    slots, _elig = pilot._resolve_needs(rec["obs"], board, rows)
+    board = pilot._board(rec.obs)
+    rows, _ = pilot._discard_equation_rows(rec.obs, rec.obs["select"], board,
+                                           rec.obs["select"]["option"])
+    slots, _elig = pilot._resolve_needs(rec.obs, board, rows)
     gust_target = [x for x in slots if x.kind == "gust_target"]
     # EXACT, so the marginal's formula is pinned rather than merely bounded (the original assertion
     # here pinned deny's `10 / 2^t` grade the same way; a loose inequality would let the value drift

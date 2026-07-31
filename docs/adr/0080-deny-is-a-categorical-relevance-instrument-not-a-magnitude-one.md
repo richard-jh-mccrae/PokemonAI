@@ -239,6 +239,12 @@ already being covered — which is precisely what keeps Dragapult's `{D}` out, s
   the `82748422-26` fix were measured on the marginal deny will no longer read. The result is not
   wrong and the probe (`tools/train/probes/deny_gate1.py`) stays as the harness shape the relevance
   instrument's own gate should copy — but it no longer licenses the swap it was built to license.
+  *(**Amendment, Issue #243 / ADR-TEMP-243, 2026-07-31**: "stays" is no longer literally true — the
+  probe was DELETED. A one-shot investigation whose answer is written down is a RULING, and this ADR
+  is that record; the script was scaffolding, blind to 40 corpus records, and forced a flag
+  (`deny_strip_delta`) that still ships OFF. The **shape** this bullet points at survives here in
+  prose, which is what a later gate would copy anyway. Recover the file from git history if it is
+  ever wanted verbatim.)*
 - **ADR-0078 Amendments B and C keep their standing** — the instantaneous ruling and the
   saturation/`_SURVIVAL_CAP` correction are both preserved *in policy*: `_DENY_CHARGED` survives as
   relevance leg (ii)'s affordability policy. What lapses is only the two-term *form*.
