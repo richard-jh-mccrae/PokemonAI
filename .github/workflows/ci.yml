@@ -161,6 +161,13 @@ jobs:
           elif [ "${#dirs[@]}" -eq 0 ]; then
             MODE=none; PATHS=""; COV=false; AUDIT=false; EMPTY=true
           else
+            # Every add-list above names a tests/<subdir>, so a selective run silently drops the
+            # root-level test FILES -- of which tests/test_import_hygiene.py is the only one, and
+            # it is the guard against `tests.*` package imports (shadowable; see that file's
+            # docstring). A PR editing tests/strategy/** matches F_strategy, so before this line
+            # the plan was exactly `tests/strategy` and the guard never ran -- on precisely the
+            # diffs that introduce the violation. It scans 555 files in 0.33s, so it always runs.
+            dirs+=("tests/test_import_hygiene.py")
             PATHS=$(printf '%s\n' "${dirs[@]}" | sort -u | tr '\n' ' ' | sed 's/ *$//')
             MODE=selective; EMPTY=false
             case " $PATHS " in *" tests/scouting "*) COV=true ;; *) COV=false ;; esac
