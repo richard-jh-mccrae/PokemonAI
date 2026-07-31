@@ -92,6 +92,22 @@ becomes **immune to my attacker**, closing my route through it permanently. That
 a threat magnitude, and filing it under "how scary are they" was a category error the additive stack
 could never see. It scores maximal because this turn is the last one in which the route exists.
 
+## The inputs are TWO dataclasses, one per side (Issue #219)
+
+`target_relevance` reads the board through :class:`TheirPlanInputs` and :class:`MyRouteInputs` rather
+than a flat kwarg list, which is this repo's documented shape for a pure value function with many
+board inputs — `evolve_value.EvolveInputs` (ADR-0070) and `promote_retreat_value.PromoteRetreatInputs`
+(ADR-0073) both sit in exactly this position, a pure equation module beside the `Pilot` plumbing that
+fills it in.
+
+The split is **one object per side of the product**, not one bag, so the shape above lives in the type
+system rather than only in this prose and in the function body: a future leg lands on the correct side
+by construction — inside `their_plan`'s `max` or inside `my_route`'s — rather than by the author
+remembering which `max` to join. That the product's split was measured *not* corpus-discriminated (it
+is held on composition grounds, ADR-0085 decision 2) makes an executable expression of it worth more,
+not less. `brief_boost` stays a loose argument on purpose: it is the CALLER's constant
+(`_BRIEF_THREAT_BOOST`), not a board fact, and belongs to neither side's read.
+
 ## Constants
 
 **None are introduced.** `MAX_ATTACK_DAMAGE` is `deny_relevance`'s existing derived, CSV-recomputed
@@ -127,6 +143,7 @@ positive Brief boost down (below).
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 
 from common.currency import tiebreak_bonus
 from common.deny_relevance import MAX_ATTACK_DAMAGE, normalize
@@ -222,48 +239,89 @@ def brief_tiebreak(peers: list[tuple[float, float]], mine_relevance: float,
     return tiebreak_bonus([r for r, _p in peers], K)
 
 
-def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = None,
-                     forward_damage: int = 0, is_strongest_forward: bool = False,
-                     forward_form_in_play: bool = False, is_forced_promotion: bool = False,
-                     prize_redundant: bool = False, promotion_mirage: bool = False,
-                     is_tera: bool = False, brief_priority: float = 0.0,
-                     brief_boost: float = 1.0,
-                     turns_to_ko_before: float | None = None,
-                     turns_to_ko_after: float | None = None,
-                     hp_remaining: int = 0, rider_damage: int = 0,
-                     prize_value: int = 1, prizes_needed: int = 6,
-                     prevents_my_ex: bool = False) -> dict:
+@dataclass(frozen=True)
+class TheirPlanInputs:
+    """The board facts the **their_plan** side reads — *does this body matter to their offence?*
+
+    Every field is sourced from the Threat Clock rather than `Pilot._body_threat_rank` (decision 3);
+    the `Pilot` fills them in, this module scores them, and the split is what keeps the equation pure.
+    """
+    #: `combat.incoming(my_active, [body], t=1, charged=None)` — the CEILING policy. Decision 8
+    #: splits the conservatism deliberately: ceiling on how HARD they can hit (under-counting their
+    #: reach loses games, ADR-0064's hidden-burst lesson) and the slow rules-floor clock on how SOON
+    #: (over-counting their speed only wastes a rider).
+    incoming_damage: int = 0
+    #: `combat.turns_to_afford(body, attaches_per_turn=1)` — the slow half of that split. ``None``
+    #: means UNKNOWN (fail-closed at source), and takes no discount at all rather than reading as
+    #: maximally distant, which would be the fail-open direction.
+    turns_to_afford: int | None = None
+    #: `stats.forward_max_damage(card_id)`, for the developing-wincon leg.
+    forward_damage: int = 0
+    #: ADR-0044's `snipe-the-evolving-threat` discriminator — chip the pre-evo only while the evolved
+    #: wincon is NOT already on board.
+    is_strongest_forward: bool = False
+    forward_form_in_play: bool = False
+    #: ADR-0044's Forced-Promotion Read. GRADED here, never a flat 1.0 (decision 10).
+    is_forced_promotion: bool = False
+    #: The two ADR-0044 reads. **Leg-scoped** — they zero the imminence leg and nothing else
+    #: (decision 4); a whole-target gate makes three corpus frames unreachable.
+    prize_redundant: bool = False
+    promotion_mirage: bool = False
+    #: Used ONLY to stand a positive Brief boost down. The Tera veto itself is an ORDERING
+    #: (`Pilot._snipe_tera_veto`), never a zero here — a benched Tera that is the only offered target
+    #: must remain selectable.
+    is_tera: bool = False
+    #: The matched MatchupPlan/Brief priority, signed and already scaled. A POSITIVE priority stands
+    #: down on a redundant / mirage / Tera body; a negative (``avoid``) priority always applies. That
+    #: asymmetry is load-bearing (ADR-0085 Amendment A3): a booster must scale the oracle, never
+    #: override it. Only its SIGN is read — `brief_boost` carries the magnitude.
+    brief_priority: float = 0.0
+
+    def brief_boost_gated(self) -> bool:
+        """Whether a POSITIVE Brief priority must stand down on this body.
+
+        Lives here rather than in the equation because it is a claim about the plan side's own
+        reads, and because the three gates are exactly the ones a later leg would have to remember
+        to add itself to (ADR-0085 Amendment A3). A NEGATIVE (``avoid``) priority is unaffected —
+        the asymmetry is the whole point: a booster must scale the oracle, never override it."""
+        return self.prize_redundant or self.promotion_mirage or self.is_tera
+
+
+@dataclass(frozen=True)
+class MyRouteInputs:
+    """The board facts the **my_route** side reads — *does hurting it advance MY prize route?*"""
+    #: `combat.turns_to_ko` against the body as it stands and after the TWO-chip window
+    #: (decision 11). The pair travels together by construction: the leg is their difference, and a
+    #: one-chip read scores `82756021-57`'s correct answer at zero.
+    turns_to_ko_before: float | None = None
+    turns_to_ko_after: float | None = None
+    #: The `reach` leg's pair — the body's HP as it stands against my REPEATABLE bench rider, i.e.
+    #: how many rides finish it alongside my main KOs.
+    hp_remaining: int = 0
+    rider_damage: int = 0
+    #: The `share` leg's pair — this body's prizes against what I still NEED, which is what selects
+    #: the 3-prize Mega over a smaller body whose `reach` is higher (`82756021-57`).
+    prize_value: int = 1
+    prizes_needed: int = 6
+    #: This body's line reaches `prevent_ex_damage` AND my Active is an ex body — my route through it
+    #: closes permanently once it evolves (decision 9), so this turn is the last one it exists.
+    prevents_my_ex: bool = False
+
+
+def target_relevance(*, plan: TheirPlanInputs, route: MyRouteInputs,
+                     brief_boost: float = 1.0) -> dict:
     """Relevance of aiming this turn's snipe/chip at ONE offered opponent body, with its legs.
 
+    Both sides are REQUIRED, following `evolve_value` / `promote_value` — every field defaults, so a
+    caller with nothing to say passes ``TheirPlanInputs()`` explicitly. A defaulted side would let a
+    future call site forget one half of a conjunctive product and silently score 0.
+
     Args:
-        incoming_damage: `combat.incoming(my_active, [body], t=1, charged=None)` — the CEILING
-            policy. Decision 8 splits the conservatism deliberately: ceiling on how HARD they can hit
-            (under-counting their reach loses games, ADR-0064's hidden-burst lesson) and the slow
-            rules-floor clock on how SOON (over-counting their speed only wastes a rider).
-        turns_to_afford: `combat.turns_to_afford(body, attaches_per_turn=1)` — the slow half of that
-            split. ``None`` means UNKNOWN (fail-closed at source), and takes no discount at all
-            rather than reading as maximally distant, which would be the fail-open direction.
+        plan: the **their_plan** side's board reads (:class:`TheirPlanInputs`).
+        route: the **my_route** side's board reads (:class:`MyRouteInputs`).
         brief_boost: the multiplier a matched Brief applies — the caller's `_BRIEF_THREAT_BOOST`.
-            Passed in rather than defined here so one constant governs both instruments.
-        forward_damage: `stats.forward_max_damage(card_id)`, for the developing-wincon leg.
-        is_strongest_forward / forward_form_in_play: ADR-0044's `snipe-the-evolving-threat`
-            discriminator — chip the pre-evo only while the evolved wincon is NOT already on board.
-        is_forced_promotion: ADR-0044's Forced-Promotion Read.
-        prize_redundant / promotion_mirage: the two ADR-0044 reads. **Leg-scoped** — they zero the
-            imminence leg and nothing else (decision 4).
-        is_tera: used ONLY to stand a positive Brief boost down. The Tera veto itself is an ORDERING
-            (`Pilot._snipe_tera_veto`), never a zero here — a benched Tera that is the only offered
-            target must remain selectable.
-        brief_priority: the matched MatchupPlan/Brief priority, signed and already scaled. A
-            POSITIVE priority stands down on a redundant / mirage / Tera body; a negative (``avoid``)
-            priority always applies. That asymmetry is load-bearing (ADR-0085 Amendment A3): a
-            booster must scale the oracle, never override it.
-        turns_to_ko_before / turns_to_ko_after: `combat.turns_to_ko` against the body as it stands
-            and after the two-chip window (decision 11).
-        hp_remaining / rider_damage: for the `reach` leg.
-        prize_value / prizes_needed: for the `share` leg.
-        prevents_my_ex: this body's line reaches `prevent_ex_damage` AND my Active is an ex body —
-            my route through it closes permanently once it evolves (decision 9).
+            Passed in rather than defined here so one constant governs both instruments, and kept
+            OUTSIDE both sides because it is the caller's constant, not a board fact.
 
     Returns:
         ``{"relevance", "their_plan", "my_route", "imminence", "forward", "forced",
@@ -273,21 +331,21 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
     # The two ADR-0044 reads suppress the IMMINENCE claim specifically: "I don't need this body's
     # prizes" and "they will never actually promote this" are objections to treating it as an
     # imminent attacker, not to pre-chipping a developing win-condition on it.
-    if prize_redundant or promotion_mirage:
+    if plan.prize_redundant or plan.promotion_mirage:
         imminence = 0.0
     else:
         # `None` means the body or its biggest-attack cost is UNKNOWN (`combat.turns_to_afford` is
         # fail-closed there), not "it can never attack". Discounting an unknown body to zero threat
         # would be fail-OPEN, which is the direction decision 8 exists to forbid — under-counting
         # their reach feeds them the wincon. So an unknown clock takes NO discount.
-        t = 0 if turns_to_afford is None else max(0, int(turns_to_afford))
-        imminence = normalize(incoming_damage) / (2 ** t)
+        t = 0 if plan.turns_to_afford is None else max(0, int(plan.turns_to_afford))
+        imminence = normalize(plan.incoming_damage) / (2 ** t)
 
-    forward = (normalize(forward_damage)
-               if (is_strongest_forward and not forward_form_in_play) else 0.0)
+    forward = (normalize(plan.forward_damage)
+               if (plan.is_strongest_forward and not plan.forward_form_in_play) else 0.0)
 
     # GRADED, and with no imminence discount — see the module docstring and decision 10.
-    forced = normalize(incoming_damage) if is_forced_promotion else 0.0
+    forced = normalize(plan.incoming_damage) if plan.is_forced_promotion else 0.0
 
     their_plan = max(imminence, forward, forced)
 
@@ -296,19 +354,19 @@ def target_relevance(*, incoming_damage: int = 0, turns_to_afford: int | None = 
     # hard it sharpens is already settled for the sibling instrument. Scaling the raw MatchupPlan
     # priority into this band would need a rate nothing derives — the free parameter ADR-0065 forbids.
     multiplier = 1.0
-    if brief_priority > 0 and not (prize_redundant or promotion_mirage or is_tera):
+    if plan.brief_priority > 0 and not plan.brief_boost_gated():
         multiplier = max(0.0, float(brief_boost))
-    elif brief_priority < 0 and brief_boost:
+    elif plan.brief_priority < 0 and brief_boost:
         multiplier = 1.0 / float(brief_boost)      # the mirror, so one constant governs both directions
     their_plan = min(1.0, their_plan * multiplier)
 
     # ── my_route ──────────────────────────────────────────────────────────────────────────────
-    delta = ko_delta(turns_to_ko_before, turns_to_ko_after)
-    reach = rider_reach(hp_remaining, rider_damage)
-    share = prize_share(prize_value, prizes_needed)
+    delta = ko_delta(route.turns_to_ko_before, route.turns_to_ko_after)
+    reach = rider_reach(route.hp_remaining, route.rider_damage)
+    share = prize_share(route.prize_value, route.prizes_needed)
     # Maximal, because this turn is the last one in which the route exists at all: once the line
     # reaches its `prevent_ex_damage` form my ex attacker cannot damage it, ever.
-    prevent_ex = 1.0 if prevents_my_ex else 0.0
+    prevent_ex = 1.0 if route.prevents_my_ex else 0.0
     my_route = max(delta, reach, share, prevent_ex)
 
     return {"relevance": their_plan * my_route,

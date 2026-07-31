@@ -990,7 +990,11 @@ frame either gate can adjudicate, and no catastrophe in play. It does **not** se
 Relevance is an improvement — the mid-build instrument cannot show that at affordable `n`, by
 construction. Two legs remain owed and are tracked elsewhere: the `incoming` fix split to **Issue
 #213**, and Lillie's Clefairy ex reading board-effective damage rather than its printed 20 (decision 7
-bar 4), which lands with the combined-bench scaler family. The 18-kwarg signature is **Issue #219**.
+bar 4), which lands with the combined-bench scaler family. The 18-kwarg signature is **Issue #219**
+— LANDED 2026-07-31: `target_relevance` now takes `TheirPlanInputs` and `MyRouteInputs`, one frozen
+`Inputs` dataclass per side of decision 2's product, taking the shape ADR-0070 / ADR-0073 already set.
+A signature change and nothing else: the sweep is byte-identical and the Discrimination Gate unmoved,
+so no decision here is amended.
 
 ## Amendment D — rebased onto Issue #213; both gates re-run; Issue #204 inherited (2026-07-30)
 

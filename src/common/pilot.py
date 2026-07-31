@@ -8292,20 +8292,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             priority = plan.priority(cid) or 0.0
 
         got = srel.target_relevance(
-            incoming_damage=incoming, turns_to_afford=tta,
-            forward_damage=forward_damage,
-            is_strongest_forward=bool(getattr(ctx, "target_is_strongest_forward", False)),
-            forward_form_in_play=bool(getattr(ctx, "target_forward_form_in_play", False)),
-            is_forced_promotion=bool(getattr(ctx, "target_is_forced_promotion", False)),
-            prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),
-            promotion_mirage=bool(getattr(ctx, "target_promotion_mirage", False)),
-            is_tera=bool(getattr(ctx, "target_is_bench_tera", False)),
-            brief_priority=priority, brief_boost=_BRIEF_THREAT_BOOST,
-            turns_to_ko_before=t_before, turns_to_ko_after=t_after,
-            hp_remaining=hp, rider_damage=rider,
-            prize_value=self.combat.prize_value(body),
-            prizes_needed=max(1, int(getattr(board, "my_prizes_remaining", 6) or 6)),
-            prevents_my_ex=prevents_my_ex)
+            plan=srel.TheirPlanInputs(
+                incoming_damage=incoming, turns_to_afford=tta,
+                forward_damage=forward_damage,
+                is_strongest_forward=bool(getattr(ctx, "target_is_strongest_forward", False)),
+                forward_form_in_play=bool(getattr(ctx, "target_forward_form_in_play", False)),
+                is_forced_promotion=bool(getattr(ctx, "target_is_forced_promotion", False)),
+                prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),
+                promotion_mirage=bool(getattr(ctx, "target_promotion_mirage", False)),
+                is_tera=bool(getattr(ctx, "target_is_bench_tera", False)),
+                brief_priority=priority),
+            route=srel.MyRouteInputs(
+                turns_to_ko_before=t_before, turns_to_ko_after=t_after,
+                hp_remaining=hp, rider_damage=rider,
+                prize_value=self.combat.prize_value(body),
+                prizes_needed=max(1, int(getattr(board, "my_prizes_remaining", 6) or 6)),
+                prevents_my_ex=prevents_my_ex),
+            brief_boost=_BRIEF_THREAT_BOOST)
         cache[key] = got
         return got
 

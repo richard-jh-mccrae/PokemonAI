@@ -384,13 +384,15 @@ def test_a_benched_tera_is_ordered_last_but_stays_selectable():
     strictly wasted. But `_snipe_tera_veto` expresses that as an ORDERING (`-KO_SCORE`), never a
     removal: when a benched Tera is the ONLY offered target the select is forced and the agent must
     still answer. A literal `relevance = 0` that dropped the option would break a legal-move case."""
-    from common.snipe_relevance import target_relevance
+    from common.snipe_relevance import MyRouteInputs, TheirPlanInputs, target_relevance
     armed = _armed()
     tera_ctx = type("C", (), {"target_is_bench_tera": True})()
     assert armed._snipe_tera_veto(tera_ctx) < 0, "ordered last..."
     # ...and the scalar itself does not zero it, so the option is still scored and selectable.
-    assert target_relevance(incoming_damage=200, turns_to_afford=0, is_tera=True,
-                            hp_remaining=200, rider_damage=50)["relevance"] > 0.0
+    scored = target_relevance(
+        plan=TheirPlanInputs(incoming_damage=200, turns_to_afford=0, is_tera=True),
+        route=MyRouteInputs(hp_remaining=200, rider_damage=50))
+    assert scored["relevance"] > 0.0
 
 
 @pytest.mark.req("REQ-SNIPECONS-0007")
@@ -406,11 +408,12 @@ def test_snipe_credits_banked_potential_unlike_denys_fire_reading():
     precisely to pre-chip a body that CANNOT attack yet (a Riolu banking toward Mega Lucario ex), and
     decision 3 sources `their_plan` from a `t=1` ceiling curve that deliberately credits one attach.
     A body three turns from arming still scores, discounted rather than zeroed."""
-    from common.snipe_relevance import target_relevance
-    banked = target_relevance(incoming_damage=270, turns_to_afford=3,
-                              hp_remaining=200, rider_damage=50)
-    arrived = target_relevance(incoming_damage=270, turns_to_afford=0,
-                               hp_remaining=200, rider_damage=50)
+    from common.snipe_relevance import MyRouteInputs, TheirPlanInputs, target_relevance
+    route = MyRouteInputs(hp_remaining=200, rider_damage=50)
+    banked = target_relevance(plan=TheirPlanInputs(incoming_damage=270, turns_to_afford=3),
+                              route=route)
+    arrived = target_relevance(plan=TheirPlanInputs(incoming_damage=270, turns_to_afford=0),
+                               route=route)
     assert banked["imminence"] > 0.0, "a not-yet-armed threat is DISCOUNTED, never zeroed"
     assert arrived["imminence"] > banked["imminence"], "...and an arrived one still outranks it"
 
