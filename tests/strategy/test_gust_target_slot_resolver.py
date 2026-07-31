@@ -129,3 +129,33 @@ def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
     assert not calls                            # neither consumer recomputed — both read the cache
     assert any(s.kind == "gust_target" for s in slots)
     assert shadow is not None and shadow["bodies"][0]["id"] == RIOLU
+
+
+@pytest.mark.req("REQ-NEEDS-0016")
+def test_the_gust_slot_survives_the_rollout_because_the_shared_rows_now_run_mid_sim():
+    """Gust hit the SAME defect deny did, and nobody was looking (ADR-TEMP-228 decision 6).
+
+    `_opponent_target_rows` used to early-return `None` under the planner's `_planning` reentrancy
+    flag. This emission already carries the cache-or-compute ladder — but mid-sim the cache is empty
+    AND the fresh compute returned `None`, so the ladder terminated in nothing and **no `gust_target`
+    slot was emitted inside a rollout at all**, with `gust_target_slots` shipped ON the whole time.
+
+    The guard has moved to `_opponent_target_shadow`, where "no shadow work in rollouts" actually
+    applies. Asserted as an identity between the two `_planning` states rather than against a value,
+    for the same reason the deny sibling is: the claim is that the agent scores this the same inside
+    its own rollout as outside it."""
+    pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": []}],
+                        gust_target_slots=True)
+
+    pilot._planning = False
+    _rows, _slots_r, _elig, _deny, root_gust = _slots(pilot, obs)
+    assert root_gust, "the fixture must offer a gust_target slot at the root, or it tests nothing"
+
+    pilot._opponent_target_cache = None          # a rollout step starts with no per-decision cache
+    pilot._planning = True
+    _rows, _slots_m, _elig, _deny, mid_gust = _slots(pilot, obs)
+
+    assert [s.value for _j, s in mid_gust] == [s.value for _j, s in root_gust], (
+        f"gust emitted {[s.value for _j, s in mid_gust]} mid-sim but "
+        f"{[s.value for _j, s in root_gust]} at the root — a shipped instrument going silent inside "
+        f"the agent's own rollout")

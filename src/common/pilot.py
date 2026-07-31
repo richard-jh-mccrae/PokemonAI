@@ -505,11 +505,19 @@ class Board:
                                        # RETIRING: armed `deny_relevance` reads the fields below instead
                                        # (ADR-0080, Issue #187). Kept live for the OFF path so the two
                                        # readings diff on one board rather than across commits.
-    deny_relevance_best: float = 0.0   # **Deny Relevance** (ADR-0080, Issue #187): the best relevance
-                                       # achievable anywhere on their board, in [0,1]. 0 = no Energy is
+    deny_relevance_best: float | None = None
+                                       # **Deny Relevance** (ADR-0080, Issue #187): the best relevance
+                                       # achievable anywhere on their board, in [0,1]. 0.0 = no Energy is
                                        # doing work worth denying (no Energy at all, surplus Energy, or
                                        # the only live body dies to my Knock Out this turn) — HOLD.
                                        # Replaces `opp_denial_best` on the fire-now rung when armed.
+                                       # **`None` means ABSENT, not zero** (ADR-TEMP-228 decision 2;
+                                       # `CONTEXT.md`, ABSENT is not ZERO): the read is OFF, or this
+                                       # board never went through `_board()`. The default was `0.0`
+                                       # until Issue #228, which made absence indistinguishable from a
+                                       # measured whiff — and mid-sim absence was routine, so the fire
+                                       # rung declined strips worth +22.50 and +74.50. A `None` fails
+                                       # CLOSED to `opp_denial_best`, never to a whiff.
     deny_relevance_rows: tuple = ()    # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
                                        # what the TARGET pick ranks on, plus the ADR-0084 clock DELTA
                                        # its lexicographic tiebreak reads (None when `deny_strip_delta`
@@ -5599,11 +5607,21 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # ARMED (ADR-0080, Issue #187): `K x relevance` replaces the damage magnitude. Same SHAPE —
         # odds x weight x value - keep price — so the whiff hold, the Lever A scaling and the
         # `_finish_turn_last` interaction all survive unchanged; only what supplies "value" moves.
-        value = (_DENY_RELEVANCE_K * board.deny_relevance_best if self.deny_relevance
-                 else board.opp_denial_best)
-        if not value:
-            return 0.0                                  # nothing to deny — hold it (whiff)
+        rel = board.deny_relevance_best if self.deny_relevance else None
+        # `None` is ABSENT, not zero (ADR-TEMP-228 decision 2) — the read is OFF, or this board never
+        # went through `_board()`. Fail CLOSED to the incumbent magnitude, which is computed
+        # unconditionally and so is never itself absent. This is also the seat of decision 3's
+        # pre-registered fallback: if the mid-sim read is ever withdrawn on cost, every armed board
+        # lands here and prices exactly as the incumbent did, rather than silently whiffing.
+        value = _DENY_RELEVANCE_K * rel if rel is not None else board.opp_denial_best
         weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
+        # NO whiff short-circuit. A `value` of 0 is a real read saying "nothing here", and it must
+        # still pay the keep price: `odds x weight x 0 - _DENIAL_ITEM_COST` = -10.0, which DECLINES.
+        # Returning a bare 0.0 here did not — `_finish_turn_last` promotes only on `score > 0`, so a
+        # 0.0 free Item landed in the last tier TIED with End and stable score order played it by
+        # option index. The OFF path escaped that by arithmetic accident (its magnitude is rarely
+        # exactly 0 while the card is playable); a categorical [0,1] scalar is 0 routinely and by
+        # design, which is what turned a latent contract violation into a live defect at arming time.
         return coin_odds(ctx.card_id) * weight * value - _DENIAL_ITEM_COST
 
     def _denial_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
@@ -8090,10 +8108,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Returns ``(phase, rows)``; each row carries the raw ``body`` dict, its ``area``
         (``"active"``/``"bench"``) and within-area index ``bi`` (the deny-slot key convention), plus
-        ``id``/``prize``/``survival_shift``/``value``. None when sparse: mid-sim (`self._planning`),
-        no live my Active, or no opponent in-play bodies."""
-        if getattr(self, "_planning", False):
-            return None
+        ``id``/``prize``/``survival_shift``/``value``. None when sparse: no live my Active, or no
+        opponent in-play bodies.
+
+        **Runs MID-SIM** (ADR-TEMP-228 decision 3). It used to early-return `None` under the
+        planner's `_planning` reentrancy flag, alongside the three SHADOWS — but this is the LIVE
+        computation both the deny fire rung and the `gust_target` slot emission read, not a
+        diagnostic, and withholding it mid-sim made the agent evaluate a different policy inside its
+        own rollout than outside it. That is the third confirmed source of continuation collateral
+        in this repo (ADR-0072 finding 2, ADR-0070 amendment H, Issue #228). The guard was a COST
+        decision, not a correctness one — nothing below starts a nested engine search; `turns_to_ko_me`
+        is the closed-form S1 curve. It now lives on `_opponent_target_shadow`, which is the caller
+        that genuinely wants no shadow work in rollouts."""
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -8635,7 +8661,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         decision computes the per-body simulation once and shares it with the live `gust_target`
         slot emission; falls back to a fresh compute when called directly (off a hand-built `board`
         that never went through `_board()`, as the existing shadow tests do) — `_board()` always
-        runs first in a real decision, so the cache is never stale by the time this reads it."""
+        runs first in a real decision, so the cache is never stale by the time this reads it.
+
+        Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) — the guard
+        `_opponent_target_rows` used to carry for everyone. It belongs HERE, on the diagnostic, and
+        not on the live row computation two live instruments read (ADR-TEMP-228 decision 3). Same
+        placement as `_threat_shadow` and `_recur_shadow`."""
+        if getattr(self, "_planning", False):
+            return None
         result = getattr(self, "_opponent_target_cache", None)
         if result is None:
             result = self._opponent_target_rows(obs, board)

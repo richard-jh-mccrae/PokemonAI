@@ -37,7 +37,7 @@ HAMMER = 1120                              # Crushing Hammer (energy_denial, coi
 FIRE, PSYCHIC, FIGHTING, DARKNESS = 2, 5, 6, 7
 
 MAIN, DISCARD_ENERGY = 0, 30               # SelectContext
-PLAY, ENERGY = 7, 6                        # OptionType
+PLAY, ENERGY, END = 7, 6, 14               # OptionType
 ACTIVE, BENCH = 4, 5                       # AreaType
 
 
@@ -442,7 +442,12 @@ def test_off_reproduces_the_documented_incumbent_arithmetic_exactly():
     p._unfavored = lambda _b: False
     expected = coin_odds(HAMMER) * _DENIAL_PLAY_W * board.opp_denial_best - _DENIAL_ITEM_COST
     assert p._denial_play_tactical(board, _Ctx()) == expected
-    assert board.deny_relevance_best == 0.0, "OFF must emit no relevance at all"
+    # RE-RULED (Issue #228, ADR-TEMP-228 decision 2). This asserted `== 0.0` — the dataclass default
+    # back when the field could not express absence. OFF emits no relevance at all, and `None` says
+    # exactly that where `0.0` said "measured, and it is nothing". The distinction is the defect:
+    # mid-sim the armed read was equally absent, and the fire rung whiffed on strips worth +22.50
+    # and +74.50 because it could not tell the two apart.
+    assert board.deny_relevance_best is None, "OFF must emit no relevance at all — ABSENT, not zero"
     assert board.deny_relevance_rows == ()
 
 
@@ -657,7 +662,11 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
     comparison anywhere would play the Hammer the corpus ruled against.
 
     (The asymmetry itself — that a bad strip prices 0 where ADR-0062's reasoning implies it should
-    price negative — is knowingly left open and handed forward by decision 8.)
+    price negative — was knowingly left open and handed forward by ADR-0084 decision 8. **Issue #228
+    CLOSED it** (ADR-TEMP-228 decision 4): the whiff short-circuit is gone, so a shut gate now prices
+    `odds x weight x 0 - _DENIAL_ITEM_COST` = **-10.0**. It had to close, because `0.0` did not
+    actually decline — `_finish_turn_last` promotes on `score > 0`, so the Hammer landed in the last
+    tier TIED with End and stable score order played it by option index.)
 
     **Asserted on the REAL f21/f29 fixtures, with their full captured menus.** A first attempt used a
     hand-built menu and was worthless twice over: `explain().chosen` is a LIST, so `chosen != 0` was
@@ -678,14 +687,15 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
         hammer = [i for i, o in enumerate(select["option"])
                   if p._option_card_id(obs, select, o) == HAMMER]
         assert hammer, f"{fixture} must actually offer a Hammer, or it tests nothing"
-        assert all(ex.options[i].score == pytest.approx(0.0) for i in hammer), (
-            f"{fixture}: a shut gate must take the whiff branch at exactly 0.0 — this fixes WHICH "
-            f"branch, so the assertion below is known to be testing the zero case; got "
-            f"{[ex.options[i].score for i in hammer]}")
+        from common.pilot import _DENIAL_ITEM_COST
+        assert all(ex.options[i].score == pytest.approx(-_DENIAL_ITEM_COST) for i in hammer), (
+            f"{fixture}: a shut gate must take the whiff branch and still PAY THE KEEP PRICE — this "
+            f"fixes WHICH branch, so the assertion below is known to be testing the zero-relevance "
+            f"case; got {[ex.options[i].score for i in hammer]}")
         assert not set(ex.chosen) & set(hammer), (
-            f"{fixture}: a Hammer scoring 0.0 must NOT be chosen — a free Item is tiered ahead of "
-            f"everything by `_finish_turn_last`, so if any tier treats 0.0 as playable, decision 8's "
-            f"handed-forward asymmetry becomes forced rather than optional. chosen={ex.chosen}")
+            f"{fixture}: a whiffing Hammer must NOT be chosen — a free Item is tiered ahead of "
+            f"everything by `_finish_turn_last`, and at the old 0.0 it TIED End and won on option "
+            f"index. chosen={ex.chosen}")
         assert list(ex.chosen) == want, (
             f"{fixture}: and the decision must still match the corpus ruling {want}; got {ex.chosen}")
 
@@ -720,3 +730,67 @@ def test_the_clock_never_reorders_what_relevance_already_separates(fixture, deck
                     f"relevance {rel_a} at {key_a}/{t_a} scored {sc_a}, but LOWER relevance {rel_b} "
                     f"at {key_b}/{t_b} scored {sc_b} — the clock must never overtake a relevance "
                     f"difference, only break an exact tie")
+
+
+# ── the read must SURVIVE the rollout (ADR-TEMP-228, Issue #228) ─────────────────────────────────
+
+def _play_or_end_obs(**kw):
+    """The fire-now menu with End beside it — the two options `_finish_turn_last` tiers together
+    when the Hammer is unendorsed, and therefore the only board on which "held" is falsifiable."""
+    obs = _play_obs(**kw)
+    obs["select"]["option"] = [{"type": PLAY, "index": 0}, {"type": END}]
+    return obs
+
+
+@pytest.mark.req("REQ-DENYREL-0036")
+@pytest.mark.parametrize("board,label", [
+    (lambda: _play_obs(opp_active=_body(DRAGAPULT_EX, [FIRE])), "a live typed strip"),
+    (lambda: _play_obs(opp_active=_body(DRAGAPULT_EX)), "a bare board (a real whiff)"),
+    (lambda: _play_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING])), "the forward-line anchor"),
+])
+def test_the_armed_fire_rung_prices_the_same_MID_SIM_as_it_does_at_the_root(board, label):
+    """**The defect Issue #228 was blocked by.** `_opponent_target_rows` returns None mid-sim, so
+    the per-decision cache is empty, `Board.deny_relevance_best` keeps its default, and the fire rung
+    read that default as a MEASURED zero — a whiff. The incumbent had no such hole because
+    `opp_denial_best` is computed unconditionally.
+
+    Measured consequence: on three corpus frames the armed rung returned 0.00 mid-sim where the
+    incumbent returned -5.00 / +22.50 / +74.50, flipping the Hammer decision inside the rollout,
+    moving one Energy on the opponent's board, and toggling `_PLANNER_SURVIVAL_W` (50.0) in the leaf.
+    That is what the Discrimination Gate saw as `82225643|1|decision|11`,
+    `83686860|1|decision|13` and `82224509|1|decision|67`.
+
+    Asserted as an IDENTITY between the two readings rather than against a literal, because the
+    defect is a disagreement — any pinned number would also have to be re-derived on every re-tune,
+    while "the agent scores this the same inside its own rollout as outside it" is invariant."""
+    p = _pilot()
+    obs = board()
+    p._planning = False
+    root = _scores(p, obs)[0]
+    p._planning = True
+    mid = _scores(p, obs)[0]
+    assert mid == pytest.approx(root), (
+        f"{label}: the fire rung scored {mid} mid-sim but {root} at the root — the agent is "
+        f"simulating a policy it does not play")
+
+
+@pytest.mark.req("REQ-DENYREL-0037")
+@pytest.mark.parametrize("planning", [False, True])
+def test_a_real_whiff_scores_STRICTLY_below_End_so_that_held_means_held(planning):
+    """`_denial_play_tactical`'s docstring promised *"a whiff prices at 0 and is held … declining one
+    REQUIRES a non-positive score."* It did not hold. `_finish_turn_last` sequences early only on
+    `score > 0`, so a 0.0 free Item lands in the LAST tier **tied with End**, and stable score order
+    breaks that tie by option index — the Hammer sits first, so the whiff was PLAYED.
+
+    The OFF path escaped this by arithmetic accident: its magnitude is rarely exactly 0 while the
+    card is playable, so `odds x weight x value - keep price` came out strictly negative. A
+    categorical [0,1] relevance scalar is 0 routinely and by design, which is what made a latent
+    contract violation a live defect at arming time (`src/common/CONTEXT.md`, ABSENT is not ZERO).
+
+    Run under both `_planning` states: mid-sim is where it actually bit."""
+    p = _pilot()
+    p._planning = planning
+    hammer, end = _scores(p, _play_or_end_obs(opp_active=_body(DRAGAPULT_EX)))
+    assert hammer < end, (
+        f"a whiffing Hammer scored {hammer} against End at {end} — a tie is not a hold, and the "
+        f"lower option index plays it")
