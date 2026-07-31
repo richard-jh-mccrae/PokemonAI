@@ -175,6 +175,9 @@ def test_lever_c_suppresses_a_denied_evolving_threats_forward_rank():
 # ---- M2.1b Slice 3: lever A (favorability) — up-weight useful disruption when unfavored ----
 
 HAMMER = 555
+# Two DIFFERENT numbers that coincide for Basic Energy — kept apart on purpose (`pilot_helpers.poke`):
+FIGHTING = 6      # EnergyType.FIGHTING — the TYPE code (src/cg/api.py `class EnergyType`)
+F_ENERGY = 6      # Basic {F} Energy — the CARD ID (EN_Card_Data.csv: `6,Basic {F} Energy,SVE,6,…,{F}`)
 
 
 def _unfavored_pilot(win_rate, funcs):
@@ -183,18 +186,36 @@ def _unfavored_pilot(win_rate, funcs):
     # Mega Lucario ex with an affordable attack (Aura Jab {F} 130) so `opp_active_can_damage_us` sees a
     # real threat at its 1 Energy — the energy-denial gate needs the opp to be able to hurt us, and an
     # empty stat provider would mask that (2026-07-09).
+    #
+    # Aura Jab's cost is TYPED, and saying so records a card fact rather than inventing one:
+    # `data/EN_Card_Data.csv` row 678 reads `Mega Lucario ex,…,{F},…,Aura Jab,{F},130`. The typed cost
+    # plus the Basic {F} the body actually holds are what let Deny Relevance (armed below) read this
+    # board at all — untyped, every strip here scores 0 and Lever A would have nothing to scale.
     stats = DictCardStatProvider({
-        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True, attacks=(11,)),
-    }, attacks={11: AttackStat(11, damage=130, cost=1)})
+        MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True,
+                               attacks=(11,), energyType=FIGHTING),
+        F_ENERGY: CardStat(F_ENERGY, name="Basic {F} Energy", hp=0, energyType=FIGHTING),
+    }, attacks={11: AttackStat(11, damage=130, cost=1, energyTypes=(FIGHTING,))})
     return Pilot(Strategy(params={"my_archetype": "MyDeck"}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats,
+                 # Armed EXPLICITLY: OFF is documented DEGRADED MODE since Issue #228 deleted the
+                 # ADR-0062 magnitude oracle — every deny surface stands down, so a Lever A claim
+                 # stated OFF would be a claim about nothing. Set here rather than inherited from
+                 # PROFILE so these tests keep meaning the same thing whichever way the flag ships
+                 # (guarding the shipped value is `test_runtime`'s job). `deny_strip_delta` stays off:
+                 # it only orders a DISCARD_ENERGY target pick, and this menu has none.
+                 deny_relevance=True,
                  functions=funcs, scout=Scout(art))
 
 
 def _obs_hammer_vs_energized_mega_lucario():
+    # `energies` holds attached Energy CARD IDS, resolved to their type through the Stat Provider
+    # (`combat.attached_type_counts`) — so a Basic {F} is card 6, and it is the only Energy that can
+    # pay Aura Jab's {F}. The old board attached card id 1 (Basic {G}), which the provider did not
+    # know and which could not have paid the cost the same fixture claims makes this body a threat.
     me = {"active": [{"id": 1, "energies": [], "hp": 100}], "bench": [],
           "hand": [{"id": HAMMER}], "discard": [], "prize": []}
-    opp = {"active": [{"id": MEGA_LUCARIO, "energies": [1], "hp": 200}],
+    opp = {"active": [{"id": MEGA_LUCARIO, "energies": [F_ENERGY], "hp": 200}],
            "bench": [{"id": SOLROCK}, {"id": RIOLU}], "discard": [], "prize": []}
     return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 4},
             "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
@@ -212,14 +233,24 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
     So the assertion moves off "which rung fired" and onto the thing that actually matters: an
     unfavored Read must make a real strip score strictly MORE.
 
-    Scoped to the ADR-0062 MAGNITUDE instrument deliberately. Lever A survived deny's move to Deny
-    Relevance by re-expression rather than retirement (ADR-0080 Amendment B), and the armed half of
-    that property is asserted in `test_energy_denial_guards.py` against REAL captured frames --
-    `test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign[relevance]`. It is not
-    re-asserted here because this board is synthetic: its attached Energy is a bare card id and its
-    attack carries no typed cost, so relevance correctly reads 0 on it, and arming this fixture would
-    mean inventing a typed cost -- an invented board manufacturing a fake result, which is the very
-    thing the denial guards file exists to avoid.
+    Stated against DENY RELEVANCE since Issue #228 (armed in `_unfavored_pilot`), the ADR-0062
+    magnitude instrument this used to score on having been deleted. Lever A survived deny's move by
+    re-expression rather than retirement (ADR-0080 Amendment B), and the property is scale-invariant,
+    so the assertion below reads verbatim as it did against the magnitude.
+
+    An earlier revision of this docstring held that arming the fixture "would mean inventing a typed
+    cost". That was wrong on the facts, and the objection is withdrawn: this body IS Mega Lucario ex
+    (`scouting_helpers.MEGA_LUCARIO` == the real card id 678) and `data/EN_Card_Data.csv` prints Aura
+    Jab's cost as `{F}` — writing `energyTypes=(FIGHTING,)` RECORDS that fact where the fixture had
+    silently dropped it. What was invented was the OLD board: a {F}-costed attacker holding a Basic
+    {G} it could never pay with. Nothing here is hand-fitted to produce a result.
+
+    What this test carries that `test_energy_denial_guards.py` does not: that file's
+    `test_the_unfavored_read_scales_the_denial_and_can_never_flip_its_sign[relevance]` monkeypatches
+    `_unfavored` outright, so it pins the MULTIPLIER's arithmetic on real frames but never the READ
+    that decides to apply it. Here the only thing that differs between the two Pilots is a dossier
+    win_rate (0.3 vs 0.5), so the whole Scout -> favorability -> coverage -> `_unfavored` path is
+    under test — which is what REQ-POSTURE-0004 is about.
     """
     funcs = CardFunctions({HAMMER: ["energy_denial"]})
     obs = _obs_hammer_vs_energized_mega_lucario()
@@ -232,13 +263,18 @@ def test_lever_a_boosts_useful_disruption_when_unfavored():
 @pytest.mark.req("REQ-POSTURE-0004")
 def test_lever_a_cannot_make_a_worthless_disruption_worth_playing():
     """The multiplier's whole point (ADR-0063): scaling cannot flip a sign. Their Active is a Mega
-    Lucario ex on 3 Energy — SURPLUS, since Mega Brave costs only 2, so the strip still leaves it
+    Lucario ex on 3 {F} — SURPLUS for the one {F} Aura Jab costs, so the strip still leaves it
     affording the same attack and denies nothing. However badly the matchup reads, the Hammer must
     stay held: 0 x anything is 0.
+
+    Armed (Issue #228) the whiff now arrives STRUCTURALLY, through Deny Relevance's surplus clause
+    (`type_count <= needed` fails at 3 <= 1), which is the shape ADR-0080 wanted: the hold is derived
+    rather than gated. The three Energy are typed for exactly that reason — left as unresolvable card
+    ids they would read 0 for the wrong reason and this test would pass while asserting nothing.
     """
     funcs = CardFunctions({HAMMER: ["energy_denial"]})
     obs = _obs_hammer_vs_energized_mega_lucario()
-    obs["current"]["players"][1]["active"][0]["energies"] = [1, 1, 1]     # surplus for a 1-cost attack
+    obs["current"]["players"][1]["active"][0]["energies"] = [F_ENERGY] * 3   # surplus for a 1-{F} cost
     assert _unfavored_pilot(0.3, funcs).explain(obs).options[0].score <= 0, (
         "the unfavored Read resurrected a Hammer that denies nothing — that is an override, not a boost")
 

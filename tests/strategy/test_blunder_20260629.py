@@ -42,6 +42,10 @@ def _stats(attacks=None):
 
 
 # Attack records (ADR-0051): the facts the legacy attacks=/attack_costs= Pilot dicts used to carry.
+# Two DIFFERENT numbers that happen to coincide, kept apart deliberately (`pilot_helpers.poke`):
+FIGHTING = 6      # EnergyType.FIGHTING — the TYPE code (src/cg/api.py `class EnergyType`)
+F_ENERGY = 6      # Basic {F} Energy — the CARD ID (EN_Card_Data.csv: `6,Basic {F} Energy,SVE,6,…,{F}`)
+
 _ATTACK_STATS = {10: AttackStat(10, damage=210, cost=3),      # Nebula Beam
                  11: AttackStat(11, damage=120, cost=1),      # Jetting Blow
                  12: AttackStat(12, damage=20, cost=1)}       # Staryu chip
@@ -213,9 +217,19 @@ def _denial_pilot(**kw):
         PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0),
-        OPP: CardStat(OPP, name="Mega Lucario ex", hp=440, megaEx=True, maxDamage=270, energyType=7,
+        OPP: CardStat(OPP, name="Mega Lucario ex", hp=440, megaEx=True, maxDamage=270,
+                      energyType=FIGHTING,               # {F} (EN_Card_Data.csv row 678)
                       attacks=(13,)),                    # Aura Jab {F} 130 — an affordable threat at 1 Energy
-    }, attacks={**_ATTACK_STATS, 13: AttackStat(13, damage=130, cost=1)})   # + Aura Jab
+        # The Energy the opponent's body actually holds, so the Provider can resolve card id -> type.
+        F_ENERGY: CardStat(F_ENERGY, name="Basic {F} Energy", hp=0, energyType=FIGHTING),
+    }, attacks={**_ATTACK_STATS, 13: AttackStat(13, damage=130, cost=1, energyTypes=(FIGHTING,))})
+    # The attack's `energyTypes` and the body's typed Energy are BOTH required since Issue #228 armed
+    # Deny Relevance: the read is TYPED (which Energy is doing the work) where the deleted ADR-0062
+    # magnitude oracle only counted Energy. Miss either half — an untyped cost, or an Energy card the
+    # Provider cannot resolve — and the strip reads relevance 0, a whiff, and the SEQUENCING claim
+    # below would be tested on a board with nothing worth sequencing.
+    kw.setdefault("deny_relevance", True)
+    kw.setdefault("deny_strip_delta", True)
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
@@ -233,13 +247,19 @@ def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
     Hammer denies NOTHING. The old gate played it anyway — it asked only whether Energy was present,
     which is the whole reason Hammers were being burned for zero effect. At 1 Energy the strip turns
     the attacker off (130 -> 0) and the rung fires on merit. The SEQUENCING claim under test is
-    unchanged; only the board now describes a strip worth making."""
+    unchanged; only the board now describes a strip worth making.
+
+    Since Issue #228 armed Deny Relevance that strip must also be TYPED to be seen: the lone Energy
+    is a Basic {F} (card id 6, registered in `_denial_pilot`'s Provider) paying Aura Jab's {F} slot,
+    so relevance reads 130/350 and the Item prices +55. An untyped body would read 0 and the Hammer
+    would price at exactly `-_DENIAL_ITEM_COST`, testing sequencing on an empty claim."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)            # Crushing Hammer in hand[0]
     attack = attack_opt(11)                               # Jetting Blow, 120
     obs = make_select([play_crush, attack, opt(END)],
                       current=state(active=poke(WINCON, energy=3, hp=330),
-                                    opp_active=poke(OPP, energy=1, hp=440), hand=[CRUSH]))
+                                    opp_active=poke(OPP, energy=1, hp=440, energy_card=F_ENERGY),
+                                    hand=[CRUSH]))
     traces = pilot.explain(obs)
     assert traces.options[0].score > 0        # ADR-0062: priced tactical, not the retired flat rung
     assert traces.options[1].tactical > traces.options[0].score   # attack scores higher on tactical
@@ -250,13 +270,18 @@ def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
 @pytest.mark.req("REQ-GEN-0031")
 def test_play_energy_denial_fires_in_setup_against_a_developing_attacker():
     """SETUP (payoff not yet in play): strip the opponent's developing Active before chipping — the
-    ep82523811 fr15 shape (deny a Riolu its Energy before it can become a Mega Lucario ex)."""
+    ep82523811 fr15 shape (deny a Riolu its Energy before it can become a Mega Lucario ex).
+
+    Same typed board as the RACE case above (a Basic {F}, card id 6, on Aura Jab's {F} slot): the
+    armed read is what makes the strip worth anything, and the claim here is that being in SETUP does
+    not suppress it."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)
     chip = attack_opt(12)                                 # Staryu's 20 chip
     obs = make_select([play_crush, chip, opt(END)],
                       current=state(active=poke(PREEVO, energy=1, hp=70),
-                                    opp_active=poke(OPP, energy=1, hp=440), hand=[CRUSH]))
+                                    opp_active=poke(OPP, energy=1, hp=440, energy_card=F_ENERGY),
+                                    hand=[CRUSH]))
     traces = pilot.explain(obs)
     assert traces.options[0].plan == Plan.SETUP           # payoff not in play -> still SETUP
     assert traces.options[0].score > 0        # ADR-0062: priced tactical, not the retired flat rung
