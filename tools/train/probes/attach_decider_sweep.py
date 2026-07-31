@@ -70,21 +70,17 @@ def _names() -> dict:
 
 
 def _frames():
-    """`gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1, Issue #243). The private
-    raw-JSONL walk this replaced was short **40** records: a falsy `agent` is *recoverable* from
-    `agent_build`, and only `Correction.from_dict` backfills it. Keyed by `(episode, frame)` for the
-    display id this probe prints; the derived **Frame Key** is discarded here rather than
-    hand-rebuilt, which is the half of ADR-0087 that cost the Decision Gate 163 keys."""
-    from train.gates import keyed_corrections
-    index = {(str(c.episode_id), (c.decision or {}).get("frame")): c
-             for _key, c in keyed_corrections(REPO / "data" / "corrections")
-             if c.obs and c.agent}
-    return sorted(index.items())
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-TEMP-243)."""
+    from train.probes._corpus import frames
+    return frames()
 
 
 def _agent(rec) -> str:
-    a = rec.agent or ""
-    return a if a in {"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"} else "mega_starmie"
+    """The shared replay fallback (`_corpus.replay_agent`). It is no longer papering over a missing
+    `agent` — `from_dict` backfills that from `agent_build` — but it is not cosmetic either: the
+    corpus holds one `SkiChu` record with no agent directory."""
+    from train.probes._corpus import replay_agent
+    return replay_agent(rec)
 
 
 def _strategy_and_deck(agent: str):

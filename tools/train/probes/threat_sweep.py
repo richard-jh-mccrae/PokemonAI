@@ -23,7 +23,7 @@ SLOTS and RANK were DELETED by Issue #243 (ADR-TEMP-243 decision 1), for opposit
     said exactly why ("so it stays an A/B after the PROFILE ships the flag ON") — the mistake was
     made next to its own correction.
   * RANK was ANSWERED. ADR-0083 records 0 decided-pick flips over 331 frames, and the substance is
-    pinned by `tests/strategy/test_scaled_rank_corpus.py`, which exercises the read on every real
+    covered by `tests/strategy/test_scaled_rank_corpus.py`, which exercises the read on every real
     frame the corpus contains. A ruling is a ruling; carrying it as a probe mode too is the fourth
     Probe Fate this repo keeps having to delete.
 
@@ -46,16 +46,9 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 def _frames():
-    """`gates.keyed_corrections` — THE Corpus Reader (ADR-0087 decision 1, Issue #243). The private
-    raw-JSONL walk this replaced was short **40** records: a falsy `agent` is *recoverable* from
-    `agent_build`, and only `Correction.from_dict` backfills it. Keyed by `(episode, frame)` for the
-    display id this probe prints; the derived **Frame Key** is discarded here rather than
-    hand-rebuilt, which is the half of ADR-0087 that cost the Decision Gate 163 keys."""
-    from train.gates import keyed_corrections
-    index = {(str(c.episode_id), (c.decision or {}).get("frame")): c
-             for _key, c in keyed_corrections(REPO / "data" / "corrections")
-             if c.obs and c.agent}
-    return sorted(index.items())
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-TEMP-243)."""
+    from train.probes._corpus import frames
+    return frames()
 
 
 def _tune():

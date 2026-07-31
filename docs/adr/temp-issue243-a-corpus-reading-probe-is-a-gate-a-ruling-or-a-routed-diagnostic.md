@@ -191,7 +191,7 @@ looked like they would need a ruling were measured, and both are clean:
 82228640-9   EXCLUDED in test_hyperclosure_corpus.py as "no-agent — unreplayable".
              FALSE on both counts: agent backfills to mega_starmie, obs present,
              correct=[1], chosen=[0].  Shipped Pilot picks [1] == correct.
-             -> exclusion deleted, frame promoted to a PIN.
+             -> exclusion deleted, frame moved into test_hyperclosure_corpus's PINS.
 
 test_scaled_rank_corpus.py, widened 332 -> 372:
   CLEFAIRY_EX (272)        8 frames,  0 new,  0 failures, fired 8,  max 120.0
@@ -234,7 +234,7 @@ with no directory of its own, and dropping the fallback would have crashed a rep
 | `evolve_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic; OLD arm already gone |
 | `promote_retreat_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic; OLD arm already gone |
 | `needs_sweep.py` | **ROUTE** | `docs/writeup-from-corrections-to-needs.md` promises its numbers reproduce |
-| `threat_sweep.py` | **ROUTE, −2 modes** | `--doom`/`--recur`/`--target` live; **delete `--slots`** (same-vs-same, 0 flips by construction) and **`--rank`** (answered ADR-0083, pinned by `test_scaled_rank_corpus.py`); fix the stale line-17 docstring |
+| `threat_sweep.py` | **ROUTE, −2 modes** | `--doom`/`--recur`/`--target` live; **delete `--slots`** (same-vs-same, 0 flips by construction) and **`--rank`** (answered ADR-0083, covered by `test_scaled_rank_corpus.py`); fix the stale line-17 docstring |
 | 11 files under `tests/strategy/` | **ROUTE** | 9 globbing + 2 fixed-path; one carried the identical 40-record filter |
 
 ### The predicate is lifted UNWIRED, and that is the decision

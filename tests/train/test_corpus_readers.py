@@ -135,7 +135,7 @@ def test_threat_sweep_no_longer_offers_the_vacuous_modes():
     """`--slots` compared the shipped PROFILE against `_forced(gust_target_slots=True)` while the
     PROFILE has shipped that flag ON since 2026-07-27 — same-vs-same, 0 flips BY CONSTRUCTION. Its
     sibling `sweep_rank` forced both sides and its docstring said why, so the mistake sat next to its
-    own correction. `--rank` was answered (ADR-0083) and is pinned by `test_scaled_rank_corpus.py`.
+    own correction. `--rank` was answered (ADR-0083) and is covered by `test_scaled_rank_corpus.py`.
     Asserted here because a re-added mode reads as new coverage rather than as a returning defect."""
     text = (REPO / "tools" / "train" / "probes" / "threat_sweep.py").read_text(encoding="utf-8")
     assert "def sweep_slots" not in text and "def sweep_rank" not in text

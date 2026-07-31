@@ -61,6 +61,13 @@ def test_an_optional_select_that_DOES_state_a_preference_still_gates():
 
 
 @pytest.mark.req("REQ-GATE-0009")
+def test_ordering_does_not_defeat_the_comparison():
+    """A multi-pick record is compared as a SET — `[1, 0]` and `[0, 1]` are the same answer, and an
+    exclusion rule that missed that would leak an unstatable frame back into the gate."""
+    assert unstatable(_Rec(chosen=[1, 0], correct=[0, 1]), _obs(0)) is True
+
+
+@pytest.mark.req("REQ-GATE-0009")
 @pytest.mark.parametrize("scope", ["turn", "match"])
 def test_a_scoped_decline_is_statable_and_must_not_be_swallowed(scope):
     """THE guard the lift added, and the corpus is the reason. `86088989|0|turn|0` records

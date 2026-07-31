@@ -25,12 +25,17 @@ it replaces (those appended per matching line and would double-count a duplicate
 """
 from __future__ import annotations
 
-import sys
 from functools import lru_cache
 from pathlib import Path
 
+from train.gates import keyed_corrections
+
 REPO = Path(__file__).resolve().parents[1]
-sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
+
+#: Agents with a directory under `src/agents/`. Mirrors `tools/train/probes/_corpus._REPLAYABLE`;
+#: the two cannot share a definition because `tests/` is not importable from `tools/`, and a probe
+#: reaching into the test tree to borrow it would invert the dependency.
+_REPLAYABLE = frozenset({"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"})
 
 
 @lru_cache(maxsize=1)
@@ -39,11 +44,9 @@ def corpus_index() -> dict:
     `obs` and an `agent`.
 
     Cached for the session: `keyed_corrections` walks and constructs the whole corpus, and eleven
-    test modules asking independently would pay for it eleven times. The dict is shared, so callers
-    must treat it as read-only.
+    test modules asking independently would pay for it eleven times. **The dict is shared and must be
+    treated as read-only** — a caller that mutates it corrupts every later test in the session.
     """
-    from train.gates import keyed_corrections
-
     return {(str(c.episode_id), (c.decision or {}).get("frame")): c
             for _key, c in keyed_corrections(REPO / "data" / "corrections")
             if c.obs and c.agent}
@@ -78,5 +81,4 @@ def replay_agent(correction) -> str:
     replays through `mega_starmie` exactly as the private `_agent` helpers did.
     """
     agent = getattr(correction, "agent", None) or ""
-    return agent if agent in {"dragapult_ex", "mega_lucario", "mega_starmie", "slowking"} \
-        else "mega_starmie"
+    return agent if agent in _REPLAYABLE else "mega_starmie"

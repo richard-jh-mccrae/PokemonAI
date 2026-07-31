@@ -19,7 +19,7 @@ each exclusion), and `refuted`/`covered` are now the ONLY grounds.
 `82228640-9` used to be excluded as "carries no `agent`/obs — unreplayable". That was false on both
 counts, and only a raw-JSONL walk could believe it: the record backfills to `mega_starmie` from its
 `agent_build` and carries an `obs` (ADR-0087, Issue #241 — the 40 dropped records). Replayed through
-the shipped Pilot it picks `[1]`, which IS the human's `correct`, so Issue #243 promoted it to a PIN
+the shipped Pilot it picks `[1]`, which IS the human's `correct`, so Issue #243 moved it into PINS
 rather than inventing a new ground to keep it out. An exclusion whose stated reason is untrue is the
 failure this file's own `test_excluded_ids_are_provably_out` exists to prevent.
 """
@@ -40,7 +40,8 @@ CORR = REPO / "data" / "corrections"
 PINS = {
     # Recovered by ADR-0087's backfill (Issue #243): EXCLUDED here as "no-agent / unreplayable" until
     # the raw walk was retired. The record is replayable and the shipped Pilot already makes the
-    # human's pick, so it is a pin, not a target — a free regression guard the corpus was hiding.
+    # human's pick, so it belongs in PINS rather than TARGETS — a free regression guard the corpus
+    # was hiding.
     "82228640-9": "recovered from the 40 dropped records — the agent already makes the human pick",
     # discard-pair valuation (sets, not sums; role floors)
     "85045840-14": "dp: don't pitch the on-board Dragapult ex to a Budew fetch",

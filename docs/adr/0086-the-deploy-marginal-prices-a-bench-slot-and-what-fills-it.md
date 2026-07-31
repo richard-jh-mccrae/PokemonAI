@@ -393,6 +393,16 @@ magnitude survives (decision 5).
 (decision 2); a `bench_harvest` sibling exposing `_harvest_optima`'s objective prize total
 (decision 5); `_bench_shortens_their_path` returns a delta rather than a sign (decision 5).
 
+> **Amendment, Issue #243 / ADR-TEMP-243 (2026-07-31): `deploy_decider_sweep.py` was DELETED.** The
+> reading below stands as recorded — it was taken when the nine rungs its OLD arm zeroed still
+> existed, so OLD was the real incumbent pile and the comparison was genuine. Every one of those nine
+> ids has since been removed from `src/` (tracker directive 1 requires the deletion; nothing
+> re-pointed the sweep), leaving `baseline_bench` holding one rung, so OLD came to score a near-empty
+> scorer whose argmax falls to option index — the sweep could only ever report FIX. It was the fourth
+> sibling ADR-0085 Amendment J retired, missed then **because it was the only one that gated**, and a
+> passing exit code read as evidence of health. The Decision Gate is `tools/train/decider_lab.py`;
+> use that, not a re-run of this.
+
 **Gates (ADR-0072 / #136 directive 6) — both PASS.** The
 `tools/train/probes/deploy_decider_sweep.py` **Decision Gate**: 3 FIX, 0 unruled `REGRESSION`, one
 frame held out to #165 (`83661652|0|decision|19` — a multi-step turn-plan complaint whose `correct`
