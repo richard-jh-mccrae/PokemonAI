@@ -1435,6 +1435,112 @@ worth running; `decider_lab.py` deliberately does not duplicate them.
 **Baseline discipline, inherited verbatim from the leaf lab:** it is a RULING RECORD. CI must never
 auto-recapture it, or the gate becomes a mirror that agrees with whatever it is shown.
 
+## Amendment J — the rebuild's owed work, closed (2026-07-30)
+
+Amendment I shipped the instrument and listed five things it did **not** settle
+(`docs/plans/decision-gate-rebuild-handoff.md`). All five are closed here. Two of them turned on a
+measurement that contradicted the hand-off's own expectation, which is the part worth reading.
+
+### J1 — a Correction's `correct` is a CONSTRAINT, not the whole answer
+
+The open question was whether `correct ⊆ chosen` should count as agreement for multi-pick contexts,
+or whether those Corrections should record the full answer. **Ruled: satisfaction is `correct ⊆
+chosen`** (`gates.satisfies_human`).
+
+The reasoning is that the two sides speak different vocabularies. A Correction's `correct` names *the
+card the ruling was about* — exactly what ADR-0082's Claim vocabulary records — while a multi-pick
+select returns **every** index the engine demands. Equality across those is simply the wrong test,
+and it was measurably wrong: `DISCARD` read **1/12** purely because the agent picks `[2, 3]` where
+the ruling says `[2]`. Under satisfaction the same corpus reads **10/12**, and the corpus-wide rate
+moves **220/331 → 230/331 with no decision changed**. Ten "disagreements" were never disagreements.
+
+The rejected alternative — rewrite those Corrections to record the full answer — would put indices
+into a human ruling that the human never ruled on, destroying the one thing `correct` is for. Read
+the record correctly rather than editing the record.
+
+**One predicate, both readings.** `decider_lab_diff` classifies direction through the same function
+as the agree-rate readout, so the gate and the report cannot drift into two ideas of "matches the
+human". This makes the gate **strictly more sensitive** on multi-pick frames, never less: under
+equality a move from `[2, 3]` to `[3, 4]` against `correct: [2]` classifies NEUTRAL and passes;
+under satisfaction it is the REGRESSION it actually is.
+
+**The guard that makes `⊆` safe.** The empty set is a subset of everything, so a naive reading would
+make `correct: []` vacuously satisfied by every frame — a gate-shaped hole. But `correct: []` is not
+absent, it is a recorded **DECLINE**, and **eleven** sit in the corpus today (nine `MAIN`, one
+`SETUP_BENCH_POKEMON`, one `TO_HAND`), one of which — `86088989|0|decision|3` — the agent genuinely
+satisfies. So a DECLINE is matched EXACTLY, never by subset, and stays labelled and gated. Issue #229
+owns whether the *writer* should keep rejecting a shape the corpus already contains.
+
+### J2 — the four sweeps lose their OFF arm
+
+Amendment I bannered them DIAGNOSTIC but left the dead limb attached. Removed now, because a number
+that cannot come out any other way is not evidence and `12 FIX` invites being read as merit. Verified
+before cutting, not assumed — every switch ships **ON** through `common/runtime.py`, the single
+deployment PROFILE, so in every case the OFF arm scored an emptied pile:
+
+| probe | pile | rungs left | what OFF actually scored |
+|---|---|---|---|
+| `promote_retreat_decider_sweep` | `baseline_promote` | **0** of 12 | a literally empty scorer — the option indices in order |
+| `attach_decider_sweep` | `baseline_energy` | 3 of 22 | near-empty |
+| `evolve_decider_sweep` | `baseline_evolution` | 2 of 6 | the 2 survivors are Gates the NEW arm never zeroed; **all five ids it did zero no longer exist** |
+| `snipe_decider_sweep` | `baseline_snipe` | 3 of 9 (counter rungs) | the six *target* rungs, the ones under test, all gone |
+
+Each now takes ONE reading — the shipped agent, against the human, through `satisfies_human` — and
+keeps the per-leg breakdown that is the actual reason to run it (`decider_lab` records decisions,
+never the terms behind them). They exit 0 always: they report, they do not gate. Attach's
+`--scale`/`--pref` retune search is untouched. Post-strip readings: snipe **17/19** with both misses
+the ADR-0085 decision 7 recorded ones, evolve 16/24, attach 78/133, promote/retreat 123/133. Each
+also halves its cost, from two engine-backed Pilot builds per frame to one.
+
+### J3 — the baseline moves to a `main` SHA, and it is pure bookkeeping
+
+Re-captured at **`e50735a`** (main's tip) off the feature-branch commit `6328ab7`. The diff was run
+first, as decision 2 requires: **zero flips**, so there was nothing to rule. Exactly two fields moved
+— `git_rev`, and `agree` 220 → 230 from J1's predicate — and **not one of the 332 rows**. Recorded in
+`docs/ci.md`'s new provenance table, mirroring the leaf baseline's.
+
+### J4 — the Decision Gate gets a `main` watchdog, because the objection failed
+
+The hand-off argued *against* rushing this: the gate "replays 332 frames through a full Pilot and is
+materially slower than the leaf diff, so measure the runtime before proposing it." Measured
+back-to-back on one box (py3.12):
+
+| gate | frames | wall |
+|---|---|---|
+| `decider_lab diff` | 332 | **31.6 s** |
+| `leaf_lab diff` | 267 | 71.0 s |
+
+It is **~2.2× faster** than the gate that already had a watchdog. The objection was a guess and the
+measurement retired it — the same "measure before asserting" correction this ADR has now had to make
+three times (the fold's prize-marginal recommendation, Amendment I's `share` claim, and this).
+`.github/workflows/decider-gate-main.yml` runs it on every push to `main`, never re-captures the
+baseline, and warns rather than fails on a shifted corpus. CLAUDE.md's "one main-watchdog gate" rule
+becomes two.
+
+### J5 — the 111 blessed disagreements are triaged, and there are 101
+
+`docs/plans/decider-disagreement-triage.md`. First finding is J1's: **ten of the 111 were a
+vocabulary artifact, not a defect.** The remaining 101 sort by `data/corrections/reviewed.json`
+disposition:
+
+| tier | disposition | n | the work |
+|---|---|---|---|
+| B | `covered` — reviewed, believed handled, still missed | 28 | **start here** |
+| C | never reviewed | 55 | fresh rounds (Issue #146) |
+| A | `refuted` — the label is wrong | 18 | none owed; the agent is right |
+
+**The lead worth naming here: 13 of the 28 `covered` frames rest their coverage on a rung the
+deletion passes DELETED** — `dont-waste-discard-energy`, `concentrate-energy-on-wincon`,
+`build-active-wincon`, `power-up-attacker`, `conserve-burst-when-no-ko`. Each was closed in a blunder
+round as handled by a rule that no longer exists, and the agent still misses the frame. That is this
+ADR's own lesson recurring one level down — *a measured claim expires when the thing it measured
+moves* — and it is a direct test of the premise every deletion pass ran on, that the new equation
+subsumes what it retired.
+
+Tier A also means the agree rate is **pessimistic**: 18 of the 101 are refuted labels, so the honest
+denominator for "is the agent right" is nearer 230/313 than 230/331. Recording that in the corpus is
+a Corrections-schema question and stays with ADR-0082 and Issue #229.
+
 ## Alternatives rejected
 
 - **Fold onto the prize marginal as chartered.** 7/19 against the shipped 17/19, and it restores the

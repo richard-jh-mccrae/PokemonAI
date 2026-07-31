@@ -210,6 +210,93 @@ more than protecting the six improvements, the re-capture is the thing to revert
 Aggregates moved both ways and do **not** gate (ADR-0072 decision 2): shared-top 188 → 191,
 SOLE-top 36 → 35.
 
+## Main watchdog: the Decision Gate
+
+[`decider-gate-main.yml`](../.github/workflows/decider-gate-main.yml) runs
+`tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json` on **every push to
+`main`** and fails the run on any unruled `REGRESSION` — a frame whose DECISION moved away from the
+human's ruling. It is ADR-0072's Decision Gate, as rebuilt by ADR-0085 Amendment I.
+
+**Why it exists,** beyond the argument the leaf watchdog already makes. The Decision Gate was not
+merely unwatched on main, it was **vacuous**. ADR-0072 defined it as *"the phase's
+`probes/*_decider_sweep.py`"*, each comparing the shipped agent against its own kill-switch OFF —
+correct at the swap, when OFF *was* the incumbent rung pile, and meaningless the moment each phase
+deleted that pile. With no rungs left, OFF is an empty scorer whose argmax falls to option index, so
+all four sweeps could only ever report `FIX`. They had been reporting `PASS` in that state for weeks.
+Amendment I rebuilt the gate against a recorded baseline; this job is what stops the rebuilt one from
+going unwatched the way the original did.
+
+**Why both watchdogs.** They ask different questions, and the decision-level one is what a ladder
+actually sees: the leaf lab asks *"does the leaf still RANK the human's option top?"*, this asks
+*"does the agent still PLAY it?"* — end-to-end through the real Pilot, including the planner and
+tiebreaks the leaf ranking never reaches.
+
+**It is the cheaper of the two,** which was not the expectation. The rebuild's hand-off argued this
+gate "replays 332 frames through a full Pilot and is materially slower than the leaf diff, so measure
+the runtime before proposing it." Measured back-to-back on one box (2026-07-30, py3.12):
+
+| gate | frames | wall |
+|---|---|---|
+| `decider_lab diff` | 332 | **31.6 s** |
+| `leaf_lab diff` | 267 | 71.0 s |
+
+~2.2× **faster** than the gate that already had a watchdog. The objection was a guess and the
+measurement retired it.
+
+**It never writes the baseline**, for exactly the reason the leaf watchdog doesn't: auto-recapture on
+merge would redefine the "before" picture to whatever just landed, so every regression would bless
+itself and the job would pass forever by construction — the same shape the old sweeps went vacuous
+in. Re-capture is deliberate:
+
+```bash
+python tools/train/decider_lab.py capture --out data/decider_lab/baseline.json
+```
+
+and only after the flips it would absorb have been **ruled** with the user.
+
+**When it goes red**, the fix is a ruling, not a re-capture — per frame, decide whether the new
+decision is wrong (fix the code) or right (hold the frame out via its fixture's `frame_key` +
+Decision-Claim `owner`). One ruling holds a frame out of **both** gates: `decider_lab` keys through
+the same `frame_key_of` the leaf lab uses, deliberately, so the two cannot drift. The report uploads
+as the `decider-gate-main` artifact.
+
+**A shifted corpus warns, it does not fail** — same rule as the leaf gate. `decider_lab` prints
+`corpus shape moved` with added/removed counts and the run emits a `::warning::`.
+
+**What a green run does not mean.** It means nothing regressed against the last blessed build. It
+does **not** mean the agent is right: the baseline records every frame it captured as the reference,
+including the **101** where the agent contradicts a human ruling. Those are ranked in
+[`docs/plans/decider-disagreement-triage.md`](plans/decider-disagreement-triage.md) and owned by the
+correction rounds (Issue #146), not by this job.
+
+### Baseline provenance
+
+`data/decider_lab/baseline.json` is currently pinned at **`e50735a` (2026-07-30)**, 332 frames.
+
+| capture | rev | absorbed | why |
+|---|---|---|---|
+| 2026-07-30 | `6328ab7` | — (first capture) | the instrument's own build (ADR-0085 Amendment I) |
+| 2026-07-30 | `e50735a` | **nothing — zero row changes** | move off a feature-branch commit onto `main`, + Amendment J's agree predicate |
+
+The second re-capture is the one worth reading, because it is what a *bookkeeping* re-capture looks
+like and the contrast is the point. The first pin, `6328ab7`, was a commit on the Issue #188 feature
+branch — a reference that could not be reasoned about from `main`. Re-running `capture` at `main`'s
+tip changed exactly **two fields**:
+
+- `git_rev`: `6328ab7` → `e50735a`
+- `agree`: `220` → `230`
+
+and **not one of the 332 rows**. No decision moved between the two commits, verified by running the
+diff before capturing. So there was nothing to rule, which is the precondition ADR-0072 decision 2
+sets for a re-capture; had the flip list been non-empty, each flip would have been a conversation
+before the file moved.
+
+The `agree` jump is **not** the agent improving — no decision changed. It is ADR-0085 Amendment J
+correcting how agreement is *read*: a Correction's `correct` names the card the ruling was about, so
+satisfaction is `correct ⊆ chosen`, not `correct == chosen`. Under equality, `DISCARD` scored 1/12
+purely because the agent picks `[2, 3]` where the ruling says `[2]`; under satisfaction the same
+corpus reads 10/12. Ten of the eleven recovered frames were that vocabulary mismatch.
+
 ## Reproduce locally
 
 ```bash
@@ -231,10 +318,12 @@ itself is reproduced by the `filters:` + *Determine test plan* blocks in `ci.yml
 
 ## Scope & extending
 
-CI is **tests, plus the one main-watchdog gate above** — the global Doxygen / Sphinx / GitHub Pages
+CI is **tests, plus the two main-watchdog gates above** — the global Doxygen / Sphinx / GitHub Pages
 / PDF steps are still omitted until those toolchains exist in the repo (see `CLAUDE.md`). The
-watchdog is a deliberate, narrow widening of "tests only" (2026-07-28): it runs an existing
-deterministic instrument the repo already owed on main, not a new toolchain.
+watchdogs are a deliberate, narrow widening of "tests only" (the Discrimination Gate 2026-07-28, the
+Decision Gate 2026-07-30): each runs an existing deterministic instrument the repo already owed on
+main, not a new toolchain. Neither ever re-captures its baseline — that is what would make them
+vacuous, and ADR-0085 Amendment I is the record of a gate that went vacuous exactly that way.
 
 - **Add a new subsystem?** Add a filter to `.github/filters.yml` and a matching
   `add tests/<area>` line in the *Determine test plan* step of `ci.yml` (plus any

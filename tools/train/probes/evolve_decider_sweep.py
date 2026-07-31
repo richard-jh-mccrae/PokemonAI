@@ -1,40 +1,40 @@
-"""Evolve DECIDER sweep — the batched review's input for the no-shadow swap (#140, ADR-0070).
+"""Evolve decider sweep — the per-term DIAGNOSTIC for the no-shadow swap (#140, ADR-0070). **Not a gate.**
 
-The sibling of ``attach_decider_sweep.py``, same protocol (ADR-0069 §8): run the corpus through
-BOTH evolve deciders while both still exist and report every frame where they disagree, with the new
-decider's TERM BREAKDOWN on each side of the flip. No decision may flip silently — the human rules on
-the WHY, one sitting, one table, BEFORE the deletion commit retires the rungs for good.
-
-The two pilots, built fresh per frame (pilots are stateful; sharing one pollutes verdicts):
-
-  * NEW — ``evolve_value`` ON with the retired ``baseline_evolution`` rungs (and dragapult's
-    ``hold-evolution`` deck rung) forced to weight 0. That is exactly the post-deletion agent.
-    Zeroing rather than deleting is what lets this run BEFORE the deletion commit.
-  * OLD — ``evolve_value`` OFF with every rung at its shipped weight: the pile as it decides today.
+Runs the corpus through the SHIPPED evolve decider and reports, per frame carrying an evolve option,
+which body it evolves, whether that satisfies the corpus ruling, and the decider's TERM BREAKDOWN
+(`deploy` / `income_gain` / `income_loss`) behind the call. The breakdown is why this file outlived
+the gate it used to be — `decider_lab.py` records the decision, never the terms that produced it.
 
 Comparison is by the resolved BODY SLOT ``(inPlayArea, inPlayIndex)``, never the raw option index —
 two Dreepy→Drakloak options differ only by which body they evolve, and the index says nothing about
-which. ``correct`` (the human label, where the frame has one) is shown on both sides so a flip reads
-as a FIX, a REGRESSION, or a no-label judgement call.
+which.
 
-    python tools/train/probes/evolve_decider_sweep.py            # the flip table + the tally
-    python tools/train/probes/evolve_decider_sweep.py --all      # every frame, not only the flips
+    python tools/train/probes/evolve_decider_sweep.py            # the miss table + the tally
+    python tools/train/probes/evolve_decider_sweep.py --all      # every frame, not only the misses
 
-Offline and read-only; two engine-backed Pilot builds per frame.
-⚠️ **This probe is a DIAGNOSTIC, not the Decision Gate** (since ADR-0085 Amendment I, 2026-07-30).
+Offline and read-only; one engine-backed Pilot build per frame. Always exits 0: it reports, it does
+not gate.
 
-ADR-0072 named "the phase's `*_decider_sweep.py`" as the Decision Gate, and this one compared the
-shipped agent against its own kill-switch turned OFF. That was right at the swap, when OFF *was* the
-incumbent rung pile. It stopped being right the moment that pile was DELETED, as tracker directive 1
-requires: with no rungs left, OFF is an empty scorer whose argmax falls to option index, so the
-comparison became "the equation versus nothing" and could only ever report FIX. A gate that cannot
-report a REGRESSION is not a gate. All four sweeps were in this state simultaneously and none said so.
+## Why the OLD arm is GONE (ADR-0085 Amendment J, 2026-07-30)
 
-The Decision Gate is now `tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`,
-which diffs against a RECORDED capture — the property that kept the Discrimination Gate honest all
-along. What remains here is still worth running: the per-leg breakdown and the per-frame
-classification against the human are diagnosis this lab deliberately does not duplicate.
+This probe used to build TWO pilots per frame — NEW (``evolve_value`` ON, the retired rungs forced to
+weight 0) and OLD (``evolve_value`` OFF, the pile at its shipped weights) — and classify each
+disagreement `FIX` / `REGRESSION` / `DIVERGENT`. ADR-0072 called that pairing the **Decision Gate**,
+and at the swap it was right: OLD *was* the incumbent pile, so the diff measured the equation against
+what it replaced.
 
+The deletion commit ended that, as tracker directive 1 requires. **All five ids the NEW arm zeroed are
+gone from `baseline_evolution`** — the two rungs left (`prefer-rush-evolve-tutor`,
+`dont-rush-evolve-without-target`) are the Gates this probe's own header says were never part of the
+retired set. So the zeroing override applied to ids that no longer exist, and OLD was
+``evolve_value`` OFF over a pile with nothing in it: an empty scorer whose argmax falls to option
+index. Measured in that state, this probe reported **4 FIX, 0 REGRESSION** — and a comparison that
+cannot produce a REGRESSION is not evidence of not regressing.
+
+Amendment I moved the gate to `tools/train/decider_lab.py diff --baseline
+data/decider_lab/baseline.json`, which diffs against a RECORDED capture. Amendment J removes the dead
+arm here rather than leaving a `4 FIX` line for someone to read as merit. What remains is the one
+reading that means something: the shipped agent, against the human.
 """
 from __future__ import annotations
 
@@ -49,24 +49,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (EVOLVE_LANE, decision_gate_verdict, frame_key_of,  # noqa: E402
-                         held_out_frames, in_lane, lane_slots, option_slot,
-                         print_gate_report)
+from train.gates import (EVOLVE_LANE, in_lane, lane_slots,  # noqa: E402
+                         option_slot, satisfies_human)
 
 _EVOLVE = 9
-
-#: The rungs the evolve decider retires (ADR-0070 §10). Forced to 0 in the NEW pilot so this probe
-#: measures the post-deletion agent without needing the deletion first. The two `_PLAY`-side rungs
-#: are NOT here: `dont-rush-evolve-without-target` survives as a Gate (and must keep its Class-B
-#: spend-account membership), and `prefer-rush-evolve-tutor` folds to the equation in the deletion
-#: commit rather than simply disappearing, so zeroing it here would measure neither agent.
-RETIRED = (
-    "evolve-into-wincon",
-    "advance-the-evolution-line",
-    "evolve-the-energized-body-first",
-    "advance-the-energized-line-body-first",
-    "hold-evolution-until-attacker-ready",      # the dragapult deck rung -> income_loss
-)
 
 _TERMS = ("deploy", "income_gain", "income_loss")
 
@@ -90,16 +76,6 @@ def _frames():
     return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
 
 
-def _frame_key(rec, ep, fr) -> str:
-    """The frame's stable identity, in the SAME form the Leaf Lab and the Held-out Ledger use — the
-    Correction's `identity_key` (episode, seat, scope, subject). One key shape across both gates is
-    what lets a single ruling hold a frame out of either."""
-    scope = rec.get("scope") or "decision"
-    subject = rec.get("subject")
-    if subject is None:
-        subject = fr if scope == "decision" else (rec.get("decision") or {}).get("turn")
-    return frame_key_of(ep, rec.get("seat"), scope, subject)
-
 
 def _agent(rec) -> str:
     a = rec.get("agent") or ""
@@ -116,14 +92,15 @@ def _strategy_and_deck(agent: str):
     return mod.STRATEGY, deck
 
 
-def _pilot(agent: str, *, new: bool, seams):
-    """A fresh shipped Pilot for ``agent`` in NEW (decider-only) or OLD (rung-only) mode."""
+def _pilot(agent: str, *, seams):
+    """A fresh SHIPPED Pilot for ``agent`` — one per frame, because the Pilot is stateful (deck
+    tracker, per-decision caches) and sharing one leaks a previous frame's board.
+
+    No params are overridden and no rungs are zeroed: `common/runtime.py` resolves the single
+    deployment PROFILE, and a probe that reads anything else reports an agent nobody runs."""
     from common.runtime import build_pilot
     strategy, deck = _strategy_and_deck(agent)
-    params = dict(strategy.params)
-    params["evolve_value"] = bool(new)
-    overrides = {hid: 0 for hid in RETIRED} if new else None
-    return build_pilot(strategy, deck, params=params, overrides=overrides, **seams)
+    return build_pilot(strategy, deck, **seams)
 
 
 def _seams():
@@ -152,25 +129,34 @@ def _term_line(row) -> str:
             f"{('  [' + terms + ']') if terms else ''}  {clocks}")
 
 
+def _hits(chosen, chosen_slots, correct, correct_slots) -> bool:
+    """Does the shipped pick satisfy the ruling, read through the EVOLVE lane?
+
+    A frame whose ``correct`` is a NON-evolve play still labels this decision: the question it
+    answers is *"evolve at all?"*, and matching it means picking no evolve. Reading only the evolve
+    slots would score that frame "unlabelled" and hide a real miss — which is why the no-slot branch
+    falls back to `satisfies_human` over the raw indices."""
+    if correct_slots:
+        return chosen_slots == correct_slots
+    return not chosen_slots and satisfies_human(chosen, correct)
+
+
 def sweep(show_all: bool, quiet: bool = False) -> int:
     names, frames, seams = _names(), _frames(), _seams()
-    hdr = (f"{'id':<14} {'agent':<13} {'NEW pick':<14} {'OLD pick':<14} {'correct':<14} "
-           f"{'verdict':<12}")
+    hdr = f"{'id':<14} {'agent':<13} {'shipped':<14} {'correct':<14} {'reading':<12}"
     if not quiet:
-        print("EVOLVE DECIDER SWEEP — new (body-substituted delta, rungs zeroed) vs old (the rungs)\n")
+        print("EVOLVE DECIDER SWEEP — the shipped decider, per frame, with its term breakdown\n")
         print(hdr)
         print("-" * len(hdr))
     tally = defaultdict(int)
-    flips = []
-    graded = []          # per-frame verdicts — the Decision Gate's input (ADR-0072 decision 2)
+    misses = []
     for (ep, fr), rec in frames:
         agent = _agent(rec)
         options = (rec["obs"].get("select") or {}).get("option") or []
         if not any(o.get("type") == _EVOLVE for o in options):
             continue                                   # no evolve on the menu — outside this lane
         try:
-            dec_new = _pilot(agent, new=True, seams=seams).explain(rec["obs"])
-            dec_old = _pilot(agent, new=False, seams=seams).explain(rec["obs"])
+            dec = _pilot(agent, seams=seams).explain(rec["obs"])
         except Exception as exc:                       # a frame the shipped build can't replay
             tally["error"] += 1
             if show_all:
@@ -178,71 +164,44 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
             continue
         rows = [dict(t.evolve_working, slot=(option_slot(options[i])
                                      if in_lane(options[i], EVOLVE_LANE) else None))
-                for i, t in enumerate(dec_new.options)
+                for i, t in enumerate(dec.options)
                 if i < len(options) and t.evolve_working is not None]
-        correct = rec.get("correct") or []
-        new_slots = lane_slots(dec_new.chosen, options, lane=EVOLVE_LANE)
-        old_slots = lane_slots(dec_old.chosen, options, lane=EVOLVE_LANE)
-        correct_slots = lane_slots(correct, options, lane=EVOLVE_LANE)
-        agree = new_slots == old_slots
+        correct = rec.get("correct")
+        chosen_slots = lane_slots(dec.chosen, options, lane=EVOLVE_LANE)
+        correct_slots = lane_slots(correct or [], options, lane=EVOLVE_LANE)
         tally["frames"] += 1
-        if agree:
+        if correct is None:
+            tally["unlabelled"] += 1
+            reading = "unlabelled"
+        elif _hits(dec.chosen, chosen_slots, correct, correct_slots):
             tally["agree"] += 1
+            reading = "agrees"
             if not show_all:
                 continue
-            verdict = "agree"
         else:
-            tally["flip"] += 1
-            # A frame whose `correct` is a NON-evolve play still labels this decision: the question
-            # it answers is "evolve at all?", and matching it means picking no evolve. Reading only
-            # the evolve slots would score that frame "unlabelled" and hide a real regression.
-            if correct:
-                new_hit = (new_slots == correct_slots if correct_slots
-                           else not new_slots and set(dec_new.chosen or []) & set(correct))
-                old_hit = (old_slots == correct_slots if correct_slots
-                           else not old_slots and set(dec_old.chosen or []) & set(correct))
-                verdict = ("FIX" if new_hit and not old_hit
-                           else "REGRESSION" if old_hit and not new_hit else "DIVERGENT")
-            else:
-                verdict = "unlabelled"
-            tally[verdict] += 1
-            graded.append({"key": _frame_key(rec, ep, fr), "verdict": verdict,
-                           "label": rec.get("correct_label") or ""})
+            tally["MISS"] += 1
+            reading = "MISSES"
+            misses.append((ep, fr))
         if not quiet:
-            print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {_cell(new_slots):<14} "
-                  f"{_cell(old_slots):<14} {_cell(correct_slots):<14} {verdict:<12}")
-        if not agree:
-            flips.append((ep, fr))
-            if not quiet:
+            print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {_cell(chosen_slots):<14} "
+                  f"{_cell(correct_slots):<14} {reading:<12}")
+            if reading != "agrees":
                 lbl = rec.get("correct_label") or ""
                 if lbl:
                     print(f"      correct_label: {lbl}")
                 for row in sorted(rows, key=lambda r: -r["tactical"]):
                     print(_term_line(row))
-    held_out = held_out_frames()
-    passed = decision_gate_verdict(graded, held_out=held_out)
     if quiet:
-        print(" ".join(f"{k}={tally[k]}" for k in ("frames", "agree", "flip", "FIX", "REGRESSION",
-                                                   "DIVERGENT", "unlabelled")) +
-              f" gate={'PASS' if passed else 'FAIL'}")
-        return 0 if passed else 1
+        print(" ".join(f"{k}={tally[k]}" for k in ("frames", "agree", "MISS", "unlabelled", "error")))
+        return 0
     print("\nTALLY")
-    for k in ("frames", "agree", "flip", "FIX", "REGRESSION", "DIVERGENT", "unlabelled", "error"):
+    for k in ("frames", "agree", "MISS", "unlabelled", "error"):
         print(f"  {k:<12} {tally[k]}")
-    print(f"\n{len(flips)} frame(s) need a user ruling before the deletion commit: "
-          f"{', '.join(f'{e}-{f}' for e, f in flips) or '(none)'}")
-
-    # DECISION GATE (ADR-0072 decision 2): zero unruled REGRESSION. Held-out frames still RUN and
-    # still REPORT — a re-ruling is a state the gate reads, not prose in a review doc, and a frame
-    # broken for three phases must not become scenery (decision 4).
-    regressions = [g for g in graded if g["verdict"] == "REGRESSION"]
-    ruled = [g for g in regressions if g["key"] in held_out]
-    unruled = [g for g in regressions if g["key"] not in held_out]
-    print_gate_report(f"DIAGNOSTIC (not the Decision Gate — see decider_lab.py) — {len(graded)} labelled flip(s) graded",
-                      gating=unruled, ruled=ruled, held_out=held_out, total=len(graded),
-                      rule="zero unruled REGRESSION",
-                      line=lambda g: f"REGRESSION {g['key']}  {g['label']}")
-    return 0 if passed else 1
+    print(f"\n{len(misses)} frame(s) where the shipped decider misses the ruling: "
+          f"{', '.join(f'{e}-{f}' for e, f in misses) or '(none)'}")
+    print("\nThis probe REPORTS, it does not gate — the Decision Gate is "
+          "`decider_lab.py diff --baseline data/decider_lab/baseline.json` (ADR-0085 Amendment I).")
+    return 0
 
 
 if __name__ == "__main__":

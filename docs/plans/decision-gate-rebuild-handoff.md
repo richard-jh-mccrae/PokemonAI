@@ -1,8 +1,25 @@
 # Decision Gate rebuild — session handoff
 
-**Status:** the instrument is BUILT and both gates pass. What follows is what the build did **not**
-settle. Written 2026-07-30 at the end of Issue #188 / PR #227, for whoever picks this up **after that
-merges**.
+> ## ✅ CLOSED 2026-07-30 — all five items done
+>
+> Picked up after PR #227 merged. The rulings and measurements are
+> **[ADR-0085 Amendment J](../adr/0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)**;
+> this file is kept as the record of what was owed and what each item turned into.
+>
+> | item | outcome |
+> |---|---|
+> | 1. triage the 111 | **101**, not 111 — see item 2. Tiered in [`decider-disagreement-triage.md`](decider-disagreement-triage.md). Lead finding: **13 frames are "covered" by a rung that was deleted.** |
+> | 2. multi-pick agree rate | **Ruled**: satisfaction is `correct ⊆ chosen` (`gates.satisfies_human`). `DISCARD` 1/12 → 10/12; corpus 220/331 → **230/331 with no decision changed**. |
+> | 3. recapture at a `main` SHA | Done, `6328ab7` → **`e50735a`**. Zero flips — two fields moved, **no rows**. |
+> | 4. a `main` watchdog | **Added.** The runtime objection failed: 31.6 s vs the leaf gate's 71 s, i.e. ~2.2× *faster*. |
+> | 5. the diagnostics' fate | OFF arm **stripped** from all four; breakdowns kept; they exit 0 and no longer gate. |
+>
+> Two traps below were confirmed the hard way and are worth keeping: *"a measured claim expires when
+> the thing it measured moves"* caught item 4's own premise (the hand-off's guess about runtime was
+> wrong), and again at one level down in item 1's headline finding.
+
+**Original status (2026-07-30, end of Issue #188 / PR #227):** the instrument is BUILT and both gates
+pass. What follows is what the build did **not** settle.
 
 **Read first:** [ADR-0085](../adr/0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)
 Amendment I (the ruling and the measurements), `tools/train/decider_lab.py` (the instrument's own
@@ -43,6 +60,9 @@ Verified by **mutation**, not by a green run: inverting the snipe ordering makes
 ---
 
 ## Owed work, highest value first
+
+*(All five closed — see the table at the top. The text below is as written, so the reasoning that
+motivated each item survives alongside what it became.)*
 
 ### 1. The baseline silently blesses 111 disagreements — this is the big one
 

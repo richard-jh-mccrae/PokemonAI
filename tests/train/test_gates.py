@@ -5,7 +5,9 @@ costs: −1.17 pp, 95% CI [−4.59, +2.25] over 2400 games — a run that demons
 regression nor a non-regression, and which no affordable n could settle. Merit therefore moved to two
 instruments that answer EXACTLY rather than statistically, both per-frame, both pure:
 
-  * the **Decision Gate**    — the phase's decider sweep: zero unruled REGRESSION frames.
+  * the **Decision Gate**    — a Decider Lab capture diffed against a committed baseline: zero
+    unruled REGRESSION frames. (It was "the phase's decider sweep" until ADR-0085 Amendment I; that
+    arm scored an emptied rung pile, so it could only ever report FIX.)
   * the **Discrimination Gate** — a Leaf Lab capture diffed before/after: zero unruled OK->MISS flips.
 
 Everything here is dict-in/value-out with no engine, no cgpy, no DLL and no Pilot, which is what lets
@@ -19,7 +21,7 @@ from train.gates import (EVOLVE_LANE, OWNER_RE, RULED_RE, AxisClaim, DecisionCla
                          decision_gate_verdict, discrimination_gate_verdict, evaluate_axis_claim,
                          evaluate_decision_claim, evaluate_endorsement_claim, held_out_owner,
                          lane_slots, leaf_lab_diff, option_slot, parse_claims,
-                         decider_lab_diff, decision_gate_verdict)
+                         decider_lab_diff, decision_gate_verdict, satisfies_human)
 
 # ── slot resolution — the shared basis both sweeps and Axis Claims compare on ─────────────────────
 
@@ -719,9 +721,8 @@ def test_decider_lab_diff_compares_a_multi_pick_as_a_set_not_a_sequence():
 
     Found while writing the hand-off, by reading the captured `DISCARD` rows rather than trusting
     the aggregate: the agent picks `[2, 3]` where `correct` records `[2]`, because a Correction's
-    `correct` names the card the RULING was about, not the whole legal answer. That mismatch is why
-    context 8 reads 1/12 agreement and why the per-context agree rate is not meaningful for
-    multi-pick contexts — the movement detection is, which is what actually gates.
+    `correct` names the card the RULING was about, not the whole legal answer. Amendment J rules that
+    mismatch (`satisfies_human`, below); this test covers the movement half, which gates either way.
     """
     before = _dcap([_drow("k", [0, 2], [0, 2], context=8)])
     after = _dcap([_drow("k", [2, 0], [0, 2], context=8)])
@@ -729,3 +730,68 @@ def test_decider_lab_diff_compares_a_multi_pick_as_a_set_not_a_sequence():
     # a genuine change to the SET is still caught
     moved = _dcap([_drow("k", [2, 4], [0, 2], context=8)])
     assert [r["verdict"] for r in decider_lab_diff(before, moved)["rows"]] == ["REGRESSION"]
+
+
+# ── `satisfies_human` — a Correction's `correct` is a CONSTRAINT, not the answer (ADR-0085 J) ─────
+
+def test_a_multi_pick_satisfies_a_ruling_it_is_a_superset_of():
+    """**The Amendment J ruling.** `correct` names the card the ruling was ABOUT; a multi-pick select
+    returns every index the engine demands. Equality across those two vocabularies mis-reports, and
+    measurably did: `DISCARD` read **1/12** on the capture purely because the agent picks `[2, 3]`
+    where the ruling says `[2]`. Under `⊆` the same corpus reads **10/12** — the ten were vocabulary
+    artifacts, not defects, and the gate was defending them as if they were losses."""
+    assert satisfies_human([2, 3], [2]) is True
+    assert satisfies_human([3, 4], [2]) is False, "the ruled card was NOT discarded"
+    assert satisfies_human([2], [2, 3]) is False, "a partial answer does not satisfy a two-card ruling"
+
+
+def test_satisfaction_degenerates_to_equality_on_a_single_pick():
+    """Why the 220 single-pick agreements are untouched by the ruling: with one index a side, `⊆`
+    and `==` are the same test. The change buys the multi-pick contexts and costs nothing elsewhere."""
+    assert satisfies_human([1], [1]) is True
+    assert satisfies_human([0], [1]) is False
+
+
+def test_an_empty_correct_is_a_DECLINE_ruling_and_needs_an_empty_pick():
+    """The guard that makes `⊆` safe to use at all.
+
+    The empty set is a subset of everything, so reading `correct: []` through `⊆` would make EVERY
+    frame vacuously agree — a gate-shaped hole rather than a rounding error. But `correct: []` is not
+    absent, it is a recorded **DECLINE** ("take none of these"), and eleven such frames sit in the
+    corpus today with `86088989|0|decision|3` genuinely satisfying one. So it is exact, not subset:
+    a DECLINE stays a labelled, gated ruling instead of being either discarded or auto-passed."""
+    assert satisfies_human([], []) is True
+    assert satisfies_human([0], []) is False, "picking something does not satisfy a DECLINE"
+
+
+def test_an_absent_ruling_and_an_unreplayable_frame_satisfy_nothing():
+    """`correct is None` claims no direction (callers report UNLABELLED); `chosen is None` is a frame
+    this build could not replay at all. Neither may read as agreement — an unreplayable frame
+    silently counting as agreement is how a shrinking gated set looks green."""
+    assert satisfies_human([0], None) is False
+    assert satisfies_human(None, [0]) is False
+    assert satisfies_human(None, None) is False
+
+
+def test_the_diff_judges_direction_through_the_same_predicate_as_the_agree_rate():
+    """The gate and the readout must not hold two ideas of "matches the human".
+
+    Under equality this frame is invisible: the baseline `[2, 3]` and the build `[3, 4]` both differ
+    from `correct: [2]`, so the move classifies NEUTRAL and passes. Under satisfaction the baseline
+    discarded the ruled card and the build stopped, which is precisely a REGRESSION — so the shared
+    predicate makes the gate STRICTLY more sensitive on multi-pick contexts, never less."""
+    before = _dcap([_drow("k", [2, 3], [2], context=8)])
+    after = _dcap([_drow("k", [3, 4], [2], context=8)])
+    assert [r["verdict"] for r in decider_lab_diff(before, after)["rows"]] == ["REGRESSION"]
+    # ...and the reverse move is the FIX it looks like
+    assert [r["verdict"] for r in decider_lab_diff(after, before)["rows"]] == ["FIX"]
+
+
+def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
+    """NEUTRAL covers both-miss AND both-satisfy. `[2, 3] -> [2, 5]` against `correct: [2]` is a real
+    change the corpus simply does not adjudicate — the ruled card is discarded either way, and the
+    other slot is the engine's, never the human's. Calling that a REGRESSION would gate on a
+    preference no one recorded."""
+    before = _dcap([_drow("k", [2, 3], [2], context=8)])
+    after = _dcap([_drow("k", [2, 5], [2], context=8)])
+    assert [r["verdict"] for r in decider_lab_diff(before, after)["rows"]] == ["NEUTRAL"]

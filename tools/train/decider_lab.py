@@ -36,6 +36,19 @@ capture, never against a live switch. This applies that fix to the decision leve
     python tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json
     python tools/train/decider_lab.py diff --baseline ... --context 15   # one phase's frames
 
+## Reading the agree rate
+
+"Agree" means the agent's pick **satisfies** the Correction — `correct ⊆ chosen` (`satisfies_human`,
+ADR-0085 Amendment J), not `correct == chosen`. A Correction's `correct` names *the card the ruling
+was about*; a multi-pick select returns every index the engine demands. Equality across those two
+vocabularies mis-reports: it read `DISCARD` at **1/12** purely because the agent picks `[2, 3]` where
+the ruling says `[2]`. On single-pick contexts the two tests are identical.
+
+It is still a DIAGNOSTIC number, never the gate's verdict. The gate is the per-frame diff below, and
+a green gate means *nothing regressed*, **not** that the agent is right — the baseline records every
+frame it captured as the reference, including the ones where the agent contradicts a human
+(`docs/plans/decider-disagreement-triage.md` ranks those).
+
 **The baseline is a RULING RECORD, never auto-recaptured** — the same discipline `data/leaf_lab/`
 carries. Re-capture only once a build's flips have been ruled with the user, or the gate becomes a
 mirror that agrees with whatever it is shown. Frames ruled out of a decider's scope are held out via
@@ -56,7 +69,8 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.gates import (decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         frame_key_of, held_out_frames, print_gate_report)
+                         frame_key_of, held_out_frames, print_gate_report,
+                         satisfies_human)
 
 
 def _git_rev() -> str:
@@ -123,7 +137,7 @@ def build_report(store, agent=None) -> dict:
             errors += 1
         rows.append(row)
     labelled = [r for r in rows if r.get("correct") is not None and r.get("chosen") is not None]
-    agree = sum(1 for r in labelled if r["chosen"] == r["correct"])
+    agree = sum(1 for r in labelled if satisfies_human(r["chosen"], r["correct"]))
     return {"rows": rows, "n": len(rows), "errors": errors,
             "labelled": len(labelled), "agree": agree}
 
@@ -137,7 +151,7 @@ def _print_summary(rpt: dict) -> None:
     for ctx in sorted(by_ctx, key=lambda c: (c is None, c)):
         rs = by_ctx[ctx]
         lab = [r for r in rs if r.get("correct") is not None and r.get("chosen") is not None]
-        ok = sum(1 for r in lab if r["chosen"] == r["correct"])
+        ok = sum(1 for r in lab if satisfies_human(r["chosen"], r["correct"]))
         print(f"  context {str(ctx):<5} {len(rs):>4} frames   {ok}/{len(lab)} agree")
 
 

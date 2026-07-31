@@ -1,41 +1,43 @@
-"""Attach DECIDER sweep — the batched review's input for the no-shadow swap (#139, ADR-0069 §8).
+"""Attach decider sweep — the per-axis DIAGNOSTIC for the no-shadow swap (#139, ADR-0069 §8). **Not a gate.**
 
-Runs the corpus through BOTH attach deciders while both still exist and reports every frame where
-they disagree, with the new decider's AXES BREAKDOWN on each side of the flip. That report is the
-whole point: the swap protocol rules that no decision may flip silently, so the human rules on the
-WHY — one sitting, one table — BEFORE the deletion commit retires the rung pile for good.
-
-The two pilots, built fresh per frame (pilots are stateful; sharing one pollutes verdicts — the
-`needs_sweep` lesson):
-
-  * NEW — ``attach_value`` ON with the 19 retired ``baseline_energy`` rungs forced to weight 0.
-    That is exactly the post-deletion agent: the axes-sum decider alone, plus the three structure
-    survivors. Zeroing rather than deleting is what lets this run BEFORE the deletion commit.
-  * OLD — ``attach_value`` OFF with every rung at its shipped weight: the pile as it decides today.
+Runs the corpus through the SHIPPED attach decider and reports, per attach frame, which target it
+funds, whether that satisfies the corpus ruling, and the decider's AXES BREAKDOWN behind the call.
+The breakdown is why this file outlived the gate it used to be — `decider_lab.py` records the
+decision, never the axes that produced it.
 
 Comparison is by the resolved target SLOT ``(area, position)``, never the raw option index —
 duplicate energy-source options and identical-effect target copies otherwise read as false flips
-(82523811-59, 82750161-59). ``correct`` (the human label, where the frame has one) is shown on both
-sides so a flip can be read as a FIX, a REGRESSION, or a no-label judgement call.
+(82523811-59, 82750161-59).
 
-    python tools/train/probes/attach_decider_sweep.py            # the flip table + the tally
-    python tools/train/probes/attach_decider_sweep.py --all      # every frame, not only the flips
+    python tools/train/probes/attach_decider_sweep.py            # the miss table + the tally
+    python tools/train/probes/attach_decider_sweep.py --all      # every frame, not only the misses
+    python tools/train/probes/attach_decider_sweep.py --scale 6 --pref 3 --quiet   # retune grid
 
-Offline and read-only; ~4-8 min for the full corpus (two engine-backed Pilot builds per frame).
-⚠️ **This probe is a DIAGNOSTIC, not the Decision Gate** (since ADR-0085 Amendment I, 2026-07-30).
+Offline and read-only; one engine-backed Pilot build per frame. Always exits 0: it reports, it does
+not gate.
 
-ADR-0072 named "the phase's `*_decider_sweep.py`" as the Decision Gate, and this one compared the
-shipped agent against its own kill-switch turned OFF. That was right at the swap, when OFF *was* the
-incumbent rung pile. It stopped being right the moment that pile was DELETED, as tracker directive 1
-requires: with no rungs left, OFF is an empty scorer whose argmax falls to option index, so the
-comparison became "the equation versus nothing" and could only ever report FIX. A gate that cannot
-report a REGRESSION is not a gate. All four sweeps were in this state simultaneously and none said so.
+## Why the OLD arm is GONE (ADR-0085 Amendment J, 2026-07-30)
 
-The Decision Gate is now `tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`,
-which diffs against a RECORDED capture — the property that kept the Discrimination Gate honest all
-along. What remains here is still worth running: the per-leg breakdown and the per-frame
-classification against the human are diagnosis this lab deliberately does not duplicate.
+This probe used to build TWO pilots per frame — NEW (``attach_value`` ON, the 19 retired rungs forced
+to weight 0) and OLD (``attach_value`` OFF, the pile at its shipped weights) — and classify each
+disagreement `FIX` / `REGRESSION` / `DIVERGENT`. ADR-0072 called that pairing the **Decision Gate**,
+and at the swap it was right: OLD *was* the incumbent pile, so the diff measured the equation against
+what it replaced.
 
+The deletion commit ended that, as tracker directive 1 requires. `baseline_energy` holds **3** of its
+22 rungs now — `use-acceleration`, `prefer-active-attach-in-setup`,
+`feed-the-line-for-disruptor-lock` — so OLD was ``attach_value`` OFF over a near-empty scorer whose
+argmax falls to option index. All four sweeps sat in that state simultaneously and none of them said
+so; a comparison that cannot produce a REGRESSION is not evidence of not regressing.
+
+Amendment I moved the gate to `tools/train/decider_lab.py diff --baseline
+data/decider_lab/baseline.json`, which diffs against a RECORDED capture. Amendment J removes the dead
+arm here. What remains is the one reading that means something: the shipped agent, against the human.
+
+The ``--scale`` / ``--pref`` retune search is UNAFFECTED and stays — it overrides shipped constants
+to search the feasible region (ADR-0069's retune protocol), and this probe is the only place they are
+ever poked, so a shipped constant is never quietly different from the one measured. Note `--pref`
+still bites: `prefer-active-attach-in-setup` is one of the three survivors.
 """
 from __future__ import annotations
 
@@ -50,30 +52,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import ATTACH_LANE, in_lane, lane_slots, option_slot   # noqa: E402
+from train.gates import (ATTACH_LANE, in_lane, lane_slots,  # noqa: E402
+                         option_slot, satisfies_human)
 
 _ATTACH, _CARD, _ATTACH_FROM = 8, 3, 21
-
-#: The 19 rungs the decider retires (ADR-0069 §7 / the issue's build addendum). Forced to 0 in the
-#: NEW pilot so this probe measures the post-deletion agent without needing the deletion first.
-RETIRED = (
-    # the 8 folded positives
-    "concentrate-energy-on-wincon", "build-active-wincon", "power-up-attacker",
-    "spread-attach-to-the-needy", "concentrate-accel-on-one-line-body",
-    "feed-the-firing-accelerator", "arm-the-doomed-active", "advance-the-accel-pieces",
-    # the burst family -> evaporation loss + no-KO cap + resource tie-break
-    "dont-waste-discard-energy", "dont-attach-discard-energy-turn1", "conserve-burst-when-no-ko",
-    "conserve-discard-energy-prefer-basic", "prefer-reusable-over-burst",
-    # the role guards -> the board-evaluated role gate
-    "dont-fund-the-non-attacking-body", "dont-power-the-draw-engine",
-    # the doom guards -> the survival gate + the evolution-escape
-    "dont-feed-the-doomed", "dont-overbuild-the-doomed-wincon",
-    # emergent / channel folds
-    "dont-waste-off-type-energy", "fuel-the-dormant-ability",
-)
-#: `attach-energy-last` converts to a decide()-only ordering deferral rather than folding into a
-#: term, so it is zeroed too — the NEW pilot must not carry its -5 into the score channel.
-ZEROED = RETIRED + ("attach-energy-last",)
 
 _AXES = ("attack_axis", "this_turn", "build", "accel_value", "retreat_equity", "ability_fuel",
          "evaporation_loss")
@@ -112,14 +94,15 @@ def _strategy_and_deck(agent: str):
     return mod.STRATEGY, deck
 
 
-def _pilot(agent: str, *, new: bool, seams):
-    """A fresh shipped Pilot for ``agent`` in NEW (decider-only) or OLD (rung-only) mode."""
+def _pilot(agent: str, *, seams):
+    """A fresh SHIPPED Pilot for ``agent`` — one per frame, because the Pilot is stateful (deck
+    tracker, per-decision caches) and sharing one pollutes verdicts (the `needs_sweep` lesson).
+
+    No params are overridden and no rungs are zeroed: `common/runtime.py` resolves the single
+    deployment PROFILE, and a probe that reads anything else reports an agent nobody runs."""
     from common.runtime import build_pilot
     strategy, deck = _strategy_and_deck(agent)
-    params = dict(strategy.params)
-    params["attach_value"] = bool(new)
-    overrides = {hid: 0 for hid in ZEROED} if new else None
-    return build_pilot(strategy, deck, params=params, overrides=overrides, **seams)
+    return build_pilot(strategy, deck, **seams)
 
 
 def _seams():
@@ -177,76 +160,68 @@ def sweep(show_all: bool, scale=None, pref_weight=None, quiet: bool = False) -> 
             if h.id == "prefer-active-attach-in-setup":
                 object.__setattr__(h, "weight", float(pref_weight))
     names, frames, seams = _names(), _frames(), _seams()
-    hdr = (f"{'id':<14} {'agent':<13} {'NEW pick':<18} {'OLD pick':<18} {'correct':<12} "
-           f"{'verdict':<12}")
+    hdr = f"{'id':<14} {'agent':<13} {'shipped':<18} {'correct':<12} {'reading':<12}"
     if not quiet:
-        print("ATTACH DECIDER SWEEP — new (axes-sum, rungs zeroed) vs old (the rung pile)\n")
+        print("ATTACH DECIDER SWEEP — the shipped decider, per frame, with its axes breakdown\n")
         print(hdr)
         print("-" * len(hdr))
     tally = defaultdict(int)
-    flips = []
+    misses = []
     for (ep, fr), rec in frames:
         agent = _agent(rec)
         try:
-            dec_new = _pilot(agent, new=True, seams=seams).explain(rec["obs"])
-            dec_old = _pilot(agent, new=False, seams=seams).explain(rec["obs"])
+            dec = _pilot(agent, seams=seams).explain(rec["obs"])
         except Exception as exc:                       # a frame the shipped build can't replay
             tally["error"] += 1
             if show_all:
                 print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} ERROR {exc}")
             continue
-        working = dec_new.attach_working
+        working = dec.attach_working
         if working is None:                            # not an attach menu — outside this swap's lane
             continue
         options = rec["obs"]["select"]["option"]
         ctx = (rec["obs"].get("select") or {}).get("context")
-        correct = rec.get("correct") or []
-        new_slots = _slots(dec_new.chosen, options, ctx)
-        old_slots = _slots(dec_old.chosen, options, ctx)
-        correct_slots = _slots(correct, options, ctx)
-        agree = new_slots == old_slots
+        correct = rec.get("correct")
+        chosen_slots = _slots(dec.chosen, options, ctx)
+        correct_slots = _slots(correct or [], options, ctx)
         tally["frames"] += 1
-        if agree:
+        # A frame whose `correct` is a NON-attach play still labels this decision: the question it
+        # answers is "attach at all?", and matching it means making NO energy attach. Reading only the
+        # attach slots would silently score that frame "unlabelled" and hide a real miss
+        # (83007714-65: the Ignition onto the doomed Cinderace before the retreat).
+        if correct is None:
+            tally["unlabelled"] += 1
+            reading = "unlabelled"
+        elif (chosen_slots == correct_slots if correct_slots
+              else not chosen_slots and satisfies_human(dec.chosen, correct)):
             tally["agree"] += 1
+            reading = "agrees"
             if not show_all:
                 continue
-            verdict = "agree"
         else:
-            tally["flip"] += 1
-            # A frame whose `correct` is a NON-attach play still labels this decision: the question
-            # it answers is "attach at all?", and matching it means making NO energy attach. Reading
-            # only the attach slots would silently score that frame "unlabelled" and hide a real
-            # regression (83007714-65: the Ignition onto the doomed Cinderace before the retreat).
-            if correct:
-                new_hit = (new_slots == correct_slots if correct_slots
-                           else not new_slots and set(dec_new.chosen or []) & set(correct))
-                old_hit = (old_slots == correct_slots if correct_slots
-                           else not old_slots and set(dec_old.chosen or []) & set(correct))
-                verdict = ("FIX" if new_hit and not old_hit
-                           else "REGRESSION" if old_hit and not new_hit else "DIVERGENT")
-            else:
-                verdict = "unlabelled"
-            tally[verdict] += 1
-        new_energy = next((r["energy"] for r in working["eq"]
-                           if tuple(r["slot"]) in {tuple(s) for s in new_slots}), None)
+            tally["MISS"] += 1
+            reading = "MISSES"
+            misses.append((ep, fr))
+        chosen_energy = next((r["energy"] for r in working["eq"]
+                              if tuple(r["slot"]) in {tuple(s) for s in chosen_slots}), None)
         if not quiet:
-            print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {_cell(new_slots, names, new_energy):<18} "
-                  f"{_cell(old_slots):<18} {_cell(correct_slots):<12} {verdict:<12}")
-        if not agree:
-            flips.append((ep, fr))
-            if not quiet:
+            print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} "
+                  f"{_cell(chosen_slots, names, chosen_energy):<18} "
+                  f"{_cell(correct_slots):<12} {reading:<12}")
+            if reading != "agrees":
                 for row in sorted(working["eq"], key=lambda r: -r["tactical"]):
                     print(_axes_line(row, names))
     if quiet:
         print(f"scale={scale} pref={pref_weight} " + " ".join(
-            f"{k}={tally[k]}" for k in ("frames", "agree", "flip", "FIX", "REGRESSION",
-                                        "DIVERGENT", "unlabelled")))
+            f"{k}={tally[k]}" for k in ("frames", "agree", "MISS", "unlabelled", "error")))
         return
     print("\nTALLY")
-    for k in ("frames", "agree", "flip", "FIX", "REGRESSION", "DIVERGENT", "unlabelled", "error"):
+    for k in ("frames", "agree", "MISS", "unlabelled", "error"):
         print(f"  {k:<12} {tally[k]}")
-    print(f"\n{len(flips)} frame(s) need a user ruling before the deletion commit: "
-          f"{', '.join(f'{e}-{f}' for e, f in flips) or '(none)'}")
+    print(f"\n{len(misses)} frame(s) where the shipped decider misses the ruling: "
+          f"{', '.join(f'{e}-{f}' for e, f in misses) or '(none)'}")
+    print("\nThis probe REPORTS, it does not gate — the Decision Gate is "
+          "`decider_lab.py diff --baseline data/decider_lab/baseline.json` (ADR-0085 Amendment I).")
 
 
 if __name__ == "__main__":

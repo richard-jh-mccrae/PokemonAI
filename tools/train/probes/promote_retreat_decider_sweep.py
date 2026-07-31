@@ -1,22 +1,14 @@
-"""Promote/retreat DECIDER sweep — the batched review's input for the no-shadow swap (#141, ADR-0073).
+"""Promote/retreat sweep — the per-term DIAGNOSTIC for the no-shadow swap (#141, ADR-0073). **Not a gate.**
 
-The sibling of ``evolve_decider_sweep.py`` / ``attach_decider_sweep.py``, same protocol (ADR-0069 §8):
-run the corpus through BOTH promote/retreat deciders while both still exist and report every frame
-where they disagree, with the new decider's TERM BREAKDOWN on each side of the flip. No decision may
-flip silently — the human rules on the WHY, one sitting, one table, BEFORE the deletion commit
-retires the rungs for good.
+The sibling of ``evolve_decider_sweep.py`` / ``attach_decider_sweep.py``: runs the corpus through the
+SHIPPED promote/retreat decider and reports, per frame, what it does, whether that satisfies the
+corpus ruling, and the decider's TERM BREAKDOWN behind the call. The breakdown is why this file
+outlived the gate it used to be — `decider_lab.py` records the decision, never the terms behind it.
 
 This REPLACES ``tools/train/promote_retreat_sweep.py``, which is not merely stale but unrunnable: it
 reads a `promote_retreat_shadow` record and a `worth_it` SIGN BIT, and ADR-0073 decision 2 retires
 both — deleting `stay_forgone` turns the whether-site verdict from a sign test into a per-option
 score, so there is no sign left to agree with.
-
-The two pilots, built fresh per frame (pilots are stateful; sharing one pollutes verdicts):
-
-  * NEW — ``promote_retreat_value`` ON with the eleven retired rungs forced to weight 0. That is
-    exactly the post-deletion agent. Zeroing rather than deleting is what lets this run BEFORE the
-    deletion commit.
-  * OLD — ``promote_retreat_value`` OFF with every rung at its shipped weight: the pile as it decided.
 
 Comparison is by the resolved BODY SLOT, never the raw option index — two promote options differ only
 in which body they bring up, and the index says nothing about which (ADR-0073 §12).
@@ -24,31 +16,32 @@ in which body they bring up, and the index says nothing about which (ADR-0073 §
 Two site families, because the family's mass lives in BOTH and they compare differently:
 
   * **pick** — a TO_ACTIVE forced promote or a SWITCH retreat destination. The lane is ``PROMOTE_LANE``
-    and the comparison is which BODY each agent picks.
+    and the comparison is which BODY the agent picks.
   * **whether** — a MAIN menu carrying a native RETREAT (or a switch-class Item). The comparison is
-    whether each agent RETREATS at all, which is a membership test on `chosen`, not a slot.
+    whether the agent RETREATS at all, which is a membership test on `chosen`, not a slot.
 
-Deleting the `active_can_ko` recusal returns the 24 frames the shadow withdrew from, so the
-whether-site corpus goes from 72 priced back to ~96 (ADR-0073 §12).
+    python tools/train/probes/promote_retreat_decider_sweep.py          # the miss table + the tally
+    python tools/train/probes/promote_retreat_decider_sweep.py --all    # every frame, not only misses
 
-    python tools/train/probes/promote_retreat_decider_sweep.py          # the flip table + the tally
-    python tools/train/probes/promote_retreat_decider_sweep.py --all    # every frame, not only flips
+Offline and read-only; one engine-backed Pilot build per frame. Always exits 0: it reports, it does
+not gate.
 
-Offline and read-only; two engine-backed Pilot builds per frame.
-⚠️ **This probe is a DIAGNOSTIC, not the Decision Gate** (since ADR-0085 Amendment I, 2026-07-30).
+## Why the OLD arm is GONE (ADR-0085 Amendment J, 2026-07-30)
 
-ADR-0072 named "the phase's `*_decider_sweep.py`" as the Decision Gate, and this one compared the
-shipped agent against its own kill-switch turned OFF. That was right at the swap, when OFF *was* the
-incumbent rung pile. It stopped being right the moment that pile was DELETED, as tracker directive 1
-requires: with no rungs left, OFF is an empty scorer whose argmax falls to option index, so the
-comparison became "the equation versus nothing" and could only ever report FIX. A gate that cannot
-report a REGRESSION is not a gate. All four sweeps were in this state simultaneously and none said so.
+This probe used to build TWO pilots per frame — NEW (``promote_retreat_value`` ON, the eleven retired
+rungs forced to weight 0) and OLD (``promote_retreat_value`` OFF, the pile at its shipped weights) —
+and classify each disagreement `FIX` / `REGRESSION` / `DIVERGENT`. ADR-0072 called that pairing the
+**Decision Gate**, and at the swap it was right: OLD *was* the incumbent pile.
 
-The Decision Gate is now `tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`,
-which diffs against a RECORDED capture — the property that kept the Discrimination Gate honest all
-along. What remains here is still worth running: the per-leg breakdown and the per-frame
-classification against the human are diagnosis this lab deliberately does not duplicate.
+The deletion commit ended that, as tracker directive 1 requires, and this pile went furthest of the
+four: **`baseline_promote` holds ZERO rungs** — 12 of 12 deleted. So OLD was
+``promote_retreat_value`` OFF over a literally empty scorer, whose argmax falls to option index. The
+probe was not comparing two deciders; it was comparing the shipped decider against the numbers 0, 1,
+2, 3 in order.
 
+Amendment I moved the gate to `tools/train/decider_lab.py diff --baseline
+data/decider_lab/baseline.json`, which diffs against a RECORDED capture. Amendment J removes the dead
+arm here. What remains is the one reading that means something: the shipped agent, against the human.
 """
 from __future__ import annotations
 
@@ -63,29 +56,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (PROMOTE_LANE, decision_gate_verdict, frame_key_of,  # noqa: E402
-                         held_out_frames, lane_slots, option_slot, print_gate_report)
+from train.gates import PROMOTE_LANE, lane_slots, option_slot   # noqa: E402
 
 _MAIN, _SWITCH, _TO_ACTIVE = 0, 3, 4
 _RETREAT, _PLAY = 12, 7
-
-#: The rungs the promote/retreat decider retires (ADR-0073 §11) — eleven of twelve. Forced to 0 in
-#: the NEW pilot so this probe measures the post-deletion agent without needing the deletion first.
-#: `retreat-to-wall-the-line` is deliberately ABSENT: it survives as #165's Maneuver, so zeroing it
-#: would measure neither agent.
-RETIRED = (
-    "promote-the-ko-attacker",
-    "promote-the-accelerator-for-the-ko",
-    "promote-the-ready-wincon",
-    "dont-promote-onto-their-path",
-    "interpose-the-cheap-attacker-to-preserve-the-wincon",
-    "dont-promote-into-their-prize-reach",
-    "promote-the-staller",
-    "retreat-to-ready-attacker",
-    "swap-out-the-locked-attacker",
-    "dont-play-switch-for-no-gain",
-    "hold-position-in-setup",
-)
 
 _TERMS = ("my_yield", "closure", "exposure", "tempo_denied", "fatal", "preservation", "retreat_cost")
 
@@ -109,16 +83,6 @@ def _frames():
     return [(k, v) for k, v in sorted(index.items()) if v.get("obs") and v.get("agent")]
 
 
-def _frame_key(rec, ep, fr) -> str:
-    """The frame's stable identity, in the SAME form the Leaf Lab and the Held-out Ledger use — the
-    Correction's `identity_key`. One key shape across both gates is what lets a single ruling hold a
-    frame out of either."""
-    scope = rec.get("scope") or "decision"
-    subject = rec.get("subject")
-    if subject is None:
-        subject = fr if scope == "decision" else (rec.get("decision") or {}).get("turn")
-    return frame_key_of(ep, rec.get("seat"), scope, subject)
-
 
 def _agent(rec) -> str:
     a = rec.get("agent") or ""
@@ -135,14 +99,15 @@ def _strategy_and_deck(agent: str):
     return mod.STRATEGY, deck
 
 
-def _pilot(agent: str, *, new: bool, seams):
-    """A fresh shipped Pilot for ``agent`` in NEW (decider-only) or OLD (rung-only) mode."""
+def _pilot(agent: str, *, seams):
+    """A fresh SHIPPED Pilot for ``agent`` — one per frame, because the Pilot is stateful (deck
+    tracker, per-decision caches) and sharing one pollutes verdicts.
+
+    No params are overridden and no rungs are zeroed: `common/runtime.py` resolves the single
+    deployment PROFILE, and a probe that reads anything else reports an agent nobody runs."""
     from common.runtime import build_pilot
     strategy, deck = _strategy_and_deck(agent)
-    params = dict(strategy.params)
-    params["promote_retreat_value"] = bool(new)
-    overrides = {hid: 0 for hid in RETIRED} if new else None
-    return build_pilot(strategy, deck, params=params, overrides=overrides, **seams)
+    return build_pilot(strategy, deck, **seams)
 
 
 def _seams():
@@ -182,15 +147,13 @@ def _term_line(row, names) -> str:
 
 def sweep(show_all: bool, quiet: bool = False) -> int:
     names, frames, seams = _names(), _frames(), _seams()
-    hdr = (f"{'id':<14} {'agent':<13} {'site':<8} {'NEW':<14} {'OLD':<14} {'correct':<14} "
-           f"{'verdict':<12}")
+    hdr = f"{'id':<14} {'agent':<13} {'site':<8} {'shipped':<14} {'correct':<14} {'reading':<12}"
     if not quiet:
-        print("PROMOTE/RETREAT DECIDER SWEEP — new (sub-lethal residual, rungs zeroed) "
-              "vs old (the rungs)\n")
+        print("PROMOTE/RETREAT DECIDER SWEEP — the shipped decider, per frame, with its terms\n")
         print(hdr)
         print("-" * len(hdr))
     tally = defaultdict(int)
-    flips, graded = [], []
+    misses = []
     for (ep, fr), rec in frames:
         options = (rec["obs"].get("select") or {}).get("option") or []
         ctx = (rec["obs"].get("select") or {}).get("context")
@@ -199,88 +162,70 @@ def sweep(show_all: bool, quiet: bool = False) -> int:
             continue                                   # outside this family
         agent = _agent(rec)
         try:
-            dec_new = _pilot(agent, new=True, seams=seams).explain(rec["obs"])
-            dec_old = _pilot(agent, new=False, seams=seams).explain(rec["obs"])
+            dec = _pilot(agent, seams=seams).explain(rec["obs"])
         except Exception as exc:                       # a frame the shipped build can't replay
             tally["error"] += 1
             if show_all:
                 print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {site:<8} ERROR {exc}")
             continue
-        correct = rec.get("correct") or []
+        correct = rec.get("correct")
         if site == "pick":
-            new_v = lane_slots(dec_new.chosen, options, lane=PROMOTE_LANE, select_context=ctx)
-            old_v = lane_slots(dec_old.chosen, options, lane=PROMOTE_LANE, select_context=ctx)
-            cor_v = lane_slots(correct, options, lane=PROMOTE_LANE, select_context=ctx)
+            got = lane_slots(dec.chosen, options, lane=PROMOTE_LANE, select_context=ctx)
+            cor_v = lane_slots(correct or [], options, lane=PROMOTE_LANE, select_context=ctx)
             labelled = bool(cor_v)
+            hit = got == cor_v
         else:
             # The whether-site question is "retreat at all?", which is a membership test on the
             # chosen set — a slot comparison cannot express "stayed".
             def _retreated(chosen) -> bool:
                 return any(0 <= i < len(options) and options[i].get("type") == _RETREAT
                            for i in (chosen or []))
-            new_v, old_v = _retreated(dec_new.chosen), _retreated(dec_old.chosen)
-            cor_v, labelled = _retreated(correct), bool(correct)
+            got, cor_v = _retreated(dec.chosen), _retreated(correct)
+            # `correct: []` is a recorded DECLINE, not an absent label — it rules "do not retreat",
+            # which `_retreated([])` already reads as False. Only a MISSING `correct` is unlabelled,
+            # which is why this is `is not None` rather than the `bool(correct)` it used to be.
+            labelled = correct is not None
+            hit = got == cor_v
         rows = [dict(t.promote_retreat_working,
                      slot=option_slot(options[i]) if i < len(options) else None,
                      card_id=(options[i] or {}).get("cardId"))
-                for i, t in enumerate(dec_new.options)
+                for i, t in enumerate(dec.options)
                 if i < len(options) and getattr(t, "promote_retreat_working", None) is not None]
-        agree = new_v == old_v
         tally["frames"] += 1
         tally[f"frames:{site}"] += 1
-        if agree:
+        if not labelled:
+            tally["unlabelled"] += 1
+            reading = "unlabelled"
+        elif hit:
             tally["agree"] += 1
+            reading = "agrees"
             if not show_all:
                 continue
-            verdict = "agree"
         else:
-            tally["flip"] += 1
-            if labelled:
-                new_hit, old_hit = new_v == cor_v, old_v == cor_v
-                verdict = ("FIX" if new_hit and not old_hit
-                           else "REGRESSION" if old_hit and not new_hit else "DIVERGENT")
-            else:
-                verdict = "unlabelled"
-            tally[verdict] += 1
-            graded.append({"key": _frame_key(rec, ep, fr), "verdict": verdict, "site": site,
-                           "label": rec.get("correct_label") or ""})
+            tally["MISS"] += 1
+            reading = "MISSES"
+            misses.append((ep, fr))
         if not quiet:
-            print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {site:<8} {_cell(new_v):<14} "
-                  f"{_cell(old_v):<14} {_cell(cor_v) if labelled else '(none)':<14} {verdict:<12}")
-        if not agree:
-            flips.append((ep, fr))
-            if not quiet:
+            print(f"{ep + '-' + str(fr):<14} {agent[:12]:<13} {site:<8} {_cell(got):<14} "
+                  f"{(_cell(cor_v) if labelled else '(none)'):<14} {reading:<12}")
+            if reading != "agrees":
                 lbl = rec.get("correct_label") or ""
                 if lbl:
                     print(f"      correct_label: {lbl}")
                 for row in sorted(rows, key=lambda r: -r["total"]):
                     print(_term_line(row, names))
-    held_out = held_out_frames()
-    passed = decision_gate_verdict(graded, held_out=held_out)
-    keys = ("frames", "frames:pick", "frames:whether", "agree", "flip", "FIX", "REGRESSION",
-            "DIVERGENT", "unlabelled")
+    keys = ("frames", "frames:pick", "frames:whether", "agree", "MISS", "unlabelled")
     if quiet:
-        print(" ".join(f"{k}={tally[k]}" for k in keys) +
-              f" gate={'PASS' if passed else 'FAIL'}")
-        return 0 if passed else 1
+        print(" ".join(f"{k}={tally[k]}" for k in keys))
+        return 0
     print("\nTALLY")
     for k in keys + ("error",):
         print(f"  {k:<16} {tally[k]}")
-    print(f"\n{len(flips)} frame(s) need a user ruling before the deletion commit: "
-          f"{', '.join(f'{e}-{f}' for e, f in flips) or '(none)'}")
-
-    # DECISION GATE (ADR-0072 decision 2): zero unruled REGRESSION. Held-out frames still RUN and
-    # still REPORT — a re-ruling is a state the gate reads, not prose in a review doc, and a frame
-    # broken for three phases must not become scenery (decision 4). ADR-0073 §12 adds no gate of its
-    # own: there is NO disagreement-rate pass mark, which supersedes the issue's grill agenda item 4.
-    regressions = [g for g in graded if g["verdict"] == "REGRESSION"]
-    ruled = [g for g in regressions if g["key"] in held_out]
-    unruled = [g for g in regressions if g["key"] not in held_out]
-    print_gate_report(f"DIAGNOSTIC (not the Decision Gate — see decider_lab.py) — {len(graded)} labelled flip(s) graded",
-                      gating=unruled, ruled=ruled, held_out=held_out, total=len(graded),
-                      rule="zero unruled REGRESSION",
-                      line=lambda g: f"REGRESSION [{g['site']}] {g['key']}  {g['label']}")
-    return 0 if passed else 1
+    print(f"\n{len(misses)} frame(s) where the shipped decider misses the ruling: "
+          f"{', '.join(f'{e}-{f}' for e, f in misses) or '(none)'}")
+    print("\nThis probe REPORTS, it does not gate — the Decision Gate is "
+          "`decider_lab.py diff --baseline data/decider_lab/baseline.json` (ADR-0085 Amendment I).")
+    return 0
 
 
 if __name__ == "__main__":
