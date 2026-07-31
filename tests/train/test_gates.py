@@ -1105,7 +1105,7 @@ def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
     assert len(got) == len(want) > 300              # a plausible corpus, not an empty walk
 
 
-# ── the Ruling Index — one query over every store a ruling can live in (ADR-TEMP-239, Issue #239) ──
+# ── the Ruling Index — one query over every store a ruling can live in (ADR-0088, Issue #239) ──
 
 
 def _reviewed(tmp_path, entries):
@@ -1241,7 +1241,7 @@ def test_a_voided_regression_is_reported_and_does_NOT_fail_either_gate():
     assert discrimination_gate_verdict(d, held_out={"real": "#1"}, voided={"void"})
 
 
-# ── the Agree Delta — the aggregate half of the Ruling Move fix (ADR-TEMP-239 decision 7) ─────────
+# ── the Agree Delta — the aggregate half of the Ruling Move fix (ADR-0088 decision 7) ─────────
 
 
 @pytest.mark.req("REQ-GATE-0011")

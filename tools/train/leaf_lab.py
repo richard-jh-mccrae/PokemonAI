@@ -124,7 +124,7 @@ def leaf_lab_report(pilot_for, corrections, *, voided=()) -> dict:
     for an agent (memoised by the caller). Only leaf frames (``is_leaf_frame``) are considered.
 
     A **Voided Ruling** frame is still scored and still carried in ``rows`` — it is marked ``voided``
-    and left out of the RATES only (ADR-TEMP-239 decision 4). It deliberately stays *scorable*, so the
+    and left out of the RATES only (ADR-0088 decision 4). It deliberately stays *scorable*, so the
     diff still compares it and `ruling_moves` still sees it: a voided ruling stops grading, it does not
     stop existing, and a frame vanishing from ``compared`` would be the shrinking-gated-set failure
     ``added``/``removed`` exist to prevent."""
@@ -197,7 +197,7 @@ def _build_report(store, agent, *, voided=()):
 
 
 def _print_report(rpt) -> None:
-    # `gradeable` is absent from a capture taken before ADR-TEMP-239; fall back rather than crash,
+    # `gradeable` is absent from a capture taken before ADR-0088; fall back rather than crash,
     # so a diff against an older committed baseline still reads. Same field name the Decision Gate
     # uses — one concept, one word.
     gradeable = rpt.get("gradeable", rpt["scorable"])
@@ -305,7 +305,7 @@ def main(argv=None) -> int:
                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
                 "added": diff["added"], "removed": diff["removed"],
                 "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-0087 d7)
-                "agree_delta": diff["agree_delta"],     # the aggregate half (ADR-TEMP-239 d7)
+                "agree_delta": diff["agree_delta"],     # the aggregate half (ADR-0088 d7)
                 # `{key: disposition}`, not a bare key list: a machine consumer must tell a
                 # `transposition` exclusion from a `refuted` one without re-reading the ledger.
                 "voided": {k: r.disposition for k, r in sorted(voided.items())},

@@ -43,7 +43,7 @@ ALLOWED_RAW_READERS = {
     "tools/train/probes/needs_sweep.py": "#243",
     "tools/train/probes/promote_retreat_decider_sweep.py": "#243",
     "tools/train/probes/threat_sweep.py": "#243",
-    # `snipe_decider_sweep.py` PAID this debt (Issue #239, ADR-TEMP-239 decision 5): retiring its
+    # `snipe_decider_sweep.py` PAID this debt (Issue #239, ADR-0088 decision 5): retiring its
     # private RECORDED_MISSES store meant it had to join the Ruling Index by Frame Key, which a
     # hand-built `<ep>-<frame>` key cannot do — so the raw walk went with it. That is the intended
     # shape of a payoff: an entry leaves this dict, and the census below moves deliberately.

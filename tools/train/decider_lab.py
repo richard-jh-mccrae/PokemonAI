@@ -45,7 +45,7 @@ vocabularies mis-reports: it read `DISCARD` at **1/12** purely because the agent
 the ruling says `[2]`. On single-pick contexts the two tests are identical.
 
 A frame carrying a **Voided Ruling** — `refuted` (the ruling was disowned) or `transposition` (it
-stands but names one of an indistinguishable set) — is OUT of the rate entirely (ADR-TEMP-239). It is
+stands but names one of an indistinguishable set) — is OUT of the rate entirely (ADR-0088). It is
 neither agreement nor disagreement, so the denominator is `gradeable`, not `labelled`, and both are
 recorded. Measured at the re-capture: **253/371 -> 248/346**, 25 frames voided. Those frames also stop
 gating: 18 of the 101 recorded disagreements carried a refuted label, so a build correcting one used
@@ -143,7 +143,7 @@ def build_report(store, agent=None, *, voided=()) -> dict:
     silently, one layer earlier, which is what ADR-0087 fixes.
 
     A **Voided Ruling** frame is still replayed and still recorded — only the agree rate excludes it
-    (ADR-TEMP-239 decision 4). ``labelled`` keeps its raw meaning and ``gradeable`` is the honest
+    (ADR-0088 decision 4). ``labelled`` keeps its raw meaning and ``gradeable`` is the honest
     denominator, printed as ``agree/gradeable``: carrying both is what lets a re-capture's smaller
     denominator read as a deliberate exclusion rather than a vanishing corpus.
     """
@@ -178,7 +178,7 @@ def _print_summary(rpt: dict) -> None:
     by_ctx = {}
     for r in rpt["rows"]:
         by_ctx.setdefault(r.get("context"), []).append(r)
-    # `gradeable` is absent from a capture taken before ADR-TEMP-239; fall back rather than crash, so
+    # `gradeable` is absent from a capture taken before ADR-0088; fall back rather than crash, so
     # a diff against an older committed baseline still reads.
     gradeable = rpt.get("gradeable", rpt["labelled"])
     voided = rpt.get("voided", 0)
@@ -213,7 +213,7 @@ def main(argv=None) -> int:
 
     # The **Ruling Index** is read ONCE and threaded through both subcommands: the rulings are one
     # corpus, not a property of a capture, so a capture and the diff that reads it must not resolve
-    # two different voided sets (ADR-TEMP-239 decision 2).
+    # two different voided sets (ADR-0088 decision 2).
     index = ruling_index(args.store)
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)

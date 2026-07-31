@@ -35,7 +35,7 @@ DEFAULT_REVIEWED = DEFAULT_ROOT / "reviewed.json"
 # roadmap layer, recorded w/ real-Pilot re-measure + fixture + docs/todo definition-of-done.
 # A merely-missing signal/tag/enum is never deferred -> it is built (step 4b).
 #
-# `transposition` (ADR-TEMP-239 decision 6, Issue #239): the ruling STANDS but its `correct` names one
+# `transposition` (ADR-0088 decision 6, Issue #239): the ruling STANDS but its `correct` names one
 # of an INDISTINGUISHABLE set of options, so no agent can be scored on picking "the right one". Kept
 # distinct from `refuted` because the ruling is not disowned — `81905522-75`'s pick is cited by
 # ADR-0085 decision 4 to justify leg-scoped guards. Both VOID the label for the graders
@@ -43,7 +43,7 @@ DEFAULT_REVIEWED = DEFAULT_ROOT / "reviewed.json"
 #
 # `fixed` / `deferred-multi-turn` were in the ledger for weeks while this tuple listed neither — the
 # loader accepted them, `review_correction.py` would have rejected them. Adopted rather than migrated:
-# both are plainly rulings that STAND, and the drift itself is what ADR-TEMP-239 decision 3's loud
+# both are plainly rulings that STAND, and the drift itself is what ADR-0088 decision 3's loud
 # unrecognised-disposition path now guards against recurring.
 #
 # Kept in step with `gates.RECOGNISED_DISPOSITIONS` by a test — a word this writer accepts that the

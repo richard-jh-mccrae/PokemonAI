@@ -366,7 +366,7 @@ def discrimination_gate_verdict(diff: dict, *, held_out: dict, voided=()) -> boo
     Improvements never block, and the aggregate metrics (SOLE-top / shared-top / avg top-tie) are not
     consulted at all — on 1b they moved the *good* way while six frames broke.
 
-    ``voided`` frames do not block either (ADR-TEMP-239 decision 4): their ruling can no longer say
+    ``voided`` frames do not block either (ADR-0088 decision 4): their ruling can no longer say
     the agent is wrong. Passed alongside ``held_out`` rather than folded into it because the two are
     different acts — one holds a STANDING ruling out of this gate's scope, the other says the ruling
     itself cannot grade — and the readout names them separately."""
@@ -379,7 +379,7 @@ def decision_gate_verdict(rows, *, held_out: dict, voided=()) -> bool:
     the sweep puts every flip in front of the human, and only a regression they have not ruled is a
     blocker.
 
-    A ``REGRESSION`` on a **voided** frame is reported and never blocks (ADR-TEMP-239 decision 4).
+    A ``REGRESSION`` on a **voided** frame is reported and never blocks (ADR-0088 decision 4).
     That is the live hazard this closes: 18 of 101 recorded disagreements carried a refuted label, so
     a build that corrected one of them failed `main` for moving away from a ruling the human had
     already disowned."""
@@ -407,7 +407,7 @@ def print_gate_report(title, *, gating, ruled, held_out, total, rule, line,
     three phases must not become scenery. ``line(item)`` renders one row.
 
     ``voided`` frames get their own always-visible section for the same reason and a different cause
-    (ADR-TEMP-239 decision 4) — a HELD-OUT ruling STANDS and is merely out of this gate's scope,
+    (ADR-0088 decision 4) — a HELD-OUT ruling STANDS and is merely out of this gate's scope,
     while a voided one cannot grade at all. Collapsing them into one section would print
     ``owner=None`` against a frame nobody held out and lose which of the two acts excused it."""
     print(f"\n=== {title} ===")
@@ -453,11 +453,11 @@ class Ruling:
 
 
 #: The dispositions that VOID a label — the ruling can no longer grade the agent, for two different
-#: reasons. Both leave the agree-rate denominator and both stop gating (ADR-TEMP-239 decision 4).
+#: reasons. Both leave the agree-rate denominator and both stop gating (ADR-0088 decision 4).
 #:
 #: * ``refuted``       — the ruling is DISOWNED. It said the wrong thing.
 #: * ``transposition`` — the ruling STANDS, but its ``correct`` names one of an *indistinguishable*
-#:   set of options, so no agent can be scored on picking "the right one" (ADR-TEMP-239 decision 6).
+#:   set of options, so no agent can be scored on picking "the right one" (ADR-0088 decision 6).
 #:   Kept distinct from ``refuted`` because ADR-0085 decision 4 cites `81905522-75`'s pick to justify
 #:   leg-scoped rather than whole-target guards — filing it as a refutation would write into the
 #:   ledger an assertion a shipped ADR contradicts. Only the instance is handled here; teaching
@@ -585,7 +585,7 @@ def print_ruling_readout(index: dict, voided: dict, *, orphans=(), detail=False)
 def agree_delta(before: dict, after: dict, *, agrees, moved, voided=(), keep=None) -> dict:
     """The **Agree Delta** — the agree rate on both sides WITH the counts of what moved beside it.
 
-    The aggregate half of the fix `ruling_moves` made per-frame (ADR-TEMP-239 decision 7). Measured:
+    The aggregate half of the fix `ruling_moves` made per-frame (ADR-0088 decision 7). Measured:
     re-capturing the baseline moved **three** rows and the headline printed ``230/331 -> 230/331``,
     because one re-ruling flipped a frame disagree->agree and exactly cancelled a held-out
     regression's agree->disagree. Offsetting moves presenting as stillness is the same class of event
@@ -828,7 +828,7 @@ def held_out_frames(fixtures_dir=None) -> dict:
 
 def ruling_index(store=None, *, reviewed_path=None, fixtures_dir=None) -> dict:
     """**THE Ruling Index** — ``{frame key: (Ruling, ...)}`` over every store a ruling can live in
-    (ADR-TEMP-239 decision 2, Issue #239). The ONE query answering *"has this frame been ruled, and
+    (ADR-0088 decision 2, Issue #239). The ONE query answering *"has this frame been ruled, and
     where?"*.
 
     It exists because a frame could be ruled four different ways and still read as unreviewed.

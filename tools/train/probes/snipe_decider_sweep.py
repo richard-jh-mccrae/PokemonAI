@@ -11,7 +11,7 @@ two-identical-Riolu transposition the design doc's own risk R3 says not to chase
 (a `refuted` label). A run that "fixes" either has almost certainly overfitted — the scorer's shape
 was selected against these same 19 frames.
 
-Both are now read from the **Ruling Index** (`gates.ruling_index`, ADR-TEMP-239 decision 5) rather
+Both are now read from the **Ruling Index** (`gates.ruling_index`, ADR-0088 decision 5) rather
 than a private ``RECORDED_MISSES`` dict that lived here. That constant was a *fourth store* for
 rulings, sitting in a probe where no gate could see it, with free-text values and no disposition
 vocabulary — and it is exactly why `81905522-75` was triaged *"never reviewed"* while `82749168-38`,

@@ -190,7 +190,7 @@ _Avoid_: re-rule (the human act — this is the instrument's report of it), labe
 
 **Ruling Index**:
 The ONE query that spans every store a ruling can live in — `gates.ruling_index()`, `{Frame Key:
-Ruling}` (**ADR-TEMP-239**, Issue #239). Built on `keyed_corrections`, so the `review_key` ↔ **Frame
+Ruling}` (**ADR-0088**, Issue #239). Built on `keyed_corrections`, so the `review_key` ↔ **Frame
 Key** join is *derived per record inside the one walk* (ADR-0087 decision 2) — both keys come off
 the same `Correction`, neither derives from the other, so the walk is the only honest join point. It
 merges `data/corrections/reviewed.json` and the **Held-out Ledger**; `RECORDED_MISSES` is retired
@@ -224,7 +224,7 @@ graded (say **gradeable** — the two labs used different words for one concept 
 
 **Orphaned Ruling**:
 A `reviewed.json` entry whose `review_key` matches NO committed **Correction** (`gates.orphan_rulings`,
-**ADR-TEMP-239** decision 3a). It rules on nothing, silently: the **Ruling Index** walks the *corpus*
+**ADR-0088** decision 3a). It rules on nothing, silently: the **Ruling Index** walks the *corpus*
 and looks each record up, so an entry the corpus cannot reach never enters the index at all. It must
 therefore be walked from the LEDGER's side — a test that asks the index instead is **tautological**,
 because `voided_frames(index)` is a subset of `keyed_corrections` by construction and can never fail.
@@ -234,7 +234,7 @@ _Avoid_: stale ruling (a ruling can be stale AND reachable), dangling key, missi
 Correction is not missing — the ledger names one that never existed under that key)
 
 **Transposition**:
-A disposition (**ADR-TEMP-239** decision 6): the human's ruling is correct, but its `correct` names
+A disposition (**ADR-0088** decision 6): the human's ruling is correct, but its `correct` names
 one of an **indistinguishable** set of options, so no agent can be scored on picking "the right one".
 Voiding, for a different reason than `refuted` — and the distinction is load-bearing, because
 ADR-0085 decision 4 cites `81905522-75`'s pick (two identical Riolu, no board signal splits them,
@@ -247,7 +247,7 @@ _Avoid_: tie (the scores tying is the symptom; the cause is the options being th
 label, refuted
 
 **Agree Delta**:
-The aggregate half of the **Ruling Move** fix (**ADR-TEMP-239** decision 7): `agree_delta` on both
+The aggregate half of the **Ruling Move** fix (**ADR-0088** decision 7): `agree_delta` on both
 diffs — `{before: (agree, denom), after: (agree, denom), moved, reruled, voided}` — printed by one
 shared printer beside `print_ruling_moves`, so the two gates cannot describe it differently. It
 exists because offsetting moves can present as stillness: `230/331 -> 230/331` was printed while

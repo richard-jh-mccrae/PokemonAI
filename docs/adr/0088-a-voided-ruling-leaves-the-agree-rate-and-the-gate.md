@@ -1,14 +1,14 @@
-# ADR-TEMP-239 — A VOIDED ruling leaves the agree rate and the gate, and one Ruling Index says so
+# ADR-0088 — A VOIDED ruling leaves the agree rate and the gate, and one Ruling Index says so
 
-**Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #239 — seven locked decisions).
+**Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #239 — seven locked decisions,
+plus 3a and 3b added at build time when the two-axis code review found a property with no code behind
+it and a test that could never fail).
 **Build = Issue #239.**
 **Extends [ADR-0087](0087-a-corpus-reader-constructs-corrections-and-keys-by-identity.md)** (THE
 Corpus Reader and the derived Frame Key — this adds a second thing derived from the same walk) and
 **[ADR-0072](0072-mid-build-swaps-are-gated-by-deterministic-instruments.md) decision 4** (the
 Held-out Ledger — a voided frame gets the same never-gating treatment for a different reason). Does
 **not** supersede anything, and does **not** change what either gate gates on.
-
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
 
 **Context issues:** Issue #239 (this grill), Issue #241 / ADR-0087 (the Corpus Reader, and
 `ruling_moves`, which closed half of Issue #239 before this grill opened), Issue #229 (a Correction

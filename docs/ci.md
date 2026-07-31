@@ -282,14 +282,14 @@ as the `decider-gate-main` artifact.
 does **not** mean the agent is right: the baseline records every frame it captured as the reference,
 including the **98** where the agent contradicts a human ruling that still stands. (It was 101 over a
 332-frame corpus, and the figure is now taken over the **gradeable** set — the 25 **Voided Rulings**
-are neither agreement nor disagreement, ADR-TEMP-239.) Those are ranked in
+are neither agreement nor disagreement, ADR-0088.) Those are ranked in
 [`docs/plans/decider-disagreement-triage.md`](plans/decider-disagreement-triage.md) and owned by the
 correction rounds (Issue #146), not by this job.
 
 ### Baseline provenance
 
 `data/decider_lab/baseline.json` is currently pinned at **`e138881` (2026-07-31)**, **372 frames**
-(346 gradeable — 25 carry a **Voided Ruling**, ADR-TEMP-239).
+(346 gradeable — 25 carry a **Voided Ruling**, ADR-0088).
 
 | capture | rev | absorbed | why |
 |---|---|---|---|

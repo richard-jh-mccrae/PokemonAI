@@ -78,7 +78,7 @@ def avg_blunders_per_game(corrections) -> dict:
 # vocabulary or a census row silently vanishes: `present` filters on `_DISP_ORDER`, so a word missing
 # here drops those Corrections out of the report without a trace. That is the consumer-drift this
 # module's own ledger already suffered — `transposition` and `deferred-multi-turn` were live in
-# `reviewed.json` and absent from every list that reads it (Issue #239, ADR-TEMP-239 decision 3).
+# `reviewed.json` and absent from every list that reads it (Issue #239, ADR-0088 decision 3).
 # Derived from the writer's vocabulary rather than re-typed, so the next word added cannot skip here.
 _LEDGER_RESOLVED = tuple(DISPOSITIONS)                     # every disposition the ledger may carry
 _RESOLVED = ("fixed", *(d for d in _LEDGER_RESOLVED if d != "fixed"))
