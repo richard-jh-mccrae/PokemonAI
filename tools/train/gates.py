@@ -910,6 +910,47 @@ def orphan_rulings(store=None, *, reviewed_path=None) -> list:
     return [(k, entry) for k, entry in sorted(reviewed.items()) if k not in reachable]
 
 
+def equivalence_index(store=None) -> dict:
+    """``{Frame Key: {option index: class}}`` over the committed corpus — the **Option Equivalence
+    Class** map, read ONCE and threaded (ADR-0091 decision 2).
+
+    The sibling of `ruling_index`, and here for the same reason it is: both gates need it, and a
+    frame's equivalence must be resolved identically wherever it is consulted. It rides the SAME
+    `keyed_corrections` walk (ADR-0087's Corpus Reader), so it cannot see a different frame
+    population than the rulings do.
+
+    **A property of the corpus, never of a capture.** A capture records its classes for legibility,
+    but a diff restates BOTH sides against today's map — exactly the argument `agree_delta` already
+    makes for `voided`. Reading them back off two captures would let one diff grade its halves under
+    two different oracles, and a baseline predating this build carries none at all.
+
+    Frames with no non-trivial class are omitted, so the map is small (101 of 372 measured
+    2026-07-31) and a `.get(key)` miss is the common, meaningful answer: nothing to widen."""
+    from common.option_equivalence import option_equivalence
+
+    out = {}
+    for key, correction in keyed_corrections(store):
+        obs = correction.obs or {}
+        eq = option_equivalence((obs.get("select") or {}).get("option") or [], obs)
+        if eq:
+            out[key] = eq
+    return out
+
+
+def classes_of(equiv) -> list:
+    """One frame's classes as a sorted list of sorted index lists — the JSON-safe shape a capture row
+    records.
+
+    A row says WHICH options were equivalent rather than merely how many, on the precedent of the
+    per-row ``voided`` marker: a reviewer of a re-capture needs to see the reason a frame scored as
+    agreement, not just that it did.
+
+    Delegates rather than re-deriving: `option_equivalence.classes` is the ONE walk over an ``equiv``
+    map, for the same reason the fingerprint has one home."""
+    from common.option_equivalence import classes
+    return classes(equiv)
+
+
 def picks_as_set(pick):
     """A pick compared as a SET, not a sequence.
 
@@ -920,7 +961,7 @@ def picks_as_set(pick):
     return None if pick is None else frozenset(pick)
 
 
-def satisfies_human(chosen, correct) -> bool:
+def satisfies_human(chosen, correct, *, equiv=None) -> bool:
     """Does ``chosen`` satisfy the Correction's ruling — the ONE predicate both readings key on.
 
     **A Correction's ``correct`` is a CONSTRAINT, not the whole legal answer** (ADR-0085 Amendment J,
@@ -963,12 +1004,42 @@ def satisfies_human(chosen, correct) -> bool:
       since been re-ruled ``[] -> [0]`` in `b6d7483` — a **Ruling Move** no instrument could report
       until `ruling_moves` existed. A wrong keyspace propagating into an ADR-backed docstring is
       the clearest argument for `correction_frame_key` being the only derivation.
+
+    ``equiv`` — an **Option Equivalence Class** map (`common.option_equivalence`, ADR-0091) — is
+    the fourth case, and the one Issue #247 exists for. A ruling naming one of an *indistinguishable*
+    set of options is satisfied by a pick of ANY member: two identical undamaged Riolu, the same
+    Energy onto either of two identical Basics. Without it such a ruling can never be satisfied on
+    purpose, only excused out of the denominator as a ``transposition`` — ADR-0088 decision 6, whose
+    deferral this closes.
+
+    **Default None reproduces the pre-#247 behaviour byte-for-byte**, deliberately: the three decider
+    sweeps and every existing assertion call the two-argument form, and a predicate two `main` gates
+    key on must not change meaning for a caller that did not ask. The equivalence is a property of the
+    CORPUS rather than of a capture, so callers resolve it once from the frame and pass it in.
+
+    The DECLINE case is checked BEFORE the equivalence for the reason it is checked at all: ``correct
+    == []`` names no index, so there is no class to widen, and routing it through a map would put the
+    empty-set-subsets-everything trap back within reach.
     """
     if chosen is None or correct is None:
         return False
     if not correct:                       # a recorded DECLINE — exact, never subset
         return not chosen
-    return picks_as_set(correct) <= picks_as_set(chosen)
+    if not equiv:
+        return picks_as_set(correct) <= picks_as_set(chosen)
+    from collections import Counter
+
+    from common.option_equivalence import class_of
+
+    # COUNTING, not membership. A class widens WHICH option satisfies a ruled card; it never lets one
+    # pick satisfy two of them. Ruling `[1, 3]` on two indistinguishable options demands BOTH be
+    # taken, and a bare `class & picked` test says yes to `[1]` alone — a partial answer passing as a
+    # whole one, the exact failure the DISCARD paragraph above exists to prevent one shape over.
+    # Classes PARTITION the menu (an option has one fingerprint, so it is in exactly one class), so
+    # per-class counting is an exact bipartite matching rather than an approximation of one.
+    picked = picks_as_set(chosen)
+    want = Counter(frozenset(class_of(equiv, c)) for c in picks_as_set(correct))
+    return all(len(cls & picked) >= n for cls, n in want.items())
 
 
 def records_a_decline_it_cannot_state(correction, obs) -> bool:
@@ -1090,7 +1161,7 @@ def print_ruling_moves(moves) -> None:
         print(f"    {m['key']}  correct {m['before']} -> {m['after']}")
 
 
-def decider_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
+def decider_lab_diff(before: dict, after: dict, *, voided=(), equiv=None) -> dict:
     """Per-frame DECISION movement between two Decider Lab captures, classified against the human.
 
     The Decision Gate's comparison after ADR-0085 Amendment I. It replaces the sweeps' live
@@ -1135,11 +1206,18 @@ def decider_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
         if norm(was) == norm(now):
             continue
         correct = a[k].get("correct")
+        # Resolved from TODAY's corpus, never from either capture: the board a frame poses is a
+        # property of the corpus, so restating both sides against one map is what keeps a diff from
+        # grading its two halves under two different oracles (the same argument `agree_delta` makes
+        # for `voided`). A capture predating ADR-0091 simply has no `equiv` to disagree with.
+        eq = (equiv or {}).get(k)
         if correct is None:
             verdict = "UNLABELLED"
-        elif satisfies_human(now, correct) and not satisfies_human(was, correct):
+        elif (satisfies_human(now, correct, equiv=eq)
+              and not satisfies_human(was, correct, equiv=eq)):
             verdict = "FIX"
-        elif satisfies_human(was, correct) and not satisfies_human(now, correct):
+        elif (satisfies_human(was, correct, equiv=eq)
+              and not satisfies_human(now, correct, equiv=eq)):
             verdict = "REGRESSION"
         else:
             verdict = "NEUTRAL"
@@ -1154,5 +1232,6 @@ def decider_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
                 # gate and its readout must not form two ideas of "matches the human". None = the row
                 # carries no gradeable ruling (unlabelled, or unreplayable so `chosen` is null).
                 agrees=lambda r: (None if r.get("correct") is None or r.get("chosen") is None
-                                  else satisfies_human(r["chosen"], r["correct"])),
+                                  else satisfies_human(r["chosen"], r["correct"],
+                                                       equiv=(equiv or {}).get(r["key"]))),
                 moved=lambda x, y: norm(x.get("chosen")) != norm(y.get("chosen")))}

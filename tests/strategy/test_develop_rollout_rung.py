@@ -129,3 +129,138 @@ def test_rung_captures_every_rolled_out_candidate_for_the_corpus():
     p._develop_rollout_line({}, None, None, options, traces)
     steps = {tuple(c["step"]) for c in p._develop_candidates_pending}
     assert steps == {(0,), (1,), (2,), (3,), (4,)}              # all five leaf values captured
+
+
+# ── Option Equivalence Class canonicalisation (ADR-0091 decisions 5+8, Issue #247) ───────────
+
+def _twin_frame(bodies):
+    """A board whose option i picks bench body i — the shape that produced the measured asymmetry."""
+    return {"current": {"yourIndex": 0, "looking": None,
+                        "players": [{"active": [], "bench": list(bodies), "hand": [], "discard": []},
+                                    {"active": [], "bench": [], "hand": [], "discard": []}]}}
+
+
+def _riolu(serial, *, hp=70):
+    return {"appearThisTurn": False, "energies": [], "energyCards": [], "hp": hp, "id": 1030,
+            "maxHp": 70, "playerIndex": 0, "preEvolution": [], "serial": serial, "tools": []}
+
+
+def _bench_options(n):
+    return [{"area": 5, "index": i, "playerIndex": 0, "type": 3} for i in range(n)]
+
+
+def _counting_leaf(pilot, by_step, *, streams=()):
+    """Like `_stub_leaf`, but RECORDS which first-steps were actually simmed — the point of the
+    canonicalisation is that identical options are not simmed twice."""
+    seen = []
+
+    def leaf(obs, step, spend_account=True, with_stream=False):
+        seen.append(tuple(step))
+        val = by_step.get(tuple(step))
+        stream = tuple(step) in streams
+        return (val, stream) if with_stream else val
+    pilot._engine_leaf_value = leaf
+    return seen
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_the_rung_sims_ONE_representative_per_equivalence_class():
+    """`81903490|0|decision|49`'s shape: three byte-identical Riolu. They are one decision, so the
+    rung sims the lowest index and never touches the other two — which is also why the change makes
+    the rung cheaper rather than more expensive."""
+    p = _pilot(leaf_option_equivalence=True)
+    obs = _twin_frame([_riolu(1), _riolu(2), _riolu(3)])
+    options = _bench_options(3)
+    traces = [_trace(0, 5.0), _trace(1, 4.0), _trace(2, 3.0)]
+    seen = _counting_leaf(p, {(0,): 100.0})
+    line = p._develop_rollout_line(obs, None, None, options, traces)
+    assert seen == [(0,)], "three identical bodies are ONE rollout"
+    assert line is not None and line.next_step == [0] and line.value == 100.0
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_every_member_of_a_class_carries_the_class_MAXIMUM():
+    """The fix itself. The representative's value is the whole class's — so the rung can no longer
+    prefer one of two identical decisions over the other, which is what the measured 1167.0-vs-95.4
+    split amounted to.
+
+    Values are held BELOW `KO_SCORE`: a rollout value at or above it is treated as an unsound
+    phantom win and defers the rung outright (ml f24), which would mask what this asserts."""
+    p = _pilot(leaf_option_equivalence=True)
+    obs = _twin_frame([_riolu(1), _riolu(2)])
+    options = _bench_options(2) + [{"type": 14}]
+    traces = [_trace(0, 5.0), _trace(1, 4.0), _trace(2, 3.0)]
+    _counting_leaf(p, {(0,): 116.7, (2,): 9.54})
+    p._develop_rollout_line(obs, None, None, options, traces)
+    cand = p._develop_candidates_pending
+    assert sorted(c["value"] for c in cand) == [9.54, 116.7, 116.7]
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_a_DISTINGUISHABLE_body_is_still_simmed_and_ranked_separately():
+    """The negative half — canonicalisation must not swallow genuine differences. A damaged twin is
+    a different decision, so it gets its own rollout and its own value."""
+    p = _pilot(leaf_option_equivalence=True)
+    obs = _twin_frame([_riolu(1), _riolu(2, hp=30)])
+    options = _bench_options(2)
+    traces = [_trace(0, 5.0), _trace(1, 4.0)]
+    seen = _counting_leaf(p, {(0,): 100.0, (1,): 20.0})
+    line = p._develop_rollout_line(obs, None, None, options, traces)
+    assert seen == [(0,), (1,)]
+    assert line.next_step == [0] and line.value == 100.0
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_the_kill_switch_OFF_is_byte_identical_to_the_pre_247_rung():
+    """`leaf_option_equivalence=False` must sim every option, exactly as before — the property that
+    makes the flag a real one-line rollback rather than a partial one."""
+    p = _pilot(leaf_option_equivalence=False)
+    obs = _twin_frame([_riolu(1), _riolu(2), _riolu(3)])
+    options = _bench_options(3)
+    traces = [_trace(0, 5.0), _trace(1, 4.0), _trace(2, 3.0)]
+    seen = _counting_leaf(p, {(0,): 116.7, (1,): 9.54, (2,): 9.54})
+    line = p._develop_rollout_line(obs, None, None, options, traces)
+    assert seen == [(0,), (1,), (2,)]
+    assert line.value == 116.7
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_a_stream_riding_REPRESENTATIVE_still_defers_the_whole_rung():
+    """All-or-nothing is unchanged in RULE (#178): an unreproducible value in the ranking means the
+    rung hands the turn back to the tuned scoring."""
+    p = _pilot(leaf_option_equivalence=True)
+    obs = _twin_frame([_riolu(1), _riolu(2)])
+    options = _bench_options(2)
+    traces = [_trace(0, 5.0), _trace(1, 4.0)]
+    _counting_leaf(p, {(0,): 100.0}, streams={(0,)})
+    assert p._develop_rollout_line(obs, None, None, options, traces) is None
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_a_stream_riding_NON_representative_no_longer_defers():
+    """The narrowing (decision 8), and the reason it is sound: option 1 is never simmed, so its coin
+    never enters the ranking. Before, a class surrendered the whole turn whenever one isomorphic
+    sibling happened to roll a coin its twin did not — and which sibling rolls is exactly the
+    cross-process variance #178 documents. Every value the rung consults is still reproducible."""
+    p = _pilot(leaf_option_equivalence=True)
+    obs = _twin_frame([_riolu(1), _riolu(2)])
+    options = _bench_options(2)
+    traces = [_trace(0, 5.0), _trace(1, 4.0)]
+    seen = _counting_leaf(p, {(0,): 100.0, (1,): 95.0}, streams={(1,)})
+    line = p._develop_rollout_line(obs, None, None, options, traces)
+    assert seen == [(0,)]
+    assert line is not None and line.value == 100.0
+
+
+@pytest.mark.req("REQ-PLANNER-0012")
+def test_the_committed_pick_is_the_LOWEST_index_of_a_winning_class():
+    """Determinism across processes: ties break to the class representative, never to whichever
+    member the iteration happened to reach first."""
+    p = _pilot(leaf_option_equivalence=True)
+    obs = _twin_frame([_riolu(1), _riolu(2)])
+    options = [{"type": 14}] + _bench_options(2)
+    # the option list puts the non-class option FIRST, so the class's members are indices 1 and 2
+    traces = [_trace(0, 9.0), _trace(1, 4.0), _trace(2, 3.0)]
+    _counting_leaf(p, {(0,): 10.0, (1,): 500.0})
+    line = p._develop_rollout_line(obs, None, None, options, traces)
+    assert line.next_step == [1]

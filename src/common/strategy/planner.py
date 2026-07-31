@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from common.option_equivalence import class_representatives, fan_out, option_equivalence
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
                                      _COIN_HEAD, _END, _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY,
                                      _TO_HAND, KO_SCORE)
@@ -530,8 +531,17 @@ class PlannerMixin:
         if not options:
             return None
         greedy_idx = max(range(len(traces)), key=lambda i: traces[i].score) if traces else 0
-        ranked = []
-        for i in range(len(options)):
+        # **Option Equivalence Class** canonicalisation (ADR-0091 decisions 5-6, Issue #247).
+        # Options a board cannot tell apart are ONE decision, so sim one representative per class and
+        # give every member its value. Measured cause: the rollout is greedy and index-order
+        # dependent, so it reached a KO from bench 0 and missed the isomorphic line from bench 1 —
+        # `81903490|0|decision|49` scored 1167.0 / 95.4 / 95.4 on three byte-identical Riolu.
+        # Taking the class MAXIMUM is sound by isomorphism (any line reachable from one member is
+        # reachable from all), so it corrects an omission rather than inventing optimism; it is also
+        # cheaper, a 3-member class costing one rollout instead of three.
+        equiv = self._option_equivalence(obs, options)
+        scored = [None] * len(options)
+        for i in class_representatives(equiv, len(options)):
             self._planning = True                        # per-sim reentrancy guard (never nest a search)
             try:
                 val, stream = self._engine_leaf_value(obs, [i], with_stream=True)
@@ -541,8 +551,13 @@ class PlannerMixin:
                 self._planning = False
             if stream:
                 return None                              # unreproducible ranking -> defer (all-or-nothing)
-            if val is not None:
-                ranked.append((val, i))
+            scored[i] = val
+        # The rule is UNCHANGED and its population narrowed (decision 8): every value in the ranking
+        # is one this rung actually consulted, and each is reproducible — which is exactly what
+        # all-or-nothing asserts. It also removes an order-dependent defer, since a class used to
+        # surrender the whole turn when one isomorphic sibling happened to roll a coin its twin did
+        # not, and which sibling rolls is the cross-process variance #178 documents.
+        ranked = [(v, i) for i, v in enumerate(fan_out(scored, equiv)) if v is not None]
         if not ranked:
             return None                                  # nothing simmable at all — defer to the tuned
                                                          # scoring rather than pick blind
@@ -559,6 +574,17 @@ class PlannerMixin:
         return TurnLine(next_step=[best_i], goal="develop", value=best_val,
                         rationale="develop: best end-of-turn board by rollout",
                         ranked_by="engine", diverged=(best_i != greedy_idx))
+
+    def _option_equivalence(self, obs, options) -> dict:
+        """The frame's **Option Equivalence Class** map, or ``{}`` when the kill-switch is off.
+
+        One place, so the flag is read once and the rung below cannot half-apply it. ``{}`` makes
+        `class_representatives` return every index and `fan_out` an identity, so OFF is byte-identical
+        to the pre-#247 rung — which is what makes the switch a real rollback rather than a partial
+        one."""
+        if not getattr(self, "leaf_option_equivalence", False):
+            return {}
+        return option_equivalence(options, obs)
 
     def _develop_candidates_record(self, ranked, best_i, greedy_idx, traces) -> list:
         """The develop rung's ``plan_candidates``: the top-K ranked end-boards (sorted desc) it already

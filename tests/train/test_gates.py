@@ -1337,15 +1337,179 @@ def test_the_excused_split_prefers_the_held_out_label_when_a_frame_is_both():
 
 
 @pytest.mark.req("REQ-GATE-0010")
-def test_the_transposition_frame_ADR_0085_relies_on_is_recorded_and_voided():
-    """`81905522-75` was ruled by ADR-0085 decision 7 and lived only in a probe script's private
-    constant, so the triage read it as *"never reviewed"* while `82749168-38` — same ADR, same
-    permanence — read as ruled. Retiring that constant (decision 5) is only real if the ruling
-    survived the move.
+def test_the_transposition_frame_is_now_GRADED_and_SATISFIED_not_voided():
+    """`81905522|0|decision|75` — the frame this whole vocabulary was invented for — is graded again
+    (ADR-0091 decision 3, Issue #247).
 
-    Note the SEAT: `82749168-38` is seat **1**. The probe's retired constant keyed it
-    ``"82749168-38"`` with no seat at all, which is precisely why that store could never join the
-    gates' keyspace — and why the key here is derived by the index rather than written by hand."""
+    This test used to assert the frame was *recorded and voided*, i.e. it pinned the WORKAROUND. The
+    oracle makes the ruling satisfiable on purpose: the agent picks index 1, the human ruled index 3,
+    and the two are the same undamaged Riolu, so the pick agrees. Voiding it now would excuse a frame
+    the gate can adjudicate — verbatim the complaint Issue #247's title makes.
+
+    `82749168-38` still stands as the neighbouring `refuted`, and its SEAT is still the point: it is
+    seat **1**, while the retired probe constant keyed it ``"82749168-38"`` with no seat at all, which
+    is why that store could never join the gates' keyspace. The key here is derived by the index
+    rather than written by hand, which is the property that catches it."""
     voided = gates.voided_frames(gates.ruling_index())
-    assert voided["81905522|0|decision|75"].disposition == "transposition"
+    assert "81905522|0|decision|75" not in voided, "the transposition entry is retired, not re-filed"
     assert voided["82749168|1|decision|38"].disposition == "refuted"
+
+    equiv = gates.equivalence_index()["81905522|0|decision|75"]
+    assert equiv[1] == equiv[3] and 1 in equiv[3], "the two Riolu are ONE decision"
+    assert gates.satisfies_human([1], [3], equiv=equiv) is True
+    assert gates.satisfies_human([1], [3]) is False, "and it took the oracle to see it"
+
+
+def test_the_transposition_WORD_survives_with_no_corpus_entry_behind_it():
+    """Decision 3 deletes the ENTRY and keeps the VOCABULARY. The oracle is sound only over what the
+    snapshot reveals — a face-down DECK option can never be fingerprinted — so an equivalence turning
+    on information outside `obs` would otherwise be unrecordable by a human."""
+    assert "transposition" in gates.VOIDING_DISPOSITIONS
+    assert "transposition" in gates.RECOGNISED_DISPOSITIONS
+
+
+def test_the_SECOND_instance_nobody_ruled_is_graded_correctly():
+    """`86091728|0|decision|19` sat in the corpus scored as a DISAGREEMENT the entire time — the same
+    Energy card onto either of two identical id-119 basics (70/70, empty, no tools), agent on bench 0
+    and the human on bench 1.
+
+    It is the evidence that the class needed fixing rather than the instance: nobody had ruled it, so
+    no ledger entry could ever have reached it, and only an oracle reading the board finds it."""
+    equiv = gates.equivalence_index()["86091728|0|decision|19"]
+    assert gates.satisfies_human([2], [3], equiv=equiv) is True
+    assert gates.satisfies_human([2], [3]) is False
+
+
+def test_a_ruling_is_NOT_satisfied_by_an_option_outside_its_class():
+    """The negative half, on the same real frame: the class widens what satisfies a ruling, it does
+    not make the ruling vacuous."""
+    equiv = gates.equivalence_index()["86091728|0|decision|19"]
+    assert gates.satisfies_human([1], [3], equiv=equiv) is False
+
+
+# ── the no-DLL layering, asserted rather than asserted-in-prose ──────────────────────────────────
+
+def test_importing_gates_never_maps_the_native_engine():
+    """`train.gates` must stay loadable with **no DLL** — the offline cross-platform suite depends on
+    it, and `cg.api` maps the native library on a bare import (`libcg` in /proc/self/maps).
+
+    Until ADR-0091 that constraint was a COMMENT. Decision 7 has `gates` import shipped code
+    (`common.option_equivalence`), which is exactly the kind of edge that turns a documented
+    invariant into a broken one three refactors later — a shipped module gains an innocuous
+    convenience import and the gates stop loading on a machine with no engine. So it is a test now.
+
+    A subprocess, because this process has almost certainly imported `cg` already: the assertion is
+    about what a FRESH interpreter loads, which an in-process check cannot see."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo = Path(__file__).resolve().parents[2]
+    code = ("import sys;"
+            "sys.path[:0] = [r'%s', r'%s'];"
+            "import train.gates;"
+            "import common.option_equivalence;"
+            "bad = sorted(m for m in sys.modules if m == 'cg' or m.startswith('cg.'));"
+            "print(','.join(bad))" % (repo / "tools", repo / "src"))
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                          cwd=str(repo), encoding="utf-8")
+    assert proc.returncode == 0, proc.stderr
+    assert proc.stdout.strip() == "", (
+        f"importing the gates pulled in the engine wrapper: {proc.stdout.strip()}")
+
+
+# ── the Option Equivalence Class reaches the predicate (pure half) ───────────────────────────────
+
+def test_no_equiv_map_is_byte_identical_to_the_old_predicate():
+    """The default that protects three decider sweeps and every assertion above: a caller that does
+    not ask for equivalence gets exactly the pre-#247 answer."""
+    assert satisfies_human([1], [3]) is False
+    assert satisfies_human([1], [3], equiv=None) is False
+    assert satisfies_human([1], [3], equiv={}) is False
+
+
+def test_a_sibling_pick_satisfies_a_ruling_naming_its_twin():
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert satisfies_human([1], [3], equiv=equiv) is True
+    assert satisfies_human([3], [1], equiv=equiv) is True
+
+
+def test_an_unrelated_pick_still_fails_under_an_equiv_map():
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert satisfies_human([2], [3], equiv=equiv) is False
+
+
+def test_a_DECLINE_stays_exact_under_an_equiv_map():
+    """The dangerous case. ``correct == []`` names no index, so there is no class to widen — and the
+    empty set being a subset of everything is what would make every frame vacuously agree."""
+    equiv = {0: frozenset({0, 1}), 1: frozenset({0, 1})}
+    assert satisfies_human([], [], equiv=equiv) is True
+    assert satisfies_human([0], [], equiv=equiv) is False
+
+
+def test_a_multi_pick_ruling_still_needs_EVERY_ruled_card_matched():
+    """A class widens what satisfies each ruled card; it never excuses a missing one."""
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert satisfies_human([1, 5], [3, 5], equiv=equiv) is True
+    assert satisfies_human([1], [3, 5], equiv=equiv) is False, "half an answer is not an answer"
+
+
+def test_an_unreplayable_frame_satisfies_nothing_even_with_a_class():
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert satisfies_human(None, [3], equiv=equiv) is False
+
+
+def test_a_capture_row_records_WHICH_options_were_one_decision():
+    """`classes_of` is the JSON-safe shape, and it must be stable so a re-capture diff is readable."""
+    equiv = {3: frozenset({1, 3}), 1: frozenset({1, 3}), 4: frozenset({4, 0}), 0: frozenset({4, 0})}
+    assert gates.classes_of(equiv) == [[0, 4], [1, 3]]
+    assert gates.classes_of({}) == []
+    assert gates.classes_of(None) == []
+
+
+def test_ONE_pick_cannot_satisfy_TWO_ruled_cards_in_the_same_class():
+    """The regression guard for a real defect this build shipped and the review caught.
+
+    The first implementation asked only *"does some member of this card's class appear in the
+    pick?"*, so a ruling of ``[1, 3]`` over two indistinguishable options was satisfied by taking
+    ``[1]`` alone — one pick answering for two ruled cards. A class widens WHICH option satisfies a
+    ruled card; it must never let one pick satisfy two of them.
+
+    Zero committed frames hit this today (all 372 checked), so it was latent rather than a live
+    mis-grade — which is precisely why it needs a test rather than a corpus assertion."""
+    equiv = {1: frozenset({1, 3}), 3: frozenset({1, 3})}
+    assert satisfies_human([1], [1, 3], equiv=equiv) is False, "half the ruling is not the ruling"
+    assert satisfies_human([1, 3], [1, 3], equiv=equiv) is True
+    # and the widening it must still allow: two ruled cards in DIFFERENT classes
+    two = {0: frozenset({0, 2}), 2: frozenset({0, 2}), 1: frozenset({1, 4}), 4: frozenset({1, 4})}
+    assert satisfies_human([2, 4], [0, 1], equiv=two) is True, "each ruled card met by its own twin"
+
+
+def test_the_diff_classifies_a_SIBLING_pick_as_neutral_not_a_regression():
+    """The gate half of the fix, and the one that decides whether `main` goes red.
+
+    A build whose agent moves from one member of a class to another has changed nothing the ruling
+    can see. Before the oracle that read as a REGRESSION and failed `main`; it must now be NEUTRAL —
+    a real change in what was played, but not one the corpus adjudicates."""
+    before = _report([{"key": "e|0|decision|1", "chosen": [3], "correct": [3], "context": 0}])
+    after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
+    equiv = {"e|0|decision|1": {1: frozenset({1, 3}), 3: frozenset({1, 3})}}
+
+    blind = gates.decider_lab_diff(before, after)
+    assert [r["verdict"] for r in blind["rows"]] == ["REGRESSION"], "the defect, reproduced"
+
+    aware = gates.decider_lab_diff(before, after, equiv=equiv)
+    assert [r["verdict"] for r in aware["rows"]] == ["NEUTRAL"]
+    assert gates.decision_gate_verdict(aware["rows"], held_out={}) is True
+
+
+def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
+    """The equivalence is a property of the CORPUS, not of a capture: an old baseline carries no
+    `equiv` field at all, so if the diff read the map off each side it would grade its two halves
+    under two different oracles. The agree delta must move on both sides at once."""
+    before = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
+    after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [3], "context": 0}])
+    equiv = {"e|0|decision|1": {1: frozenset({1, 3}), 3: frozenset({1, 3})}}
+    assert gates.decider_lab_diff(before, after)["agree_delta"]["before"] == (0, 1)
+    aware = gates.decider_lab_diff(before, after, equiv=equiv)["agree_delta"]
+    assert aware["before"] == (1, 1) and aware["after"] == (1, 1)
