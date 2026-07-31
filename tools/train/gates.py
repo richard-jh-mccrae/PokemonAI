@@ -844,9 +844,11 @@ def ruling_index(store=None, *, reviewed_path=None, fixtures_dir=None) -> dict:
     than becoming a rewrite of every grader.
 
     **The join is DERIVED, inside the one corpus walk.** `reviewed.json` keys by ADR-0049's Scope
-    subject (`review_key`: ``<ep>-<frame>`` / ``<ep>-t<turn>s<seat>`` / ``<ep>-m<seat>``); the gates
-    key by **Frame Key** (`correction_frame_key`: ``<ep>|<seat>|<scope>|<subject>``). Both come off the
-    same `Correction` and NEITHER derives from the other, so the walk is the only honest join point —
+    subject (`review_key`: ``<ep>-<frame>`` / ``<ep>-t<turn>s<seat>`` / ``<ep>-m<seat>`` — the same
+    id the reports print, a claim that was FALSE until Issue #250 made `report_md._at` honour it);
+    the gates key by **Frame Key** (`correction_frame_key`: ``<ep>|<seat>|<scope>|<subject>``).
+    Both come off the same `Correction` and NEITHER derives from the other, so the walk is the only
+    honest join point —
     translating between the two string shapes anywhere else is the hand-built key ADR-0087 decision 2
     forbids, and the one that cost the Decision Gate 203 of its 372 keys.
 
@@ -890,9 +892,17 @@ def orphan_rulings(store=None, *, reviewed_path=None) -> list:
     `held_out_frames` is asserted against for the other — a ruling detached from its record reads
     exactly like a frame nobody ruled.
 
-    Measured 2026-07-31: **two** entries are orphaned, and one of them (`86091435-119`) is a
+    Measured 2026-07-31: **two** entries were orphaned, and one of them (`86091435-119`) was a
     ``refuted`` — a human refutation voiding nothing, silently, which is precisely the class of
-    defect Issue #239 was opened about."""
+    defect Issue #239 was opened about.
+
+    Both were repaired the same day (Issue #250), and **neither was stale**: they named live
+    committed records under the wrong name. `85046350-10` had the wrong EPISODE (the record is
+    ep 85045840 f10, in the same store file); `86091435-119` the wrong key SHAPE (the record is
+    turn-scoped, so its `review_key` is `86091435-t14s0` — 119 is the Anchor frame `report_md._at`
+    printed for every scope). The writer now RESOLVES a **Ruling Locator** rather than accepting a
+    typed key (`reviewed.resolve_locator`), so this is the backstop for hand-edits rather than the
+    only guard, and the committed ledger is asserted **empty** of orphans."""
     from train.blunder.reviewed import load_reviewed, review_key
 
     reviewed = load_reviewed(reviewed_path) if reviewed_path is not None else load_reviewed()

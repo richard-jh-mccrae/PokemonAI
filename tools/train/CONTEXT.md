@@ -258,10 +258,30 @@ A `reviewed.json` entry whose `review_key` matches NO committed **Correction** (
 and looks each record up, so an entry the corpus cannot reach never enters the index at all. It must
 therefore be walked from the LEDGER's side — a test that asks the index instead is **tautological**,
 because `voided_frames(index)` is a subset of `keyed_corrections` by construction and can never fail.
-Two exist today, and one (`86091435-119`) is a `refuted`: a human refutation voiding nothing. Same
-dangling-join family as **Claim Agreement**'s `no_record` finding, one store over.
-_Avoid_: stale ruling (a ruling can be stale AND reachable), dangling key, missing correction (the
-Correction is not missing — the ledger names one that never existed under that key)
+Same dangling-join family as **Claim Agreement**'s `no_record` finding, one store over.
+Both that ever existed were **mis-keyed, not stale** — they named live committed records under the
+wrong name (**ADR-TEMP-250**, Issue #250): `85046350-10` had the wrong *episode* (the record is
+`85045840` f10, same file), `86091435-119` the wrong key *shape* (the record is turn-scoped, so its
+`review_key` is `86091435-t14s0`). Both re-keyed; the guard now asserts **empty**, which also proves
+every committed entry resolves.
+_Avoid_: stale ruling (a ruling can be stale AND reachable — and neither real orphan was stale),
+dangling key, missing correction (the Correction is not missing — the ledger names one that never
+existed under that key)
+
+**Ruling Locator**:
+Any string that names a **Correction** well enough for the ledger writer to find it — the canonical
+`review_key`, the **Frame Key**, the `Correction.id`, or the **anchor form** the reports print
+(**ADR-TEMP-250**, Issue #250). `reviewed.resolve_locator(locator, keyed)` maps all four onto the one
+canonical `review_key`, which is what is written; an unresolvable locator is REFUSED with near-misses
+(two deterministic rules — same frame under a different episode; same episode, anchor↔Scope-subject —
+never fuzzy matching, because a confident wrong suggestion points at someone else's human ruling and
+`orphan_rulings` cannot see that). The corpus is INJECTED (`keyed_corrections()`'s pairs), so
+`blunder/` still never imports `gates`. Exists because a hand-typed ledger key **is** a hand-built key
+(ADR-0087 decision 2, one store over): the writer took free text, its `--help` and `reviewed.json`'s
+`_note` documented the *decision* shape only, and `report_md._at` printed the scope-blind anchor frame
+— so the operator who wrote `86091435-119` was copying what the report showed them.
+_Avoid_: key (a locator is what you *type*; the **review_key** is what gets *written*), alias,
+lookup string, id (`Correction.id` is only one of the four accepted forms)
 
 **Transposition**:
 A disposition (**ADR-0088** decision 6): the human's ruling is correct, but its `correct` names

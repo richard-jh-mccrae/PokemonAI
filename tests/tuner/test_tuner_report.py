@@ -71,3 +71,32 @@ def test_run_report_locates_a_scoped_proposal_by_its_subject():
     assert _where(propose_hypothesis(turn)) == "ep 42 turn 12 (seat 1)"
     assert _where(propose_hypothesis(match)) == "ep 42 whole match (seat 1)"
     assert _where(propose_hypothesis(decision)) == "ep 42 f28"
+
+
+def test_the_report_names_a_correction_by_the_key_the_ledger_uses():
+    """ADR-TEMP-250 decision 4 (Issue #250). `_at` printed `ep <id> f<frame>` for EVERY Correction
+    regardless of scope, so a turn-scoped record was displayed under its Anchor frame — and an
+    operator copying that string into `review_correction.py` wrote a ruling that reached nothing.
+    That is literally how `86091435-119` was born, and the reviewed-entries section (which this
+    exercises) is where the broken ruling was printed back beside the frame that broke it.
+
+    So the rule is: what the report prints is what the writer accepts. Asserted through the RENDERED
+    report, not `_at` directly — the property is about the artifact a human reads."""
+    from train.blunder.correction import build_correction
+    from train.blunder.decisions import Decision
+    from train.blunder.reviewed import review_key
+
+    dec = Decision(episode_id=86091435, frame=119, seat=0, turn=14, select_context="Main",
+                   select_type="Main", options=[{"type": 7}, {"type": 13}], chosen=[0], current={})
+    turn = build_correction(dec, source="own", agent="a", correct=[], category="wrong_supporter",
+                            rationale="r", scope="turn", span=[{"chosen_label": "x"}])
+    assert review_key(turn) == "86091435-t14s0"                  # the key the ledger is keyed by
+
+    result = TuneResult(overrides={}, proposals=[], skipped=[], n_constraints=1,
+                        unsatisfied=[turn], base_satisfied=0, fit_adopted=False, w_items=[])
+    md = render_run_report("dragapult_ex", result, seeds={}, changed={}, reg=0.15,
+                           when_iso="2026-01-01T00:00:00", build=None, n_corrections=1,
+                           reviewed=[(turn, {"disposition": "refuted", "reason": "better line"})])
+
+    assert md.count("86091435-t14s0") == 2          # unsatisfied list AND reviewed-entries section
+    assert "ep 86091435 f119" not in md             # the Anchor frame never poses as identity
