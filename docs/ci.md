@@ -171,7 +171,7 @@ so it was not born red.
 
 ### Baseline provenance
 
-`data/leaf_lab/baseline.json` is currently pinned at **`ff05403` (2026-07-31)**. Six deliberate
+`data/leaf_lab/baseline.json` is currently pinned at **`31b1c28` (2026-07-31)**. Seven deliberate
 re-captures, each taken only with **zero unruled `OK → MISS`** outstanding — the ADR-0072 decision 2
 precondition, *"only when a swap's flips have been ruled"*:
 
@@ -183,6 +183,7 @@ precondition, *"only when a swap's flips have been ruled"*:
 | 2026-07-31 | `e138881` | **nothing — a field relabel (`graded` → `gradeable`) + `git_rev`, zero row changes** | the code review settled one word for one concept across both labs (Issue #239) |
 | 2026-07-31 | `e834272` | **19 frames VOIDED out of the rates** + 1 × `MISS → OK` (`83686860\|1\|decision\|13`) + 1 × ruled `OK → MISS` (`86091435\|0\|decision\|35`, owner `#165`) | Issue #239: a **Voided Ruling** leaves the agree rate. The two flips are **main's**, not this issue's — the baseline was stale by 32 rows of `values` drift, the `OK → MISS` was already held out, and zero unruled `OK → MISS` were outstanding |
 | 2026-07-31 | `ff05403` | **1 more frame VOIDED (`86091435\|0\|turn\|14`), and it was an `OK`; zero unruled `OK → MISS`** | Issue #250: the same repaired refutation as the Decision Gate's last row. `leaf_correct 183/249 → 182/248`, voided `19 → 20`, rate 73.49% → **73.39%**. The leaf did not get worse — a frame it was scoring correctly is no longer a frame a human stands behind, so it stops counting. This is the honest half of the pair: one repair, one rate up, one rate down |
+| 2026-07-31 | `31b1c28` | **nothing — `git_rev` only, zero row changes** | Issue #250: rebasing onto `main` (Issue #243's PR #252, plus an ADR renumber) orphaned the capture's SHA. Re-measured against the new base first: **zero** row changes, so #243's corpus-reader refactor is confirmed behaviour-preserving for this instrument as its PR claimed |
 
 Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
 same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to
@@ -289,7 +290,7 @@ correction rounds (Issue #146), not by this job.
 
 ### Baseline provenance
 
-`data/decider_lab/baseline.json` is currently pinned at **`ff05403` (2026-07-31)**, **372 frames**
+`data/decider_lab/baseline.json` is currently pinned at **`31b1c28` (2026-07-31)**, **372 frames**
 (345 gradeable — 26 carry a **Voided Ruling**, ADR-0088).
 
 | capture | rev | absorbed | why |
@@ -302,6 +303,7 @@ correction rounds (Issue #146), not by this job.
 | 2026-07-31 | `e138881` | **nothing — `git_rev` only, zero row changes** | re-captured beside its sibling after the code review (Issue #239) |
 | 2026-07-31 | `e834272` | **25 frames VOIDED out of the rate; zero `chosen` moves, zero Ruling Moves** | Issue #239: a ruling the human took back can no longer grade, so it leaves the denominator and stops gating. Agree `253/371 → 248/346` — **5 of the 25 had been scored as agreements**, so this is not a one-way flatter of the number |
 | 2026-07-31 | `ff05403` | **1 more frame VOIDED (`86091435\|0\|turn\|14`); zero `chosen` moves, zero Ruling Moves** | Issue #250: a **refutation that had been ruling on nothing** since 2026-07-19 finally reaches its record. Agree `248/346 → 248/345`, voided `25 → 26`. The frame was a **disagreement**, so the rate rises 71.68% → 71.88% — read that as the repair working, not the metric being flattered; see the sibling entry, where the same ruling costs the Leaf Gate an `OK` |
+| 2026-07-31 | `31b1c28` | **nothing — `git_rev` only, zero row changes** | Issue #250: same rebase as the sibling entry. Re-measured before re-capturing — `248/345` unchanged, 0 picks moved, 0 Ruling Moves |
 
 The 2026-07-31 pair is the shape ADR-0087 decision 5 prescribes, and the reason it is two
 entries rather than one. The Decision Gate's keys had been built by hand, reading `seat` off a
