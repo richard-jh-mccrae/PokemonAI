@@ -349,6 +349,40 @@ def _read_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _correction_logs(root: Path) -> list:
+    """Every correction log under ``root``, as the STORE defines that layout — never a local glob.
+
+    The store owns where the logs live (`store.jsonl_files`), and re-deriving it here would be a
+    second idea of what the corpus *is*, one level below the second idea of what a *record* is that
+    cost the Decision Gate 40 records (ADR-TEMP-241). Verified equivalent to the `rglob` this
+    replaces: both resolve the same 28 files, and the store's version additionally knows about the
+    legacy root-level log."""
+    from train.blunder.store import jsonl_files
+    return jsonl_files(root)
+
+
+def _corrections_in(path: Path):
+    """Every Correction in one log file, CONSTRUCTED (ADR-TEMP-241 decision 1).
+
+    Per-file rather than through `gates.keyed_corrections` because the viewer is addressed by the
+    ``<episode>-<frame>`` shorthand a human types, not by a **Frame Key**, and it displays the source
+    path — which a keyed reader does not carry. What it needs from the contract is the *construction*
+    (so `agent` is backfilled from `agent_build`), not the keying. Dedup off: a viewer showing the
+    append history is right where a gate collapsing it is.
+
+    A malformed line is skipped rather than raised on — the same tolerance the raw read had, and the
+    viewer is a diagnostic that must still answer when one record is broken."""
+    from train.blunder.correction import Correction
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            yield Correction.from_dict(json.loads(line))
+        except (ValueError, TypeError):
+            continue
+
+
 def _hit_from_correction(rec: dict, path: Path) -> FrameHit:
     dec = rec.get("decision") or {}
     cur = dec.get("current") or {}
@@ -463,20 +497,17 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():
         searched.append(f"{corrections}/**/corrections.jsonl")
-        for path in sorted(corrections.rglob("corrections.jsonl")):
-            for line in path.read_text(encoding="utf-8").splitlines():
-                line = line.strip()
-                if not line:
+        # CONSTRUCT the records (ADR-TEMP-241 decision 1) rather than re-parsing the raw lines: a
+        # record with an empty `agent` carries a populated `agent_build`, and only `from_dict`
+        # backfills the deck from that stem. 40 committed records are that shape, and a raw read
+        # renders every one of them with a blank agent. Per-file so the source path survives.
+        for path in _correction_logs(corrections):
+            for c in _corrections_in(path):
+                if c.episode_id != episode_id:
                     continue
-                try:
-                    rec = json.loads(line)
-                except ValueError:
+                if (c.decision or {}).get("frame") != frame:
                     continue
-                if rec.get("episode_id") != episode_id:
-                    continue
-                if (rec.get("decision") or {}).get("frame") != frame:
-                    continue
-                return _hit_from_correction(rec, path)
+                return _hit_from_correction(c.to_dict(), path)
 
     fixtures = Path(fixtures) if fixtures else None
     if fixtures and fixtures.is_dir():
@@ -1070,16 +1101,9 @@ def available_frames(episode_id: int | None = None, *, corrections=DEFAULT_CORRE
     keys: set[str] = set()
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():
-        for path in corrections.rglob("corrections.jsonl"):
-            for line in path.read_text(encoding="utf-8").splitlines():
-                if not line.strip():
-                    continue
-                try:
-                    rec = json.loads(line)
-                except ValueError:
-                    continue
-                ep = rec.get("episode_id")
-                fr = (rec.get("decision") or {}).get("frame")
+        for path in _correction_logs(corrections):
+            for c in _corrections_in(path):        # constructed, not raw — see `find_frame`
+                ep, fr = c.episode_id, (c.decision or {}).get("frame")
                 if ep is None or fr is None:
                     continue
                 if episode_id is None or ep == episode_id:

@@ -98,7 +98,7 @@ def _find_replay(episode_id, dirs) -> Path | None:
 
 def main(argv=None):
     from meta_tracker.parse import load_replay
-    from train.blunder.store import DEFAULT_ROOT, _jsonl_files, load_corrections
+    from train.blunder.store import DEFAULT_ROOT, jsonl_files, load_corrections
 
     ap = argparse.ArgumentParser(description="Backfill search_begin_input + own_prizes on Corrections")
     ap.add_argument("--store", default=str(DEFAULT_ROOT))
@@ -108,7 +108,7 @@ def main(argv=None):
 
     cache: dict = {}
     total = filled = 0
-    for f in _jsonl_files(Path(args.store)):
+    for f in jsonl_files(Path(args.store)):
         rows = [json.loads(line) for line in f.read_text("utf-8").splitlines() if line.strip()]
         changed = False
         for row in rows:

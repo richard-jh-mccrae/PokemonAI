@@ -68,9 +68,10 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from train import gates as gates_mod                          # noqa: E402  — THE Corpus Reader lives here
 from train.gates import (decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         frame_key_of, held_out_frames, print_gate_report,
-                         satisfies_human)
+                         held_out_frames, print_gate_report,
+                         print_ruling_moves, satisfies_human, write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -89,27 +90,40 @@ def _tune():
 
 
 def _records(store: Path, agent: str | None):
-    """Every Correction carrying the obs needed to replay it, keyed so duplicates collapse."""
-    index = {}
-    for jf in sorted(Path(store).glob("*/corrections.jsonl")):
-        for line in jf.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
-            d = json.loads(line)
-            if agent and d.get("agent") != agent:
-                continue
-            if not (d.get("obs") and d.get("agent")):
-                continue
-            index[(str(d.get("episode_id")), d.get("decision", {}).get("frame"))] = d
-    return [v for _k, v in sorted(index.items(), key=lambda kv: (kv[0][0], kv[0][1] or 0))]
+    """Every replayable Correction, already paired with its **Frame Key**.
+
+    One line, because it must be: this is `gates.keyed_corrections`, THE Corpus Reader
+    (ADR-TEMP-241 decision 1). What used to live here was a private raw-JSONL walk with a
+    hand-built key, and it cost 40 dropped records plus 163 mis-keyed ones — see that function's
+    docstring for the measurement. The predicate runs on the CONSTRUCTED record, so an empty
+    ``agent`` has already been backfilled from ``agent_build`` before anything filters on it.
+
+    Sorted by key so a capture's row order is stable across runs and machines."""
+    def keep(c):
+        return bool(c.obs and c.agent) and (not agent or c.agent == agent)
+
+    return sorted(gates_mod.keyed_corrections(store, predicate=keep), key=lambda kc: kc[0])
 
 
-def _key(rec) -> str:
-    """The frame's Held-out-Ledger key. Built through `gates.frame_key_of` so one ruling holds a
-    frame out of BOTH gates — a second implementation drifting by a field would silently stop
-    matching, which is the failure ADR-0072 decision 4 exists to prevent."""
-    d = rec.get("decision") or {}
-    return frame_key_of(rec.get("episode_id"), d.get("seat", 0), "decision", d.get("frame"))
+def _portable_error(exc: Exception) -> str:
+    """One unreplayable frame's error, with every machine-specific path removed.
+
+    The baseline is a COMMITTED ruling record, so anything it embeds must be reproducible on any
+    box. It was embedding an absolute path — `/home/user/PokemonAI/...` from the Linux capture,
+    `C:\\Users\\...` from a Windows one — so the same build re-captured on a different machine
+    produced a different artifact for a frame whose *verdict* had not moved. Dev is Windows and the
+    grader is Linux (CLAUDE.md), so that difference is the normal case, not an edge one.
+
+    Repo-relative and forward-slashed, keeping the diagnostic (which file, which error) while
+    dropping the part that only says who ran it.
+
+    Slashes are normalised BEFORE the root is stripped: an exception's ``str`` carries the path
+    already repr-escaped (``C:\\\\Users\\\\...``), so matching ``str(REPO)`` against the raw text
+    silently fails on Windows and leaves the absolute path in.
+    """
+    text = f"{type(exc).__name__}: {exc}".replace("\\\\", "/").replace("\\", "/")
+    root = str(REPO).replace("\\", "/")
+    return text.replace(root + "/", "").replace(root, "")
 
 
 def build_report(store, agent=None) -> dict:
@@ -118,22 +132,23 @@ def build_report(store, agent=None) -> dict:
     Fresh per frame, deliberately: the Pilot is stateful (deck tracker, caches), and the
     `needs_sweep` / `threat_sweep` discipline is one pilot per frame so a replay cannot inherit a
     previous frame's board. Unreplayable frames are recorded with `error` rather than dropped —
-    a shrinking gated set must be visible, not silent.
+    a shrinking gated set must be visible, not silent. The *unreadable* ones used to be dropped
+    silently, one layer earlier, which is what ADR-TEMP-241 fixes.
     """
     tune = _tune()
     rows, errors = [], 0
-    for rec in _records(store, agent):
-        select = ((rec.get("obs") or {}).get("select") or {})
-        row = {"key": _key(rec), "episode": str(rec.get("episode_id")),
-               "frame": (rec.get("decision") or {}).get("frame"),
-               "agent": rec.get("agent"), "context": select.get("context"),
-               "correct": rec.get("correct")}
+    for key, rec in _records(store, agent):
+        select = ((rec.obs or {}).get("select") or {})
+        row = {"key": key, "episode": str(rec.episode_id),
+               "frame": (rec.decision or {}).get("frame"),
+               "agent": rec.agent, "context": select.get("context"),
+               "correct": rec.correct}
         try:
-            pilot = tune._build_pilot(rec["agent"])[0]
-            row["chosen"] = pilot.explain(rec["obs"]).chosen
+            pilot = tune._build_pilot(rec.agent)[0]
+            row["chosen"] = pilot.explain(rec.obs).chosen
         except Exception as e:                      # a frame this build cannot replay at all
             row["chosen"] = None
-            row["error"] = f"{type(e).__name__}: {e}"
+            row["error"] = _portable_error(e)
             errors += 1
         rows.append(row)
     labelled = [r for r in rows if r.get("correct") is not None and r.get("chosen") is not None]
@@ -176,9 +191,7 @@ def main(argv=None) -> int:
     rpt = build_report(args.store, args.agent)
 
     if args.cmd == "capture":
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        args.out.write_text(json.dumps({"git_rev": _git_rev(), "agent": args.agent, **rpt},
-                                       indent=2), encoding="utf-8")
+        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
         _print_summary(rpt)
         print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
         return 0
@@ -203,6 +216,7 @@ def main(argv=None) -> int:
                     print(f"    {r['key']}  {r['before']} -> {r['after']}  (human {r['correct']})")
         if diff["added"] or diff["removed"]:
             print(f"\n  ⚠️ corpus shape moved: +{len(diff['added'])} / -{len(diff['removed'])} frames")
+        print_ruling_moves(diff["ruling_moves"])
         passed = print_gate_report(
             f"DECISION GATE (ADR-0072) — {diff['compared']} frames compared vs "
             f"{before.get('git_rev', '?')}"
@@ -212,9 +226,7 @@ def main(argv=None) -> int:
             line=lambda r: f"REGRESSED {r['key']}  {r['before']} -> {r['after']}  "
                            f"(human {r['correct']})")
         if args.out:
-            args.out.parent.mkdir(parents=True, exist_ok=True)
-            args.out.write_text(json.dumps({"passed": passed, "rows": rows}, indent=2),
-                                encoding="utf-8")
+            write_json_artifact(args.out, {"passed": passed, "rows": rows})
         return 0 if passed else 1
 
     _print_summary(rpt)

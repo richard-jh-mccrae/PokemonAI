@@ -328,7 +328,10 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
     ``episode_id`` alone silently merged frames from one episode — it collapsed a real 276-row diff
     to 221 — and an under-reporting gate is the precise failure mode this exists to prevent. Frames
     present on only one side are surfaced (``added``/``removed``) rather than quietly skipped, so a
-    capture taken against a different corpus shape is visible."""
+    capture taken against a different corpus shape is visible — and a frame whose *ruling* moved is
+    surfaced as a **Ruling Move** (`ruling_moves`), which neither of those pairs can see because the
+    frame exists on both sides. This diff compares ``correct_is_top``, computed FROM ``correct``, so
+    a re-ruling silently changes its verdict exactly as it does the Decision Gate's."""
     def index(rpt):
         return {r["key"]: r for r in (rpt.get("rows") or []) if not r.get("unscorable")}
 
@@ -343,7 +346,7 @@ def leaf_lab_diff(before: dict, after: dict) -> dict:
             miss_to_ok.append({"key": k, "before": b[k], "after": a[k]})
     return {"ok_to_miss": ok_to_miss, "miss_to_ok": miss_to_ok,
             "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
-            "compared": len(shared)}
+            "compared": len(shared), "ruling_moves": ruling_moves(before, after)}
 
 
 def discrimination_gate_verdict(diff: dict, *, held_out: dict) -> bool:
@@ -416,6 +419,71 @@ def held_out_map(claims_by_key: dict) -> dict:
 SEEDED_OBS_KEYS = ("own_prizes", "search_begin_input")
 
 
+def write_json_artifact(path, doc) -> None:
+    """Write a gate artifact (a capture, a verdict) as **LF-framed UTF-8 bytes**.
+
+    Both labs write JSON artifacts and both used ``Path.write_text``, which on Windows rewrites every
+    ``\\n`` to ``\\r\\n``. `data/decider_lab/baseline.json` and `data/leaf_lab/baseline.json` are
+    committed LF, so a re-capture from a Windows box turned a 40-row data change into a 4835-line
+    whole-file rewrite — burying the one thing a reviewer of a re-capture needs to see. Dev is on
+    Windows and the grader is Linux (CLAUDE.md), so the framing has to be chosen, not inherited.
+
+    Shared rather than fixed twice for this module's own reason: a second implementation drifts, and
+    a re-capture is exactly the moment nobody re-reads the writer."""
+    from pathlib import Path
+    import json as _json
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(_json.dumps(doc, indent=2).encode("utf-8"))
+
+
+def correction_frame_key(correction) -> str:
+    """One Correction's **Frame Key** — ``frame_key_of(*identity_key(c))``, and the ONLY way any
+    instrument derives one (ADR-TEMP-241 decision 2).
+
+    Split out of `keyed_corrections` so a caller holding a single record cannot be tempted to
+    re-assemble the shape by hand, which is exactly how the Decision Gate ended up reading ``seat``
+    from a snapshot that has no ``seat`` field. Both gates route through here, so ADR-0072 decision
+    4's *one ruling holds a frame out of BOTH gates* is structural rather than a convention."""
+    from train.blunder.correction import identity_key
+    return frame_key_of(*identity_key(correction))
+
+
+def keyed_corrections(store=None, *, predicate=None) -> list:
+    """**THE Corpus Reader** — every committed Correction, already paired with its **Frame Key**
+    (ADR-TEMP-241 decisions 1–2, Issue #241). Returns ``[(frame_key, Correction), ...]``.
+
+    Two rules, and they are the same rule twice:
+
+    * **Records are CONSTRUCTED**, via ``load_corrections`` — never walked as raw JSONL. That is what
+      inherits ``Correction.from_dict``'s ``agent_build`` backfill, and every future normalisation,
+      for both gates at once. The Decision Gate kept its own raw walk and dropped **40** records on a
+      falsy ``agent`` — a *recoverable* field, not a missing one — before a row existed, so they
+      landed in neither capture and ``added``/``removed`` could never surface them.
+    * **The key is DERIVED**, via ``frame_key_of(*identity_key(c))`` — never hand-assembled. The gate
+      built its own from raw dict lookups and read ``seat`` off the ``decision`` snapshot, which has
+      no ``seat`` field (it is top-level), so every key it produced said seat 0 against a corpus that
+      is 201/171. Scope and subject were hardcoded too. Net: **169 of 372 keys correct**, and four of
+      the eleven Held-out Ledger rulings unreachable — a frame ruled by a human failing `main` behind
+      their back. It drifted undetectably because BOTH sides of a diff shared the same wrong key, so
+      the diff stayed self-consistent and nothing ever went red.
+
+    Returning **pairs, not a dict**, is deliberate. A dict silently collapses two Corrections sharing
+    a key; today that is measurably zero, but ``load_corrections`` deliberately keeps *conflicts*
+    (same identity, different ``correct``/``category`` — what ``find_conflicts`` surfaces), and a
+    reader that drops one would commit this issue's own defect at the seam built to remove it. A
+    caller wanting a mapping builds one and owns that choice.
+
+    ``predicate`` filters on the CONSTRUCTED record (e.g. ``lambda c: c.obs and c.agent`` for the
+    replayable set), so a filter can never again be applied to a field the raw shape had not yet
+    normalised."""
+    from train.blunder.store import DEFAULT_ROOT, load_corrections
+
+    corrections = load_corrections(store if store is not None else DEFAULT_ROOT)
+    return [(correction_frame_key(c), c)
+            for c in corrections if predicate is None or predicate(c)]
+
+
 def iter_keyed_fixtures(fixtures_dir=None):
     """Yield ``(path, fixture, frame_key, Claims)`` per committed fixture declaring a ``frame_key``.
 
@@ -481,11 +549,7 @@ def claim_agreement(fixtures_dir=None, store=None) -> list[dict]:
     deriving one from the loose ``episode``+``frame`` pair would be guessing at ADR-0049's identity
     (the Scope's *subject*, not the Anchor frame). Several fixtures may share one key — legal and
     load-bearing — so each is judged independently."""
-    from train.blunder.correction import identity_key
-    from train.blunder.store import DEFAULT_ROOT, load_corrections
-
-    by_key = {frame_key_of(*identity_key(c)): c
-              for c in load_corrections(store if store is not None else DEFAULT_ROOT)}
+    by_key = dict(keyed_corrections(store))     # THE Corpus Reader; last wins, as this join always did
 
     found: list[dict] = []
     for path, fx, key, claims in iter_keyed_fixtures(fixtures_dir):
@@ -590,6 +654,53 @@ def satisfies_human(chosen, correct) -> bool:
     return picks_as_set(correct) <= picks_as_set(chosen)
 
 
+def ruling_moves(before: dict, after: dict) -> list:
+    """Every frame present in BOTH captures whose **Correction**'s ``correct`` changed — the human
+    re-ruled it (**Ruling Move**, ADR-TEMP-241 decision 7). ``[{key, before, after}, ...]``.
+
+    Emitted **independently of whether the agent's pick moved**, and that independence IS the fix.
+    Both diffs emit a verdict row only on a moved pick, so a frame the agent plays identically whose
+    ruling was re-written produces *no row at all* — while its verdict silently flips. Measured:
+    ``85709280`` went ``[] -> [0]`` in ``b6d7483`` (ADR-0081 Amendment D) and moved the agree rate
+    230 -> 231 with no decision changed. ``added``/``removed`` cannot see it either, because the frame
+    is on both sides; it is the same *"a thing that moved that the instrument cannot report"* family
+    as Issue #239.
+
+    It sits beside ``added``/``removed`` because it is the same idea one level in — those report a
+    frame appearing or leaving, this reports the *ruling about* a frame moving — and the module's
+    doctrine is that a corpus-shape move must never read as a quiet green.
+
+    **It never gates.** A re-ruling is a deliberate human act, not an agent regression, so
+    `decision_gate_verdict` and `discrimination_gate_verdict` do not consult it.
+
+    Shared by both diffs for `frame_key_of`'s reason: `leaf_lab_diff` compares ``correct_is_top``,
+    which is computed FROM ``correct``, so it carries the identical blindness, and a second
+    implementation would drift. Normalised by `picks_as_set` — the same predicate the verdict uses,
+    so re-ordering ``correct`` is not a re-ruling and the two cannot form different ideas of "moved".
+    """
+    def index(rpt):
+        return {r["key"]: r for r in (rpt.get("rows") or []) if r.get("key")}
+
+    b, a = index(before), index(after)
+    moved = []
+    for k in sorted(b.keys() & a.keys()):
+        was, now = b[k].get("correct"), a[k].get("correct")
+        if was is None and now is None:
+            continue
+        if was is None or now is None or picks_as_set(was) != picks_as_set(now):
+            moved.append({"key": k, "before": was, "after": now})
+    return moved
+
+
+def print_ruling_moves(moves) -> None:
+    """The shared readout, so the two gates cannot describe a **Ruling Move** differently."""
+    if not moves:
+        return
+    print(f"\n  ⚠️ RULING MOVED ({len(moves)}) — the human re-ruled these frames; reported, never gating:")
+    for m in moves:
+        print(f"    {m['key']}  correct {m['before']} -> {m['after']}")
+
+
 def decider_lab_diff(before: dict, after: dict) -> dict:
     """Per-frame DECISION movement between two Decider Lab captures, classified against the human.
 
@@ -645,4 +756,5 @@ def decider_lab_diff(before: dict, after: dict) -> dict:
         rows.append({"key": k, "agent": a[k].get("agent"), "context": a[k].get("context"),
                      "before": was, "after": now, "correct": correct, "verdict": verdict})
     return {"rows": rows, "compared": len(b.keys() & a.keys()),
-            "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys())}
+            "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
+            "ruling_moves": ruling_moves(before, after)}

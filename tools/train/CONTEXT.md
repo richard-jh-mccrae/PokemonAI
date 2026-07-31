@@ -144,6 +144,12 @@ report and exit 0.
 **A green Decision Gate means nothing REGRESSED. It does not mean the agent is right** — the baseline
 records every frame it captured as the reference, including the 101 where the agent contradicts a
 human ruling (`docs/plans/decider-disagreement-triage.md` tiers them).
+
+⚠️ Its corpus is **372** frames, not the 332 the pre-ADR-TEMP-241 capture reported, and the 101/331
+figures are readings of that reduced, mis-keyed set. It is a **Corpus Reader** and bound by that
+term's rules — the defect Issue #241 fixes was one raw-JSONL walk plus one hand-built key, which
+between them left only 169 of 372 frames correctly named and put 4 of the 11 **Held-out Ledger**
+rulings out of the gate's reach entirely.
 _Avoid_: decision test, decider suite, regression run (it is an instrument; its readings are picks)
 
 **Satisfying a Correction**:
@@ -156,6 +162,31 @@ EXACTLY, because the empty set is a subset of everything and subset-reading it w
 vacuously agree. Both the Decision Gate's direction test and its agree-rate readout key on this one
 predicate, deliberately, so they cannot drift apart.
 _Avoid_: "the agent agrees with the correction" as a synonym for equality — say **satisfies**
+
+**Corpus Reader**:
+Any code that reads `data/corrections/`. Under **ADR-TEMP-241** (Issue #241) it **constructs**
+`Correction` objects via `train.blunder.store.load_corrections` and derives every **Frame Key** as
+`frame_key_of(*identity_key(c))` — never a raw-JSONL walk, never a hand-built key. Both shortcuts are
+the same defect: a *second idea of what a record is*, which is what silently cost the **Decision
+Gate** 40 records (an empty `agent` is *recoverable* from `agent_build`, and only `from_dict`
+backfills it) and mis-keyed 163 more (`seat` is top-level, so `decision.get("seat", 0)` was always
+0). Enforced, not asserted: a test fails on any raw `corrections.jsonl` glob outside the store module
+that is not on an allowlist, and an allowlist entry must name a live issue.
+_Avoid_: loader (fine in prose, but the noun that matters is *what it constructs*), parser, corpus
+walk (**`iter_keyed_fixtures`** is the *fixture* walk — a different corpus)
+
+**Ruling Move**:
+A frame present in both captures whose **Correction**'s `correct` CHANGED between them — the human
+re-ruled (`gates.ruling_moves`, ADR-TEMP-241 decision 7). Reported by both the **Decision Gate** and
+the **Discrimination Gate** beside `added`/`removed`, and **never gating**: a re-ruling is a
+deliberate human act, not an agent regression. It exists because both diffs emit a row only when
+`chosen` (resp. `correct_is_top`) moves, so a re-ruling on a frame the agent plays identically
+produced **no row at all** while silently changing that frame's verdict — `85709280` went `[] → [0]`
+in `b6d7483` and moved the headline `230 → 231` with no decision changed. The same blindness family
+as Issue #239. Distinct from `added`/`removed`, which report the *frame* appearing or leaving; this
+reports the *ruling about* a frame moving.
+_Avoid_: re-rule (the human act — this is the instrument's report of it), label change (a
+**Correction**'s `correct` is the ruling, not a label), corpus drift (that is `added`/`removed`)
 
 **Leaf Frame**:
 A **Correction** the **Leaf Lab** can score: a reseedable MAIN-select (context 0) board carrying
@@ -213,6 +244,14 @@ block while none of the 34 do), which is the defect
 [ADR-0082](../../docs/adr/0082-a-corrections-ruling-lives-in-its-claim-and-must-agree-with-its-record.md)
 back-fills. Several fixtures may legally share one Frame Key — they assert different things about the
 same board — so a consumer keys on it without assuming uniqueness.
+
+**Always DERIVED, never hand-built** (ADR-TEMP-241 decision 2): `frame_key_of(*identity_key(c))` off
+a constructed `Correction`, which is what makes one **Held-out Ledger** ruling hold a frame out of
+*both* gates (ADR-0072 decision 4). A key assembled from raw dict lookups is a second implementation,
+and it drifts silently because both sides of a diff share the same wrong key — `decider_lab` read
+`seat` from the `decision` snapshot, which has no `seat` field, so every key it built said seat 0
+against a corpus that is 201/171. The wrong keyspace even leaked into `satisfies_human`'s docstring,
+which cites `86088989|0|decision|3` for a frame whose identity is `86088989|0|turn|0`.
 _Avoid_: episode/frame (the loose pre-0072 pair, not an identity), fixture id, correction id, key
 
 **Claim Agreement**:
