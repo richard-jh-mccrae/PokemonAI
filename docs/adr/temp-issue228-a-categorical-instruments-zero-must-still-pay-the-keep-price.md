@@ -315,6 +315,31 @@ item 1 asked for evaporated without a single frame being ruled. Nothing entered 
 moves **zero** frames, so touching a shipped, ladder-validated instrument cost nothing measurable —
 and the OFF arm is what proves it, exactly as decision 5 intended.
 
+Both gates were then **re-run on the final post-deletion tree**, because the runs above predate the
+OFF-path deletion and so describe a tree that is not what ships. Both PASS unchanged.
+
+### The mid-build Tripwire (ADR-0072 decision 1)
+
+`gauntlet_ab.py --stage mid-build`, n=200/arm/directed matchup, 2400 games, shipped side OFF with the
+overlay arming both flags so the CI reads in the direction the bound is written against:
+
+```
+AGGREGATE delta=+0.0117  95% CI [-0.0236, +0.0470]  crashes=0
+STAGE: mid-build
+TRIPWIRE: True  (rule: CI-lo>=-0.05 AND crashes==0 (NO delta clause))
+```
+
+`ci_lo = -2.36 pp` clears the −5 pp floor and `crashes == 0`. Per the rule's own note this excludes
+CATASTROPHES only and is **not** a claim of non-regression; merit is the two per-frame gates above.
+
+⚠️ **A first attempt at this run was VOID and its numbers must not be cited.** It was launched from
+the main working tree and then `pilot.py` was edited underneath it mid-run, so later matchups
+imported a half-deleted module: it reported 394 crashes and a 0.990 → 0.155 collapse on
+`dragapult_ex vs mega_starmie`. The valid run above was taken from a **git worktree detached at the
+final commit**, and that same matchup comes back `on 31/200 = 0.155, off 31/200 = 0.155, delta 0.000,
+crashes 0` — confirming the catastrophe was entirely a measurement artefact. Recorded because a
+discarded measurement that looked this alarming should be findable, not silently dropped.
+
 ### A seventh defect, found at the build — the overlay runner could not name its stage
 
 ADR-0072 decision 1 put the two stage rules *"in code, so a run names which one it was graded
