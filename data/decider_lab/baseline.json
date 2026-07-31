@@ -1,5 +1,5 @@
 {
-  "git_rev": "e138881",
+  "git_rev": "31b1c28",
   "agent": null,
   "rows": [
     {
@@ -4773,6 +4773,7 @@
       "correct": [
         2
       ],
+      "voided": true,
       "chosen": [
         3
       ]
@@ -4857,7 +4858,7 @@
   "n": 372,
   "errors": 1,
   "labelled": 371,
-  "voided": 25,
-  "gradeable": 346,
+  "voided": 26,
+  "gradeable": 345,
   "agree": 248
 }

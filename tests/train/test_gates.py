@@ -19,6 +19,13 @@ from pathlib import Path
 
 import pytest
 
+# The corpus's on-disk shape lives in ONE place, because a second test file needed a `tmp_path`
+# corpus (Issue #250) and would otherwise re-encode it — the same second-idea-of-a-record defect
+# ADR-0087 is about, one layer down. Aliased to the original private names, so the 18 call sites
+# below read unchanged.
+from corrections_helpers import correction_record as _rec
+from corrections_helpers import corrections_store as _store
+
 #: Spelled from ordinals so this file can never itself be normalised into asserting nothing — the
 #: literal it looks for is exactly the byte pair a Windows `write_text` would introduce.
 CRLF = bytes((13, 10))
@@ -819,29 +826,7 @@ def test_a_move_the_ruling_does_not_separate_is_NEUTRAL_in_both_directions():
 # diff over a wrong keyspace still reports flips and nothing ever goes red.
 
 
-def _rec(episode, frame, *, seat=0, scope="decision", subject=None, agent="mega_starmie",
-         agent_build=None, correct=None, obs=True, category="wasted_resource"):
-    """One raw corrections.jsonl record, in the on-disk shape. ``seat`` is TOP-LEVEL — the whole
-    point: the ``decision`` snapshot has no ``seat`` field, which is why reading it off there
-    yielded 0 forever."""
-    return {"id": f"{episode}-{frame}", "source": "own", "episode_id": episode, "seat": seat,
-            "agent": agent, "agent_build": agent_build, "submission_id": None,
-            "agent_version": None, "episode_time": None, "tagged_at": "2026-07-31T00:00:00+00:00",
-            "decision": {"frame": frame, "turn": 1, "select_context": 0, "select_type": 0,
-                         "options": [], "current": {}},
-            "chosen": [0], "chosen_label": "", "correct": [1] if correct is None else correct,
-            "correct_label": "", "category": category, "attribution": None, "rationale": "",
-            "obs": {"select": {"context": 0, "option": []}} if obs else None,
-            "scope": scope, "subject": subject if subject is not None else (
-                frame if scope == "decision" else (1 if scope == "turn" else None))}
 
-
-def _store(tmp_path, records, build="mega_starmie_20260101_abc1234"):
-    d = tmp_path / build
-    d.mkdir(parents=True, exist_ok=True)
-    (d / "corrections.jsonl").write_text(
-        "".join(json.dumps(r) + "\n" for r in records), encoding="utf-8")
-    return tmp_path
 
 
 @pytest.mark.req("REQ-GATE-0007")
@@ -1320,15 +1305,21 @@ def test_an_orphaned_ledger_entry_is_reported_rather_than_ruling_on_nothing(tmp_
 
 
 @pytest.mark.req("REQ-GATE-0010")
-def test_the_committed_ledgers_orphans_are_the_two_that_are_known():
-    """Over the REAL ledger. Two entries rule on no committed Correction, and one of them
-    (`86091435-119`) is a **refutation** — a human ruling voiding nothing, which is exactly the class
-    of defect Issue #239 was opened about, found one layer in.
+def test_no_committed_ledger_entry_rules_on_nothing():
+    """Over the REAL ledger, and the strongest form: **zero** entries rule on no committed
+    Correction.
 
-    Pinned to the known two rather than asserted empty: fixing them is a re-key or a delete of a human
-    ruling, which is the user's call and not this build's. A THIRD appearing turns this red, which is
-    the property that matters."""
-    assert [k for k, _e in gates.orphan_rulings()] == ["85046350-10", "86091435-119"]
+    This asserted the two known orphans by name while fixing them was still the user's call. Both are
+    now repaired (Issue #250) — and neither was stale, which is why the assertion could be tightened
+    rather than merely re-measured: `85046350-10` had the wrong EPISODE (the record is ep 85045840 f10, in the
+    same store file) and `86091435-119` the wrong key SHAPE (the record is turn-scoped, so its
+    `review_key` is `86091435-t14s0`; 119 is the Anchor frame the report used to print).
+
+    Asserting empty rather than a count also makes this the reachability guard for the WHOLE ledger:
+    it proves all ~145 committed entries resolve, including the ones nobody has re-checked. A new
+    orphan — the third, from any source — turns it red on the commit that introduces it. The writer
+    now refuses to create one (ADR-0090 decision 2), so this is the backstop for hand-edits."""
+    assert [k for k, _e in gates.orphan_rulings()] == []
 
 
 @pytest.mark.req("REQ-GATE-0010")

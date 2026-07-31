@@ -1,17 +1,17 @@
 {
-  "git_rev": "e138881",
+  "git_rev": "31b1c28",
   "agent": null,
   "n": 277,
   "scorable": 268,
   "unscorable": 9,
   "skipped_agent": 1,
-  "voided": 19,
-  "gradeable": 249,
-  "leaf_correct": 183,
-  "leaf_correct_rate": 0.7349397590361446,
+  "voided": 20,
+  "gradeable": 248,
+  "leaf_correct": 182,
+  "leaf_correct_rate": 0.7338709677419355,
   "leaf_correct_strict": 35,
-  "leaf_correct_strict_rate": 0.14056224899598393,
-  "avg_top_tie": 3.0240963855421685,
+  "leaf_correct_strict_rate": 0.14112903225806453,
+  "avg_top_tie": 3.0120967741935485,
   "rows": [
     {
       "key": "83686860|1|decision|13",
@@ -925,7 +925,8 @@
       "correct_is_unique_top": false,
       "correct_rank": 1,
       "outscored_by": 0,
-      "top_tie": 6
+      "top_tie": 6,
+      "voided": true
     },
     {
       "key": "86091728|0|decision|19",
