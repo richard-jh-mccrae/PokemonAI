@@ -74,7 +74,7 @@ def test_run_report_locates_a_scoped_proposal_by_its_subject():
 
 
 def test_the_report_names_a_correction_by_the_key_the_ledger_uses():
-    """ADR-TEMP-250 decision 4 (Issue #250). `_at` printed `ep <id> f<frame>` for EVERY Correction
+    """ADR-0090 decision 4 (Issue #250). `_at` printed `ep <id> f<frame>` for EVERY Correction
     regardless of scope, so a turn-scoped record was displayed under its Anchor frame — and an
     operator copying that string into `review_correction.py` wrote a ruling that reached nothing.
     That is literally how `86091435-119` was born, and the reviewed-entries section (which this

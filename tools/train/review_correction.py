@@ -10,7 +10,7 @@ roadmap layer, with a fixture + docs/todo definition-of-done; a missing signal i
 deferred), covered (already handled by an existing rule). Edits ``data/corrections/reviewed.json``
 in place, preserving the ``_note`` and existing entries. See ``tools/train/blunder/reviewed.py``.
 
-**A locator is RESOLVED against the corpus, never taken as the key** (ADR-TEMP-250, Issue #250).
+**A locator is RESOLVED against the corpus, never taken as the key** (ADR-0090, Issue #250).
 Give it any of the four spellings `reviewed.resolve_locator` accepts — the canonical `review_key`,
 the **Frame Key**, the ``Correction.id``, or the Anchor form the reports print — and the *canonical*
 key is what gets written. A locator matching no committed Correction is REFUSED, non-zero, with

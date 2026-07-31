@@ -1,4 +1,4 @@
-# ADR-TEMP-250 — A ruling names its record through a RESOLVER, and every surface prints that name
+# ADR-0090 — A ruling names its record through a RESOLVER, and every surface prints that name
 
 **Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #250 — four locked decisions
 plus five side calls).

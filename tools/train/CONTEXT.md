@@ -260,7 +260,7 @@ therefore be walked from the LEDGER's side — a test that asks the index instea
 because `voided_frames(index)` is a subset of `keyed_corrections` by construction and can never fail.
 Same dangling-join family as **Claim Agreement**'s `no_record` finding, one store over.
 Both that ever existed were **mis-keyed, not stale** — they named live committed records under the
-wrong name (**ADR-TEMP-250**, Issue #250): `85046350-10` had the wrong *episode* (the record is
+wrong name (**ADR-0090**, Issue #250): `85046350-10` had the wrong *episode* (the record is
 `85045840` f10, same file), `86091435-119` the wrong key *shape* (the record is turn-scoped, so its
 `review_key` is `86091435-t14s0`). Both re-keyed; the guard now asserts **empty**, which also proves
 every committed entry resolves.
@@ -271,7 +271,7 @@ existed under that key)
 **Ruling Locator**:
 Any string that names a **Correction** well enough for the ledger writer to find it — the canonical
 `review_key`, the **Frame Key**, the `Correction.id`, or the **Anchor** form the reports print
-(**ADR-TEMP-250**, Issue #250). `reviewed.resolve_locator(locator, keyed)` maps all four onto the one
+(**ADR-0090**, Issue #250). `reviewed.resolve_locator(locator, keyed)` maps all four onto the one
 canonical `review_key`, which is what is written; an unresolvable locator is REFUSED with near-misses
 (two deterministic rules — same frame under a different episode; same episode, Anchor↔Scope-subject —
 never fuzzy matching, because a confident wrong suggestion points at someone else's human ruling and

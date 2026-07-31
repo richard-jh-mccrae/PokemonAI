@@ -1318,7 +1318,7 @@ def test_no_committed_ledger_entry_rules_on_nothing():
     Asserting empty rather than a count also makes this the reachability guard for the WHOLE ledger:
     it proves all ~145 committed entries resolve, including the ones nobody has re-checked. A new
     orphan — the third, from any source — turns it red on the commit that introduces it. The writer
-    now refuses to create one (ADR-TEMP-250 decision 2), so this is the backstop for hand-edits."""
+    now refuses to create one (ADR-0090 decision 2), so this is the backstop for hand-edits."""
     assert [k for k, _e in gates.orphan_rulings()] == []
 
 

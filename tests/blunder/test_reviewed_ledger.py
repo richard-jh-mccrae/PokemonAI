@@ -72,7 +72,7 @@ def test_partition_splits_active_from_dispositioned():
     assert review_key(c) == "81904451-37" and entry["disposition"] == "refuted"
 
 
-# ── the Ruling Locator (ADR-TEMP-250, Issue #250) ─────────────────────────────────────────────────
+# ── the Ruling Locator (ADR-0090, Issue #250) ─────────────────────────────────────────────────
 #
 # Both orphans `gates.orphan_rulings` found named LIVE committed records under the wrong name:
 # `85046350-10` had the wrong EPISODE (the record is ep 85045840 f10), `86091435-119` the wrong key

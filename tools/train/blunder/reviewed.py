@@ -25,7 +25,7 @@ Keys starting with ``_`` are comments. Append entries with ``tools/train/review_
 ``86091435-t14s0`` was displayed as ``ep 86091435 f119``. An operator copied that string into the
 writer — which took it as free text and checked it against nothing — and the resulting ruling
 reached no record and voided nothing for twelve days. Two things now hold the claim up: `_at`
-returns ``review_key``, and `resolve_locator` accepts the Anchor form regardless (ADR-TEMP-250).
+returns ``review_key``, and `resolve_locator` accepts the Anchor form regardless (ADR-0090).
 `gates.orphan_rulings` asserts the ledger has no unreachable entry at all.
 """
 from __future__ import annotations
@@ -115,7 +115,7 @@ _LOCATOR_FORMS = ("key", "frame_key", "id", "anchor")
 
 
 def resolve_locator(locator: str, keyed) -> str | None:
-    """The one canonical `review_key` a **Ruling Locator** names, or ``None`` (ADR-TEMP-250
+    """The one canonical `review_key` a **Ruling Locator** names, or ``None`` (ADR-0090
     decision 2, Issue #250).
 
     Four accepted spellings, all of which the operator can legitimately be holding:

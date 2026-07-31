@@ -31,7 +31,7 @@ def _move(correction) -> str:
 def _at(correction) -> str:
     """One Correction's id, as the LEDGER keys it (`reviewed.review_key`, ADR-0049).
 
-    **What the report prints must be what the writer accepts** (ADR-TEMP-250 decision 4, Issue
+    **What the report prints must be what the writer accepts** (ADR-0090 decision 4, Issue
     #250). This returned `ep <id> f<frame>` for every Correction regardless of scope, so a
     turn-scoped record was displayed under its *Anchor* frame — and an operator copying that string
     into `review_correction.py` produced `86091435-119`, a human refutation that reached no record
