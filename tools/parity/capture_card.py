@@ -79,7 +79,11 @@ def build_decks(db: CardDB, card_id: int,
             cost_types += [int(e) or int(card.energyType) or 3
                            for e in db.attacks[aid].energies]
         fodder = bench_fodder(live, set(chain))
-        own = build_side_deck(chain, cost_types or [int(card.energyType) or 3], fodder)
+        # 1 copy each, not 4: an off-chain Basic can win the setup Active and strand the line
+        # (the engine only offers the redraw on a Basic-less hand), which `_drive_to_attack`
+        # reports as `_SetupMiss` and this module retries. Fewer copies, fewer wasted deals.
+        own = build_side_deck(chain, cost_types or [int(card.energyType) or 3], fodder,
+                              fodder_copies=1)
     else:
         # Trainer/energy target: a sturdy basic line carries the game; 4x target rides
         # (1x for an ACE SPEC — the deck rule caps those at one copy).

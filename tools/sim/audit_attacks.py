@@ -55,6 +55,11 @@ _DECK_SIZE = 60
 CRUSTLE = 345          # prevent_ex panel body: ability zeroes damage from opponent {ex} Pokémon
 _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyType -> card id
 _BENCH_REF = 1         # both seats pinned here unless a bench sweep moves one (REQ-AUDIT-0018)
+# Two budgets, because the two retry causes cost wildly different amounts. A setup miss aborts
+# before the drive plays a turn, so re-dealing is nearly free and can afford a deep budget; a
+# bench miss or a timeout has already paid for a whole drive, so those stay at the historical 6.
+_SETUP_DEALS = 24
+_DRIVE_ATTEMPTS = 6
 _BENCH_STEPS = (0, 1, 2)
 _SWEEP_POINTS = ({"var": "energy", "step": 1}, {"var": "energy", "step": 2},
                  {"var": "hand", "step": 2}, {"var": "hand", "step": 4},
@@ -99,18 +104,24 @@ def evolution_chain(target_id: int, cards: dict[int, dict]) -> list[int]:
 
 
 def build_side_deck(chain: list[int], energy_types: list[int],
-                    fodder: list[int] = ()) -> list[int]:
-    """Legal 60-card deck: 4x each chain card (+ 4x each fodder body) + Energy fill.
+                    fodder: list[int] = (), fodder_copies: int = 4) -> list[int]:
+    """Legal 60-card deck: 4x each chain card (+ ``fodder_copies`` of each fodder body) +
+    Energy fill.
 
     Args:
         chain: Basic-first evolution line (>= 1 card).
         energy_types: The attack's ``energies`` (EnergyType ints; colorless maps to Water).
         fodder: Extra distinct basics (:func:`bench_fodder`) so a bench reliably exists.
+        fodder_copies: Copies of each fodder body (:func:`_fodder_copies` sizes it). Kept
+            separate from the chain's flat 4x because every off-chain Basic is a setup
+            hazard, not just a bench body — see :func:`_fodder_copies`.
     """
     fill = sorted({_ENERGY_CARD.get(int(e), 3) for e in (energy_types or [0])}) or [3]
     deck: list[int] = []
-    for cid in list(chain) + list(fodder):
+    for cid in chain:
         deck += [cid] * 4
+    for cid in fodder:
+        deck += [cid] * fodder_copies
     i = 0
     while len(deck) < _DECK_SIZE:
         deck.append(fill[i % len(fill)])
@@ -135,6 +146,20 @@ def bench_fodder(cards: dict[int, dict], exclude: set[int], n: int = 2) -> list[
                    and c not in exclude),
                   key=lambda c: (-cards[c]["hp"], c))
     return pool[:n]
+
+
+def _fodder_copies(need: int, bodies: int = 2) -> int:
+    """Copies of EACH fodder body: the fewest that can still fill a bench target of ``need``.
+
+    Off-chain Basics are not free. The engine only offers the setup redraw (``MULLIGAN``,
+    "Would you like to redraw the cards?") when the opening hand holds NO Basic at all, so a
+    deck whose only Basics are its chain basic is *guaranteed* to open on that basic — it
+    redraws until it does. Every fodder copy buys a bench body at the price of a hand that
+    satisfies the engine with an off-chain Basic instead, stranding an unevolvable Active that
+    can never fire the attack. A flat 4x of two bodies dropped that guarantee to ~40%; one copy
+    each keeps it near 75% per seat, and :func:`_drive_to_attack` re-deals on the rest.
+    """
+    return max(1, min(4, -(-need // max(1, bodies))))
 
 
 def pick_panel(attacker: dict, cards: dict[int, dict]) -> dict[str, int | None]:
@@ -491,8 +516,15 @@ class _Timeout(Exception):
 
 
 class _SetupMiss(Exception):
-    """The defender's setup Active is off-chain (a fodder basic won the slot) — the chain tip
-    can never come online, so abort fast and retry on a fresh shuffle."""
+    """EITHER seat's setup Active is off-chain (a fodder basic won the slot) — the chain tip
+    can never come online, so abort fast and retry on a fresh shuffle.
+
+    Both seats, not just the defender: nothing promotes a benched body here (the drive never
+    retreats), so an attacker that opens on fodder is just as stuck — it sits unevolvable until
+    the match deck-outs at the turn limit. That was the whole of this harness's flakiness: the
+    attacker seat only started carrying fodder with the bench caps (REQ-AUDIT-0018), and the
+    miss went undetected until ~95 turns of driving had already been spent.
+    """
 
 
 class _BenchMiss(Exception):
@@ -536,6 +568,8 @@ def _drive_to_attack(battle_select, obs, *, attack_id, atk_chain, def_chain, cos
         if ctx == _CTX_MULLIGAN:
             obs = battle_select(_yes_no(obs, chain[0] not in [c.get("id") for c in _hand(obs, seat)]))
         elif ctx == _CTX_SETUP_ACTIVE:
+            if chain[0] not in [c.get("id") for c in _hand(obs, seat)]:
+                raise _SetupMiss(f"seat {seat} set up without its chain basic {chain[0]}")
             obs = battle_select([_setup_pick(obs, seat, chain[0])])
         elif ctx != _CTX_MAIN:
             obs = battle_select(_sub_select(obs, cap=caps.get(seat)))
@@ -701,16 +735,24 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
     def_chain = evolution_chain(plan["defender"], cards)
     own = cards[attacker_id].get("energyType") or 3         # colorless attacker -> Water
     fill = [e or own for e in info["energies"]] or [own]    # colorless cost -> own type effect
-    # The attacker seat carries bench fodder ONLY when a plan asks it to bench (REQ-AUDIT-0018):
-    # its own chain basic is otherwise the sole benchable body, so an attacker-bench target would
-    # depend on drawing a spare copy. Kept conditional deliberately — fodder displaces Energy fill
-    # and lengthens games, and every non-bench measurement should keep the deck it was taken with.
-    atk_fodder = bench_fodder(cards, set(atk_chain)) if plan.get("atk_bench") else []
-    atk_deck = build_side_deck(atk_chain, fill, atk_fodder)  # clauses reference their own Energy
+    # Each seat carries bench fodder ONLY when its plan asks it to bench (REQ-AUDIT-0018), and
+    # only at :func:`_fodder_copies` copies: its own chain basic is otherwise the sole benchable
+    # body, so a bench target would depend on drawing a spare copy — but every extra off-chain
+    # Basic is also a setup hazard, so the count is the fewest that can reach the target.
+    atk_need = _bench_target(0, plan.get("atk_bench"))
+    def_need = _bench_target(1, plan.get("def_bench"))
     battle_start, battle_select, battle_finish = _engine()
-    for attempt in range(6):                                # fresh shuffle when setup misses;
-        fodder = bench_fodder(cards, set(def_chain)) if attempt < 4 else []
-        def_deck = build_side_deck(def_chain, [0], fodder)  # ...fodderless tail can't miss setup
+    drives, last_error = 0, "the attack never became measurable"
+    for deal in range(_SETUP_DEALS):
+        bare = deal >= _SETUP_DEALS - 2     # chain-basics-only tail: setup can no longer miss
+        atk_deck = build_side_deck(                         # clauses reference their own Energy
+            atk_chain, fill,
+            bench_fodder(cards, set(atk_chain)) if atk_need and not bare else [],
+            _fodder_copies(atk_need))
+        def_deck = build_side_deck(
+            def_chain, [0],
+            bench_fodder(cards, set(def_chain)) if def_need and not bare else [],
+            _fodder_copies(def_need))
         obs, start = battle_start(atk_deck, def_deck)
         if getattr(start, "errorPlayer", -1) >= 0 or obs is None:
             battle_finish()
@@ -725,24 +767,29 @@ def measure_attack(attack_id: int, plan: dict, *, cards: dict[int, dict] | None 
                                    def_bench=plan.get("def_bench"))
             bench_size = len(board_snapshot(pre, 1)["bench"])
             atk_bench_size = len(board_snapshot(pre, 0)["bench"])
-            if attempt < 5 and (atk_bench_size, bench_size) != (
-                    _bench_target(0, plan.get("atk_bench")),
-                    _bench_target(1, plan.get("def_bench"))):
+            if drives < _DRIVE_ATTEMPTS - 1 and (atk_bench_size, bench_size) != (atk_need,
+                                                                                def_need):
                 raise _BenchMiss()                  # uncontrolled point -- reshuffle and retry
             fork = _coin_fork(pre, attack_id, atk_deck, def_deck) if coin_fork else None
             damage, energies, hand_size = _fire_and_measure(battle_select, pre, attack_id)
             break
+        except _SetupMiss as e:
+            last_error = f"setup kept missing a chain basic ({e})"
+            continue                        # free: the drive aborted before it played a turn
         except _BenchMiss:
-            continue                                # fresh shuffle; attempt 5 accepts what it got
-        except _SetupMiss:
-            if attempt == 5:
-                return _err("defender setup kept missing its chain basic", attacker_id)
+            drives += 1
+            last_error = (f"bench targets {(atk_need, def_need)} never reached within patience")
         except _Timeout as e:
-            return _err(str(e), attacker_id)
+            drives += 1
+            last_error = str(e)
         except Exception as e:                              # never a silent skip
             return _err(f"{type(e).__name__}: {e}", attacker_id)
         finally:
             battle_finish()
+        if drives >= _DRIVE_ATTEMPTS:
+            return _err(last_error, attacker_id)
+    else:
+        return _err(last_error, attacker_id)
     common = dict(attack_id=attack_id, attacker_id=attacker_id, scenario=plan["scenario"],
                   printed=info["damage"], defender_id=plan["defender"],
                   defender_hp=cards[plan["defender"]]["hp"], defender_bench=bench_size,

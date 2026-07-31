@@ -6,7 +6,7 @@ Lib-free — the engine drive-shell is covered by ``tests/test_audit_attacks_eng
 import pytest
 
 from sim.audit_attacks import (
-    CRUSTLE, _BENCH_REF, _missing_typed, _sub_select, attack_window, bench_fodder,
+    CRUSTLE, _BENCH_REF, _fodder_copies, _missing_typed, _sub_select, attack_window, bench_fodder,
     board_snapshot, build_side_deck, damage_from_window, error_record, evolution_chain,
     merge_records, pick_panel, plan_scenarios, record_key, shape_record,
 )
@@ -106,6 +106,20 @@ def test_side_deck_seeds_bench_fodder_within_copy_limits():
     deck = build_side_deck([344, CRUSTLE], [0], fodder=[20, 30])
     assert len(deck) == 60
     assert deck.count(20) == 4 and deck.count(30) == 4    # snipe targets drawable
+
+
+@pytest.mark.req("REQ-AUDIT-0018")
+def test_side_deck_can_hold_fodder_to_the_fewest_copies_that_fill_a_bench_target():
+    # Off-chain Basics are a SETUP hazard, not just bench bodies: the engine only offers the
+    # opening redraw on a Basic-less hand, so every fodder copy is another way to open on a body
+    # the line can never evolve. The bench target is the ceiling on how many are worth carrying.
+    assert _fodder_copies(0) == 1 and _fodder_copies(1) == 1      # 2 bodies already cover 1
+    assert _fodder_copies(2) == 1 and _fodder_copies(4) == 2
+    assert _fodder_copies(20) == 4                                # never past the 4-copy rule
+    deck = build_side_deck([344, CRUSTLE], [0], fodder=[20, 30], fodder_copies=1)
+    assert len(deck) == 60
+    assert deck.count(20) == 1 and deck.count(30) == 1
+    assert deck.count(344) == 4                                   # the chain keeps its flat 4x
 
 
 @pytest.mark.req("REQ-AUDIT-0002")
