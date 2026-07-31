@@ -1,4 +1,4 @@
-# ADR-TEMP-243 — A corpus-reading probe is a GATE, a RULING, or a routed DIAGNOSTIC — never a fourth thing
+# ADR-0089 — A corpus-reading probe is a GATE, a RULING, or a routed DIAGNOSTIC — never a fourth thing
 
 **Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #243).
 **Build = Issue #243.**
@@ -7,8 +7,6 @@ reader CONSTRUCTS Corrections and keys by IDENTITY — *how* a reader reads) wit
 did not ask: *what a corpus-reading probe is allowed to be at all.*
 **Finishes [ADR-0085](0085-snipe-is-a-categorical-relevance-instrument-and-the-fold-collapses-the-additive-stack.md)
 Amendment J** on its fourth, missed sibling. Does **not** supersede anything.
-
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
 
 **Context issues:** Issue #243 (this grill), Issue #241 (ADR-0087 — the parent; recorded the census of
 eleven raw readers), Issue #239 (ADR-0088 — converted `snipe_decider_sweep`, the exemplar payoff),

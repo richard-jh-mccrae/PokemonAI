@@ -437,7 +437,7 @@ def _tune():
 
 
 def _frame(ep, fr):
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243)."""
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089)."""
     from corpus_helpers import corpus_record
     return corpus_record(ep, fr)
 

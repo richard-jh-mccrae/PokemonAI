@@ -8,7 +8,7 @@ consumers still run `{base_attach: 1}` behind a matched Read: the ±50 survival 
 promote stand-down (`opp_cannot_punish_wincon`). All of them — and none of the doom path — flow
 through ONE seam: `combat.reachable_incoming(charged=...)`.
 
-**The question is ANSWERED and the answer is written down**, so under ADR-TEMP-243 decision 1 this
+**The question is ANSWERED and the answer is written down**, so under ADR-0089 decision 1 this
 is a RULING, not a runnable diagnostic: the sweep replayed every committed correction twice through
 fresh shipped Pilots — stock, and with `reachable_incoming` wrapped so a matched `{base_attach: 1}`
 budget is upgraded to `{base_attach: 2}` — and found **zero decision flips**. Ruling:

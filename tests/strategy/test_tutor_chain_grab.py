@@ -32,7 +32,7 @@ _FIGHTING = 6
 
 def _record():
     """The recorded ml 85059103 f9 correction (the corpus target this seam flips), through THE
-    Corpus Reader (ADR-0087 / ADR-TEMP-243)."""
+    Corpus Reader (ADR-0087 / ADR-0089)."""
     from corpus_helpers import corpus_record
     return corpus_record("85059103", 9)
 

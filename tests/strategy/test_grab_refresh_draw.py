@@ -27,7 +27,7 @@ PETREL, JUDGE, LILLIES = 1219, 1213, 1227
 
 
 def _record(episode: str, frame: int):
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243). The private
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The private
     raw-JSONL walk this replaced was a second idea of where the corpus lives."""
     from corpus_helpers import corpus_record
     return corpus_record(episode, frame)

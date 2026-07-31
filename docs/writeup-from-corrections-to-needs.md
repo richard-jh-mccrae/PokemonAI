@@ -169,7 +169,7 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
   refresh split), `tools/train/leaf_lab.py` (the 267-frame board-value bench), the corpus suite
   (`tests/strategy/test_hyperclosure_corpus.py`). No ladder round-trip needed.
 
-  > **Corpus Provenance** (ADR-TEMP-243 decision 2). `needs_sweep.py` read the corpus through a raw
+  > **Corpus Provenance** (ADR-0089 decision 2). `needs_sweep.py` read the corpus through a raw
   > JSONL walk that was short **40** records (ADR-0087, Issue #241), so "reproducible" was not quite
   > true — the sweep saw 332 frames of a 372-frame corpus. It now routes through
   > `gates.keyed_corrections`, and both readings are re-derived and stamped rather than inherited:

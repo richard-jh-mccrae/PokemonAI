@@ -1,4 +1,4 @@
-"""**One Corpus Reader** — the contract, ENFORCED (ADR-0087 decision 4; widened by ADR-TEMP-243).
+"""**One Corpus Reader** — the contract, ENFORCED (ADR-0087 decision 4; widened by ADR-0089).
 
 The Decision Gate lost 40 records and mis-keyed 163 more because it kept a private raw-JSONL walk
 instead of constructing Corrections. Fixing that one module fixes one module. What stops it
@@ -58,7 +58,7 @@ _FIXED_PATH_RE = re.compile(
 #: path, because naming that string is not always reaching it: `tests/label/test_category.py` passes
 #: `"data/corrections/machine/corrections.jsonl"` to `git check-ignore` to assert the machine store
 #: stays untracked. That test never opens the file, and flagging it would push a correct assertion
-#: into an exemption — the precise decay ADR-TEMP-243 decision 4 removed the allowlist to stop.
+#: into an exemption — the precise decay ADR-0089 decision 4 removed the allowlist to stop.
 _SLASH_PATH_RE = re.compile(r"""["'][^"'\n]*data/corrections/[^"'\n]*corrections\.jsonl["']""")
 _OPENS_RE = re.compile(r"Path\(|open\(|read_text|read_bytes|open_text")
 
@@ -119,7 +119,7 @@ def test_the_two_gates_and_the_viewer_go_through_the_corpus_reader():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_probe_dispositions_landed():
-    """ADR-TEMP-243's disposition table, as an assertion. Five probes were DELETED (four one-shot
+    """ADR-0089's disposition table, as an assertion. Five probes were DELETED (four one-shot
     rulings plus the vacuous gate) and five ROUTED; a probe reappearing under either name means a
     ruling was reverted without one being recorded."""
     probes = REPO / "tools" / "train" / "probes"

@@ -393,7 +393,7 @@ magnitude survives (decision 5).
 (decision 2); a `bench_harvest` sibling exposing `_harvest_optima`'s objective prize total
 (decision 5); `_bench_shortens_their_path` returns a delta rather than a sign (decision 5).
 
-> **Amendment, Issue #243 / ADR-TEMP-243 (2026-07-31): `deploy_decider_sweep.py` was DELETED.** The
+> **Amendment, Issue #243 / ADR-0089 (2026-07-31): `deploy_decider_sweep.py` was DELETED.** The
 > reading below stands as recorded — it was taken when the nine rungs its OLD arm zeroed still
 > existed, so OLD was the real incumbent pile and the comparison was genuine. Every one of those nine
 > ids has since been removed from `src/` (tracker directive 1 requires the deletion; nothing

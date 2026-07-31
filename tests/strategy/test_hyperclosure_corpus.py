@@ -151,7 +151,7 @@ _REVIEWED = json.loads((CORR / "reviewed.json").read_text(encoding="utf-8"))
 
 
 def _record(cid: str):
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243). The private
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The private
     module-level raw index this replaced dropped 40 records on a falsy `agent` — one of which,
     `82228640-9`, this file EXCLUDED as "unreplayable" on exactly that evidence."""
     from corpus_helpers import corpus_record

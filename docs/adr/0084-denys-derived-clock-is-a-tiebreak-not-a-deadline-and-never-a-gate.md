@@ -251,7 +251,7 @@ Fixing that changes every zero-value frame, predates this issue, and is handed f
   equivalence, the 128/218 bite-gate suppression, and gate 2's whole-corpus non-separation. Each names
   the probe and the sample size so the next grill re-runs rather than re-derives.
 - **`tools/train/probes/deny_gate217.py` was the harness** for all of it, alongside `deny_gate1.py`.
-  Both were **deleted by Issue #243 / ADR-TEMP-243 (2026-07-31)**: their questions are answered and
+  Both were **deleted by Issue #243 / ADR-0089 (2026-07-31)**: their questions are answered and
   recorded here and in ADR-0080, they were short 40 corpus records apiece, `deny_gate217` selected
   six hardcoded `(episode, frame)` literals, and both force flags that still ship OFF — so what they
   measured was not the shipped agent. The measurements above keep their standing; re-derive from

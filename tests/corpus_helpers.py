@@ -1,7 +1,7 @@
 """The ONE way a test reaches `data/corrections/` — `gates.keyed_corrections`, THE Corpus Reader.
 
 **ADR-0087** (Issue #241) made a Corpus Reader *construct* `Correction` objects and *derive* every
-**Frame Key**. **ADR-TEMP-243** (Issue #243) found that contract was enforced over `tools/` only, and
+**Frame Key**. **ADR-0089** (Issue #243) found that contract was enforced over `tools/` only, and
 by a regex that matched `glob(` — so eleven files under `tests/strategy/` reached the corpus anyway:
 nine globbing it (one carrying the identical `d.get("obs") and d.get("agent")` filter, short the same
 **40** records) and two naming a build directory outright, which is worse — a renamed build dir
@@ -58,7 +58,7 @@ def corpus_record(episode, frame):
     Raising rather than skipping is deliberate: every caller names a literal frame it asserts real
     behaviour about, so a missing record means the corpus moved under a test that still claims to
     cover it — which must go red, not quietly green. `test_needs_deny_resolver` previously skipped
-    here, and a skip that can never be noticed is the same false-clean shape ADR-TEMP-243 exists to
+    here, and a skip that can never be noticed is the same false-clean shape ADR-0089 exists to
     remove.
     """
     rec = corpus_index().get((str(episode), frame))

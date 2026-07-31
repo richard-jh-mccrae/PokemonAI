@@ -70,7 +70,7 @@ def _names() -> dict:
 
 
 def _frames():
-    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-TEMP-243)."""
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
     from train.probes._corpus import frames
     return frames()
 

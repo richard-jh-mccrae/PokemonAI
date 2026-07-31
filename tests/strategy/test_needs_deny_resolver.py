@@ -162,7 +162,7 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     its general floor). Under the pre-ruling damage-denominated value the same board priced the
     strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
     original ruling retired, and the ADR-0076 migration does not reopen."""
-    # THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243). The inline raw walk
+    # THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The inline raw walk
     # this replaced `pytest.skip`ped when the frame was absent — a skip on a test that names a
     # literal frame it asserts real behaviour about is a green nobody can notice, so the helper
     # RAISES instead.

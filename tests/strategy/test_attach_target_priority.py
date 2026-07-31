@@ -28,11 +28,11 @@ _PSYCHIC_ENERGY, _DREEPY, _MUNKIDORI = 5, 119, 112
 
 
 def _record():
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243).
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089).
 
     What this replaced named a BUILD DIRECTORY outright — `dragapult_ex_20260715_32530b9` — which no
     glob pattern can see and which breaks silently the day that directory is renamed. That is why
-    ADR-TEMP-243 decision 5 widened the rule from "no raw glob" to "nothing outside the store reaches
+    ADR-0089 decision 5 widened the rule from "no raw glob" to "nothing outside the store reaches
     the corpus": a check that forbids a spelling teaches people to find another one."""
     from corpus_helpers import corpus_record
     return corpus_record("86091728", 19)

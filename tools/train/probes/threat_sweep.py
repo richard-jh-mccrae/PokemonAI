@@ -13,7 +13,7 @@ per frame, the needs_sweep discipline) and reports the three Threat-Clock shadow
     clock (turns_to_afford) and the incoming to my Active.
   * TARGET   (S3a, `opp_target_shadow`) — the two-term removal value per opponent body (prize +
     phase × survival), the Option-B currency, for eyeballing vs the shipped snipe/gust/deny pick.
-SLOTS and RANK were DELETED by Issue #243 (ADR-TEMP-243 decision 1), for opposite reasons:
+SLOTS and RANK were DELETED by Issue #243 (ADR-0089 decision 1), for opposite reasons:
 
   * SLOTS was **same-vs-same**. It compared a shipped pilot it described as "both new flags OFF,
     today's default" against `_forced(gust_target_slots=True)` / `_forced(recur_fuel_relax=True)` —
@@ -46,7 +46,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 
 def _frames():
-    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-TEMP-243)."""
+    """THE Corpus Reader, via the shared probe helper (ADR-0087 / ADR-0089)."""
     from train.probes._corpus import frames
     return frames()
 

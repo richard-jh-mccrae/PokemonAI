@@ -55,7 +55,7 @@ ADJUDICATED = {
 
 
 def _record(cid: str):
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243). `load_corrections`
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). `load_corrections`
     dedups, so the old "last write wins" walk and this agree — measured, all 372 committed records
     carry a unique (episode, frame)."""
     from corpus_helpers import corpus_record

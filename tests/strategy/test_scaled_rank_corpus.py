@@ -27,7 +27,7 @@ KADABRA, ALAKAZAM = 742, 743          # Powerful Hand: printed 0, 20 per card in
 
 def _corpus():
     """Every committed Correction carrying a replayable `obs`, keyed by frame — through THE Corpus
-    Reader (ADR-0087 / ADR-TEMP-243).
+    Reader (ADR-0087 / ADR-0089).
 
     This file was the one test carrying the raw walk's `d.get("obs") and d.get("agent")` filter
     VERBATIM, so it was short the same **40** records: a falsy `agent` is *recoverable* from

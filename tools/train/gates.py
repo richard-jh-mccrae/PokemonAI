@@ -984,7 +984,7 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
       what it is for.
 
     UNWIRED as of Issue #243, and kept deliberately. Its only caller was `deploy_decider_sweep`,
-    deleted by ADR-TEMP-243 as a gate that could only report FIX. The **Decision Gate** has the same
+    deleted by ADR-0089 as a gate that could only report FIX. The **Decision Gate** has the same
     exposure on two `decision`-scope frames, but which frames stop gating is a *ruling*, not a
     refactor, so wiring it is owned by **Issue #251** rather than taken as a side effect of a
     cleanup. That issue argues the priority is LOW on purpose: the gap is DORMANT (ADR-0086 decision

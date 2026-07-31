@@ -95,7 +95,7 @@ construction was wrong.
   ordering): `python tools/train/leaf_lab.py diff --baseline data/leaf_lab/baseline.json`.
 - **Decision Gate** — already PASS, but re-run after step 1 since the equation changes:
   `python tools/train/decider_lab.py diff --baseline data/decider_lab/baseline.json`.
-  (Was `probes/deploy_decider_sweep.py`, **deleted by Issue #243 / ADR-TEMP-243**: every one of the
+  (Was `probes/deploy_decider_sweep.py`, **deleted by Issue #243 / ADR-0089**: every one of the
   nine ids it zeroed for its OLD arm had since been removed from `src/`, leaving `baseline_bench`
   holding one rung, so OLD scored a near-empty pile and the sweep could only ever report FIX. It was
   the fourth sibling ADR-0085 Amendment J retired — missed then only because it was the one that

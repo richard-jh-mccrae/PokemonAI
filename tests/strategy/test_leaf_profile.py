@@ -187,7 +187,7 @@ _ATTACH_FRAMES = (("82523811", 59), ("83664340", 45), ("82750161", 59))
 
 
 def _attach_frames():
-    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-TEMP-243).
+    """THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089).
 
     `corpus_record` raises on a missing frame, which is what the old `len(out) == len(wanted)` guard
     was for — and it names WHICH frame, where the count could only say one went missing. The raw walk

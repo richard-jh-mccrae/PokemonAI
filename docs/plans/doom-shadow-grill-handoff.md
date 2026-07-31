@@ -247,7 +247,7 @@ attach on this corpus — `_incoming_budget` KEEPS `base_attach: 1`; the stricte
 stays a doom-consumer-only budget. The residual flagged in the RULED appendix is closed with
 evidence, not changed code.
 
-> **Corpus Provenance** (ADR-TEMP-243 decision 2). The ruling above was a COUNT over the whole
+> **Corpus Provenance** (ADR-0089 decision 2). The ruling above was a COUNT over the whole
 > corpus, and it was measured through a raw-JSONL walk that was short **40** records — 332 frames of
 > a 372-frame corpus (ADR-0087, Issue #241). Such a ruling is a claim about a corpus that will not
 > exist next week, so it is re-derived and stamped rather than inherited:
@@ -257,7 +257,7 @@ evidence, not changed code.
 >   0 REGRESSED, 0 MOVED, 1 SKIP.** The ruling is unchanged by the widening: the forty records the
 >   backfill restores move nothing on this seam.
 >
-> The sweep's **runner was then deleted** (ADR-TEMP-243 decision 1 — a one-shot investigation whose
+> The sweep's **runner was then deleted** (ADR-0089 decision 1 — a one-shot investigation whose
 > answer is written down becomes a RULING, and the script is scaffolding). Its pure core
 > (`upgrade_charged` / `wrap_reachable` / `verdict`, `REQ-BUDGETSWEEP`) survives in the same module,
 > reading no corpus. Re-deriving this ruling again means re-writing ~20 lines of runner against

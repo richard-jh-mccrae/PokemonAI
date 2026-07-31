@@ -172,7 +172,7 @@ Gate** 40 records (an empty `agent` is *recoverable* from `agent_build`, and onl
 backfills it) and mis-keyed 163 more (`seat` is top-level, so `decision.get("seat", 0)` was always
 0). Enforced, not asserted: `tests/train/test_corpus_readers.py` fails on **any** construction of a
 `data/corrections` path outside the store module, across `tools/` **and** `tests/` — the rule forbids
-reaching the corpus, not one spelling of it (**ADR-TEMP-243** decision 5; the earlier glob-only,
+reaching the corpus, not one spelling of it (**ADR-0089** decision 5; the earlier glob-only,
 `tools/`-only check missed nine globbing tests and two fixed-path readers). The `ALLOWED_RAW_READERS`
 work queue was paid to empty by Issue #243 and deleted. A **test** reaches the corpus through
 `tests/corpus_helpers.py` (`corpus_record` / `corpus_index` / `replay_agent`) — the one door, so that
@@ -182,7 +182,7 @@ _Avoid_: loader (fine in prose, but the noun that matters is *what it constructs
 walk (**`iter_keyed_fixtures`** is the *fixture* walk — a different corpus)
 
 **Probe Fate**:
-The three things a corpus-reading module is allowed to be (**ADR-TEMP-243** decision 1, Issue #243) —
+The three things a corpus-reading module is allowed to be (**ADR-0089** decision 1, Issue #243) —
 a **GATE** (committed baseline that is a *ruling record*, plus a CI watchdog that turns red), a
 **RULING** (one-shot investigation whose answer is written down and whose script is then DELETED), or
 a routed **DIAGNOSTIC** (re-runnable, answers what the gates deliberately do not — e.g. the per-axis
@@ -197,7 +197,7 @@ around in case" (that is the fourth category)
 
 **Corpus Provenance**:
 The `measured at <commit>, N frames` stamp a ruling carries when it was reached by **counting across
-the whole corpus** (**ADR-TEMP-243** decision 2). Such a ruling is a claim about a corpus that will
+the whole corpus** (**ADR-0089** decision 2). Such a ruling is a claim about a corpus that will
 not exist next week — `budget_sweep`'s "zero decision flips" was ruled over 332 frames while the
 corpus held 372. A ruling reached **structurally**, or from a handful of **named frames**, does not
 carry the stamp (decision 3): corpus growth cannot move it, and a stamp applied where it cannot

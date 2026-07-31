@@ -1,5 +1,5 @@
 """`gates.records_a_decline_it_cannot_state` — the record-shape exclusion (Issue #197, the
-2026-07-30 f3 sitting; lifted to `gates.py` by Issue #243 / ADR-TEMP-243 decision on Q1).
+2026-07-30 f3 sitting; lifted to `gates.py` by Issue #243 / ADR-0089 decision on Q1).
 
 It guards a change to a gate's own INSTRUMENT, so it gets its own tests: a rule that quietly widened
 would stop a gate failing on real regressions, which is the one failure mode a gate cannot have.

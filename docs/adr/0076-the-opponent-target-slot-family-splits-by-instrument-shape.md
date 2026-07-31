@@ -123,7 +123,7 @@ Resolved from the code itself (`_active_doomed`, `_doom_recur_fueled`, `combat.a
 re-litigated with the user — it doesn't change the ruling (S2 stays survival-only, fail-scared-safe),
 only which function it wires into.
 
-> **Amendment, Issue #243 / ADR-TEMP-243 (2026-07-31): `threat_sweep.py --slots` was DELETED, and the
+> **Amendment, Issue #243 / ADR-0089 (2026-07-31): `threat_sweep.py --slots` was DELETED, and the
 > distinction matters for how the readings below should be read.**
 >
 > Every `--slots` measurement recorded in this ADR was a **valid A/B when it was run**: at that time
