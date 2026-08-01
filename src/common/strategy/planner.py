@@ -3569,6 +3569,9 @@ class PlannerMixin:
         if not types:
             return len(energies)
         from collections import Counter
+        # DELIBERATE CombatMath bypass (POC-T1's documented list): pure typed arithmetic over a
+        # SIMULATED body inside a rollout — a body that is on no board, so there is no board read to
+        # route and no second reader to drift from.
         attached = self.combat.attached_type_counts(body)        # typed Basics {type: count}
         pool = dict(attached)
         need = Counter(t for t in types if t not in (0, None))

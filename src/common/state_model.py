@@ -34,6 +34,30 @@ under one manual attach anyway.
 Composes the knowledge seams (the Stat Provider ADR-0056, ``CardFunctions``, ``CombatMath``
 ADR-0052, the Read) and takes per-decision facts as explicit arguments. It never imports or reads a
 Pilot or a Board — the dependency runs one way, exactly as ``CombatMath`` does.
+
+**The DELIBERATE bypass list** (POC-T1, Issue #260). The model is the sole data supplier, and after
+T1 every board read on a model-covered question goes through it. Four kinds of direct ``CombatMath``
+call survive, each for a reason that is a property of the QUESTION rather than an unfinished
+migration — so the list is short, closed, and enforced by ``tests/strategy/test_combat_bypass_census``
+rather than by review:
+
+1. **Hypothetical enabler Budgets** (``_evolve_income_delta``, ``_promote_closure``). Every argument
+   is a model read; what the model cannot supply is the hypothetical TARGET — a form the board does
+   not carry in that configuration. A ``MySide`` method per hypothetical would move the assembly, not
+   remove it.
+2. **The empty-Budget second leg** (``_attach_value``, ``_active_arm_available``; the #142 idiom).
+   "What can this body do with what is attached RIGHT NOW" is the baseline half of a counterfactual
+   whose other half is the model's full-Budget read. The model route always carries the full Budget,
+   so the empty leg has no model expression by construction.
+3. **The one-fact-source rule** (``_recur_fueled_oa``). Its ``fueled`` gate and its augmentation must
+   read the SAME discard or the doom relax could fire on a read that never counted its own fuel.
+4. **Pure card arithmetic over a body dict** (``prize_value``, ``attached_type_counts`` — the Pilot's
+   generic adapters and the planner's ``_payable_energy``). No board state, so two readers cannot
+   diverge, which is the whole hazard the census exists to close; and every caller passes a synthetic
+   or simulated body that is on no board.
+
+Every one of those call sites carries the same note in-line, because a reader arrives at the call,
+not at this docstring.
 """
 from __future__ import annotations
 
@@ -41,6 +65,7 @@ from collections import Counter
 from dataclasses import dataclass
 
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
+from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
 
 #: Sentinel for "use the policy threaded at :meth:`StateModel.build`". A clock consumer that wants a
 #: DIFFERENT conservatism than the Read's — the catastrophe-grade doom budget, the deny Δ's zero-attach
@@ -49,21 +74,10 @@ from common.deck_odds import p_contains          # the Probability Leg's one imp
 #: the two readings must be distinguishable; a plain ``None`` default silently collapses them.
 _THREADED = object()
 
-def CURRENT_FORMS_ONLY(_card_id):
-    """A forward-availability gate that admits NOTHING — "read the bodies as they stand".
-
-    A named module-level callable rather than an inline ``lambda`` at each call site, so the clock
-    memo can reuse an answer across a decision: the memo keys on the callable itself, and a fresh
-    closure per call would key differently every time. The one live consumer is
-    `Board.incoming_active_damage`, which asks what the body in FRONT of me hits for today (a +HP
-    Tool's survival breakpoint) rather than what its line becomes.
-    """
-    return ()
-
-
 #: Fallback Bench cap for an observation that omits the engine's own ``benchMax`` — the shipped
-#: format's 5 (`docs/rules.md` §7). Only a hand-built board ever reaches it; a real observation
-#: carries the field, and reading it is what keeps the model honest if the format ever changes.
+#: format's 5 (`docs/rulebook.txt` L75: *"Each player may have up to 5 Pokémon on the Bench at any
+#: one time"*, restated at L122). Only a hand-built board ever reaches it; a real observation carries
+#: the field, and reading THAT is what keeps the model honest if the format ever changes.
 _BENCH_MAX = 5
 
 # ── the lazy field descriptor ──────────────────────────────────────────────────────────────────
@@ -308,8 +322,8 @@ class BodyView(_Lazily):
 
     @lazy
     def energy_count(self) -> int:
-        """Energy UNITS attached — the raw count the rules speak in (a retreat cost is "discard this
-        many Energy", `docs/rules.md` §4).
+        """Energy UNITS attached — the raw count the rules speak in (a retreat cost is paid "in
+        Energy", `docs/rules.md` §3 *Action economy*).
 
         Deliberately NOT ``sum(attached_types.values())``, which is what it used to be: that counts
         only the TYPED Basic Energy the colour matcher can resolve, so a Special Energy or an
@@ -357,12 +371,6 @@ class BodyView(_Lazily):
         return tuple((c or {}).get("id") if isinstance(c, dict) else c
                      for c in (self.body.get("tools") or ())
                      if (c.get("id") if isinstance(c, dict) else c) is not None)
-
-    @lazy
-    def serial(self):
-        """The body's match-unique serial — the key ADR-0033 transient grants are stored under.
-        None when the observation carries no serial (a hand-built body)."""
-        return self.body.get("serial")
 
     @lazy
     def grant(self) -> dict:
@@ -508,8 +516,9 @@ class _SideBase(_Lazily):
         """Every card id in this side's discard, in zone order — the FULL public contents
         (POC-T0 / Issue #259, ADR-0092's "the StateModel is the SOLE data supplier" ruling).
 
-        A discard pile is public in **both** directions (`docs/rules.md` — "DISCARD [pub — both may
-        look]"), so this is sound knowledge about the opponent, not an estimate, and it belongs on
+        A discard pile is public in **both** directions (`docs/rulebook.txt` L541: *"The cards you
+        have discarded. These cards are always face up. Anyone can look at these cards at any
+        time."*), so this is sound knowledge about the opponent, not an estimate, and it belongs on
         the shared base rather than on `TheirSide` alone. Until now the model exposed only
         :meth:`discard_energy_counts` — a Basic-Energy projection — so every consumer wanting *what
         is actually in there* (a recur target, a Night Stretcher line, a used-up Item count, a rebuilt
@@ -551,6 +560,19 @@ class MySide(_SideBase):
     def hand_ids(self) -> tuple:
         return tuple(c["id"] for c in (self.player.get("hand") or [])
                      if c and c.get("id") is not None)
+
+    @lazy
+    def hand_size(self) -> int:
+        """Cards in my hand — the COUNT, and deliberately not ``len(hand_ids)`` (POC-T1, Issue #260).
+
+        :attr:`hand_ids` drops a card the observation gives without an ``id``; a count that inherited
+        that filter would under-report the hand by exactly the cards a disruption read cares most
+        about. The engine's own ``handCount`` is the authority where it is present — it is what the
+        opponent's side reads — and the card list is the fallback for a hand-built board that omits
+        it. Mirrors :attr:`TheirSide.hand_size`, so "how big is that hand" has ONE shape on both
+        sides even though only mine can also say WHICH cards."""
+        count = self.player.get("handCount")
+        return int(count) if count is not None else len(self.player.get("hand") or [])
 
     @lazy
     def hand_energy_counts(self) -> dict:
@@ -986,7 +1008,7 @@ class TheirSide(_SideBase):
         ``bodies`` names the counterfactual opponent board (see :meth:`_bodies`); ``charged`` the
         energy policy (see :meth:`_charged_policy`); ``forward_ids`` the AVAILABILITY gate, defaulting
         to the index threaded at build. Overriding the gate is how a caller asks about the CURRENT
-        forms only — pass ``lambda _cid: ()`` — which is a real question (`Board`'s
+        forms only — pass ``combat.CURRENT_FORMS_ONLY`` — which is a real question (`Board`'s
         ``incoming_active_damage`` exposes it so a +HP Tool can test a survival breakpoint against
         what the body in front of me hits for TODAY) and not a way around the index. The remaining
         kwargs are the oracle's own and are documented on ``CombatMath.incoming`` — they are here
@@ -1007,7 +1029,7 @@ class TheirSide(_SideBase):
         # `fwd` goes into the key AS THE CALLABLE, not as its id(): a function is hashable, and the
         # key then holds a reference to it, so a freshly-built closure can only cost a memo MISS —
         # never an id collision serving a different index's answer. Callers wanting reuse pass a
-        # stable callable (:data:`CURRENT_FORMS_ONLY`).
+        # stable callable (`combat.CURRENT_FORMS_ONLY`).
         key = ("incoming", self._key(my_body), t, self._key(opp_bodies), self._key(policy), fwd,
                evo_min_energy, self._key(context), bool(my_benched), self._key(opp_active),
                bool(switch_enabler))
@@ -1020,6 +1042,26 @@ class TheirSide(_SideBase):
         """``incoming(t=1)`` — their next single development step. Delegates with every kwarg intact,
         so the one-step read stays identical to the curve by construction."""
         return self.incoming(my_body, 1, **kwargs)
+
+    def doomed(self, my_body: dict | None, **kwargs) -> bool:
+        """Can they Knock Out ``my_body`` next turn? — the composed survival boolean (POC-T1,
+        Issue #260), and the home the folded `CombatMath.active_doomed` moved to.
+
+        The fold made doom *one call into the curve at one policy*, which left the ``>= hp``
+        comparison as the only thing still worth naming — and it was being written out at both
+        consumers (the live decider and its diagnostic). Two spellings of one composition is the
+        drift the fold exists to remove, one level up.
+
+        Defaults to :data:`~common.strategy.combat.UNCHARGED`, the doom policy: the current form
+        contributes unconditionally (a body on the board can hold Energy we cannot see) and forward
+        forms keep the ``attached + 1`` gate, fail-open on an unresolvable cost. A caller confirming
+        or clearing that cry under a different budget passes ``charged=`` like any other clock
+        consumer; every other kwarg goes straight through to :meth:`incoming`."""
+        hp = (my_body or {}).get("hp", 0)
+        if not hp:
+            return False                              # no live body: no claim, never a doom cry
+        kwargs.setdefault("charged", UNCHARGED)
+        return int(self.incoming(my_body, 1, **kwargs)) >= hp
 
     def turns_to_afford(self, body, *, attaches_per_turn: int = 1, fuelled: bool = True) -> int | None:
         """The earliest future turn ``body``'s line is ARMED — its biggest attack's cost payable.
@@ -1077,8 +1119,8 @@ class TheirSide(_SideBase):
         Real ids rather than a synthetic marker, because the clock's typed leg matches an attack's
         cost SHAPE against attached Energy by card identity — a placeholder would pay a colourless
         slot and no typed one, silently under-crediting exactly the {F}/{M} lines this exists for.
-        The discard is public (`docs/rules.md`), so picking the ids out of it is a sound read, not an
-        estimate; :attr:`discard_ids` is the zone and the combat oracle resolves each id's type.
+        The discard is public (`docs/rulebook.txt` L541), so picking the ids out of it is a sound
+        read, not an estimate; :attr:`discard_ids` is the zone and the combat oracle resolves each id's type.
         Returns fewer ids than asked (possibly none) when the discard cannot supply them — the count
         and the ids then disagree only in the fail-CLOSED direction."""
         stat = view.stat
@@ -1266,7 +1308,8 @@ class StateModel(_Lazily):
         """The one Retreat for this turn is spent (POC-T1, Issue #260).
 
         Homes the ``allowance_retreat_used`` zone. Retreat is an ordinary turn action limited to once
-        per turn (`docs/rules.md` §4) and the engine has carried ``current.retreated`` all along; the
+        per turn (`docs/rules.md` §3 *Action economy*) and the engine has carried
+        ``current.retreated`` all along; the
         snapshot simply never surfaced it, so a retreat's own LEGALITY could not be differenced —
         and an illegal option priced like a legal one is a phantom line, not a small error."""
         return bool(self.state.get("retreated"))

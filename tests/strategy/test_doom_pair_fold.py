@@ -31,13 +31,26 @@ from pathlib import Path
 
 import pytest
 
+from common.strategy.combat import CURRENT_FORMS_ONLY, UNCHARGED
+
 REPO = Path(__file__).resolve().parents[2]
 
-#: The RULED 15-frame divergence corpus (doom-shadow grill, 2026-07-23) is drawn from these three
-#: agents' correction runs; the fold is checked over EVERY committed frame of all of them rather
-#: than only the 15, because "the 15" was a property of one sweep and this pin should not rot when
-#: the corpus widens (ADR-0089 decision 2 — a ruling is re-derived, not inherited).
+#: The three agents whose correction runs the ruled corpus is drawn from. The fold is checked over
+#: EVERY committed frame of all three, not only the 15 — "the 15" was a property of one sweep, and a
+#: pin scoped to it would narrow silently as the corpus grows (ADR-0089 decision 2: a ruling is
+#: re-derived, not inherited).
 AGENTS = ("mega_starmie", "mega_lucario", "dragapult_ex")
+
+#: …and the fifteen frames the grill ruled BY NAME (`doom-shadow-grill-handoff.md`, RULED appendix),
+#: as `episode_id-frame`. Asserted present and byte-identical individually, because "the corpus was
+#: covered" is a weaker claim than "these frames were covered": the whole sweep found agreement on
+#: 259/274 and it is exactly these fifteen where the two reads disagreed, so they are the frames a
+#: fold could plausibly move.
+RULED_15 = (
+    "81904451-17", "82749168-21", "82749168-29", "81904064-44", "85163634-17",
+    "85058574-69", "85058574-71", "86091435-13", "86091435-20", "86091435-30",
+    "86091435-35", "86091435-60", "86091435-62", "86091435-68", "86091435-69",
+)
 
 
 # ── the reference oracle: the two deleted bodies, verbatim ────────────────────────────────────────
@@ -110,7 +123,8 @@ def _frames(agent):
                 continue
             obs = rec.get("obs")
             if isinstance(obs, dict) and obs.get("current"):
-                yield run.name, i, obs
+                key = f"{rec.get('episode_id')}-{(rec.get('decision') or {}).get('frame')}"
+                yield run.name, i, obs, key
 
 
 def _sides(obs):
@@ -133,7 +147,7 @@ def test_the_fold_is_byte_identical_to_the_deleted_pair(agent):
         pytest.skip(f"no committed correction corpus for {agent}")
     pilot = _pilot(agent)
     checked = 0
-    for run, i, obs in frames:
+    for run, i, obs, _key in frames:
         ma, oa, opp = _sides(obs)
         if not (ma and oa):
             continue
@@ -144,9 +158,11 @@ def test_the_fold_is_byte_identical_to_the_deleted_pair(agent):
         # tracker is empty on a replayed frame, but assert the premise rather than assume it
         assert not (pilot.combat._grant(oa) or {}).get("self_lock"), (
             f"{where}: a self-locked Active is the declared divergence — rule it, don't pin it")
-        assert pilot.combat.incoming_active_damage(ma, oa, context=ctx) == \
+        model = pilot._state_model
+        assert model.theirs.incoming(ma, 1, bodies=[oa], charged=UNCHARGED,
+                                     forward_ids=CURRENT_FORMS_ONLY, context=ctx) == \
             _legacy_current(pilot.combat, ma, oa, context=ctx), f"{where}: current-form damage moved"
-        assert pilot.combat.active_doomed(ma, oa, context=ctx) == \
+        assert model.theirs.doomed(ma, bodies=[oa], context=ctx) == \
             _legacy_doomed(pilot.combat, ma, oa, opp, context=ctx), f"{where}: the doom bit moved"
         checked += 1
     assert checked >= 20, f"{agent}: only {checked} frames carried a live Active pair — too thin to pin"
@@ -156,9 +172,8 @@ def test_the_fold_reads_one_curve_at_two_policies():
     """The structural claim, stated as code: doom IS `incoming` under `UNCHARGED`, and the surviving
     divergence from `doomed_incoming` is that method's `charged=None` ceiling — one implementation,
     two policies. If a future edit re-splits them this fails before any corpus does."""
-    from common.strategy.combat import UNCHARGED
     pilot = _pilot("mega_lucario")
-    frames = [obs for _run, _i, obs in _frames("mega_lucario")]
+    frames = [obs for _run, _i, obs, _k in _frames("mega_lucario")]
     if not frames:
         pytest.skip("no committed correction corpus")
     seen_divergence = False
@@ -170,7 +185,7 @@ def test_the_fold_reads_one_curve_at_two_policies():
         ctx = pilot._damage_context(obs, attacker_is_me=False)
         doom = model.theirs.incoming(ma, 1, bodies=[oa], charged=UNCHARGED, context=ctx)
         ceiling = model.theirs.incoming(ma, 1, bodies=[oa], charged=None, context=ctx)
-        assert pilot.combat.active_doomed(ma, oa, context=ctx) == (doom >= ma["hp"])
+        assert model.theirs.doomed(ma, bodies=[oa], context=ctx) == (doom >= ma["hp"])
         # the doom policy is strictly the more pessimistic of the two — that is what makes it the
         # one policy a catastrophe-grade boolean may take (`sound_rules: doom-ceiling-fail-direction`)
         assert doom >= ceiling, "the doom policy must never read BELOW the ceiling"
@@ -178,3 +193,73 @@ def test_the_fold_reads_one_curve_at_two_policies():
     assert seen_divergence, ("the two policies never diverged on this corpus — the divergence this "
                             "fold turns into a parameter is what the 15 ruled frames measured, so "
                             "its disappearance is a finding, not a pass")
+
+
+@pytest.mark.parametrize("frame_key", RULED_15)
+def test_each_RULED_frame_is_byte_identical(frame_key):
+    """The fifteen by name. `test_the_fold_is_byte_identical_to_the_deleted_pair` already covers
+    them inside its corpus walk, but only as anonymous members of a few hundred — and a walk that
+    silently stopped finding them would still pass. These are the frames the grill ruled one at a
+    time; they are asserted one at a time."""
+    for agent in AGENTS:
+        for _run, _i, obs, key in _frames(agent):
+            if key != frame_key:
+                continue
+            pilot = _pilot(agent)
+            ma, oa, opp = _sides(obs)
+            assert ma and oa, f"{frame_key}: the ruled frame must carry a live Active pair"
+            model = pilot._snapshot(obs)
+            ctx = pilot._damage_context(obs, attacker_is_me=False)
+            assert model.theirs.doomed(ma, bodies=[oa], context=ctx) == \
+                _legacy_doomed(pilot.combat, ma, oa, opp, context=ctx), f"{frame_key}: doom moved"
+            return
+    pytest.fail(f"{frame_key} is not in the committed corrections corpus — the ruled 15-frame "
+                "corpus this fold was measured against has moved, so re-derive the ruling")
+
+
+def test_the_declared_self_lock_divergence_is_MEASURED_not_assumed():
+    """The one behaviour change the corpus cannot show, shown directly.
+
+    `_attacker_forms` used to skip a self-locked body's WHOLE line; it now skips only the locked
+    form and still yields its FORWARD forms, because evolving clears attack effects
+    (`docs/rulebook.txt` L215: *"When a Pokémon evolves or moves to the Bench, it recovers from all
+    Special Conditions"*; `docs/rules.md` §4 for attack effects). The corpus walk asserts no frame
+    carries a live lock rather than exercising one — the tracker is empty on a replayed frame — so
+    without this the fold's only real divergence would be untested.
+
+    Both halves are asserted: the locked form contributes nothing, and its forward form still does.
+    The direction matters — the old pair got this right by accident (`forward_incoming_damage` never
+    consulted the lock), so had the fold inherited `incoming`'s skip it would have made a survival
+    read LESS pessimistic than the read it replaced."""
+    from common.cards import CardFunctions
+    from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
+    from common.strategy.combat import CombatMath
+
+    PRE, EVO, SMALL, BIG = 900001, 900002, 51, 52
+    stats = DictCardStatProvider({
+        PRE: CardStat(PRE, name="Locked Base", hp=90, energyType=6, minAttackCost=1,
+                      maxDamage=60, attacks=(SMALL,)),
+        EVO: CardStat(EVO, name="Its Evolution", hp=300, evolvesFrom="Locked Base", energyType=6,
+                      minAttackCost=1, maxDamage=200, attacks=(BIG,)),
+        1: CardStat(1, name="My Body", hp=150),
+    }, attacks={SMALL: AttackStat(SMALL, damage=60, cost=1),
+                BIG: AttackStat(BIG, damage=200, cost=1)})
+
+    class _Locked:
+        """A tracker whose grant self-locks serial 7 — ADR-0033's "this body cannot attack at all"."""
+        def grant_for_serial(self, serial):
+            return {"self_lock": True} if serial == 7 else None
+
+    combat = CombatMath(stats, functions=CardFunctions({}), transients=_Locked())
+    ma, oa = {"id": 1, "hp": 150}, {"id": PRE, "serial": 7, "hp": 90, "energies": [6]}
+
+    # the locked body itself contributes nothing — its own 60 is off the table
+    assert combat.incoming(ma, [oa], 1, charged=UNCHARGED,
+                           forward_ids=CURRENT_FORMS_ONLY) == 0
+    # …and its EVOLUTION still threatens 200, because the lock is a fact about that Pokémon
+    assert combat.incoming(ma, [oa], 1, charged=UNCHARGED) == 200
+    assert combat.incoming(ma, [oa], 1, charged=UNCHARGED) >= ma["hp"]      # so: still doomed
+
+    # the OLD pair agreed with the new reading here — this is a fix to `incoming`, not to the pair
+    assert _legacy_current(combat, ma, oa) == 0
+    assert _legacy_forward(combat, ma, oa, {"handCount": 0}) == 200

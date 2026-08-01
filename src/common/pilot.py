@@ -19,7 +19,7 @@ from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
                                           promote_value)
 from common.opponent_model import OpponentModel
-from common.state_model import CURRENT_FORMS_ONLY, StateModel
+from common.state_model import StateModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
@@ -42,8 +42,8 @@ from common.snipe_relevance import K as _SNIPE_RELEVANCE_K  # noqa: E402
 #                                             the relevance normalizer, imported so `_DENY_RELEVANCE_K`
 #                                             below is the SAME number by construction rather than a
 #                                             copy that could drift when a new set re-derives it
-from common.strategy.combat import (Budget, _EFFICIENCY,  # noqa: E402  (re-used by the tactical scorers)
-                                    HARVEST_UNAVOIDABLE, UNCHARGED)
+from common.strategy.combat import (Budget, CURRENT_FORMS_ONLY,  # noqa: E402  (re-used
+                                    _EFFICIENCY, HARVEST_UNAVOIDABLE, UNCHARGED)  # by the tactical scorers)
 from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
@@ -2188,6 +2188,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # guard, which silently zeroed §3, §7 and amendment B on EVERY board (#167).
             # Truncated, not rounded — the conservative direction for an endorser.
             copies = int(getattr(count, "expected", count) or 0)
+            # DELIBERATE CombatMath bypass (POC-T1's documented list; `test_combat_bypass_census`):
+            # a HYPOTHETICAL enabler Budget. Every argument is a model read, but the TARGET is a form
+            # the board does not carry in this configuration, and the model's route builds a Budget
+            # for a body it holds. Inventing a `MySide` method per hypothetical would move the
+            # assembly, not remove it.
             enabler = self.combat.attach_budget(
                 raw, mine.hand_ids, energy_attached=mine.energy_attached,
                 supporter_played=mine.supporter_played,
@@ -2452,6 +2457,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 # `expected` is the leg: a dig's odds ARE an estimate, and passing the CountTriple
                 # itself raises into `draw_hit_probability`'s "bad input -> 0.0" guard (#167).
                 copies = int(getattr(count, "expected", count) or 0)
+                # DELIBERATE CombatMath bypass (POC-T1's documented list;
+                # `test_combat_bypass_census`): a HYPOTHETICAL enabler Budget. Every argument is a
+                # model read, but the TARGET is a form the board does not carry in this
+                # configuration, and the model's route builds a Budget for a body it holds.
+                # Inventing a `MySide` method per hypothetical would move the assembly, not remove it.
                 enabler = self.combat.attach_budget(
                     raw, mine.hand_ids, energy_attached=mine.energy_attached,
                     supporter_played=mine.supporter_played,
@@ -2876,9 +2886,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _prize_value(self, poke: dict | None) -> int:
         """Prizes a knockout yields — Mega ex 3, ex 2, else 1 (the KO oracle's read)."""
+        # DELIBERATE CombatMath bypass (POC-T1's documented list): card knowledge, constant all
+        # game. `PrizeRace`'s own docstring keeps per-body prize YIELD on the oracle and only the
+        # RACE on the model (ADR-0052) — and every caller of this adapter passes a SYNTHETIC
+        # `{"id": cid}`, which is a card question, not a board one.
         return self.combat.prize_value(poke)
 
     def _attached_type_counts(self, target: dict) -> dict:
+        # DELIBERATE CombatMath bypass (POC-T1's documented list): pure typed arithmetic over a
+        # body's own `energies`, with no other board input — so two readers cannot disagree, which
+        # is the drift this track's census exists to prevent. Called with synthetic bodies.
         return self.combat.attached_type_counts(target)
 
     def _attack_type_payable(self, aid, target: dict | None, *, extra_type=None,
@@ -3825,8 +3842,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `needs.keep_v2`) and the v2 decider's pick (`needs.cheapest_removal`), hedged at v1's
         POST-GATE keep — the WP-N3 refinement: v2 never prices below the shipped decider (a
         raw-tier floor would undo the gate knowledge), and a firing floor telemeters a missing
-        slot. SHADOW-ONLY (Round 6): nothing here decides. Returns ``(keep_v2 per row, eq2_pick
-        as OPTION indices)``.
+        slot. Returns ``(keep_v2 per row, eq2_pick as OPTION indices)``.
+
+        **This DECIDES** (`needs_keep_value`, armed ON 2026-07-20 by ADR-0065 WP-N4): the forced
+        discard's pick IS `eq2_pick` — see `_discard_needs_pick`, the consumer. The line here read
+        "SHADOW-ONLY (Round 6): nothing here decides" for eleven days after the swap; corrected by
+        POC-T1 (Issue #260). A stale "decides nothing" is worse than no note at all — it is the
+        sentence a reader trusts when judging whether a change here is safe.
 
         v0 resolver scope (the discard bench's needs — the rest joins in WP-N4):
           * LINE slots per held card class at its line-role tier × the v1 deploy gate (dead
@@ -4750,6 +4772,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         overkill = False
         if area == _ACTIVE and board.active_cheap_attack_kos:
             opp_hp = self._opp_body_hps(obs)
+            # DELIBERATE CombatMath bypass (POC-T1's documented list): the #142 EMPTY-Budget leg —
+            # "what can this body do with what is attached RIGHT NOW", the baseline of the
+            # counterfactual. The model's route always carries the FULL Budget, so the empty leg has
+            # no model expression by construction.
             if opp_hp and max(opp_hp) <= self.combat.best_reachable_damage(target, budget=Budget()):
                 overkill = True
         # The EVAPORATION gate, global: a `discard_eot` Energy that buys nothing before it is
@@ -6405,6 +6431,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if body is None or not aids:
             return False
         biggest = max(aids, key=self._attack_damage)
+        # DELIBERATE CombatMath bypass (POC-T1's documented list): the #142 EMPTY-Budget leg again —
+        # the biggest attack must NOT be payable on the empty budget but MUST be under the full one,
+        # and the line below takes the full one off the model.
         if self.combat.reachable_attach(ma, biggest, budget=Budget()):
             return False                    # already armed — there is nothing left for an attach to complete
         return bool(model.mine.reachable_attach(body, biggest))
@@ -6830,7 +6859,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
             opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
             opp_hand_size=model.theirs.hand_size,               # ← StateModel (POC-T1): THE
-            my_hand_size=len(model.mine.hand_ids),               #   supplier of the hand counts
+            my_hand_size=model.mine.hand_size,                   #   supplier of BOTH hand counts
             opp_draw_engine_in_play=bool(self._draw_engine_ids(opp)),
             # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers — sourced from the tracker
             # observed at self.opponent.observe(obs) above; each read fails OPEN (unknown -> no-fire default).
@@ -8005,6 +8034,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         disc = self._discard_energy_counts(opp.get("discard") or [])[1]
         if not disc:
             return oa
+        # DELIBERATE CombatMath bypass (POC-T1's documented list): the ONE-FACT-SOURCE rule stated in
+        # this method's own docstring — the relax's `fueled` gate and this augmentation must read the
+        # SAME discard, and `_doom_recur_fueled` reads it through `_discard_energy_counts(opp)`.
         fuel = self.combat.discard_recur_fuel(oa, disc, forward_ids=self._forward_card_ids)
         if fuel <= 0:
             return oa
@@ -8057,15 +8089,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # `active_doomed` spelled as its own implementation; `_DOOM_CHARGED` is the matched-Read
         # relax. Reading them off one method at two policies is what makes "these two disagree on
         # 15 frames" a statement about POLICY rather than about two pieces of code.
-        worst = model.theirs.incoming(ma, 1, bodies=[oa], charged=UNCHARGED,
-                                      context=ctx) >= my_hp
+        worst = model.theirs.doomed(ma, bodies=[oa], context=ctx)
         if not (worst and self.doom_matched_relax):
             return worst
         matched, fueled, read_oa = self._doom_relax_inputs(oa, opp)
         if not matched or (fueled and not self.recur_fuel_relax):
             return worst
-        return model.theirs.incoming(ma, 1, bodies=[read_oa],
-                                     charged=self._DOOM_CHARGED, context=ctx) >= my_hp
+        return model.theirs.doomed(ma, bodies=[read_oa], charged=self._DOOM_CHARGED, context=ctx)
 
     def _threat_shadow(self, obs: dict, board) -> dict | None:
         """S1b threat-clock doom SHADOW (docs/plans/opponent-value-equation-unification.md): emit the
@@ -8106,8 +8136,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # compare is now one implementation, so what it still measures — and the only thing it ever
         # really measured — is the gap between two POLICIES.
         dmg = model.theirs.incoming(ma, 1, bodies=[oa], charged=None, context=ctx)
-        old = bool(my_hp and model.theirs.incoming(ma, 1, bodies=[oa], charged=UNCHARGED,
-                                                   context=ctx) >= my_hp)
+        old = model.theirs.doomed(ma, bodies=[oa], context=ctx)
         new = bool(my_hp and dmg >= my_hp)
         matched, fueled, read_oa = self._doom_relax_inputs(oa, opp)
         decided = bool(old and self.doom_matched_relax and matched

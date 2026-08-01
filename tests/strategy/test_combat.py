@@ -7,7 +7,7 @@ import pytest
 
 from common.cards import CardFunctions
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
-from common.strategy.combat import CombatMath
+from common.strategy.combat import CURRENT_FORMS_ONLY, UNCHARGED, CombatMath
 from common.strategy.damage import wr_adjust
 
 WATER, FIRE, LIGHTNING = 3, 2, 4
@@ -237,7 +237,16 @@ def test_best_affordable_ko_value_type_guard_and_boost_rider():
 
 
 @pytest.mark.req("REQ-COMBAT-0007")
-def test_incoming_active_damage_reads_transient_locks_and_bonuses():
+def _cur(oracle, ma, oa):
+    """What their Active, IN ITS CURRENT FORM, hits my Active for next turn.
+
+    POC-T1 (Issue #260) folded `incoming_active_damage` onto the curve and then deleted it once the
+    census moved its only production consumer onto the snapshot; this is the same read spelled the
+    way production spells it — the doom policy with the forward-availability gate emptied."""
+    return int(oracle.incoming(ma, [oa], 1, charged=UNCHARGED, forward_ids=CURRENT_FORMS_ONLY))
+
+
+def test_the_current_form_incoming_reads_transient_locks_and_bonuses():
     class _Grants:
         def __init__(self, grant): self._g = grant
         def grant_for_serial(self, serial): return self._g if serial == 9 else None
@@ -246,16 +255,16 @@ def test_incoming_active_damage_reads_transient_locks_and_bonuses():
     ma = {"id": CINDERACE, "hp": 160}
     # Unlocked worst case vs my Water-weak Cinderace: Jetting 120 x2 = 240 (beats Nebula's
     # weakness-blind 210 — Incoming reads the ceiling over ALL their attacks).
-    assert base.incoming_active_damage(ma, {"id": STARMIE, "energies": [1]}) == 240
+    assert _cur(base, ma, {"id": STARMIE, "energies": [1]}) == 240
     # A self-lock grant on THEIR Active: no attack next turn -> 0 threat.
     locked = _oracle(transients=_Grants({"self_lock": True}))
-    assert locked.incoming_active_damage(ma, oa) == 0
+    assert _cur(locked, ma, oa) == 0
     # A same-attack lock excludes only that attack: Jetting locked -> Nebula's 210 remains.
     same = _oracle(transients=_Grants({"same_lock": JETTING}))
-    assert same.incoming_active_damage(ma, oa) == 210
+    assert _cur(same, ma, oa) == 210
     # A self-bonus raises the worst hit: 240 + 30.
     bonus = _oracle(transients=_Grants({"self_bonus": 30}))
-    assert bonus.incoming_active_damage(ma, oa) == 270
+    assert _cur(bonus, ma, oa) == 270
 
 
 @pytest.mark.req("REQ-COMBAT-0007")
@@ -273,13 +282,13 @@ def test_active_doomed_sees_the_forward_evolution_threat():
     ma = {"id": CINDERACE, "hp": 130}
     oa = {"id": riolu, "energies": [1]}                     # 1 Energy + next attach pays the 2
     # Riolu's own attack can't KO — but the line it evolves INTO (270) dooms my 130-HP Active.
-    assert o.active_doomed(ma, oa)
+    assert o.incoming(ma, [oa], 1, charged=UNCHARGED) >= ma["hp"]
     # POC-T1 (Issue #260): the vestigial third `opp` positional is GONE. It was never read — its
     # only effect was that passing None silently disabled the whole forward leg, so a caller that
     # simply did not have an opponent dict to hand got a quieter survival read for free. The forward
     # threat above is a fact about `oa`'s own line, and it is now read as one.
-    assert o.active_doomed(ma, {"id": riolu, "energies": []}) is False   # 0 Energy: 2-cost is out of
-    #                                                                     reach even with one attach
+    bare = {"id": riolu, "energies": []}          # 0 Energy: the 2-cost forward form is out of
+    assert o.incoming(ma, [bare], 1, charged=UNCHARGED) < ma["hp"]   # reach even with one attach
 
 
 @pytest.mark.req("REQ-COMBAT-0008")

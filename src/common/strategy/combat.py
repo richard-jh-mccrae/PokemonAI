@@ -41,6 +41,19 @@ _ACCEL_TAGS = frozenset({"tutor_energy", "energy_accel"})   # the Function-Tag R
 #: boolean may take (`sound_rules`: `doom-ceiling-fail-direction`).
 UNCHARGED = "uncharged"
 
+
+def CURRENT_FORMS_ONLY(_card_id):
+    """A forward-availability gate that admits NOTHING — "read the bodies AS THEY STAND".
+
+    A named module-level callable rather than an inline ``lambda`` at each call site, for two
+    reasons: the clock memo keys on the callable itself, so a fresh closure per call would key
+    differently every time; and one spelling of "no forward forms" is one place to read about why a
+    caller wanted that. The live consumer is `Board.incoming_active_damage`, which asks what the body
+    in FRONT of me hits for today (a +HP Tool's survival breakpoint) rather than what its line
+    becomes — the forward leg is `active_doomed`'s question, not that field's.
+    """
+    return ()
+
 _RECUR_RELOAD_CAP = 3      # the max Basic Energy a `discard_energy_recur` line reloads from its OWN
                            # discard in one turn — VERIFIED at source (EN_Card_Data.csv): Mega Lucario
                            # ex 678 Aura Jab up to 3 Basic {F}; Archaludon ex 190 Assemble Alloy up to
@@ -741,50 +754,14 @@ class CombatMath:
         fci = getattr(self.stats, "forward_card_ids", None)
         return fci(card_id) if (fci is not None and card_id is not None) else frozenset()
 
-    def incoming_active_damage(self, ma: dict | None, oa: dict | None, *,
-                               context: dict | None = None) -> int:
-        """Closed-form worst damage the opponent's **Active, in its current form**, deals my Active
-        next turn — its biggest attack, honoring a live transient grant on THEIR Active: a self-lock
-        means no attack at all, a same-attack lock excludes that one, a self-bonus raises the hit.
-        0 when unknown. WORST-CASE by design — affordability deliberately NOT charged (the hidden
-        burst-Energy lesson; docs/todo/incoming-affordability.md).
-
-        **A delegate onto the curve** (POC-T1, Issue #260). It used to be a second implementation of
-        the same question, and the 94.5%-agreement divergence between this pair and
-        :meth:`doomed_incoming` was tracked for a year as a code difference. It is a POLICY
-        difference: :data:`UNCHARGED` is what "worst-case, affordability not charged" means, spelled
-        as a parameter of the one curve. The forward index is emptied because this read is the
-        CURRENT form only — the forward leg is its sibling's, and both now compose inside
-        :meth:`active_doomed` rather than beside it."""
-        return int(self.incoming(ma, [oa], 1, charged=UNCHARGED,
-                                 forward_ids=lambda _cid: (), context=context))
-
-    def active_doomed(self, ma: dict | None, oa: dict | None, *,
-                      context: dict | None = None) -> bool:
-        """The opponent can Knock Out my Active next turn — its biggest CURRENT attack OR the attack
-        its Active reaches by EVOLVING >= my Active's HP. WORST-CASE (the ceiling): Energy
-        affordability is not charged on the body as it stands — a hidden Ignition-class burst reaches
-        a costly nuke in one turn (the planner_6858 lesson). A survival read must never under-prepare.
-
-        **The fold** (POC-T1, Issue #260): one call into the Threat-Clock curve at the
-        :data:`UNCHARGED` policy, over the Active and its forward forms. The old body was
-        ``max(incoming_active_damage, forward_incoming_damage)`` — two hand-written reads whose
-        agreement with the curve had to be measured (259/274) instead of being true by construction.
-
-        Two behaviour changes came out of writing it as one implementation, both in the PESSIMISTIC
-        direction and both defects of the old pair rather than costs of the fold:
-
-        * a self-locked Active now still contributes its FORWARD forms (evolving clears attack
-          effects, `docs/rules.md` §4) — the old `incoming_active_damage` returned 0 and the old
-          `forward_incoming_damage` never consulted the lock, so the pair happened to get this right
-          while the curve's shared enumeration got it wrong; the curve is fixed, not worked around.
-        * the vestigial ``opp`` parameter is GONE. It was never read — its only effect was that
-          passing None silently disabled the whole forward leg, which is a trapdoor, not an option.
-        """
-        my_hp = (ma or {}).get("hp", 0)
-        if not my_hp:
-            return False
-        return int(self.incoming(ma, [oa], 1, charged=UNCHARGED, context=context)) >= my_hp
+    # `incoming_active_damage` and `active_doomed` were DELETED by POC-T1 (Issue #260). The fold
+    # turned them into one-line spellings of `incoming` at the `UNCHARGED` policy, and the SAME
+    # track's census migration moved their only production consumers onto the snapshot — so what the
+    # fold left behind was two zero-caller delegates. Keeping them would have contradicted the
+    # deletion rule this track applied to every other unconsumed surface, and a second spelling of a
+    # question is the drift hazard ADR-0087 charges for whether or not anything calls it today. The
+    # composed reads live where their consumers are: `StateModel.TheirSide.doomed` and, for the
+    # current-form damage `Board` exposes, `theirs.incoming(..., forward_ids=CURRENT_FORMS_ONLY)`.
 
     def doomed_incoming(self, ma: dict | None, oa: dict | None, *, charged: dict | None = None,
                         context: dict | None = None) -> int:
@@ -1318,8 +1295,8 @@ class CombatMath:
         return self.rider_snipe(attack_id) + self.rider_spread(attack_id)
 
     def _reach_form_damage(self, my_body, form_id, form_body, attached, charged, context, *,
-                           exclude, bonus, attaches: int = 1, my_benched: bool = False,
-                           is_current: bool = False) -> int:
+                           exclude, bonus, is_current: bool, attaches: int = 1,
+                           my_benched: bool = False) -> int:
         """The worst damage ONE attacker form (current or evolved) deals ``my_body`` under the
         ``charged`` energy policy (see :meth:`incoming`), given ``attaches`` manual attach-turns of
         Energy available (1 = the ADR-0064 one-step read; the Threat-Clock curve passes ``t``). 0
@@ -1521,7 +1498,7 @@ class CombatMath:
         return (None, 0)
 
     def _affords(self, stat, form_body, aid, attached: int, t: int, charged, *,
-                 is_current: bool = True) -> bool:
+                 is_current: bool) -> bool:
         """Whether ``aid`` is payable at turn ``t`` under the ``charged`` policy (see :meth:`incoming`).
 
         ONE function owns affordability, so the damage read (:meth:`_reach_form_damage`) and the
@@ -1530,6 +1507,12 @@ class CombatMath:
 
         Under the ceiling policy (``charged is None``) the question is per-FORM, not per-attack: a
         form contributes once it can pay its CHEAPEST attack, and ``aid`` is then irrelevant.
+
+        ``is_current`` has NO default here or on :meth:`_reach_form_damage`, deliberately. It is one
+        concept read by two methods, and a default would have to pick a fail direction for both: True
+        suppresses the Issue #257 evolve-accel credit (under-reading their clock — the unsafe
+        direction), False credits it on a body already in play (reach that does not exist). Every
+        call site knows which it holds, so the answer is to make them say it.
 
         Under :data:`UNCHARGED` it is per-form too, but read FAIL-OPEN: an unresolvable cost counts
         as payable. That is the one substantive difference from the ceiling, and it is deliberate —

@@ -118,10 +118,19 @@ def to_record(decision, *, tier: int = 0) -> dict | None:
     attach_working = getattr(decision, "attach_working", None)  # the ENERGY-ATTACH DECIDER's legible
     if attach_working:                            # working (ADR-0069 §9): the per-option AXES rows —
         rec["attach_working"] = attach_working    # attack_axis/channels/gates + the tactical each scored
-    threat_shadow = getattr(decision, "threat_shadow", None)  # the DOOM worst-case SHADOW (Threat-Clock
-    if threat_shadow:                             # unification S1b): incumbent active_doomed vs the
-        rec["threat_shadow"] = threat_shadow      # incoming(t=1)-curve re-expression + the agree bit —
-                                                  # deciding nothing; disagreement rows drive the swap
+    # ── SHADOW emitters: POC-T1 (Issue #260) deliberately left these in place. Its §4 purge names
+    # "orphaned telemetry", and none of these is orphaned — each has a live reader under
+    # `tools/train/probes/` (threat_sweep, doom_audit, needs_sweep) or in the blunder shell, so
+    # deleting them would break a consumer rather than remove dead weight. Their retirement is
+    # POC-T2's, which owns the shadow deletions as a set (`docs/plans/value-system-poc-plan.md`
+    # §4-T2); doing it here would put two parallel lanes on the same files. What T1 DID change is
+    # what `threat_shadow` measures: the doom pair is one implementation now, so `doom_old` vs
+    # `doom_curve` is a gap between two POLICIES of one curve rather than between two code paths —
+    # which is the only thing it ever really measured.
+    threat_shadow = getattr(decision, "threat_shadow", None)  # the DOOM SHADOW (Threat-Clock
+    if threat_shadow:                             # unification S1b): the UNCHARGED doom policy vs the
+        rec["threat_shadow"] = threat_shadow      # ceiling re-expression + the agree bit — deciding
+                                                  # nothing; disagreement rows drove the swap
     recur_shadow = getattr(decision, "recur_shadow", None)  # the DISCARD-RECUR fuel SHADOW (S2): per
     if recur_shadow:                              # opponent refueler body, the Threat-Clock reads with
         rec["recur_shadow"] = recur_shadow        # vs without the discard fuel — deciding nothing

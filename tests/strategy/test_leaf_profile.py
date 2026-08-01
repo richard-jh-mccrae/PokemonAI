@@ -69,6 +69,7 @@ PER_DECISION_PROFILE = frozenset({
     "mine.hand_energy_counts",
     "mine.hand_energy_types",
     "mine.hand_ids",
+    "mine.hand_size",                 # ← POC-T1: Board's `my_hand_size`, off its one home
     "mine.prizes_hidden",
     "mine.prizes_remaining",
     "mine.reachable_attach",
