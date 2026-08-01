@@ -38,7 +38,7 @@ Pilot or a Board — the dependency runs one way, exactly as ``CombatMath`` does
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 

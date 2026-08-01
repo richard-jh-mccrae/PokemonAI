@@ -37,7 +37,6 @@ from pathlib import Path
 import pytest
 
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
-from common.strategy.combat import CombatMath
 from common.strategy.damage import compute_active_damage
 
 REPO = Path(__file__).resolve().parents[2]
