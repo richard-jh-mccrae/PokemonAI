@@ -89,6 +89,10 @@ PINS = {
     # shuffling them and the refresh stands down — the agent attacks instead.
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
+    "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
+                   "covering an irreplaceable Active takes an insurance slot at its full tier "
+                   "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
+                   "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
     "83686860-13": "keep: don't refresh a live hand — end the turn",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",
@@ -98,24 +102,7 @@ PINS = {
     "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
 }
-TARGETS = {
-    # DEMOTED from a PIN 2026-08-01 by the refresh-SHED v2 swap (ADR-0101, Issue #261 item 2b) —
-    # PROVISIONAL, pending the wave-2 ruling on this frame. The pin's premise was "Lillie's stands
-    # down holding the Wally's that answers next-turn Nebula, `clutch_heal` worth 20". v1 charged the
-    # Wally's its full tier-20 keep. The v2 assignment gives it a `general` slot at 20 x
-    # `_GENERAL_WORTH_W` (0.45) = 9.0 instead, because `board.active_doomed` is FALSE here: the
-    # answer-doom slot reads the CURRENT board, and the threat the pin names is NEXT turn's. The shed
-    # falls 21.6 -> 17.8, the (one-sided, so opponent-legs-free) swing becomes 20 - 17.8 = +2.2, and
-    # `_finish_turn_last` promotes a +2.2 play above the attack.
-    #
-    # Whether that is WRONG turns on a question this item must not answer alone: should the
-    # answer-doom slot carry a one-turn lookahead? That is the shared resolver, so it also moves the
-    # discard decider's 12/12 — it belongs to the keep-value resolver's own bench, not to a refresh
-    # swap. Ruling this target "reject" means fixing the resolver; "accept" means deleting this entry
-    # and re-capturing the Decision Gate baseline.
-    "83969481-55": "refresh: a near-zero swing (+2.2) preempts the attack — awaits the wave-2 ruling "
-                   "on whether answer-doom needs a one-turn lookahead (ADR-0101)",
-    # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
+TARGETS = {    # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
     # evolve, but the blunder is the DEAD Buddy-Buddy Poffin: it fetches Basics of 70 HP or less,
     # Staryu is the only such card in the deck, and all 3 copies were on the board. Evolving either
     # Staryu is merely FINE — the evolve decider scores both exactly 0.0, i.e. correctly indifferent —

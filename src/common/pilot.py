@@ -3919,6 +3919,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 # so its succession slot goes FULL tier at deadline 0 (the old answer-doom successor
                 # spike, re-derived as the line's OWN worth; the successor no longer rides the flat
                 # answer-doom slot). Same granularity as the retired answer-doom test.
+                # NOTE (Issue #261 wave-2, ep83117367 f34): narrowing this to a base that is
+                # EVOLVABLE THIS TURN (`_successor_evolvable_now`) was built and REVERTED — it
+                # contradicts the ruling this spike exists for. `line_slots`' own docstring rules the
+                # turn-fresh case explicitly: "don't Harlequin away the second Mega Starmie **the
+                # turn its Staryu hit the bench**" (ep83037962 f49). The need is created by the Active
+                # DYING, not by the evolve being legal today, so a successor whose base arrived this
+                # turn is still needed imminently. f34's residual regression is a live ruling conflict
+                # between those two frames, recorded in ADR-0101, NOT a defect to patch here.
                 urgent = bool(board.active_doomed and cid in self._wincon_set()
                               and getattr(board, "line_preevo_in_play", False))
                 # READINESS (piece 1): the primary comes online when its base is in play AND already
@@ -4104,9 +4112,69 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             deploy = rows[live[0]].get("deploy", 1.0)
             if worth * deploy > 0:
                 liq = self._general_liquidity(cid, board, me)   # piece 2b: illiquid latent worth discounts
+                # INSURANCE, not latent worth (ADR-0101 amendment, Issue #261 wave-2 ruling on
+                # ep83969481 f55): `_GENERAL_WORTH_W` prices a card that is ~one deploy away from
+                # mattering. A `clutch_heal` covering an IRREPLACEABLE Active is not one deploy away —
+                # it is the survival plan, and the latency haircut is simply the wrong model of it.
+                # Full tier, deadline 1: the threat is NEXT turn (so `answer_doom`, a this-turn read,
+                # correctly stays shut — reviewed.json rules exactly that), which also leaves the
+                # closure's re-access window open rather than forcing the closing edge.
+                if self._heal_insures_the_last_wincon(cid, board, me):
+                    _emit(needs.Slot("answer_doom", worth, 1, f"insure:{cid}"), live)
+                    continue
                 _emit(needs.general_worth_slot(f"general:{cid}",
                                                value=worth * deploy * _GENERAL_WORTH_W * liq), live)
         return slots, elig
+
+    def _heal_insures_the_last_wincon(self, cid, board: Board, me: dict) -> bool:
+        """Is held card ``cid`` the heal keeping my LAST win-condition alive? — the user's wave-2
+        ruling on ep83969481 f55, stated as a board fact: *"preserve our healer when we only have a
+        single wincon remaining."*
+
+        All four clauses are load-bearing, and each removes a way this could over-fire:
+
+        1. ``cid`` carries ``clutch_heal`` — the emergency-heal tag, not any heal (a routine heal is
+           latent worth and keeps the general slot);
+        2. my Active IS a win-condition (`_wincon_set`) — healing a filler body insures nothing;
+        3. no OTHER win-condition body is in play — a second copy on the Bench means the line
+           survives the KO, which is exactly ep83661649 f30 (two Mega Starmie ex in play), and that
+           frame must NOT take this slot;
+        4. the line CANNOT BE REBUILT — no pre-evolution of it survives anywhere reachable: not on
+           the Bench, not in hand, and **not in the unseen pool** (deck + face-down prizes).
+
+        Clause 4 reads the unseen pool deliberately, and an earlier draft that stopped at the board
+        was measurably wrong: with only the board clauses it fired on *any* empty Bench under a
+        wincon Active and cost the Discrimination Gate `82525101|1|decision|87` (rank 1 -> 2), a
+        board whose deck still holds Staryu. "Our last wincon" is a claim about COPIES REMAINING, not
+        about board shape — on ep83969481 f55 the real fact is that both Staryu are in the discard,
+        which strands the spare Mega Starmie ex still sitting in the deck.
+
+        That distinction is also what keeps this off §6's double-counting list. An empty Bench under
+        a knock-outable Active already carries two guards (`empty-bench-filter`, `_predicted_loss`),
+        and the POC plan names putting it there a third time as the error to avoid. This is a
+        different fact — the win-condition LINE being exhausted — and it prices a held card rather
+        than gating a move."""
+        if not (self.functions and "clutch_heal" in set(self.functions.tags(cid))):
+            return False
+        active = next((b for b in (me.get("active") or []) if b), None)
+        wincons = self._wincon_set()
+        if not active or active.get("id") not in wincons:
+            return False
+        bench = [b for b in (me.get("bench") or []) if b]
+        if any(b.get("id") in wincons for b in bench):
+            return False                       # the line survives the KO — ep83661649 f30
+        hand = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
+        if any(h in wincons and self._successor_evolvable_now(me, h) for h in hand):
+            return False                       # a successor lands this turn
+        preevos = self._line_preevo_set()
+        if not preevos:
+            return False                       # a Basic wincon has no line to exhaust
+        if any(b.get("id") in preevos for b in bench) or any(h in preevos for h in hand):
+            return False
+        from collections import Counter
+        unseen = Counter(self.deck)
+        unseen.subtract(self._visible_card_counts(me))
+        return not any(unseen.get(pid, 0) > 0 for pid in preevos)
 
     def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
         """The whole-hand v2 rows for the refresh SHED: one row per held card (minus ONE copy
@@ -6835,6 +6903,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         board = (me.get("active") or []) + (me.get("bench") or [])
         return any(p and p.get("id") in preevos for p in board)
+
+    def _successor_evolvable_now(self, me: dict, cid) -> bool:
+        """Can ``cid`` — a payoff sitting in my HAND — legally evolve a body I have in play **this
+        turn**? A pre-evolution matching its ``evolvesFrom`` name must be on my Active/Bench AND must
+        not have arrived this turn: `docs/rules.md` §4 `[RULE: rulebook L123-128]` `[ENGINE-LEGAL]`
+        — *"cannot evolve a Pokémon the turn it was played/put into play."*
+
+        The narrow question the URGENT succession spike needs, and deliberately NOT
+        `board.line_preevo_in_play`, which asks the looser *"is there anything a rush-evolve tutor
+        could aim at"* and is read by other consumers. Both clauses matter: name-matching alone says
+        yes on a board where the engine offers no evolve option at all (ep83117367 f34 — two Staryu,
+        both benched this turn, so the held Mega Starmie ex has no playable option on the menu), and
+        the spike then charges its full tier against a card that cannot be used until next turn."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        base = getattr(st, "evolvesFrom", None) if st is not None else None
+        if not base:
+            return False
+        bodies = (me.get("active") or []) + (me.get("bench") or [])
+        return any(b and not b.get("appearThisTurn")
+                   and getattr(self.stats.get(b.get("id")), "name", None) == base
+                   for b in bodies)
 
     def _line_readiness_deadline(self, me: dict, cid) -> int:
         """READINESS (piece 1): how soon a held wincon ``cid`` comes online, as the re-access deadline

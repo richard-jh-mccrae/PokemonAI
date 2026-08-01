@@ -184,6 +184,73 @@ against v1's 0.32 ms on `ms_…_f94` — the assignment DP is *cheaper* than the
 summation it replaced, because the resolver emits few slots (3 on that board) while `_hand_keep`
 walks every copy. No guard was needed and none was added.
 
+## Amendment — the wave-2 rulings, and what they bought (2026-08-01)
+
+The user ruled all three regressions **REJECT**. One is fixed here; two are left standing, each for a
+reason that is itself a finding.
+
+### `83969481|0|decision|55` — FIXED. A heal insuring the last wincon is not latent worth
+
+The user's ruling, in their words: *"preserve our healer when we only have a single wincon
+remaining."* The board bears it out exactly — Mega Starmie ex is Stage 1 from Staryu, **both Staryu
+are in the discard and none remain in deck, hand or play**, so the spare Mega Starmie ex in the deck
+is stranded and the Active is the last playable wincon; the Bench is empty, so its loss is terminal
+(`docs/rules.md` §7 case 2).
+
+`_GENERAL_WORTH_W` (0.45) is a **latency** discount — *"a hand card is ~one deploy away, like a
+benched body."* A `clutch_heal` covering an irreplaceable Active is not one deploy away from
+mattering; it is the survival plan. `_heal_insures_the_last_wincon` gives it an insurance slot at its
+full tier, deadline 1, and the frame goes `Lillie's +2.2 → −8.8` — the agent attacks.
+
+Deadline **1**, not 0, on purpose: the threat is next turn, which is precisely why `answer_doom`
+correctly stays shut (`reviewed.json` rules exactly that) and why the closure's re-access window
+stays open rather than taking the closing edge. The four gate clauses are in the helper's docstring;
+clause 3 (no other wincon body in play) is what keeps `83661649|0|decision|30` — two Mega Starmie ex
+in play — out of this slot. **It is deliberately not keyed on an empty Bench**: that fact already
+carries `empty-bench-filter` and `_predicted_loss`, and §6 names putting it on the list a third time
+as the double-counting error to avoid. This is a different fact, and it prices a held card rather
+than gating a move.
+
+The corpus fixture went `PIN → TARGET → PIN` inside this build: demoted when the swap broke it,
+XPASSed the strict-xfail once the insurance slot landed, promoted back. That is the ratchet doing its
+job, and it is why the demotion was recorded rather than deleted.
+
+### `83117367|0|decision|34` — NOT FIXED. A live conflict between two of the user's own rulings
+
+The measured defect is real: the held Mega Starmie ex takes the URGENT succession slot at full tier
+30 with `resupply = 0.0` — the slot **asserts P(re-access) = 0** where the closure counts **8 outs**
+(3× Mega Signal, Ultra Ball, Hilda, plus the card itself) at **67.3%** this turn / 74.4% by next
+turn's draw. Both benched Staryu arrived this turn, so the card cannot legally be played at all
+(`docs/rules.md` §4; the engine offers no option for it).
+
+Narrowing the spike to a base evolvable **this turn** was built, and it works — f34 flips to the
+human's `[2]` Harlequin, and Harlequin (+15.5) beats Lillie's (+2.8) on the merits rather than by
+assertion. **It was then reverted**, because `line_slots`' own docstring rules the turn-fresh case
+head-on for `ep83037962 f49`: *"don't Harlequin away the second Mega Starmie **the turn its Staryu
+hit the bench**."* Both frames have a doomed Active, a second Mega Starmie ex in hand, and a Staryu
+benched this turn. The rulings disagree, and the distinction — f49's Active is at 210/330 and
+genuinely dying, f34's is undamaged at 330/330 — is not one `active_doomed` can express, since the
+worst-case ceiling reads both as doomed.
+
+**This is a ruling conflict, not a defect**, so it is recorded rather than patched. Resolving it
+means either distinguishing the two frames on a fact the model can see (a graded doom, not a
+boolean), or re-ruling one of them. `reviewed.json` already disposes f34 `covered` on the grounds
+that *"Harlequin-vs-Lillie's is a supporter-priority value judgment… not the blunder"*, which argues
+the conflict may dissolve on re-reading rather than needing new machinery.
+
+### `83661649|0|decision|30` — NOT FIXED. The near-zero band, and it needs a structural decision
+
+No locatable mispricing: the hand is three cards on plain `general` slots, and the swing moves
+`−1.4 → +1.9` across the swap. Two Mega Starmie ex are in play, so the insurance slot correctly
+declines to fire. What makes a `+1.9` refresh beat a `189.9` attack is not the shed at all — it is
+`_finish_turn_last`, under which any positive-scoring play precedes a commitment.
+
+That boundary is whitelisted `structural` (`information-before-commitment`), and the observation this
+frame raises is that a refresh sits awkwardly under it: it is informative but **not reversible** — it
+spends the turn's Supporter and shuffles the hand away. Acting on that would re-order every
+play-versus-attack decision in the tree, which is not a refresh swap's call to make. Recorded for the
+whitelist's own review and for T4, which replaces the tier rule with sequence differencing.
+
 ## Consequences
 
 - **The refresh and the forced discard now share one price.** `_resolve_needs` had two consumers with
