@@ -3,7 +3,7 @@
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 6 —
 the escape-hatch doctrine fork, plus the user's remedy requirement).
 **Build = Issue #259 (POC-T0 contract + registry), lanes and gate owned by T4.**
-**Extends [ADR-0059](0059-cgpy-is-a-pure-python-twin-of-the-native-engine.md)** (the parity-trace
+**Extends [ADR-0059](0059-cgpy-is-a-trace-verified-python-twin-of-the-native-engine.md)** (the parity-trace
 format, the replayer, the differ and the DLL-free CI gate — this adds a third lane to rails that
 already exist) and **ratifies ADR-0092 §4-T0/§4-T4's** "engine-sim as parity fixture, never a
 runtime path" **with the guard that makes it survivable**. Does **not** supersede anything.

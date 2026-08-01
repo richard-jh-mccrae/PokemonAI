@@ -2,9 +2,9 @@
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 4).
 **Build = Issue #259 (POC-T0 registry + contract note), value authored in T3.**
-**Amends [ADR-0078](0078-currency-owns-the-exchange-rates.md)** (which owns the scale bridges and
+**Amends [ADR-0078](0078-the-value-currencies-are-three-scales-bridged-by-derived-rates.md)** (which owns the scale bridges and
 records the reconciliation debt this discharges in one direction) and
-**voids the structural half of [ADR-0080](0080-deny-is-a-categorical-relevance-instrument.md) /
+**voids the structural half of [ADR-0080](0080-deny-is-a-categorical-relevance-instrument-not-a-magnitude-one.md) /
 [ADR-0086](0086-the-deploy-marginal-prices-a-bench-slot-and-what-fills-it.md)'s underivability
 finding** — not by disputing the measurement, but because the POC's architecture removes the premise
 it rested on. Does **not** supersede anything.

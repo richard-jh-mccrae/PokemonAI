@@ -81,7 +81,7 @@ Amendment A: this ADR is introduced by the same unmerged PR.
 **What moved.** With the composer's ordering now uniform 1-ply differencing, the four per-seam
 equations — `attach_value` ([ADR-0069](0069-the-attach-marginal-is-an-axes-sum-and-the-decider-may-say-no.md)),
 `evolve_value` ([ADR-0070](0070-the-evolve-marginal-is-a-body-substituted-delta-in-damage.md)),
-`promote_retreat_value` ([ADR-0073](0073-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md))
+`promote_retreat_value` ([ADR-0100](0100-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md), Issue #141 — it was ADR-0073 until PR #267 resolved a five-day-latent number collision)
 and `deploy_value` ([ADR-0086](0086-the-deploy-marginal-prices-a-bench-slot-and-what-fills-it.md)) —
 **stop being DECIDERS** for any option the enumerator covers. Their *math* stays ratified; their
 *role* changes.

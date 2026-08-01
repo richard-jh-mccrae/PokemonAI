@@ -2,7 +2,7 @@
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 2).
 **Build = Issue #259 (POC-T0), with the sequencer change owned by T2 and the contract note by T0.**
-**Amends [ADR-0069](0069-attach-energy-last-is-a-sequencing-tier-not-a-weight.md) §7** (which made
+**Amends [ADR-0069](0069-the-attach-marginal-is-an-axes-sum-and-the-decider-may-say-no.md) §7** (which made
 the attach a sequencing tier rather than a weight — this applies the same reasoning one tier up, to
 the free band 0069 left undifferentiated) and **narrows the whitelist entry** ratified under
 [ADR-0092](0092-the-value-system-poc-builds-by-differencing-tracks-with-wave-rulings.md) §6.

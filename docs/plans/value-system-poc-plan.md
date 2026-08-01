@@ -307,7 +307,7 @@ table uses this same label.
 | `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
 | `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |
 | `evolve-value-composed` | `evolve_value` (ADR-0070) | `composed-into-the-leaf` | the marginal value of evolving a body → composes into **readiness** | — |
-| `promote-retreat-value-composed` | `promote_retreat_value` (Issue #141; ADR-0073, renumbered 0100 by PR #267) | `composed-into-the-leaf` | the marginal value of changing who is Active → composes into **survival** | — |
+| `promote-retreat-value-composed` | `promote_retreat_value` (Issue #141; ADR-0100, was ADR-0073 before PR #267) | `composed-into-the-leaf` | the marginal value of changing who is Active → composes into **survival** | — |
 | `deploy-value-composed` | `deploy_value` (ADR-0086) | `composed-into-the-leaf` | the marginal value of putting a body into play → composes into **development** | — |
 
 **Role change, not deletion (added 2026-08-01, Issue #263 ordering ruling):** the composer's beam

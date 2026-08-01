@@ -257,8 +257,9 @@ WHITELIST: tuple[SoundRule, ...] = (
         id="promote-retreat-value-composed",
         # Cited by ISSUE as well as number on purpose: `docs/adr/README.md`'s numbering log says
         # outright that "the number is not the identifier". This one proves it — ADR-0073 was
-        # claimed by TWO merged ADRs, and PR #267 renumbers the promote/retreat half to 0100.
-        entry="`promote_retreat_value` (Issue #141; ADR-0073, renumbered 0100 by PR #267)",
+        # claimed by TWO merged ADRs for five days, and PR #267 renumbered the promote/retreat
+        # half to 0100. Anything citing it as "ADR-0073" now points at the fetch ADR instead.
+        entry="`promote_retreat_value` (Issue #141; ADR-0100, was ADR-0073 before PR #267)",
         type=COMPOSED_INTO_THE_LEAF,
         fact="the marginal value of changing who is Active",
         reason="Same role change. The sub-lethal residual it computes is a survival/threat reading "

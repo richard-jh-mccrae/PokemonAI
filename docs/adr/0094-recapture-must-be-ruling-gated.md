@@ -4,7 +4,7 @@
 **Build = Issue #259 (POC-T0). Scope: NOT in Issue #259's stated scope** — it rides with T0 because
 T0 is the serial track and all five downstream lanes are graded against exactly these baselines.
 Shipped as its own commit for that reason.
-**Extends [ADR-0072](0072-two-gates-guard-the-decider-and-the-leaf.md)** (the Discrimination and
+**Extends [ADR-0072](0072-mid-build-swaps-are-gated-by-deterministic-instruments.md)** (the Discrimination and
 Decision Gates and their "never auto-recapture" rule — this rules on the one actor 0072 left
 unguarded: the *capture* command itself) and
 **[ADR-0092](0092-the-value-system-poc-builds-by-differencing-tracks-with-wave-rulings.md)**

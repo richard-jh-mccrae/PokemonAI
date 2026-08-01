@@ -7,7 +7,7 @@ ADR) and carries forward Issues #232, #237, #254 into the POC's term families.
 **Narrows [ADR-0086](0086-the-deploy-marginal-prices-a-bench-slot-and-what-fills-it.md) decision 7**
 (which made the empty-Bench guard an unconditional sound filter — this makes that unconditionality
 *provisional and dated* rather than permanent) and **preserves its decision 9 unchanged**.
-**Applies [ADR-0064](0064-the-predicted-loss-rung.md)'s `_predicted_loss` as the single surviving
+**Applies [ADR-0064](0064-incoming-counts-the-opponents-next-development-step-budgeted-by-the-read.md)'s `_predicted_loss` as the single surviving
 guard.** Does **not** supersede anything.
 
 **Context issues:** Issue #259 (this grill), Issue #231 (ruled and closed here), Issues #232 / #237 /
