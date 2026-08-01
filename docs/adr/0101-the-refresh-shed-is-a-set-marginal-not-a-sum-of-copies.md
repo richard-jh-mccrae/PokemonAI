@@ -215,7 +215,46 @@ The corpus fixture went `PIN → TARGET → PIN` inside this build: demoted when
 XPASSed the strict-xfail once the insurance slot landed, promoted back. That is the ratchet doing its
 job, and it is why the demotion was recorded rather than deleted.
 
-### `83117367|0|decision|34` — NOT FIXED. A live conflict between two of the user's own rulings
+### `83117367|0|decision|34` — HELD OUT. The shed is risk-neutral; the ruling is about certainty
+
+**Resolved 2026-08-01 by user ruling: held out onto T3/T4** (`ms_heldout_refresh_certainty_vs_
+expectation_f34.json`). The verdict is REJECT — the agent should play Harlequin — and the finding is
+that no setting of the refresh SHED can deliver it without breaking `ep83037962 f49`.
+
+**The two frames are the same board to the shed.** Opponent hand 7 on both ⇒ STRIP +12 on both ⇒
+both decline iff `shed > 32`. The user ruled them opposite ways. Two fixes were built and reverted,
+and neither holds both:
+
+| | f34 | f49 |
+|---|---|---|
+| succession value `30 → 15` | 33.0 → 16.5, **plays** ✓ | **plays** ✗ |
+| succession re-access `0 → 0.77` | 33.0 → 16.5, **plays** ✓ | 46.1 → 24.1, **plays** ✗ |
+
+The two Basic `{W}` do not rescue f49, and the model is not miscounting them: they price `2.49` each
+because 8 Energy outs in a 43-card pool over 5 draws is a 66% recovery, so the fund-attack slot
+discounts to 31% of tier.
+
+**The axis is certainty, not magnitude.** The shed is a **risk-neutral expectation** — it prices a
+79%-recoverable Mega Starmie ex at 79% recovered. The user's f49 reasoning is a **risk** calculation:
+*"in our hand is what we need to respond to the possible KO with a new Starmie with energy, that
+GUARANTEE is what we risk."* The odds confirm the preference rather than the pricing: ~40% to redraw
+both pieces, against ~15pp of KO reduction (their Ignition → Nebula Beam 210 is exact lethal on a
+210 HP Active; 3 unseen in a pool of 45 ⇒ 45.2% at hand 8 vs 30.4% at hand 5). The old
+`resupply = 0.0` closing edge was a crude proxy for that preference — it over-fires on f34, where the
+card has 8 outs at 67% and the rest of the hand is dead.
+
+Expressing *guaranteed vs expected under an imminent KO* is variance, which belongs to the gamble
+machinery (ADR-0039) and T3's `state_value`, not to a slot's resupply term.
+
+**A doom-read theory was tested and REFUTED**, recorded so nobody re-runs it: `active_doomed` is True
+on f34 and is *not* a worst-case artifact. The opponent is Kyogre / Mega Abomasnow ex (Read
+confident, 2× Kyogre benched), Hammer-lanche `{W}{W}` is payable with the 2 already attached, and the
+representative build puts **29 Basic `{W}` in 44 unseen (66%)** — so its *expected* roll is ~300–395
+against a 330 HP Active. Both frames are genuinely doomed; doom does not separate them.
+
+The historical conflict this replaces is kept below, because the reasoning that led here matters.
+
+#### (superseded) The ruling conflict as first diagnosed
 
 The measured defect is real: the held Mega Starmie ex takes the URGENT succession slot at full tier
 30 with `resupply = 0.0` — the slot **asserts P(re-access) = 0** where the closure counts **8 outs**
@@ -238,18 +277,43 @@ boolean), or re-ruling one of them. `reviewed.json` already disposes f34 `covere
 that *"Harlequin-vs-Lillie's is a supporter-priority value judgment… not the blunder"*, which argues
 the conflict may dissolve on re-reading rather than needing new machinery.
 
-### `83661649|0|decision|30` — NOT FIXED. The near-zero band, and it needs a structural decision
+### `83661649|0|decision|30` — HELD OUT. A fitted constant sitting 7% inside its own margin
 
-No locatable mispricing: the hand is three cards on plain `general` slots, and the swing moves
-`−1.4 → +1.9` across the swap. Two Mega Starmie ex are in play, so the insurance slot correctly
-declines to fire. What makes a `+1.9` refresh beat a `189.9` attack is not the shed at all — it is
-`_finish_turn_last`, under which any positive-scoring play precedes a commitment.
+**Resolved 2026-08-01 by user ruling: held out onto the joint `W`+`r` re-measure**
+(`ms_heldout_refresh_general_worth_margin_f30.json`). The verdict is REJECT — attack with Jetting
+Blow, as the correction states.
 
-That boundary is whitelisted `structural` (`information-before-commitment`), and the observation this
-frame raises is that a refresh sits awkwardly under it: it is informative but **not reversible** — it
-spends the turn's Supporter and shuffles the hand away. Acting on that would re-order every
-play-versus-attack decision in the tree, which is not a refresh swap's call to make. Recorded for the
-whitelist's own review and for T4, which replaces the tier rule with sequence differencing.
+All three held cards cover exactly one `general` slot each, so the shed **is** the haircut sum:
+
+```
+Ignition Energy  30 x 0.45 = 13.5
+Basic {W}         8 x 0.45 =  3.6
+Wally's          20 x 0.45 =  9.0
+                            -----
+                             26.1   <- the shed, exactly   (v1 charged 29.4)
+```
+
+The whole `−1.4 → +1.9` flip is `_GENERAL_WORTH_W = 0.45`. The swing declines iff `shed > 28.0`, i.e.
+`58 × W > 28`, i.e. **`W > 0.483`** — the frame sits **7% away from a fitted number**.
+
+**Not re-fitted here, deliberately.** `_GENERAL_WORTH_W` was measured (WP-N5: under-pricing 46→19
+came from W alone) and `_refresh_slot_resupply`'s docstring carries the standing instruction *"Re-open
+only as a JOINT re-measure of W and r, never r alone."* Moving W to satisfy one frame is the
+rung-fitting this POC exists to delete, and it would move every keep-value site including the discard
+decider's 12/12.
+
+**Two theories tested and refuted**, recorded so the owner need not re-run them:
+
+- the deferred **non-Active fund bodies** leg — the bench holds a 2nd Mega Starmie ex on 1 `{W}`
+  needing 3, so fund slots were prototyped for benched bodies: `shed 26.10 → 26.10`, **no movement**.
+  The Energy already sit on general slots worth more than `ENERGY_TIER` 8, so the assignment does not
+  re-route them.
+- the **insurance slot** (which fixes f55) — correctly declines here: a second Mega Starmie ex sits
+  undamaged on the Bench, so the line survives the Active's KO and nothing irreplaceable is insured.
+
+An earlier draft of this section blamed `_finish_turn_last`'s information-before-commitment boundary.
+That was wrong and is retracted: the boundary is what converts a positive swing into a pre-attack
+play, but the *sign* is the constant's, and the constant is the thing 7% off.
 
 ## Consequences
 
