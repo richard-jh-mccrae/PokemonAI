@@ -188,7 +188,7 @@ POC_WORTH_PRIZE_RATE: float | None = (
 #: It is also the term's MEANING, not merely its size: readiness prices POTENTIAL. The prize for
 #: actually swinging belongs to `attack_ev` at the terminal action, so pricing a body's full swing
 #: here would pay for one Knock Out twice — the same double-count the `threat` cap prevents on the
-#: other side of the board. `test_state_value.py` pins this against `planner._READINESS_ATTACK_W`
+#: other side of the board. `test_state_value.py` asserts this against `planner._READINESS_ATTACK_W`
 #: (importing the planner HERE would be a cycle: the planner's leaf imports this module).
 _READINESS_W = 0.045
 #: `planner._READINESS_BODY_CAP` 120 / `KO_SCORE` — a RUNAWAY GUARD. With `_READINESS_W` applied the

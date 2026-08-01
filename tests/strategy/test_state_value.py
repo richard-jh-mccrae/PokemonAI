@@ -200,7 +200,7 @@ def test_the_worth_scaffold_is_reconciled_against_its_anchor_not_pinned_as_a_lit
     loudly instead of leaving a fourth silent rate behind.
 
     Modelled on `test_currency.py`, which recomputes `PRIZE_DAMAGE_RATE` from the CSV rather than
-    pinning the literal, for exactly the same reason."""
+    asserting the literal, for exactly the same reason."""
     assert sv.POC_WORTH_PRIZE_RATE == pytest.approx(
         currency.DEPLOY_BAND / currency.DEPLOY_WORTH_SCALE / currency.PRIZE_DAMAGE_RATE)
     # Re-stated as damage-per-worth-point, the form ADR-0097 requires the reconciliation in.

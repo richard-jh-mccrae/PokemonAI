@@ -214,7 +214,7 @@ KO_LINE_PROFILE = frozenset({
 
 #: The fields **`state_value`** adds when the planner leaf scores its end board (POC-T3 / Issue #262).
 #:
-#: This is the tripwire above FIRING and being answered, not being widened away. The pin's own note
+#: This is the tripwire above FIRING and being answered, not being widened away. Its own note
 #: says the moment `state_value` reads a field the ordinary decision path does not, *"the per-leaf
 #: cost needs measuring against the 2-vCPU / ~10-min grader bank"* — so it was measured, on the same
 #: real turn-1 engine drive the tripwire itself uses (`test_planner_engine.py`, dragapult_ex):
