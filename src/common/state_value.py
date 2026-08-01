@@ -157,8 +157,14 @@ if TYPE_CHECKING:                      # the seam, expressed without importing t
 #:
 #: `tests/strategy/test_state_value.py` asserts the arithmetic above rather than the literal, so
 #: the anchor cannot drift silently if `currency.py` re-derives one of its constants.
-POC_WORTH_PRIZE_RATE: float | None = (
-    currency.DEPLOY_BAND / currency.DEPLOY_WORTH_SCALE / currency.PRIZE_DAMAGE_RATE)
+#: **A LITERAL, not a live expression.** Computing it from `currency.DEPLOY_BAND /
+#: DEPLOY_WORTH_SCALE / PRIZE_DAMAGE_RATE` was tried and reverted: it would make an *authored*
+#: scaffold silently track three DERIVED constants, so a `currency.py` re-derivation would move this
+#: number with no ruling and no note — the exact opposite of module-local and authored. The anchor is
+#: still enforced, but by a TEST that fails loudly rather than by an expression that adjusts quietly
+#: (`test_state_value.py::test_the_worth_scaffold_is_reconciled_against_its_anchor_...`), which is
+#: `test_currency.py`'s own discipline pointed the other way.
+POC_WORTH_PRIZE_RATE: float | None = 1.0 / 120.0
 
 # ── the positional band ───────────────────────────────────────────────────────────────────────────
 #
@@ -239,13 +245,18 @@ _PROXIMITY_W = 0.5
 
 # ── the terminal band ─────────────────────────────────────────────────────────────────────────────
 
-#: A full Bench plus the Active (`docs/rules.md` §2 / `strategy/context._BENCH_MAX`).
+#: A full Bench plus the Active. Verified at source: *"Each player may have up to 5 Pokemon on the
+#: Bench at any one time"* (`docs/rulebook.txt` L75, restated L122); `strategy/context._BENCH_MAX`
+#: is the same 5 and is what this reads, so the two cannot drift.
 _MAX_BODIES = _BENCH_MAX + 1
-#: The biggest prize yield in the set — a Mega Evolution Pokémon ex (`docs/rules.md` §6, verified at
-#: source; `CardStat.prize_value` is the runtime authority and returns 3 for `megaEx`).
+#: The biggest prize yield in the set — a Mega Evolution Pokemon ex. Verified at source:
+#: `docs/rules.md` §6's prize table (`megaEx` -> 3, `[RULE: L333]`), and `CardStat.prize_value` is
+#: the runtime authority that returns it.
 _MAX_PRIZE_VALUE = 3.0
-#: The Prize count both players race down from (`docs/rules.md` §6; `needs._PRIZES_START`).
-_PRIZES_START = 6
+#: The Prize count both players race down from. Verified at source: *"Prize cards are 6 cards that
+#: each player sets aside"* (`docs/rulebook.txt` L57, and the setup step at L102). Read from
+#: `needs` rather than re-declared — one fact, one home (ADR-0087).
+_PRIZES_START = _needs._PRIZES_START
 
 #: **A predicted GAME LOSS, in prizes — DERIVED, not authored.**
 #:
@@ -654,8 +665,7 @@ def _ready_bodies(model: "StateModel") -> tuple:
             continue
         out.append(ReadyBody(payoff=payoff,
                              readiness_odds=_readiness_odds(model, b),
-                             role_relevance=(_role_relevance(model, b.card_id)
-                                             * _saturation(model, b.card_id, seen))))
+                             role_relevance=_body_relevance(model, b.card_id, seen)))
     return tuple(out)
 
 
@@ -719,6 +729,18 @@ def _readiness_odds(model: "StateModel", body) -> float:
 _ROLE_FLOOR = ROLE_TIER["tutor"] / currency.DEPLOY_WORTH_SCALE
 
 
+def _body_relevance(model: "StateModel", card_id, seen: set) -> float:
+    """How much this body matters, discounted for being a repeat — :func:`_role_relevance` times
+    :func:`_saturation`, in one place.
+
+    `readiness` and `development` both need it and each keeps its OWN ``seen`` set, because they are
+    independent readings of the board and sharing the bookkeeping would make the second family's
+    answer depend on the first having run. What must not be duplicated is the EXPRESSION: two copies
+    would let a saturation change land in one family and not the other, which is a divergence nothing
+    would report."""
+    return _role_relevance(model, card_id) * _saturation(model, card_id, seen)
+
+
 def _role_relevance(model: "StateModel", card_id) -> float:
     """A card's role weight as a dimensionless [0, 1] ratio — `deploy_value._relevance`'s form.
 
@@ -780,13 +802,14 @@ def _development_legs(model: "StateModel") -> dict:
     for b in mine.bodies:
         if b.card_id is None:
             continue
-        relevance = _role_relevance(model, b.card_id) * _saturation(model, b.card_id, seen)
+        relevance = _body_relevance(model, b.card_id, seen)
         deploy += currency.deploy_relevance_to_damage(relevance) / currency.PRIZE_DAMAGE_RATE
-        owed, hops, reachable = mine.forward_payoff(b.card_id)
-        if hops > 0 and owed > 0.0:
-            credit = _READINESS_W * (owed / currency.PRIZE_DAMAGE_RATE) * halve(hops) * relevance
+        forward = mine.forward_payoff(b.card_id)
+        if forward.hops > 0 and forward.owed_damage > 0.0:
+            credit = (_READINESS_W * (forward.owed_damage / currency.PRIZE_DAMAGE_RATE)
+                      * halve(forward.hops) * relevance)
             evolve += credit
-            if not reachable:
+            if not forward.reachable:
                 topology -= credit
     return {"deploy_marginal": deploy, "evolve_marginal": evolve, "line_topology": topology,
             "bench_slot_price": _bench_slot_price(len(mine.bench))}
@@ -828,8 +851,14 @@ def prize_race(*, my_prizes_remaining: int, their_prizes_remaining: int) -> floa
     **The lead leg has UNIT SLOPE, and that is load-bearing rather than a scaling choice.** Taking
     a prize moves this term by exactly 1.0, which is what makes the whole scalar prize-denominated
     and what preserves the incumbent leaf's dominant `KO_SCORE * prizes_taken` term across the swap.
-    Every positional family is capped well under 1.0 against it (see the module header), so no
-    amount of board shape can out-rank a Knock Out — `ko-score-band`, unchanged.
+
+    That unit slope is the yardstick `ko-score-band` is measured against — and the measurement is
+    **not** the incumbent's. A positional family's absolute LEVEL can exceed a prize here (see the
+    module header and `sound_rules.py`'s `ko-score-band` entry, which records the divergence and
+    files it for a ruling); what cannot exceed a prize is a single play's positional DELTA, which is
+    what the per-body bounds hold. Stated this way round because the older phrasing — "every
+    positional family is capped well under 1.0" — is simply false of this implementation, and a
+    docstring that asserts a retired invariant is worse than one that names the live one.
 
     Proximity is graded by `grading.halve`, the shipped decay convention, on prizes-still-to-take
     rather than a fresh curve: at one prize left the grade is 1.0, at six it is 1/32. It enters as

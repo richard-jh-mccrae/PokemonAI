@@ -62,7 +62,8 @@ not at this docstring.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import NamedTuple
 
 from common import card_worth
 from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk / the ONE unit read
@@ -291,6 +292,22 @@ class CarriedState:
 
 
 # ── body views ────────────────────────────────────────────────────────────────────────────────
+
+class ForwardPayoff(NamedTuple):
+    """What a body's evolution line still OWES it — :meth:`MySide.forward_payoff`'s answer.
+
+    NAMED rather than a bare 3-tuple for the reason `state_value.ExposedBody` gives one field over:
+    three positional values of three different kinds invite a transposed unpack that still runs and
+    still returns a plausible number. Two of these are numbers and one is a flag, so a swap would be
+    caught — but only after it had mis-priced a board."""
+
+    #: Best printed damage anywhere in the forward closure MINUS the card's own, floored at 0.
+    owed_damage: float
+    #: How many evolutions away that best form is. 0 when the card is already the best form.
+    hops: int
+    #: Is every step of that path still available (not provably outside my deck)?
+    reachable: bool
+
 
 class BodyView(_Lazily):
     """One Pokémon in play, with its typed Energy and its attacks' typed cost shapes.
@@ -810,6 +827,10 @@ class MySide(_SideBase):
     def role_worth(self, card_id) -> float:
         """A card's **Worth**, in `card_worth` points — what job it does for THIS deck.
 
+        ``role_worth`` is a CALLABLE ``card_id -> Worth``, mirroring :attr:`needs`'s resolver one
+        accessor down — a mapping overload was written and removed, because a second accepted
+        shape is a second thing to keep in step for no caller that wanted it.
+
         Roles are DECLARED (`Strategy.roles`), not a card fact: `card_worth.role_value`'s own
         docstring says so outright ("the Pilot supplies ``roles`` / ``tags`` / the two flags"), and
         `CardStat` carries neither. So the resolver is a caller-supplied callable, exactly like
@@ -827,10 +848,8 @@ class MySide(_SideBase):
         if card_id is None:
             return 0.0
         resolver = self._role_worth
-        if callable(resolver):
-            return float(resolver(card_id) or 0.0)
         if resolver is not None:
-            return float(dict(resolver).get(card_id, 0.0))
+            return float(resolver(card_id) or 0.0)
         stat = self._combat._card_stat(card_id)
         if stat is None:
             return 0.0
@@ -1224,8 +1243,8 @@ class MySide(_SideBase):
                 index.setdefault(base, []).append(cid)
         return {name: tuple(sorted(ids)) for name, ids in index.items()}
 
-    def forward_payoff(self, card_id) -> tuple:
-        """``(owed_damage, hops, reachable)`` for ``card_id``'s line — what evolving it still OWES.
+    def forward_payoff(self, card_id) -> "ForwardPayoff":
+        """:class:`ForwardPayoff` for ``card_id``'s line — what evolving it still OWES.
 
         ``owed_damage`` is the best printed damage anywhere in the card's forward closure MINUS the
         card's own, floored at 0 (a forward form that hits softer owes nothing); ``hops`` is how
@@ -1238,17 +1257,18 @@ class MySide(_SideBase):
         already uses. **Card knowledge only** — no engine, no observation beyond the zones the
         snapshot already owns.
 
-        Fails closed at ``(0.0, 0, True)`` for an unknown card: no claim, and no phantom penalty."""
+        Fails closed at ``ForwardPayoff(0.0, 0, True)`` for an unknown card: no claim, and no
+        phantom penalty."""
         return self._memoized(("forward_payoff", card_id), lambda: self._forward_payoff(card_id))
 
-    def _forward_payoff(self, card_id) -> tuple:
+    def _forward_payoff(self, card_id) -> "ForwardPayoff":
         stat = self._combat._card_stat(card_id) if card_id is not None else None
         if stat is None:
-            return (0.0, 0, True)
+            return ForwardPayoff(0.0, 0, True)
         own = float(getattr(stat, "maxDamage", 0) or 0)
         held = set(self.hand_ids)
         unseen = self.unseen_counts
-        best = (0.0, 0, True)
+        best = ForwardPayoff(0.0, 0, True)
         # Breadth-first over the forward closure. `seen` guards a self-referential decklist rather
         # than a real evolution cycle — the rules cannot produce one, but a data slip must not hang
         # a value equation on the grader.
@@ -1265,8 +1285,8 @@ class MySide(_SideBase):
                     continue
                 nlive = live and (unseen.get(nxt, 0) > 0 or nxt in held)
                 owed = max(0.0, float(getattr(nstat, "maxDamage", 0) or 0) - own)
-                if owed > best[0]:
-                    best = (owed, hops + 1, nlive)
+                if owed > best.owed_damage:
+                    best = ForwardPayoff(owed, hops + 1, nlive)
                 frontier.append((nxt, getattr(nstat, "name", None), hops + 1, nlive))
         return best
 

@@ -560,17 +560,6 @@ def assignment_split(slots, eligibility, resupply, *, exclude=frozenset(),
     return base, best
 
 
-def opponent_target_max(max_prize_value: float) -> float:
-    """The largest value :func:`opponent_target_value` can return for ONE body.
-
-    ``prize_advance`` is bounded by the biggest prize yield in the set and the survival term by
-    :data:`_SURVIVAL_CAP`, so this is exact rather than an estimate. Public because a composer that
-    SUMS these needs a bound on the sum: `state_value` derives its predicted-loss magnitude from
-    exactly this (POC-T3, Issue #262), and a hand-copied 3.9 there would be the second home for one
-    fact that ADR-0087 charges for."""
-    return float(max_prize_value) + _SURVIVAL_CAP
-
-
 @dataclass(frozen=True)
 class Resolution:
     """A position's Needs, RESOLVED — the shape :attr:`common.state_model.MySide.needs` carries.

@@ -568,7 +568,7 @@ class PlannerMixin:
         if not ranked:
             return None                                  # nothing simmable at all — defer to the tuned
                                                          # scoring rather than pick blind
-        ranked.sort(key=lambda t: self._develop_tiebreak(obs, select, options, t))
+        ranked.sort(key=lambda t: t[0], reverse=True)
         best_val, best_i = ranked[0]
         if best_val >= KO_SCORE:
             return None                                  # a KO_SCORE-class leaf is an UNSOUND rollout-win
@@ -581,35 +581,6 @@ class PlannerMixin:
         return TurnLine(next_step=[best_i], goal="develop", value=best_val,
                         rationale="develop: best end-of-turn board by rollout",
                         ranked_by="engine", diverged=(best_i != greedy_idx))
-
-    def _develop_tiebreak(self, obs, select, options, entry) -> tuple:
-        """The rollout's **deterministic option ordering** — old Issue #145's amendment D.
-
-        ``(-value, -worth of the touched card, card id, option index)``, so the sort NEVER falls
-        through to menu index while two options still differ in something meaningful.
-
-        Amendment D exists because the zero-score index-pick class produced at least three distinct
-        CRITICAL bug clusters on record: ADR-0062's oldest-attached fall-through, mega_starmie
-        ep82867148 f48/f87, and mega_lucario ep83661652 f33/f40/f44 — *"benched whichever Basic sat
-        lowest in the menu"*. A leaf that ties is not a leaf that has no opinion; it is a leaf whose
-        opinion the secondary key has to supply, and menu order is the one key that carries no
-        information about the game at all.
-
-        Worth is `_role_value` — the same currency every keep, deploy and discard site reads, so the
-        tie-break agrees with the rest of the ladder about what a card is for rather than inventing a
-        private ordering. Card id then index are pure STABILITY tails: they never decide between two
-        genuinely different cards, they only stop equal-worth siblings from depending on menu
-        position. (Byte-identical siblings are already ONE decision by Option Equivalence, so this
-        tail fires only for distinct cards of equal worth.)
-
-        Index survives as the LAST key rather than being removed, deliberately: a total order needs a
-        total tail, and an unstable sort is a worse answer to index-dependence than a documented one.
-        """
-        value, i = entry
-        option = options[i] if 0 <= i < len(options) else {}
-        cid = self._option_card_id(obs, select, option)
-        return (-float(value), -float(self._role_value(cid)),
-                cid if cid is not None else 1 << 30, i)
 
     def _option_equivalence(self, obs, options) -> dict:
         """The frame's **Option Equivalence Class** map, or ``{}`` when the kill-switch is off.
@@ -3349,9 +3320,19 @@ class PlannerMixin:
         `_CLASS_B_SPEND_IDS` rungs behind it. Its ability-fire half is genuinely unpriced and is
         NAMED as such in `readiness`'s `blind_to`.
 
-        **The Tier-5 learned term (`_value_term`) is no longer consulted.** It was a second opinion
-        about the same board, and ADR-0092 decision 4 forbids a rival scorer beside the equation
-        rather than under it; the seam is parked for post-POC Issue #147.
+        **What this swap left with no production caller**, named rather than left for a reader to
+        discover: `_readiness` and its eleven sub-helpers, `_value_term` + `_board_hypothetical`
+        (the Tier-5 learned leaf — a second opinion about the same board, which ADR-0092 decision 4
+        forbids beside the equation rather than under it; the seam is parked for post-POC
+        Issue #147), `_predicted_loss` (its fact survives inside `state_value`'s `survival`), and
+        `pilot._hand_readiness`. `_leaf_value` itself STAYS — three closed-form ladder sites still
+        call it.
+
+        They are not deleted here, and that is a scope call rather than an oversight. Issue #262
+        says outright that *"the rollout keeps running (T4 retires it)"*, so the retirement belongs
+        with the rollout; and while the wave-3 packet is open, a ruling that reverts part of this
+        swap is answered far more cheaply with the retired composition still in the tree. T4
+        (Issue #263) deletes them with the rollout.
 
         A line that finishes the game in my favour still scores above any prize count (dominant).
         None when the search is unavailable — the caller then keeps the closed-form leaf value (never
@@ -3382,8 +3363,7 @@ class PlannerMixin:
                                                           # the SOUND win rung (the f24 Meowth mirage;
                                                           # `_commit_best`'s below-one-prize veto then
                                                           # defers exactly as designed)
-        board_value = KO_SCORE * state_value(self._leaf_state_model(end, my_index),
-                                             working=getattr(self, "_leaf_working", None))
+        board_value = KO_SCORE * state_value(self._leaf_state_model(end, my_index))
         return _out(board_value + min(_LINE_CAP, line_val if spend_account else 0.0))
 
     def _leaf_state_model(self, end, my_index: int):

@@ -124,7 +124,7 @@ def _print_report(rpt, *, top_term=None, frame=None) -> None:
             print(f"    ... and {len(failed) - 20} more")
 
     if frame:
-        hit = [r for r in rpt["rows"] if r["key"].startswith(frame) or frame in (r["key"] or "")]
+        hit = [r for r in rpt["rows"] if frame in (r["key"] or "")]
         if not hit:
             print(f"\n  (no frame matching {frame!r})")
         for r in hit:

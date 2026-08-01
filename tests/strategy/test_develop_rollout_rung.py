@@ -80,39 +80,6 @@ def test_rung_stashes_the_ranked_candidates_sorted_with_flags():
 
 
 @pytest.mark.req("REQ-PLANNER-0012")
-def test_a_tie_is_broken_by_WORTH_never_by_menu_position():
-    """Old Issue #145's **amendment D**, at the single point where the chosen option is selected.
-
-    Two candidates the leaf cannot separate, differing only in what they touch: option 0 benches the
-    junk body, option 1 benches the wincon. Under the retired `sort(key=value)` the sort was stable,
-    so the tie fell through to menu order and option 0 won for no reason connected to the game.
-
-    That class is not hypothetical — it produced at least three CRITICAL clusters on record
-    (ADR-0062's oldest-attached fall-through; mega_starmie ep82867148 f48/f87; mega_lucario
-    ep83661652 f33/f40/f44, *"benched whichever Basic sat lowest in the menu"*). Worth is the
-    secondary key because it is the currency every keep, deploy and discard site already reads."""
-    p = _pilot()
-    options = [{"type": 0, "index": 0}, {"type": 0, "index": 1}]
-    traces = [_trace(0, 5.0), _trace(1, 5.0)]
-    _stub_leaf(p, {(0,): 42.0, (1,): 42.0})                      # a genuine tie at the leaf
-    p._option_card_id = lambda obs, select, option: (
-        JUNK if option["index"] == 0 else WINCON)
-    line = p._develop_rollout_line({}, None, None, options, traces)
-    assert line is not None
-    assert line.next_step == [1], "the tie fell through to menu order instead of to Worth"
-
-    # ...and REVERSING the menu must not reverse the answer. This is the property that actually
-    # matters: a decision that depends on where an option sits in the menu is unrulable, and an
-    # unrulable frame cannot be graded, which makes the gate protecting it vacuous.
-    q = _pilot()
-    swapped = [{"type": 0, "index": 0}, {"type": 0, "index": 1}]
-    _stub_leaf(q, {(0,): 42.0, (1,): 42.0})
-    q._option_card_id = lambda obs, select, option: (
-        WINCON if option["index"] == 0 else JUNK)
-    assert q._develop_rollout_line({}, None, None, swapped, traces).next_step == [0]
-
-
-@pytest.mark.req("REQ-PLANNER-0012")
 def test_rung_defers_when_no_candidate_can_be_simmed():
     """Every rollout returns None (sim unavailable) — the rung has nothing to rank, so it defers to
     the tuned scoring (returns None) rather than committing a blind pick."""

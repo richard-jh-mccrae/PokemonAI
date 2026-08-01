@@ -267,9 +267,13 @@ def test_the_readiness_scale_is_the_planners_own_weight_carried_at_the_same_band
     instead of expressed in code. Without this, a planner retune would silently leave the two
     readiness scales disagreeing."""
     from common.strategy.context import KO_SCORE
-    from common.strategy.planner import _READINESS_ATTACK_W
+    from common.strategy.planner import _READINESS_ATTACK_W, _READINESS_SATURATED
     assert sv._READINESS_W == pytest.approx(
         _READINESS_ATTACK_W * currency.PRIZE_DAMAGE_RATE / KO_SCORE)
+    # The repeated-utility-body discount is a straight carry-over, so it must stay equal, not merely
+    # close: `planner._readiness_saturation` and `state_value._saturation` answer the same question
+    # about the same board, and two different answers would be a divergence nothing reports.
+    assert sv._SATURATED == _READINESS_SATURATED
 
 
 # ── the bands, and the terminal dominance they support ────────────────────────────────────────────
@@ -422,14 +426,46 @@ def test_the_scalar_is_PROVENANCE_AGNOSTIC_over_two_models_of_one_board():
     assert w1 == pytest.approx(w2)
 
 
-@pytest.mark.req("REQ-STATEVALUE-0008")
-def test_scoring_is_deterministic_across_repeated_calls_on_one_model():
-    """Amendment D's foundation. A tie-break policy is only meaningful if the values it breaks ties
-    between are stable — a scalar that wobbled between calls would make every downstream ordering
-    unrulable, and an unrulable frame cannot be graded, which makes the gate protecting it vacuous
-    (the same argument `apply_option` makes for refusing nondeterministic effects)."""
-    model = _lucario_board(my_energies=[E_F], bench=[_poke(RIOLU, hp=80, serial=2)])
-    assert len({sv.state_value(model) for _ in range(5)}) == 1
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_state_value_returns_a_BIT_IDENTICAL_float_on_every_call():
+    """Issue #262's fourth amendment, and the only half of old Issue #145's amendment D this track
+    owns — *"the actual amendment D rule moved to Issue #263, this track only owns the function's own
+    determinism"*.
+
+    The spec's words: *"for a fixed StateModel, `state_value` returns a BIT-IDENTICAL float on every
+    call — fixed term-iteration order (never dict/set iteration that could reorder), no clock/random/
+    hidden global state read by any term."* Bit-identical, not approximately equal: floating-point
+    addition is not associative, so a term order that varied would move the last bits, and a
+    selection key built on a value whose last bits wobble is not a fix.
+
+    Asserted on a model that exercises every family — two bodies, a bench, a hand, both sides
+    populated — because a term that read a global would most likely be one the empty board skips."""
+    model = _lucario_board(my_energies=[E_F], bench=[_poke(RIOLU, hp=80, serial=2)],
+                           hand=[MEGA_LUC, E_F])
+    values = [sv.state_value(model) for _ in range(32)]
+    assert len(set(values)) == 1
+    # Bit-identical, asserted through the repr so a difference below `==`'s notice would still show.
+    assert len({repr(v) for v in values}) == 1
+
+    # And a FRESHLY built model of the same board agrees bit-for-bit, so the answer is a function of
+    # the board rather than of the memo's fill order.
+    fresh = _lucario_board(my_energies=[E_F], bench=[_poke(RIOLU, hp=80, serial=2)],
+                           hand=[MEGA_LUC, E_F])
+    assert repr(sv.state_value(fresh)) == repr(values[0])
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_the_term_iteration_order_is_FIXED_not_a_set_or_a_dict_scan():
+    """The mechanism behind the test above, asserted directly rather than inferred from one board.
+
+    `working`'s keys must come out in the registry's declared order every time. A term set assembled
+    by iterating a `set` — or by a comprehension over anything unordered — would still produce a
+    stable answer inside one interpreter run and could reorder across runs, which is precisely the
+    failure a same-process repeat test cannot see."""
+    model = _lucario_board(my_energies=[E_F])
+    working: dict = {}
+    sv.state_value(model, working=working)
+    assert list(working) == [f.name for f in sv.REGISTRY]
 
 
 # ── MID-TURN MONOTONICITY — the class Issue #263's ordering ruling requires ────────────────────────
@@ -510,7 +546,7 @@ def test_taking_a_prize_moves_the_scalar_by_a_full_prize():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
-def test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is()  :
+def test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is():
     """The `POC_WORTH_PRIZE_RATE` sanity the whole ADR-0097 argument rests on. Pricing the hand at
     zero makes every free Item strictly worth playing (the defect `_DENIAL_ITEM_COST` patches);
     pricing it too high makes the agent hoard. With no Needs resolution supplied the hand leg is a
@@ -603,3 +639,101 @@ def test_the_module_reaches_for_no_engine_no_obs_and_no_pilot():
     src = inspect.getsource(sv)
     for forbidden in ("from cg import", "import cgpy", "from common.pilot", "import pilot"):
         assert forbidden not in src, forbidden
+
+
+# ── the SAME monotonicity, on REAL corpus frames ──────────────────────────────────────────────────
+#
+# Issue #262's ordering-ruling amendment asks for this class "on a handful of CORPUS frames", and the
+# synthetic cases above are not a substitute: a fixture board is one I chose, and the failure mode
+# being guarded — a term that quietly assumes a completed turn — is likeliest on the boards nobody
+# designed. These perturb a real frame by exactly one beneficial fact and assert the direction.
+#
+# Asserted as `>=` per frame with at least one STRICT move required across the corpus. A real board
+# can be genuinely indifferent to one more Energy (the attacker is already maxed) or to a heal (the
+# clock does not move a whole turn), and demanding `>` everywhere would fail on correct behaviour.
+# The "at least one strict" floor is what stops the whole class from passing vacuously.
+
+def _corpus_models():
+    """`(key, pilot, obs)` for a sample of replayable corpus frames, through THE Corpus Reader."""
+    from corpus_helpers import corpus_index
+    from train.tune import _build_pilot
+    out, built = [], {}
+    for (episode, frame), rec in sorted(corpus_index().items())[:40]:
+        if rec.agent not in built:
+            try:
+                built[rec.agent] = _build_pilot(rec.agent)[0]
+            except Exception:                       # an unbuildable agent is skipped, never fatal
+                built[rec.agent] = None
+        if built[rec.agent] is not None:
+            out.append((f"{episode}|{frame}", built[rec.agent], rec.obs))
+    return out
+
+
+@pytest.fixture(scope="module")
+def corpus_models():
+    models = _corpus_models()
+    if not models:
+        pytest.skip("no replayable corrections corpus in this checkout")
+    return models
+
+
+def _my_active(obs):
+    cur = (obs or {}).get("current") or {}
+    players = cur.get("players") or []
+    me = players[cur.get("yourIndex", 0)] if players else {}
+    return next((b for b in (me.get("active") or []) if b), None)
+
+
+def _perturbed(obs, mutate):
+    """A deep-enough copy of ``obs`` with ``mutate`` applied to MY Active. The original is shared
+    across the whole test session (`corpus_index` caches it), so mutating in place would corrupt
+    every later test — the helper's own docstring says so."""
+    import copy
+    fresh = copy.deepcopy(obs)
+    active = _my_active(fresh)
+    if active is not None:
+        mutate(active)
+    return fresh
+
+
+def _score(pilot, obs, term):
+    my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
+    working: dict = {}
+    sv.state_value(pilot._leaf_state_model(obs, my_index), working=working)
+    return working[term]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_on_real_frames_one_more_energy_never_lowers_readiness(corpus_models):
+    """An attach toward an attack cost raises readiness — the ruling's first named case, on boards
+    nobody designed for it."""
+    strict = 0
+    for key, pilot, obs in corpus_models:
+        active = _my_active(obs)
+        if not active or not (active.get("energies") or []):
+            continue                                # nothing to duplicate; the attach is unmodelled
+        extra = (active.get("energies") or [])[0]
+        before = _score(pilot, obs, "readiness")
+        after = _score(pilot, _perturbed(obs, lambda b: b["energies"].append(extra)), "readiness")
+        assert after >= before - 1e-9, f"{key}: an extra Energy LOWERED readiness"
+        strict += after > before + 1e-9
+    assert strict, "no corpus frame moved at all — the class would pass on a constant term"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_on_real_frames_healing_my_active_never_lowers_survival(corpus_models):
+    """A heal above the incoming raises survival — the ruling's second named case, and the family
+    that motivated differencing: a heal has no bespoke equation anywhere, so if this term does not
+    move, T4's heal family prices at 0 and is never played."""
+    strict = 0
+    for key, pilot, obs in corpus_models:
+        active = _my_active(obs)
+        if not active or not active.get("maxHp") or active.get("hp") is None:
+            continue
+        if active["hp"] >= active["maxHp"]:
+            continue                                # already whole; nothing to heal
+        before = _score(pilot, obs, "survival")
+        after = _score(pilot, _perturbed(obs, lambda b: b.__setitem__("hp", b["maxHp"])), "survival")
+        assert after >= before - 1e-9, f"{key}: a full heal LOWERED survival"
+        strict += after > before + 1e-9
+    assert strict, "no corpus frame moved at all — the class would pass on a constant term"
