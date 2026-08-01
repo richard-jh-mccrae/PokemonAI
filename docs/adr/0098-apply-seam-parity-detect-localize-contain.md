@@ -176,3 +176,102 @@ raises rather than returning 0.0 — an un-enumerated effect must not read as a 
 **What did NOT move:** the `state_value` term registry and the StateModel completion API. Decisions
 1–5 above stand unchanged; this amendment widens the contract's surface, it does not revisit the
 declined engine route.
+
+## Amendment B — three fates, footprints, and a completeness contract (ruled 2026-08-01, Issue #259 §3b/§3c)
+
+Ruled by the developer into the Issue #259 **body** (sections 3b and 3c, both new) while PR #266 was
+in flight, with an "AMENDMENT CHECKLIST" comment as the delta list. Recorded here for the same reason
+as Amendment A: this ADR is introduced by the same unmerged PR, so a sibling number would record a
+history that never existed.
+
+### B1. Three fates — and the engine route comes BACK, narrowly
+
+Amendment A left two outcomes (modelled or refused). §3b adds a third between them:
+
+| fate | when | returns |
+|---|---|---|
+| **MODELLED** | closed-form from Effect Clauses. Always preferred. | a `StateModel` / `Expectation` |
+| **ENGINE-RESOLVED** | clause-vocabulary gap, **but** provably deterministic **and** real board **and** 1-ply | an `EngineResolved` wrapper |
+| **REFUSED** | everything else | a `Refusal` (always-expand) |
+
+This does **not** reopen decision 1. That decision declined an engine route *as the runtime pricing
+mechanism*, on two objections: single-sample-past-a-shuffle, and offline invisibility. The narrow
+fate here is immune to both by construction — *provably deterministic* excludes anything past a
+shuffle, and 1-ply-on-a-real-board means the frame is a live observation, which is the only kind that
+carries `search_begin_input` at all. It is a bridge for a **vocabulary** gap, not a substitute for
+the closed-form model.
+
+**The gate wording is load-bearing: "provably deterministic", NOT "unmodelled".** So `deterministic`
+is **tri-state** and its unproven default (`None`) refuses — ADR-0067's yield convention, fail
+closed. Two independent fatal reasons, both worth restating because either alone settles it:
+
+1. The engine has **no deal-seed**, so a shuffle-riding sim returns ONE SAMPLE rather than a
+   distribution. That is Issue #178's defect, and the same measurement decision 1 rests on.
+2. Nondeterminism breaks the **deterministic replay both gates depend on**. A frame whose decision
+   turns on a coin flip cannot be ruled, so it cannot be graded, so the gate protecting it is
+   vacuous — the failure mode this whole ADR series exists to prevent.
+
+Refused outright, therefore: opponent-choice effects (an accepted POC gap — there is no opponent
+model), anything riding the shuffle, and **anything at depth ≥ 2**. Depth is not a policy dial: past
+the first ply the preceding steps were closed-form applies, so the board is a *synthesized*
+StateModel and there is nothing to hand the native engine. Each precondition refuses under **its own
+scope** (`depth` / `nondeterminism` / `no-engine`) because they are three different pieces of work.
+
+**`_search_api` is preserved on purpose.** Issue #263 retires it as a runtime *rollout*; the *seam*
+survives as exactly this fallback. Do not design as if it disappears — a natural misreading of "the
+rollout is retired", and the reason the issue says so explicitly.
+
+**Telemetry is structural, not conventional.** The route returns an `EngineResolved` wrapper rather
+than a bare model, so a caller cannot use the answer without seeing that the engine produced it. §3b
+calls this route *"a bridge that makes the vocabulary gap visible for later modelling, never a
+resting place"*, and a convention every caller could forget would not deliver that.
+
+### B2. Per-kind READ/WRITE footprints
+
+The table exposes, per kind, the snapshot fields the transition WRITES and the fields it READS.
+Issue #263 consumes both to prove **commutativity** — two options commute iff neither reads what the
+other writes and they do not both write the same field — and collapse orderings into one canonical
+candidate per subset.
+
+**Fail closed:** an unknown or partial footprint commutes with NOTHING. An under-reporting footprint
+is worse than none, because it licenses a reorder that changes the board and lets the composer
+collapse two genuinely different lines into one candidate. Only `_ATTACH`, `_EVOLVE` and `_RETREAT`
+carry complete footprints (their write-sets follow from the rulebook, not from card text); `_PLAY`
+deliberately does not, because a Trainer play writes whatever its Effect Clauses write and that is
+per-card.
+
+Separately, a kind that **reveals information** can never join a commutative block whatever its
+footprint says: a reveal changes the OPTION SET, not only the board, so reordering around it changes
+what the later choices are.
+
+### B3. StateModel completeness is a contract (§3c)
+
+> *"All fields should certainly be covered — we want to minimize this risk."*
+
+The differencing system's worst failure mode is an effect writing to state the snapshot cannot
+represent: the delta reads **0**, and under 1-ply ordering 0 means *never explored*, not
+*undervalued*. `src/common/snapshot_coverage.py` is therefore the enumeration, as data — every
+writable zone with its snapshot home, or one of two explicit statuses:
+
+- **`owed`** — no home yet, and it **must name the owning track**. An owed zone with no owner is a
+  silence, not a schedule. Four today, all T1 / Issue #260: `attached_tools` (the raws carry a
+  `tools` key; the typed read is missing), `special_conditions` (`attack_blocked` derives the two
+  that block acting but collapses them to one bool on the SIDE), `allowance_retreat_used` (the
+  observation has `current.retreated`; the snapshot does not surface it), `transient_grants` (only a
+  private generation *counter* exists, not a read of the grants).
+- **`hidden`** — deliberately unrepresentable. Deck **order** is the case, and it must say what
+  prices it instead (`deck_odds` hypergeometrics). Recorded so nobody "fixes" it by inventing a
+  field, and it is the same fact that makes shuffle-riding effects REFUSED above.
+
+The **audit test** walks the committed Effect Clause vocabulary (`card_effects.json`, ADR-0032) and
+fails on a kind or rider with no declared write-set — the requirement that a new clause fail rather
+than silently price 0. The strong invariant is `clauses_writing_unhomed()`: **no clause the
+compendium already knows may write to an owed zone**, which is what keeps the owed list a schedule
+rather than a live correctness hole. It is empty.
+
+`footprints_writing_unhomed()` is **not** empty, and that is a finding rather than a defect in the
+registry: `_EVOLVE` clears Special Conditions (`docs/rules.md` §4) and so does `_RETREAT`, since they
+are cleared "when it leaves the Active Spot OR evolves" (§8) — both rulebook-sourced, and the second
+easy to miss because the rules text leads with the evolve half. `special_conditions` has no home, so
+part of what those two transitions do is currently invisible to a delta. Surfaced as a generated T1
+work list, with a test asserting the set can only shrink.

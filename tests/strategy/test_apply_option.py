@@ -63,7 +63,8 @@ def test_the_kind_table_is_TOTAL_over_the_engines_option_vocabulary():
     against the engine enum itself rather than against a hand-copied list, because a hand-copied list
     is what the table would have to drift from to fail."""
     assert set(ao.KIND_COVERAGE) == _engine_option_types()
-    assert set(ao.KIND_COVERAGE.values()) <= {ao.MODELLED, ao.TERMINAL, ao.REFUSED}
+    assert set(ao.KIND_COVERAGE.values()) <= {ao.MODELLED, ao.ENGINE_RESOLVED, ao.TERMINAL,
+                                              ao.REFUSED}
 
 
 @pytest.mark.req("REQ-APPLY-0001")
@@ -71,10 +72,11 @@ def test_the_derived_kind_sets_partition_the_table():
     """`TRANSITION_KINDS` / `TERMINAL_KINDS` / `REFUSED_KINDS` are DERIVED from one table. A
     hand-kept second copy is the drift ADR-0087 charges for one store over, and here it would let
     the planner believe a kind is modelled while `apply_option` refuses it."""
-    assert not (ao.TERMINAL_KINDS & ao.TRANSITION_KINDS)
-    assert not (ao.REFUSED_KINDS & ao.TRANSITION_KINDS)
-    assert not (ao.REFUSED_KINDS & ao.TERMINAL_KINDS)
-    assert (ao.TRANSITION_KINDS | ao.TERMINAL_KINDS | ao.REFUSED_KINDS) == set(ao.KIND_COVERAGE)
+    sets = (ao.TRANSITION_KINDS, ao.ENGINE_ROUTE_KINDS, ao.TERMINAL_KINDS, ao.REFUSED_KINDS)
+    for i, a in enumerate(sets):
+        for b in sets[i + 1:]:
+            assert not (a & b), (sorted(a), sorted(b))
+    assert set().union(*sets) == set(ao.KIND_COVERAGE)
 
 
 @pytest.mark.req("REQ-APPLY-0001")
@@ -90,12 +92,147 @@ def test_attack_and_end_are_terminal_and_nothing_else_is():
 
 @pytest.mark.req("REQ-APPLY-0001")
 def test_the_kinds_with_no_uniform_transition_are_declared_refused_not_omitted():
-    """Named individually so a later promotion is a visible diff. ABILITY is the one the amendment
-    made concrete — 17 live MAIN-menu options across the 372 corpus frames, which the pre-amendment
-    table did not declare at all, so ordering would have raised on them."""
-    for kind in (_NUMBER, _YES, _NO, _CARD, _ENERGY, _ABILITY, _DISCARD_IN_PLAY, _SKILL,
-                 _SPECIAL_CONDITION):
+    """Named individually so a later promotion is a visible diff."""
+    for kind in (_NUMBER, _YES, _NO, _CARD, _ENERGY, _DISCARD_IN_PLAY, _SKILL, _SPECIAL_CONDITION):
         assert ao.coverage(kind) == ao.REFUSED, kind
+
+
+# ── §3b: THREE fates, and a silent no-op is never one of them ─────────────────────────────────────
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_there_are_exactly_three_fates_and_terminal_is_not_one():
+    """§3b resolves every option to MODELLED / ENGINE-RESOLVED / REFUSED. A turn-ender has no
+    transition to have a fate about, and `UNDECLARED` is a refusal REASON — folding either into the
+    fate vocabulary would make "how many ways can this end?" unanswerable."""
+    assert ao.FATES == (ao.MODELLED, ao.ENGINE_RESOLVED, ao.REFUSED)
+    assert ao.TERMINAL not in ao.FATES and ao.UNDECLARED not in ao.FATES
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_ability_is_ELIGIBLE_for_the_engine_route_rather_than_flatly_refused():
+    """ABILITY is 17 live MAIN-menu options in the corpus and the kind IS its effect, so there is no
+    uniform closed-form transition — but many Abilities touch no RNG and no hidden zone, and §3b's
+    whole point is that such an effect gets priced through the engine rather than pruned at 0."""
+    assert ao.coverage(_ABILITY) == ao.ENGINE_RESOLVED
+    assert _ABILITY in ao.ENGINE_ROUTE_KINDS and _ABILITY not in ao.TRANSITION_KINDS
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_the_engine_gate_is_PROVABLY_DETERMINISTIC_not_merely_unmodelled():
+    """The load-bearing wording. `deterministic` is TRI-state and the unproven default refuses: an
+    unmodelled effect that MIGHT touch RNG is REFUSED, fail-closed per ADR-0067's yield convention.
+
+    Two independent reasons, both fatal — the engine has no deal-seed, so a shuffle-riding sim is one
+    sample and not a distribution (Issue #178); and nondeterminism breaks the deterministic replay
+    both gates depend on, which makes the frame unrulable and the gate vacuous."""
+    api = object()
+    assert ao.fate({"type": _ABILITY}, search_api=api, deterministic=True) == ao.ENGINE_RESOLVED
+    assert ao.fate({"type": _ABILITY}, search_api=api, deterministic=None) == ao.REFUSED   # unproven
+    assert ao.fate({"type": _ABILITY}, search_api=api, deterministic=False) == ao.REFUSED
+    assert ao.fate({"type": _ABILITY}, search_api=api) == ao.REFUSED                       # default
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_depth_2_refuses_because_the_board_is_synthesized():
+    """Not a policy choice. At depth ≥ 1 the preceding steps were closed-form applies, so the board
+    is a SYNTHESIZED StateModel — and a synthesized model cannot be handed back to the native
+    engine. The refusal carries its own scope because "we were two plies deep" is different work
+    from "we never proved this deterministic"."""
+    api = object()
+    assert ao.fate({"type": _ABILITY}, depth=1, search_api=api, deterministic=True) == ao.REFUSED
+    r = ao.apply_option(object(), {"type": _ABILITY}, depth=2, search_api=api, deterministic=True)
+    assert isinstance(r, ao.Refusal) and r.scope == ao.DEPTH_SCOPE
+    assert "synthesized" in r.reason
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_each_engine_precondition_refuses_with_its_own_scope():
+    """Three preconditions, three scopes, because the coverage report has to tell them apart — they
+    are three different pieces of work (prove determinism / wire the seam / do not go deep)."""
+    got = {}
+    for kwargs in ({"deterministic": True, "search_api": None},
+                   {"deterministic": None, "search_api": object()},
+                   {"depth": 3, "deterministic": True, "search_api": object()}):
+        r = ao.apply_option(object(), {"type": _ABILITY}, **kwargs)
+        got[r.scope] = r.reason
+    assert set(got) == {ao.NO_ENGINE_SCOPE, ao.NONDETERMINISM_SCOPE, ao.DEPTH_SCOPE}
+    assert all(reason.strip() for reason in got.values())
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_the_engine_route_returns_a_WRAPPER_so_the_telemetry_cannot_be_forgotten():
+    """§3b calls this route *"a bridge that makes the vocabulary gap visible for later modelling,
+    never a resting place"*, so it emits telemetry. Returning a bare model would make that a
+    convention every caller could forget; the wrapper makes the engine's involvement part of the
+    value you must handle. `require_model` unwraps it; `must_expand` is False — it IS resolved."""
+    er = ao.EngineResolved(model="board", kind=_ABILITY, clause_gap="no clause for Adrena-Brain")
+    assert ao.must_expand(er) is False
+    assert ao.require_model(er) == "board"
+    assert er.clause_gap
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_the_search_api_seam_is_named_as_preserved_not_deleted():
+    """Issue #263 retires `_search_api` as a runtime ROLLOUT and keeps the seam precisely so this
+    fallback has a home. Recorded where an implementer reads it, because the natural reading of
+    "the rollout is retired" is that the seam goes with it."""
+    doc = ao.__doc__ or ""
+    assert "_search_api" in doc and "do not design as if it disappears" in doc.lower()
+
+
+# ── §3b: per-kind READ/WRITE footprints ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_an_uncharacterised_kind_commutes_with_NOTHING():
+    """Fail closed. A footprint that under-reports is worse than none — it would license a reorder
+    that changes the board, and the composer would collapse two genuinely different lines into one
+    candidate. So the default is incomplete, and incomplete commutes with nothing, itself included."""
+    assert ao.footprint(_PLAY).complete is False            # per-card effects: no kind-level answer
+    assert ao.commutes(_PLAY, _ATTACH) is False
+    assert ao.commutes(_PLAY, _PLAY) is False
+    assert ao.commutes(999, 999) is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_two_kinds_conflict_when_one_reads_what_the_other_writes():
+    """The commutativity rule Issue #263 consumes. ATTACH and EVOLVE both take a card from hand, so
+    both WRITE `my_hand_ids` — and hand indices are how options encode their card, so reordering
+    them genuinely changes the later option set."""
+    attach, evolve = ao.footprint(_ATTACH), ao.footprint(_EVOLVE)
+    assert attach.complete and evolve.complete
+    assert "my_hand_ids" in attach.writes & evolve.writes
+    assert ao.commutes(_ATTACH, _EVOLVE) is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_a_revealer_never_joins_a_commutative_block_whatever_its_footprint_says():
+    """A reveal changes the OPTION SET, not only the board, so read/write analysis cannot clear it:
+    reordering around a draw changes what the later choices are. Asserted through `commutes` on two
+    otherwise-disjoint complete footprints, so it is the reveal flag doing the work."""
+    quiet = ao.Footprint(reads=frozenset({"stadium"}), writes=frozenset({"stadium"}), complete=True)
+    other = ao.Footprint(reads=frozenset({"my_prizes"}), writes=frozenset({"my_prizes"}),
+                         complete=True)
+    revealer = ao.Footprint(reads=frozenset({"my_prizes"}), writes=frozenset({"my_prizes"}),
+                            complete=True, reveals_information=True)
+    ao.FOOTPRINTS[901], ao.FOOTPRINTS[902] = quiet, other
+    try:
+        assert ao.commutes(901, 902) is True      # disjoint + complete + no reveal -> commutes
+        ao.FOOTPRINTS[902] = revealer             # ...same footprint, now flagged as revealing
+        assert ao.commutes(901, 902) is False
+    finally:
+        del ao.FOOTPRINTS[901], ao.FOOTPRINTS[902]
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_footprints_speak_the_coverage_registrys_field_vocabulary():
+    """One store. A footprint naming a zone `snapshot_coverage` has never heard of would look like
+    analysis while corresponding to nothing the snapshot was ever checked for."""
+    from common import snapshot_coverage as sc
+    for kind, fp in ao.FOOTPRINTS.items():
+        unknown = sorted((fp.reads | fp.writes) - set(sc.BY_ID))
+        assert unknown == [], (kind, unknown)
 
 
 # ── refusal is a RESULT, not an exception and not a no-op ─────────────────────────────────────────
@@ -107,9 +244,9 @@ def test_an_unmodellable_kind_returns_a_REFUSAL_not_a_silent_no_op():
     delta, which at ordering time means "never explored" rather than "undervalued" — so an Ability
     the seam cannot model would look like an Ability not worth using, forever, and nothing would
     report the gap."""
-    r = ao.apply_option(object(), {"type": _ABILITY})
+    r = ao.apply_option(object(), {"type": _SKILL})
     assert isinstance(r, ao.Refusal)
-    assert r.kind == _ABILITY and r.scope == ao.KIND_SCOPE and r.reason.strip()
+    assert r.kind == _SKILL and r.scope == ao.KIND_SCOPE and r.reason.strip()
 
 
 @pytest.mark.req("REQ-APPLY-0005")

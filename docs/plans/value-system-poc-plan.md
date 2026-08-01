@@ -146,8 +146,38 @@ record — never auto-recaptured).
    transitions for the option kinds the planner sequences (trainer play, attach, evolve, bench,
    retreat/promote; attack/end are terminal). Stochastic effects (draw N, search-reveal) return an
    EXPECTATION node: outcome classes enumerated by Option-Equivalence identity, weighted by the
-   existing hypergeometrics (`deck_odds`), branching capped. The engine-sim rollout survives only
-   as a T4 parity *test fixture*, never a runtime path.
+   existing hypergeometrics (`deck_odds`), branching capped. The engine-sim *rollout* survives only
+   as a T4 parity **test fixture**, never a runtime path — but the `_search_api` **seam** it rides
+   is preserved, because §3b's ENGINE-RESOLVED fate needs it.
+
+   **§3b — three fates, ruled 2026-08-01.** The per-kind table resolves every option to exactly one
+   of: **MODELLED** (closed-form from Effect Clauses; always preferred) · **ENGINE-RESOLVED** (the
+   clause vocabulary has a gap, but the effect is *provably deterministic*, the board is REAL and
+   the call is 1-ply — simulate through `_search_api`, read the board back into a StateModel,
+   difference normally, **emit telemetry**) · **REFUSED** (everything else). A silent no-op is never
+   a fate: it prices the option at 0 delta, and at ordering time 0 means *never explored*.
+   The gate is **"provably deterministic", not "unmodelled"** — an unmodelled effect that MIGHT
+   touch RNG is REFUSED, fail-closed (ADR-0067). Refused outright: opponent-choice effects (no
+   opponent model — an accepted POC gap), anything riding the shuffle (the engine has **no
+   deal-seed**, so a sim is ONE SAMPLE not a distribution — Issue #178's defect — and nondeterminism
+   breaks the deterministic replay both gates depend on), and anything at **depth ≥ 2** (the board
+   is then a synthesized StateModel, which cannot be handed back to the native engine).
+
+   **§3b — per-kind READ/WRITE footprints.** The table exposes, per option kind, the snapshot fields
+   the transition WRITES and the fields it READS. Issue #263 consumes both to prove commutativity
+   (two options commute iff neither reads what the other writes and they do not both write the same
+   field) and collapse orderings into one canonical candidate per subset. **Fail closed:** an
+   unknown or partial footprint commutes with NOTHING. A kind that REVEALS information (draw /
+   search / reveal) can never join a commutative block whatever its footprint says — it changes the
+   option set itself.
+
+4. **§3c — StateModel completeness is a CONTRACT** (`src/common/snapshot_coverage.py`, ruled
+   2026-08-01). The differencing system's worst failure mode is an effect writing to state the
+   snapshot cannot represent: the delta reads 0, and 0 means *never explored*. So every zone or
+   marker a card effect can write is enumerated with its snapshot home, or an explicit status —
+   `owed` (**must name the owning track**) or `hidden` (deck ORDER, priced by `deck_odds` instead).
+   An **audit test** walks the committed Effect Clause vocabulary and fails on a clause kind or
+   rider with no declared write-set, and on any clause writing to a zone with no home.
 4. **Sound-rule whitelist** drafted for wave-1 ratification (§6).
 
 Deliverables: `src/common/state_value.py` skeleton (registry + signatures + working shape),
@@ -277,7 +307,7 @@ table uses this same label.
 | `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
 | `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |
 | `evolve-value-composed` | `evolve_value` (ADR-0070) | `composed-into-the-leaf` | the marginal value of evolving a body → composes into **readiness** | — |
-| `promote-retreat-value-composed` | `promote_retreat_value` (ADR-0073) | `composed-into-the-leaf` | the marginal value of changing who is Active → composes into **survival** | — |
+| `promote-retreat-value-composed` | `promote_retreat_value` (Issue #141; ADR-0073, renumbered 0100 by PR #267) | `composed-into-the-leaf` | the marginal value of changing who is Active → composes into **survival** | — |
 | `deploy-value-composed` | `deploy_value` (ADR-0086) | `composed-into-the-leaf` | the marginal value of putting a body into play → composes into **development** | — |
 
 **Role change, not deletion (added 2026-08-01, Issue #263 ordering ruling):** the composer's beam
