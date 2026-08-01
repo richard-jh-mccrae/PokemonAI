@@ -11,35 +11,19 @@ flavour — the attack-rider one — which Crushing Hammer does not set.
 
 **A Hammer is worth exactly what it stops them doing.** Not "do they have Energy" — that is what the
 pre-ADR-0062 rung asked, and it is why Hammers burned on bodies carrying more Energy than they needed.
-The value is the damage their best AFFORDABLE attack loses when one Energy leaves:
 
-    Mega Lucario ex — Aura Jab {F} 130, Mega Brave {F}{F} 270
+⚠️ **The MAGNITUDE half of this module is DELETED** (Issue #228, tracker directive 1: *"rungs an
+equation replaces are DELETED, not suppressed"*). `best_affordable_damage` and `denial_value` priced
+a strip in damage — *"the damage their best AFFORDABLE attack loses when one Energy leaves"* — and
+were the arithmetic behind `Pilot._denial_at` / `_opp_denial_best`. ADR-0080 re-derived deny as a
+**categorical relevance** instrument rather than a magnitude one, `common/deny_relevance.py` now owns
+the scoring end to end, and Issue #228 armed it and removed the incumbent. The two functions
+outlived their last production consumer by that one commit.
 
-      2 Energy: best 270 -> strip -> 130   denies 140   (the nuke goes off)
-      1 Energy: best 130 -> strip ->   0   denies 130   (the attacker goes off)
-      3 Energy: best 270 -> strip -> 270   denies   0   (SURPLUS — the Hammer does nothing)
-
-Closed-form off the attack table and their visible Energy, in the same shape as the KO oracle.
+What survives here is the **COIN**, which relevance does not model and still needs: half of all
+Crushing Hammers do nothing whatever the board looks like.
 """
 from __future__ import annotations
-
-
-def best_affordable_damage(energy: int, attacks: dict) -> int:
-    """Damage of the best attack this Pokémon can PAY FOR with `energy` Energy attached.
-
-    `attacks` is ``{attack_id: (cost, damage)}``. 0 when nothing is affordable — a body holding
-    Energy it cannot convert into an attack is not a threat, and stripping it denies nothing.
-    """
-    return max((dmg for cost, dmg in attacks.values() if cost <= energy), default=0)
-
-
-def denial_value(energy: int, attacks: dict, *, removed: int = 1) -> int:
-    """Damage this Pokémon LOSES if `removed` Energy is discarded from it — the honest worth of a
-    Hammer aimed here. Zero when the Energy is SURPLUS (they still afford the same attack) or when
-    they could not afford an attack in the first place. Never negative."""
-    before = best_affordable_damage(energy, attacks)
-    after = best_affordable_damage(max(0, energy - removed), attacks)
-    return max(0, before - after)
 
 
 # COIN facts, id-keyed, verified at data/EN_Card_Data.csv. A denial Item that flips is worth its

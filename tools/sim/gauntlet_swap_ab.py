@@ -52,25 +52,13 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from sim.battle import read_deck, run_battle          # noqa: E402
-from sim.paired_ab import (MID_BUILD_REG_TOL, _REG_TOL, flips_on,  # noqa: E402
-                           mid_build_verdict, paired_delta)
+from sim.paired_ab import STAGES, paired_delta          # noqa: E402
 
 
 def _wins(results):
     """(A-wins, n, crashes) from a Battle's contestant-relative BattleMatch list — A is our deck D."""
     n = len(results)
     return sum(1 for r in results if r.winner == 0), n, sum(len(r.crashed) for r in results)
-
-
-#: The two stage rules of #136 directive 6 (ADR-0072 decision 1). ``mid-build`` (Phases 1a–1g) is the
-#: Tripwire — crashes==0 AND CI-lo >= -5%, NO delta clause; merit lives in the two deterministic
-#: per-frame gates (`train.gates`). ``post-composition`` (#145 onward) is `flips_on` verbatim.
-STAGES = {
-    "mid-build": (mid_build_verdict, MID_BUILD_REG_TOL,
-                  "CI-lo>=-0.05 AND crashes==0 (NO delta clause)", "TRIPWIRE"),
-    "post-composition": (flips_on, _REG_TOL,
-                         "delta>=0 AND CI-lo>=-0.01 AND crashes==0", "FLIP"),
-}
 
 
 def run(agents, n, *, candidate: Path, incumbent: Path, jobs: int, out_dir: Path, stage: str):

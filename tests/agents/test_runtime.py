@@ -112,7 +112,11 @@ EXPECTED_SHIPPED = {
                                     # flat `_HAND_SIZE_ATTACKER_BOOST` proxy is deleted. Ships ON
                                     # because OFF would make the change a no-op on the board and
                                     # both ADR-0072 merit gates measure the ON behaviour
-    "deny_strip_delta": False,       # ADR-0078 / Issue #199 (S3c). ADR-0084 (Issue #217) gave it its
+    "deny_strip_delta": True,       # ADR-0078 / Issue #199 (S3c). ARMED-ON 2026-07-31 (Issue #228)
+                                    # TOGETHER with `deny_relevance`, never alone — its only consumer
+                                    # lives inside that flag's branch, and that flag alone would
+                                    # leave the tie to engine option order (the ADR-0062 defect).
+                                    # ADR-0084 (Issue #217) gave it its
                                     # consumer — the target pick's lexicographic tiebreak among
                                     # candidates tied on relevance, which orders a tie and never GATES
                                     # one (a `strip_shift > 0` keep-price gate suppresses 128/218
@@ -126,11 +130,20 @@ EXPECTED_SHIPPED = {
                                     # Gate, Discrimination Gate (run ARMED, per ADR-0072 decision 5),
                                     # and the mid-build Tripwire (-1.25 pp, CI [-4.79, +2.29], 0
                                     # crashes / 2400 games — `mid_build_verdict` True)
-    "deny_relevance": False,         # ADR-0080 / Issue #199 (S3c). ⚠️ OFF is a KNOWN DEBT against
-                                    # tracker directive 1 (a kill-switch ships ON), not a decision —
-                                    # arming is owed by Issue #228. ADR-0084 (Issue #217) chartered it
-                                    # and the Discrimination Gate blocked it, so the ADR's
-                                    # pre-registered ship-dark fallback was taken. What DID clear:
+    "deny_relevance": True,         # ADR-0080 / Issue #199 (S3c). **ARMED-ON 2026-07-31
+                                    # (Issue #228, ADR-0093), closing Phase 1e and discharging
+                                    # the directive-1 debt.** The Discrimination Gate's blocker was a
+                                    # DEFECT, not the leaf weighting ADR-0084 Amendment B point 3
+                                    # diagnosed: `_opponent_target_rows` returned None mid-sim, and
+                                    # `deny_relevance_best` could not express absence, so the fire
+                                    # rung read the dataclass default as a measured whiff. Three
+                                    # frames moved, each by exactly `_PLANNER_SURVIVAL_W` 50.0.
+                                    # Fixed, then armed; all three bars cleared at `baed389` vs
+                                    # baseline `a8da62d` — Discrimination Gate PASS with the fix in
+                                    # and flags OFF (0 picks moved, which is what makes the armed run
+                                    # attributable), Discrimination Gate PASS armed (0 unruled,
+                                    # 0 ruled), Decision Gate PASS armed (372 frames, agree
+                                    # 250/346 -> 250/346, 0 picks moved). What ALSO clears:
                                     # `_DENIAL_BENCH`'s retirement to the promotion gate, with 0 sign
                                     # changes over 21 Hammer-ruled frames and **0 decision flips over
                                     # 331 corpus frames at the real `decide()`** — the retest decision

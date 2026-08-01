@@ -109,3 +109,42 @@ def test_opponent_target_shadow_ranks_bodies_and_decides_nothing():
     # mid-sim → sparse (no shadow work in rollouts)
     p._planning = True
     assert p._opponent_target_shadow(obs, board) is None
+
+
+def test_the_live_rows_run_mid_sim_while_only_the_SHADOW_stands_down():
+    """ADR-0093 decision 3 — where the `_planning` guard belongs.
+
+    `_opponent_target_rows` is the LIVE per-body computation that both the deny fire rung and the
+    `gust_target` slot emission read. It used to early-return `None` mid-sim alongside the three
+    diagnostics, which made the agent evaluate a different policy inside its own rollout than
+    outside it — the third confirmed source of continuation collateral here (ADR-0072 finding 2,
+    ADR-0070 amendment H, Issue #228). Measured cost of that: the armed deny rung returned 0.00
+    mid-sim where the incumbent returned -5.00 / +22.50 / +74.50.
+
+    The guard was a COST decision, not a correctness one — nothing in the rows starts a nested
+    engine search. It now sits on `_opponent_target_shadow`, which is the caller that actually wants
+    no shadow work in rollouts, and this test pins BOTH halves so the two cannot drift back
+    together."""
+    from train.tune import _build_pilot
+    p = _build_pilot("mega_lucario")[0]
+    obs = {"current": {"yourIndex": 0, "players": [
+        {"active": [{"id": 999999, "hp": 100, "energies": []}]},
+        {"active": [{"id": 678, "hp": 340, "energies": []}],
+         "bench": [{"id": 677, "hp": 70, "energies": []}]},
+    ]}}
+    board = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3)
+
+    p._planning = False
+    root = p._opponent_target_rows(obs, board)
+    assert root is not None and root[1], "the fixture must produce rows at the root"
+
+    p._planning = True
+    mid = p._opponent_target_rows(obs, board)
+    assert mid is not None, "the LIVE rows must survive the rollout"
+    assert [r["value"] for r in mid[1]] == [r["value"] for r in root[1]], (
+        "and must value each body identically inside the rollout and outside it")
+
+    # the DIAGNOSTIC still stands down — the guard moved, it was not deleted
+    p._opponent_target_cache = None
+    assert p._opponent_target_shadow(obs, board) is None, (
+        "no shadow work in rollouts — the guard belongs on the shadow, not on the live rows")

@@ -47,7 +47,7 @@ from common.strategy.combat import (Budget, _EFFICIENCY,  # noqa: E402  (re-used
 from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
-from common.strategy.denial import coin_odds, denial_value  # noqa: E402  (ADR-0062 energy denial)
+from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 energy denial)
 # A shuffle-refresh moves cards in four directions and they are NOT worth the same per card. Pricing
 # them symmetrically is what broke the guard family on the first cut: a per-card credit for cards I
 # DRAW reached +76 and went straight through `hold-wincon-dont-shuffle` (−25),
@@ -118,22 +118,6 @@ _HAND_READINESS_CAP = 40.0
 # the damage was tie-splits, not magnitude — so the ε only helps once the VALUATION is right (N5d).
 _HAND_TIEBREAK_W = 0.0001
 _HAND_TIEBREAK_CAP = 0.02
-_DENIAL_BENCH = 0.25       # ADR-0062: discount on stripping a BENCHED body. Crushing Hammer targets ANY
-                           # of their Pokémon (card text + engine), but a benched body must be PROMOTED
-                           # before the denial bites AND they get a turn in between to simply re-attach —
-                           # an Active strip is spent immediately, a bench strip is easily undone. The
-                           # bound is DERIVED, not tuned to taste: ms f29 (bench, 70) must hold while
-                           # ms f15 (Active, 30) must play, which forces bench weight < 30/70 = 0.43.
-                           # ⚠️ OFF-PATH ONLY since ADR-0084 decision 5. Its stated premise above is
-                           # REFUTED by the rules: retreat is an ordinary turn action (rules.md §2)
-                           # paid in Energy discard and attacking ends the turn, so retreat-then-attack
-                           # is legal in ONE turn — a benched attacker owes Energy, never tempo
-                           # (ADR-0071 decision 6, `combat._promotion_open`). The ARMED fire rung and
-                           # target pick both read the boolean gate instead. Kept live here and in
-                           # `_opp_denial_best` so the ADR-0062 derivation is not deleted and the
-                           # OFF-vs-ARMED diff still works (tracker Issue #136 build rule 11).
-                           # Measured: 0 sign changes over 21 Hammer-ruled frames, and 0 decision
-                           # flips over 331 corpus frames at the real `decide()`.
 _DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLACES `play-energy-denial`'s
                            # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
                            # off a benched body. Same lesson as ADR-0060: price the quantity, don't
@@ -158,18 +142,29 @@ _DENIAL_TARGET_W = 1.0     # points per damage-point denied, at the DISCARD_ENER
 #: that relevance is a [0,1] scalar. **DERIVED, not chosen** — it is exactly the normalizer relevance
 #: was divided by, so `K x relevance == the setback damage` and the armed fire rung is a strict
 #: GENERALISATION of the incumbent's own arithmetic rather than a re-scaling of it. There is no free
-#: parameter here: pin it to anything else and the two instruments stop agreeing.
+#: parameter here: pin it to anything else and `K x relevance` stops being a damage figure at all.
 #:
-#: Measured on the ADR-0062 anchors, the identity reproduces the incumbent to the cent where the
-#: readings coincide, and diverges only upward where relevance sees a setback `_denial_at` cannot —
-#: **f12 +55.0 vs +22.50, f26 +16.25 vs +1.25**, same sign, same decision, strictly better informed.
+#: Measured on the ADR-0062 anchors AT ISSUE #187, the identity reproduced the incumbent to the cent
+#: where the readings coincided, and diverged only upward where relevance saw a setback `_denial_at`
+#: could not — **f12 +55.0 vs +22.50, f26 +16.25 vs +1.25**, same sign, same decision, strictly
+#: better informed.
+#: ⚠️ That comparison is the DERIVATION RECORD, not a live cross-check, and **both armed figures have
+#: since moved** — do not read them as current. f12 now prices +22.50 (ADR-0084 Amendment A applied
+#: the mandated `_DENIAL_FORWARD` discount to the armed read, which had been crediting the forward
+#: form at double) and f26 now prices +95.00 (decision 5 dropped the bench weight in favour of the
+#: promotion gate). Issue #228 then armed the flag and DELETED the ADR-0062 magnitude rung
+#: (`opp_denial_best` / `_denial_at`), so there is no second instrument left to compare against at
+#: all. K stays pinned to the normalizer for the reason it was derived — it cancels the division
+#: relevance performs — and that is now the only thing holding it. The live pin is
+#: `test_deny_relevance_consumer.py::test_the_fire_factor_is_the_normalizer_so_it_prices_in_damage_units`.
 #:
 #: ⚠️ **The witness moved (ADR-0084 decision 8).** This note used to cite f21/f29's benched Dragapult
 #: ex pricing **-1.25 on both**. That figure was `70 x _DENIAL_BENCH`, and decision 5 retired the
-#: constant from this rung in favour of ADR-0071's promotion GATE. On that board the gate SHUTS (their
-#: Terapagos ex holds 0 Energy against retreat cost 2, and no switch survives the read), so the bench
-#: carries no weight, `deny_relevance_best` is 0, and the rung takes its whiff branch at **0.00** —
-#: same decision, different number. f12 and f26 are the surviving witnesses; f21/f29 now witness the
+#: constant from this rung in favour of ADR-0071's promotion GATE (Issue #228 then deleted the
+#: constant outright with the rest of the OFF path). On that board the gate SHUTS (their Terapagos ex
+#: holds 0 Energy against retreat cost 2, and no switch survives the read), so the bench carries no
+#: weight, `deny_relevance_best` is 0, and the rung takes its whiff branch at **0.00** — same
+#: decision, different number. f12 and f26 are the surviving witnesses; f21/f29 now witness the
 #: GATE instead. K itself is untouched: decision 5 changed an area WEIGHT, which multiplies outside
 #: this normalizer, so there was never a free parameter here to re-derive.
 #:
@@ -188,10 +183,12 @@ _DENIAL_UNFAVORED = 0.3    # Lever A (ADR-0026), as a MULTIPLIER on the priced d
                            # is tiered ahead of everything. A booster must scale the oracle, never add to it.
                            # RE-EXPRESSED ON RELEVANCE (user ruling 2026-07-30, ADR-0080 Amendment B): its
                            # SUBJECT is now "deny's value, whichever instrument supplies it" rather than
-                           # "the priced denial magnitude". It multiplies the whole product on both paths,
-                           # so it is scale-invariant — a 30% amplification is 30% whether the term it
-                           # scales is a damage figure or `K x relevance`, and the f17 discipline survives
-                           # verbatim (relevance 0 -> 0, so it still cannot resurrect a whiff).
+                           # "the priced denial magnitude". It multiplies the whole product, so it is
+                           # scale-invariant — a 30% amplification is 30% whether the term it scales is a
+                           # damage figure or `K x relevance`, and the f17 discipline survives verbatim
+                           # (relevance 0 -> 0, so it still cannot resurrect a whiff). Since Issue #228
+                           # deleted the ADR-0062 magnitude rung, `K x relevance` is the ONLY term it
+                           # scales; the scale-invariance argument is what made that deletion safe.
                            # ADR-0078 decision 6 had retired this outright, on the grounds that it and
                            # `needs.phase_scale` "say the same thing multiplicatively". That retirement is
                            # **WITHDRAWN**: under ADR-0080 deny reads `phase_scale` on NO surface, so the
@@ -497,23 +494,32 @@ class Board:
     stall_target_is_keystone: bool = False  # that stall target is opponent's KEY attacker (an ex /
                                        # Mega ex) — stranding their win-condition Active is high-value
                                        # disruption, worth the Supporter over a redundant dig (ADR-0022)
-    opp_denial_best: float = 0.0       # ADR-0062: the most damage a single Energy discard could take away
-                                       # from ANY of their Pokémon (Crushing Hammer targets Active OR Bench;
-                                       # bench discounted by `_DENIAL_BENCH`). 0 = every energized body either
-                                       # holds SURPLUS Energy (strip it and they still afford the same attack)
-                                       # or cannot pay an attack at all — the Hammer is a whiff, HOLD it.
-                                       # RETIRING: armed `deny_relevance` reads the fields below instead
-                                       # (ADR-0080, Issue #187). Kept live for the OFF path so the two
-                                       # readings diff on one board rather than across commits.
-    deny_relevance_best: float = 0.0   # **Deny Relevance** (ADR-0080, Issue #187): the best relevance
-                                       # achievable anywhere on their board, in [0,1]. 0 = no Energy is
+    deny_relevance_best: float | None = None
+                                       # **Deny Relevance** (ADR-0080, Issue #187): the best relevance
+                                       # achievable anywhere on their board, in [0,1]. 0.0 = no Energy is
                                        # doing work worth denying (no Energy at all, surplus Energy, or
                                        # the only live body dies to my Knock Out this turn) — HOLD.
                                        # Replaces `opp_denial_best` on the fire-now rung when armed.
-    deny_relevance_rows: tuple = ()    # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
+                                       # **`None` means ABSENT, not zero** (ADR-0093 decision 2;
+                                       # `CONTEXT.md`, ABSENT is not ZERO): the read is OFF, or this
+                                       # board never went through `_board()`. The default was `0.0`
+                                       # until Issue #228, which made absence indistinguishable from a
+                                       # measured whiff — and mid-sim absence was routine, so the fire
+                                       # rung declined strips worth +22.50 and +74.50. A `None` fails
+                                       # CLOSED to a RECOMPUTE (`_deny_relevance_best`'s ladder),
+                                       # never to a whiff — it used to fall back to `opp_denial_best`,
+                                       # which Issue #228 deleted along with the rest of that oracle.
+    deny_relevance_rows: tuple | None = None
+                                       # per-body `(area, bi, {EnergyType: relevance}, strip_shift)` —
                                        # what the TARGET pick ranks on, plus the ADR-0084 clock DELTA
                                        # its lexicographic tiebreak reads (None when `deny_strip_delta`
-                                       # is off — absence, NOT a measured zero). One row set, so the
+                                       # is off — absence, NOT a measured zero). `None` on the
+                                       # FIELD is the same distinction one level up: not
+                                       # measured, versus measured and empty (Issue #228
+                                       # applied it to `deny_relevance_best`; it is the same
+                                       # rule here). Consumers already re-compute on falsy,
+                                       # so this is a typing correction, not a behaviour
+                                       # change. One row set, so the
                                        # rank and its tiebreak can never drift apart.
                                        # Keyed by TYPE, never by position: a
                                        # `DISCARD_ENERGY` option's `energyIndex` indexes attached CARDS
@@ -1998,7 +2004,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
                     + self._grab_refresh_draw_tactical(board, ctx)
-                    + self._denial_play_tactical(board, ctx)
+                    + self._denial_play_tactical(obs, board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_relevance_tactical(obs, select, board, option, ctx)
                     + self._snipe_brief_tiebreak(obs, select, board, option, ctx)
@@ -3976,9 +3982,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # ADR-0062 DAMAGE swing ~140; whether to FIRE the strip is a line evaluation the play-side
         # gust rungs own, not a keep price) and GRADED by the body's visible turns-to-ready
         # (`needs.deny_slot` — a ready threat's strip is worth its full card tier, a far-off one
-        # discounts; the 86091435-68 ruling with timing). The ADR-0062 oracle (`_denial_at`) is now
-        # a GATE only: `> 0` = the strip BITES this body (it has energy to strip / is worth reaching),
-        # and a KO-able Active denies nothing (`active_can_ko` drop, consumed intact). Eligibility
+        # discounts; the 86091435-68 ruling with timing). The ADR-0062 oracle (`_denial_at`) was a
+        # GATE only here — `> 0` = the strip BITES this body — and Issue #228 deleted it: relevance
+        # > 0 SUBSUMES that gate (it is already 0 for a bare body, for surplus Energy and for one
+        # dying to my KO this turn, the `active_can_ko` drop consumed intact). Eligibility
         # routes through the SUPPLIES net: any held row carrying a deny-supplying tag
         # (gust / energy_denial). Fail-closed everywhere: no deny-capable row, no opponent read,
         # unknown stats (`_opp_turns_to_ready` → None) or a strip that bites nothing → NO slot —
@@ -4005,7 +4012,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # is the only term pricing WHEN the threat lands. Per-body rather than a board-level max, so
         # each body keeps its own deadline; the DP then picks the best assignment, which is the max.
         deny_rel = self._deny_relevance_map(obs, board) if self.deny_relevance else {}
-        if deniers:
+        if deniers and self.deny_relevance:
             state = obs.get("current") or {}
             players = state.get("players") or []
             yi = state.get("yourIndex", 0)
@@ -4015,16 +4022,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 areas.insert(0, ("active", (opp or {}).get("active") or []))
             for area, bodies in areas:
                 for bi, p in enumerate(bodies):
-                    if self.deny_relevance:
-                        # relevance > 0 SUBSUMES the ADR-0062 bite gate: it is already 0 for a body
-                        # with no Energy, for surplus Energy, and for one dying to my KO this turn.
-                        value = deny_tier * max((deny_rel.get((area, bi)) or {}).values(), default=0.0)
-                        if not p or value <= 0:
-                            continue
-                    else:
-                        if not p or self._denial_at(p) <= 0:   # the strip must BITE this body (oracle as
-                            continue                           # a GATE, its damage magnitude discarded)
-                        value = deny_tier
+                    # relevance > 0 SUBSUMES the ADR-0062 bite gate: it is already 0 for a body
+                    # with no Energy, for surplus Energy, and for one dying to my KO this turn. The
+                    # OFF branch here read `_denial_at` as that gate; both are DELETED (Issue #228,
+                    # directive 1) and OFF now emits no deny slot at all — degraded, not a rollback.
+                    value = deny_tier * max((deny_rel.get((area, bi)) or {}).values(), default=0.0)
+                    if not p or value <= 0:
+                        continue
                     t = self._opp_turns_to_ready(p)
                     if t is None:
                         continue               # unknown stats — fail closed, no deny slot
@@ -4041,11 +4045,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if self.gust_target_slots:
             gusters = [k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])]
             if gusters:
-                result = getattr(self, "_opponent_target_cache", None)
-                if result is None:
-                    result = self._opponent_target_rows(obs, board)
-                if result is not None:
-                    _phase, target_rows = result
+                # ONE ladder, `_deny_rows` — this used to open-code the cache-or-compute walk, a
+                # second spelling of the same three lines. Issue #228 extracted
+                # `_best_area_weighted_relevance` for
+                # exactly that reason and would have left this copy behind.
+                target_rows = self._deny_rows(obs, board)
+                if target_rows:
                     for r in target_rows:
                         if r["area"] != "bench" or r["value"] <= 0:
                             continue           # off-area, or a removal that isn't worth anything
@@ -5487,65 +5492,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         best = max(aids, key=self._attack_damage)
         return same == best
 
-    def _attacks_of(self, cid: int | None) -> dict:
-        """``{attack_id: (cost, damage)}`` for a card id — the denial oracle's view of a body."""
-        st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if st is None:
-            return {}
-        return {aid: (self._attack_cost(aid), self._attack_damage(aid))
-                for aid in (getattr(st, "attacks", None) or ())}
-
-    def _denial_at(self, p: dict | None) -> float:
-        """Damage this Pokémon loses if ONE Energy is discarded from it (ADR-0062). 0 when the Energy
-        is surplus (it still affords the same attack) or when it could not pay an attack anyway.
-
-        Measured against the body's own attacks AND, discounted by `_DENIAL_FORWARD`, against what it
-        EVOLVES INTO. "Evolving keeps attached cards" (rules.md:98), so Energy on a pre-evolution is
-        being BANKED, not spent: a Riolu holds {F} for Mega Lucario ex's Aura Jab (130), not for its
-        own Accelerating Stab (30). Pricing only the current form under-values every strip aimed at a
-        line under construction — which is exactly where a Hammer earns its keep (ms 82225643 f12).
-
-        The forward credit is DISCOUNTED, never taken at face value: the payoff is a turn away (they
-        must evolve first) and contingent (they must actually hold the evolution). Un-discounted it
-        resurrects a CRITICAL (dragapult 85046350 f32 — a Gabite's Garchomp prices the strip at 100)."""
-        cid = (p or {}).get("id")
-        if cid is None or self.stats is None:
-            return 0.0
-        energy = len((p or {}).get("energies") or [])
-        now = denial_value(energy, self._attacks_of(cid))
-        forward = 0
-        for fwd in self._forward_card_ids(cid):
-            forward = max(forward, denial_value(energy, self._attacks_of(fwd)))
-        return float(max(now, _DENIAL_FORWARD * forward))
-
-    def _opp_denial_best(self, opp: dict | None, active_doomed: bool = False) -> float:
-        """The most damage a single Energy discard could take away from ANY of their Pokémon —
-        Active OR Bench, because that is what the card says and what the engine offers (Crushing
-        Hammer: "discard an Energy from 1 of your opponent's Pokémon"; `op_trash_energy_enemy` builds
-        its options from ACTIVE + BENCH). A benched body must still be promoted before the denial
-        bites, so it is discounted, not ignored — a bench-loading opponent used to make us stand down
-        entirely, leaving 4 Hammers dead in hand all game.
-
-        `active_doomed` (I can already KO their Active this turn) drops the ACTIVE from the max — it
-        does NOT blank the board. Stripping Energy off a body that is about to die denies nothing; a
-        benched body banking Energy is untouched by that fact. Hammer the bench, then take the KO
-        (ms 82748422 f26: the old stand-down zeroed the whole board and left a benched Mega Starmie ex
-        sitting on 3 Energy unmolested).
-
-        0 means every energized body is either holding SURPLUS Energy, cannot pay an attack, or is
-        already dead: there is nothing to deny and the Hammer should be HELD."""
-        if not opp:
-            return 0.0
-        best = 0.0
-        tiers = [(_DENIAL_BENCH, opp.get("bench") or [])]
-        if not active_doomed:
-            tiers.insert(0, (1.0, opp.get("active") or []))
-        for weight, bodies in tiers:
-            for p in bodies:
-                if p:
-                    best = max(best, weight * self._denial_at(p))
-        return best
-
     def _opp_turns_to_ready(self, p: dict | None) -> int | None:
         """The Round-3 ruled basic lookahead of ONE opponent in-play body, from VISIBLE facts only
         (thread 2, the deny-slot deadline): `needs.turns_to_ready` over
@@ -5576,19 +5522,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return (board.matchup_coverage >= _POSTURE_MIN_COVERAGE
                 and board.favorability <= _POSTURE_UNFAVORED)
 
-    def _denial_play_tactical(self, board: Board, ctx) -> float:
+    def _denial_play_tactical(self, obs: dict, board: Board, ctx) -> float:
         """Value of PLAYING an energy-denial Item (ADR-0062): what the strip actually takes away,
         priced by its odds, net of keeping the card.
 
             coin_odds(card) * _DENIAL_PLAY_W * (unfavored?) * value  -  _DENIAL_ITEM_COST
 
-        where ``value`` is `K x relevance` when `deny_relevance` is armed (ADR-0080, Issue #187) and
-        the ADR-0062 damage magnitude `opp_denial_best` when it is OFF.
+        where ``value`` is `K x relevance` (ADR-0080, Issue #187). It was the ADR-0062 damage
+        magnitude `opp_denial_best` until Issue #228 armed the flag and deleted that oracle; OFF now
+        stands the rung down entirely — DEGRADED MODE, never a rollback.
 
-        Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy,
-        no affordable attack, or the only energized body is one I am about to KO) prices at 0 and is
-        held; `_finish_turn_last` tiers a free Item ahead of everything, so declining one REQUIRES a
-        non-positive score. Half of all Crushing Hammers do nothing whatever the board looks like, so
+        Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy, no affordable
+        attack, or the only energized body is one I am about to KO) still pays the keep price and so
+        prices at **-`_DENIAL_ITEM_COST`**, which DECLINES. It used to short-circuit to a bare 0.0,
+        and this docstring used to claim that "prices at 0 and is held" — it did not: `_finish_turn_last`
+        promotes only on `score > 0`, so a 0.0 free Item landed in the last tier TIED with End and
+        stable score order played it by option index (Issue #228; the asymmetry ADR-0084 decision 8
+        knowingly handed forward). Declining REQUIRES a STRICTLY negative score, not merely a
+        non-positive one. Half of all Crushing Hammers do nothing whatever the board looks like, so
         the coin is priced here rather than absorbed into a tuned constant.
 
         The unfavored Read (Lever A) SCALES this value and is never added beside it — see
@@ -5599,11 +5550,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # ARMED (ADR-0080, Issue #187): `K x relevance` replaces the damage magnitude. Same SHAPE —
         # odds x weight x value - keep price — so the whiff hold, the Lever A scaling and the
         # `_finish_turn_last` interaction all survive unchanged; only what supplies "value" moves.
-        value = (_DENY_RELEVANCE_K * board.deny_relevance_best if self.deny_relevance
-                 else board.opp_denial_best)
-        if not value:
-            return 0.0                                  # nothing to deny — hold it (whiff)
+        if not self.deny_relevance:
+            return 0.0          # DEGRADED MODE, never a rollback — see the flag's note in runtime.py
+        # `None` on the Board is ABSENT, not zero (ADR-0093 decision 2), so it is RECOMPUTED
+        # rather than read as a whiff. A genuine 0.0 survives the ladder and is a real hold.
+        value = _DENY_RELEVANCE_K * self._deny_relevance_best(obs, board)
         weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
+        # NO whiff short-circuit. A `value` of 0 is a real read saying "nothing here", and it must
+        # still pay the keep price: `odds x weight x 0 - _DENIAL_ITEM_COST` = -10.0, which DECLINES.
+        # Returning a bare 0.0 here did not — `_finish_turn_last` promotes only on `score > 0`, so a
+        # 0.0 free Item landed in the last tier TIED with End and stable score order played it by
+        # option index. The OFF path escaped that by arithmetic accident (its magnitude is rarely
+        # exactly 0 while the card is playable); a categorical [0,1] scalar is 0 routinely and by
+        # design, which is what turned a latent contract violation into a live defect at arming time.
         return coin_odds(ctx.card_id) * weight * value - _DENIAL_ITEM_COST
 
     def _denial_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
@@ -5615,9 +5574,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         on a benched support mon while their Active sat one Energy above its nuke. That is the literal
         waste. Score each option by what removing it actually denies.
 
-        The DOOMED Active scores 0 here for the same reason it is dropped from `_opp_denial_best`:
-        Energy on a body I am about to knock out is not worth taking. A won flip should land on the
-        bench instead of shaving a corpse.
+        The DOOMED Active scores 0 here for the same reason Deny Relevance's redundancy gate zeroes
+        its row: Energy on a body I am about to knock out is not worth taking. A won flip should land
+        on the bench instead of shaving a corpse.
 
         ARMED (ADR-0080, Issue #187) this is a **pure `argmax relevance`**, scored per OPTION rather
         than per body — which is what makes the within-body rulings expressible at all: on a Munkidori
@@ -5640,21 +5599,21 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             bench = opp.get("bench") or []
             idx = option.get("index", -1)
             target = bench[idx] if 0 <= idx < len(bench) else None
-            # ARMED: no area weight at all — a PURE `argmax relevance` (user ruling, 2026-07-30).
-            # `_DENIAL_BENCH` stays live on the OFF path (and in `_opp_denial_best`), so the ADR-0062
-            # derivation is not deleted, only unread while armed: relevance already prices a benched
-            # body's slower clock through its own line scan, so discounting it again double-counts.
-            weight = 1.0 if self.deny_relevance else _DENIAL_BENCH
+            # No area weight at all — a PURE `argmax relevance` (user ruling, 2026-07-30). Relevance
+            # already prices a benched body's slower clock through its own line scan, so discounting
+            # it again double-counts. `_DENIAL_BENCH` was the OFF-path weight here and is DELETED
+            # (Issue #228, directive 1); the promotion GATE carries its question on the fire rung.
+            weight = 1.0
             key = ("bench", idx)
         else:
             return 0.0
-        if self.deny_relevance:
-            etype = self._option_energy_type(target, option)
-            rel_map = self._deny_relevance_map(obs, board)
-            rel = (rel_map.get(key) or {}).get(etype, 0.0)
-            base = _DENIAL_TARGET_W * weight * _DENY_RELEVANCE_K * rel
-            return base + self._deny_strip_delta_tiebreak(obs, board, select, key, rel, rel_map)
-        return _DENIAL_TARGET_W * weight * self._denial_at(target)
+        if not self.deny_relevance:
+            return 0.0          # DEGRADED MODE, never a rollback — see the flag's note in runtime.py
+        etype = self._option_energy_type(target, option)
+        rel_map = self._deny_relevance_map(obs, board)
+        rel = (rel_map.get(key) or {}).get(etype, 0.0)
+        base = _DENIAL_TARGET_W * weight * _DENY_RELEVANCE_K * rel
+        return base + self._deny_strip_delta_tiebreak(obs, board, select, key, rel, rel_map)
 
     def _deny_strip_delta_tiebreak(self, obs: dict, board: Board, select: dict, key,
                                    rel: float, rel_map: dict) -> float:
@@ -6750,7 +6709,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             attach_from_concentrate_slot=self._attach_from_concentrate_slot(me, select),
             stall_target_exists=self._stall_target_exists(opp),
             stall_target_is_keystone=self._stall_target_is_keystone(opp),
-            opp_denial_best=self._opp_denial_best(opp, self._active_can_ko(ma, oa)),
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
             opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
             opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
@@ -6818,37 +6776,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # The three deny surfaces read these fields; none re-scores a body, so the ADR-0076
             # Amendment C "resolved once per decision" promise covers deny too.
             _rel_rows = self._opponent_target_cache[1]
-            # AREA-WEIGHTED, and deliberately so. The 2026-07-30 ruling dropped `_DENIAL_BENCH` from
-            # the TARGET pick (surface c), where relevance already prices a benched body's own line
-            # and a second discount would double-count. It does NOT apply to the FIRE decision:
-            # ADR-0062 *derived* `_DENIAL_BENCH = 0.25` from precisely this rung's f29 bound
-            # (`17.5 -> -1.25`), so dropping it here would delete that derivation and start firing
-            # Hammers at benched bodies the corpus rules against (measured: ms f21 flips to playing
-            # the Hammer the human ruled against). Spending the card and choosing its target are two
-            # decisions and only one of them prices the promotion delay.
-            # ...and the AFFORDABLE reading, not the full one: spending the card prices only what
+            # The AREA weighting and its ADR-0084 decision-5 derivation now live on
+            # `_best_area_weighted_relevance`,
+            # so the ladder `_denial_play_tactical` reads and this per-decision build cannot drift.
+            # The reading is the AFFORDABLE one, not the full one: spending the card prices only what
             # they can do NOW (ADR-0080 Amendment B). Measured on the four ADR-0062 anchors, this is
             # what keeps all four signs: f21/f29 hold (-6.50), f12 plays (+16.00), f26 plays (+0.50).
             # Full relevance here fires on f21/f29 (+2.50) off an unaffordable Phantom Dive.
-            # ADR-0084 decision 5: the bench AREA WEIGHT is the ADR-0071 decision 6 promotion GATE,
-            # not `_DENIAL_BENCH`. `_DENIAL_BENCH`'s own premise — "a benched body must still be
-            # promoted before the denial bites" — is refuted by the rules: retreat is an ordinary
-            # turn action (rules.md §2) paid in Energy discard, and attacking ends the turn, so
-            # retreat-then-attack is legal in ONE turn. A benched attacker owes Energy, never tempo.
-            # So the honest reading is boolean: a benched body counts FULLY when promotion is open
-            # and NOT AT ALL when it is shut — which on ms f21/f29 is stricter than the 0.25 it
-            # replaces (their Active holds 0 Energy against retreat cost 2 and no switch survives
-            # the read, so the gate SHUTS and the rung takes its whiff branch). Measured over all 21
-            # Hammer-ruled corpus frames: ZERO sign changes vs the constant
-            # (ADR-0084, via `deny_gate217.py` at commit `809c6d5`; the probe itself was deleted by
-            # Issue #243 once its question was answered). `_DENIAL_BENCH` stays live on the OFF path.
-            _opp_bodies = [b for b in ([oa] if oa else []) + list(opp.get("bench") or []) if b]
-            promotion_open = bool(_opp_bodies) and self.combat._promotion_open(
-                _opp_bodies, oa, switch_enabler=self._opp_switch_enabler())
-            board.deny_relevance_best = max(
-                (r.get("relevance_fire", 0.0) * (1.0 if r["area"] == "active"
-                                                 else (1.0 if promotion_open else 0.0))
-                 for r in _rel_rows), default=0.0)
+            board.deny_relevance_best = self._best_area_weighted_relevance(_rel_rows, opp, oa)
             board.deny_relevance_rows = tuple(
                 (r["area"], r["bi"], dict(r.get("relevance_by_type") or {}), r.get("strip_shift"))
                 for r in _rel_rows)
@@ -8090,10 +8025,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Returns ``(phase, rows)``; each row carries the raw ``body`` dict, its ``area``
         (``"active"``/``"bench"``) and within-area index ``bi`` (the deny-slot key convention), plus
-        ``id``/``prize``/``survival_shift``/``value``. None when sparse: mid-sim (`self._planning`),
-        no live my Active, or no opponent in-play bodies."""
-        if getattr(self, "_planning", False):
-            return None
+        ``id``/``prize``/``survival_shift``/``value``. None when sparse: no live my Active, or no
+        opponent in-play bodies.
+
+        **Runs MID-SIM** (ADR-0093 decision 3). It used to early-return `None` under the
+        planner's `_planning` reentrancy flag, alongside the three SHADOWS — but this is the LIVE
+        computation both the deny fire rung and the `gust_target` slot emission read, not a
+        diagnostic, and withholding it mid-sim made the agent evaluate a different policy inside its
+        own rollout than outside it. That is the third confirmed source of continuation collateral
+        in this repo (ADR-0072 finding 2, ADR-0070 amendment H, Issue #228). The guard was a COST
+        decision, not a correctness one — nothing below starts a nested engine search; `turns_to_ko_me`
+        is the closed-form S1 curve. It now lives on `_opponent_target_shadow`, which is the caller
+        that genuinely wants no shadow work in rollouts."""
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -8140,6 +8083,48 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     brief_ids=getattr(board, "brief_threat_ids", ()) or ()))
             rows.append(row)
         return phase, rows
+
+    def _best_area_weighted_relevance(self, rel_rows, opp: dict | None,
+                                      oa: dict | None) -> float:
+        """The best relevance achievable anywhere on their board — `Board.deny_relevance_best`.
+
+        AREA-WEIGHTED, and deliberately so. The 2026-07-30 ruling dropped `_DENIAL_BENCH` from the
+        TARGET pick (surface c), where relevance already prices a benched body's own line scan; it
+        did NOT drop the question this rung asks, which is whether that benched body can REACH the
+        Active position at all. ADR-0084 decision 5 answered it with ADR-0071's promotion GATE rather
+        than a flat discount: a bench row counts in full when the gate is open and not at all when it
+        is shut. Measured over all 21 Hammer-ruled corpus frames: ZERO sign changes vs the constant.
+
+        Extracted from `_board()` by Issue #228 so the ladder below and the per-decision build share
+        ONE definition — a second spelling of "which rows count, and how much" is exactly the drift
+        that put a whiff and an absent read at the same value in the first place."""
+        bodies = [b for b in ([oa] if oa else []) + list((opp or {}).get("bench") or []) if b]
+        promotion_open = bool(bodies) and self.combat._promotion_open(
+            bodies, oa, switch_enabler=self._opp_switch_enabler())
+        return max((r.get("relevance_fire", 0.0) * (1.0 if r["area"] == "active"
+                                                    else (1.0 if promotion_open else 0.0))
+                    for r in rel_rows), default=0.0)
+
+    def _deny_relevance_best(self, obs: dict, board: Board) -> float:
+        """`Board.deny_relevance_best`, cached-or-computed — the fire rung's value.
+
+        The SAME cache-or-compute ladder `_deny_relevance_map` and `_deny_strip_shift_map` carry, and
+        for the same stated reason: *without the fallback an armed hand-built board would emit no
+        deny read and score as a whiff, which is a silent behaviour change rather than a fail-closed
+        one.* This surface was the one of the three that lacked it (Issue #228), and it is the one
+        that moved three Discrimination Gate frames.
+
+        A `None` on the Board means ABSENT, never a measured zero, so it must never be read as one —
+        it is recomputed here instead. A genuine 0.0 (no Energy doing work, surplus Energy, or the
+        only live body dies to my KO this turn) survives the ladder unchanged and is a real HOLD."""
+        if board.deny_relevance_best is not None:
+            return board.deny_relevance_best
+        state = obs.get("current") or {}
+        players = state.get("players") or []
+        yi = state.get("yourIndex", 0)
+        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
+        oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
+        return self._best_area_weighted_relevance(self._deny_rows(obs, board), opp, oa)
 
     def _deny_relevance_map(self, obs: dict, board: Board) -> dict:
         """``{(area, bi): {EnergyType: relevance}}`` — the resolved Deny Relevance read, per body.
@@ -8635,7 +8620,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         decision computes the per-body simulation once and shares it with the live `gust_target`
         slot emission; falls back to a fresh compute when called directly (off a hand-built `board`
         that never went through `_board()`, as the existing shadow tests do) — `_board()` always
-        runs first in a real decision, so the cache is never stale by the time this reads it."""
+        runs first in a real decision, so the cache is never stale by the time this reads it.
+
+        Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) — the guard
+        `_opponent_target_rows` used to carry for everyone. It belongs HERE, on the diagnostic, and
+        not on the live row computation two live instruments read (ADR-0093 decision 3). Same
+        placement as `_threat_shadow` and `_recur_shadow`."""
+        if getattr(self, "_planning", False):
+            return None
         result = getattr(self, "_opponent_target_cache", None)
         if result is None:
             result = self._opponent_target_rows(obs, board)

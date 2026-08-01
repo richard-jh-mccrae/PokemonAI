@@ -51,9 +51,34 @@ def attack_opt(attack_id: int) -> dict:
     return {"type": ATTACK, "attackId": attack_id}
 
 
-def poke(cid: int, *, energy: int = 0, hp: int = 0, max_hp: int = 0) -> dict:
-    """A Pokémon on the board with `energy` energies attached."""
-    return {"id": cid, "serial": 0, "energies": [0] * energy, "energyCards": [],
+def poke(cid: int, *, energy: int = 0, hp: int = 0, max_hp: int = 0,
+         energy_card: int = 0) -> dict:
+    """A Pokémon on the board with `energy` energies attached.
+
+    `energy_card` is the **card id** of the Energy attached `energy` times — NOT an EnergyType code.
+    `energies` is a list of the attached Energy CARD IDS (`combat.attached_type_counts` and
+    `Pilot._relevance_terms` both resolve each entry through the Stat Provider to get its type), so
+    a test wanting a TYPED body passes the Basic Energy's card id here AND registers that card in
+    its `DictCardStatProvider`. Default 0 is the long-standing unresolvable placeholder: it counts
+    as an Energy UNIT but resolves to no type, which is all a count-only test ever needed, and it
+    leaves every existing caller byte-identical.
+
+    Set it when the test needs a typed read: Deny Relevance (armed since Issue #228) asks *which*
+    Energy is doing the work, matching the body's attached types against the attack's `energyTypes`
+    — where the deleted ADR-0062 magnitude oracle only counted Energy. An untyped body reads
+    relevance 0 there, so a Hammer on it is a whiff whatever else the board shows.
+
+    Never conflate the two numbers even though Basic Energy makes them coincide (Basic {F} Energy is
+    card id 6 and EnergyType.FIGHTING is 6, per `data/EN_Card_Data.csv` and `cg.api`): the coincidence
+    fails on the very next Energy a test reaches for — Ignition Energy is card id 17.
+
+    `energyCards` mirrors `energies` whenever a real card is named, because a `DISCARD_ENERGY`
+    option's `energyIndex` indexes attached CARDS while `energies` counts the units those cards
+    PROVIDE. It stays EMPTY for the untyped default, so no test gains a phantom card-0 attachment in
+    the stores that walk that stack (`deck_tracker`, `opponent_resources`, `option_equivalence`)."""
+    return {"id": cid, "serial": 0, "energies": [energy_card] * energy,
+            "energyCards": [{"id": energy_card, "serial": 0} for _ in range(energy)]
+                           if energy_card else [],
             "tools": [], "preEvolution": [], "hp": hp, "maxHp": max_hp}
 
 

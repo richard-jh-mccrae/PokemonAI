@@ -854,8 +854,10 @@ take?"* — it credits an attack they cannot afford yet, which is the point of t
 **affordable** reading (`affordable_relevance`) restricts the same scan to attacks the body can pay
 for as it stands, and is the only one the FIRE rung may read: crediting an unaffordable attack there
 spends a finite Item on a threat that has not arrived (measured — ms f21/f29 flips to playing the
-Hammer the human ruled against). The Brief sharpener and `_DENIAL_BENCH` likewise apply to the
-rank/keep side only; on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
+Hammer the human ruled against). The Brief sharpener likewise applies to the rank/keep side only
+(`_DENIAL_BENCH` did too, until Issue #228 deleted it with the rest of the ADR-0062 magnitude path —
+its QUESTION, whether a benched body can reach the Active position at all, survives as ADR-0071's
+promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
 is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
 strip Δ as deny's VALUE (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
@@ -1030,6 +1032,23 @@ either: `strip_shift > 0` reads as *"this strip does something"* but only measur
 my death by a whole turn or more"*, and the gap is 128 of 218 relevance-positive corpus rows wide
 (Issue #217, measured). Its one sound use is a LEXICOGRAPHIC TIEBREAK among options already equal on
 the primary read, where it orders without suppressing.
+
+**ABSENT is not ZERO, and a categorical instrument makes the difference bite** (Issue #228,
+2026-07-31; ADR-0093). `_opponent_target_rows` returns `None` **mid-sim** by design — the
+`_planning` reentrancy guard, `pilot.py:8095` — so every read off the per-decision
+`_opponent_target_cache` is *absent* inside a rollout, not zero. Any field typed to carry the read as
+a bare `float` with a `0.0` default silently converts that absence into a measured zero: armed,
+`deny_relevance_best` did exactly this and the fire rung whiffed on boards where the root read is
+correct to the cent (`K x relevance == opp_denial_best`, 10.0 / 65.0 / 130.0). The incumbent had no
+such hole only because `opp_denial_best` is computed unconditionally.
+
+Two rules follow. **One**, a read that can be absent is typed `| None` and every consumer
+distinguishes the cases — the same rule ADR-0084 decision 4 already states for `strip_shift`.
+**Two**, when a MAGNITUDE instrument is replaced by a CATEGORICAL one, every *"is it zero"* branch
+changes **frequency class**: a damage magnitude is rarely exactly 0 while the card is playable, a
+`[0,1]` relevance scalar is 0 routinely and by design. Behaviour that was safe only because zero was
+rare becomes a live defect on the day the instrument is armed. Check those branches before arming,
+not after.
 _Avoid_: turns_to_ready (the `needs.py` primitive both wrap — name the wrapper you mean), readiness
 clock (unqualified — whose?), treating the two as summable (they are raced, not added), calling
 `strip_shift` a clock or a deadline (it is a delta OF one — say strip Δ)

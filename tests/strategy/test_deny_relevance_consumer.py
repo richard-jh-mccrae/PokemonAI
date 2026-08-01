@@ -19,7 +19,15 @@ something the ADR's own decision-3 table left terser than the shipped code:
   1. the keep price KEEPS its `/2**t` turns-to-ready grade      — REQ-DENYREL-0024
   2. the target pick DROPS `_DENIAL_BENCH` (pure argmax)        — REQ-DENYREL-0023
   3. `_DENIAL_UNFAVORED` is RE-EXPRESSED on relevance, not retired — asserted in
-     `test_energy_denial_guards.py` on real captured frames, both instruments.
+     `test_energy_denial_guards.py` on real captured frames.
+
+Issue #228 then armed the flag and DELETED the ADR-0062 magnitude oracle it replaced
+(`Board.opp_denial_best`, `Pilot._opp_denial_best`, `Pilot._denial_at`, `_DENIAL_BENCH`) under the
+tracker's directive that *"rungs an equation replaces are DELETED, not suppressed"*. Several tests
+here used to draw their contrast by scoring the same board on both instruments; those now state the
+claim against the armed read alone, and each says so in its own docstring. OFF is **documented
+DEGRADED MODE, never a rollback** — every deny surface stands down, which is what
+`test_off_is_documented_DEGRADED_MODE_and_emits_ABSENT_not_a_measured_zero` pins.
 """
 from __future__ import annotations
 
@@ -37,7 +45,7 @@ HAMMER = 1120                              # Crushing Hammer (energy_denial, coi
 FIRE, PSYCHIC, FIGHTING, DARKNESS = 2, 5, 6, 7
 
 MAIN, DISCARD_ENERGY = 0, 30               # SelectContext
-PLAY, ENERGY = 7, 6                        # OptionType
+PLAY, ENERGY, END = 7, 6, 14               # OptionType
 ACTIVE, BENCH = 4, 5                       # AreaType
 
 
@@ -116,24 +124,45 @@ def test_the_fire_factor_is_the_normalizer_so_it_prices_in_damage_units():
     divided by, so that `K x relevance` is the setback DAMAGE and the armed fire rung prices in the
     same units the ADR-0062 magnitude rung did.
 
-    That identity is the whole reason the two instruments agree. Pinned as an identity rather than a
-    value so a future set re-deriving `MAX_ATTACK_DAMAGE` from the CSV carries K with it — a copied
-    literal would silently desynchronise the fire rung from the read.
+    That identity is the whole reason the instrument could REPLACE the magnitude rung rather than
+    re-scale it. Pinned as an identity rather than a value so a future set re-deriving
+    `MAX_ATTACK_DAMAGE` from the CSV carries K with it — a copied literal would silently
+    desynchronise the fire rung from the read.
 
-    The measured consequence, and the reason this matters: on f21/f29's benched Dragapult ex the
-    armed rung prices **exactly -1.25**, the same figure ADR-0062 derived `_DENIAL_BENCH` from and
-    ADR-0082 Amendment A re-verified. Any other K breaks that agreement (at 140 the same board prices
-    -6.50, still a hold but no longer the incumbent's own number)."""
+    **The witness moved twice (ADR-0084 decision 5, then Issue #228).** This used to price f21/f29's
+    benched Dragapult ex by hand at **-1.25**, the figure ADR-0062 derived `_DENIAL_BENCH` from. That
+    arithmetic went through the bench discount, which decision 5 retired from this rung in favour of
+    ADR-0071's promotion gate and Issue #228 then deleted outright — so there is no `_DENIAL_BENCH`
+    to multiply by any more, and on that board the gate SHUTS and the rung reads 0.00 (asserted in
+    `test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes`).
+
+    So the identity is pinned on a board that exercises it: their Active is a Mega Lucario ex sitting
+    on exactly the `{F}{F}` Mega Brave (270) needs, so the strip puts that nuke out of reach and the
+    rung must pay `coin x W x 270 - keep price` = 125.00. `K x relevance` reproduces 270 only if K IS
+    the normalizer — at any other value the by-hand figure and the rung part company, which is
+    exactly what this test is for. Card facts verified at data/EN_Card_Data.csv (MEG 77)."""
     from common.deny_relevance import MAX_ATTACK_DAMAGE
-    from common.pilot import _DENIAL_BENCH, _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.pilot import _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.strategy.denial import coin_odds
+
+    class _Ctx:
+        option_type, tags, card_id = PLAY, ["energy_denial"], HAMMER
+
     assert _DENY_RELEVANCE_K == MAX_ATTACK_DAMAGE, (
         "K must BE the normalizer, not a copy of its current value")
-    # The f21/f29 board, priced by hand from the documented arithmetic: a benched body whose only
-    # affordable setback is 70 damage (Jet Headbutt), discounted for the bench.
-    by_hand = 0.5 * _DENIAL_PLAY_W * _DENY_RELEVANCE_K * (70 / MAX_ATTACK_DAMAGE) * _DENIAL_BENCH \
-        - _DENIAL_ITEM_COST
-    assert by_hand == pytest.approx(-1.25), (
-        f"the identity must reproduce ADR-0062's own -1.25 on this board (got {by_hand})")
+    MEGA_BRAVE = 270                               # Mega Lucario ex, {F}{F} — the attack denied
+    by_hand = coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K \
+        * (MEGA_BRAVE / MAX_ATTACK_DAMAGE) - _DENIAL_ITEM_COST
+    assert by_hand == pytest.approx(125.0), (
+        f"the documented arithmetic must price this board at +125.00 (got {by_hand})")
+
+    p = _pilot("mega_lucario")
+    obs = _play_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING, FIGHTING]))
+    board = p._board(obs, obs["select"])
+    p._unfavored = lambda _b: False                # Lever A has its own test; isolate the identity
+    assert p._denial_play_tactical(obs, board, _Ctx()) == pytest.approx(by_hand), (
+        "the fire rung must price in damage units — `K x relevance` IS the setback damage, so the "
+        "rung and the hand-computed formula cannot differ unless K stopped being the normalizer")
 
 
 # ── surface (c): which Energy ────────────────────────────────────────────────────────────────────
@@ -147,20 +176,31 @@ def test_the_within_body_ruling_is_expressible_at_all_only_because_the_lookup_is
     rather than on `relevance_energy`, whose index counts PROVIDED UNITS and so cannot be matched
     against an option's `energyIndex` at all.
 
-    OFF, both options score identically and the argmax falls through to index 0 — the historical
-    "stripped whatever landed first" defect, which lands on the right answer here only by luck. Armed,
-    the `{D}` wins strictly, which is the difference between being right and being lucky."""
+    The historical "stripped whatever landed first" defect landed on the right answer here only by
+    luck: any BODY-keyed reading — which is all the retired ADR-0062 magnitude oracle ever had —
+    scores these two options identically, because they name the same body. Armed, the `{D}` wins
+    strictly, which is the difference between being right and being lucky.
+
+    **The reference moved (Issue #228).** That contrast used to be drawn by scoring the same menu on
+    the OFF path and asserting the tie; the magnitude oracle is deleted, so it is drawn instead from
+    the read's own shape — the two options resolve to ONE row, and the whole discrimination lives
+    inside that row's `relevance_by_type`. Nothing else on the row could have separated them."""
     p = _pilot()
     obs = _strip_obs([(BENCH, 0, 0), (BENCH, 0, 1)],                 # the {D}, then the {P}
                      opp_active=_body(DRAGAPULT_EX, [FIRE]),
                      opp_bench=[_body(MUNKIDORI, [DARKNESS, PSYCHIC])])
+    board = p._board(obs, obs["select"])
     armed = _scores(p, obs)
     assert armed[0] > armed[1], (
         f"must strip the {{D}} to mute Adrena-Brain, not the {{P}} off Mind Bend's cost ({armed})")
-    off = _scores(_pilot(armed=False), obs)
-    assert off[0] == off[1] > 0, (
-        f"the magnitude instrument cannot see a within-body difference, so this documents WHY the "
-        f"typed lookup was needed ({off}) — and > 0, or the tie would be a vacuous both-zero one")
+
+    keys = {_key_of(o) for o in obs["select"]["option"]}
+    assert keys == {("bench", 0)}, (
+        f"the ruling is only a WITHIN-body one if both options name the same body; got {keys}")
+    by_type = p._deny_relevance_map(obs, board)[("bench", 0)]
+    assert by_type[DARKNESS] > by_type[PSYCHIC] > 0, (
+        f"the separation must live in the TYPED map — a body-keyed reading has one number for this "
+        f"row and could not express the ruling at all ({by_type})")
 
 
 @pytest.mark.req("REQ-DENYREL-0022")
@@ -187,9 +227,16 @@ def test_the_target_pick_applies_no_area_weight(  # ruling 2, 2026-07-30
 
     Two copies of the same body holding the same Energy, one Active and one benched, therefore score
     EQUAL armed: relevance already prices a benched body's slower clock through its own line scan, so
-    discounting it again double-counts. OFF the bench option is discounted by `_DENIAL_BENCH` (0.25),
-    and that constant stays live on the OFF path — it is unread while armed, not deleted, so
-    ADR-0062's derivation survives for whoever retires the magnitude path.
+    discounting it again double-counts.
+
+    **The contrast lost its other half (Issue #228).** This used to also score the menu OFF and assert
+    the bench option came back discounted by `_DENIAL_BENCH` (0.25). That constant and the path that
+    read it are deleted under tracker directive 1, so the incumbent behaviour is now recorded here in
+    prose and asserted only where it still runs: `_deny_best_of`'s promotion GATE, which carries
+    `_DENIAL_BENCH`'s actual QUESTION ("can that benched body reach the Active position at all") on
+    the fire rung, and is asserted by
+    `test_energy_denial_pilot.py::test_the_hammer_fires_on_a_loaded_BENCH_behind_a_bare_active` and
+    `test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes`.
 
     Guarded on `active_can_ko` being False, or the redundancy gate would zero the Active instead.
 
@@ -208,9 +255,6 @@ def test_the_target_pick_applies_no_area_weight(  # ruling 2, 2026-07-30
     assert active == bench > 0, (
         f"armed must apply no area weight ({active} vs {bench}) — and both > 0, or an equality that "
         f"held only because relevance was 0 everywhere would pass while proving nothing")
-    off_active, off_bench = _scores(_pilot(armed=False), obs)
-    assert off_bench < off_active, (
-        f"the OFF path must still discount the bench by _DENIAL_BENCH ({off_bench} vs {off_active})")
 
 
 # ── surface (a): the keep price ──────────────────────────────────────────────────────────────────
@@ -424,13 +468,30 @@ def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
 
 
 @pytest.mark.req("REQ-DENYREL-0026")
-def test_off_reproduces_the_documented_incumbent_arithmetic_exactly():
-    """The kill-switch's OFF half, pinned against the formula rather than against itself.
+def test_off_is_documented_DEGRADED_MODE_and_emits_ABSENT_not_a_measured_zero():
+    """The kill-switch's OFF half.
 
-    `_denial_play_tactical` OFF must equal `coin x W x (unfavored?) x opp_denial_best - item cost`
-    recomputed independently here. Asserting OFF == OFF would be vacuous; recomputing the documented
-    arithmetic is what makes "byte-identical" a claim a future edit can falsify."""
-    from common.pilot import _DENIAL_ITEM_COST, _DENIAL_PLAY_W
+    ⚠️ **RE-SUBJECTED (Issue #228). Read this before assuming coverage was lost.** This test used to
+    be `test_off_reproduces_the_documented_incumbent_arithmetic_exactly`: it recomputed
+    `coin x W x (unfavored?) x opp_denial_best - item cost` by hand and asserted the OFF branch of
+    `_denial_play_tactical` matched, so that "byte-identical to the incumbent" was a claim a future
+    edit could falsify. **That subject no longer exists** — tracker directive 1 ("rungs an equation
+    replaces are DELETED, not suppressed") removed `Board.opp_denial_best`, `Pilot._opp_denial_best`
+    and `Pilot._denial_at`, and with them the arithmetic there was to reproduce. The lost coverage is
+    named plainly rather than quietly re-scoped: **nothing now pins the ADR-0062 magnitude formula,
+    because nothing computes it.**
+
+    What OFF means now is the `snipe_relevance` precedent: **documented DEGRADED MODE, never a
+    rollback.** All three deny surfaces stand down — the fire rung returns exactly 0.0 (before the
+    keep price, so a held Hammer is not even charged for being held), the target pick returns 0.0,
+    and no deny slot is emitted. That contract is what this test pins, together with the
+    absence-versus-zero distinction it already carried:
+
+    RE-RULED (Issue #228, ADR-0093 decision 2). The Board assertion below once read `== 0.0` —
+    the dataclass default, back when the field could not express absence. OFF emits no relevance at
+    all, and `None` says exactly that where `0.0` said "measured, and it is nothing". The distinction
+    is the defect: mid-sim the ARMED read was equally absent, and the fire rung whiffed on strips
+    worth +22.50 and +74.50 because it could not tell the two apart."""
     from common.strategy.denial import coin_odds
 
     class _Ctx:
@@ -440,10 +501,16 @@ def test_off_reproduces_the_documented_incumbent_arithmetic_exactly():
     obs = _play_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING, FIGHTING]))
     board = p._board(obs, obs["select"])
     p._unfavored = lambda _b: False
-    expected = coin_odds(HAMMER) * _DENIAL_PLAY_W * board.opp_denial_best - _DENIAL_ITEM_COST
-    assert p._denial_play_tactical(board, _Ctx()) == expected
-    assert board.deny_relevance_best == 0.0, "OFF must emit no relevance at all"
-    assert board.deny_relevance_rows == ()
+    assert coin_odds(HAMMER) > 0, "the fixture's card must be a real coin-flip denier"
+    assert p._denial_play_tactical(obs, board, _Ctx()) == 0.0, (
+        "OFF is DEGRADED MODE: the fire rung stands down at exactly 0.0, ahead of the keep price — "
+        "a board this loaded (Mega Brave's own {F}{F}) prices +125.00 armed")
+    assert board.deny_relevance_best is None, "OFF must emit no relevance at all — ABSENT, not zero"
+    assert board.deny_relevance_rows is None, (
+        "and the ROWS carry the same distinction one level up — `None` is not measured, `()` would "
+        "be measured and empty. Both fields say ABSENT, which is the whole point of this test")
+    assert _deny_slots(p, _discard_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING, FIGHTING]))) == [], (
+        "and the keep price stands down with it — OFF emits no deny slot at all")
 
 
 # ── Issue #217 / ADR-0084: the derived clock is a TIEBREAK, not a deadline, and never a gate ──────
@@ -561,51 +628,63 @@ def test_the_clock_is_silent_on_a_within_body_tie():
 
 
 @pytest.mark.req("REQ-DENYREL-0035")
-def test_the_armed_read_discounts_a_forward_form_exactly_as_the_off_path_does():
+def test_the_armed_read_discounts_a_forward_form_by_exactly_DENIAL_FORWARD():
     """**ADR-0084 Amendment A — the defect Issue #217's investigation found in Issue #187's build.**
 
     ADR-0080 decision 2 makes `_DENIAL_FORWARD` *"central"* to relevance's forward-potential leg and
     *"promoted rather than deleted"*. It was never applied there: the only consumer was `_denial_at`,
     on the OFF path. So the ARMED instrument credited a forward form at full damage and priced a
-    forward threat at DOUBLE the incumbent.
+    forward threat at DOUBLE the incumbent — a real shipped defect, live for a week.
 
     ms 82225643 f11 is the witness the user ruled on (2026-07-30, *"rationale is correct"*): turn 2, a
     Basic Riolu holding one `{F}`, and Mega Lucario ex's Aura Jab (`{F}` 130) credited in full fired a
     Hammer over the Pokégear 3.0 dig the corpus rules correct. Their hand holds no Mega Lucario ex, so
     that attack cannot happen this turn or next.
 
-    Asserted as the two instruments AGREEING on one board rather than as either number, so a re-derived
-    `_DENIAL_FORWARD` carries both sides with it. Non-vacuous by construction: the forward attack must
-    out-damage the body's own, or there would be nothing for a discount to bite on."""
+    **The reference moved (Issue #228), the claim did not.** This used to assert the two instruments
+    AGREEING on this board — armed's affordable reading against `Board.opp_denial_best` — so that a
+    re-derived `_DENIAL_FORWARD` carried both sides with it. The OFF instrument is deleted, so the
+    discount is now pinned DIRECTLY: the armed forward-leg readings must equal the discounted value
+    computed from `_DENIAL_FORWARD` and the card facts. Same guarantee against the same defect (an
+    undiscounted read prices exactly double each figure below); it simply no longer borrows a second
+    instrument to say so, and a re-derived `_DENIAL_FORWARD` still carries the assertion with it
+    because the constant is read, not spelled.
+
+    Both readings are pinned, because the discount has to bite on both and they differ:
+
+      * **fire** (`affordable_relevance`) — restricted to attacks the body could pay for as it
+        stands, which off one `{F}` is Aura Jab (`{F}` 130) and not Mega Brave (`{F}{F}` 270). This
+        is the reading the fire rung consumes, and the one the old cross-check compared.
+      * **banked** (`relevance` / `relevance_setback`) — the whole line including what they cannot
+        afford yet, so Mega Brave 270. It deliberately EXCEEDS the affordable reading; comparing it
+        against the OFF number was this test's own first mistake (it read 135 vs 65 and looked like
+        a bug when both were correct).
+
+    Card facts verified at data/EN_Card_Data.csv (MEG 76/77): Riolu is the SOLE pre-evolution of Mega
+    Lucario ex, a single hop, Aura Jab {F} 130 and Mega Brave {F}{F} 270."""
     from common.deny_relevance import MAX_ATTACK_DAMAGE
     from common.pilot import _DENIAL_FORWARD
 
-    obs = _fixture_obs("ms_hammer_forward_form_riolu_f12.json")
+    AURA_JAB, MEGA_BRAVE = 130, 270
 
+    obs = _fixture_obs("ms_hammer_forward_form_riolu_f12.json")
     armed = _pilot("mega_starmie")
     armed._board(obs, obs.get("select"))
     row = max(_rows_by_key(armed).values(), key=lambda r: r.get("relevance") or 0.0)
-    assert row.get("relevance_forward"), (
-        "this fixture only tests the discount if the top row's relevance comes off a FORWARD form")
+    assert row.get("relevance_forward") == MEGA_BRAVE, (
+        f"this fixture only tests the discount if the top row's relevance comes off the FORWARD form "
+        f"at its RAW value ({row.get('relevance_forward')} vs Mega Brave's {MEGA_BRAVE})")
 
-    off = _pilot("mega_starmie", armed=False)
-    off_board = off._board(obs, obs.get("select"))
-    assert off_board.opp_denial_best > 0, (
-        "the OFF instrument must price this board, or there is no reference value to agree with")
-
-    # Compared on the AFFORDABLE reading, which is the one the fire rung uses and the one `_denial_at`
-    # is the OFF counterpart of. NOT the banked reading: that deliberately credits an attack they
-    # cannot pay for yet (here Mega Brave `{F}{F}` 270 off one `{F}`), which is the whole point of the
-    # forward leg and is SUPPOSED to exceed the OFF number. Comparing banked against OFF was this
-    # test's own first mistake — it read 135 vs 65 and looked like a bug when both were correct.
     armed_fire = (row.get("relevance_fire") or 0.0) * MAX_ATTACK_DAMAGE
-    assert armed_fire == pytest.approx(off_board.opp_denial_best), (
-        f"armed must price the forward threat exactly as OFF does ({armed_fire} vs "
-        f"{off_board.opp_denial_best}) — undiscounted it prices "
-        f"{armed_fire / _DENIAL_FORWARD:.0f}, double the incumbent")
+    assert armed_fire == pytest.approx(_DENIAL_FORWARD * AURA_JAB), (
+        f"the fire reading must credit Aura Jab at the mandated discount, not in full "
+        f"({armed_fire} vs {_DENIAL_FORWARD * AURA_JAB}; undiscounted it prices {AURA_JAB}, double)")
+    assert row.get("relevance_setback") == pytest.approx(_DENIAL_FORWARD * MEGA_BRAVE), (
+        f"and the banked reading must credit Mega Brave at the SAME discount "
+        f"({row.get('relevance_setback')} vs {_DENIAL_FORWARD * MEGA_BRAVE})")
     assert (row.get("relevance") or 0.0) > (row.get("relevance_fire") or 0.0), (
-        "and the BANKED reading must still exceed it — the discount scales the forward credit, it "
-        "does not delete the banked doctrine (ADR-0063: a discount, never a deletion)")
+        "the BANKED reading must still exceed the affordable one — the discount scales the forward "
+        "credit, it does not delete the banked doctrine (ADR-0063: a discount, never a deletion)")
 
 
 @pytest.mark.req("REQ-DENYREL-0033")
@@ -657,7 +736,11 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
     comparison anywhere would play the Hammer the corpus ruled against.
 
     (The asymmetry itself — that a bad strip prices 0 where ADR-0062's reasoning implies it should
-    price negative — is knowingly left open and handed forward by decision 8.)
+    price negative — was knowingly left open and handed forward by ADR-0084 decision 8. **Issue #228
+    CLOSED it** (ADR-0093 decision 4): the whiff short-circuit is gone, so a shut gate now prices
+    `odds x weight x 0 - _DENIAL_ITEM_COST` = **-10.0**. It had to close, because `0.0` did not
+    actually decline — `_finish_turn_last` promotes on `score > 0`, so the Hammer landed in the last
+    tier TIED with End and stable score order played it by option index.)
 
     **Asserted on the REAL f21/f29 fixtures, with their full captured menus.** A first attempt used a
     hand-built menu and was worthless twice over: `explain().chosen` is a LIST, so `chosen != 0` was
@@ -678,14 +761,15 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
         hammer = [i for i, o in enumerate(select["option"])
                   if p._option_card_id(obs, select, o) == HAMMER]
         assert hammer, f"{fixture} must actually offer a Hammer, or it tests nothing"
-        assert all(ex.options[i].score == pytest.approx(0.0) for i in hammer), (
-            f"{fixture}: a shut gate must take the whiff branch at exactly 0.0 — this fixes WHICH "
-            f"branch, so the assertion below is known to be testing the zero case; got "
-            f"{[ex.options[i].score for i in hammer]}")
+        from common.pilot import _DENIAL_ITEM_COST
+        assert all(ex.options[i].score == pytest.approx(-_DENIAL_ITEM_COST) for i in hammer), (
+            f"{fixture}: a shut gate must take the whiff branch and still PAY THE KEEP PRICE — this "
+            f"fixes WHICH branch, so the assertion below is known to be testing the zero-relevance "
+            f"case; got {[ex.options[i].score for i in hammer]}")
         assert not set(ex.chosen) & set(hammer), (
-            f"{fixture}: a Hammer scoring 0.0 must NOT be chosen — a free Item is tiered ahead of "
-            f"everything by `_finish_turn_last`, so if any tier treats 0.0 as playable, decision 8's "
-            f"handed-forward asymmetry becomes forced rather than optional. chosen={ex.chosen}")
+            f"{fixture}: a whiffing Hammer must NOT be chosen — a free Item is tiered ahead of "
+            f"everything by `_finish_turn_last`, and at the old 0.0 it TIED End and won on option "
+            f"index. chosen={ex.chosen}")
         assert list(ex.chosen) == want, (
             f"{fixture}: and the decision must still match the corpus ruling {want}; got {ex.chosen}")
 
@@ -720,3 +804,68 @@ def test_the_clock_never_reorders_what_relevance_already_separates(fixture, deck
                     f"relevance {rel_a} at {key_a}/{t_a} scored {sc_a}, but LOWER relevance {rel_b} "
                     f"at {key_b}/{t_b} scored {sc_b} — the clock must never overtake a relevance "
                     f"difference, only break an exact tie")
+
+
+# ── the read must SURVIVE the rollout (ADR-0093, Issue #228) ─────────────────────────────────
+
+def _play_or_end_obs(**kw):
+    """The fire-now menu with End beside it — the two options `_finish_turn_last` tiers together
+    when the Hammer is unendorsed, and therefore the only board on which "held" is falsifiable."""
+    obs = _play_obs(**kw)
+    obs["select"]["option"] = [{"type": PLAY, "index": 0}, {"type": END}]
+    return obs
+
+
+@pytest.mark.req("REQ-DENYREL-0036")
+@pytest.mark.parametrize("board,label", [
+    (lambda: _play_obs(opp_active=_body(DRAGAPULT_EX, [FIRE])), "a live typed strip"),
+    (lambda: _play_obs(opp_active=_body(DRAGAPULT_EX)), "a bare board (a real whiff)"),
+    (lambda: _play_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING])), "the forward-line anchor"),
+])
+def test_the_armed_fire_rung_prices_the_same_MID_SIM_as_it_does_at_the_root(board, label):
+    """**The defect Issue #228 was blocked by.** `_opponent_target_rows` returns None mid-sim, so
+    the per-decision cache is empty, `Board.deny_relevance_best` keeps its default, and the fire rung
+    read that default as a MEASURED zero — a whiff. The incumbent had no such hole because
+    `opp_denial_best` was computed unconditionally (it is since deleted, Issue #228, so the armed
+    ladder is the only thing standing between this defect and the shipped agent).
+
+    Measured consequence: on three corpus frames the armed rung returned 0.00 mid-sim where the
+    incumbent returned -5.00 / +22.50 / +74.50, flipping the Hammer decision inside the rollout,
+    moving one Energy on the opponent's board, and toggling `_PLANNER_SURVIVAL_W` (50.0) in the leaf.
+    That is what the Discrimination Gate saw as `82225643|1|decision|11`,
+    `83686860|1|decision|13` and `82224509|1|decision|67`.
+
+    Asserted as an IDENTITY between the two readings rather than against a literal, because the
+    defect is a disagreement — any pinned number would also have to be re-derived on every re-tune,
+    while "the agent scores this the same inside its own rollout as outside it" is invariant."""
+    p = _pilot()
+    obs = board()
+    p._planning = False
+    root = _scores(p, obs)[0]
+    p._planning = True
+    mid = _scores(p, obs)[0]
+    assert mid == pytest.approx(root), (
+        f"{label}: the fire rung scored {mid} mid-sim but {root} at the root — the agent is "
+        f"simulating a policy it does not play")
+
+
+@pytest.mark.req("REQ-DENYREL-0037")
+@pytest.mark.parametrize("planning", [False, True])
+def test_a_real_whiff_scores_STRICTLY_below_End_so_that_held_means_held(planning):
+    """`_denial_play_tactical`'s docstring promised *"a whiff prices at 0 and is held … declining one
+    REQUIRES a non-positive score."* It did not hold. `_finish_turn_last` sequences early only on
+    `score > 0`, so a 0.0 free Item lands in the LAST tier **tied with End**, and stable score order
+    breaks that tie by option index — the Hammer sits first, so the whiff was PLAYED.
+
+    The retired OFF path escaped this by arithmetic accident: its magnitude was rarely exactly 0
+    while the card was playable, so `odds x weight x value - keep price` came out strictly negative.
+    A categorical [0,1] relevance scalar is 0 routinely and by design, which is what made a latent
+    contract violation a live defect at arming time (`src/common/CONTEXT.md`, ABSENT is not ZERO).
+
+    Run under both `_planning` states: mid-sim is where it actually bit."""
+    p = _pilot()
+    p._planning = planning
+    hammer, end = _scores(p, _play_or_end_obs(opp_active=_body(DRAGAPULT_EX)))
+    assert hammer < end, (
+        f"a whiffing Hammer scored {hammer} against End at {end} — a tie is not a hold, and the "
+        f"lower option index plays it")

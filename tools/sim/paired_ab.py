@@ -72,3 +72,20 @@ def mid_build_verdict(result: dict, *, crashes: int, reg_tol: float = MID_BUILD_
     never gate.
     """
     return result["ci_lo"] >= -reg_tol and crashes == 0
+
+
+#: The two stage rules of Issue #136 directive 6 (ADR-0072 decision 1). ``mid-build`` (Phases 1a–1g) is the
+#: Tripwire — crashes==0 AND CI-lo >= -5%, NO delta clause; merit lives in the two deterministic
+#: per-frame gates (`train.gates`). ``post-composition`` (Issue #145 onward) is `flips_on` verbatim.
+#:
+#: Lives HERE, beside the two verdict functions, rather than in one runner (Issue #228). It was
+#: private to `gauntlet_swap_ab.py`, so the OVERLAY runner (`gauntlet_ab.py`) had no way to name its
+#: stage and printed `flips_on`'s post-composition verdict for a mid-build swap — the exact
+#: mislabelling ADR-0072 Amendment B fixed on the swap runner, surviving on its sibling. A second
+#: copy of "which rule graded this run" is the one thing that must not exist in two places.
+STAGES = {
+    "mid-build": (mid_build_verdict, MID_BUILD_REG_TOL,
+                  "CI-lo>=-0.05 AND crashes==0 (NO delta clause)", "TRIPWIRE"),
+    "post-composition": (flips_on, _REG_TOL,
+                         "delta>=0 AND CI-lo>=-0.01 AND crashes==0", "FLIP"),
+}

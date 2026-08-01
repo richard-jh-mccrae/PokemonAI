@@ -190,8 +190,11 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
     **``oracle_value`` is a misnomer, kept for call-compatibility (corrected 2026-07-28, ADR-0078).**
     This docstring used to claim the value came from the ADR-0062 denial oracle (`_opp_denial_best`).
     It does not, and has not since the WP-N8 currency ruling: the caller passes the flat disruption
-    card-tier `TAG_TIER["gust"]` (~10) — `pilot._resolve_needs` — and the ADR-0062 oracle survives on
-    that path only as a `> 0` BITE GATE (`_denial_at`), its damage magnitude discarded.
+    card-tier `TAG_TIER["gust"]` (~10) — `pilot._resolve_needs` — graded per body by relevance. The
+    ADR-0062 oracle used to survive on this path as a `> 0` BITE GATE (`_denial_at`); Issue #228
+    deleted it, and `relevance > 0` SUBSUMES that gate (already 0 for a body with no Energy, for
+    surplus Energy, and for one dying to my Knock Out this turn). With `deny_relevance` OFF the
+    emission now stands down entirely — DEGRADED MODE, never a rollback.
 
     ADR-0078 (#187 grill) overturned that WP-N8 ruling in turn — deny was to read the shared per-body
     `opponent_target_value` marginal converted at a DERIVED Worth Damage Rate. **That plan is
