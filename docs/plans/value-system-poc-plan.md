@@ -98,11 +98,29 @@ T0 Spine (serial, ~1 session)
  ├──> T1 Substrate completion   (parallel lane A)
  ├──> T2 Phase-1 finish line    (parallel lane B, items independently parallel)
  └──> T3 state_value            (critical path)
-        └──> T4 Turn Planner    (critical path)
-               └──> T5 Purge + integration (joins all lanes)
+        └──> T3.5 A1 remediation (critical path — INSERTED 2026-08-01)
+               └──> T4 Turn Planner    (critical path)
+                      └──> T5 Purge + integration (joins all lanes)
+
+A1 Term sufficiency audit (parallel AUDIT lane; blocks nothing, read-only)
 ```
 
-Critical path: **T0 → T3 → T4 → T5**. T1 and T2 fill parallel worktree lanes and must land
+**A1 — term sufficiency audit** (Issue #268, report: `term-sufficiency-audit.md`). Walks the four
+DECKS rather than the corpus, because the corpus records what the OLD rung-driven agent looked at,
+so a term the new architecture needs and the old agent never exercised leaves no trace in either
+gate. Feeds T3's registry (its `blind_to` lists) and T4's blind-spot checklist. Read-only — it
+produces findings, not code, and the disposition of each finding is decided after it lands.
+
+**T3.5 — A1 remediation** (Issue #278, 13 subtasks). A1's findings, implemented. Inserted into the
+critical path by developer ruling 2026-08-01: **finish T3 → land T3.5 → start T4.** It is on the
+critical path rather than beside it because T4's ordering heuristic evaluates `state_value` on every
+candidate, so a term that mis-prices combat mis-orders every candidate that touches it — and under
+1-ply differencing a mis-priced option is not merely undervalued, it is never explored. Four of the
+findings are blockers, three of them one structural error seen from three sides (`state_value` reads
+damage as a printed number rather than as the damage model's answer). Does NOT re-open ruled
+omissions: those stay with T1 / T2 / T4 and are tabulated in the issue.
+
+Critical path: **T0 → T3 → T3.5 → T4 → T5**. T1 and T2 fill parallel worktree lanes and must land
 before T5 begins. Each track is one issue, one branch, one PR (multi-session inside a track is
 fine; worktrees isolate lanes). Contract-freeze discipline: after T0 merges, its three contracts
 change only by a wave-packet ruling — never silently by a downstream track.
