@@ -1034,7 +1034,7 @@ my death by a whole turn or more"*, and the gap is 128 of 218 relevance-positive
 the primary read, where it orders without suppressing.
 
 **ABSENT is not ZERO, and a categorical instrument makes the difference bite** (Issue #228,
-2026-07-31; ADR-TEMP-228). `_opponent_target_rows` returns `None` **mid-sim** by design — the
+2026-07-31; ADR-0093). `_opponent_target_rows` returns `None` **mid-sim** by design — the
 `_planning` reentrancy guard, `pilot.py:8095` — so every read off the per-decision
 `_opponent_target_cache` is *absent* inside a rollout, not zero. Any field typed to carry the read as
 a bare `float` with a `0.0` default silently converts that absence into a measured zero: armed,

@@ -487,7 +487,7 @@ def test_off_is_documented_DEGRADED_MODE_and_emits_ABSENT_not_a_measured_zero():
     and no deny slot is emitted. That contract is what this test pins, together with the
     absence-versus-zero distinction it already carried:
 
-    RE-RULED (Issue #228, ADR-TEMP-228 decision 2). The Board assertion below once read `== 0.0` —
+    RE-RULED (Issue #228, ADR-0093 decision 2). The Board assertion below once read `== 0.0` —
     the dataclass default, back when the field could not express absence. OFF emits no relevance at
     all, and `None` says exactly that where `0.0` said "measured, and it is nothing". The distinction
     is the defect: mid-sim the ARMED read was equally absent, and the fire rung whiffed on strips
@@ -737,7 +737,7 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
 
     (The asymmetry itself — that a bad strip prices 0 where ADR-0062's reasoning implies it should
     price negative — was knowingly left open and handed forward by ADR-0084 decision 8. **Issue #228
-    CLOSED it** (ADR-TEMP-228 decision 4): the whiff short-circuit is gone, so a shut gate now prices
+    CLOSED it** (ADR-0093 decision 4): the whiff short-circuit is gone, so a shut gate now prices
     `odds x weight x 0 - _DENIAL_ITEM_COST` = **-10.0**. It had to close, because `0.0` did not
     actually decline — `_finish_turn_last` promotes on `score > 0`, so the Hammer landed in the last
     tier TIED with End and stable score order played it by option index.)
@@ -806,7 +806,7 @@ def test_the_clock_never_reorders_what_relevance_already_separates(fixture, deck
                     f"difference, only break an exact tie")
 
 
-# ── the read must SURVIVE the rollout (ADR-TEMP-228, Issue #228) ─────────────────────────────────
+# ── the read must SURVIVE the rollout (ADR-0093, Issue #228) ─────────────────────────────────
 
 def _play_or_end_obs(**kw):
     """The fire-now menu with End beside it — the two options `_finish_turn_last` tiers together

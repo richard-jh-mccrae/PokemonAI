@@ -155,7 +155,7 @@ def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
 
 @pytest.mark.req("REQ-NEEDS-0016")
 def test_the_gust_slot_survives_the_rollout_because_the_shared_rows_now_run_mid_sim():
-    """Gust hit the SAME defect deny did, and nobody was looking (ADR-TEMP-228 decision 6).
+    """Gust hit the SAME defect deny did, and nobody was looking (ADR-0093 decision 6).
 
     `_opponent_target_rows` used to early-return `None` under the planner's `_planning` reentrancy
     flag. This emission already carries the cache-or-compute ladder — but mid-sim the cache is empty

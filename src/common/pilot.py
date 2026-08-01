@@ -500,7 +500,7 @@ class Board:
                                        # doing work worth denying (no Energy at all, surplus Energy, or
                                        # the only live body dies to my Knock Out this turn) — HOLD.
                                        # Replaces `opp_denial_best` on the fire-now rung when armed.
-                                       # **`None` means ABSENT, not zero** (ADR-TEMP-228 decision 2;
+                                       # **`None` means ABSENT, not zero** (ADR-0093 decision 2;
                                        # `CONTEXT.md`, ABSENT is not ZERO): the read is OFF, or this
                                        # board never went through `_board()`. The default was `0.0`
                                        # until Issue #228, which made absence indistinguishable from a
@@ -5552,7 +5552,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # `_finish_turn_last` interaction all survive unchanged; only what supplies "value" moves.
         if not self.deny_relevance:
             return 0.0          # DEGRADED MODE, never a rollback — see the flag's note in runtime.py
-        # `None` on the Board is ABSENT, not zero (ADR-TEMP-228 decision 2), so it is RECOMPUTED
+        # `None` on the Board is ABSENT, not zero (ADR-0093 decision 2), so it is RECOMPUTED
         # rather than read as a whiff. A genuine 0.0 survives the ladder and is a real hold.
         value = _DENY_RELEVANCE_K * self._deny_relevance_best(obs, board)
         weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
@@ -8028,7 +8028,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ``id``/``prize``/``survival_shift``/``value``. None when sparse: no live my Active, or no
         opponent in-play bodies.
 
-        **Runs MID-SIM** (ADR-TEMP-228 decision 3). It used to early-return `None` under the
+        **Runs MID-SIM** (ADR-0093 decision 3). It used to early-return `None` under the
         planner's `_planning` reentrancy flag, alongside the three SHADOWS — but this is the LIVE
         computation both the deny fire rung and the `gust_target` slot emission read, not a
         diagnostic, and withholding it mid-sim made the agent evaluate a different policy inside its
@@ -8624,7 +8624,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) — the guard
         `_opponent_target_rows` used to carry for everyone. It belongs HERE, on the diagnostic, and
-        not on the live row computation two live instruments read (ADR-TEMP-228 decision 3). Same
+        not on the live row computation two live instruments read (ADR-0093 decision 3). Same
         placement as `_threat_shadow` and `_recur_shadow`."""
         if getattr(self, "_planning", False):
             return None

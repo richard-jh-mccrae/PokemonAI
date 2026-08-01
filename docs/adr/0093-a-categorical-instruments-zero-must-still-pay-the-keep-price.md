@@ -1,6 +1,6 @@
-# ADR-TEMP-228 — A categorical instrument's ZERO must still pay the keep price: a whiff that TIES is not a hold
+# ADR-0093 — A categorical instrument's ZERO must still pay the keep price: a whiff that TIES is not a hold
 
-**Status:** Proposed (grilling 2026-07-31, `/grill-with-docs` on Issue #228). **Corrects
+**Status:** Accepted (grilled 2026-07-31, `/grill-with-docs` on Issue #228); **BUILT**. **Corrects
 [ADR-0084](0084-denys-derived-clock-is-a-tiebreak-not-a-deadline-and-never-a-gate.md) Amendment B
 point 3**, whose diagnosis of the blocking frame is measurably wrong. Build = Issue #228.
 
@@ -9,7 +9,26 @@ Issue #217 / ADR-0084 (the arming attempt that was blocked, and the Amendment th
 Issue #187 / ADR-0080 (deny as a categorical relevance instrument), ADR-0062 (the incumbent denial
 oracle the armed path replaces), ADR-0072 (the two mid-build merit gates), ADR-0091 / Issue #247
 (the Option Equivalence oracle whose baseline re-capture invalidated every measurement in the issue
-body), Issue #136 (the Value System tracker and its directive 1).
+body), Issue #136 (the Value System tracker and its directive 1), **ADR-0092** (the Value System POC, which
+landed on `main` mid-build).
+
+**Relationship to ADR-0092.** That ADR lists Issue #228 among the issues its POC restructure
+*absorbs*, and its **T2 track's first bullet is precisely this work** — *"flip `deny_relevance` +
+`deny_strip_delta` ON …; DELETE the ADR-0062 magnitude-oracle OFF path and the flag fallbacks."* All
+three are delivered here, so T2 opens with that bullet already discharged. Two notes for whoever
+picks T2 up:
+
+- T2 says the arming waits *"after wave-1 rules the two recorded flips."* **There are no flips left
+  to rule.** The mid-sim absence fix (decision 2) made all three move-frames stop moving, so nothing
+  entered the Held-out Ledger and wave 1 inherits nothing from deny.
+- ADR-0092 amends ADR-0072 for POC tracks — *"NO paired A/Bs; both deterministic gates + suite
+  mandatory."* The mid-build Tripwire recorded below was therefore run under the OLD rule and is
+  **surplus** rather than required. It is kept because it passed and because it cost nothing to keep;
+  the two deterministic gates are what carry the verification either way.
+
+T2's remaining deny item — *"resolve Issue #217's deadline question inside the armed instrument"* —
+is **not** touched here; ADR-0084 decisions 1 and 2 settled the clock as a lexicographic tiebreak and
+that is what ships.
 
 ## Context
 

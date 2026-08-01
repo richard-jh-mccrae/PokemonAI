@@ -131,7 +131,7 @@ EXPECTED_SHIPPED = {
                                     # and the mid-build Tripwire (-1.25 pp, CI [-4.79, +2.29], 0
                                     # crashes / 2400 games — `mid_build_verdict` True)
     "deny_relevance": True,         # ADR-0080 / Issue #199 (S3c). **ARMED-ON 2026-07-31
-                                    # (Issue #228, ADR-TEMP-228), closing Phase 1e and discharging
+                                    # (Issue #228, ADR-0093), closing Phase 1e and discharging
                                     # the directive-1 debt.** The Discrimination Gate's blocker was a
                                     # DEFECT, not the leaf weighting ADR-0084 Amendment B point 3
                                     # diagnosed: `_opponent_target_rows` returned None mid-sim, and

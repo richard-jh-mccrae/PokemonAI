@@ -255,7 +255,7 @@ PROFILE = {
                                     # OPEN consequence: the Brief steer is a MULTIPLIER, so it goes
                                     # inert when `their_plan` is 0 for every offered target.
     "deny_relevance": True,         # ADR-0080 / Issue #199 (S3c) + Issue #187.
-                                    # **ARMED-ON 2026-07-31 (Issue #228, ADR-TEMP-228), closing
+                                    # **ARMED-ON 2026-07-31 (Issue #228, ADR-0093), closing
                                     # Phase 1e.** ADR-0084 (Issue #217) chartered the arming, the
                                     # Discrimination Gate blocked it, and the ADR's pre-registered
                                     # ship-dark fallback was taken. Issue #228 re-measured against
@@ -287,7 +287,7 @@ PROFILE = {
                                     # Excludes catastrophes only; merit is the two per-frame gates,
                                     # not this number.
                                     # The staged OFF run is what makes the armed run attributable
-                                    # (ADR-TEMP-228 decision 5) — the fix and the arming share one
+                                    # (ADR-0093 decision 5) — the fix and the arming share one
                                     # branch, so the OFF arm accounts for everything the repair moved
                                     # before the arming is measured at all. Mid-sim read cost 101s ->
                                     # 118s (~1.17x), well under decision 3's pre-registered 2x

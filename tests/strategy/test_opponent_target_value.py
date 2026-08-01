@@ -112,7 +112,7 @@ def test_opponent_target_shadow_ranks_bodies_and_decides_nothing():
 
 
 def test_the_live_rows_run_mid_sim_while_only_the_SHADOW_stands_down():
-    """ADR-TEMP-228 decision 3 — where the `_planning` guard belongs.
+    """ADR-0093 decision 3 — where the `_planning` guard belongs.
 
     `_opponent_target_rows` is the LIVE per-body computation that both the deny fire rung and the
     `gust_target` slot emission read. It used to early-return `None` mid-sim alongside the three
