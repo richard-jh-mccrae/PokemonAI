@@ -42,6 +42,13 @@ from dataclasses import dataclass, field
 
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 
+#: Sentinel for "use the policy threaded at :meth:`StateModel.build`". A clock consumer that wants a
+#: DIFFERENT conservatism than the Read's — the catastrophe-grade doom budget, the deny Δ's zero-attach
+#: budget, the ceiling — passes ``charged=`` explicitly, and ``None`` there means the worst-case
+#: ceiling rather than "unset". The per-consumer conservatism is a PARAMETER by ADR-0064 Decision 1, so
+#: the two readings must be distinguishable; a plain ``None`` default silently collapses them.
+_THREADED = object()
+
 # ── the lazy field descriptor ──────────────────────────────────────────────────────────────────
 
 class lazy:
@@ -83,6 +90,39 @@ class _Lazily:
     def __init__(self, *, probe=None):
         self._memo: dict = {}
         self._probe = probe
+        self._canon: dict = {}
+
+    def _key(self, value):
+        """``_canonical(value)``, memoized per OBJECT — the parameterised memos' key primitive.
+
+        The clock reads key by VALUE rather than by ``id()`` because their callers construct
+        temporaries (a stripped body, a spliced board — see :meth:`TheirSide.incoming`), and a freed
+        temporary's address can be reallocated to a different body. But canonicalising a whole
+        opponent board on every read is also the hot path of the per-decision build, so the
+        projection is cached.
+
+        Keyed on ``id()`` and yet sound, because the entry **holds a reference to the object**
+        alongside its projection: an object that is cached cannot be collected, so its address cannot
+        be reused while the entry lives. That is exactly the property a bare ``id()`` memo key lacks.
+        The ``is`` re-check costs nothing and makes the invariant local rather than argued.
+
+        Rests on the model's PURITY contract (ADR-0068): the observation does not change under a
+        snapshot. Every ``id()``-keyed memo in this module already assumed that; this assumes no more.
+        """
+        if value is None or isinstance(value, (int, float, bool, str)):
+            return value
+        if isinstance(value, (list, tuple)):
+            # Per-ELEMENT, deliberately. The counterfactual board lists differ from the real one by a
+            # single entry (a removal, a spliced strip), and they are FRESH objects every call — so
+            # caching the sequence wholesale would miss every time while re-walking every body it
+            # shares with the last one. Caching the bodies and re-assembling is O(n) of dict lookups.
+            return tuple(self._key(v) for v in value)
+        hit = self._canon.get(id(value))
+        if hit is not None and hit[0] is value:
+            return hit[1]
+        canon = _canonical(value)
+        self._canon[id(value)] = (value, canon)
+        return canon
 
     def _memoized(self, key, make):
         """Memo for a PARAMETERISED derivation (per-body budgets, the ``incoming(t)`` curve) — the
@@ -336,6 +376,31 @@ class _SideBase(_Lazily):
         express it; the snapshot owns the list because it is lazy and pure (ADR-0068), which is what
         stops the bench shifting under a memoized clock."""
         return tuple(b.body for b in self.bench)
+
+    def view_of(self, body) -> "BodyView | None":
+        """The :class:`BodyView` for ``body`` — the RAW-engine-dict adapter (POC-T1, Issue #260).
+
+        Every migrated consumer holds a raw engine dict (the Pilot and the planner get their bodies
+        from the observation, not from the model), while the model's per-body reads are typed on
+        ``BodyView``. Without one adapter each call site grows its own, and a hand-built view is a
+        SECOND view of a body the snapshot already holds — it would miss the memo and, worse, could
+        disagree with the snapshot's own view about a body's area. So the lookup is by IDENTITY
+        against the bodies this side already exposes, and only a body this side does not hold gets a
+        fresh view.
+
+        The fallback is deliberate rather than a fail-closed None: the deny instruments price
+        HYPOTHETICAL bodies (an Energy-stripped copy of a real one), which are by construction not on
+        the board. Such a body is Active iff the body it stands in for is, and the caller knows that —
+        hence ``is_active``'s default here is False and a caller pricing a stripped ACTIVE passes the
+        real Active through :meth:`view_of` for the area-sensitive reads. ``None`` in, ``None`` out.
+        """
+        if body is None or isinstance(body, BodyView):
+            return body
+        for view in self.bodies:
+            if view.body is body:
+                return view
+        return BodyView(body, combat=self._combat, is_active=False, probe=self._probe,
+                        prefix=f"{self._probe_prefix}.hypothetical")
 
     # -- prizes / zones -------------------------------------------------------------------------
     @lazy
@@ -738,7 +803,7 @@ class MySide(_SideBase):
                                         pool=pool, draws=draws,
                                         p_by_type=self.deck_energy_p if weighted else None)
 
-    def turns_to_afford(self, body: BodyView | None, *, attaches_per_turn: int = 1) -> int | None:
+    def turns_to_afford(self, body, *, attaches_per_turn: int = 1) -> int | None:
         """**The Two Clocks**, my half (ADR-0070 §6): the earliest future turn ``body``'s line is
         ARMED — the MAX of the energy-deficit leg and the FORWARD-HOP leg, never the sum.
 
@@ -747,12 +812,20 @@ class MySide(_SideBase):
         evolving removes one forward hop, so the Δ across the hop is what an evolve buys on the
         armed side — and where the energy leg dominates, that Δ is honestly zero. Uses the
         pool-level forward index (my own deck's forward forms are exactly the right availability
-        gate for my line). None when unknown — fail-closed, the caller then makes no claim."""
-        if body is None:
+        gate for my line). None when unknown — fail-closed, the caller then makes no claim.
+
+        Takes a :class:`BodyView` or a raw engine dict (see :meth:`view_of`), and keyed by VALUE for
+        the reason spelled out on :meth:`TheirSide.incoming`. There is deliberately NO ``fuelled`` leg
+        here, unlike the their-side twin: ``discard_energy_recur`` is a fact about the OPPONENT's
+        clock in every consumer that reads it, and neither shipped line sits in one of our decks — so
+        crediting my own reload would be an unexercised code path, and an unexercised credit on MY
+        clock fails in the unsafe direction (it would price a line as armed sooner than it is)."""
+        view = self.view_of(body)
+        if view is None:
             return None
-        return self._memoized(("mine_turns_to_afford", id(body.body), attaches_per_turn),
+        return self._memoized(("mine_turns_to_afford", self._key(view.body), attaches_per_turn),
                               lambda: self._combat.turns_to_afford(
-                                  body.body, attaches_per_turn=attaches_per_turn, typed=True))
+                                  view.body, attaches_per_turn=attaches_per_turn, typed=True))
 
     @lazy
     def famine(self) -> bool:
@@ -803,38 +876,156 @@ class TheirSide(_SideBase):
         return int(self.player.get("deckCount") or 0)
 
     # -- the clock family (ADR-0064 / the Threat-Clock unification) -----------------------------
-    def incoming(self, my_body: dict | None, t: int = 1, *, evo_min_energy: int = 0,
-                 context: dict | None = None) -> int:
+    def _bodies(self, bodies):
+        """The opponent board a clock read runs against — their real one unless a COUNTERFACTUAL list
+        is supplied (POC-T1, Issue #260).
+
+        The removal Δ (``opponent_target_value``: how much survival does killing this body buy?), the
+        Energy-strip Δ (Deny Relevance) and the per-body threat read (Snipe Relevance) are all
+        questions about a board that is not the board — ``bodies[:i] + bodies[i+1:]``, a stripped copy
+        spliced in, one body alone. That is why each of them bypassed the model: the old signature
+        could only ask about the WHOLE side, so the model was strictly less expressive than the oracle
+        beneath it. It is a first-class question, not an escape hatch, so it becomes a parameter and
+        the threaded ``forward_ids`` / ``charged`` policy travels with it.
+        """
+        return self.body_raws if bodies is None else tuple(bodies)
+
+    def _charged_policy(self, charged):
+        """The energy policy for one clock read: the Read's threaded budget unless the consumer names
+        its own (ADR-0064 Decision 1 keeps the conservatism per-consumer). ``None`` passed explicitly
+        is the worst-case CEILING — a real policy, distinct from "unset", which is why the default is
+        a sentinel rather than ``None``."""
+        return self._charged if charged is _THREADED else charged
+
+    def incoming(self, my_body: dict | None, t: int = 1, *, bodies=None,
+                 charged=_THREADED, evo_min_energy: int = 0, context: dict | None = None,
+                 my_benched: bool = False, opp_active: dict | None = None,
+                 switch_enabler: bool = False) -> int:
         """Worst W/R-adjusted damage their affordable attackers could deal ``my_body`` at future turn
-        ``t`` — the Threat-Clock curve, memoized per ``(body, t, context)``. ``t=1`` is Reachable
+        ``t`` — the Threat-Clock curve, memoized by VALUE over every argument. ``t=1`` is Reachable
         Incoming.
 
-        ``context`` is part of the memo key (Issue #213): it prices every scaling attack, so two
-        callers passing different contexts must not share one answer. Latent while a single caller
-        threads one per-decision context, but the scaling term is load-bearing now that the threat
-        reads price the Damage Formula, and a memo that silently ignores an argument is a trap.
+        ``bodies`` names the counterfactual opponent board (see :meth:`_bodies`); ``charged`` the
+        energy policy (see :meth:`_charged_policy`). The remaining kwargs are the oracle's own and are
+        documented on ``CombatMath.incoming`` — they are here because the bypass census carried them
+        (POC-T1, Issue #260), and a model route that cannot express what its callers ask is a route
+        nobody takes.
+
+        **Keyed by VALUE, not by ``id()``.** Every argument is in the key — a memo that silently
+        ignores one is a trap this method already had to be fixed for once (Issue #213) — and the key
+        canonicalises the body dicts rather than hashing their addresses. Identity keys were safe only
+        while every body came off the live observation and outlived the memo; the counterfactual
+        callers above construct TEMPORARIES (a stripped copy, a spliced list), and a freed temporary's
+        address is free to be reallocated to a different body, which would serve one body's clock as
+        another's. Same reasoning as ``MySide.attach_budget``'s value key, one side over.
         """
-        key = ("incoming", id(my_body) if my_body is not None else None, t, evo_min_energy,
-               id(context) if context is not None else None)
+        opp_bodies = self._bodies(bodies)
+        policy = self._charged_policy(charged)
+        key = ("incoming", self._key(my_body), t, self._key(opp_bodies), self._key(policy),
+               evo_min_energy, self._key(context), bool(my_benched), self._key(opp_active),
+               bool(switch_enabler))
         return self._memoized(key, lambda: self._combat.incoming(
-            my_body, self.body_raws, t, forward_ids=self._forward_ids,
-            charged=self._charged, evo_min_energy=evo_min_energy, context=context))
+            my_body, opp_bodies, t, forward_ids=self._forward_ids,
+            charged=policy, evo_min_energy=evo_min_energy, context=context,
+            my_benched=my_benched, opp_active=opp_active, switch_enabler=switch_enabler))
 
-    def reachable_incoming(self, my_body: dict | None, *, evo_min_energy: int = 0,
-                           context: dict | None = None) -> int:
-        """``incoming(t=1)`` — their next single development step. Delegates, so the one-step read
-        stays identical to the curve by construction."""
-        return self.incoming(my_body, 1, evo_min_energy=evo_min_energy, context=context)
+    def reachable_incoming(self, my_body: dict | None, **kwargs) -> int:
+        """``incoming(t=1)`` — their next single development step. Delegates with every kwarg intact,
+        so the one-step read stays identical to the curve by construction."""
+        return self.incoming(my_body, 1, **kwargs)
 
-    def turns_to_afford(self, body: BodyView, *, attaches_per_turn: int = 1) -> int | None:
+    def turns_to_afford(self, body, *, attaches_per_turn: int = 1, fuelled: bool = True) -> int | None:
         """The earliest future turn ``body``'s line is ARMED — its biggest attack's cost payable.
-        None when unknown (fail-closed: the caller emits no deny slot)."""
-        return self._memoized(("turns_to_afford", id(body.body), attaches_per_turn),
+        None when unknown (fail-closed: the caller emits no deny slot). Takes a :class:`BodyView` or a
+        raw engine dict (see :meth:`view_of`).
+
+        ``fuelled`` (default True, **Issue #204**) credits the line's own DISCARD RECURSION on top of
+        the one manual attach per turn the clock otherwise assumes, at the ``self_arming`` scope — the
+        reading that asks whether the reload reaches THIS body's own cost, quantified by Effect
+        Clause. On the two shipped lines that resolves to: **Archaludon ex** yes (Assemble Alloy is an
+        Ability firing on the very evolve hop this clock counts, and its {M} may land on the evolved
+        body), **Mega Lucario ex** no (Aura Jab is an attack that reloads the BENCH, never the
+        attacker). See ``CombatMath.discard_recur_fuel`` for the texts and for the bench-reload gap
+        this deliberately leaves unpriced. Without it an Archaludon ex reads two turns from Metal
+        Defender {M}{M}{M} when it is one — the bare clock is not conservative there, it is wrong.
+
+        The fuel enters the way the shipped `_recur_fueled_oa` relax already enters it — by augmenting
+        the body's ``energies`` and re-reading the clock — rather than as a new oracle parameter, so
+        the reload keeps ONE quantifier and the clock keeps ONE energy model.
+
+        Fail direction: more fuel credited ⇒ the opponent reads CLOSER ⇒ the threat read is more
+        pessimistic, which is the safe direction for an opponent clock (ADR-0064's bounded pessimism).
+        ``fuelled=False`` is the un-fuelled reading, kept for the diagnostic that sizes the delta.
+        """
+        view = self.view_of(body)
+        if view is None:
+            return None
+        raw = view.body
+        fuel = self._arming_recur_fuel(view) if fuelled else 0
+        if fuel:
+            # The reload is TYPED — `discard_recur_fuel` returns copies of the recur form's own
+            # `energyType` — so the augmented body must carry typed ids, not bare counts, or the
+            # oracle's typed leg would read them as colourless. The ids come from the discard itself:
+            # these are real cards moving zone, not synthesised Energy.
+            raw = dict(raw, energies=list(raw.get("energies") or ()) + self._recur_energy_ids(view, fuel))
+        return self._memoized(("turns_to_afford", self._key(raw), attaches_per_turn),
                               lambda: self._combat.turns_to_afford(
-                                  body.body, forward_ids=self._forward_ids,
+                                  raw, forward_ids=self._forward_ids,
                                   attaches_per_turn=attaches_per_turn))
 
-    def turns_to_ko_me(self, my_body: dict | None, *, my_benched: bool = False, my_bench=(),
+    def _arming_recur_fuel(self, view: "BodyView") -> int:
+        """The discard reload that reaches ``view``'s OWN attack cost — the clock's reading of the
+        recursion (Issue #204). Distinct from :meth:`discard_recur_fuel`, which is the fail-OPEN
+        "could they refuel at all" caution the doom relax takes; see
+        ``CombatMath.discard_recur_fuel`` for why the two questions have different answers on the two
+        shipped lines."""
+        return self._memoized(("arming_recur_fuel", self._key(view.body)),
+                              lambda: self._combat.discard_recur_fuel(
+                                  view.body, self.discard_energy_counts,
+                                  forward_ids=self._forward_ids, scope="self_arming"))
+
+    def _recur_energy_ids(self, view: "BodyView", count: int) -> list:
+        """``count`` Basic-Energy card ids of the recur line's own type, taken from THEIR DISCARD.
+
+        Real ids rather than a synthetic marker, because the clock's typed leg matches an attack's
+        cost SHAPE against attached Energy by card identity — a placeholder would pay a colourless
+        slot and no typed one, silently under-crediting exactly the {F}/{M} lines this exists for.
+        The discard is public (`docs/rules.md`), so picking the ids out of it is a sound read, not an
+        estimate; :attr:`discard_ids` is the zone and the combat oracle resolves each id's type.
+        Returns fewer ids than asked (possibly none) when the discard cannot supply them — the count
+        and the ids then disagree only in the fail-CLOSED direction."""
+        stat = view.stat
+        recur_type = None
+        for cid in self._recur_form_ids(view):
+            form = self._combat._card_stat(cid)
+            if form is not None and form.energyType is not None:
+                recur_type = form.energyType
+                break
+        if recur_type is None:
+            recur_type = getattr(stat, "energyType", None)
+        if recur_type is None:
+            return []
+        out = []
+        for cid in self.discard_ids:
+            if len(out) >= count:
+                break
+            st = self._combat._card_stat(cid)
+            if st is not None and st.is_typed_basic_energy and st.energyType == recur_type:
+                out.append(cid)
+        return out
+
+    def _recur_form_ids(self, view: "BodyView") -> tuple:
+        """``view``'s line — its own card id then its forward forms — in the order the recursion
+        oracle scans them, so the type this side reloads is read off the SAME form that oracle picked
+        as the refueler (one fact, one source)."""
+        cid = view.card_id
+        if cid is None:
+            return ()
+        fwd = self._forward_ids if self._forward_ids is not None else self._combat.forward_card_ids
+        return (cid,) + tuple(fwd(cid) or ())
+
+    def turns_to_ko_me(self, my_body: dict | None, *, bodies=None, charged=_THREADED,
+                       my_benched: bool = False, my_bench=(),
                        key_ids=frozenset(), reading: str | None = None,
                        opp_active: dict | None = None, switch_enabler: bool = False,
                        context: dict | None = None) -> int:
@@ -857,26 +1048,37 @@ class TheirSide(_SideBase):
         sibling :meth:`incoming` already had to be fixed for (Issue #213) — two callers passing
         different harvest readings must not share one answer.
 
-        T1 (Issue #260) migrates the bypass census onto this route. Any bypass that deliberately
-        SURVIVES must document why at its call site, because "no undocumented CombatMath bypasses on
-        model-covered questions" is T1's acceptance criterion, and an undocumented bypass is
-        indistinguishable from an unmigrated one."""
-        key = ("turns_to_ko_me", id(my_body) if my_body is not None else None, bool(my_benched),
-               tuple(id(b) for b in my_bench or ()), frozenset(key_ids or ()), reading,
-               id(opp_active) if opp_active is not None else None, bool(switch_enabler),
-               id(context) if context is not None else None)
+        T1 (Issue #260) migrated the bypass census onto this route, adding the two arguments the
+        census still could not express — ``bodies`` (the counterfactual opponent board; see
+        :meth:`_bodies`) and ``charged`` (the per-consumer energy policy; see
+        :meth:`_charged_policy`). Any bypass that deliberately SURVIVES must document why at its call
+        site, because "no undocumented CombatMath bypasses on model-covered questions" is T1's
+        acceptance criterion, and an undocumented bypass is indistinguishable from an unmigrated one.
+
+        Keyed by VALUE for the reason spelled out on :meth:`incoming` — the removal and strip Δs
+        construct temporary body dicts, and an address-keyed memo can serve one temporary's answer for
+        the next one allocated at the same address."""
+        opp_bodies = self._bodies(bodies)
+        policy = self._charged_policy(charged)
+        key = ("turns_to_ko_me", self._key(my_body), self._key(opp_bodies), self._key(policy),
+               bool(my_benched), self._key(tuple(my_bench or ())), frozenset(key_ids or ()),
+               reading, self._key(opp_active), bool(switch_enabler), self._key(context))
         extra = {} if reading is None else {"reading": reading}
         return self._memoized(key, lambda: self._combat.turns_to_ko_me(
-            my_body, self.body_raws, charged=self._charged, my_benched=my_benched,
+            my_body, opp_bodies, charged=policy, my_benched=my_benched,
             my_bench=my_bench, key_ids=key_ids, opp_active=opp_active,
             switch_enabler=switch_enabler, context=context, **extra))
 
-    def discard_recur_fuel(self, body: BodyView) -> int:
+    def discard_recur_fuel(self, body) -> int:
         """Basic Energy their discard can reload onto ``body`` (the Aura-Jab class) — the recursion
-        half of the discard read, which makes a KO'd threat's line persistent."""
-        return self._memoized(("discard_recur_fuel", id(body.body)),
+        half of the discard read, which makes a KO'd threat's line persistent. Takes a
+        :class:`BodyView` or a raw engine dict (see :meth:`view_of`)."""
+        view = self.view_of(body)
+        if view is None:
+            return 0
+        return self._memoized(("discard_recur_fuel", self._key(view.body)),
                               lambda: self._combat.discard_recur_fuel(
-                                  body.body, self.discard_energy_counts,
+                                  view.body, self.discard_energy_counts,
                                   forward_ids=self._forward_ids))
 
 

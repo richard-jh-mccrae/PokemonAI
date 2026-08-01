@@ -101,6 +101,7 @@ def test_opponent_target_shadow_ranks_bodies_and_decides_nothing():
          "bench": [{"id": 677, "hp": 70, "energies": []}]},
     ]}}
     board = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3)
+    p._snapshot(obs)                  # the per-decision StateModel the rows now read (POC-T1)
     sh = p._opponent_target_shadow(obs, board)
     assert sh is not None and sh["bodies"]
     assert 0.0 <= sh["phase"] <= 1.0
@@ -134,6 +135,7 @@ def test_the_live_rows_run_mid_sim_while_only_the_SHADOW_stands_down():
     ]}}
     board = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3)
 
+    p._snapshot(obs)                  # the per-decision StateModel the rows now read (POC-T1)
     p._planning = False
     root = p._opponent_target_rows(obs, board)
     assert root is not None and root[1], "the fixture must produce rows at the root"

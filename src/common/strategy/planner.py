@@ -2715,7 +2715,7 @@ class PlannerMixin:
         ``supporter_spent`` closes the Supporter leg for a line that plays a Supporter as its own
         enabling step (ADR-0075 decision 3) — the successor to the retired
         ``enabler_consumes_supporter`` split."""
-        model = getattr(self, "_state_model", None)
+        model = self._state_model
         if model is None or card_id is None:
             return None
         return model.mine.attach_budget_for_card(card_id, benched=benched,
@@ -2729,7 +2729,7 @@ class PlannerMixin:
         This is the RANKED-consumer half of ADR-0074's Leg Assignment: the `ko_for_prizes` ladder
         emits a compared scalar, so it weights; the Win Rung gates, so it never calls this."""
         budget = self._composed_budget(card_id, benched=benched, supporter_spent=supporter_spent)
-        model = getattr(self, "_state_model", None)
+        model = self._state_model
         if budget is None or model is None:
             return None
         p_by_type = model.mine.deck_energy_p
@@ -3167,14 +3167,22 @@ class PlannerMixin:
             return 0.0
         if any(b for b in (me.get("bench") or [])):
             return 0.0                                    # a bench body soaks — recoverable, not a loss
-        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        model = self._state_model
+        if model is None:
+            return 0.0                                    # no snapshot → no claim, as above
         # The catastrophe rung reads a STRICTER Incoming than the ±50 survival term: an evolution-based
         # KO counts only off a pre-evo that ALREADY carries Energy (evo_min_energy=1) — a bare 0-Energy
         # pre-evo is not a credible next-turn game-ender (ADR-0064 bounded-pessimism guard).
-        incoming = self.combat.reachable_incoming(
-            {"id": active.get("id"), "hp": my_hp}, opp_bodies,
-            charged=getattr(self, "_incoming_budget", None), evo_min_energy=1,
-            context=getattr(self, "_opp_attack_context", None))
+        #
+        # Off the SNAPSHOT (POC-T1). `bodies=` names the SIMULATED end board's opponent side rather
+        # than the live one — the whole point of this rung is a board that does not exist yet — while
+        # the energy policy and the forward index still come from the snapshot, which is where the
+        # Read put them. No `charged=`: the threaded budget IS `_incoming_budget`, the value this call
+        # used to fetch off `self` by hand.
+        opp_bodies = (opp.get("active") or []) + (opp.get("bench") or [])
+        incoming = model.theirs.reachable_incoming(
+            {"id": active.get("id"), "hp": my_hp}, bodies=opp_bodies, evo_min_energy=1,
+            context=self._opp_attack_context)
         return -float(KO_SCORE) if incoming >= my_hp else 0.0
 
     def _survives_after_ko(self, my_id, my_hp, opp_player) -> bool:
@@ -3198,14 +3206,19 @@ class PlannerMixin:
         my_stat = self.stats.get(my_id) if (self.stats and my_id is not None) else None
         if not (my_stat and my_hp):                       # unknown my card → no claim (contract-preserving)
             return 0
+        model = self._state_model
+        if model is None:
+            return 0                                      # no snapshot → no claim, as above
         # AREA-AT-DAMAGE-TIME (ADR-0070 §9): ACTIVE, declared explicitly. `_survives_after_ko` asks
         # about the body that will be Active AFTER my line resolves — the lethal tiers promote a
         # benched body before it swings — so its CURRENT board area is irrelevant here. Inferring the
         # area from the board would hand those bodies bench immunity and manufacture phantom lethals.
-        return int(self.combat.reachable_incoming(
-            {"id": my_id, "hp": my_hp}, opp_bodies,
-            charged=getattr(self, "_incoming_budget", None),
-            context=getattr(self, "_opp_attack_context", None), my_benched=False))
+        #
+        # Off the SNAPSHOT (POC-T1), with `bodies=` naming the post-line opponent side (the caller
+        # excludes the Active my line Knocks Out) and the threaded `_incoming_budget` as the policy.
+        return int(model.theirs.reachable_incoming(
+            {"id": my_id, "hp": my_hp}, bodies=opp_bodies,
+            context=self._opp_attack_context, my_benched=False))
 
     def _threat_magnitude(self, opp) -> float:
         """The threat magnitude of the opponent's Active — its biggest printed attack — as the

@@ -128,6 +128,8 @@ def test_opp_turns_to_ready_is_the_visible_parallel_lookahead():
     one hop to Mega Lucario ex whose Mega Brave costs 2) is ONE turn out on both legs; a powered
     Mega Lucario ex is ready NOW; an unknown body reads None — fail-closed, no deny slot."""
     pilot, _obs = _setup([HAMMER])
+    pilot._snapshot(_obs)        # the clock reads THEIR side off the snapshot now (POC-T1)
+    assert pilot._opp_turns_to_ready(None) is None       # …and None without a snapshot, likewise
     assert pilot._opp_turns_to_ready({"id": RIOLU, "energies": [0]}) == 1
     assert pilot._opp_turns_to_ready({"id": RIOLU, "energies": []}) == 2      # 2 attaches owed
     assert pilot._opp_turns_to_ready({"id": MLUC, "energies": [0, 0]}) == 0   # ready now

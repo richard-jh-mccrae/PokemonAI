@@ -134,6 +134,10 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "coin": frozenset(),                     # writes nothing: it is an RNG READ. See COIN below.
     "draw": frozenset({"my_hand_ids", "my_deck_count", "deck_odds"}),
     "energy_provide": frozenset({"attached_energy", "allowance_energy_attached"}),
+    # Issue #204: a `discard_energy_recur` line reloading Basic Energy from its OWN discard pile
+    # onto a body in play. No deck zone — unlike `accel`, the source is the visible discard, which
+    # is why the clock may read it soundly rather than through the odds machinery.
+    "energy_recur": frozenset({"attached_energy", "my_discard_contents"}),
     "fetch": frozenset({"my_hand_ids", "bodies_in_play", "my_deck_count", "deck_odds"}),
     "heal": frozenset({"damage_counters"}),
     # riders

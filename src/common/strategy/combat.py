@@ -33,6 +33,14 @@ _BENCH_SNIPE_CAP = 0.9     # a sub-prize tiebreak: the equal-outcome KO that ALS
 _ACCEL_TAGS = frozenset({"tutor_energy", "energy_accel"})   # the Function-Tag ROUTING gate of the
                            # Attach Budget: a tag says a card MIGHT supply Energy, an Effect Clause
                            # says how much (ADR-0067) — an untagged card is never even inspected
+#: The **doom** energy policy for :meth:`CombatMath.incoming` (POC-T1, Issue #260 — the fold of the
+#: legacy `incoming_active_damage` / `forward_incoming_damage` pair). Named rather than a magic
+#: string so a consumer picks it by import and a typo is an ImportError, not a silent ceiling.
+#: Semantics live on :meth:`CombatMath.incoming`; the short version is *strictly more pessimistic
+#: than the ceiling*, on both legs, which is why it is the ONE policy a catastrophe-grade survival
+#: boolean may take (`sound_rules`: `doom-ceiling-fail-direction`).
+UNCHARGED = "uncharged"
+
 _RECUR_RELOAD_CAP = 3      # the max Basic Energy a `discard_energy_recur` line reloads from its OWN
                            # discard in one turn — VERIFIED at source (EN_Card_Data.csv): Mega Lucario
                            # ex 678 Aura Jab up to 3 Basic {F}; Archaludon ex 190 Assemble Alloy up to
@@ -734,62 +742,48 @@ class CombatMath:
 
     def incoming_active_damage(self, ma: dict | None, oa: dict | None, *,
                                context: dict | None = None) -> int:
-        """Closed-form worst damage the opponent's Active deals my Active next turn — its biggest
-        attack (per-attack ceiling), honoring a live transient grant on THEIR Active: a self-lock
+        """Closed-form worst damage the opponent's **Active, in its current form**, deals my Active
+        next turn — its biggest attack, honoring a live transient grant on THEIR Active: a self-lock
         means no attack at all, a same-attack lock excludes that one, a self-bonus raises the hit.
         0 when unknown. WORST-CASE by design — affordability deliberately NOT charged (the hidden
-        burst-Energy lesson; docs/todo/incoming-affordability.md)."""
-        if not (self.stats and ma and oa):
-            return 0
-        opp_stat = self._card_stat(oa.get("id"))
-        if not opp_stat:
-            return 0
-        grant = self._grant(oa) or {}
-        if grant.get("self_lock"):
-            return 0
-        dmg = self.predicted_max_damage(opp_stat, ma, exclude_attack=grant.get("same_lock"),
-                                        context=context)
-        return int(dmg + grant.get("self_bonus", 0)) if dmg else int(dmg)
+        burst-Energy lesson; docs/todo/incoming-affordability.md).
 
-    def forward_incoming_damage(self, ma: dict | None, oa: dict | None, opp: dict | None, *,
-                                context: dict | None = None) -> int:
-        """Worst-case incoming if the opponent EVOLVES their Active's line next turn (play AS IF
-        they evolve): for each forward form affordable on their Energy + one attach, its damage
-        W/R-adjusted vs my Active. 0 when unknown / no ``opp`` dict.
+        **A delegate onto the curve** (POC-T1, Issue #260). It used to be a second implementation of
+        the same question, and the 94.5%-agreement divergence between this pair and
+        :meth:`doomed_incoming` was tracked for a year as a code difference. It is a POLICY
+        difference: :data:`UNCHARGED` is what "worst-case, affordability not charged" means, spelled
+        as a parameter of the one curve. The forward index is emptied because this read is the
+        CURRENT form only — the forward leg is its sibling's, and both now compose inside
+        :meth:`active_doomed` rather than beside it."""
+        return int(self.incoming(ma, [oa], 1, charged=UNCHARGED,
+                                 forward_ids=lambda _cid: (), context=context))
 
-        The hand-size scaler is priced by the Damage Formula like every other scaler, through
-        ``context`` (Issue #213). This used to carry a hand-rolled ``hand_size_attacker`` branch
-        beside the oracle; it was dead on every production path — the generic ``atk_hand`` term
-        already reads higher, and all six Incoming call sites thread the per-decision context —
-        and the card-level case now lives in :meth:`card_level_damage`, one level down, where both
-        fallback paths reach it."""
-        if not (self.stats and ma and oa and opp):
-            return 0
-        if not self._card_stat(ma.get("id")):
-            return 0
-        oa_energy = len(oa.get("energies") or [])
-        best = 0
-        for fid in self.forward_card_ids(oa.get("id")):
-            fstat = self._card_stat(fid)
-            if not fstat:
-                continue
-            if (fstat.minAttackCost or 0) > oa_energy + 1:   # unaffordable even with next turn's attach
-                continue
-            best = max(best, int(self.predicted_max_damage(fstat, ma, context=context)))
-        return best
-
-    def active_doomed(self, ma: dict | None, oa: dict | None, opp: dict | None = None, *,
+    def active_doomed(self, ma: dict | None, oa: dict | None, *,
                       context: dict | None = None) -> bool:
-        """The opponent can Knock Out my Active next turn — its biggest CURRENT attack OR the
-        attack its Active reaches by EVOLVING >= my Active's HP. WORST-CASE (the ceiling): Energy
-        affordability is deliberately not charged — a hidden Ignition-class burst reaches a costly
-        nuke in one turn (the planner_6858 lesson). A survival read must never under-prepare."""
+        """The opponent can Knock Out my Active next turn — its biggest CURRENT attack OR the attack
+        its Active reaches by EVOLVING >= my Active's HP. WORST-CASE (the ceiling): Energy
+        affordability is not charged on the body as it stands — a hidden Ignition-class burst reaches
+        a costly nuke in one turn (the planner_6858 lesson). A survival read must never under-prepare.
+
+        **The fold** (POC-T1, Issue #260): one call into the Threat-Clock curve at the
+        :data:`UNCHARGED` policy, over the Active and its forward forms. The old body was
+        ``max(incoming_active_damage, forward_incoming_damage)`` — two hand-written reads whose
+        agreement with the curve had to be measured (259/274) instead of being true by construction.
+
+        Two behaviour changes came out of writing it as one implementation, both in the PESSIMISTIC
+        direction and both defects of the old pair rather than costs of the fold:
+
+        * a self-locked Active now still contributes its FORWARD forms (evolving clears attack
+          effects, `docs/rules.md` §4) — the old `incoming_active_damage` returned 0 and the old
+          `forward_incoming_damage` never consulted the lock, so the pair happened to get this right
+          while the curve's shared enumeration got it wrong; the curve is fixed, not worked around.
+        * the vestigial ``opp`` parameter is GONE. It was never read — its only effect was that
+          passing None silently disabled the whole forward leg, which is a trapdoor, not an option.
+        """
         my_hp = (ma or {}).get("hp", 0)
         if not my_hp:
             return False
-        threat = max(self.incoming_active_damage(ma, oa, context=context),
-                     self.forward_incoming_damage(ma, oa, opp, context=context))
-        return threat >= my_hp
+        return int(self.incoming(ma, [oa], 1, charged=UNCHARGED, context=context)) >= my_hp
 
     def doomed_incoming(self, ma: dict | None, oa: dict | None, *, charged: dict | None = None,
                         context: dict | None = None) -> int:
@@ -1274,7 +1268,7 @@ class CombatMath:
                 my_body, form_id, form_body, attached, charged, context,
                 exclude=grant.get("same_lock") if is_current else None,
                 bonus=grant.get("self_bonus", 0) if is_current else 0,
-                attaches=turns, my_benched=my_benched))
+                attaches=turns, my_benched=my_benched, is_current=is_current))
         return worst
 
     def _attacker_forms(self, opp_bodies, *, forward_ids=None, evo_min_energy: int = 0,
@@ -1288,9 +1282,16 @@ class CombatMath:
         bare 0-Energy pre-evolution's riders where the damage read would not. Same reasoning as
         `_build_standing` in ADR-0070: one function owns the fact, so the readings cannot disagree.
 
-        Applies the transient self-lock (a body that cannot attack at all is skipped entirely,
-        ADR-0033) and the promotion gate (ADR-0071 decision 6). A forward form is grant-free —
-        evolving clears attack effects (rules.md §4)."""
+        Applies the transient self-lock (ADR-0033) and the promotion gate (ADR-0071 decision 6). A
+        forward form is grant-free — **evolving clears attack effects** (`docs/rules.md` §4:
+        *"Evolving keeps attached cards + damage counters; clears Special Conditions and attack
+        effects"*), and that is why a self-locked body still yields its FORWARD forms: the lock
+        says *this* Pokémon cannot attack next turn, and the Pokémon it evolves into is not it.
+        Skipping the whole line was an UNDER-read (POC-T1, Issue #260) — the legacy
+        `forward_incoming_damage` this curve now subsumes never applied the lock to forward forms,
+        and dropping them on the fold would have made a survival read less pessimistic than the read
+        it replaced. Fixed here rather than compensated for at the fold, because the fold's whole
+        premise is that there is ONE implementation."""
         fwd = forward_ids if forward_ids is not None else self.forward_card_ids
         promotable = self._promotion_open(opp_bodies, opp_active,
                                           switch_enabler=switch_enabler)
@@ -1300,10 +1301,9 @@ class CombatMath:
             if not promotable and opp_active is not None and body is not opp_active:
                 continue                              # stuck behind an Active that can't pay retreat
             grant = self._grant(body) or {}
-            if grant.get("self_lock"):
-                continue                              # this body can't attack at all next turn
             attached = len(body.get("energies") or [])
-            yield body.get("id"), body, attached, grant, True
+            if not grant.get("self_lock"):            # locked: this body can't attack at all — but
+                yield body.get("id"), body, attached, grant, True    # its evolutions still can
             if attached < evo_min_energy:
                 continue                              # bare pre-evo — not a credible evolving threat
             for fid in (fwd(body.get("id")) or ()):   # forward forms — carry the attached Energy
@@ -1317,7 +1317,8 @@ class CombatMath:
         return self.rider_snipe(attack_id) + self.rider_spread(attack_id)
 
     def _reach_form_damage(self, my_body, form_id, form_body, attached, charged, context, *,
-                           exclude, bonus, attaches: int = 1, my_benched: bool = False) -> int:
+                           exclude, bonus, attaches: int = 1, my_benched: bool = False,
+                           is_current: bool = False) -> int:
         """The worst damage ONE attacker form (current or evolved) deals ``my_body`` under the
         ``charged`` energy policy (see :meth:`incoming`), given ``attaches`` manual attach-turns of
         Energy available (1 = the ADR-0064 one-step read; the Threat-Clock curve passes ``t``). 0
@@ -1326,14 +1327,22 @@ class CombatMath:
         ``my_benched`` is the AREA-AT-DAMAGE-TIME of ``my_body`` (ADR-0070 §9): an attack's printed
         damage lands on the ACTIVE, so a benched body is reachable only by the snipe/spread riders —
         and not at all if it is Tera (rules.md §185). The attacker-side self-bonus grant raises
-        printed damage, not a rider, so it is not applied on the bench path."""
+        printed damage, not a rider, so it is not applied on the bench path.
+
+        ``is_current`` distinguishes the body as it STANDS from a form it could evolve into, and it
+        is load-bearing under exactly one policy: :data:`UNCHARGED` charges the current form NO
+        affordability at all (the hidden-burst lesson — a body already on the board can hold Energy
+        we cannot see, so "its cheapest attack costs more than it carries" is not a proof it will not
+        swing), while a form that does not exist yet must still be reachable."""
         stat = self._card_stat(form_id)
         if not stat:
             return 0
         if my_benched and self.is_tera((my_body or {}).get("id")):
             return 0                                  # Tera: no attack damage while Benched
-        if charged is None:                           # ceiling: pay cheapest, credit biggest
-            if not self._affords(stat, form_body, None, attached, attaches, charged):
+        if charged is None or charged == UNCHARGED:   # ceiling family: pay the gate, credit biggest
+            unconditional = (charged == UNCHARGED and is_current)
+            if not unconditional and not self._affords(stat, form_body, None, attached, attaches,
+                                                       charged):
                 return 0
             if my_benched:
                 return max((self._bench_rider(aid) for aid in (stat.attacks or ())
@@ -1465,7 +1474,16 @@ class CombatMath:
         `_build_standing` lesson from ADR-0070, applied here because #163 added a second consumer.
 
         Under the ceiling policy (``charged is None``) the question is per-FORM, not per-attack: a
-        form contributes once it can pay its CHEAPEST attack, and ``aid`` is then irrelevant."""
+        form contributes once it can pay its CHEAPEST attack, and ``aid`` is then irrelevant.
+
+        Under :data:`UNCHARGED` it is per-form too, but read FAIL-OPEN: an unresolvable cost counts
+        as payable. That is the one substantive difference from the ceiling, and it is deliberate —
+        ``can_pay_cheapest`` reads ``(minAttackCost or 99)``, a fail-CLOSED idiom whose own docstring
+        scopes it to "a my-side claim is never assumed". Pointed at the OPPONENT it says *"I cannot
+        tell what this costs, so assume it cannot reach me"*, which is the one thing a survival read
+        must never say. The current form skips this check entirely; see :meth:`_reach_form_damage`."""
+        if charged == UNCHARGED:                      # doom: fail-OPEN on an unresolvable cost
+            return (getattr(stat, "minAttackCost", None) or 0) <= attached + t
         if charged is None:                           # ceiling: pay cheapest, credit anything
             return bool(stat.can_pay_cheapest(attached + t))
         base = charged.get("base_attach", 1)
@@ -1536,32 +1554,77 @@ class CombatMath:
 
 
     def discard_recur_fuel(self, body: dict | None, opp_discard_energy: dict | None, *,
-                           forward_ids=None) -> int:
+                           forward_ids=None, scope: str = "any") -> int:
         """The extra Basic Energy a `discard_energy_recur` line can reload from the opponent's DISCARD
         next turn — the Threat Clock's discard-fuel input (S2 of
         docs/plans/opponent-value-equation-unification.md). A refueler taps its own discard as an
         extra energy reservoir beyond the 1 manual attach/turn, so its line is faster (lower
         :meth:`turns_to_afford`) and more dangerous (higher :meth:`incoming`). Verified card facts
         (EN_Card_Data.csv): Mega Lucario ex 678 Aura Jab attaches up to 3 Basic {F} from its discard
-        to its Bench; Archaludon ex 190 Assemble Alloy up to 2 Basic {M} to its {M} Pokémon.
+        to its **Benched** Pokémon; Archaludon ex 190 Assemble Alloy up to 2 Basic {M} to its {M}
+        Pokémon, **on evolving**.
 
-        Returns ``min(discard count of the line's own type, _RECUR_RELOAD_CAP)`` — the reload TYPE is
-        the recur form's own ``energyType`` (verified {F}/{M}). 0 when no form in the body's line
-        (current + forward) carries the tag, no Basic Energy of the line's type sits in the discard,
-        or functions/stats are blind (fail-open). Pure: a caller models the fuel by augmenting a
-        body's ``energies`` and re-reading the clock — the live reads are unchanged (S2 shadow-only)."""
+        ``scope`` picks WHICH question is being asked, and the two are genuinely different (Issue
+        #204's grill agenda item 2, resolved here against the card text rather than deferred):
+
+        - ``"any"`` (default, the shipped reading) — *"could this line refuel at all?"* A fail-OPEN
+          caution signal: the doom-relax stands down when a refueler has fuel in the bin, because a
+          reload outside the attach budget is exactly what a relaxed survival read cannot see. Tag-
+          routed and type-capped; it deliberately does not care where the Energy lands.
+        - ``"self_arming"`` — *"does the reload help THIS body pay for its own attack?"* That is a
+          CLOCK input (`turns_to_afford`), so a wrong answer is a wrong number rather than a missed
+          caution, and it is quantified by **Effect Clause**, never by the boolean tag (ADR-0067's
+          rule: the tag ROUTES, the clause says how much and under what predicate). The two shipped
+          lines answer this differently and the texts are unambiguous:
+
+          * **Assemble Alloy is an Ability that fires "when you play this Pokémon from your hand to
+            evolve"** and attaches to "your {M} Pokémon" — which includes the body that just evolved.
+            So it funds precisely the hop this clock is already counting. **Credited.**
+          * **Aura Jab is an ATTACK** whose reload targets "your **Benched** Pokémon" — never the
+            attacker. Crediting it toward arming Mega Lucario ex would be circular (it must already
+            be armed to attack) and toward arming a Riolu it is simply not yet available. **Not
+            credited.**
+
+          **Declared gap** (source-verified, not an oversight): Aura Jab's reload IS real for OTHER
+          benched bodies once a Mega Lucario ex is in play and attacking. Pricing that needs a
+          board-level "an armed refueler exists and will swing" premise rather than a per-body one,
+          so it is left out — which UNDER-rates their bench clock, the one direction this method
+          otherwise errs against. Recorded rather than papered over.
+
+        0 when no form in the body's line (current + forward) carries the tag, no Basic Energy of the
+        line's type sits in the discard, or functions/stats are blind (fail-open). Pure: a caller
+        models the fuel by augmenting a body's ``energies`` and re-reading the clock."""
         if not (self.functions and self.stats) or not opp_discard_energy:
             return 0
         st = self._card_stat((body or {}).get("id"))
         if st is None:
             return 0
         fwd = forward_ids if forward_ids is not None else self.forward_card_ids
-        forms = [st, *(self._card_stat(f) for f in (fwd(st.cardId) or ()))]
+        forward_stats = [self._card_stat(f) for f in (fwd(st.cardId) or ())]
+        forms = [st, *forward_stats]
         recur = next((s for s in forms if s is not None
                       and "discard_energy_recur" in self.functions.tags(s.cardId)), None)
         if recur is None or recur.energyType is None:
             return 0
-        return min(int(opp_discard_energy.get(recur.energyType, 0)), _RECUR_RELOAD_CAP)
+        cap = _RECUR_RELOAD_CAP
+        if scope == "self_arming":
+            clause = self._energy_recur_clause(recur.cardId)
+            if clause is None:
+                return 0                              # no clause, no claim (fail-CLOSED on yield)
+            if clause.get("trigger") != "on_evolve" or clause.get("target") == "bench_only":
+                return 0                              # the reload does not reach this body's cost
+            if recur is st:
+                return 0                              # the hop already happened — it fires once
+            cap = min(cap, int(clause.get("amount") or 0))
+        return min(int(opp_discard_energy.get(recur.energyType, 0)), cap)
+
+    def _energy_recur_clause(self, card_id) -> dict | None:
+        """The card's ``energy_recur`` Effect Clause (amount / trigger / target scope), or None when
+        the compendium has nothing for it — the fail-CLOSED read a yield question must take."""
+        if self.effects is None:
+            return None
+        return next((c for c in (self.effects.clauses(card_id) or ())
+                     if c.get("kind") == "energy_recur"), None)
 
     def attack_realising_p(self, attack_id, *, budget, body=None, p_by_type=None) -> float:
         """P(``budget`` plus ``body``'s attached Energy really pays ``attack_id``) — the Probability

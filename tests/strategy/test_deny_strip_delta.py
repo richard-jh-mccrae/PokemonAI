@@ -44,8 +44,14 @@ def _obs(opp_energies, *, my_hp=200):
 BOARD = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3)
 
 
+def _rows(pilot, obs):
+    """The rows, with the per-decision StateModel these reads now go through installed (POC-T1)."""
+    pilot._snapshot(obs)
+    return pilot._opponent_target_rows(obs, BOARD)
+
+
 def _active_row(pilot, obs):
-    _phase, rows = pilot._opponent_target_rows(obs, BOARD)
+    _phase, rows = _rows(pilot, obs)
     return next(r for r in rows if r["area"] == "active")
 
 
@@ -91,8 +97,8 @@ def test_off_is_byte_identical_and_on_adds_only_new_keys():
     field is unchanged and only the two new keys appear. Nothing reads them yet — #187 is the
     consumer and is itself blocked on #199 — so ON can change no decision."""
     obs = _obs(2)
-    off_phase, off_rows = _pilot(strip=False)._opponent_target_rows(obs, BOARD)
-    on_phase, on_rows = _pilot(strip=True)._opponent_target_rows(obs, BOARD)
+    off_phase, off_rows = _rows(_pilot(strip=False), obs)
+    on_phase, on_rows = _rows(_pilot(strip=True), obs)
 
     assert off_phase == on_phase
     assert not any({"strip_shift", "deny_value"} & set(r) for r in off_rows)
@@ -133,7 +139,7 @@ def test_a_bare_body_denies_nothing_and_the_caller_s_dict_is_never_mutated():
     assert obs["current"]["players"][1]["active"] == before
 
     obs2 = _obs(2)
-    _pilot()._opponent_target_rows(obs2, BOARD)
+    _rows(_pilot(), obs2)
     assert obs2["current"]["players"][1]["active"][0]["energies"] == [FIGHTING, FIGHTING]
 
 

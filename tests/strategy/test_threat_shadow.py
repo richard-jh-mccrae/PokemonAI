@@ -73,6 +73,7 @@ def test_threat_shadow_emits_the_agreement_bit_and_respects_the_midsim_guard():
         {"active": [{"id": OPP, "hp": 200, "energies": []}]},
     ]}}
     board = types.SimpleNamespace(active_doomed=True)
+    p._snapshot(obs)                  # the shadow reads both policies off the snapshot (POC-T1)
     sh = p._threat_shadow(obs, board)
     assert sh is not None
     assert set(sh) >= {"doom_old", "doom_curve", "doom_incoming", "my_hp", "agree",
@@ -81,7 +82,7 @@ def test_threat_shadow_emits_the_agreement_bit_and_respects_the_midsim_guard():
     # value, exposed separately as doom_final — which mirrors what was fed in here).
     ma = obs["current"]["players"][0]["active"][0]
     opp = obs["current"]["players"][1]
-    assert sh["doom_old"] == p.combat.active_doomed(ma, opp["active"][0], opp)
+    assert sh["doom_old"] == p.combat.active_doomed(ma, opp["active"][0])
     assert sh["doom_final"] is True
     assert sh["agree"] == (sh["doom_old"] == sh["doom_curve"])
     # mid-sim → sparse (no shadow work during rollouts)
@@ -104,7 +105,7 @@ def test_the_two_doom_reads_agree_on_a_hand_size_attacker():
     ctx = {"atk_hand": 7}
     for body in ({"id": ALAKAZAM, "hp": 140, "energies": [5]},       # already the attacker
                  {"id": KADABRA, "hp": 90, "energies": [5]}):        # one evolution away
-        worst = combat.active_doomed(my, body, opp, context=ctx)
+        worst = combat.active_doomed(my, body, context=ctx)
         curve = combat.doomed_incoming(my, body, context=ctx)
         assert curve == 140                          # 20 dmg/card x a 7-card hand
         assert worst is True and (curve >= my["hp"]) is True         # they AGREE
@@ -112,5 +113,5 @@ def test_the_two_doom_reads_agree_on_a_hand_size_attacker():
     # the case the retired branch used to make diverge, by crediting a card-level roll-up that the
     # curve had no equivalent for.
     kadabra = {"id": KADABRA, "hp": 90, "energies": [5]}
-    assert combat.active_doomed(my, kadabra, opp, context=None) is False
+    assert combat.active_doomed(my, kadabra, context=None) is False
     assert combat.doomed_incoming(my, kadabra, context=None) < my["hp"]

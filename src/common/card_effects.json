@@ -418,5 +418,25 @@
 "energy": "basic",
 "energy_type": 5
 }
+],
+"190": [
+{
+"kind": "energy_recur",
+"amount": 2,
+"energy_type": 8,
+"zone": "discard",
+"trigger": "on_evolve",
+"target": "own_type"
+}
+],
+"678": [
+{
+"kind": "energy_recur",
+"amount": 3,
+"energy_type": 6,
+"zone": "discard",
+"trigger": "on_attack",
+"target": "bench_only"
+}
 ]
 }

@@ -273,8 +273,13 @@ def test_active_doomed_sees_the_forward_evolution_threat():
     ma = {"id": CINDERACE, "hp": 130}
     oa = {"id": riolu, "energies": [1]}                     # 1 Energy + next attach pays the 2
     # Riolu's own attack can't KO — but the line it evolves INTO (270) dooms my 130-HP Active.
-    assert o.active_doomed(ma, oa, {"handCount": 4})
-    assert not o.active_doomed(ma, oa)                      # no opp dict -> no forward read
+    assert o.active_doomed(ma, oa)
+    # POC-T1 (Issue #260): the vestigial third `opp` positional is GONE. It was never read — its
+    # only effect was that passing None silently disabled the whole forward leg, so a caller that
+    # simply did not have an opponent dict to hand got a quieter survival read for free. The forward
+    # threat above is a fact about `oa`'s own line, and it is now read as one.
+    assert o.active_doomed(ma, {"id": riolu, "energies": []}) is False   # 0 Energy: 2-cost is out of
+    #                                                                     reach even with one attach
 
 
 @pytest.mark.req("REQ-COMBAT-0008")
