@@ -90,7 +90,7 @@ EXPECTED_SHIPPED = {
     "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069): the axes-sum
                                     # marginal IS the energy-attach decision; 19 baseline_energy rungs are
                                     # DELETED, so OFF is documented DEGRADED MODE, never a rollback
-    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER, shipped ON 2026-07-27 (ADR-0073, #141):
+    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER, shipped ON 2026-07-27 (ADR-0100, #141):
                                     # the Sub-lethal Residual in the damage currency, at a DERIVED
                                     # 100 damage/prize. Eleven of the twelve promote/retreat rungs it
                                     # replaced are DELETED (only `retreat-to-wall-the-line` survives, as

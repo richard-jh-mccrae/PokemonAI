@@ -2,10 +2,10 @@
 
 The batched review #136 standing directive 2 owes before the deletion commit is final: *every flip is
 re-ruled with the user, never auto-conformed*. Companion to `attach-decider-swap-review.md` (1a) and
-`evolve-decider-swap-review.md` (1b). Authority for every design choice is **ADR-0073**.
+`evolve-decider-swap-review.md` (1b). Authority for every design choice is **ADR-0100**.
 
 **Status: RULED by the user 2026-07-27.** The single `REGRESSION` is held out with owner **#165** (it
-is a Maneuver), and the defect it exposed in `_deck_basic_energy_fuel` is filed as **#172**. ADR-0073
+is a Maneuver), and the defect it exposed in `_deck_basic_energy_fuel` is filed as **#172**. ADR-0100
 §4's exposure grading is exonerated. Nothing in the equation was tuned toward the frame — auto-
 conforming it is the thing directive 2 forbids.
 
@@ -13,7 +13,7 @@ conforming it is the thing directive 2 forbids.
 
 `tools/train/probes/promote_retreat_decider_sweep.py`, rebuilt for this phase. The shipped
 `tools/train/promote_retreat_sweep.py` is **deleted, not merely stale**: it reads a
-`promote_retreat_shadow` record and a `worth_it` SIGN BIT, and ADR-0073 decision 2 retires both —
+`promote_retreat_shadow` record and a `worth_it` SIGN BIT, and ADR-0100 decision 2 retires both —
 deleting `stay_forgone` turns the whether-site verdict from a sign test into a per-option score, so
 there is no sign left to agree with.
 
@@ -39,7 +39,7 @@ gate   PASS  (the one REGRESSION is RULED — held out with owner #165, see belo
 ```
 
 Deleting the `active_can_ko` recusal returned the frames the shadow used to withdraw from, as
-ADR-0073 §12 predicted.
+ADR-0100 §12 predicted.
 
 ## The fifteen FIX frames
 
@@ -204,7 +204,7 @@ ORDER. So there are two distinct defects behind this one frame:
 
 **Disposition.** The frame is **HELD OUT with owner #165** (defect ii — the Maneuver), and defect (i)
 is filed as **#172** against `_deck_basic_energy_fuel`, which is ADR-0061's, pre-existing, and shared
-with the attack option, so it is not 1c's to change unilaterally. ADR-0073 §4's exposure grading is
+with the attack option, so it is not 1c's to change unilaterally. ADR-0100 §4's exposure grading is
 **exonerated** — reading A is withdrawn as treating a symptom.
 
 ### The readings, for the record
@@ -224,18 +224,18 @@ with the attack option, so it is not 1c's to change unilaterally. ADR-0073 §4's
 * **The Discrimination Gate** (leaf-lab `OK → MISS` flips) and the **paired A/B tripwire**
   (`--stage mid-build`, crashes == 0 and `ci_lo >= −5pp`) are ADR-0072's, unchanged, and both need
   the live engine harness — they are owed before merge, not before the sitting.
-* ADR-0073 §12 adds **no gate of its own**, which supersedes the issue's grill agenda item 4: there is
+* ADR-0100 §12 adds **no gate of its own**, which supersedes the issue's grill agenda item 4: there is
   no disagreement-*rate* pass mark, only "zero unruled regressions, every flip ruled".
 
 ## Two build-time findings worth carrying forward
 
-* **`hold-position-in-setup` was NOT refuted.** ADR-0073 flags its deletion as the weakest claim in
+* **`hold-position-in-setup` was NOT refuted.** ADR-0100 flags its deletion as the weakest claim in
   the ruling — an emergence argument with no worked frame behind it — and expects a regression there.
   One appeared (83007714-8, the turn-1 setup frame the issue named) and turned out to be a bug of
   mine, not a refutation: the equation credited turn-1 attack damage, which `docs/rules.md` §2 L71-72
   forbids for the player going first. With the rule honoured the frame converts to a FIX, and the
   deletion stands with a worked frame behind it at last (`tests/strategy/test_baseline_retreat.py`).
-* **Finding B2's stay-to-develop term is NOT needed.** ADR-0073 decision 2 said to measure before
+* **Finding B2's stay-to-develop term is NOT needed.** ADR-0100 decision 2 said to measure before
   authoring it. Measured: of the three named residual regressions, 83007714-8 now converts, and no
   frame in the sweep regresses in the B2 shape. No term authored.
 

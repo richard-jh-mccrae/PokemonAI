@@ -1,7 +1,7 @@
 """Deploy DECIDER — ADR-0086 (grill: Issue #197), the fourth per-seam value equation.
 
 What is putting ONE body into ONE Bench slot worth, right now? Beside the attach (ADR-0069), evolve
-(ADR-0070) and promote/retreat (ADR-0073) marginals, and owning every way a body reaches my Bench:
+(ADR-0070) and promote/retreat (ADR-0100) marginals, and owning every way a body reaches my Bench:
 the pregame placement, a `PLAY` from hand at the main menu, and a fetch straight onto the Bench.
 
     deploy(X) = BAND x ( assignment_relevance(X) + ability_relevance(X) )

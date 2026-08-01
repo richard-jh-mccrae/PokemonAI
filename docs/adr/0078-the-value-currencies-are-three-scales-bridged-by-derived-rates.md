@@ -14,7 +14,7 @@ number is a rebase artifact, not an identifier, so cite the issue alongside it.
 **Context issues:** #187 (this grill), #186 / ADR-0076 (the slot-family split this extends and partly
 supersedes), #136 (the Value System build tracker), #143 (the un-split original, closed),
 `docs/plans/opponent-value-equation-unification.md` (the design), ADR-0062 (the denial oracle),
-ADR-0073 (the Prize Damage Rate), ADR-0065 (the no-fudge discipline this is disciplined by).
+ADR-0100 (the Prize Damage Rate), ADR-0065 (the no-fudge discipline this is disciplined by).
 
 ## Context
 
@@ -59,7 +59,7 @@ removal Δ because gust and snipe are what it served. The design doc always spec
 currency" claim scopes to the DP slots only. The live scales are **card-worth points** (`ROLE_TIER`
 caps 30, `ENERGY_TIER` 8, `TAG_TIER` 10–30), **damage / tactical** (`_DENIAL_PLAY_W = 1.0` points per
 damage point, `ENERGY_RECOVER = 75` "chip-scale", `KO_SCORE = 1000`), and **prize-equivalents**
-(`needs.opponent_target_value`, 0–3.9). ADR-0073 already bridges prizes↔damage. Nothing bridges
+(`needs.opponent_target_value`, 0–3.9). ADR-0100 already bridges prizes↔damage. Nothing bridges
 worth↔anything, and two shipped constant-pairs price the same object on both scales with answers ~9×
 apart:
 
@@ -69,7 +69,7 @@ apart:
 | one Energy | `ENERGY_TIER` **8.0** | `ENERGY_RECOVER` **75** | ~9.4 dmg per worth-pt |
 
 So the worth bridge cannot be read off existing constants by matching a pair. The precedent is a
-warning, not a reassurance: ADR-0073 records that the superseded `_PRIZE_UNIT = 12` was wrong by
+warning, not a reassurance: ADR-0100 records that the superseded `_PRIZE_UNIT = 12` was wrong by
 roughly 8× and made the shipped equation *"endorse feeding a 3-prize body to save a 40-point band."*
 Same failure mode, same order of magnitude.
 
@@ -92,11 +92,11 @@ Amendment E had to write an amendment about.
 converts at a **derived** rate. Two bridges are needed and they are not the same number:
 
 - **prize-eq → damage/tactical: already exists.** `PRIZE_DAMAGE_RATE = 100.0`
-  (`promote_retreat_value.py:63`, ADR-0073) — the median HP-per-prize over all 1061 bodies in
+  (`promote_retreat_value.py:63`, ADR-0100) — the median HP-per-prize over all 1061 bodies in
   `data/EN_Card_Data.csv`, *recomputed from the CSV by `test_promote_retreat_value.py:77`* rather than
   pinned. No new constant, no new derivation. It is currently a single-consumer constant living in a
   promote/retreat module; S3c **hoists it to a shared home**, because three more consumers are arriving.
-- **prize-eq → card-worth: does NOT exist, and ADR-0073 scoped it out on purpose.** That ADR's own
+- **prize-eq → card-worth: does NOT exist, and ADR-0100 scoped it out on purpose.** That ADR's own
   glossary `_Avoid_` line reads: *"`KO_SCORE` (the KO's dominance band, deliberately unbounded by this
   rate), **Worth** (the card/role tier currency)."* The missing primitive is the third leg — a **Worth
   Damage Rate** (damage per card-worth point) — from which the prize→worth conversion composes as

@@ -439,7 +439,7 @@ class Board:
     ko_promote_slot: tuple | None = None  # (AreaType, index) of the benched body whose affordable attack —
                                        # given this turn's attachable Energy + a playable {F} damage-boost —
                                        # KOs the opp Active (`promote_ko_aware`; None when off / no KO-body).
-                                       # Backed `promote-the-ko-attacker` (DELETED, ADR-0073 §11 -> `_promote_ko_tactical`)
+                                       # Backed `promote-the-ko-attacker` (DELETED, ADR-0100 §11 -> `_promote_ko_tactical`)
     evolve_to_ready_wincon_available: bool = False  # win-condition in hand AND the payoff's IMMEDIATE
                                        # pre-evo on the Bench already carries enough Energy that evolving THIS turn
                                        # yields a ready attacker — worth promoting to evolve. False -> bare/too-deep
@@ -453,7 +453,7 @@ class Board:
     opp_cannot_punish_wincon: bool = False  # ADR-0064 Decision 4: the opponent's reachable Incoming
                                        # (charged safety read) cannot KO my best benched win-condition next
                                        # turn — the return-KO reachability veto. Stands down interpose /
-                                       # the prize-reach brake; both rungs are DELETED (ADR-0073 §11, now Exposure)
+                                       # the prize-reach brake; both rungs are DELETED (ADR-0100 §11, now Exposure)
                                        # (scenario 3: they literally can't afford to punish). Fails CLOSED
     basic_energy_in_deck: bool = False  # my deck can still yield a Basic Energy (a Basic-Energy id not
                                        # known-exhausted) — fuel gate for an accelerator promote
@@ -987,7 +987,7 @@ class Context:
                                         # rather than estimated when the machinery is dark.
     promote_target_on_their_path: bool = False  # Tier-3 Path Denial (ADR-0040): this promote/switch
                                         # candidate sits on THEIR cheapest path — bringing it up walks
-                                        # it into the KO they want (rung DELETED as subsumed, ADR-0073 §7c)
+                                        # it into the KO they want (rung DELETED as subsumed, ADR-0100 §7c)
     counter_is_best_placement: bool = False   # this option puts the current counter on the knapsack-
                                               # optimal opp target at a DAMAGE_COUNTER_ANY/DAMAGE_COUNTER
                                               # select (== board.best_counter_slot) — `place-counter-to-convert`
@@ -1107,12 +1107,12 @@ class OptionTrace:
                                  # emission path, one truth, and the substrate #146/#148 consume. Sparse:
                                  # None off an EVOLVE option or while the kill-switch is OFF.
     promote_retreat_working: dict | None = None  # the PROMOTE/RETREAT DECIDER's legible working
-                                 # (ADR-0073, #141): the per-option TERM row — my_yield, closure,
+                                 # (ADR-0100, #141): the per-option TERM row — my_yield, closure,
                                  # exposure, tempo_denied, fatal, and (whether-site only) preservation
                                  # and retreat_cost, plus the `tactical` the option actually scored.
                                  # Like `attach_working`/`evolve_working` this DECIDES, so there is no
                                  # agreement bit: one emission path, one truth. `site` names which of
-                                 # ADR-0073 §9's call sites priced it ("pick" | "whether"). Sparse:
+                                 # ADR-0100 §9's call sites priced it ("pick" | "whether"). Sparse:
                                  # None off a promote/retreat option or while the kill-switch is OFF.
 
 
@@ -1365,7 +1365,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # Takes precedence over `discard_keep_value`; OFF =
                                                         # v1 decides (or the ladder) and v2 only shadows.
         self.promote_retreat_value = promote_retreat_value   # the PROMOTE/RETREAT DECIDER's emergency
-                                                        # lever (ADR-0073, shipped ON): the Sub-lethal
+                                                        # lever (ADR-0100, shipped ON): the Sub-lethal
                                                         # Residual, one evaluator across the body pick, the
                                                         # whether-to-retreat question and the forced
                                                         # promote. OFF is DEGRADED MODE, not a rollback —
@@ -1998,7 +1998,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_row = self._attach_decision(obs, select, board, option)   # priced ONCE: the score term
                                                            # and the planner's spend account read it
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
-        promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0073
+        promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0100
         deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0086 (#197)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
@@ -2015,7 +2015,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
                     + self._retreat_to_lethal_tactical(obs, board, option)
-                    + self._promote_ko_tactical(obs, select, board, option)   # ADR-0073 §11
+                    + self._promote_ko_tactical(obs, select, board, option)   # ADR-0100 §11
                     + self._grab_lethal_tactical(obs, select, board, option)
                     + self._grab_enabler_lethal_tactical(obs, select, board, option)
                     + self._grab_retreat_tool_lethal_tactical(obs, select, board, option)
@@ -2261,7 +2261,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return True
         return False
 
-    # ── the PROMOTE/RETREAT DECIDER (ADR-0073, #141) ───────────────────────────────────────────
+    # ── the PROMOTE/RETREAT DECIDER (ADR-0100, #141) ───────────────────────────────────────────
     # ONE evaluator, three call sites (§9). Every read routes through the StateModel snapshot
     # (ADR-0068), so a memoized clock cannot shift under a hypothetical build, and the equation
     # itself stays pure over MEASUREMENTS — the Pilot fills `PromoteBody`/`RetreatSide`, exactly
@@ -2269,7 +2269,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _promote_body(self, obs: dict, board: Board, raw: dict | None, *, draws: int = 0,
                       bench_after=None) -> PromoteBody:
-        """Read ONE body into the promote/retreat decider's damage-currency view (ADR-0073 §3-§7).
+        """Read ONE body into the promote/retreat decider's damage-currency view (ADR-0100 §3-§7).
 
         The body is measured AS THE ACTIVE — that is where a promote candidate arrives and where the
         retreating Active currently stands — so its Attach Budget is built at ``target_benched=False``
@@ -2333,7 +2333,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _promote_wall_progress(self, obs: dict, board: Board, raw: dict) -> float | None:
         """ADR-0040's per-turn wall progress (``hp / t_star``) for a body promoted into a STANDING
         WALL, or None when the wall does not stand and the body's reachable damage speaks for itself
-        (ADR-0073 §3a: "vs a standing wall the single hit is fake value — price the SEQUENCE").
+        (ADR-0100 §3a: "vs a standing wall the single hit is fake value — price the SEQUENCE").
 
         Scoped to THIS body rather than `board.active_can_ko`, because the question is what B faces
         after arriving. Returns None the moment B can Knock the defender Out: the KO is then the
@@ -2369,7 +2369,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _promote_accel_units(self, obs: dict, board: Board, raw: dict) -> float:
         """Energy this body's accel rider would actually attach AND a recipient can actually USE —
-        the `_recover_units` count (ADR-0073 §3b).
+        the `_recover_units` count (ADR-0100 §3b).
 
         `max` over the body's AFFORDABLE attacks, because it commits to one attack and picks the
         best: `max` WITHIN the axis, per ADR-0069 §1. Retreating INTO Cinderace must credit what
@@ -2388,7 +2388,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _promote_closure(self, obs: dict, raw: dict, *, draws: int) -> float:
         """``max`` over attacks of ``damage(a) x [readiness_p(a | enabler) - readiness_p(a)]`` — the
         odds that THIS turn's dig readies an unready body, priced as probability x the damage it
-        unlocks (ADR-0073 §5).
+        unlocks (ADR-0100 §5).
 
         `_evolve_income_delta` is the wiring this copies, so it inherits that path's fixes rather
         than re-earning them — notably `CountTriple.expected` rather than the raw triple, whose
@@ -2439,7 +2439,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _promote_tempo_step(self, raw: dict) -> float:
         """``incoming(t=2) - incoming(t=1)`` against the body that would be my Active — ONE
-        development step's threat growth off the live Threat-Clock curve (ADR-0073 §6).
+        development step's threat growth off the live Threat-Clock curve (ADR-0100 §6).
 
         The curve's own docstring notes that `t` moves only the ENERGY budget, evolution reach being
         maximal at `t=1`, so the delta IS one step. 0.0 without a snapshot (fail-closed)."""
@@ -2452,7 +2452,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _opp_items_live(self) -> bool:
         """Does the opponent PROVABLY still hold live Item copies — the gate on `tempo_denied`
-        (ADR-0073 §6).
+        (ADR-0100 §6).
 
         The shape of `_opp_switch_enabler`, but failing **CLOSED**: no facade, no functions table, no
         matched Read or any error all mean NO CREDIT. That is the opposite fail direction from a
@@ -2481,7 +2481,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _turn_dig_depth(self, obs: dict) -> int:
         """The cards this turn's REMAINING dig still puts within reach — the closure term's draw
-        window (ADR-0073 §5).
+        window (ADR-0100 §5).
 
         Summed over my in-play bodies whose draw/dig Ability is STILL ON THE MENU, because the menu
         is the fact about whether a use is left (the same argument ADR-0070 §7 makes for
@@ -2497,7 +2497,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _retreat_discard_choice(self, ma: dict, n: int) -> dict:
         """``ma`` as it stands after a retreat discards ``n`` Energy — the GREEDY cheapest-to-lose
-        typed choice (ADR-0073 §8).
+        typed choice (ADR-0100 §8).
 
         A Retreat Cost slot is COLOURLESS (`docs/rules.md` §89, rulebook.txt L142: "discard 1 Energy
         for each ⟨C⟩"), so which Energy goes is genuinely ours to pick — and the engine poses a
@@ -2513,7 +2513,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return dict(ma, energies=energies)
 
     def _retreat_cost_legs(self, obs: dict, card_worth: float = 0.0) -> dict:
-        """What LEAVING the Active Spot costs (ADR-0073 §8) — the build the discard destroys, plus
+        """What LEAVING the Active Spot costs (ADR-0100 §8) — the build the discard destroys, plus
         ADR-0069 §5c's resource premium.
 
         Computed ONCE per menu rather than per destination, because §9's claim is precisely that
@@ -2542,7 +2542,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "build_after": self._build_standing(after), "resource_premium": premium}
 
     def _retreat_side(self, obs: dict, board: Board, *, promoted_raw, cost: dict) -> RetreatSide:
-        """The A-side of a voluntary swap, for ONE destination (ADR-0073 §4 preservation, §8 cost).
+        """The A-side of a voluntary swap, for ONE destination (ADR-0100 §4 preservation, §8 cost).
 
         Only the PRESERVATION leg is per-destination, and only because the Bench that A lands on
         depends on which body left it — reading A among its CURRENT bench-mates would mis-price the
@@ -2554,7 +2554,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                    bench_after=bench_after), **cost)
 
     def _promote_retreat_decision(self, obs: dict, select: dict, board: Board, ctx, option: dict):
-        """The PROMOTE/RETREAT DECIDER: price ONE option (ADR-0073). Returns the per-option TERM row
+        """The PROMOTE/RETREAT DECIDER: price ONE option (ADR-0100). Returns the per-option TERM row
         — the decider's legible working — or None to abstain: the kill-switch is OFF, or this option
         is neither a body PICK nor a whether-to-retreat action.
 
@@ -2622,7 +2622,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _promote_ko_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for the body PICK that takes the prize — the pick site's own Knock-Out
-        layer (ADR-0073 §11), mirroring `_retreat_to_lethal_tactical`.
+        layer (ADR-0100 §11), mirroring `_retreat_to_lethal_tactical`.
 
         Rulings 4/5 defer wins to the Lethal Solver and provable KOs to the Turn Planner, but BOTH are
         MAIN-only (`planner.py:283`; `_retreat_to_lethal_tactical` fires only on a `_RETREAT` option).
@@ -2679,7 +2679,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _effective_retreat_cost(self, obs: dict, ma: dict | None) -> int:
         """The Active's Retreat Cost in Energy — the count of Energy a retreat actually discards, and
-        so (ADR-0073 §8) the size of the build a retreat destroys. READ-ONLY (mirrors the cost
+        so (ADR-0100 §8) the size of the build a retreat destroys. READ-ONLY (mirrors the cost
         arithmetic of `_can_retreat` without its affordability verdict); 0 on an unknown stat.
 
         Three grant shapes, all fail-CLOSED — an unreadable or unmodelled grant charges the PRINTED
@@ -2717,7 +2717,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return max(0, cost)
 
     def _retreat_free_granted(self, obs: dict, ma: dict, stat) -> bool:
-        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0073 §8)?
+        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0100 §8)?
 
         The predicate travels WITH the grant (`CardStat.retreatFreeGrant`), so adding a card adds a
         parse and a predicate rather than a call-site special case. Unknown predicate → False, which
@@ -5475,7 +5475,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         "can't use <this attack> next turn" attack last turn (Mega Brave class; a blanket self-lock
         counts too). Read off the ADR-0033 tracker, serial-gated: a body that left the Active carries
         a new serial, so the grant expires with the swap — which is exactly why swapping in a fresh
-        benched copy restores the attack (the rung is DELETED, ADR-0073 §11 — the swap is
+        benched copy restores the attack (the rung is DELETED, ADR-0100 §11 — the swap is
         now emergent from destination value minus retreat cost)."""
         grant = self._transients.grant_for_serial((ma or {}).get("serial"))
         if not grant:
@@ -8661,7 +8661,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (visible zones); silent for decks with no benched item-lock opener (no-op on mega_starmie /
         mega_lucario) and once the Active is the payoff (not a pre-evo). Backs `retreat-to-wall-the-line`
         ; `_finish_turn_last` rides the retreat step tier-0. (`hold-position-in-setup` is
-        DELETED, ADR-0073 §11, so there is no longer a setup brake to stand down.)"""
+        DELETED, ADR-0100 §11, so there is no longer a setup brake to stand down.)"""
         if not (self.functions and ma and ma.get("id") in self._line_preevo_set()):
             return False
         has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))

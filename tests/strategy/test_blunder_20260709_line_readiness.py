@@ -56,7 +56,7 @@ def test_f31_promote_item_lock_staller_over_bare_stage0_base():
     fx = _fixture("dragapult_promote_over_fragile_base_f31")
     dec = _pilot("dragapult_ex").explain(fx["obs"])
     assert dec.chosen == fx["correct"]                         # [1] Budew, not [0] the bare Dreepy
-    # `promote-the-staller` is DELETED (ADR-0073 §6a): a disposable staller decomposes with no
+    # `promote-the-staller` is DELETED (ADR-0100 §6a): a disposable staller decomposes with no
     # remainder into terms the decider already builds, so the pick is emergent rather than runged.
 
 

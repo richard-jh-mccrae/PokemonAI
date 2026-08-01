@@ -52,7 +52,7 @@ def _parse_tool_retreat_reduction(card) -> int:
     return 0
 
 
-# Retreat-cost GRANTS beyond the flat Tool reduction (ADR-0073 §8). The flat read was Tool-only and
+# Retreat-cost GRANTS beyond the flat Tool reduction (ADR-0100 §8). The flat read was Tool-only and
 # unconditional, and under the convex build-delta cost a missed reduction is worth ~117 damage of
 # PHANTOM cost on a 3-slot attacker — systematic on an archetype built around free-retreat pivoting.
 # Both parsers are FAIL-CLOSED: an unreadable or unmodelled grant returns nothing, so the caller

@@ -57,7 +57,7 @@ SELECT_CONTEXT_TO_ACTIVE = 4                        # cg.api.SelectContext.TO_AC
 EVOLVE_LANE: Lane = ((OPTION_TYPE_EVOLVE, None),)
 ATTACH_LANE: Lane = ((OPTION_TYPE_ATTACH, None),
                      (OPTION_TYPE_CARD, SELECT_CONTEXT_ATTACH_FROM))
-#: The promote/retreat PICK lane (ADR-0073 §12) — "promote THIS body over that one". Both the forced
+#: The promote/retreat PICK lane (ADR-0100 §12) — "promote THIS body over that one". Both the forced
 #: promote and the retreat destination pose an `OptionType.CARD` option (verified against the corpus
 #: and `cgpy`'s `_pose_retreat_switch`), so the lane is that type under either context.
 #:

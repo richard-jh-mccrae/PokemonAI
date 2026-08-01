@@ -319,7 +319,7 @@ _Avoid_: target (overloaded — reserve "recipient" for the body that *receives*
 
 **Deploy Marginal**:
 The value of putting ONE body into ONE **Bench Slot**, denominated in damage — the fourth per-seam
-value equation, beside the attach (ADR-0069), evolve (ADR-0070) and promote/retreat (ADR-0073)
+value equation, beside the attach (ADR-0069), evolve (ADR-0070) and promote/retreat (ADR-0100)
 marginals. Owns every way a body reaches my Bench: `_SETUP_BENCH` (pregame), `_PLAY` at `_MAIN`, and
 `_TO_BENCH` (the Poffin-class fetch). **Four legs**, each a *difference of two optimal values under a
 hypothetical board change*: the netted **Slot Displacement** and the **Ability yield** — both
@@ -772,7 +772,7 @@ utility bodies (every body earns it — attack terms dominate wherever they exis
 
 **Sub-lethal Residual**:
 The share of a promote/retreat trade the value equation owns: what remains once the Knock-Outs
-available on BOTH sides of the swap have cancelled (#141 grill, ADR-0073 decision 1). Retreat and
+available on BOTH sides of the swap have cancelled (#141 grill, ADR-0100 decision 1). Retreat and
 promote are a three-part decision — whether to retreat, why, and who to promote — and no single layer
 sees all of it, so each prices what it can: the KO **delta** between staying and pivoting is the
 tactical lookahead's and, where the steps depend on each other, **#165's** (a **Maneuver**); the
@@ -804,7 +804,7 @@ prize-denominated marginal uses to enter a damage-scale score, so its home moves
 with it, since falsifiability is the point rather than an incidental.
 
 **Worth Damage Rate**:
-The MISSING third leg of the currency triangle, and the one ADR-0073 deliberately declined to build:
+The MISSING third leg of the currency triangle, and the one ADR-0100 deliberately declined to build:
 **damage per card-worth point**, bridging the Worth scale (`ROLE_TIER` ≤ 30, `ENERGY_TIER` 8,
 `TAG_TIER` 10–30 — what the Needs DP sums) to the damage scale the tactical rungs and the Prize Damage
 Rate already share. Named and specified by ADR-0078 (#187 grill, 2026-07-28); **not yet derived, and
@@ -813,7 +813,7 @@ disagree by ~9× — keeping a gust/denial Trainer is `TAG_TIER["gust"]` 10.0 vs
 (⇒ ~1 dmg/worth-pt), one Energy is `ENERGY_TIER` 8.0 vs `ENERGY_RECOVER` 75 (⇒ ~9.4) — so the rate
 cannot be read off existing constants and needs a corpus anchor, which does not exist yet (every
 committed deny fixture is a play/hold frame, none a DISCARD select). Until that anchor is captured and
-adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0073's own
+adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0100's own
 `_PRIZE_UNIT = 12` — wrong by ~8×, and it endorsed feeding a 3-prize body to save a 40-point band — is
 the standing example of what guessing it costs.
 **MOOT for deny since ADR-0080 (Issue #199 grill, 2026-07-29) — and the anchor search is CLOSED, not
@@ -935,7 +935,7 @@ plus authored per-leg fixtures.)_
 _(Issue #219, 2026-07-31 — a no-op refactor, sweep byte-identical and the gate unmoved:_
 `target_relevance` _now reads **two frozen `Inputs` dataclasses, one per side of the product** —_
 `TheirPlanInputs` _and_ `MyRouteInputs` _— rather than 18 loose kwargs, taking the shape_
-`EvolveInputs` _(ADR-0070) and_ `PromoteRetreatInputs` _(ADR-0073) already set. Why one object per
+`EvolveInputs` _(ADR-0070) and_ `PromoteRetreatInputs` _(ADR-0100) already set. Why one object per
 SIDE rather than one bag, and why_ `brief_boost` _stays loose:_ `snipe_relevance.py`_'s module
 docstring, §"The inputs are TWO dataclasses".)_
 

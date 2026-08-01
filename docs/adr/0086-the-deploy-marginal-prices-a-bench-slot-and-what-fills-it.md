@@ -15,7 +15,7 @@ artifact, not an identifier.
 **Context issues:** Issue #197 (this grill — split out of the Issue #161 grill as the pregame-Bench
 half), Issue #161 (`starter_priority`, the Active-slot sibling), Issue #136 (the Value System build
 tracker), ADR-0069 (attach, Phase 1a — the axes-sum shape this follows), ADR-0070 (evolve, Phase 1b),
-ADR-0073 (promote/retreat, Phase 1c — `PRIZE_DAMAGE_RATE`), ADR-0065 + ADR-0076 (the Needs assignment
+ADR-0100 (promote/retreat, Phase 1c — `PRIZE_DAMAGE_RATE`), ADR-0065 + ADR-0076 (the Needs assignment
 this extends), ADR-0078 (the currency triangle), ADR-0034 (deck rules fold general when the vocabulary
 is general), ADR-0072 (the gates a decider swap owes).
 
@@ -184,7 +184,7 @@ is imported from `common/currency.py` (the home ADR-0078 decision 2 creates), an
 Issue #187 / #188 / #189 as a fourth consumer of S3c.
 
 Rejected: a deploy-local rate (mints a rival for the same conversion — the exact incoherence ADR-0078
-found and refused to guess past, with ADR-0073's `_PRIZE_UNIT = 12`, wrong by ~8×, as the standing
+found and refused to guess past, with ADR-0100's `_PRIZE_UNIT = 12`, wrong by ~8×, as the standing
 example of the cost), and routing the assignment through the damage-native readiness leaf instead of
 the Worth scale (it prices the slot-displacement leg cleanly but leaves decision 3's Ability leg
 homeless — pricing a HAND card through a board-evaluation leaf is the mismatch `needs.general_worth_slot`
@@ -591,7 +591,7 @@ deploy is mediocre would still score a full band and the agent would deploy ever
 - `BAND` is **pinned** so the resulting scores reproduce the incumbent rung range (+12…+25) across the
   deploy corpus, and is **recorded as a preservation choice, never dressed as a derivation** —
   ADR-0080 decision 3's discipline for its `K`, applied verbatim. The `deploy_decider_sweep` Decision
-  Gate is what VERIFIES the pin actually preserved behaviour; that is the check ADR-0073's
+  Gate is what VERIFIES the pin actually preserved behaviour; that is the check ADR-0100's
   `_PRIZE_UNIT = 12` never had, and the reason this is a difference in discipline rather than a repeat
   of the same mistake.
 

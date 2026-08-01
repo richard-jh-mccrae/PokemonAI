@@ -128,7 +128,7 @@ def test_the_promote_decider_off_does_not_take_the_ko():
     """Baseline (the pre-fix defect): f26 promotes the wrong body and forfeits the Knock Out — pins
     that the fix, not the fixture, is what lands it.
 
-    The LEVER changed with ADR-0073 (#141). `promote_ko_aware` was the kill-switch for
+    The LEVER changed with ADR-0100 (#141). `promote_ko_aware` was the kill-switch for
     `promote-the-ko-attacker`, and that rung is DELETED; the pick site's Knock-Out layer is now
     `_promote_ko_tactical`, which rides the `promote_retreat_value` switch alongside the residual
     it sums with. So the degraded mode this test pins is the decider OFF — which reproduces the

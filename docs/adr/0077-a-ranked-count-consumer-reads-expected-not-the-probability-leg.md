@@ -110,7 +110,7 @@ that replaces it.
 
 Consequences: `_deck_basic_energy_fuel` and `_recover_units` return `float`; the latent
 `is_basic_energy` / `is_typed_basic_energy` mismatch between the two paths resolves onto the typed
-test. Both consumers were checked and neither gates — `_promote_accel_units` feeds the ADR-0073 §3b
+test. Both consumers were checked and neither gates — `_promote_accel_units` feeds the ADR-0100 §3b
 dividend, and in `_tactical` the lethal branch uses `recover` only as a **capped sub-prize
 tiebreak** (`min(_RECOVER_KO_CAP, …)`) *after* `dmg >= hp` has already established the KO. So
 decision 1's ranked branch applies with no lock in scope.
@@ -165,7 +165,7 @@ A/B.
   (Harlequin) — is **out of scope by construction**. It is a property of step ORDER and remains
   Issue #165's.
 - **Correcting the read exposed a second, masked defect and it is fixed alongside** (see the
-  2026-07-29 amendment to [ADR-0073](0073-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md)).
+  2026-07-29 amendment to [ADR-0100](0100-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md)).
   `ENERGY_RECOVER` was a tuned band constant at 75, ~6 % above the bracket two human rulings impose,
   and the retired pigeonhole floor had been under-counting the units it multiplies — an over-valued
   rate and an under-counted quantity cancelling. With the read honest, the rate showed: on

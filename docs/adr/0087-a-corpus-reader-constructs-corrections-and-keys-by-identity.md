@@ -8,8 +8,6 @@ one of them a mid-grill correction of an earlier one).
 **[ADR-0049](0049-corrections-carry-a-scope-decision-turn-or-match.md)** (Correction identity = the
 Scope's subject). Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #241 (this grill), Issue #238 (the 13 expired coverage claims — the
 consumer of the widened corpus), Issue #239 (label moves the diff cannot report — same blindness
 family), Issue #228 (the frame that exposed it), PR #227 (introduced the instrument), PR #236

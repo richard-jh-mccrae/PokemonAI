@@ -1,6 +1,6 @@
 """BASELINE cluster: RETREAT — the open-menu Retreat decision (ADR-0025).
 
-**One rung survives ADR-0073 (#141).** The promote/retreat DECIDER
+**One rung survives ADR-0100 (#141).** The promote/retreat DECIDER
 (`common/promote_retreat_value.py`) now answers the whether-to-retreat question as the Sub-lethal
 Residual, so four of the five rungs are DELETED:
 
@@ -11,10 +11,10 @@ Residual, so four of the five rungs are DELETED:
 * `dont-play-switch-for-no-gain` (−8) → EMERGENT: a switch that gains nothing has a destination value
   no better than staying, and now pays the card's Worth as `retreat_cost`, so it nets below End
   without a penalty rung. Switch-class Items are priced by the same equation as a manual retreat
-  (ADR-0073 §11's rider).
+  (ADR-0100 §11's rider).
 * `hold-position-in-setup` (−25) → DELETED on an emergence argument: a setup retreat pays real
   `retreat_cost` for a destination that is not yet worth promoting, so the equation should decline it
-  on its own. **This is flagged in ADR-0073 as the WEAKEST claim in the ruling — the one deletion with
+  on its own. **This is flagged in ADR-0100 as the WEAKEST claim in the ruling — the one deletion with
   no worked frame behind it — and is the most likely to return as a ruled flip at the Decision Gate.**
   Treat a regression here as expected rather than surprising.
 
@@ -43,7 +43,7 @@ HYPOTHESES = [
                   "bought a locked tempo turn while the win-condition line assembles safely. Also fires for "
                   "the OFFENSIVE variant (`can_lock_line_with_disruptor`, dragapult f20): early-game, retreat "
                   "a nothing-better-to-do line-preevo into the item-lock to deny the opponent's Item turn "
-                  "even with no incoming damage. SURVIVES the ADR-0073 rung deletion precisely because it is "
+                  "even with no incoming damage. SURVIVES the ADR-0100 rung deletion precisely because it is "
                   "a MANEUVER and not a value claim: the payoff lands on the LATER steps, which a per-option "
                   "equation cannot see. Owner #165.",
         when=lambda c: c.select_context == _MAIN and c.option_type == _RETREAT

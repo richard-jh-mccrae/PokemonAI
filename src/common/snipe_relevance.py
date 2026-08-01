@@ -97,7 +97,7 @@ could never see. It scores maximal because this turn is the last one in which th
 `target_relevance` reads the board through :class:`TheirPlanInputs` and :class:`MyRouteInputs` rather
 than a flat kwarg list, which is this repo's documented shape for a pure value function with many
 board inputs — `evolve_value.EvolveInputs` (ADR-0070) and `promote_retreat_value.PromoteRetreatInputs`
-(ADR-0073) both sit in exactly this position, a pure equation module beside the `Pilot` plumbing that
+(ADR-0100) both sit in exactly this position, a pure equation module beside the `Pilot` plumbing that
 fills it in.
 
 The split is **one object per side of the product**, not one bag, so the shape above lives in the type

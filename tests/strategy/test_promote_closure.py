@@ -1,6 +1,6 @@
-"""The promote/retreat CLOSURE term, driven above zero (ADR-0073 §5, #141).
+"""The promote/retreat CLOSURE term, driven above zero (ADR-0100 §5, #141).
 
-The fixture ADR-0073 asks for by name, and the one term in the equation that had never been
+The fixture ADR-0100 asks for by name, and the one term in the equation that had never been
 exercised above zero on any board. Its build entailment: *"The missing fixture is authored as a
 **SWITCH/whether** frame, one attach short with hand accel, driving `closure(B) > 0`."*
 

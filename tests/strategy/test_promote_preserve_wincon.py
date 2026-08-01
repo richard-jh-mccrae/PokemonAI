@@ -1,4 +1,4 @@
-"""Prize-economy promote: the interpose doctrine, now EMERGENT (ADR-0073 §11, #141).
+"""Prize-economy promote: the interpose doctrine, now EMERGENT (ADR-0100 §11, #141).
 
 When my Active is Knocked Out and both a cheap 1-prize attacker (Cinderace) and a higher-prize
 win-condition (Mega Starmie ex) sit on the Bench with Energy, the forced promote is a prize-race
@@ -7,7 +7,7 @@ if they can Knock it Out; interposing the 1-prize Cinderace soaks the hit for a 
 keeps the fresh finisher on the Bench.
 
 **The rung is gone.** `interpose-the-cheap-attacker-to-preserve-the-wincon` (+50) and its penalty
-complement `dont-promote-into-their-prize-reach` (−20) are DELETED; ADR-0073 §11 rules the doctrine
+complement `dont-promote-into-their-prize-reach` (−20) are DELETED; ADR-0100 §11 rules the doctrine
 EMERGENT from prize **Exposure** (`prizes x 100 x halve(turns_to_ko - 1)`) plus the fatal step. So
 these tests assert the DECISION, never a rung firing — ADR-0072's rewrite of f29 from a score claim
 to a decision claim is the prior art.
@@ -15,7 +15,7 @@ to a decision claim is the prior art.
 That change makes the doctrine CONDITIONAL where the rung was categorical, and deliberately so. The
 rung fired on three board FLAGS (Weakness / an under-built finisher / a shown gust) without ever
 asking whether the opponent could actually punish the wincon — the boolean `opp_cannot_punish_wincon`
-was its only brake, and ADR-0073 §4 retires it as a 300-damage cliff read off the WRONG BODY. The
+was its only brake, and ADR-0100 §4 retires it as a 300-damage cliff read off the WRONG BODY. The
 equation asks the clock instead, per body. Two consequences are tested below: interpose FIRES hard
 when they can take the 3-prize Knock Out next turn (exposure 300 vs 100, the ADR's own arithmetic),
 and STANDS DOWN when the wincon is actually the safer body — a case the flag-driven rung got wrong.
@@ -103,7 +103,7 @@ def _terms(pilot, obs):
 
 @pytest.mark.req("REQ-GEN-0054")
 def test_interpose_emerges_when_they_can_take_the_three_prize_knockout():
-    """ADR-0073 §11's emergence claim, in its own arithmetic: exposing the 3-prize finisher to a body
+    """ADR-0100 §11's emergence claim, in its own arithmetic: exposing the 3-prize finisher to a body
     that Knocks it Out NEXT TURN costs 300 damage, while the 1-prize soaker costs 100 — a 200-damage
     gap that swamps the finisher's 160-damage attack advantage. No rung required."""
     p = _pilot()

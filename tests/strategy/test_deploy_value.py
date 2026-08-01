@@ -2,7 +2,7 @@
 
 Pure arithmetic over resolved board facts — no engine, no obs, no Pilot — which is the seam the ADR
 picked so the whole equation is testable with plain numbers. Prior art for the style:
-`test_evolve_value.py` (ADR-0070) and `test_promote_retreat_value.py` (ADR-0073).
+`test_evolve_value.py` (ADR-0070) and `test_promote_retreat_value.py` (ADR-0100).
 
 The property test that matters most here is `test_the_worth_legs_are_dimensionless`: the entire
 currency argument of amendment B rests on the Worth points CANCELLING in a ratio, and a regression

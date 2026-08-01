@@ -138,7 +138,7 @@ unified Threat Clock; the SWAP (retire the rungs) blocks on the shadow-disagreem
 
 Telemetry wired (`Decision.promote_retreat_shadow`, the FIFTH shadow, emitted in `telemetry.py` beside
 discard/refresh/attach) + the reusable tool `tools/train/promote_retreat_sweep.py` (DELETED by
-#141/ADR-0073 — decision 2 retired the shadow record and the `worth_it` sign bit it reads;
+#141/ADR-0100 — decision 2 retired the shadow record and the `worth_it` sign bit it reads;
 `tools/train/probes/promote_retreat_decider_sweep.py` is its replacement). Replays every
 RECORDED promote/retreat SELECT frame through a fresh Pilot; NO ladder submission. Results:
 

@@ -63,7 +63,7 @@ class CardStat:
     retreatFreeAtHp: int = 0           # remaining HP at or below which an attached Tool zeroes the
                                        # holder's Retreat Cost outright (Rescue Board: 30) — the
                                        # CONDITIONAL leg the flat read above could not carry
-                                       # (ADR-0073 §8). 0 = no such clause.
+                                       # (ADR-0100 §8). 0 = no such clause.
     retreatFreeGrant: str | None = None  # a BOARD-LEVEL Ability granting no Retreat Cost, as the
                                        # predicate it scopes to: "basic" (Latias ex's Skyliner —
                                        # `slowking` runs it), "metal_attached" (Archaludon). The

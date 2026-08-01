@@ -27,7 +27,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 @pytest.mark.req("REQ-CURRENCY-0001")
 def test_prize_damage_rate_recomputes_from_the_card_set():
-    """ADR-0073 §3 / ADR-0078 decision 2: the Prize Damage Rate is DERIVED, so a reviewer can
+    """ADR-0100 §3 / ADR-0078 decision 2: the Prize Damage Rate is DERIVED, so a reviewer can
     recompute it and a future set can re-derive it. This test IS that recomputation — the median
     HP-per-prize over every body in `data/EN_Card_Data.csv` at the `docs/rules.md` §6 prize values
     (Mega ex 3, ex 2, else 1).
@@ -40,14 +40,14 @@ def test_prize_damage_rate_recomputes_from_the_card_set():
             hp = int(row["HP"]) if (row.get("HP") or "").strip().isdigit() else 0
             if hp > 0:                                    # Trainers / Energy report no HP
                 bodies[row["Card ID"]] = hp / prizes[(row.get("Rule") or "n/a").strip()]
-    assert len(bodies) == 1061                            # the population ADR-0073 measured
+    assert len(bodies) == 1061                            # the population ADR-0100 measured
     assert statistics.median(bodies.values()) == PRIZE_DAMAGE_RATE
 
 
 @pytest.mark.req("REQ-CURRENCY-0002")
 def test_the_hoist_keeps_every_existing_import_working():
     """ADR-0078: the constant moved homes, it did not change value. `promote_retreat_value` re-exports
-    it, so ADR-0073's consumers and tests are untouched by the hoist."""
+    it, so ADR-0100's consumers and tests are untouched by the hoist."""
     from common import promote_retreat_value as prv
     assert prv.PRIZE_DAMAGE_RATE is PRIZE_DAMAGE_RATE
     assert prize_to_damage(3.0) == pytest.approx(300.0)   # a 3-prize body, in damage
@@ -96,7 +96,7 @@ def test_the_deploy_band_is_present_pinned_and_labelled_as_a_preservation_choice
     * the SCALE is the shipped ceiling on a single card's assignment contribution, not a fresh
       number — a ratio divided by an invented divisor would be the fudge wearing a different hat;
     * the BAND reproduces the incumbent rung range it replaces (+12..+25), which is what makes it a
-      PRESERVATION choice the Decision Gate can check, and the check ADR-0073's `_PRIZE_UNIT = 12`
+      PRESERVATION choice the Decision Gate can check, and the check ADR-0100's `_PRIZE_UNIT = 12`
       (wrong by ~8x) never had;
     * the module says so in prose, so the third entry in ADR-0078's catalogue cannot be mistaken for
       a derivation by the next reader.

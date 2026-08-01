@@ -41,7 +41,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 # The grading convention lives in `common.grading` now that the promote/retreat equation reads it
-# too (ADR-0073 §4) — one halving rule and one horizon, so a re-tune on either equation cannot
+# too (ADR-0100 §4) — one halving rule and one horizon, so a re-tune on either equation cannot
 # silently re-open the other. Aliased at module scope because this file's prose names them.
 from common.grading import HORIZON as _HORIZON
 from common.grading import halve as _halve
