@@ -195,8 +195,11 @@ does not have (a defender-side attach driver, stage-filtered fodder, ex-only fod
 driver) and one of them — Dudunsparce ex's `60×` Tenacious Tail — was computing to literal ZERO
 meanwhile. The rule they bend is about a *fitter* inventing a plausible variable name from a regex;
 one human reading one card's printed sentence into one attackId is not that mechanism. The
-measurement debt is recorded rather than hidden — see `tests/strategy/test_visible_state_scalers.py`,
-which also pins which of the four any corpus can actually see.
+measurement debt is **owned by Issue #275** (ratified 2026-08-01), which builds the two sweep axes
+that can separate these variables and scopes them to the two cards a corpus could ever see — 283
+Mamoswine ex and 217 Azelf are provably absent from every deck, dossier, Brief and correction frame,
+so measuring them would verify a number nothing consumes. See
+`tests/strategy/test_visible_state_scalers.py`, which asserts that absence so the claim cannot rot.
 _Avoid_: expected value (a probability blend — breaks soundness in both directions), printed damage
 (the base term only), bounds (the coin-RNG fallback, not the general shape)
 

@@ -17,9 +17,22 @@ priced these four at "a sweep capability each"; the defect that rule exists to p
 naming a plausible variable no measurement supports (Skeledirge's bench scaler fitted as `atk_hand`).
 Neither half of that failure mode is in play here: each entry is one human reading one card's own
 printed sentence into one `attackId`, which is the same seam and the same discipline
-`effect_overrides.json` already uses for clauses the probe cannot reach. The measurement debt is
-real and is recorded on the issue rather than hidden — what is NOT tolerable is leaving 425 priced at
-zero while waiting for a defender-side sweep driver.
+`effect_overrides.json` already uses for clauses the probe cannot reach. What is NOT tolerable is
+leaving 425 priced at zero while waiting for a defender-side sweep driver.
+
+**The debt has an OWNER: Issue #275** (ratified by the user 2026-08-01 — ship these, file the
+measurement). It is not a TODO in a docstring: #275 builds the two axes that can actually separate
+these variables, and it scopes them to the two cards a corpus could ever see. Two findings from
+POC-T1 that shape it, recorded here because they are the reason the gap existed rather than an
+oversight:
+
+  * **The harness as it stands would CONFIRM the wrong answer for 425.** `audit_attacks.py` pins both
+    seats' bench at `_BENCH_REF = 1` and fills them with whatever basics the drive drew, so
+    `def_ex_in_play` measures 0, the attack deals 0, and a fit concludes "no scaler" from data that
+    could not have shown one.
+  * **120 is unfittable on the current axes at all.** With the defender holding no Energy,
+    `both_active_energy` and `atk_active_energy` are indistinguishable under every point the sweep
+    can produce; separating them needs the defender-attach axis ADR-0083 §3's joining rule assumes.
 
 **Corpus status** (the issue's own bar — a corpus example or a recorded absence):
   * **96 Teal Mask Ogerpon ex** — live meta. 12 `artifact.json` dossiers at inclusion 1.0, and 32
