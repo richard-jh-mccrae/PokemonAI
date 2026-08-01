@@ -948,7 +948,7 @@ class PlannerMixin:
         if active_ko and self._is_simultaneous_draw(board, aid, self._prize_value(opp)):
             return False
         prizes_taken = ((self._prize_value(opp) if active_ko else 0)
-                        + self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(aid)))
+                        + self._snipe_ko_prizes(board.opp_bench, self.combat.rider_snipe(aid)))
         if prizes_taken >= board.my_prizes_remaining:
             return True
         return active_ko and not board.opp_bench       # KO leaves them no Pokémon to promote
@@ -2633,11 +2633,11 @@ class PlannerMixin:
 
     def _affords_snipe_ko(self, body_id, energy: int, target_hp: int) -> bool:
         """True iff ``body_id`` carrying ``energy`` can pay an attack whose unconditional bench-snipe
-        rider (`_rider_snipe`) reaches ``target_hp`` — the exact snipe-KO test (no W/R on the Bench)."""
+        rider (`combat.rider_snipe`) reaches ``target_hp`` — the exact snipe-KO test (no W/R on the Bench)."""
         stat = self.stats.get(body_id) if (self.stats and body_id is not None) else None
         if not (stat and target_hp):
             return False
-        return any(self._attack_cost(aid) <= energy and self._rider_snipe(aid) >= target_hp
+        return any(self._attack_cost(aid) <= energy and self.combat.rider_snipe(aid) >= target_hp
                    for aid in (stat.attacks or ()))
 
     def _is_energy_tutor(self, obs, select, option) -> bool:

@@ -461,10 +461,11 @@ class CombatMath:
     def rider_recoil(self, attack_id) -> int:
         """The attack's unconditional self-damage (0 unknown).
 
-        UNCONSUMED: zero callers and zero tests. Its siblings `rider_snipe`/`rider_spread` are both
-        live. Recoil IS priced — but through `_recoil_flips_doom`, which reads `AttackStat.recoil`
-        directly, so this accessor never got wired. Delete on the next combat pass unless a caller
-        appears."""
+        Read by the simultaneous-draw guard (ADR-0022 #2 — recoil that KOs my own Active turns a
+        "win" into a DRAW) and by `_recoil_flips_doom` (a non-KO recoil that hands them a free KO).
+        Was UNCONSUMED until POC-T1 (Issue #260) deleted the Pilot's byte-identical private copy and
+        re-pointed both callers here — the ADR-0052 consolidation this and its two siblings were
+        always meant to be the one home for."""
         st = self.attack_stat(attack_id)
         return st.recoil if st else 0
 

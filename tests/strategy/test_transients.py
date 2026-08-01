@@ -117,17 +117,28 @@ def test_opponents_frost_barrier_shrinks_my_tactical_damage_and_expires():
 
 
 @pytest.mark.req("REQ-TRANS-0004")
+def _incoming(p, ma, oa):
+    """`Board.incoming_active_damage` through a FRESH per-decision snapshot.
+
+    The read routes via the StateModel now (POC-T1, Issue #260) and the model MEMOIZES, so a
+    transient grant observed between two reads needs a rebuilt snapshot to be seen — which is the
+    model's purity contract working, not a workaround for it."""
+    p._snapshot({"current": {"yourIndex": 0, "players": [
+        {"active": [ma], "bench": []}, {"active": [oa], "bench": []}]}})
+    return p._incoming_active_damage(ma, oa)
+
+
 def test_incoming_respects_their_self_lock_and_self_bonus():
     p = _pilot()
     oa = {"id": 2, "serial": 9, "hp": 300, "energies": [7]}
     ma = {"id": 1, "serial": 1, "hp": 100, "energies": [3]}
-    base = p._incoming_active_damage(ma, oa)                   # no grants: max(90, 50) = 90
+    base = _incoming(p, ma, oa)                   # no grants: max(90, 50) = 90
     assert base == 90
     p._transients.observe(_obs(3, [_atk(1, LOCKED, 9)]))       # their Active self-locked
-    assert p._incoming_active_damage(ma, oa) == 0              # can't attack me next turn
+    assert _incoming(p, ma, oa) == 0              # can't attack me next turn
     p._transients.observe(_obs(5, [{"type": TURN_START, "playerIndex": 1}]))   # lock expired
     p._transients.observe(_obs(5, [_atk(1, BONUS, 9)]))        # now +120 self-bonus
-    assert p._incoming_active_damage(ma, oa) == 90 + 120
+    assert _incoming(p, ma, oa) == 90 + 120
 
 
 @pytest.mark.req("REQ-TRANS-0004")
@@ -137,6 +148,6 @@ def test_incoming_same_attack_lock_excludes_only_that_attack():
                                  attacks=(NAMED, PLAIN), minAttackCost=1)
     oa = {"id": 2, "serial": 9, "hp": 300, "energies": [7]}
     ma = {"id": 1, "serial": 1, "hp": 100, "energies": [3]}
-    assert p._incoming_active_damage(ma, oa) == 150            # NAMED 150 beats PLAIN 120
+    assert _incoming(p, ma, oa) == 150            # NAMED 150 beats PLAIN 120
     p._transients.observe(_obs(3, [_atk(1, NAMED, 9)]))        # NAMED is locked next turn
-    assert p._incoming_active_damage(ma, oa) == 120            # other attack still threatens
+    assert _incoming(p, ma, oa) == 120            # other attack still threatens

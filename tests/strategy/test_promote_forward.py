@@ -161,7 +161,7 @@ def test_an_anchored_board_scores_the_dividend_exactly_as_before():
     obs = _obs(bench, {"id": 678, "hp": 20, "energies": [1, 1, 1]}, prize=0)
     p._board(obs, obs["select"])
     water = p._state_model.mine.deck_energy_counts[3]
-    assert water.anchored is True                                # legs collapsed …
+    assert water.floor == water.ceiling                          # legs collapsed …
     assert water.expected == float(water.floor) == float(water.ceiling)   # … to the one integer
     assert p.decide(obs) == [0]
 

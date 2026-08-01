@@ -49,6 +49,23 @@ from common.deck_odds import p_contains          # the Probability Leg's one imp
 #: the two readings must be distinguishable; a plain ``None`` default silently collapses them.
 _THREADED = object()
 
+def CURRENT_FORMS_ONLY(_card_id):
+    """A forward-availability gate that admits NOTHING — "read the bodies as they stand".
+
+    A named module-level callable rather than an inline ``lambda`` at each call site, so the clock
+    memo can reuse an answer across a decision: the memo keys on the callable itself, and a fresh
+    closure per call would key differently every time. The one live consumer is
+    `Board.incoming_active_damage`, which asks what the body in FRONT of me hits for today (a +HP
+    Tool's survival breakpoint) rather than what its line becomes.
+    """
+    return ()
+
+
+#: Fallback Bench cap for an observation that omits the engine's own ``benchMax`` — the shipped
+#: format's 5 (`docs/rules.md` §7). Only a hand-built board ever reaches it; a real observation
+#: carries the field, and reading it is what keeps the model honest if the format ever changes.
+_BENCH_MAX = 5
+
 # ── the lazy field descriptor ──────────────────────────────────────────────────────────────────
 
 class lazy:
@@ -171,10 +188,9 @@ class CountTriple:
     ceiling: int = 0
     p_any: float = 0.0
 
-    @property
-    def anchored(self) -> bool:
-        """True once the legs have collapsed — the count is exactly known."""
-        return self.floor == self.ceiling
+    # `anchored` (floor == ceiling) was DELETED by POC-T1 (Issue #260). It offered exactly the
+    # branch this class's own docstring forbids — "are we anchored?" — and had no consumer outside
+    # its own tests. A reader that genuinely needs the regime compares the legs.
 
     @property
     def possible(self) -> bool:
@@ -250,14 +266,9 @@ class CarriedState:
                 return v
         return default
 
-    def with_(self, name, value) -> "CarriedState":
-        """A NEW snapshot with ``name`` set — the channel is immutable, so an update is a rebind at
-        the caller rather than a mutation anyone else can observe."""
-        if name not in self.MEMBERS:
-            raise ValueError(f"undeclared Carried State member: {name!r}")
-        return CarriedState(tuple(sorted(
-            [(k, v) for k, v in self.values if k != name] + [(name, value)],
-            key=lambda kv: kv[0])))
+    # `with_` (a single-member rebind) was DELETED by POC-T1 (Issue #260): zero consumers. Every
+    # real update writes the WHOLE channel through `CarriedState.of`, which is the shape that keeps
+    # the "read in as an argument, handed back as a return value" discipline visible at the caller.
 
 
 # ── body views ────────────────────────────────────────────────────────────────────────────────
@@ -297,7 +308,16 @@ class BodyView(_Lazily):
 
     @lazy
     def energy_count(self) -> int:
-        return sum(self.attached_types.values())
+        """Energy UNITS attached — the raw count the rules speak in (a retreat cost is "discard this
+        many Energy", `docs/rules.md` §4).
+
+        Deliberately NOT ``sum(attached_types.values())``, which is what it used to be: that counts
+        only the TYPED Basic Energy the colour matcher can resolve, so a Special Energy or an
+        unresolvable card provides a unit with no type and the two numbers legitimately differ. The
+        typed histogram is :attr:`attached_types` and it is the right read for a COST SHAPE; this is
+        the right read for a count, and the distinction is why they are two fields rather than one
+        (POC-T1, Issue #260 — the raw-read migration surfaced call sites that meant the count)."""
+        return len(self.energy_key)
 
     @lazy
     def energy_key(self) -> tuple:
@@ -310,21 +330,52 @@ class BodyView(_Lazily):
         return tuple(e.get("id") if isinstance(e, dict) else e
                      for e in (self.body.get("energies") or ()))
 
-    @lazy
-    def attacks(self) -> tuple:
-        stat = self.stat
-        return tuple(stat.attacks or ()) if stat is not None else ()
-
-    def attack_slots(self, attack_id) -> tuple:
-        """The attack's per-slot typed cost shape (0 = colourless); empty when unresolvable."""
-        return self._memoized(("attack_slots", attack_id),
-                              lambda: self._combat._attack_slots(attack_id) or ())
+    # `attacks` and `attack_slots` were DELETED by POC-T1 (Issue #260): zero consumers, and both
+    # were pass-throughs to card knowledge that has a home already — `stat.attacks` and
+    # `CombatMath._attack_slots`. A body VIEW of a fact that does not depend on the body is a second
+    # place to look for it, which is the cost the model exists to remove rather than to add.
 
     @lazy
     def prize_value(self) -> int:
         """Prizes the opponent takes for knocking this body out — card knowledge, so it stays on the
         combat oracle (ADR-0052) and the model only holds the answer."""
         return self._combat.prize_value(self.body)
+
+    @lazy
+    def tool_ids(self) -> tuple:
+        """Pokémon Tool card ids attached to this body, in attach order (POC-T1, Issue #260).
+
+        Homes the ``attached_tools`` zone of the §3c completeness contract
+        (:mod:`common.snapshot_coverage`). The raws already carried a ``tools`` key and four sites
+        walked it by hand for four different questions — a Tool's damage boost, its retreat
+        reduction, whether the slot is occupied, whether the Tool is irreplaceable. A Tool play is
+        an option the T4 planner must be able to DIFFERENCE, and a zone with no public read prices
+        that difference at 0, which under the composer's 1-ply ordering means *never explored*
+        (ADR-0092 §3c). Ids rather than resolved stats, for the same reason as
+        :attr:`_SideBase.discard_ids`: the id is what every downstream oracle keys on.
+        """
+        return tuple((c or {}).get("id") if isinstance(c, dict) else c
+                     for c in (self.body.get("tools") or ())
+                     if (c.get("id") if isinstance(c, dict) else c) is not None)
+
+    @lazy
+    def serial(self):
+        """The body's match-unique serial — the key ADR-0033 transient grants are stored under.
+        None when the observation carries no serial (a hand-built body)."""
+        return self.body.get("serial")
+
+    @lazy
+    def grant(self) -> dict:
+        """The live ADR-0033 transient grant on this body — ``{}`` when none, or when the combat
+        oracle carries no tracker (POC-T1, Issue #260).
+
+        Homes the ``transient_grants`` zone of the §3c contract. Until now the only snapshot surface
+        was :attr:`StateModel._transient_generation`, a PRIVATE cache-invalidation counter — the
+        grants themselves were reachable only through ``CombatMath._grant``, which is a bypass on a
+        board fact by T1's own acceptance criterion. Keys are the tracker's own vocabulary
+        (``self_lock`` / ``same_lock`` / ``self_bonus`` / ``prevent_all`` / ``reduction``); the model
+        holds the record and the oracle keeps applying it, exactly as it does for damage."""
+        return dict(self._combat._grant(self.body) or {})
 
 
 # ── the two sides ─────────────────────────────────────────────────────────────────────────────
@@ -402,6 +453,37 @@ class _SideBase(_Lazily):
         return BodyView(body, combat=self._combat, is_active=False, probe=self._probe,
                         prefix=f"{self._probe_prefix}.hypothetical")
 
+    @lazy
+    def bench_count(self) -> int:
+        """Bodies on this side's Bench. **THE** supplier of the count (POC-T1, Issue #260) — `Board`
+        derived ``my_bench`` / ``bench_full`` / the opponent's bench tuple by re-walking the raw
+        list at three sites, which is the two-readers-of-one-fact shape ADR-0087 charges for."""
+        return len(self.bench)
+
+    @lazy
+    def bench_full(self) -> bool:
+        """No room left on this side's Bench. Reads the engine's own ``benchMax`` rather than a
+        constant, so a format that changes the cap moves the answer instead of the code — and falls
+        back to the shipped 5 only when the observation omits it (fail toward the real rule)."""
+        return self.bench_count >= int(self.player.get("benchMax") or _BENCH_MAX)
+
+    @lazy
+    def conditions(self) -> frozenset:
+        """The Special Conditions in force on this side's ACTIVE (POC-T1, Issue #260).
+
+        Homes the ``special_conditions`` zone of the §3c completeness contract. Only the Active can
+        carry one (`docs/rules.md` §8), which is why the engine puts the five flags on
+        ``PlayerState`` rather than on the body — so this is a SIDE-level read that describes a BODY,
+        and the docstring says so rather than leaving the shape to be inferred.
+
+        The whole set, not the two that block acting: :attr:`MySide.attack_blocked` collapses Asleep
+        and Paralyzed into one boolean because that is all an affordability question needs, but
+        Burned and Poisoned write damage counters at Checkup and Confused taxes an attack, and a
+        differencing system that cannot see them prices their removal at 0. Names are the engine's
+        own field names, lower-case, so the vocabulary has one spelling."""
+        return frozenset(c for c in ("poisoned", "burned", "asleep", "paralyzed", "confused")
+                         if self.player.get(c))
+
     # -- prizes / zones -------------------------------------------------------------------------
     @lazy
     def prizes_remaining(self) -> int:
@@ -453,13 +535,12 @@ class MySide(_SideBase):
     _probe_prefix = "mine"
 
     def __init__(self, player: dict, *, combat, deck=None, deck_empty=frozenset(),
-                 own_prizes=None, needs=None, energy_attached=False, supporter_played=False,
+                 own_prizes=None, energy_attached=False, supporter_played=False,
                  more_prizes_than_opp=False, turn=0, probe=None):
         super().__init__(player, combat=combat, probe=probe, prefix="mine")
         self._deck = tuple(deck or ())
         self._deck_empty = frozenset(deck_empty or ())
         self._own_prizes = own_prizes
-        self._needs = needs
         self.energy_attached = bool(energy_attached)
         self.supporter_played = bool(supporter_played)
         self.more_prizes_than_opp = bool(more_prizes_than_opp)
@@ -488,13 +569,11 @@ class MySide(_SideBase):
         """The TYPES of that supply — what the Attach Budget's manual-attach leg takes."""
         return frozenset(self.hand_energy_counts)
 
-    @lazy
-    def needs(self):
-        """The position's Needs slots (deadline-tagged, ADR-0065's glossary) as resolved by the
-        caller, or None when not supplied. The model does not own the Needs engine; it holds the
-        resolution so several equations read one assignment instead of each re-running the DP."""
-        resolver = self._needs
-        return resolver() if callable(resolver) else resolver
+    # `needs` (a caller-supplied Needs resolution, held so several equations could share one
+    # assignment) was DELETED by POC-T1 (Issue #260) together with its `needs=` constructor chain.
+    # It was doubly dead: the ONE production builder never passed it, so the field was never written
+    # AND never read. A seat nobody sits in is not architecture — it is a promise the next reader
+    # will believe. T3's `readiness` term brings its own supplier when it needs one.
 
     # -- deck availability (the Count Triple, ADR-0068 decision 4) ------------------------------
     @lazy
@@ -827,12 +906,11 @@ class MySide(_SideBase):
                               lambda: self._combat.turns_to_afford(
                                   view.body, attaches_per_turn=attaches_per_turn, typed=True))
 
-    @lazy
-    def famine(self) -> bool:
-        """My Active can reach NO attack this turn, even under the full Attach Budget — the sound
-        definition of famine (ADR-0067), never "0 Energy attached". False when there is no Active
-        (no claim rather than a false alarm)."""
-        return self.active is not None and not self.reachable_attach(self.active, None)
+    # `famine` was DELETED by POC-T1 (Issue #260). It was `active_famine` MINUS the rule leg — the
+    # affordability half alone — so a consumer taking it would have missed Asleep, Paralyzed and the
+    # first player's turn-1 attack ban, which is the f70 blunder class one door over. Two names for
+    # one premise, differing silently in what they check, is exactly what the composed read exists to
+    # prevent; `active_famine` is the premise.
 
 
 class TheirSide(_SideBase):
@@ -898,18 +976,22 @@ class TheirSide(_SideBase):
         return self._charged if charged is _THREADED else charged
 
     def incoming(self, my_body: dict | None, t: int = 1, *, bodies=None,
-                 charged=_THREADED, evo_min_energy: int = 0, context: dict | None = None,
-                 my_benched: bool = False, opp_active: dict | None = None,
-                 switch_enabler: bool = False) -> int:
+                 charged=_THREADED, forward_ids=_THREADED, evo_min_energy: int = 0,
+                 context: dict | None = None, my_benched: bool = False,
+                 opp_active: dict | None = None, switch_enabler: bool = False) -> int:
         """Worst W/R-adjusted damage their affordable attackers could deal ``my_body`` at future turn
         ``t`` — the Threat-Clock curve, memoized by VALUE over every argument. ``t=1`` is Reachable
         Incoming.
 
         ``bodies`` names the counterfactual opponent board (see :meth:`_bodies`); ``charged`` the
-        energy policy (see :meth:`_charged_policy`). The remaining kwargs are the oracle's own and are
-        documented on ``CombatMath.incoming`` — they are here because the bypass census carried them
-        (POC-T1, Issue #260), and a model route that cannot express what its callers ask is a route
-        nobody takes.
+        energy policy (see :meth:`_charged_policy`); ``forward_ids`` the AVAILABILITY gate, defaulting
+        to the index threaded at build. Overriding the gate is how a caller asks about the CURRENT
+        forms only — pass ``lambda _cid: ()`` — which is a real question (`Board`'s
+        ``incoming_active_damage`` exposes it so a +HP Tool can test a survival breakpoint against
+        what the body in front of me hits for TODAY) and not a way around the index. The remaining
+        kwargs are the oracle's own and are documented on ``CombatMath.incoming`` — they are here
+        because the bypass census carried them (POC-T1, Issue #260), and a model route that cannot
+        express what its callers ask is a route nobody takes.
 
         **Keyed by VALUE, not by ``id()``.** Every argument is in the key — a memo that silently
         ignores one is a trap this method already had to be fixed for once (Issue #213) — and the key
@@ -921,11 +1003,16 @@ class TheirSide(_SideBase):
         """
         opp_bodies = self._bodies(bodies)
         policy = self._charged_policy(charged)
-        key = ("incoming", self._key(my_body), t, self._key(opp_bodies), self._key(policy),
+        fwd = self._forward_ids if forward_ids is _THREADED else forward_ids
+        # `fwd` goes into the key AS THE CALLABLE, not as its id(): a function is hashable, and the
+        # key then holds a reference to it, so a freshly-built closure can only cost a memo MISS —
+        # never an id collision serving a different index's answer. Callers wanting reuse pass a
+        # stable callable (:data:`CURRENT_FORMS_ONLY`).
+        key = ("incoming", self._key(my_body), t, self._key(opp_bodies), self._key(policy), fwd,
                evo_min_energy, self._key(context), bool(my_benched), self._key(opp_active),
                bool(switch_enabler))
         return self._memoized(key, lambda: self._combat.incoming(
-            my_body, opp_bodies, t, forward_ids=self._forward_ids,
+            my_body, opp_bodies, t, forward_ids=fwd,
             charged=policy, evo_min_energy=evo_min_energy, context=context,
             my_benched=my_benched, opp_active=opp_active, switch_enabler=switch_enabler))
 
@@ -1095,16 +1182,15 @@ class PrizeRace:
     """
     my_prizes_remaining: int = 0
     opp_prizes_remaining: int = 0
-    prize_map: tuple = ()                          # ((their body card id, prizes it yields), …)
 
-    @property
-    def prize_diff(self) -> int:
-        """Positive = I am ahead on the count."""
-        return self.opp_prizes_remaining - self.my_prizes_remaining
-
-    def ko_wins_now(self, prizes: int) -> bool:
-        """Would taking ``prizes`` prizes end the game in my favour right now?"""
-        return prizes >= self.my_prizes_remaining > 0
+    # `prize_map`, `prize_diff` and `ko_wins_now` were DELETED by POC-T1 (Issue #260): three
+    # derivations, zero consumers between them. The map re-stated `theirs.bodies[*].prize_value`,
+    # which every reader already reaches through the BodyView it is holding anyway; the two
+    # arithmetic helpers restated a subtraction and a comparison over the two counts above, which is
+    # the kind of surface that costs nothing to offer and something to keep honest. The KO-wins
+    # question in particular is NOT one line — the live win rung composes it with the simultaneous-
+    # draw guard (a recoil KO makes it a draw, `docs/rulebook.txt`) — so a bare helper answering the
+    # easy half of it is a trap for the next reader, not a convenience.
 
 
 class StateModel(_Lazily):
@@ -1113,19 +1199,22 @@ class StateModel(_Lazily):
 
     _probe_prefix = "model"
 
-    def __init__(self, *, mine: MySide, theirs: TheirSide, state: dict,
+    def __init__(self, *, mine: MySide, theirs: TheirSide, state: dict, my_index: int = 0,
                  carried: CarriedState = CarriedState(), probe=None):
         super().__init__(probe=probe)
         self.mine = mine
         self.theirs = theirs
         self.state = state or {}
+        #: Which seat is mine. Held because a few shared facts are OWNED by a seat — the Stadium is
+        #: the live case — and "whose is it?" cannot be answered from either side's PlayerState.
+        self.my_index = int(my_index or 0)
         #: A FROZEN snapshot of the Carried State channel. The model reads it; it never writes it.
         self.carried = carried
 
     # -- construction ---------------------------------------------------------------------------
     @classmethod
     def build(cls, obs: dict, *, combat, my_index=None, deck=None, deck_empty=frozenset(),
-              needs=None, read=None, brief=None, matchup_plan=None, posture_confidence=0.0,
+              read=None, brief=None, matchup_plan=None, posture_confidence=0.0,
               favorability=0.5, matchup_coverage=0.0, opponent=None, forward_ids=None,
               charged=None, carried: CarriedState = CarriedState(), probe=None,
               their_side: TheirSide | None = None) -> "StateModel":
@@ -1144,7 +1233,7 @@ class StateModel(_Lazily):
         opp = players[1 - mi] if 0 <= 1 - mi < len(players) and players[1 - mi] else {}
         my_prizes, opp_prizes = len(me.get("prize") or []), len(opp.get("prize") or [])
         mine = MySide(me, combat=combat, deck=deck, deck_empty=deck_empty,
-                      own_prizes=(obs or {}).get("own_prizes"), needs=needs,
+                      own_prizes=(obs or {}).get("own_prizes"),
                       energy_attached=bool(state.get("energyAttached")),
                       supporter_played=bool(state.get("supporterPlayed")),
                       more_prizes_than_opp=(my_prizes > opp_prizes),
@@ -1154,33 +1243,66 @@ class StateModel(_Lazily):
             posture_confidence=posture_confidence, favorability=favorability,
             matchup_coverage=matchup_coverage, opponent=opponent, forward_ids=forward_ids,
             charged=charged, probe=probe)
-        return cls(mine=mine, theirs=theirs, state=state, carried=carried, probe=probe)
+        return cls(mine=mine, theirs=theirs, state=state, my_index=mi, carried=carried, probe=probe)
 
     # -- turn / quota facts (observation reads, not Carried State) ------------------------------
-    @property
-    def turn(self) -> int:
-        return int(self.state.get("turn") or 0)
-
+    #
+    # These are the per-turn ALLOWANCES, and they are the §3c completeness contract's homes for
+    # them (`common.snapshot_coverage`). A differencing system has to be able to see that a play
+    # SPENT one, or it prices the spend at 0 — so each is a public read even where the same fact is
+    # also mirrored onto `MySide` for the affordability cluster's internal use.
     @property
     def energy_attached(self) -> bool:
+        """The one manual Energy attachment for this turn is spent."""
         return bool(self.state.get("energyAttached"))
 
     @property
     def supporter_played(self) -> bool:
+        """The one Supporter for this turn is spent."""
         return bool(self.state.get("supporterPlayed"))
 
     @property
+    def retreated(self) -> bool:
+        """The one Retreat for this turn is spent (POC-T1, Issue #260).
+
+        Homes the ``allowance_retreat_used`` zone. Retreat is an ordinary turn action limited to once
+        per turn (`docs/rules.md` §4) and the engine has carried ``current.retreated`` all along; the
+        snapshot simply never surfaced it, so a retreat's own LEGALITY could not be differenced —
+        and an illegal option priced like a legal one is a phantom line, not a small error."""
+        return bool(self.state.get("retreated"))
+
+    @property
+    def stadium_played(self) -> bool:
+        """A Stadium has already been played this turn — the third allowance, same shape."""
+        return bool(self.state.get("stadiumPlayed"))
+
+    @property
     def stadium(self) -> tuple:
+        """Stadium card ids in play (the engine's list is 0- or 1-long). A tuple rather than a
+        scalar because that is the shape the engine gives and :attr:`opponent_fingerprint` hashes."""
         return tuple((c or {}).get("id") for c in (self.state.get("stadium") or ()))
+
+    @property
+    def stadium_id(self):
+        """The Stadium in play, or None — the scalar read `Board.stadium_in_play` wants."""
+        return self.stadium[0] if self.stadium else None
+
+    @property
+    def stadium_is_theirs(self) -> bool:
+        """The Stadium in play is THEIRS. Fails to False when no Stadium is out or the card carries
+        no ``playerIndex`` (an unowned Stadium is nobody's to be punished for)."""
+        card = (self.state.get("stadium") or [None])[0]
+        if not card:
+            return False
+        owner = card.get("playerIndex")
+        return owner is not None and owner != self.my_index
 
     # -- the cross-side derivation --------------------------------------------------------------
     @lazy
     def prize_race(self) -> PrizeRace:
         """The one canonical prize-race read (see :class:`PrizeRace`)."""
-        return PrizeRace(
-            my_prizes_remaining=self.mine.prizes_remaining,
-            opp_prizes_remaining=self.theirs.prizes_remaining,
-            prize_map=tuple((b.card_id, b.prize_value) for b in self.theirs.bodies))
+        return PrizeRace(my_prizes_remaining=self.mine.prizes_remaining,
+                         opp_prizes_remaining=self.theirs.prizes_remaining)
 
     # -- the sharing guard ----------------------------------------------------------------------
     @lazy
@@ -1209,7 +1331,21 @@ class StateModel(_Lazily):
 
     def shares_opponent_with(self, other: "StateModel") -> bool:
         """True when ``other``'s :attr:`theirs` may be reused for this board — the check a caller
-        MUST make before passing ``their_side`` to :meth:`build`."""
+        MUST make before passing ``their_side`` to :meth:`build`.
+
+        **KEPT deliberately with no runtime caller** (POC-T1, Issue #260, which purged the rest of
+        the model's unconsumed surface). This, :attr:`opponent_fingerprint` and the ``their_side=``
+        reuse path are the SHARING MACHINERY, pre-built for **post-POC Issue #150** (depth-2 search
+        over sampled worlds): they cannot act during my turn, so their expensive clock derivations
+        survive across the selects of a turn and across a forked leaf, and #150's sampled worlds
+        reuse MY half symmetrically. It is not dead surface by the purge's own test — the test is
+        "does anything need this?", and a named, dated owner is the answer that keeps a seat.
+
+        The `probe=` instrumentation is kept on the same footing, with a difference worth stating:
+        it HAS a live consumer, `tests/strategy/test_leaf_profile.py`, which pins the field set an
+        evaluation touches. That is a regression guard, not a runtime path — the cost of a lazy model
+        is invisible in the source, so the pin is the only thing that makes it visible.
+        """
         return (other is not None
                 and self.opponent_fingerprint == other.opponent_fingerprint)
 

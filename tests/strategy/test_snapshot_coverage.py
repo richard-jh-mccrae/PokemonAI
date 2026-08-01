@@ -174,26 +174,27 @@ def test_both_discards_carry_CONTENTS_not_only_energy_counts():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")
-def test_the_owed_list_is_exactly_what_T1_is_carrying():
-    """Pinned so the set can only SHRINK without a deliberate edit. A newly-owed zone appearing here
-    is a real regression in coverage and should be seen as one, not absorbed."""
-    assert set(sc.unhomed()) == {
-        "attached_tools", "special_conditions", "allowance_retreat_used", "transient_grants"}
-    for owner in sc.unhomed().values():
-        assert "Issue #260" in owner
+def test_the_owed_list_is_empty_because_T1_carried_it():
+    """**T0 shipped four owed zones with T1 named as their owner; T1 (Issue #260) homed all four.**
+    The list is pinned EMPTY rather than deleted, because the assertion's value is in the direction
+    it fails: a newly-owed zone appearing here is a real regression in coverage, and an `owed` entry
+    that arrives without a named owner is the silence the registry exists to replace."""
+    assert sc.unhomed() == {}
+    for owner in sc.unhomed().values():          # vacuous today; the rule outlives the emptiness
+        assert "Issue #" in owner
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")
-def test_the_kinds_whose_transition_touches_an_unhomed_zone_are_named():
-    """Not empty, and that is the point. Evolving CLEARS Special Conditions (`docs/rules.md` §4) and
-    so does leaving the Active Spot (§8) — both rulebook-sourced — while `special_conditions` has no
-    snapshot home, and retreat also touches the unhomed retreat allowance.
+def test_no_transition_writes_to_a_zone_the_snapshot_cannot_represent():
+    """The strong claim §3c was written for, now actually true.
 
-    That is §3c's failure mode in the concrete: part of what those transitions do is invisible, so
-    the delta under-reports and an under-reported delta is a pruned option. Named here so T1 has a
-    generated work list instead of a paragraph, and so the set cannot grow unnoticed."""
-    from common.strategy.context import _EVOLVE, _RETREAT
-    touching = ao.footprints_writing_unhomed()
-    assert set(touching) == {_EVOLVE, _RETREAT}
-    assert touching[_EVOLVE] == ["special_conditions"]
-    assert touching[_RETREAT] == ["allowance_retreat_used", "special_conditions"]
+    At T0 this was the opposite assertion: EVOLVE cleared Special Conditions and RETREAT spent the
+    retreat allowance, both zones with no snapshot home, so part of what those transitions did was
+    invisible — and an under-reported delta is a PRUNED option, not a mispriced one (ADR-0092 §3c).
+    T1 homed `special_conditions` (`_SideBase.conditions`) and `allowance_retreat_used`
+    (`StateModel.retreated`), so the apply-seam's whole write-set is now representable.
+
+    Kept as an equality against the empty dict rather than deleted: the moment a new option kind or
+    a new clause names a zone the snapshot cannot hold, this is where it surfaces."""
+    assert ao.footprints_writing_unhomed() == {}
+    assert sc.clauses_writing_unhomed() == {}

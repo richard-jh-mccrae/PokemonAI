@@ -81,7 +81,7 @@ def test_the_attach_equations_board_inputs_come_off_the_model(frame):
     """The Board-sourced inputs `_attach_value` reads are the model's, already — these fields were
     migrated in 0b, so the equation is transitively reading the snapshot today."""
     _pilot_, _obs_, board, model = frame
-    assert board.turn == model.turn
+    assert board.turn == model.mine.turn        # POC-T1: the turn's ONE home
     assert board.my_prizes_remaining == model.prize_race.my_prizes_remaining
     assert board.hand_basic_energy == model.mine.hand_energy_counts
     assert board.hand_ids == frozenset(model.mine.hand_ids)
@@ -131,5 +131,5 @@ def test_the_integration_needs_no_carried_state_and_leaves_none_behind(frame):
     This is what lets 1a evaluate several candidate attaches off one model without cross-talk."""
     pilot, obs, _board_, _model_ = frame
     before = pilot.carried()
-    StateModel.build(obs, combat=pilot.combat, deck=pilot.deck).mine.famine
+    StateModel.build(obs, combat=pilot.combat, deck=pilot.deck).mine.active_famine
     assert pilot.carried() == before

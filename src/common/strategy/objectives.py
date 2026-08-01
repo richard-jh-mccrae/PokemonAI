@@ -267,7 +267,7 @@ class ObjectivesMixin:
             d = self.predicted_damage(board.my_active_id, aid, opp, context=dmg_ctx)
             if d <= 0:
                 continue
-            chip = (self._rider_snipe(aid) + self._rider_spread(aid)) if bench_pool else 0
+            chip = (self.combat.rider_snipe(aid) + self.combat.rider_spread(aid)) if bench_pool else 0
             table[aid] = (d, chip)
         vals = race_values(table, hp)
         if attack_id not in vals:
@@ -287,7 +287,7 @@ class ObjectivesMixin:
         stat = self.stats.get((ma or {}).get("id")) if (self.stats and ma) else None
         if not stat:
             return 0
-        return max((self._rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
+        return max((self.combat.rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
 
     def _my_turns_to_ko(self, obs, my_active_id: int | None, energy: int, body: dict) -> float | None:
         """My feasibility turns to fell opponent ``body``: hp over my Active's best affordable

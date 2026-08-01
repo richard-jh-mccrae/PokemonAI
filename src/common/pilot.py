@@ -19,7 +19,7 @@ from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
                                           promote_value)
 from common.opponent_model import OpponentModel
-from common.state_model import StateModel
+from common.state_model import CURRENT_FORMS_ONLY, StateModel
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
@@ -2827,8 +2827,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         eff = _EFFICIENCY * self._attack_cost(attack_id, 0)   # cheaper of equal outcomes wins
         recover = self._recover_units(attack_id, dmg_ctx, board, obs)  # usable re-attachable fuel (Aura Jab)
         lock_cost = self._lock_sequence_cost(attack_id, board)    # damage the lock actually forfeits
-        snipe_ko = self._snipe_ko_prizes(board.opp_bench, self._rider_snipe(attack_id))
-        spread_ko = self._spread_ko_prizes(board.opp_bench, self._rider_spread(attack_id))
+        snipe_ko = self._snipe_ko_prizes(board.opp_bench, self.combat.rider_snipe(attack_id))
+        spread_ko = self._spread_ko_prizes(board.opp_bench, self.combat.rider_spread(attack_id))
         bench_ko = snipe_ko + spread_ko              # direct opp-bench KO prizes (single-target rider +
                                                      # distributable spread; disjoint — no attack has both)
         if hp and dmg >= hp:
@@ -3006,7 +3006,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return False
         if opp_active_prize < mp:                            # this KO doesn't take my last prize -> not lethal
             return False
-        recoil = self._rider_recoil(attack_id)
+        recoil = self.combat.rider_recoil(attack_id)
         if not board.my_active_hp or recoil < board.my_active_hp:   # recoil doesn't self-KO my Active
             return False
         my_prize = self._prize_value({"id": board.my_active_id})
@@ -3455,23 +3455,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             cid for cid, st in stats.items() if st and st.evolvesFrom and not deployable(st))
         return self._stranded_cache
 
-    def _rider_snipe(self, attack_id) -> int:
-        """The attack's unconditional bench-snipe rider — read off the ONE attack record
-        (`_attack_stat`), so `AttackStat` is the single source and the legacy `bench_snipe` dict
-        only feeds the synth fallback."""
-        st = self._attack_stat(attack_id)
-        return st.benchSnipe if st else 0
-
-    def _rider_spread(self, attack_id) -> int:
-        """The attack's distributable opp-bench spread total (Phantom Dive's ``benchSpread``, e.g. 60)
-        — read off the ONE attack record; the legacy ``bench_spread`` dict feeds the synth fallback."""
-        st = self._attack_stat(attack_id)
-        return st.benchSpread if st else 0
-
-    def _rider_recoil(self, attack_id) -> int:
-        """The attack's unconditional self-damage — single-sourced like `_rider_snipe`."""
-        st = self._attack_stat(attack_id)
-        return st.recoil if st else 0
+    # `_rider_snipe` / `_rider_spread` / `_rider_recoil` were DELETED by POC-T1 (Issue #260) and
+    # every caller re-pointed at `self.combat.rider_*`. They were byte-identical copies of the
+    # oracle's own accessors — an ADR-0052 consolidation leftover, and the shape
+    # `docs/plans/TODO-dead-accessor-cleanup.md` §2 rules on: snipe and spread got away with the
+    # duplication because both copies had callers, and recoil is where it became visible, because
+    # the Pilot's copy won and `CombatMath.rider_recoil` got nothing. Deleting the oracle's method
+    # (the literal reading of the T1 scope line) would have removed the EVIDENCE of the duplication
+    # while leaving the duplication; card knowledge belongs on the oracle, so the copies went instead.
 
     def _refresh_swing_tactical(self, obs: dict, board: Board, ctx) -> float:
         """Closed-form value of a shuffle-refresh (ADR-0060, SHED graded by ADR-0065). Judge/Harlequin
@@ -5481,7 +5472,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         The Wild-Press survival guard: 210 self-70 is fine as a prize trade (the KO branch is never
         charged) but not as a chip that leaves an 80-HP Psychic-weak body for nothing. Stands down
         when the Active is ALREADY doomed — chipping big before it dies is right."""
-        recoil = self._rider_recoil(attack_id)
+        recoil = self.combat.rider_recoil(attack_id)
         hp = board.my_active_hp
         if recoil <= 0 or not hp or board.active_doomed:
             return False
@@ -6673,18 +6664,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         active_lethal = self._active_cheap_attack_kos(ma, oa)   # its turn is done — build the successor
         # the Energy my Active can actually PAY an attack with this turn: attached + the best unspent
         # hand attach (Ignition = 3 on an Evolution) — the gust/offense affordability gate (f31)
-        hand_ids_now = frozenset(c.get("id") for c in (me.get("hand") or [])
-                                 if c and c.get("id") is not None)
-        payable = (len((ma or {}).get("energies") or [])
-                   + (0 if state.get("energyAttached")
-                      else self._best_hand_attach_units(
-                          hand_ids_now, self.stats.get((ma or {}).get("id")) if self.stats else None)))
+        payable = ((model.mine.active.energy_count if model.mine.active is not None else 0)
+                   + (0 if model.energy_attached
+                      else self._best_hand_attach_units(          # ← StateModel (POC-T1): my hand
+                          frozenset(model.mine.hand_ids),         #   and my Active's Energy both
+                          self.stats.get((ma or {}).get("id")) if self.stats else None)))
         # **Famine** (#142) — "my Active cannot attack this turn", read ONCE off the model: no attack
         # reachable under the full Attach Budget, or the rules forbid one at all (`attack_blocked`).
         famine = model.mine.active_famine
         # 0 attached, yet an attack is still reachable this turn — the fact behind "go down swinging
         # rather than stall-gust". Derived here because two stall-gust rules need the identical clause.
-        unarmed_but_able = len((ma or {}).get("energies") or []) == 0 and not famine
+        unarmed_but_able = (model.mine.active is not None
+                            and model.mine.active.energy_count == 0 and not famine)
         base_plan = (choose_plan(state, self.strategy, self.stats) if state.get("players")
                      else Plan.SETUP)                   # the readiness core (SETUP→RACE)
         path_sig = self._path_signals(obs, me, opp, ma, oa,   # Tier-3 two-sided Prize Path (ADR-0040):
@@ -6700,15 +6691,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         board = Board(
             opp_active_doomed=opp_doomed,
             forced_promotion_key=self._forced_promotion_key(opp, opp_doomed),
-            my_bench=sum(1 for b in (me.get("bench") or []) if b),
-            bench_full=sum(1 for b in (me.get("bench") or []) if b) >= _BENCH_MAX,
+            my_bench=model.mine.bench_count,                    # ← StateModel (POC-T1): bench
+            bench_full=model.mine.bench_full,                   #   occupancy has ONE derivation,
+            #                                                     and `bench_full` reads the
+            #                                                     engine's own `benchMax`
             my_active_id=(ma or {}).get("id"),
-            my_active_energy=len((ma or {}).get("energies") or []),
+            my_active_energy=(model.mine.active.energy_count            # ← StateModel (POC-T1):
+                              if model.mine.active is not None else 0),  #   UNITS, not typed count
             my_active_hp=(ma or {}).get("hp", 0),
-            opp_bench=tuple((b.get("id"), b.get("hp", 0)) for b in (opp.get("bench") or []) if b),
-            turn=state.get("turn", 0),
-            energy_attached=bool(state.get("energyAttached")),
-            supporter_played=bool(state.get("supporterPlayed")),
+            opp_bench=tuple((b.card_id, b.body.get("hp", 0)) for b in model.theirs.bench),
+            turn=model.mine.turn,                               # ← StateModel: the turn/allowance
+            energy_attached=model.energy_attached,              #   facts, off their one home
+            supporter_played=model.supporter_played,
             hand_startable=self._hand_startable(me.get("hand") or []),
             active_doomed=active_doomed,
             incoming_active_damage=self._incoming_active_damage(ma, oa),
@@ -6764,9 +6758,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             best_counter_slot=self._best_counter_slot(obs, select) if select else None,
             best_counter_source_slot=self._best_counter_source_slot(obs, select) if select else None,
             max_counter_move_number=self._max_counter_move_number(select) if select else 0,
-            stadium_in_play=((state.get("stadium") or [{}])[0] or {}).get("id"),
-            opp_stadium_in_play=bool((state.get("stadium") or [{}])[0]
-                                     and (state.get("stadium") or [{}])[0].get("playerIndex", yi) != yi),
+            stadium_in_play=model.stadium_id,                   # ← StateModel (POC-T1): the
+            opp_stadium_in_play=model.stadium_is_theirs,         #   Stadium and who owns it
             bench_wincon_ready=self._bench_wincon_ready(me),
             best_promote_slot=self._best_promote_slot(me),
             evolve_to_ready_wincon_available=self._evolve_to_ready_wincon_available(me),
@@ -6785,7 +6778,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                              if select and select.get("deck") else None),
             hand_basic_energy=model.mine.hand_energy_counts,               # ← StateModel
             no_supporter_in_hand=self._no_supporter_in_hand(me),
-            opp_has_played_gust=self._opp_has_played_gust(opp),
+            opp_has_played_gust=self._opp_has_played_gust(),
             active_is_wincon=bool(ma) and ma.get("id") in self._wincon_set(),
             active_is_weak_preevo=self._active_is_weak_preevo(ma),
             can_wall_line_with_disruptor=self._can_wall_line_with_disruptor(me, ma, oa),
@@ -6800,8 +6793,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
             opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
             opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
-            opp_hand_size=int((opp or {}).get("handCount") or 0),
-            my_hand_size=len(me.get("hand") or []),
+            opp_hand_size=model.theirs.hand_size,               # ← StateModel (POC-T1): THE
+            my_hand_size=len(model.mine.hand_ids),               #   supplier of the hand counts
             opp_draw_engine_in_play=bool(self._draw_engine_ids(opp)),
             # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers — sourced from the tracker
             # observed at self.opponent.observe(obs) above; each read fails OPEN (unknown -> no-fire default).
@@ -7510,18 +7503,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if cid not in empty and (stat := self.stats.get(cid)) is not None
             and stat.is_typed_basic_energy)
 
-    def _opp_has_played_gust(self, opp: dict) -> bool:
+    def _opp_has_played_gust(self) -> bool:
         """True if the opponent has played a gust (a Boss's Orders-style forced-switch) this game — a
         `gust`-tagged card sits in their discard. It means they CAN drag my benched win-condition into the
         Active and Knock it Out, so hiding the finisher on the Bench is less safe: interposing a cheap attacker
-        at a promote taxes their next gust and denies the free front-line prize. False with no functions."""
-        if not self.functions:
+        at a promote taxes their next gust and denies the free front-line prize. False with no functions.
+
+        Reads :attr:`TheirSide.discard_ids` (POC-T1, Issue #260). Their discard is a PUBLIC zone in
+        both directions (`docs/rules.md`), so scanning it is sound knowledge rather than an estimate —
+        which is exactly why it belongs on the snapshot and not in an ad-hoc walk here. The zone was
+        homed at T0 and INERT; this is its first consumer."""
+        model = self._state_model
+        if model is None or not self.functions:
             return False
-        for c in (opp.get("discard") or []):
-            cid = c.get("id") if c else None
-            if cid is not None and "gust" in self.functions.tags(cid):
-                return True
-        return False
+        return any("gust" in self.functions.tags(cid) for cid in model.theirs.discard_ids)
 
     def _weakest_snipe_hp(self, obs: dict, select: dict | None) -> int | None:
         """Least HP among the benched Pokémon a DAMAGE select can snipe — the target closest to a
@@ -7609,7 +7604,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         stat = self.stats.get(my_active_id) if (self.stats and my_active_id is not None) else None
         if not stat:
             return 0
-        return max((self._rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
+        return max((self.combat.rider_snipe(aid) for aid in (stat.attacks or ())), default=0)
 
     def _target_threat_rank(self, obs: dict, select: dict, option: dict,
                             read=None, gamma: float = 0.0) -> float | None:
@@ -7902,8 +7897,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _incoming_active_damage(self, ma: dict | None, oa: dict | None) -> int:
         """Worst next-turn damage their Active deals mine (the KO oracle's read, ADR-0052) —
         exposed on the Board so a +HP tool can test a survival breakpoint."""
-        return self.combat.incoming_active_damage(
-            ma, oa, context=self._opp_attack_context)
+        model = self._state_model
+        if model is None:
+            return 0
+        # Off the SNAPSHOT (POC-T1). `CURRENT_FORMS_ONLY` empties the forward-availability gate,
+        # which is what makes this the CURRENT-form read: the Board exposes it so a +HP Tool can test
+        # a survival breakpoint against what the body in front of me hits for today, and the line it
+        # becomes is `active_doomed`'s question, not this one.
+        return int(model.theirs.incoming(ma, 1, bodies=[oa], charged=UNCHARGED,
+                                         forward_ids=CURRENT_FORMS_ONLY,
+                                         context=self._opp_attack_context))
 
     # The DOOM consumer's charged energy policy (doom-shadow grill, 2026-07-23) — STRICTER than
     # `_incoming_budget`'s `base_attach: 1` because the survival boolean is catastrophe-grade:
@@ -8092,8 +8095,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         opponent discard Energy, or no live opponent board."""
         if getattr(self, "_planning", False):
             return None
-        disc = getattr(board, "opp_discard_energy", None)
-        if not disc:
+        model = self._state_model
+        if model is None or not model.theirs.discard_energy_counts:
+            # ONE source for the discard (POC-T1): the shadow used to take the sparse guard off
+            # `board.opp_discard_energy` and the fuel off a hand-assembled read, which is the drift
+            # hazard `_recur_fueled_oa`'s own docstring warns about — the guard could pass on one
+            # reading while the fuel came back 0 on the other.
             return None
         state = obs.get("current") or {}
         players = state.get("players") or []
@@ -8106,18 +8113,21 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         bodies = [p for p in ((opp.get("active") or []) + (opp.get("bench") or [])) if p]
         rows = []
         for p in bodies:
-            fuel = self.combat.discard_recur_fuel(p, disc, forward_ids=self._forward_card_ids)
+            # The CAUTION reading — "could this line refuel at all" — which is what the shadow has
+            # always reported and what the doom relax gates on. The CLOCK's own reading is narrower
+            # (Issue #204), and the `ttr_*` pair below is exactly that difference measured.
+            fuel = model.theirs.discard_recur_fuel(p)
             if fuel <= 0:
                 continue
             st = self.stats.get(p.get("id")) if self.stats else None
             etype = getattr(st, "energyType", None)
             fueled = dict(p, energies=list(p.get("energies") or []) + [etype] * fuel)
             row = {"id": p.get("id"), "fuel": fuel,
-                   "ttr_plain": self.combat.turns_to_afford(p, forward_ids=self._forward_card_ids),
-                   "ttr_fuel": self.combat.turns_to_afford(fueled, forward_ids=self._forward_card_ids)}
+                   "ttr_plain": model.theirs.turns_to_afford(p, fuelled=False),
+                   "ttr_fuel": model.theirs.turns_to_afford(fueled, fuelled=False)}
             if ma:
-                row["inc_plain"] = self.combat.incoming(ma, [p], 1)
-                row["inc_fuel"] = self.combat.incoming(ma, [fueled], 1)
+                row["inc_plain"] = model.theirs.incoming(ma, 1, bodies=[p], charged=None)
+                row["inc_fuel"] = model.theirs.incoming(ma, 1, bodies=[fueled], charged=None)
             rows.append(row)
         return {"bodies": rows} if rows else None
 

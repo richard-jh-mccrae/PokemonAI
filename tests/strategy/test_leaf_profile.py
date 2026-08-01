@@ -50,12 +50,15 @@ REPO = Path(__file__).resolve().parents[2]
 #: the ~25% a naive re-canonicalisation per read measured. Accepted on the same grounds as above.
 PER_DECISION_PROFILE = frozenset({
     "mine.active",
+    "mine.active.energy_count",       # ← POC-T1: Board's `my_active_energy`, off its one home
     "mine.active.energy_key",
     "mine.active.stat",            # the fail-OPEN unreadable-body check the famine read makes first
     "mine.active_famine",
     "mine.attach_budget",
     "mine.attack_blocked",
     "mine.bench",
+    "mine.bench_count",               # ← POC-T1: bench occupancy has ONE derivation now
+    "mine.bench_full",
     "mine.bodies",
     "mine.body_raws",
     "mine.deck_count",
@@ -80,6 +83,8 @@ PER_DECISION_PROFILE = frozenset({
     "theirs.bench.prize_value",
     "theirs.bodies",
     "theirs.discard_energy_counts",
+    "theirs.discard_ids",             # ← POC-T1: `opp_has_played_gust`, off the public zone
+    "theirs.hand_size",               # ← POC-T1: THE supplier of the opponent hand count
     "theirs.incoming",                # ← POC-T1: the FOLDED doom read, at the `UNCHARGED` policy
     "theirs.prizes_remaining",
     "theirs.turns_to_ko_me",          # ← POC-T1: `opponent_target_value`'s removal Δ
@@ -122,6 +127,20 @@ PROMOTE_DECIDER_PROFILE = frozenset({
     "theirs.body_raws",
 })
 
+#: The model fields the DENY-SLOT keep price adds (ADR-0080 / Issue #187), on any menu where a
+#: forced discard prices a held denier. New as a MODEL read in POC-T1 (Issue #260): the deadline
+#: grade always read this clock, it just read it around the snapshot.
+#:
+#: Both entries are ruled cost for this consumer, not a leak:
+#:   * `theirs.turns_to_afford` — the deny slot's `/2^t` deadline grade IS this clock. A Hammer on a
+#:     body three turns from arming is worth a fraction of one on a body arming next turn.
+#:   * `theirs.discard_recur_fuel` — the clock's own input since Issue #204; a refueler reloads
+#:     outside the attach quota, so the bare quota does not merely under-state its clock, it is wrong.
+DENY_SLOT_PROFILE = frozenset({
+    "theirs.discard_recur_fuel",
+    "theirs.turns_to_afford",
+})
+
 #: The CEILING on the model field set one PLANNER-LEAF evaluation may touch.
 #:
 #: A leaf does not read the model directly — its own terms (`_readiness`, `_incoming_worst`,
@@ -153,7 +172,7 @@ KO_LINE_PROFILE = frozenset({
 })
 
 LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
-                | KO_LINE_PROFILE)
+                | DENY_SLOT_PROFILE | KO_LINE_PROFILE)
 
 
 class _Probe:
@@ -261,7 +280,7 @@ def test_the_attach_decider_profile_is_pinned(pilot):
         for obs in _attach_frames():
             ms.explain(obs)
     added = probe.fields - PER_DECISION_PROFILE
-    expected = ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
+    expected = ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE | DENY_SLOT_PROFILE
     assert added == expected, (
         "the decider field set moved — re-measure before re-pinning\n"
         f"  added:   {sorted(added - expected)}\n"
@@ -272,7 +291,7 @@ def test_the_attach_decider_profile_is_pinned(pilot):
     # it legitimately prices the retreat option alongside the attach. Since POC-T1 the curve is also
     # in the per-decision set (the folded doom read), so `added` no longer carries it either way; the
     # claim is asserted against the union so it keeps biting if that ever reverses.
-    attach_only = added - PROMOTE_DECIDER_PROFILE - PER_DECISION_PROFILE
+    attach_only = added - PROMOTE_DECIDER_PROFILE - DENY_SLOT_PROFILE - PER_DECISION_PROFILE
     assert not any("incoming" in f or "needs" in f for f in attach_only), (
         "the attach decider reached an expensive cluster it has no term for")
 
