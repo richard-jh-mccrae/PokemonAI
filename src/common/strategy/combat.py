@@ -1343,7 +1343,7 @@ class CombatMath:
         if charged is None or charged == UNCHARGED:   # ceiling family: pay the gate, credit biggest
             unconditional = (charged == UNCHARGED and is_current)
             if not unconditional and not self._affords(stat, form_body, None, attached, attaches,
-                                                       charged):
+                                                       charged, is_current=is_current):
                 return 0
             if my_benched:
                 return max((self._bench_rider(aid) for aid in (stat.attacks or ())
@@ -1354,7 +1354,8 @@ class CombatMath:
         for aid in (stat.attacks or ()):
             if aid == exclude:
                 continue
-            if not self._affords(stat, form_body, aid, attached, attaches, charged):
+            if not self._affords(stat, form_body, aid, attached, attaches, charged,
+                                 is_current=is_current):
                 continue                              # unaffordable in count or in colour
             best = max(best, self._bench_rider(aid) if my_benched
                        else int(self.predicted_damage(form_id, aid, my_body,
@@ -1460,14 +1461,67 @@ class CombatMath:
             for aid in (stat.attacks or ()):
                 if is_current and aid == grant.get("same_lock"):
                     continue
-                if not self._affords(stat, form_body, aid, attached, t, charged):
+                if not self._affords(stat, form_body, aid, attached, t, charged,
+                                     is_current=is_current):
                     continue
                 pair = (self.rider_snipe(aid), self.rider_spread(aid))
                 if any(pair):
                     pairs.add(pair)
         return pairs
 
-    def _affords(self, stat, form_body, aid, attached: int, t: int, charged) -> bool:
+    def _evolve_accel(self, stat) -> tuple:
+        """``(EnergyType, units)`` an ON-EVOLVE deck-search Ability attaches to the form being
+        evolved INTO — the opponent-side reading of the `_ACCEL_TAGS` family (**Issue #257**).
+
+        Marnie's Grimmsnarl ex 648's Punk Up is the shipped case, verified at source: *"When you play
+        this Pokémon from your hand to evolve 1 of your Pokémon during your turn, you may search your
+        deck for up to 5 Basic {D} Energy cards and attach them to your Marnie's Pokémon"* — and a
+        Marnie's Grimmsnarl ex is itself a Marnie's Pokémon, so it may take them. Five Energy in one
+        turn, arriving on exactly the hop the Threat Clock is already counting.
+
+        **Effect-Clause-quantified, fail-CLOSED** — ADR-0067's self-side rule, mirrored. The Function
+        Tag only ROUTES; the amount, the type, the source zone and the TRIGGER come from the clause,
+        and a tagged card the compendium says nothing about yields zero. Deck PRESENCE fails open
+        (we cannot see their deck, and under-crediting an opponent's reach is the unsafe direction
+        for a threat read) — the same asymmetry ADR-0067 draws on my own side.
+
+        **Only the ON-EVOLVE trigger.** That is not a shortcut, it is the boundary of what a per-FORM
+        read can honestly answer: the hop IS the trigger, so the credit lands exactly where the curve
+        is already looking. A pool sweep for "search your deck … and attach" turned up 29 cards; all
+        but five are ATTACKS, which end the turn and so can never fund another attack (ADR-0064's
+        existing exclusion). Of the five Abilities, the four this deliberately does NOT credit each
+        need a BOARD-level premise the per-form structure cannot carry, and each is recorded rather
+        than silently dropped:
+
+          * **641 Steven's Metagross ex** X-Boot — once per turn, unconditional, targets "your {P}
+            Pokémon and {M} Pokémon". Available to a body ALREADY in play, so crediting it is a
+            question about their board ("does an X-Boot body exist?"), not about this form.
+          * **340 Yanmega ex** Buzzing Boost — fires on moving Bench→Active, i.e. on the promotion
+            the `_promotion_open` gate already models separately.
+          * **834 Toxtricity** Sinister Surge — targets "1 of your Benched {D} Pokémon", so it never
+            funds the attacker itself (the Aura Jab shape, one zone over).
+          * **871 Heliolisk** Frilled Generator — gated on having played Canari from HAND this turn,
+            which is hidden information; fail-closed, no credit.
+
+        These are the "on-board accel abilities … a Brief-derived budget scan is the proper home if
+        one arrives" residual the doom-shadow grill already flagged (RULED appendix, 2026-07-23).
+        Under-crediting them under-rates their clock, which is the direction this method otherwise
+        errs against — stated, not papered over."""
+        if stat is None or self.functions is None or self.effects is None:
+            return (None, 0)
+        cid = getattr(stat, "cardId", None)
+        if cid is None or not (_ACCEL_TAGS & frozenset(self.functions.tags(cid))):
+            return (None, 0)                          # untagged: never even inspected
+        for cl in (self.effects.clauses(cid) or ()):
+            if (cl.get("kind") == "accel" and cl.get("trigger") == "on_evolve"
+                    and cl.get("source") == "deck" and cl.get("target") == "own_line"):
+                etype, units = cl.get("energy_type"), int(cl.get("amount") or 0)
+                if etype is not None and units > 0:
+                    return (etype, units)
+        return (None, 0)
+
+    def _affords(self, stat, form_body, aid, attached: int, t: int, charged, *,
+                 is_current: bool = True) -> bool:
         """Whether ``aid`` is payable at turn ``t`` under the ``charged`` policy (see :meth:`incoming`).
 
         ONE function owns affordability, so the damage read (:meth:`_reach_form_damage`) and the
@@ -1493,9 +1547,15 @@ class CombatMath:
         # so it is flat in the turn count, never scaled by ``t``.
         burst = charged.get("burst_on_evo", 0) if getattr(stat, "evolvesFrom", None) else 0
         wild = t * base
-        if self.attack_cost(aid) > attached + wild + burst:
+        # Their own ON-EVOLVE deck-search Ability (Issue #257), on a form they would EVOLVE INTO —
+        # the hop is the trigger, so a current form never earns it. TYPED, so unlike the colourless
+        # burst it can pay a specific slot; flat in ``t`` for the same reason the burst is (it fires
+        # once, on the hop). CHARGED only: the ceiling already credits every attack a form can reach.
+        acc_type, acc_units = (None, 0) if is_current else self._evolve_accel(stat)
+        if self.attack_cost(aid) > attached + wild + burst + acc_units:
             return False
-        return bool(self.attack_type_payable(aid, form_body, wild_units=wild))
+        return bool(self.attack_type_payable(aid, form_body, wild_units=wild,
+                                             extra_type=acc_type, extra_units=acc_units))
 
     def turns_to_ko_me(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
                        max_t: int = 8, context: dict | None = None, my_benched: bool = False,

@@ -438,5 +438,16 @@
 "trigger": "on_attack",
 "target": "bench_only"
 }
+],
+"648": [
+{
+"kind": "accel",
+"amount": 5,
+"source": "deck",
+"target": "own_line",
+"energy": "basic",
+"energy_type": 7,
+"trigger": "on_evolve"
+}
 ]
 }

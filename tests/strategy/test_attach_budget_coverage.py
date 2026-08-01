@@ -28,6 +28,23 @@ KNOWN_UNMODELLED = {
          "attack-based-accel exclusion). Permanently zero, not a gap.",
 }
 
+# Accel a shipped deck runs where ZERO is **wrong** and the modelling is OWED. Deliberately a
+# SEPARATE list from `KNOWN_UNMODELLED`: that one says "zero is correct", and folding a real gap into
+# it would be a lie the gate then enforces. Each entry names the owner, the same discipline
+# `common.snapshot_coverage` applies to an unhomed zone — an owed item with no owner is a silence.
+SELF_SIDE_OWED = {
+    648: "Marnie's Grimmsnarl ex — [Ability] Punk Up attaches up to 5 Basic {D} from the deck when "
+         "the card is played from HAND TO EVOLVE (verified, data/EN_Card_Data.csv), and it does NOT "
+         "end the turn, so Cinderace's ruling above does not cover it: on `grimmsnarl_ex` this is a "
+         "live self-side accel the Budget cannot see, which is the f70 false-famine class. "
+         "SURFACED by POC-T1 (Issue #260), which tagged the card for the OPPONENT-facing Threat "
+         "Clock (Issue #257) — `card_functions.json` had no entry for 648 at all, so the gap existed "
+         "and this gate could not see it. Closing it is ISSUE #137's charter, not #260's: "
+         "`attach_budget` would have to admit an Evolution POKEMON in hand and take a board fact it "
+         "is not given today (is a legal evolve base in play, and is the turn's evolve still "
+         "available?). Owner: Issue #137 follow-up, filed in POC-T1's wave-2 packet.",
+}
+
 # The vocabulary CombatMath's clause interpreter actually models. Anything outside these sets is
 # silently zeroed at runtime (_accel_target_ok / _AttachCtx.source_types / condition_met all fail
 # CLOSED), so a clause using an unmodelled word must NOT count as coverage — otherwise the gate
@@ -99,12 +116,24 @@ def test_every_accel_card_in_a_shipped_deck_is_modelled_or_explicitly_ruled_zero
     tags, clauses = _tags(), _clauses()
     gaps = [cid for cid in sorted(_deck_ids(deck_csv))
             if (tags.get(cid, set()) & _ACCEL_TAGS)
-            and cid not in KNOWN_UNMODELLED
+            and cid not in KNOWN_UNMODELLED and cid not in SELF_SIDE_OWED
             and not _budget_readable(clauses.get(cid, ()))]
     assert not gaps, (
         f"{deck_csv.parent.name}: accel-tagged cards with no Budget-readable Effect Clause: {gaps}. "
         "Author the clause in tools/meta_tracker/effect_overrides.json (verify the card text at "
-        "source first), or add it to KNOWN_UNMODELLED with the ruling that makes zero correct.")
+        "source first), add it to KNOWN_UNMODELLED with the ruling that makes zero correct, or — "
+        "when zero is WRONG and the fix belongs to another track — to SELF_SIDE_OWED with its owner.")
+
+
+def test_an_owed_entry_names_its_owner_and_is_not_quietly_modelled():
+    """The owed list is a schedule, not a waiver, so it is held to two rules: every entry says who
+    owes it, and an entry whose clause has since become Budget-readable must LEAVE (otherwise the
+    list outlives the gap and the next reader believes a live seam is still broken)."""
+    clauses = _clauses()
+    for cid, owner in SELF_SIDE_OWED.items():
+        assert "Issue #" in owner and len(owner) > 80, f"{cid}: an owed entry must name its owner"
+        assert not _budget_readable(clauses.get(cid, ())), (
+            f"{cid} is now Budget-readable — remove it from SELF_SIDE_OWED")
 
 
 @pytest.mark.parametrize("deck_csv", _shipped_decks(), ids=lambda p: p.parent.name)

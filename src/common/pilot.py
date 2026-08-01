@@ -5823,6 +5823,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         def _counters(p):
             return max(0, ((p or {}).get("maxHp", 0) or 0) - ((p or {}).get("hp", 0) or 0)) // 10
 
+        def _in_play(player):
+            return [p for p in ((player.get("active") or []) + (player.get("bench") or [])) if p]
+
+        def _stat_of(p):
+            return self.stats.get((p or {}).get("id")) if self.stats else None
+
+        def _is_ex(p):
+            st = _stat_of(p)
+            return bool(st is not None and st.is_ex_body)
+
+        def _stage2_count(bench):
+            # Fail-CLOSED per body: an unresolvable card is not counted. A scaler that over-reads its
+            # own bench inflates MY damage estimate, which is the direction that manufactures a
+            # phantom lethal — the one error class the Lethal Solver may never make.
+            return sum(1 for p in bench
+                       if p and getattr(_stat_of(p), "stage2", False))
+
         def _taken(player):
             prize = player.get("prize")
             return max(0, 6 - len(prize)) if prize is not None else 0
@@ -5847,7 +5864,26 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                "atk_self_counters": _counters(aa),      # damage counters on attacking Active
                "def_counters": _counters(da),           # ... and on defending Active
                "atk_prizes_taken": _taken(atk),         # prizes each side taken (6 - remaining)
-               "def_prizes_taken": _taken(dfn)}
+               "def_prizes_taken": _taken(dfn),
+               # ── Issue #225's four families (POC-T1). Each name is the printed COUNTABLE, read
+               # off the visible board like every other scaler; see `src/common/CONTEXT.md` for
+               # why the two FILTERED counts take flat names rather than growing a filtered form.
+               #
+               # `both_active_energy` is the second member of the `both_` direction class ADR-0083
+               # §4 opened (and the card it named): "for each Energy attached to BOTH Active
+               # Pokémon" — direction-symmetric, so ONE key is right whichever side attacks.
+               "both_active_energy": (len((aa or {}).get("energies") or [])
+                                      + len((da or {}).get("energies") or [])),
+               # "for each Stage 2 Pokémon on YOUR Bench" — attacker-relative, and the first context
+               # key whose count needs a CardStat lookup per body rather than the raw obs shape.
+               "atk_bench_stage2": _stage2_count(atk.get("bench") or []),
+               # "for each damage counter on ALL of your opponent's Pokémon" — every body, not the
+               # Active alone, which is what makes it a different variable from `def_counters`.
+               "def_counters_all": sum(_counters(p) for p in _in_play(dfn)),
+               # "for each of your opponent's Pokémon {ex} in play" — Mega ex counts, since a Mega
+               # Evolution Pokémon ex IS an {ex} (`docs/rulebook.txt` L337), which is exactly what
+               # `CardStat.is_ex_body` answers.
+               "def_ex_in_play": sum(1 for p in _in_play(dfn) if _is_ex(p))}
         if attacker_is_me:
             # exact deck facts for hidden deck-discard scalers (only MY deck can be exact —
             # tracker-anchored): oracle turns them into a pigeonhole floor / hypergeometric EV

@@ -49,10 +49,19 @@ def scale_count(gs: GameState, seat: int, var: str, energy_type: int | None = No
         if ob.active is None:
             return 0
         return len(provided_energy(gs, ob.active))
+    if var == "both_active_energy":             # Myriad Leaf Shower: both Actives, symmetric
+        return sum(len(provided_energy(gs, p.active)) for p in (b, ob) if p.active is not None)
+    if var == "atk_bench_stage2":               # Rumbling March: Stage 2 on MY bench
+        return len([p for p in b.bench if gs.stat(p.top).stage2])
+    if var == "def_ex_in_play":                 # Tenacious Tail: their {ex} in play. Mega ex counts —
+        return len([p for p in gs.in_play(1 - seat)     # a Mega Evolution Pokemon ex IS an {ex}
+                    if gs.stat(p.top).ex or gs.stat(p.top).megaEx])   # (rulebook.txt L337)
     if var == "atk_self_counters":
         return (b.active.max_hp - b.active.hp) // 10 if b.active else 0
     if var == "def_counters":
         return (ob.active.max_hp - ob.active.hp) // 10 if ob.active else 0
+    if var == "def_counters_all":               # Neurokinesis: EVERY body of theirs, not the Active
+        return sum((p.max_hp - p.hp) // 10 for p in gs.in_play(1 - seat))
     if var == "atk_prizes_taken":
         return 6 - len(b.prize)
     if var == "def_prizes_taken":
