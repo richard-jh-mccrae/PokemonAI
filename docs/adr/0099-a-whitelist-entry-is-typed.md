@@ -6,8 +6,6 @@
 (the sound-rule whitelist, ratified here in amended form) and **enforces its own T0 double-counting
 rule** against the whitelist as well as against the term families. Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #259 (this grill), Issue #231 (whose entry this grill split and re-typed).
 
 ## Context
@@ -72,3 +70,45 @@ the failure above actually lived.
 - The alternative considered and rejected — deferring ratification to wave 2, after T1 measures the
   substrate — would block four parallel lanes on a measurement that has not started, because every
   track grades its flips against this list. T0 is the serial track precisely so this does not happen.
+
+## Amendment A — a fourth type: `composed-into-the-leaf` (ruled 2026-08-01, Issue #263)
+
+Ruled by the developer after this ADR was accepted and while PR #266 was in flight, on the authority
+of the *"Contract impact of the Issue #263 ordering ruling"* comment on Issue #259. Recorded here
+rather than as a sibling ADR for the same reason as [ADR-0098](0098-apply-seam-parity-detect-localize-contain.md)'s
+Amendment A: this ADR is introduced by the same unmerged PR.
+
+**What moved.** With the composer's ordering now uniform 1-ply differencing, the four per-seam
+equations — `attach_value` ([ADR-0069](0069-the-attach-marginal-is-an-axes-sum-and-the-decider-may-say-no.md)),
+`evolve_value` ([ADR-0070](0070-the-evolve-marginal-is-a-body-substituted-delta-in-damage.md)),
+`promote_retreat_value` ([ADR-0073](0073-the-promote-retreat-equation-is-the-sub-lethal-residual-in-damage.md))
+and `deploy_value` ([ADR-0086](0086-the-deploy-marginal-prices-a-bench-slot-and-what-fills-it.md)) —
+**stop being DECIDERS** for any option the enumerator covers. Their *math* stays ratified; their
+*role* changes.
+
+That leaves them in a gap the three existing types cannot express. They are not deleted. They are not
+whitelisted as rules that survive the purge. They survive as **`state_value` term-family internals**
+(Issue #262 composes readiness and development out of them) and optionally as pruning
+approximations. So the vocabulary gains a fourth type, `composed-into-the-leaf`, and the four
+equations are listed under it.
+
+**The mandatory field is the destination.** By symmetry with `provisional` (must carry a dated
+retirement test) and `authored-scaffold` (must carry a reconciliation), a `composed-into-the-leaf`
+entry **must name the `state_value` term family that absorbs it** — `attach_value` → readiness,
+`evolve_value` → readiness, `promote_retreat_value` → survival, `deploy_value` → development. Without
+a named destination, "survives as an internal" is indistinguishable from "kept out of sentiment", and
+the next track deletes it. `validate()` rejects a composed entry with no destination, and rejects a
+still-deciding entry that claims one — a `structural` rule naming a term family would be claiming to
+be math it is not, and would thereby exempt itself from the one-guard-per-fact rule.
+
+**The list now has two populations, and the double-guard detector runs over one of them.** A decider
+*guards* a fact; a composed equation *prices* one. Folding both roles into a single coverage map
+would report a rule and an equation as a double guard on the same fact, and a detector that cries
+wolf is one nobody reads. `deciders()` and `composed()` partition the whitelist;
+`undeclared_double_guarding()` reads the former.
+
+**Why the exact string matters.** Issue #264's disposition table uses the same label, so
+`composed-into-the-leaf` is asserted as a literal in the tests, not only through the constant. The
+sharpest deletion hazard is `deploy_value`: ADR-0096 already deleted `keep-a-bench` off this list, so
+a reader could reasonably conclude the whole Bench-pricing story was purged. It was not — the bench
+slot priced as a scarce resource IS this equation, and it becomes development-family math.

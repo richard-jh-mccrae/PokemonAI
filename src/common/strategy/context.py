@@ -16,6 +16,15 @@ _ENERGY = 6   # OptionType.ENERGY — an attached Energy unit (the Crushing Hamm
 _YES = 1      # "redraw the cards?" affirmative at a Mulligan select
 _ATTACK = 13  # attack (the turn-ender)
 _END = 14     # end the turn
+# The remaining OptionType members. Mirrored here — rather than transcribed a second time inside
+# `common/apply_option.py` — so the apply-seam's coverage table can be TOTAL over the enum without
+# minting a rival spelling of it (ADR-0087: one store per fact). Names are suffixed where the plain
+# name is already taken below by a SelectContext or a CardType.
+_ATTACHED_TOOL = 4        # OptionType.TOOL_CARD — an attached Tool (cf. CardType `_TOOL_CARD` = 2)
+_ENERGY_CARD = 5          # OptionType.ENERGY_CARD — an attached Energy *card* (vs `_ENERGY`'s unit)
+_DISCARD_IN_PLAY = 11     # OptionType.DISCARD — discard a card in play (cf. SelectContext `_DISCARD` = 8)
+_SKILL = 15               # OptionType.SKILL — order simultaneous card skills; not a board transition
+_SPECIAL_CONDITION = 16   # OptionType.SPECIAL_CONDITION — pick which condition an effect affects
 
 # ── SelectContext (cg/api.py) ──
 _MAIN = 0         # open turn menu (play/attach/evolve/retreat/attack/end); attack-last applies here

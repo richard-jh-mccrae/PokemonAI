@@ -17,7 +17,7 @@ in direct violation of T0's own headline rule ("every board fact enters through 
 family"), and nothing about writing the line prompted the question. Six parallel tracks will each
 delete rungs against this list, so the discipline has to be enforced rather than remembered.
 
-## The three types, and what each MUST carry
+## The four types, and what each MUST carry
 
 * ``structural``        — permanent. Encodes a game rule or a fail-direction policy. Must name it.
 * ``provisional``       — a substrate-gap workaround, not a permanent truth. **Must carry a dated
@@ -25,10 +25,25 @@ delete rungs against this list, so the discipline has to be enforced rather than
   whole failure mode the type exists to name.
 * ``authored-scaffold`` — a constant, not a rule. **Must carry a reconciliation note** stating what
   it is checked against, and a fitting-queue entry.
+* ``composed-into-the-leaf`` — a per-seam equation that stops being a DECIDER when the composer
+  lands, but survives as `state_value` term-family internals. **Must name the term family that
+  absorbs it** (``composed_into``). Added 2026-08-01 by the Issue #263 ordering ruling.
 
 `validate()` rejects an entry missing its mandatory field, and every entry names the board fact it
 guards — which is what makes the double-counting rule checkable against the whitelist itself and not
 only against `state_value`'s term families.
+
+## Two populations: what DECIDES, and what is MATH
+
+The first three types are entries that still decide something at runtime. ``composed-into-the-leaf``
+is not: those equations lose decider status to the composer's uniform 1-ply differencing, and are
+neither deleted nor whitelisted-as-rules. They are on this list precisely so that "no longer a
+decider" is not read as "delete it" — Issue #262 composes readiness and development out of their
+math, and Issue #264's disposition table uses this same label, so the string has to match exactly.
+
+`undeclared_double_guarding()` runs over the DECIDERS only. A decider guarding a fact and an
+equation pricing it are different roles, so pairing them would be a false positive — and a detector
+that cries wolf is one nobody reads.
 
 The human-readable rendering is `docs/plans/value-system-poc-plan.md` §6. It carries the same ``id``
 column, and `test_sound_rules.py` cross-checks the two so the doc and the data cannot drift.
@@ -44,8 +59,16 @@ STRUCTURAL = "structural"
 PROVISIONAL = "provisional"
 #: A constant, not a rule. Carries a reconciliation note and a fitting-queue entry.
 AUTHORED_SCAFFOLD = "authored-scaffold"
+#: A per-seam equation that stops DECIDING when the composer lands but survives as `state_value`
+#: term-family internals. Carries the term family that absorbs it. The exact string is shared with
+#: Issue #264's disposition table — do not reword it.
+COMPOSED_INTO_THE_LEAF = "composed-into-the-leaf"
 
-TYPES = frozenset({STRUCTURAL, PROVISIONAL, AUTHORED_SCAFFOLD})
+TYPES = frozenset({STRUCTURAL, PROVISIONAL, AUTHORED_SCAFFOLD, COMPOSED_INTO_THE_LEAF})
+
+#: The types whose entries still DECIDE something at runtime — the population the one-guard-per-fact
+#: rule is about. :data:`COMPOSED_INTO_THE_LEAF` is deliberately absent: it is math, not a guard.
+DECIDER_TYPES = frozenset({STRUCTURAL, PROVISIONAL, AUTHORED_SCAFFOLD})
 
 
 @dataclass(frozen=True)
@@ -66,12 +89,17 @@ class SoundRule:
     retirement_test: str = ""
     #: ``authored-scaffold`` ONLY: what the number is reconciled against, and when it gets fitted.
     reconciliation: str = ""
+    #: ``composed-into-the-leaf`` ONLY: the `state_value` term family that absorbs this equation's
+    #: math once it stops deciding. Mandatory, because "survives as an internal" with no named
+    #: destination is indistinguishable from "kept out of sentiment", and the next track deletes it.
+    composed_into: str = ""
 
 
 #: The ratified whitelist (wave 1, 2026-08-01). Amended from ADR-0092 §6's draft by this grill:
 #: `keep-a-bench` DELETED, the empty-Bench filter re-typed provisional, Set-Up split onto its own
 #: line, `_finish_turn_last` narrowed to the named boundary, `POC_WORTH_PRIZE_RATE` bound, the
-#: apply-seam coverage floors added.
+#: apply-seam coverage floors added. Amended again the same day by the Issue #263 ordering ruling:
+#: the four per-seam equations added as ``composed-into-the-leaf``.
 WHITELIST: tuple[SoundRule, ...] = (
     SoundRule(
         id="ko-score-band",
@@ -198,6 +226,53 @@ WHITELIST: tuple[SoundRule, ...] = (
         reconciliation="Reviewed post-POC as the option-kind table grows; a floor that never fails "
                        "is as uninformative as one that always does.",
     ),
+    # ── composed-into-the-leaf (added 2026-08-01 by the Issue #263 ordering ruling) ────────────────
+    # The composer's ordering heuristic became uniform 1-ply differencing, so these four stop being
+    # DECIDERS for any option the enumerator covers. They are listed here — not deleted, not
+    # whitelisted as rules — so that losing decider status cannot be read as licence to delete the
+    # math. Each names the term family that absorbs it (Issue #262 composes those families).
+    SoundRule(
+        id="attach-value-composed",
+        entry="`attach_value` (ADR-0069)",
+        type=COMPOSED_INTO_THE_LEAF,
+        fact="the marginal value of attaching an Energy",
+        reason="Its axes-sum shape is ratified and stays ratified; what changes is its ROLE. Under "
+               "1-ply differencing the ordering comes from `state_value(after) − state_value(before)` "
+               "for every option uniformly, so a per-seam equation that also ordered would be a "
+               "second opinion on the same question. The math survives as leaf internals, and "
+               "optionally as a pruning approximation.",
+        composed_into="readiness",
+    ),
+    SoundRule(
+        id="evolve-value-composed",
+        entry="`evolve_value` (ADR-0070)",
+        type=COMPOSED_INTO_THE_LEAF,
+        fact="the marginal value of evolving a body",
+        reason="Same role change. Its body-substituted delta-in-damage IS how the readiness family "
+               "prices a body swap, so deleting it would delete the only worked derivation of that "
+               "delta and leave T2 re-deriving it from nothing.",
+        composed_into="readiness",
+    ),
+    SoundRule(
+        id="promote-retreat-value-composed",
+        entry="`promote_retreat_value` (ADR-0073)",
+        type=COMPOSED_INTO_THE_LEAF,
+        fact="the marginal value of changing who is Active",
+        reason="Same role change. The sub-lethal residual it computes is a survival/threat reading "
+               "the leaf needs whether or not anything still orders by it.",
+        composed_into="survival",
+    ),
+    SoundRule(
+        id="deploy-value-composed",
+        entry="`deploy_value` (ADR-0086)",
+        type=COMPOSED_INTO_THE_LEAF,
+        fact="the marginal value of putting a body into play",
+        reason="Same role change, and the one with the sharpest deletion hazard: ADR-0096 already "
+               "deleted `keep-a-bench` off this list, so a reader could reasonably conclude the "
+               "whole Bench-pricing story was purged. It was not — the bench slot priced as a "
+               "scarce resource is exactly this equation, and it becomes development-family math.",
+        composed_into="development",
+    ),
 )
 
 #: id -> rule.
@@ -226,6 +301,13 @@ def validate(rules: Sequence[SoundRule] = WHITELIST) -> list[str]:
             problems.append(f"{r.id}: provisional entries MUST carry a dated retirement test")
         if r.type == AUTHORED_SCAFFOLD and not r.reconciliation.strip():
             problems.append(f"{r.id}: authored-scaffold entries MUST carry a reconciliation note")
+        if r.type == COMPOSED_INTO_THE_LEAF and not r.composed_into.strip():
+            problems.append(f"{r.id}: composed-into-the-leaf entries MUST name the state_value term "
+                            f"family that absorbs them — an unnamed destination is how a "
+                            f"no-longer-deciding equation gets deleted by the next track")
+        if r.type != COMPOSED_INTO_THE_LEAF and r.composed_into.strip():
+            problems.append(f"{r.id}: only composed-into-the-leaf entries name a destination term "
+                            f"family — this one still decides something")
         if r.type == STRUCTURAL and (r.retirement_test.strip() or r.reconciliation.strip()):
             problems.append(f"{r.id}: structural entries are permanent — a retirement test or "
                             f"reconciliation here means the type is wrong")
@@ -246,16 +328,31 @@ SCHEDULED_PAIRS: tuple[tuple[str, ...], ...] = (
 )
 
 
+def deciders(rules: Sequence[SoundRule] = WHITELIST) -> tuple[SoundRule, ...]:
+    """The entries that still DECIDE something at runtime — everything except
+    :data:`COMPOSED_INTO_THE_LEAF`. The population the one-guard-per-fact rule is about."""
+    return tuple(r for r in rules if r.type in DECIDER_TYPES)
+
+
+def composed(rules: Sequence[SoundRule] = WHITELIST) -> tuple[SoundRule, ...]:
+    """The per-seam equations that survive as `state_value` term-family math rather than as rules.
+    Issue #264's disposition table reads this population under the same label."""
+    return tuple(r for r in rules if r.type == COMPOSED_INTO_THE_LEAF)
+
+
 def facts_guarded() -> dict:
-    """``{fact: [rule ids]}`` — the whitelist read as a coverage map."""
+    """``{fact: [rule ids]}`` — the DECIDER half of the whitelist read as a coverage map.
+
+    Composed entries are excluded: they price a fact, they do not guard it, and folding the two roles
+    into one map would report a decider and an equation as a double guard on the same fact."""
     out: dict = {}
-    for r in WHITELIST:
+    for r in deciders():
         out.setdefault(r.fact, []).append(r.id)
     return out
 
 
 def undeclared_double_guarding() -> dict:
-    """``{fact: [rule ids]}`` for every fact guarded by more than one entry that is NOT a declared
+    """``{fact: [rule ids]}`` for every fact guarded by more than one DECIDER that is NOT a declared
     :data:`SCHEDULED_PAIRS`. Empty is the contract.
 
     A fact with two entries is not automatically wrong, but it must be DELIBERATE and said out loud.
@@ -267,6 +364,7 @@ def undeclared_double_guarding() -> dict:
 
 
 __all__: Sequence[str] = (
-    "STRUCTURAL", "PROVISIONAL", "AUTHORED_SCAFFOLD", "TYPES", "SoundRule", "WHITELIST", "BY_ID",
-    "SCHEDULED_PAIRS", "validate", "facts_guarded", "undeclared_double_guarding",
+    "STRUCTURAL", "PROVISIONAL", "AUTHORED_SCAFFOLD", "COMPOSED_INTO_THE_LEAF", "TYPES",
+    "DECIDER_TYPES", "SoundRule", "WHITELIST", "BY_ID", "SCHEDULED_PAIRS", "validate", "deciders",
+    "composed", "facts_guarded", "undeclared_double_guarding",
 )

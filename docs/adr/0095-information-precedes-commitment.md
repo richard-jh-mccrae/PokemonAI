@@ -8,8 +8,6 @@ the free band 0069 left undifferentiated) and **narrows the whitelist entry** ra
 [ADR-0092](0092-the-value-system-poc-builds-by-differencing-tracks-with-wave-rulings.md) §6.
 Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #259 (this grill), Issue #228 (owner of the deny flips), Issue #212
 (the free-Item hold price), Issue #165 / POC-T4 (the Turn Planner this constrains).
 

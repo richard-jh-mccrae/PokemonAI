@@ -12,8 +12,6 @@ unguarded: the *capture* command itself) and
 said "falsifies", on a claim the Context section below disproves).
 Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #259 (this grill / POC-T0), Issue #197 (whose re-capture `d5f7211` moved
 the frame the first draft mis-attributed — legitimately, the frame being ruled), Issue #165 (holds
 that frame out), Issue #228 / ADR-0093 (armed deny for real, and dissolved both of the flips this

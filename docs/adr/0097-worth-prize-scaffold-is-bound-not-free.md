@@ -9,8 +9,6 @@ records the reconciliation debt this discharges in one direction) and
 finding** — not by disputing the measurement, but because the POC's architecture removes the premise
 it rested on. Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #259 (this grill), Issue #199 / ADR-0080 (ran the deny anchor gate and it
 failed), Issue #197 / ADR-0086 (ran the deploy anchor sweep and it failed), Issue #172 (derived
 `ENERGY_RECOVER` and moved the catalogue gap from ~9x to ~6.7x without closing it).

@@ -10,8 +10,6 @@ ADR) and carries forward Issues #232, #237, #254 into the POC's term families.
 **Applies [ADR-0064](0064-the-predicted-loss-rung.md)'s `_predicted_loss` as the single surviving
 guard.** Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #259 (this grill), Issue #231 (ruled and closed here), Issues #232 / #237 /
 #254 (carried forward, not re-grilled), Issue #197 (the deploy-decider swap that raised all four).
 

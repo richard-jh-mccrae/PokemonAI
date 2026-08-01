@@ -8,8 +8,6 @@ format, the replayer, the differ and the DLL-free CI gate — this adds a third 
 already exist) and **ratifies ADR-0092 §4-T0/§4-T4's** "engine-sim as parity fixture, never a
 runtime path" **with the guard that makes it survivable**. Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #259 (this grill), Issue #165 / POC-T4 (the planner that consumes the
 seam), ADR-0050 (`_exact_own_zones`, the anchored-seed machinery weighed in the rejected option).
 
@@ -103,3 +101,78 @@ the thin kinds before a graded match does.
 - If the parity lane shows divergence concentrated on deterministic transitions, that is precisely
   the evidence that reopens decision 1's post-POC candidate — the fork is declined on current
   evidence, not on principle.
+
+## Amendment A — the seam is on the HOT path at 1 ply (ruled 2026-08-01, Issue #263)
+
+Ruled by the developer **after this ADR was accepted and while PR #266 was in flight**, on the
+authority of the *"Contract impact of the Issue #263 ordering ruling"* comment on Issue #259.
+Recorded here rather than as a sibling ADR because this ADR is introduced by the same unmerged PR —
+minting a new number to amend a same-PR sibling would record a history that never existed.
+
+**What moved.** Issue #263's composer was amended: its beam ordering heuristic is now **uniform
+1-ply differencing** — apply each candidate option through this seam, score `state_value` on the
+result, rank by the delta. It replaces *"the firing per-seam equations provide the local ordering."*
+The reason is a coverage hole in the old phrasing, not a preference: **heal, fetch, tool, stadium and
+draw have no per-seam equation at all**, so under equation-provided ordering they would have sorted
+at zero and been pruned before the leaf ever saw them.
+
+**Four contract consequences**, all inside this track's scope:
+
+**A1. The option-kind table is TOTAL.** Ordering visits every option on a live select menu, not only
+the kinds that appear mid-sequence, so `KIND_COVERAGE` classifies every `OptionType` member as
+`modelled` / `terminal` / `refused`. `TRANSITION_KINDS`, `TERMINAL_KINDS` and `REFUSED_KINDS` are
+DERIVED from that one table — a hand-kept second copy is the drift ADR-0087 charges for one store
+over, and here it would let the planner believe a kind is modelled while the seam refuses it.
+
+Measured over the 372 corpus frames both gates read (`data/corrections/*/corrections.jsonl`,
+2026-08-01):
+
+| where | kinds seen |
+|---|---|
+| MAIN menu | PLAY 699 · ATTACH 796 · EVOLVE 49 · **ABILITY 17** · RETREAT 146 · ATTACK 231 · END 279 |
+| elsewhere | CARD 507 · SKILL 2 |
+| never seen | DISCARD(11), and every YesNo / Count / Energy / attached-card kind |
+
+**ABILITY is what makes this concrete**: 17 live MAIN-menu options that the pre-amendment table did
+not declare at all, so ordering would have *raised* on them. `DISCARD(11)` is declared `refused`
+rather than `modelled` for the opposite reason — zero observations is no evidence to model against,
+and declaring it modelled would owe T4 an implementation nothing can check.
+
+**A2. Refusal is a RESULT, not a no-op and not an exception.** `apply_option` returns one of three
+shapes: a `StateModel`, an `Expectation`, or a **`Refusal`**. A silent no-op prices the option at
+exactly 0.0 delta, and at ordering time 0.0 does not read as *undervalued* — it reads as *never
+explore this*, and the gap never surfaces as anything but an agent that mysteriously ignores
+Pokégear. A `Refusal` is visible to the composer, which answers it by **always-expanding**;
+`must_expand()` is where that policy lives so no caller re-derives it from an `isinstance` check.
+
+Four refusal scopes, because the composer treats them identically but the coverage gate and the
+telemetry line must not: `kind` (declared unmodellable), `option` (kind modelled, this card's effect
+is not — *"the card leaves my hand"* is structural for every `_PLAY`, but a Trainer's effect is
+per-card), `undeclared` (the enum grew — `src/cg/api.py` says outright that members are appended
+during the competition), `quarantine` (decision 4's parity divergence, now routed through this same
+path so quarantine and the table give ONE answer).
+
+Consequently `transition_kind()` **no longer raises**. It did, when the seam was asked about four
+kinds mid-sequence; on the 1-ply hot path a raise is a forfeited grader match over an option we
+merely could not price. `UnsupportedTransition` survives with one honest job: `require_model()`,
+which the parity lane calls because a step *it* cannot model is a coverage gap that must fail the
+run, not a branch to expand.
+
+**A3. Transitions are LAZY.** Once per candidate per decision rules out an eager deep copy per
+branch on 2 vCPUs. Transitions materialise only what the caller reads, riding the lazy pure snapshot
+of [ADR-0068](0068-the-statemodel-is-a-lazy-pure-snapshot-shared-by-side.md). T0 cannot test this —
+nothing is implemented — so it is asserted as stated contract, which is what stops T4 discovering
+the requirement late.
+
+**A4. `Expectation` is ORDERABLE at 1 ply, not merely expandable.** A draw Supporter must be rankable
+against a Tool attach on the same scale *before* anything decides to expand it. `Expectation.expected(score)`
+is that number, **renormalised over the enumerated mass** — the expectation conditional on branches
+that survived the cap. Letting truncated mass contribute 0 would bias precisely against the widest
+enumerations, and the widest enumerations are the draw and search effects this amendment exists to
+stop pruning. `total_probability` still exposes the gap, so a caller that wants to discount an
+incomplete enumeration can; it is not this method's job to do it silently. Zero enumerated mass
+raises rather than returning 0.0 — an un-enumerated effect must not read as a worthless one.
+
+**What did NOT move:** the `state_value` term registry and the StateModel completion API. Decisions
+1–5 above stand unchanged; this amendment widens the contract's surface, it does not revisit the
+declined engine route.

@@ -167,6 +167,58 @@ def test_an_UNDECLARED_second_guard_on_a_fact_is_caught():
     assert list(doubled) == [sr.BY_ID["ko-score-band"].fact]
 
 
+# ── composed-into-the-leaf (Issue #263 ordering ruling, 2026-08-01) ───────────────────────────────
+
+
+@pytest.mark.req("REQ-WHITELIST-0004")
+def test_the_four_per_seam_equations_are_listed_as_composed_into_the_leaf():
+    """They stop DECIDING when the composer lands — its ordering is uniform 1-ply differencing — but
+    they are neither deleted nor whitelisted as rules. Listing them is what stops a later track
+    reading "no longer a decider" as licence to delete the math Issue #262 composes the leaf out of.
+
+    The label string is shared verbatim with Issue #264's disposition table, so it is asserted as a
+    literal rather than only through the constant."""
+    assert sr.COMPOSED_INTO_THE_LEAF == "composed-into-the-leaf"
+    assert {r.id for r in sr.composed()} == {
+        "attach-value-composed", "evolve-value-composed",
+        "promote-retreat-value-composed", "deploy-value-composed"}
+
+
+@pytest.mark.req("REQ-WHITELIST-0004")
+def test_a_composed_entry_must_name_the_term_family_that_absorbs_it():
+    """"Survives as an internal" with no named destination is indistinguishable from "kept out of
+    sentiment", and the next track deletes it. The destination is checked against `state_value`'s
+    REGISTRY, so a typo or a renamed family fails here rather than at T2's first import."""
+    from common.state_value import REGISTRY
+    families = {f.name for f in REGISTRY}
+    for r in sr.composed():
+        assert r.composed_into in families, (r.id, r.composed_into)
+
+    bad = sr.SoundRule(id="x", entry="e", type=sr.COMPOSED_INTO_THE_LEAF, fact="f", reason="r")
+    assert any("term" in p and "family" in p for p in sr.validate([bad]))
+
+
+@pytest.mark.req("REQ-WHITELIST-0004")
+def test_a_still_deciding_entry_may_not_claim_a_destination_family():
+    """The mirror check. A `structural` rule that names a term family is claiming to be math it is
+    not — and would then be exempt from the one-guard-per-fact rule below, which is exactly the
+    escape hatch the typing discipline exists to close."""
+    bad = sr.SoundRule(id="x", entry="e", type=sr.STRUCTURAL, fact="f", reason="r",
+                       composed_into="readiness")
+    assert any("still decides" in p for p in sr.validate([bad]))
+
+
+@pytest.mark.req("REQ-WHITELIST-0004")
+def test_the_double_guard_detector_runs_over_the_deciders_only():
+    """A decider GUARDS a fact; a composed equation PRICES one. Folding the two roles into one map
+    would report an equation and a rule as a double guard on the same fact — and a detector that
+    cries wolf is one nobody reads. The populations partition the list, so nothing falls out."""
+    assert len(sr.deciders()) + len(sr.composed()) == len(sr.WHITELIST)
+    composed_ids = {r.id for r in sr.composed()}
+    assert not (composed_ids & {i for ids in sr.facts_guarded().values() for i in ids})
+    assert sr.undeclared_double_guarding() == {}
+
+
 # ── the doc and the data cannot drift ─────────────────────────────────────────────────────────────
 
 

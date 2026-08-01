@@ -248,9 +248,16 @@ Rules that SURVIVE the purge because they encode game structure or fail-directio
 strategy hypotheses. **Every entry is TYPED and names the board fact it guards** (ADR-0099):
 `structural` = permanent; `provisional` = a substrate-gap workaround, which MUST carry a dated
 retirement test; `authored-scaffold` = a constant, which MUST carry a reconciliation note and a
-post-POC fitting queue entry. **An untyped entry is rejected by the T0 registry** — the flat draft
+post-POC fitting queue entry; `composed-into-the-leaf` = a per-seam equation that stops DECIDING
+when the composer lands but survives as `state_value` term-family math, which MUST name the term
+family that absorbs it. **An untyped entry is rejected by the T0 registry** — the flat draft
 list put ONE board fact (an empty Bench under a knock-outable Active) on §6 three times in three
 shapes, violating T0's own double-counting rule, and nothing about writing it prompted the catch.
+
+The list has **two populations**. The first three types still decide something at runtime, and the
+one-guard-per-fact rule is about them. `composed-into-the-leaf` is math, not a guard: those four
+entries are here so that "no longer a decider" is not read as "delete it". Issue #264's disposition
+table uses this same label.
 
 **`src/common/sound_rules.py` is the machine-checkable authority**; this table is its rendering, and
 `tests/strategy/test_sound_rules.py` cross-checks the two by `id` so they cannot drift.
@@ -268,6 +275,18 @@ shapes, violating T0's own double-counting rule, and nothing about writing it pr
 | `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds) | `authored-scaffold` | tolerated for POC | post-POC learning phases |
 | `poc-worth-prize-rate` | `POC_WORTH_PRIZE_RATE` (T3-local) | `authored-scaffold` | reconciled against trainer ≈1.0 / energy ≈6.7 / deploy ≈0.83 (ADR-0097) | post-POC fit against ruled spend-vs-hold frames converges |
 | `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
+| `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |
+| `evolve-value-composed` | `evolve_value` (ADR-0070) | `composed-into-the-leaf` | the marginal value of evolving a body → composes into **readiness** | — |
+| `promote-retreat-value-composed` | `promote_retreat_value` (ADR-0073) | `composed-into-the-leaf` | the marginal value of changing who is Active → composes into **survival** | — |
+| `deploy-value-composed` | `deploy_value` (ADR-0086) | `composed-into-the-leaf` | the marginal value of putting a body into play → composes into **development** | — |
+
+**Role change, not deletion (added 2026-08-01, Issue #263 ordering ruling):** the composer's beam
+ordering became **uniform 1-ply differencing** — apply each candidate through the apply-seam, score
+`state_value` on the result, rank by the delta. Under the old phrasing the per-seam equations
+provided the local ordering, which left heal / fetch / tool / stadium / draw with no local price and
+therefore pruned at zero before the leaf saw them. So the four equations stop being deciders for any
+option the enumerator covers; their math is ratified and stays, as leaf internals and optionally as
+pruning approximations.
 
 **Deleted by this ratification:** `keep-a-bench` (+60) — it guards nothing the filter does not
 already guarantee at MAIN (the filter runs *after* `_finish_turn_last`), and per Issue #231's own
