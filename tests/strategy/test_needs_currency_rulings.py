@@ -72,8 +72,13 @@ def test_doomed_successor_rides_a_full_tier_this_turn_succession_slot():
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)  # exclude the played Harlequin
     succ = [s for s in slots if s.key.endswith(":succ")]
     assert succ and succ[0].value == pytest.approx(30.0) and succ[0].deadline == 0
-    s = pilot.explain(obs).refresh_shadow
-    assert s is not None and s["cid"] == 1223 and s["swing_v2"] < 0.0  # the refresh is declined
+    # …and the LIVE swing (the v2 shed decides since ADR-0101) is negative: don't Harlequin.
+    from types import SimpleNamespace
+
+    from common.strategy.context import _PLAY
+    board = pilot._board_hypothetical(obs)
+    ctx = SimpleNamespace(card_id=1223, option_type=_PLAY)
+    assert pilot._refresh_swing_tactical(obs, board, ctx) < 0.0
 
 
 @pytest.mark.req("REQ-NEEDS-0009")

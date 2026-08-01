@@ -352,6 +352,21 @@ comparator) and ADR-0032 (Effect-Clause tier).
   Two items the grill surfaced belong to the TURN/MATCH PLANNER, not keep-value, and are recorded
   unbuilt: threshold-race snipe targeting and gust-line tempo evaluation.
 
+- **WP-N9 — the refresh SHED SWAPS, and WP-N4b's verdict is discharged (2026-08-01, ADR-0101,
+  Issue #261 item 2b).** `_refresh_shed_keepcost` IS `needs.set_keep_v2` over the whole shuffled hand;
+  the `Σ keep_cost` path at that site is deleted and `_refresh_shed_shadow` / `Decision.refresh_shadow`
+  / the `refresh_shadow` telemetry key / `needs_sweep.py`'s REFRESH half go with it. **The arming bar
+  WP-N4b set itself — sign-flips ≈ 0 — was never met** (18 → 13 → 11 → **16** at the swap, over a
+  corpus grown 83 → 96 refresh decisions): ADR-0092 retired that bar, not the measurement. A POC track
+  swaps and routes every moved frame to a wave ruling against a recorded baseline. Measured at the
+  swap: Discrimination Gate PASS / 0 moved, Decision Gate 2 FIX + 3 REGRESSION (all five
+  shadow-predicted sign-flips), `discard agree_v2` 12/12 UNMOVED — the shared resolver did not drift.
+  The three regressions are one mechanism, named rather than tuned: a swing inside ±3 of zero being
+  read as play/don't-play by `_finish_turn_last`'s `score > 0` promotion, which T4's differencing
+  replaces. `_hand_keep` stays as the gamble keep-floor's own summation — this ADR's "one summation for
+  both sites" claim is retired, deliberately: the two sites ask different questions (one card's floor
+  vs the hand's joint price) and shared an answer.
+
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles

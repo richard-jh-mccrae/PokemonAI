@@ -17,7 +17,7 @@ Authority docs (read in this order):
 | flag | state | meaning |
 |---|---|---|
 | `needs_keep_value` | **ON** | keep-value v2 (`_needs_v2` → `needs.cheapest_removal`) DECIDES the forced discard. Acceptance: agree_v2 **12/12** on the discard corpus; the duplicate-wincon pair flips without a new gate. |
-| `discard_keep_value` | ON | v1 equation — now the FALLBACK decider + the gamble/refresh keep-value spine. |
+| `discard_keep_value` | ON | v1 equation — now the FALLBACK decider + the **gamble** keep-value spine. (The REFRESH half left it 2026-08-01, ADR-0101: `_refresh_shed_keepcost` is `set_keep_v2`.) |
 | `leaf_hand_value` | **OFF** | the readiness-leaf hand fold (N5b→N5d). Measured to a WASH (see §Closed). Do NOT arm without new leaf terms (below). |
 
 Precedence at a forced discard: `needs_keep_value` > `discard_keep_value` > the `_DISCARD` ladder.
@@ -28,6 +28,11 @@ Each is a kill-switch; OFF falls through.
 `common/needs.py` (pure) owns the slot vocabulary + the exact bitmask-DP assignment
 (`assignment_value` / `keep_v2` / `set_keep_v2` / `cheapest_removal` with the residual-worth
 tiebreak) + the two soundness nets (coverage lint `SUPPLIES`, `DISSOLUTION_LEDGER`).
+**⚠️ Superseded in one place (2026-08-01, ADR-0101):** `_refresh_shed_shadow` is GONE — the refresh
+SHED swapped to `needs.set_keep_v2`, so `_resolve_needs` now has two DECIDING consumers rather than one
+decider and one shadow. Thread 1's swap bar ("flips ≈ 0", never met) was retired by ADR-0092, not
+cleared; read ADR-0101 before acting on anything below that assumes the shadow exists.
+
 `pilot._resolve_needs` is the ONE board→slots resolver (line+succession, deploy-now, fund-attack,
 draw-engine band, supply-wincon, answer-doom, fuel, general-worth — the last excluded for the leaf
 via `include_general=False`). Consumers: `_needs_v2` (discard decider + shadow columns

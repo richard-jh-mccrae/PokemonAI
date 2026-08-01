@@ -66,13 +66,11 @@ _REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card oppone
                            # 4. Priced like a shed — a card in their hand is as real as one in mine.
 _REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
                            # resources denied, versus cards they have demonstrably been unable to play.
-_REFRESH_BENCH_BODY = 12.0 # piece 2 (SHADOW-reported, decides nothing yet): per missing bench body the
-                           # redraw can supply, the ADAPTIVE draw credit above the flat CYCLE. A thin
-                           # board that the HAND cannot develop (no benchable body held) values the
-                           # redraw by the open deploy need × P(deck supplies a body) — ep83038055 f40,
-                           # "we desperately need a bench". A generic body-deploy tier (engine band);
-                           # magnitude is an OPEN promotion question — measured in the refresh shadow
-                           # before it ever touches the live CYCLE.
+# _REFRESH_BENCH_BODY / `_refresh_cycle_adaptive` (the ADAPTIVE draw credit — "CYCLE should scale to
+# the open bench-deploy need", ep83038055 f40) DELETED 2026-08-01 with the shadow that was its only
+# reader (ADR-0101). It reported beside the flat CYCLE and decided nothing, so it fell with
+# `_refresh_shed_shadow`; the promotion question it was measuring is now T3's, where a starved bench
+# is priced by the `development` term family rather than by a second credit inside this equation.
 _GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter grab: prefer the refresh
                            # with the bigger own-draw ceiling (Lillie's 8 early ≻ Judge 4). Scaled so a
                            # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
@@ -1163,13 +1161,6 @@ class Decision:
                                      # `_DISCARD` ladder, which stays the decider. Deciding NOTHING —
                                      # the evidence bridge for the discard convergence (seam D).
                                      # Sparse: None off a real discard choice
-    refresh_shadow: dict | None = None  # the REFRESH-SHED keep-value v2 MAGNITUDE shadow (ADR-0065
-                                     # WP-N4b): v1's Σ keep_cost (`_refresh_shed_keepcost`) beside
-                                     # v2's whole-hand assignment marginal (`needs.set_keep_v2`) + the
-                                     # resulting refresh swings and the SIGN-agreement bit (does
-                                     # swapping the shed flip play/don't-play?). Deciding NOTHING — the
-                                     # sets-not-sums evidence the refresh swap rides. Sparse: None off
-                                     # a real refresh PLAY option / mid-sim
     attach_working: dict | None = None  # the ENERGY-ATTACH DECIDER's legible working (ADR-0069 §9):
                                      # the per-option AXES rows — attack_axis (this_turn / build /
                                      # accel_value), retreat_equity, ability_fuel, evaporation_loss,
@@ -1646,7 +1637,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
                         discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
-                        refresh_shadow=self._refresh_shed_shadow(obs, select, board, options, traces, chosen),
                         attach_working=self._attach_working(obs, select, board, options),
                         threat_shadow=self._threat_shadow(obs, board),
                         recur_shadow=self._recur_shadow(obs, board),
@@ -3452,17 +3442,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (strategy/refresh.py):
 
             CYCLE                                  the draw side — flat, speculative, guard-cancellable
-            - Σ keep_cost(held card)              the graded SHED — what shuffling my hand costs
+            - set_keep_v2(whole hand)              the graded SHED — what shuffling my hand costs
             + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them        (certain)
             - GIFT  * max(opp_net, 0)              cards handed to them            (certain)
 
-        The card's own printed draw count is the break-even. **The SHED side is now graded** (WP7): it
-        was a flat ``_REFRESH_SHED × cards-lost``, propped up by the hand-QUALITY guards
-        (`hold-wincon` / `hold-line-piece` / `hold-irreplaceable-tool`) — a wincon and a dreg cost the
-        same to shuffle. It is now ``Σ keep_cost`` over the actual hand (`_refresh_shed_keepcost`): the
-        SAME closure the gamble uses, so a live hand of wincons/engines is expensive to shuffle and a
-        dead hand is nearly free — the guards fold in, one currency (the closure supplies the
-        redundancy discount, so a wincon with its tutors live shuffles cheaper than a lone one-of).
+        The card's own printed draw count is the break-even. **The SHED side is graded** (WP7): it was
+        a flat ``_REFRESH_SHED × cards-lost``, propped up by the hand-QUALITY guards (`hold-wincon` /
+        `hold-line-piece` / `hold-irreplaceable-tool`) — a wincon and a dreg cost the same to shuffle.
+        It became ``Σ keep_cost`` over the actual hand, and is now (ADR-0101) the **v2 assignment set
+        marginal** `_refresh_shed_keepcost` — one price for the JOINT shed, so duplicate plan pieces
+        cost what the pair is worth rather than twice what one is. A live hand of wincons/engines is
+        expensive to shuffle, a dead hand nearly free, and the guards fold in as one currency.
 
         The DRAW side stays flat (`dont-refresh-into-a-probable-miss` owns redraw quality, a separate
         jurisdiction). Silent (0) on anything that is not the PLAY of a known refresh."""
@@ -3544,43 +3534,36 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return _GRAB_REFRESH_DRAW * draw if draw is not None else 0.0
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
-        """The graded SHED (ADR-0065): the cost of shuffling my hand away on a refresh = the shared
-        ``planner._hand_keep`` summation — ``Σ keep_cost`` over every held COPY except the played
-        refresh itself (excluded once: it is discarded, not shuffled; a second held copy still
-        charges), duplicates priced marginally (each copy's re-access odds count its shuffled
-        siblings as outs). Each copy's cost = role value × (1 − re-access odds) over the
-        shuffle-grown pool across the refresh's own draw window — the closure pointed backwards,
-        the SAME summation as the gamble's `hand_keep` (`_best_gamble_line`) by construction.
-        Anchored deck counts when the tracker has them, else the pre-anchor unseen composition
-        (`decklist − visible − hidden prizes`, needs obs — the reason obs is threaded here) with the
-        re-access odds PRIZE-SPLIT-WEIGHTED (`_prize_split_hit` via `_keep_cost` — the cost side
-        prices the split exactly like the gain side; the shuffled hand copies stay ``certain``).
-        0 when the deck bookkeeping is unresolved (no shed charged — the CYCLE credit alone stands,
-        matching the old flat term's floor)."""
+        """The graded SHED — the **v2 whole-hand assignment marginal** (ADR-0101, Issue #261 item 2b):
+        what shuffling my hand away on a refresh costs = ``needs.set_keep_v2`` over EVERY held row,
+        i.e. ``V(hand) − V(∅)`` under the exact bitmask-DP assignment of held cards to the board's
+        resolved NEEDS (`_resolve_needs`), with each slot discounted by the closure's odds of
+        re-supplying it inside the refresh's own draw window (`_refresh_slot_resupply`). One row per
+        held copy except the played refresh itself (excluded once: it is discarded, not shuffled; a
+        second held copy still charges — `_needs_hand_rows`).
+
+        **Sets, not sums — the swap's whole point.** v1 was ``Σ keep_cost`` over the copies
+        (`planner._hand_keep`, still the gamble keep-floor's own summation): it charged each duplicate
+        wincon separately and OVER-priced the shed, so a refresh looked too costly on exactly the
+        hands that most want refreshing. The assignment prices the pair as ONE covered line plus its
+        succession slot, and a card covering nothing the board needs costs 0 however dear its catalog
+        worth. The set marginal is the honest quantity here because a refresh sheds the hand
+        JOINTLY — v1's per-copy sum was never the price of the move it was pricing.
+
+        0 when the hand resolves to no rows or the card is not a known refresh — the CYCLE credit
+        alone stands, matching the retired flat term's floor."""
+        from common import needs
         from common.strategy.refresh import refresh_branches
         branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
         if not branches:
             return 0.0
         draws = max(my_draw for my_draw, _opp in branches)
-        me = self._my_player(obs)
-        counts = board.deck_known_counts
-        if counts:
-            deck_count = sum(counts.values())
-            prizes_hidden = 0                                    # anchored: the split is resolved
-        else:
-            from collections import Counter
-            unseen = Counter(self.deck)
-            unseen.subtract(self._visible_card_counts(me))
-            counts = {cid: n for cid, n in unseen.items() if n > 0}
-            prizes_hidden = sum(1 for p in (me.get("prize") or [])
-                                if not (isinstance(p, dict) and p.get("id") is not None))
-            deck_count = sum(counts.values()) - prizes_hidden
-            if deck_count <= 0 or not counts:
-                return 0.0
-        hand = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
-        pool = deck_count + max(0, len(hand) - 1)                # the shuffle-grown pool, per COPY
-        return self._hand_keep(hand, ctx.card_id, counts, pool, draws, board,
-                               prizes_hidden=prizes_hidden, deck_count=deck_count)
+        rows = self._needs_hand_rows(obs, board, exclude_cid=ctx.card_id)
+        if not rows:
+            return 0.0
+        slots, elig = self._resolve_needs(obs, board, rows)
+        resupply = self._refresh_slot_resupply(slots, elig, rows, obs, board, draws)
+        return needs.set_keep_v2(slots, elig, resupply, range(len(rows)))
 
     def _discard_fuel_types(self) -> frozenset:
         """Energy types a DISCARD-SOURCE accel attack in this deck wants IN the discard — the
@@ -3844,8 +3827,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _resolve_needs(self, obs: dict, board: Board, rows: list, *, include_general: bool = True):
         """The shared keep-value v2 RESOLVER: the live board + the held-card ``rows`` resolved into
         `common.needs` slots and per-row eligibility (which slot indices each row can supply). The
-        ONE slot derivation behind BOTH the discard decider (`_needs_v2`) and the refresh-SHED
-        magnitude shadow (`_refresh_shed_shadow`) — rows need only ``cid``, ``deploy`` (the v1
+        ONE slot derivation behind BOTH the discard decider (`_needs_v2`) and the refresh SHED
+        (`_refresh_shed_keepcost`) — rows need only ``cid``, ``deploy`` (the v1
         gate factor v2 consumes), and ``fuel``. Returns ``(slots, elig)``; the caller owns
         ``resupply`` — all-0.0 where no draw window backs a discount (the discard decider, the
         leaf), `_refresh_slot_resupply` at the refresh site. The slot vocabulary, the corpus-adjudicated
@@ -4097,7 +4080,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return slots, elig
 
     def _needs_hand_rows(self, obs: dict, board: Board, exclude_cid=None) -> list:
-        """The whole-hand v2 rows for the refresh-SHED shadow: one row per held card (minus ONE copy
+        """The whole-hand v2 rows for the refresh SHED: one row per held card (minus ONE copy
         of ``exclude_cid`` — the played refresh, discarded not shuffled, exactly as v1's
         `_hand_keep`), carrying the fields `_resolve_needs` reads (``cid``, ``deploy`` — the v1 gate
         factor v2 consumes — and ``fuel``) plus ``worth`` for display. The refresh analog of
@@ -4272,74 +4255,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 r = draw_hit_probability(u + certain, pool, window)
             out[j] = max(0.0, min(1.0, r))
         return out
-
-    def _refresh_shed_shadow(self, obs: dict, select: dict, board: Board, options: list,
-                             traces: list, chosen: list):
-        """WP-N4b: the refresh-SHED keep-value v2 MAGNITUDE shadow — the refresh analog of the
-        discard shadow, deciding NOTHING (the SHED still uses v1's Σ keep_cost). At the refresh PLAY
-        option the agent would actually play (top tactical among refreshes), emit v1's shed
-        (`_refresh_shed_keepcost`) beside v2's whole-hand assignment marginal (`needs.set_keep_v2`
-        over the held hand, slot resupply LIVE over the refresh draw window —
-        `_refresh_slot_resupply`, the WP-N5 residual's fix) — the site where sets-not-sums bites: v1
-        SUMS duplicate wincons and OVER-charges the shed (refresh looks too costly), v2 prices the
-        pair as one line + the succession slot. Since the shed is the ONLY term that changes, the refresh
-        swing follows by ``swing_v2 = swing_v1 + (v1_shed − v2_shed)``; the decision-relevant
-        agreement is the SIGN bit (would swapping the shed flip play/don't-play?), the magnitude
-        analog of the discard's pick agreement. None off a real refresh PLAY option or mid-sim
-        (`self._planning`)."""
-        if self._planning:
-            return None
-        from common import needs
-        from common.strategy.refresh import refresh_branches
-        refresh_opts = []
-        for i, o in enumerate(options):
-            if o.get("type") != _PLAY:
-                continue
-            cid = self._option_card_id(obs, select, o)
-            if cid is not None and refresh_branches(cid, board.my_prizes_remaining,
-                                                    board.opp_prizes_remaining):
-                refresh_opts.append((i, cid))
-        if not refresh_opts:
-            return None
-        i, cid = max(refresh_opts, key=lambda ic: traces[ic[0]].tactical)
-        # A MINIMAL ctx — only the two fields `_refresh_shed_keepcost` / `_refresh_swing_tactical`
-        # read (card_id, option_type) — so the shadow never re-runs the heavyweight `_context`
-        # (already built per-option in the trace loop); both helpers are pure reads.
-        from types import SimpleNamespace
-        ctx = SimpleNamespace(card_id=cid, option_type=_PLAY)
-        v1_shed = self._refresh_shed_keepcost(obs, board, ctx)
-        swing_v1 = self._refresh_swing_tactical(obs, board, ctx)
-        rows = self._needs_hand_rows(obs, board, exclude_cid=cid)
-        slots, elig = self._resolve_needs(obs, board, rows)
-        branches = refresh_branches(cid, board.my_prizes_remaining, board.opp_prizes_remaining)
-        draws = max((my_draw for my_draw, _opp in branches or ()), default=0)
-        resupply = self._refresh_slot_resupply(slots, elig, rows, obs, board, draws)
-        v2_shed = needs.set_keep_v2(slots, elig, resupply, range(len(rows))) if rows else 0.0
-        for k, r in enumerate(rows):
-            r["keep_v2"] = round(needs.keep_v2(slots, elig, resupply, k), 1)
-        swing_v2 = swing_v1 + (v1_shed - v2_shed)
-        # PIECE 2 (report-only): the adaptive draw credit beside the flat CYCLE, and the swing that
-        # applies BOTH the graded shed and the adaptive cycle. Decides nothing; measured before promotion.
-        cycle_adaptive = self._refresh_cycle_adaptive(obs, board, cid)
-        swing_v2_cyc = swing_v2 + (cycle_adaptive - _REFRESH_CYCLE)
-        # DECISION CONTEXT for the ladder-time promotion analysis: the isolated swing is NOT the
-        # decision — a positive shed swing on a frame the human ruled "don't shuffle" is benign when
-        # another option out-scores the refresh (attach-first / lethal / deferred-fetch carry it). To
-        # judge a v1->v2c promotion from ladder logs we must know whether the shed+cycle DELTA
-        # (swing_v2_cyc − swing_v1) would move the refresh past its best rival:
-        #   promoted_refresh_wins  ==  refresh_score + (swing_v2_cyc − swing_v1) > best_other_score
-        # so emit both the refresh option's own score and the best NON-refresh option's score.
-        refresh_idx = {j for j, _ in refresh_opts}
-        refresh_score = traces[i].score
-        other = [traces[j].score for j in range(len(options)) if j not in refresh_idx]
-        best_other_score = max(other) if other else None
-        return {"i": i, "cid": cid, "v1_shed": round(v1_shed, 1), "v2_shed": round(v2_shed, 1),
-                "swing_v1": round(swing_v1, 1), "swing_v2": round(swing_v2, 1),
-                "cycle_adaptive": round(cycle_adaptive, 1), "swing_v2_cyc": round(swing_v2_cyc, 1),
-                "refresh_score": round(refresh_score, 1),
-                "best_other_score": round(best_other_score, 1) if best_other_score is not None else None,
-                "sign_agree": (swing_v1 >= 0) == (swing_v2 >= 0),
-                "played": i in (chosen or []), "eq": rows}
 
     def _attach_readiness(self, cid, energy: int) -> float:
         """Best printed damage the body ``cid`` can afford with ``energy`` Energy — a 2-point
@@ -5314,53 +5229,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if st is not None and getattr(st, "is_energy", False) and not self._has_energy_recipient(board, me):
             return _GENERAL_ILLIQUID_FLOOR
         return 1.0
-
-    def _refresh_cycle_adaptive(self, obs: dict, board: Board, cid) -> float:
-        """PIECE 2 (SHADOW-reported, decides nothing yet — Ruling 3, 'CYCLE should scale to the
-        situation'): the refresh DRAW credit, flat `_REFRESH_CYCLE` PLUS the open bench-deploy need a
-        redraw can fill. A refresh into a starved board (`board.my_bench < _THIN_BENCH`) that the HAND
-        cannot develop itself (`_hand_has_benchable_body` False — else deploy, don't shuffle) is worth
-        more than card flow: the body deficit × the deploy tier × P(the redraw actually supplies a body
-        from the deck over its own draw window).
-
-        The supply probability is a VALUE estimate, not a grader-safety endorsement, so it is the
-        prize-split-weighted expectation (`_prize_split_hit`, un-floored unseen) — the SAME model the
-        shed's re-access uses, and (since ADR-0077) the same one `_deck_basic_energy_fuel` reads:
-        the pigeonhole floor that used to sit there zeroed a 3-of Staryu behind six hidden prizes,
-        ep83038055 f40's exact hole, and no ranked count consumer takes it now. Bounded (deficit ≤
-        `_THIN_BENCH`, prob ≤ 1). REPLACES nothing live — reported beside the flat CYCLE so the corpus
-        can measure whether the lift fixes f40 without over-firing before it is promoted into
-        `_refresh_swing_tactical`. Flat `_REFRESH_CYCLE` on a developed board or a hand that can bench."""
-        from common.strategy.context import _THIN_BENCH
-        from common.deck_odds import draw_hit_probability
-        from common.strategy.refresh import refresh_branches
-        branches = refresh_branches(cid, board.my_prizes_remaining, board.opp_prizes_remaining)
-        deficit = max(0, _THIN_BENCH - board.my_bench)
-        me = self._my_player(obs)
-        if not branches or deficit <= 0 or self._hand_can_develop_body(me):
-            return float(_REFRESH_CYCLE)
-        draws = max(my_draw for my_draw, _o in branches)
-        counts = board.deck_known_counts
-        if counts:
-            deck_count = sum(counts.values())
-            prizes_hidden = 0
-            outs = sum(n for c, n in counts.items() if n > 0 and self._is_benchable_body(c))
-        else:
-            unseen = Counter(self.deck)
-            unseen.subtract(self._visible_card_counts(me))
-            counts = {c: n for c, n in unseen.items() if n > 0}
-            prizes_hidden = sum(1 for p in (me.get("prize") or [])
-                                if not (isinstance(p, dict) and p.get("id") is not None))
-            deck_count = sum(counts.values()) - prizes_hidden
-            outs = sum(n for c, n in counts.items() if self._is_benchable_body(c))
-        pool = deck_count + max(0, board.my_hand_size - 1)   # the shuffled hand joins the draw pool
-        if outs <= 0 or deck_count <= 0 or pool <= 0:
-            return float(_REFRESH_CYCLE)
-        if prizes_hidden > 0:
-            p = self._prize_split_hit(outs, deck_count, prizes_hidden, pool, draws)
-        else:
-            p = draw_hit_probability(outs, pool, draws)
-        return float(_REFRESH_CYCLE) + _REFRESH_BENCH_BODY * deficit * p
 
     def _recover_recipient_need(self, st, board: Board, obs: dict) -> int:
         """Total Energy the rider's recipients still LACK to pay an attack — theirs or their forward
