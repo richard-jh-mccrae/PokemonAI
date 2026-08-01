@@ -1,4 +1,4 @@
-"""Promote/retreat DECIDER — LIVE-PILOT seam on corpus frames (ADR-0073, #141).
+"""Promote/retreat DECIDER — LIVE-PILOT seam on corpus frames (ADR-0100, #141).
 
 Seam 2 of the phase's three (pure function · live Pilot · gates): the same claims the pure seam pins
 over stated measurements, now made end-to-end through the real Pilot on real recorded boards. What
@@ -129,7 +129,7 @@ def test_whether_no_longer_recuses_when_the_active_can_ko_f59():
     assert abs(row["total"]) < KO_SCORE                  # …and still sub-lethal
 
 
-# ---- the CLAIMS each pick-site fixture declares (ADR-0072 decision 3, ADR-0073 §12) ------------
+# ---- the CLAIMS each pick-site fixture declares (ADR-0072 decision 3, ADR-0100 §12) ------------
 
 @pytest.mark.parametrize("agent,fixture", [
     ("mega_starmie", "pr_promote_accelerator_f120"),
@@ -138,7 +138,7 @@ def test_whether_no_longer_recuses_when_the_active_can_ko_f59():
     ("dragapult_ex", "dragapult_promote_over_fragile_base_f31"),
 ])
 def test_the_pick_site_axis_claims(agent, fixture):
-    """ADR-0073 §12's measured position, made executable: the 131 committed fixtures are LEFT ALONE
+    """ADR-0100 §12's measured position, made executable: the 131 committed fixtures are LEFT ALONE
     (a bare `correct` already IS a Decision Claim, and nothing in the corpus is pinned to a score),
     and Axis Claims are added ONLY to the pick-site frames — where "promote THIS body over that one"
     is exactly what the frame means.

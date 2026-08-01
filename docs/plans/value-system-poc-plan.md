@@ -4,8 +4,8 @@
 source audit of the entire value stack (StateModel, CombatMath, value modules, pilot wiring +
 PROFILE, planner/doctrines). Supersedes the one-issue-at-a-time cadence of Issue #136's phase list
 for everything up to and including the Turn Planner. Issue #136 remains the master tracker; this
-doc is the build doctrine its POC section points at. ADR: ADR-0092 (claimed; renumber at merge if
-collided).
+doc is the build doctrine its POC section points at. ADR: ADR-0092 (settled — merged uncollided in
+PR #258).
 
 **The goal, in the user's words:** a proof-of-concept that is "complete enough to show the promise
 of a State Model with full use of value equations and no piles of rules or hypothesis." Not
@@ -59,7 +59,7 @@ participation (per-issue grills).
 ## 2. Built-vs-remaining inventory (source-verified 2026-07-31)
 
 **FIRING (equation-owned, rungs deleted):** attach (ADR-0069) · evolve (ADR-0070) ·
-promote/retreat (ADR-0073) · deploy (ADR-0086) · snipe relevance (ADR-0085) · forced-discard
+promote/retreat (ADR-0100) · deploy (ADR-0086) · snipe relevance (ADR-0085) · forced-discard
 needs-assignment (ADR-0065) · refresh-swing v1 SHED (ADR-0060) · energy-deny magnitude
 (ADR-0062) · gamble (ADR-0039) · lethal solver (ADR-0030/0037) · race/path/threat-clock
 (ADR-0040/0045/0064/0071) · Tier-4 Read (ADR-0026/0047/0051).

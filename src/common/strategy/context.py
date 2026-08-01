@@ -68,7 +68,7 @@ _MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
 #: Per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X} from discard") on a
-#: NON-KO turn. **DERIVED, not tuned** (ADR-0073 §3: every term is damage at a derived rate) — the
+#: NON-KO turn. **DERIVED, not tuned** (ADR-0100 §3: every term is damage at a derived rate) — the
 #: MEDIAN damage-per-Energy over the 305 attacks in `data/EN_Card_Data.csv` costing >= 2 Energy,
 #: exactly `160/3`. Cost >= 2 is the population an accel rider funds: a rider dumping 3 Energy pays
 #: for multi-Energy attackers, and `_recover_recipient_need` already measures need against the
@@ -79,7 +79,7 @@ KO_SCORE = 1000            # a KO option dominates a mere chip
 #: rate at `46.63 < E < 70.85`: ADR-0061's Aura Jab line from below, and ep81904064 f44 from above
 #: (at 75 the agent retreated into Cinderace for a 50-damage Turbo Flare rather than attack for 210).
 #:
-#: Lives HERE rather than in `pilot` because the promote/retreat equation reads it too (ADR-0073 §3b:
+#: Lives HERE rather than in `pilot` because the promote/retreat equation reads it too (ADR-0100 §3b:
 #: retreating INTO Cinderace must credit what attacking WITH Cinderace credits), and `pilot` imports
 #: that equation — so one leaf owner is what keeps the two readings from drifting apart.
 ENERGY_RECOVER = 160 / 3

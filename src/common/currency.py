@@ -31,7 +31,7 @@ from common.card_worth import ROLE_TIER as _ROLE_TIER
 #: roughly an eighth of this, which is why the shipped equation endorsed feeding a 3-prize body to
 #: save a 40-point band.
 #:
-#: Ratified by ADR-0073 (promote/retreat, its first consumer) and HOISTED here by ADR-0078 (#187
+#: Ratified by ADR-0100 (promote/retreat, its first consumer) and HOISTED here by ADR-0078 (#187
 #: grill) once three more consumers arrived — the deny / snipe / gust marginals of the
 #: opponent-target family, each of which must convert its prize-denominated slice before it can meet
 #: a damage-scale score. It deliberately does NOT reach `KO_SCORE` (the KO's dominance band is
@@ -120,7 +120,7 @@ DEPLOY_WORTH_SCALE = max(_ROLE_TIER.values())     # == 30.0 (win_condition / pri
 #: `develop-the-accel-recipient` +20, `pre-position-attacker` +25, `bench-the-supporter-tutor` +25 —
 #: so the swap starts behaviour-preserving and the Decision Gate can then rule every flip.
 #:
-#: That gate is the whole difference between this constant and ADR-0073's `_PRIZE_UNIT = 12`, which
+#: That gate is the whole difference between this constant and ADR-0100's `_PRIZE_UNIT = 12`, which
 #: was wrong by ~8x and endorsed feeding a 3-prize body to save a 40-point band: same species of
 #: number, but this one is checked against recorded frames rather than asserted.
 #:

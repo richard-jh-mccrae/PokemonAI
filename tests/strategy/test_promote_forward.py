@@ -1,4 +1,4 @@
-"""Promote with forward search (the b7e483a promote blunders) — now DECIDER claims (ADR-0073, #141).
+"""Promote with forward search (the b7e483a promote blunders) — now DECIDER claims (ADR-0100, #141).
 
 The three doctrines these frames encode all survive the rung deletion as EMERGENT properties of the
 promote/retreat decider, so every test asserts the DECISION and none asserts a rung firing:
@@ -97,7 +97,7 @@ def test_promote_the_accelerator_that_kos_over_the_wincon():
     obs = _obs(bench, {"id": 678, "hp": 20, "energies": [1, 1, 1]})
     dec = p.explain(obs)
     # Both bodies take the Knock Out, so `_promote_ko_tactical` cancels and the RESIDUAL decides —
-    # the layer split ADR-0073 §1 rules. The accelerator wins on its measured rider, not a role tag.
+    # the layer split ADR-0100 §1 rules. The accelerator wins on its measured rider, not a role tag.
     acc, wincon = dec.options[0].promote_retreat_working, dec.options[1].promote_retreat_working
     assert acc["my_yield"] > wincon["my_yield"]
     assert p.decide(obs) == [0]                                  # accelerator, not the wincon
@@ -130,7 +130,7 @@ def test_the_accel_dividend_survives_a_suite_the_pigeonhole_floor_zeroes():
     near-certainty.
 
     Both bodies Knock the 20-HP Active Out, so `_promote_ko_tactical` cancels and the residual
-    decides (ADR-0073 §1). The wincon out-reaches the accelerator on raw damage (120 vs 50), so the
+    decides (ADR-0100 §1). The wincon out-reaches the accelerator on raw damage (120 vs 50), so the
     ONLY thing that can carry Cinderace is the dividend — which is exactly zero under the floor and
     real under `CountTriple.expected`. This frame therefore fails closed on the defect and green on
     the fix, without asserting any score."""

@@ -130,7 +130,7 @@ def _lethal_only(trace) -> float:
     netted out.
 
     `OptionTrace.tactical` is a SUM across layers (ADR-0069 §1: `max` within an axis, sum across),
-    and since ADR-0073 (#141) a RETREAT option also carries the promote/retreat decider's Sub-lethal
+    and since ADR-0100 (#141) a RETREAT option also carries the promote/retreat decider's Sub-lethal
     Residual. These frames are about whether the LETHAL lookahead fires, so pinning the total would
     now assert two claims at once and fail on the one it never meant to make."""
     row = trace.promote_retreat_working

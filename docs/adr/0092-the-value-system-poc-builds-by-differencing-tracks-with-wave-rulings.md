@@ -1,8 +1,8 @@
 # ADR-0092 — The Value System POC builds by differencing tracks with wave rulings
 
 Date: 2026-08-01 · Status: accepted · Issue: the POC restructure grill (2026-07-31/08-01)
-· Plan: `docs/plans/value-system-poc-plan.md` · ⚠️ number claimed at authoring time — renumber
-at merge if collided (tracker directive 8; six collisions in five days as of 2026-07-30).
+· Plan: `docs/plans/value-system-poc-plan.md` · Number 0092 SETTLED — claimed at authoring time and
+survived the merge uncollided (PR #258). Indexed 2026-08-01.
 
 ## Context
 

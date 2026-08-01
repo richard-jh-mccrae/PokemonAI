@@ -143,7 +143,7 @@ PROFILE = {
                                     # an EMERGENCY LEVER, not a comparison baseline: OFF is documented
                                     # degraded mode (attach endorsements silent, only the three
                                     # structure rungs speak), never a rollback to the deleted pile.
-    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER, shipped ON 2026-07-27 (ADR-0073, #141):
+    "promote_retreat_value": True,  # the PROMOTE/RETREAT DECIDER, shipped ON 2026-07-27 (ADR-0100, #141):
                                     # the Sub-lethal Residual — `my_yield + closure − exposure +
                                     # tempo_denied − fatal`, plus `preservation − retreat_cost` at the
                                     # whether-site — in the same damage currency as the attach and evolve

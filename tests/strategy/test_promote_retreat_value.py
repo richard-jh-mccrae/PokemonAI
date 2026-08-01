@@ -1,6 +1,6 @@
-"""Promote/retreat DECIDER, PURE seam (common/promote_retreat_value.py) — ADR-0073, issue #141.
+"""Promote/retreat DECIDER, PURE seam (common/promote_retreat_value.py) — ADR-0100, issue #141.
 
-The design proof for the Sub-lethal Residual. Each test pins one of ADR-0073's twelve decisions as
+The design proof for the Sub-lethal Residual. Each test pins one of ADR-0100's twelve decisions as
 an executable assertion, plus the two worked frames the user's counter-frames forced. This is seam
 1 of the phase's three (pure function · live Pilot · gates): the equation is pure over MEASUREMENTS,
 so every ruling is assertable here without constructing a board.
@@ -354,7 +354,7 @@ def test_the_same_evaluator_answers_both_questions():
 # ---- the two worked frames the user's counter-frames forced ----------------------------------------
 
 def test_frame_mega_starmie_into_cinderace_retreats():
-    """ADR-0073's first worked frame. Mega Starmie ex (3 prizes, doomed in the Active Spot) retreats
+    """ADR-0100's first worked frame. Mega Starmie ex (3 prizes, doomed in the Active Spot) retreats
     into Cinderace (1 prize, 50 x2 Weakness, 3 accel). In rung currency it came out WRONG — the 3
     prizes preserved scored ZERO, so `their_yield` 12 vs `my_yield` 20 said stay. In damage the 300
     preserved prizes dominate and the retreat is right."""
@@ -368,7 +368,7 @@ def test_frame_mega_starmie_into_cinderace_retreats():
 
 
 def test_frame_drakloak_into_budew_retreats():
-    """ADR-0073's second worked frame. Drakloak (70 damage into a 320 HP wall — a five-turn race)
+    """ADR-0100's second worked frame. Drakloak (70 damage into a 320 HP wall — a five-turn race)
     retreats into Budew (10 damage + an Item lock). In rung currency `10 + 12` lost to a face-value
     70; at the Threat-Clock tempo credit the lock is worth a development step and the race discount
     prices the chip honestly, so the retreat wins."""

@@ -2,12 +2,12 @@
 
 One halving rule and one horizon, read by every decider that grades a future quantity, so a
 re-tuning on one equation cannot silently re-open another. Extracted from `evolve_value` when the
-promote/retreat equation became its second reader (ADR-0073 §4: "`_halve` and `_HORIZON` are REUSED
+promote/retreat equation became its second reader (ADR-0100 §4: "`_halve` and `_HORIZON` are REUSED
 from `evolve_value` … they move to a shared module now that two equations read them").
 
 Deliberately NOT `common/value/`, which holds the LEARNED value model (`model.py`,
 `value_model.json`) — a grading convention is arithmetic every equation shares, not a fitted
-artefact (ADR-0073 §Build entailments).
+artefact (ADR-0100 §Build entailments).
 
 Neither name is a tunable:
 

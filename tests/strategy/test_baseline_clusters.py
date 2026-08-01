@@ -35,7 +35,7 @@ CLUSTERS = {
     # `snipe-the-evolving-threat` (45), `snipe-the-forced-promotion` (40), `snipe-the-top-threat` (30),
     # `snipe-the-threat` (20), `snipe-on-the-path` (12). The bench-target pick is decided by
     # `common/snipe_relevance.py`'s [0,1] scalar, with the KO half as the structural
-    # `_snipe_ko_dominator`. The same shape as `promote` below (ADR-0073) and `energy` (ADR-0069):
+    # `_snipe_ko_dominator`. The same shape as `promote` below (ADR-0100) and `energy` (ADR-0069):
     # a decider replaces its rung family outright rather than standing it down.
     # What SURVIVES here is the counter placement/move family — a different set of select contexts
     # (13/14/16/40), untouched by decision 5's scope.
@@ -48,7 +48,7 @@ CLUSTERS = {
     # SURVIVES because decision 7 rules it a SOUND rung, not a pricing question: an empty Bench with
     # the Active Knocked Out loses on the spot, whatever the marginal says.
     "bench": (BENCH_HYPOTHESES, {"keep-a-bench"}),
-    # EMPTY since ADR-0073 (#141): all seven promote rungs are DELETED — the promote/retreat DECIDER
+    # EMPTY since ADR-0100 (#141): all seven promote rungs are DELETED — the promote/retreat DECIDER
     # prices the family as the Sub-lethal Residual, so the KO half is `_promote_ko_tactical` and the
     # rest is emergent from reachable damage and prize Exposure.
     "promote": (PROMOTE_HYPOTHESES, set()),

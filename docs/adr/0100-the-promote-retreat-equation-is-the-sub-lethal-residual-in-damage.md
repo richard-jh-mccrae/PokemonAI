@@ -1,4 +1,4 @@
-# ADR-0073: The promote/retreat equation is the sub-lethal residual, denominated in damage
+# ADR-0100: The promote/retreat equation is the sub-lethal residual, denominated in damage
 
 **Status.** Accepted (grilled 2026-07-27, `/grill-with-docs` on issue #141 — twelve locked decisions).
 Build: #141 (Phase 1c of the Value System, tracker #136). Companion vocabulary:

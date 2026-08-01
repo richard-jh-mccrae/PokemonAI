@@ -280,7 +280,7 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
     that can ACT; (3) else promote the disposable opener to protect the fragile pre-evolution. The
     bare pre-evo is NOT promoted just because it's on the line.
 
-    Case (2) CHANGED with ADR-0073 (#141) and the change is deliberate. The rung era promoted the
+    Case (2) CHANGED with ADR-0100 (#141) and the change is deliberate. The rung era promoted the
     pre-evolution whenever the payoff sat in hand, gated on `evolve_to_ready_wincon_available` —
     "enough Energy to attack post-evolve". This fixture never met that premise: the pre-evolution
     carries ONE Energy and the evolved form's attack costs THREE, so evolving it produces a body that
@@ -310,7 +310,7 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
     # (3) no Mega, no powered wincon -> promote the staller (Cinderace), keep Staryu safe
     obs = make_select(promote, context=4,
                       current=state(bench=[poke(CINDERACE, energy=1), poke(STARYU, energy=1)]))
-    assert pilot.decide(obs) == [0]   # the staller pick is EMERGENT now (ADR-0073 §6a): its own
+    assert pilot.decide(obs) == [0]   # the staller pick is EMERGENT now (ADR-0100 §6a): its own
                                      # damage plus the LOW exposure that IS "disposable"
 
     # (2) Mega in hand but the pre-evo could not pay the evolved attack -> promote the body that acts
@@ -322,7 +322,7 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
     # (1) a powered Mega is benched -> promote it to attack
     obs = make_select(promote, context=4,
                       current=state(bench=[poke(CINDERACE, energy=1), poke(MEGA, energy=3)]))
-    assert pilot.decide(obs) == [1]   # EMERGENT from reachable damage (ADR-0073 §3) — the rung and
+    assert pilot.decide(obs) == [1]   # EMERGENT from reachable damage (ADR-0100 §3) — the rung and
                                      # its `is_best_promote_target` tie-break are DELETED
 
 
@@ -404,7 +404,7 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
                        current=state(active=poke(CINDERACE, energy=1, hp=120),
                                      bench=[poke(MEGA, energy=1)], opp_active=poke(999, hp=120)))
     assert pilot.decide(obs2) == [0]   # retreat -> bring up the ready Mega. EMERGENT from
-                                      # destination value minus retreat cost (ADR-0073 §11)
+                                      # destination value minus retreat cost (ADR-0100 §11)
 
 
 @pytest.mark.req("REQ-GEN-0017")

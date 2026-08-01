@@ -341,7 +341,7 @@ def test_lone_locking_attack_is_never_charged_below_passing():
     assert _pilot().decide(obs) == [0]
 
 
-# --- GENERAL: the dual-Mega swap, now a DECIDER claim (ADR-0073 §11) --------------------------
+# --- GENERAL: the dual-Mega swap, now a DECIDER claim (ADR-0100 §11) --------------------------
 #
 # `swap-out-the-locked-attacker` (+35) is DELETED. The doctrine is emergent from destination value
 # minus retreat cost: a transient-locked attack scores LESS on its OWN option, and a fresh powered
@@ -382,7 +382,7 @@ def test_the_swap_is_declined_when_the_benched_mega_is_bare():
     assert row["my_yield"] == 0.0 and row["total"] < 0
 
 
-# --- GENERAL: the prize-reach brake, now EMERGENT from Exposure (ADR-0073 §4/§7) ---------------
+# --- GENERAL: the prize-reach brake, now EMERGENT from Exposure (ADR-0100 §4/§7) ---------------
 #
 # `dont-promote-into-their-prize-reach` (−20) is DELETED. Exposing a body costs `prizes x 100`
 # graded by the clock, so the 3-prize Mega is charged three times what the 1-prize Hariyama is —

@@ -1,4 +1,4 @@
-"""Promote/retreat DECIDER — ADR-0073 (grill: issue #141, Phase 1c of the Value System).
+"""Promote/retreat DECIDER — ADR-0100 (grill: issue #141, Phase 1c of the Value System).
 
 The promote/retreat decision as ONE equation, in the DAMAGE currency #139 established (ADR-0069)
 and #140 reused (ADR-0070), replacing eleven of the twelve `baseline_promote` / `baseline_retreat`
@@ -9,7 +9,7 @@ both sides of the swap have cancelled.
     retreat_option   = max over bench B of promote_value(B)  +  preservation(A) - retreat_cost(A)
     pick_option(B)   = promote_value(B)
 
-**One evaluator, three call sites** (ADR-0073 §9). The whether-to-retreat question at MAIN carries
+**One evaluator, three call sites** (ADR-0100 §9). The whether-to-retreat question at MAIN carries
 the A-side terms; the body PICK at a SWITCH/TO_ACTIVE select does not, because `preservation(A)` and
 `retreat_cost(A)` are CONSTANT across destinations and could change no ordering there. The forced
 promote is `promote_value(B)` with no A-side terms at all. That the two sites run the same evaluator
@@ -35,7 +35,7 @@ card set rather than tuned.
 A pure function over MEASUREMENTS — the Pilot reads the board into :class:`PromoteBody` /
 :class:`RetreatSide` (ADR-0070's `EvolveBody` pattern verbatim: every field a measurement, never a
 tier), so the equation makes no oracle calls, cannot reach for state it was not handed, and every
-ADR-0073 ruling is assertable without constructing a board.
+ADR-0100 ruling is assertable without constructing a board.
 
 Card facts behind the worked frames, verified at source (`data/EN_Card_Data.csv`, `docs/rules.md`):
 prize value is Mega ex **3**, ex **2**, else **1** (rules.md §6); a Retreat Cost slot is colourless,
@@ -56,7 +56,7 @@ from common.strategy.context import ENERGY_RECOVER, KO_SCORE
 #: denominated in the damage currency the attach and evolve marginals already speak.
 #:
 #: HOISTED to `common.currency` by ADR-0078 (#187 grill) — this module was its only consumer when
-#: ADR-0073 derived it, and the deny / snipe / gust marginals of the opponent-target family are three
+#: ADR-0100 derived it, and the deny / snipe / gust marginals of the opponent-target family are three
 #: more. Re-exported here so every existing import keeps working; the derivation, the recomputing
 #: test and the note on the still-missing Worth leg all live at the new home.
 PRIZE_DAMAGE_RATE = _PRIZE_DAMAGE_RATE
@@ -86,7 +86,7 @@ class PromoteBody:
     #: `_recover_units` count, need-gated. §3b: the dividend re-anchors on `ENERGY_RECOVER`, because
     #: retreating INTO Cinderace must credit what attacking WITH Cinderace credits (the shipped
     #: `_DIVIDEND = 5` was an order of magnitude short of the per-Energy rate the SAME rider earns on
-    #: the attack — now the DERIVED `160/3`, see the ADR-0073 amendment of 2026-07-29).
+    #: the attack — now the DERIVED `160/3`, see the ADR-0100 amendment of 2026-07-29).
     #: FRACTIONAL: the deck-fuel leg is `CountTriple.expected` (ADR-0077), so this is an EXPECTED
     #: count. `my_yield` must not coerce it — `int()` floored 2.5 to 2 and binned 37.5 points.
     accel_units: float = 0.0

@@ -1,10 +1,10 @@
-"""BASELINE cluster: RETREAT — the setup-retreat reluctance, now EMERGENT (ADR-0073 §11, #141).
+"""BASELINE cluster: RETREAT — the setup-retreat reluctance, now EMERGENT (ADR-0100 §11, #141).
 
-`hold-position-in-setup` (−25) is DELETED. ADR-0073 rules it emergent: a setup retreat pays real
+`hold-position-in-setup` (−25) is DELETED. ADR-0100 rules it emergent: a setup retreat pays real
 `retreat_cost` to promote a body that is not yet worth promoting, so the equation should decline it
 without a rung saying so.
 
-**This is flagged in ADR-0073 as the WEAKEST claim in the ruling** — the one deletion made on an
+**This is flagged in ADR-0100 as the WEAKEST claim in the ruling** — the one deletion made on an
 emergence argument with *no worked frame behind it*, and the one most likely to come back as a ruled
 flip. That is exactly why it is pinned here rather than simply deleted with its rung: this test is
 the worked frame the ADR lacked, and it fails loudly if the emergence stops holding. (The corpus

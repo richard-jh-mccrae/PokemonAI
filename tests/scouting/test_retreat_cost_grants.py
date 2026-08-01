@@ -1,4 +1,4 @@
-"""Grant-aware Retreat Cost — the card-knowledge seam and its consumer (ADR-0073 §8, #141).
+"""Grant-aware Retreat Cost — the card-knowledge seam and its consumer (ADR-0100 §8, #141).
 
 `retreatReduction` shipped Tool-only and FLAT, which was survivable while a retreat cost 8 points of
 card Worth. Under the convex build delta it is not: over-charging one Energy on a 3-slot attacker is

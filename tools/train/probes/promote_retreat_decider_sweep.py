@@ -1,4 +1,4 @@
-"""Promote/retreat sweep — the per-term DIAGNOSTIC for the no-shadow swap (#141, ADR-0073). **Not a gate.**
+"""Promote/retreat sweep — the per-term DIAGNOSTIC for the no-shadow swap (#141, ADR-0100). **Not a gate.**
 
 The sibling of ``evolve_decider_sweep.py`` / ``attach_decider_sweep.py``: runs the corpus through the
 SHIPPED promote/retreat decider and reports, per frame, what it does, whether that satisfies the
@@ -6,12 +6,12 @@ corpus ruling, and the decider's TERM BREAKDOWN behind the call. The breakdown i
 outlived the gate it used to be — `decider_lab.py` records the decision, never the terms behind it.
 
 This REPLACES ``tools/train/promote_retreat_sweep.py``, which is not merely stale but unrunnable: it
-reads a `promote_retreat_shadow` record and a `worth_it` SIGN BIT, and ADR-0073 decision 2 retires
+reads a `promote_retreat_shadow` record and a `worth_it` SIGN BIT, and ADR-0100 decision 2 retires
 both — deleting `stay_forgone` turns the whether-site verdict from a sign test into a per-option
 score, so there is no sign left to agree with.
 
 Comparison is by the resolved BODY SLOT, never the raw option index — two promote options differ only
-in which body they bring up, and the index says nothing about which (ADR-0073 §12).
+in which body they bring up, and the index says nothing about which (ADR-0100 §12).
 
 Two site families, because the family's mass lives in BOTH and they compare differently:
 
@@ -122,7 +122,7 @@ def _seams():
 
 
 def _site(options, ctx) -> str | None:
-    """Which of ADR-0073 §9's comparable sites this frame is, or None if it is neither."""
+    """Which of ADR-0100 §9's comparable sites this frame is, or None if it is neither."""
     if ctx in (_TO_ACTIVE, _SWITCH):
         return "pick"
     if ctx == _MAIN and any(o.get("type") == _RETREAT for o in options):

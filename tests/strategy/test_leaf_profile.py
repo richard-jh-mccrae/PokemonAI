@@ -87,7 +87,7 @@ ATTACH_DECIDER_PROFILE = frozenset({
     "mine.best_reachable_damage",
 })
 
-#: The model fields the PROMOTE/RETREAT DECIDER adds (#141, ADR-0073) on any menu where it prices an
+#: The model fields the PROMOTE/RETREAT DECIDER adds (#141, ADR-0100) on any menu where it prices an
 #: option — a TO_ACTIVE/SWITCH body pick, or a MAIN menu carrying a RETREAT (which is why they show
 #: up on the attach corpus at all: those frames are open turn menus).
 #:
@@ -252,7 +252,7 @@ def test_the_attach_decider_profile_is_pinned(pilot):
         f"  removed: {sorted(expected - added)}")
     # The tripwire's real claim, kept intact: the ATTACH decider must not reach an expensive cluster
     # it has no term for. The promote/retreat decider's own reads are netted out because it DOES have
-    # a term for the clock (ADR-0073 §6's `tempo_denied`), so its `theirs.incoming` is ruled cost
+    # a term for the clock (ADR-0100 §6's `tempo_denied`), so its `theirs.incoming` is ruled cost
     # rather than a leak — and these frames are open turn menus, where it legitimately prices the
     # retreat option alongside the attach.
     attach_only = added - PROMOTE_DECIDER_PROFILE

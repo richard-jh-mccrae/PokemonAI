@@ -466,7 +466,7 @@
             2
           ]
         ],
-        "why": "CRITICAL f31 (TO_ACTIVE): promote the item-lock Budew over the bare Stage-0 Dreepy, keeping the fragile line safe. `promote-the-staller` is deleted (ADR-0073 §6a) — a disposable staller decomposes with no remainder into the terms the decider already builds (its own damage, its LOW exposure), so this ordering must hold without a rung asserting it."
+        "why": "CRITICAL f31 (TO_ACTIVE): promote the item-lock Budew over the bare Stage-0 Dreepy, keeping the fragile line safe. `promote-the-staller` is deleted (ADR-0100 §6a) — a disposable staller decomposes with no remainder into the terms the decider already builds (its own damage, its LOW exposure), so this ordering must hold without a rung asserting it."
       }
     ]
   }
