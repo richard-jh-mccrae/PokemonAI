@@ -335,11 +335,16 @@ def test_favored_half_taxes_the_gift_but_never_the_strip():
 
 
 @pytest.mark.req("REQ-POSTURE-0006")
-def test_favored_half_never_kills_genuinely_triggered_disruption():
-    """Favored + the opponent runs a hand-size attacker, on a board where the refresh genuinely
-    GIFTS (opp hand below the redraw count): both the gift tax (−15) and the targeted disruption
-    endorsement (+25) fire, and the counterplay outweighs the tax — favored kills the gift, not the
-    counterplay. (The refill-arms-the-attacker latent hole is design-B, unbuilt — see the grill spec.)"""
+def test_a_hand_size_attacker_tag_no_longer_buys_the_refresh_a_flat_endorsement():
+    """The design-B latent hole, CLOSED (ADR-0102, Issue #261 item 2c).
+
+    This test used to assert the opposite: favored + a `hand_size_attacker` anywhere in play meant
+    `play-harlequin-vs-hand-size` (+25) fired and OUTWEIGHED the gift tax, so the Pilot played a
+    Judge into a 2-card hand — refilling the opponent and arming the very attacker it claimed to be
+    disrupting. The grill recorded that as an unbuilt hole; it is unbuildable now, because the flat
+    is deleted. A TAG buys nothing: the survival term reads the clock, and on this board shrinking
+    nobody's hand shortens nothing (the benched stand-in prints no scaling attack), so all that is
+    left is the gift tax and a negative swing."""
     HSATK = 4321
     funcs = CardFunctions({JUDGE_SUP: ["draw", "hand_disruption", "shuffle_hand"],
                            HSATK: ["hand_size_attacker"]})
@@ -348,8 +353,8 @@ def test_favored_half_never_kills_genuinely_triggered_disruption():
     trace = _favored_pilot(0.7, funcs).explain(obs).options[0]
     fired = {h.id for h, _ in trace.fired}
     assert "dont-gift-a-refresh-when-favored" in fired
-    assert "play-harlequin-vs-hand-size" in fired
-    assert trace.score > 0                                 # still played as targeted disruption
+    assert "play-harlequin-vs-hand-size" not in fired      # RETIRED (ADR-0102)
+    assert trace.score < 0                                 # the refill is declined, not endorsed
 
 
 # ---- Brief-consumer wiring: the matched Matchup Brief on the Board (ADR-0027), behavior-neutral ----
@@ -878,87 +883,22 @@ def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
             > p._gust_target_tactical(obs, select, cold, select["option"][0]))       # the 2-prize ex wins
 
 
-# ---- ADR-0051 Phase 3b: hold hand-disruption for the draw-engine's swing turn ----
-
-JUDGE_CARD = 1250   # a SYMMETRIC hand_disruption (shuffle_hand — refreshes BOTH hands; Judge / Iono class)
-PROBE_CARD = 1251   # a ONE-SIDED hand_disruption (strips the opponent only — no shuffle_hand, no self-refill)
-OPP_WALL = 810      # opponent's benign Active in the disruption scenarios
+# ---- ADR-0051 Phase 3b `strip-the-stacked-engine-hand` (+22): RETIRED (ADR-0102, Issue #261 2c) ---
+#
+# Its three tests are DELETED with it, and deliberately not re-pointed onto a successor, because
+# there is none and inventing one would misrecord what happened. The rung was narrowed by ADR-0060 to
+# a ONE-SIDED strip (a card that empties the opponent's hand without refilling it); no such card is
+# in the pool, so it never fired on a real board, and every one of those tests had to mint a
+# `PROBE_CARD` that does not exist to exercise it. What the POC changes is the standard, not the
+# analysis: a live weight behind an unfired gate is an untested rung waiting for a future set, and
+# `disrupt-the-tailored-hand` (weight 0) already carries the same forward contract inertly. The
+# doctrine is recorded in docs/plans/hand-disruption-grill-spec.md's fold list.
+#
+# `_fired` stays — the tests above it use the helper.
 
 
 def _fired(trace):
     return {h.id for h, _ in trace.fired}
-
-
-def _mp_disruption_pilot():
-    prov = DictCardStatProvider({
-        MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
-                       minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
-        SOLROCK: CardStat(SOLROCK, name="Dudunsparce", hp=120, maxDamage=30),   # stands in as draw engine
-        OPP_WALL: CardStat(OPP_WALL, name="Wall", hp=200),
-        JUDGE_CARD: CardStat(JUDGE_CARD, name="Judge", cardType=3),
-        PROBE_CARD: CardStat(PROBE_CARD, name="Probe", cardType=3),
-    }, attacks={11: AttackStat(11, damage=120, cost=1)})
-    strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, role="win_condition")],
-                     roles={MEGA: ["win_condition"]}, params={})
-    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=prov,
-                 functions=CardFunctions({SOLROCK: ["draw"],
-                                          JUDGE_CARD: ["draw", "hand_disruption", "shuffle_hand"],
-                                          PROBE_CARD: ["hand_disruption"]}))   # one-sided: no shuffle_hand
-
-
-def _disruption_obs(opp_hand, my_extra=0, draw_engine=True, card=JUDGE_CARD):
-    opp_bench = [{"id": SOLROCK, "energies": []}] if draw_engine else []
-    me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
-          "hand": [{"id": card}] + [{"id": 1}] * my_extra, "discard": [], "prize": []}
-    opp = {"active": [{"id": OPP_WALL, "energies": []}], "bench": opp_bench,
-           "handCount": opp_hand, "discard": [], "prize": []}
-    return {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
-            "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
-                       "option": [{"type": PLAY, "index": 0}], "deck": None}, "logs": []}
-
-
-@pytest.mark.req("REQ-POSTURE-0010")
-def test_strip_the_stacked_engine_hand_fires_on_a_stacked_draw_engine():
-    # A `draw` engine (Dudunsparce) is in play AND the opponent's hand has stacked to 7: play the
-    # ONE-SIDED disruptor to strip the engine's swing-turn resources.
-    # ADR-0060 narrowed this rung to one-sided cards (PROBE): a SYMMETRIC refill (JUDGE) is now priced
-    # by the swing oracle off its printed draw counts, so it no longer needs — or gets — this rung.
-    p = _mp_disruption_pilot()
-    assert "strip-the-stacked-engine-hand" in _fired(
-        p.explain(_disruption_obs(opp_hand=7, card=PROBE_CARD)).options[0])
-    assert "strip-the-stacked-engine-hand" not in _fired(
-        p.explain(_disruption_obs(opp_hand=7, card=JUDGE_CARD)).options[0])   # oracle's job now
-
-
-@pytest.mark.req("REQ-POSTURE-0010")
-def test_strip_the_stacked_engine_hand_holds_below_the_threshold_or_off_an_engine():
-    # The HOLD side: silent when the hand is small (nothing stacked to strip) and when NO draw engine
-    # is in play (a non-engine deck has no swing turn to hold for). The old "my hand is as large →
-    # would gift them a refresh" case is GONE from this rung: a one-sided strip cannot gift, and the
-    # gift a SYMMETRIC refill makes is now priced per card by the swing oracle (`_REFRESH_OPPONENT_HAND_GIFT`)
-    # rather than approximated by a hand-size comparison.
-    p = _mp_disruption_pilot()
-
-    def fired(**kw):
-        return _fired(p.explain(_disruption_obs(card=PROBE_CARD, **kw)).options[0])
-
-    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=4)                     # not stacked
-    assert "strip-the-stacked-engine-hand" not in fired(opp_hand=7, draw_engine=False)  # no engine in play
-    assert "strip-the-stacked-engine-hand" in fired(opp_hand=7)                         # ... and the fire case
-
-
-@pytest.mark.req("REQ-POSTURE-0010")
-def test_strip_fires_for_one_sided_disruption_even_when_my_hand_is_large():
-    # A ONE-SIDED hand_disruption (Probe — strips the opponent only, no shuffle_hand, doesn't refill
-    # me) can't gift a fresh hand and never sheds my own, so it fires on a stacked engine hand
-    # regardless of my hand size. This is the branch that KEPT the rung alive through ADR-0060: a
-    # card with no draw counts has nothing for the swing oracle to price.
-    p = _mp_disruption_pilot()
-    assert "strip-the-stacked-engine-hand" in _fired(
-        p.explain(_disruption_obs(opp_hand=7, my_extra=7, card=PROBE_CARD)).options[0])
-    # the symmetric Judge on the same board is the ORACLE's call, not this rung's
-    assert "strip-the-stacked-engine-hand" not in _fired(
-        p.explain(_disruption_obs(opp_hand=7, my_extra=7, card=JUDGE_CARD)).options[0])
 
 
 # ---- ADR-0041: the posture record on the Decision -> Decision Telemetry (stderr) ----

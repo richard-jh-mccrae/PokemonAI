@@ -36,8 +36,9 @@ def _opt_record(o) -> dict:
         rec["deferred"] = True
     if getattr(o, "attach_to_needy_line", False):
         rec["needy"] = True
-    if getattr(o, "hand_size_relief", 0.0):        # REPORTING-ONLY hand-size-attacker relief (grill
-        rec["hs_relief"] = round(o.hand_size_relief, 1)   # 2026-07-19); signed, never in `score`
+    # `hs_relief` RETIRED (ADR-0102, Issue #261 item 2c): the hand-size relief is now a scoring term,
+    # so it arrives inside `tac` like every other tactical. A reporting key beside it would report a
+    # live term's own summand as if it were still inert.
     return rec
 
 
