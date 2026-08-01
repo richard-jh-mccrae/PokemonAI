@@ -157,6 +157,39 @@ python tools/train/leaf_lab.py capture --out data/leaf_lab/baseline.json
 
 and only after the flips it would absorb have been **ruled** with the user.
 
+**That precondition is now ENFORCED, not just documented** (ADR-0094, Issue #259). `capture`
+reads the outgoing baseline first and **refuses to write** if any frame would move in the fail
+direction (`OK → MISS` here, `agree → disagree` for the Decision Gate) without carrying a ruling in
+the Ruling Index. It names every offending frame and leaves the baseline untouched:
+
+```
+REFUSED: re-capture refused: 1 frame(s) would move in the FAIL direction with no ruling on
+record -- 82226116|0|decision|94. A baseline is a RULING RECORD (CLAUDE.md): rule the flip
+first (a wave packet), or use `restamp` if you only need the recorded revision moved.
+```
+
+Improvements and brand-new keys write freely — only the fail direction is guarded. A frame that is
+**held out** or whose ruling is **voided** already carries a ruling, so it needs no second excuse.
+
+**Honest scope:** this guard repairs nothing. Replaying every transition of
+`data/leaf_lab/baseline.json` against the Ruling Index (2026-08-01) found three re-captures absorbing
+an `OK → MISS`, five flips in total, and **every one carried a ruling** — the convention has held by
+discipline for its whole history. What the guard removes is the *reliance* on that discipline, across
+a six-track parallel build in which every track rebases against these baselines. Expect it never to
+fire; a green run is not evidence it works (its unit tests and a doctored-baseline integration run
+are).
+
+**When a rebase orphans the SHA, re-stamp — do not re-capture.** Four of the twelve committed
+re-captures moved nothing but `git_rev`. Going through `capture` for that means re-reading the build
+(the ruling-bearing operation) to achieve a metadata edit:
+
+```bash
+python tools/train/leaf_lab.py restamp --baseline data/leaf_lab/baseline.json
+```
+
+It rewrites the recorded revision and nothing else, never re-reads the build, and so cannot move a
+verdict. `decider_lab.py` carries the same subcommand.
+
 **When it goes red**, the fix is a ruling, not a re-capture. Per frame, decide whether the new
 ranking is wrong (fix the code) or right (hold the frame out via its fixture's `frame_key` +
 Decision-Claim `owner`, ADR-0072 decision 4 — a reviewable claim in a diff, not a workflow flag).
@@ -171,9 +204,10 @@ so it was not born red.
 
 ### Baseline provenance
 
-`data/leaf_lab/baseline.json` is currently pinned at **`31b1c28` (2026-07-31)**. Seven deliberate
+`data/leaf_lab/baseline.json` is currently pinned at **`a8da62d` (2026-07-31)**. Nine deliberate
 re-captures, each taken only with **zero unruled `OK → MISS`** outstanding — the ADR-0072 decision 2
-precondition, *"only when a swap's flips have been ruled"*:
+precondition, *"only when a swap's flips have been ruled"*, verified across the whole history by the
+full-history replay described above and, since Issue #259, enforced by `capture` itself:
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
@@ -184,6 +218,8 @@ precondition, *"only when a swap's flips have been ruled"*:
 | 2026-07-31 | `e834272` | **19 frames VOIDED out of the rates** + 1 × `MISS → OK` (`83686860\|1\|decision\|13`) + 1 × ruled `OK → MISS` (`86091435\|0\|decision\|35`, owner `#165`) | Issue #239: a **Voided Ruling** leaves the agree rate. The two flips are **main's**, not this issue's — the baseline was stale by 32 rows of `values` drift, the `OK → MISS` was already held out, and zero unruled `OK → MISS` were outstanding |
 | 2026-07-31 | `ff05403` | **1 more frame VOIDED (`86091435\|0\|turn\|14`), and it was an `OK`; zero unruled `OK → MISS`** | Issue #250: the same repaired refutation as the Decision Gate's last row. `leaf_correct 183/249 → 182/248`, voided `19 → 20`, rate 73.49% → **73.39%**. The leaf did not get worse — a frame it was scoring correctly is no longer a frame a human stands behind, so it stops counting. This is the honest half of the pair: one repair, one rate up, one rate down |
 | 2026-07-31 | `31b1c28` | **nothing — `git_rev` only, zero row changes** | Issue #250: rebasing onto `main` (Issue #243's PR #252, plus an ADR renumber) orphaned the capture's SHA. Re-measured against the new base first: **zero** row changes, so #243's corpus-reader refactor is confirmed behaviour-preserving for this instrument as its PR claimed |
+| 2026-07-31 | `aceb433` | **nothing — zero row changes** | Issue #247 (Option Equivalence, ADR-0091): re-measured against the new base, zero rows moved |
+| 2026-07-31 | `a8da62d` | **nothing — zero row changes** | Issue #247: the rebase moved the base again after the ADR renumber. Both of these last two are `restamp` cases in hindsight — the subcommand did not exist yet, so they went through `capture` and re-read the build to achieve a metadata edit (Issue #259) |
 
 Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
 same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to

@@ -1513,3 +1513,158 @@ def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
     assert gates.decider_lab_diff(before, after)["agree_delta"]["before"] == (0, 1)
     aware = gates.decider_lab_diff(before, after, equiv=equiv)["agree_delta"]
     assert aware["before"] == (1, 1) and aware["after"] == (1, 1)
+
+
+# ── a re-capture may not move a verdict without a ruling (ADR-0094) ───────────────────────────
+#
+# `CLAUDE.md` says a baseline is a ruling record and is never auto-recaptured. Nothing enforced it.
+#
+# Measured BEFORE building the guard, and the honest result is that the convention HELD: every
+# transition of `data/leaf_lab/baseline.json` across its whole history, replayed against the Ruling
+# Index (2026-08-01), shows three re-captures absorbing an `OK -> MISS` — five flips — and every one
+# carried a ruling. So these tests guard a rule that has never been broken, and the value is removing
+# the reliance on discipline across a six-track build where every track rebases, not repairing a
+# breach. Said plainly here because a test suite is where a false "this fixes X" claim would survive
+# longest.
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_a_recapture_moving_an_unruled_frame_in_the_fail_direction_is_refused():
+    """The frame is OK in the outgoing baseline and MISS in the fresh capture, and the Ruling Index
+    holds nothing for it — so the write is refused rather than silently making the MISS the new
+    reference."""
+    outgoing = _report([_row("84071010|0|decision|15", "OK")])
+    fresh = _report([_row("84071010|0|decision|15", "MISS")])
+    fail = [f["key"] for f in leaf_lab_diff(outgoing, fresh)["ok_to_miss"]]
+
+    assert gates.unruled_recapture_moves(fail, index={}) == ["84071010|0|decision|15"]
+    with pytest.raises(gates.RecaptureRefused):
+        gates.refuse_unruled_recapture(fail, index={})
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_a_recapture_moving_a_RULED_frame_is_allowed():
+    """The legitimate path, and the whole reason this is a guard rather than a ban: once the human
+    has ruled the flip in a wave packet, re-capturing is exactly what records that ruling."""
+    fail = ["84071010|0|decision|15"]
+    index = {"84071010|0|decision|15": (gates.Ruling(disposition="covered", source="reviewed"),)}
+    assert gates.unruled_recapture_moves(fail, index=index) == []
+    gates.refuse_unruled_recapture(fail, index=index)        # raises nothing
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_a_held_out_or_voided_frame_needs_no_second_excuse():
+    """`ruling_index` already folds the Held-out Ledger and the voiding dispositions in as rulings,
+    so "carries a ruling" is ONE predicate. A second special case here would be a second idea of
+    what it means for a frame to have been ruled — the defect ADR-0087 charges for."""
+    fail = ["a", "b"]
+    index = {"a": (gates.Ruling(disposition="held_out", source="held_out", owner="#165"),),
+             "b": (gates.Ruling(disposition="refuted", source="reviewed"),)}
+    assert gates.unruled_recapture_moves(fail, index=index) == []
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_an_improvement_and_a_brand_new_key_write_freely():
+    """Only the FAIL direction is guarded. A capture that sharpens the leaf, or that covers a frame
+    the outgoing baseline never held, is not something a human owes a ruling on."""
+    outgoing = _report([_row("a", "MISS")])
+    fresh = _report([_row("a", "OK"), _row("b", "MISS")])
+    d = leaf_lab_diff(outgoing, fresh)
+    assert [f["key"] for f in d["ok_to_miss"]] == []
+    assert d["added"] == ["b"]
+    gates.refuse_unruled_recapture([f["key"] for f in d["ok_to_miss"]], index={})
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_the_refusal_names_EVERY_offending_key_not_just_the_first():
+    """A refusal that named one key would be re-run N times, and the operator would learn the scope
+    of what they were about to overwrite one frame at a time."""
+    with pytest.raises(gates.RecaptureRefused) as exc:
+        gates.refuse_unruled_recapture(["b", "a", "c"], index={"c": (gates.Ruling("covered", "reviewed"),)})
+    assert exc.value.keys == ["a", "b"]                       # sorted, and the ruled one excused
+    assert "a" in str(exc.value) and "b" in str(exc.value)
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_the_decider_fail_direction_is_REGRESSION_not_any_movement():
+    """The Decision Gate's fail direction is `satisfies_human` True -> False, which is exactly the
+    verdict `decider_lab_diff` already computes. Reusing it is what stops the guard and the gate
+    drifting into two ideas of "worse"."""
+    before = _report([{"key": "e|0|decision|1", "chosen": [0], "correct": [0], "context": 0},
+                      {"key": "e|0|decision|2", "chosen": [1], "correct": [0], "context": 0}])
+    after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [0], "context": 0},
+                     {"key": "e|0|decision|2", "chosen": [2], "correct": [0], "context": 0}])
+    diff = gates.decider_lab_diff(before, after)
+    assert gates.decision_fail_keys(diff) == ["e|0|decision|1"]   # f2 moved, but was already wrong
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_both_labs_read_their_fail_direction_through_a_NAMED_reader():
+    """The two labs must be actually symmetric, not merely described as such. The first build gave
+    the decider `decision_fail_keys` and left the leaf inlining its `ok_to_miss` comprehension at the
+    call site — the shape where one lab quietly grows a filter the other lacks."""
+    leaf = leaf_lab_diff(_report([_row("a", "OK")]), _report([_row("a", "MISS")]))
+    assert gates.discrimination_fail_keys(leaf) == ["a"]
+    assert gates.discrimination_fail_keys({}) == []          # absent key, not a crash
+    assert gates.decision_fail_keys({}) == []
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_the_shared_guarded_capture_writes_refuses_and_never_half_writes(tmp_path):
+    """The whole ruling-gated write, shared by both labs. Three behaviours in one seam: a FIRST
+    capture writes freely (no prior ruling record to protect); a clean re-capture writes; a
+    fail-direction move with no ruling returns 1 and leaves the artifact byte-identical."""
+    out = tmp_path / "baseline.json"
+    fresh_ok = _report([_row("a", "OK")])
+    wrote = []
+
+    # first capture — nothing to guard against
+    rc = gates.guarded_capture(out, fresh_ok, index={}, diff_fn=leaf_lab_diff,
+                               fail_keys_fn=gates.discrimination_fail_keys,
+                               write=lambda: (wrote.append(1),
+                                              gates.write_json_artifact(out, fresh_ok)))
+    assert rc == 0 and wrote == [1]
+    before_bytes = out.read_bytes()
+
+    # a re-capture that degrades an UNRULED frame — refused, and the file is untouched
+    rc = gates.guarded_capture(out, _report([_row("a", "MISS")]), index={}, diff_fn=leaf_lab_diff,
+                               fail_keys_fn=gates.discrimination_fail_keys,
+                               write=lambda: wrote.append(2))
+    assert rc == 1 and wrote == [1]                          # `write` never ran
+    assert out.read_bytes() == before_bytes                  # not even partially rewritten
+
+    # the same degrade, once the frame carries a ruling — allowed
+    rc = gates.guarded_capture(out, _report([_row("a", "MISS")]),
+                               index={"a": (gates.Ruling("covered", "reviewed"),)},
+                               diff_fn=leaf_lab_diff, fail_keys_fn=gates.discrimination_fail_keys,
+                               write=lambda: wrote.append(3))
+    assert rc == 0 and wrote == [1, 3]
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_a_restamp_changes_the_recorded_revision_and_NOTHING_else(tmp_path):
+    """Four of the twelve committed re-captures moved NOTHING but the recorded revision — a rebase
+    had orphaned the SHA. Serving that through `capture` means re-reading the build (the
+    ruling-bearing operation) to achieve a metadata edit. Separating them is the decision: `capture`
+    carries rulings, `restamp` carries metadata, and they stop being one command that does both."""
+    art = tmp_path / "baseline.json"
+    doc = {"git_rev": "e4c46ca", "agent": None, "n": 2,
+           "rows": [_row("a", "OK"), _row("b", "MISS")]}
+    gates.write_json_artifact(art, doc)
+
+    gates.restamp_artifact(art, "a8da62d")
+
+    after = json.loads(art.read_text(encoding="utf-8"))
+    assert after["git_rev"] == "a8da62d"
+    assert after["rows"] == doc["rows"] and after["n"] == 2
+    assert CRLF not in art.read_bytes()                       # goes through the one LF-framed writer
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_a_restamp_refuses_an_artifact_that_carries_no_revision(tmp_path):
+    """Fail loud rather than inventing a field: an artifact with no `git_rev` is not a gate baseline,
+    and silently adding one would make a re-stamp able to manufacture provenance."""
+    art = tmp_path / "notabaseline.json"
+    gates.write_json_artifact(art, {"rows": []})
+    with pytest.raises(ValueError):
+        gates.restamp_artifact(art, "a8da62d")

@@ -146,8 +146,38 @@ record — never auto-recaptured).
    transitions for the option kinds the planner sequences (trainer play, attach, evolve, bench,
    retreat/promote; attack/end are terminal). Stochastic effects (draw N, search-reveal) return an
    EXPECTATION node: outcome classes enumerated by Option-Equivalence identity, weighted by the
-   existing hypergeometrics (`deck_odds`), branching capped. The engine-sim rollout survives only
-   as a T4 parity *test fixture*, never a runtime path.
+   existing hypergeometrics (`deck_odds`), branching capped. The engine-sim *rollout* survives only
+   as a T4 parity **test fixture**, never a runtime path — but the `_search_api` **seam** it rides
+   is preserved, because §3b's ENGINE-RESOLVED fate needs it.
+
+   **§3b — three fates, ruled 2026-08-01.** The per-kind table resolves every option to exactly one
+   of: **MODELLED** (closed-form from Effect Clauses; always preferred) · **ENGINE-RESOLVED** (the
+   clause vocabulary has a gap, but the effect is *provably deterministic*, the board is REAL and
+   the call is 1-ply — simulate through `_search_api`, read the board back into a StateModel,
+   difference normally, **emit telemetry**) · **REFUSED** (everything else). A silent no-op is never
+   a fate: it prices the option at 0 delta, and at ordering time 0 means *never explored*.
+   The gate is **"provably deterministic", not "unmodelled"** — an unmodelled effect that MIGHT
+   touch RNG is REFUSED, fail-closed (ADR-0067). Refused outright: opponent-choice effects (no
+   opponent model — an accepted POC gap), anything riding the shuffle (the engine has **no
+   deal-seed**, so a sim is ONE SAMPLE not a distribution — Issue #178's defect — and nondeterminism
+   breaks the deterministic replay both gates depend on), and anything at **depth ≥ 2** (the board
+   is then a synthesized StateModel, which cannot be handed back to the native engine).
+
+   **§3b — per-kind READ/WRITE footprints.** The table exposes, per option kind, the snapshot fields
+   the transition WRITES and the fields it READS. Issue #263 consumes both to prove commutativity
+   (two options commute iff neither reads what the other writes and they do not both write the same
+   field) and collapse orderings into one canonical candidate per subset. **Fail closed:** an
+   unknown or partial footprint commutes with NOTHING. A kind that REVEALS information (draw /
+   search / reveal) can never join a commutative block whatever its footprint says — it changes the
+   option set itself.
+
+4. **§3c — StateModel completeness is a CONTRACT** (`src/common/snapshot_coverage.py`, ruled
+   2026-08-01). The differencing system's worst failure mode is an effect writing to state the
+   snapshot cannot represent: the delta reads 0, and 0 means *never explored*. So every zone or
+   marker a card effect can write is enumerated with its snapshot home, or an explicit status —
+   `owed` (**must name the owning track**) or `hidden` (deck ORDER, priced by `deck_odds` instead).
+   An **audit test** walks the committed Effect Clause vocabulary and fails on a clause kind or
+   rider with no declared write-set, and on any clause writing to a zone with no home.
 4. **Sound-rule whitelist** drafted for wave-1 ratification (§6).
 
 Deliverables: `src/common/state_value.py` skeleton (registry + signatures + working shape),
@@ -242,17 +272,56 @@ Three touches, nothing else: (1) wave ruling packets — per-frame verdicts, min
 next wave packet; it never opens a grill. Budgeted escape-hatch count: ≤2 across the build
 (build-rule 11 says arming exposes defects; expect them in T2/T4).
 
-## 6. Sound-rule whitelist (draft — wave-1 ratification)
+## 6. Sound-rule whitelist (RATIFIED wave 1, 2026-08-01 — amended by the Issue #259 grill)
 
 Rules that SURVIVE the purge because they encode game structure or fail-direction policy, not
-strategy hypotheses: `KO_SCORE` structural band + `_LINE_CAP` invariant · the empty-Bench forced
-deploy filter + `keep-a-bench` (loss guard; Issue #231 recommendation: keep unconditional) ·
-`_predicted_loss` (−KO_SCORE bench-empty doom) · `_finish_turn_last` sequencing tiers · the
-worst-case doom ceiling as the survival fail-direction (now a *policy parameter* after T1's
-fold) · opening/mulligan declaration rungs (deck-declared, not tuned) · Lethal-Solver
-preemption above the planner · authored constants inside firing equations (ROLE_TIER/TAG_TIER,
-readiness-leaf values, planner sub-prize constants, confidence seeds) — tolerated for POC,
-queued for the post-POC learning phases · `POC_WORTH_PRIZE_RATE` (authored scaffold, T3-local).
+strategy hypotheses. **Every entry is TYPED and names the board fact it guards** (ADR-0099):
+`structural` = permanent; `provisional` = a substrate-gap workaround, which MUST carry a dated
+retirement test; `authored-scaffold` = a constant, which MUST carry a reconciliation note and a
+post-POC fitting queue entry; `composed-into-the-leaf` = a per-seam equation that stops DECIDING
+when the composer lands but survives as `state_value` term-family math, which MUST name the term
+family that absorbs it. **An untyped entry is rejected by the T0 registry** — the flat draft
+list put ONE board fact (an empty Bench under a knock-outable Active) on §6 three times in three
+shapes, violating T0's own double-counting rule, and nothing about writing it prompted the catch.
+
+The list has **two populations**. The first three types still decide something at runtime, and the
+one-guard-per-fact rule is about them. `composed-into-the-leaf` is math, not a guard: those four
+entries are here so that "no longer a decider" is not read as "delete it". Issue #264's disposition
+table uses this same label.
+
+**`src/common/sound_rules.py` is the machine-checkable authority**; this table is its rendering, and
+`tests/strategy/test_sound_rules.py` cross-checks the two by `id` so they cannot drift.
+
+| id | entry | type | fact guarded / reason | retires when |
+|---|---|---|---|---|
+| `ko-score-band` | `KO_SCORE` band + `_LINE_CAP` invariant | `structural` | a prize is never outbid by a positional term | — |
+| `setup-never-bench` | Set-Up never-bench (ADR-0086 d9, `pilot.py:1750`) | `structural` | deferring is weakly dominant — optional placement (rulebook L97), no attack reaches me first either seat, zero damage-counter Abilities on a Basic | — |
+| `empty-bench-filter` | empty-Bench forced deploy filter | **`provisional`** | loss condition, `docs/rules.md` §7 case 2 | after T1: `reachable_incoming` answers on every post-setup empty-Bench corpus frame AND both gates green without it → `_predicted_loss` becomes the sole guard |
+| `predicted-loss` | `_predicted_loss` (−KO_SCORE bench-empty doom) | `structural` | same fact, CombatMath-gated — the ONE surviving guard on retirement | — |
+| `information-before-commitment` | `_finish_turn_last` — the **information-before-commitment** boundary | `structural` | an informative reversible play weakly dominates a commitment; the engine re-presents the menu | — |
+| `doom-ceiling-fail-direction` | worst-case doom ceiling as survival fail-direction | `structural` | fail-direction policy (a *policy parameter* after T1's fold) | — |
+| `declaration-rungs` | opening/mulligan declaration rungs | `structural` | deck-declared, not tuned | — |
+| `lethal-solver-preemption` | Lethal-Solver preemption above the planner | `structural` | sound win detection outranks every heuristic | — |
+| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds) | `authored-scaffold` | tolerated for POC | post-POC learning phases |
+| `poc-worth-prize-rate` | `POC_WORTH_PRIZE_RATE` (T3-local) | `authored-scaffold` | reconciled against trainer ≈1.0 / energy ≈6.7 / deploy ≈0.83 (ADR-0097) | post-POC fit against ruled spend-vs-hold frames converges |
+| `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
+| `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |
+| `evolve-value-composed` | `evolve_value` (ADR-0070) | `composed-into-the-leaf` | the marginal value of evolving a body → composes into **readiness** | — |
+| `promote-retreat-value-composed` | `promote_retreat_value` (Issue #141; ADR-0100, was ADR-0073 before PR #267) | `composed-into-the-leaf` | the marginal value of changing who is Active → composes into **survival** | — |
+| `deploy-value-composed` | `deploy_value` (ADR-0086) | `composed-into-the-leaf` | the marginal value of putting a body into play → composes into **development** | — |
+
+**Role change, not deletion (added 2026-08-01, Issue #263 ordering ruling):** the composer's beam
+ordering became **uniform 1-ply differencing** — apply each candidate through the apply-seam, score
+`state_value` on the result, rank by the delta. Under the old phrasing the per-seam equations
+provided the local ordering, which left heal / fetch / tool / stadium / draw with no local price and
+therefore pruned at zero before the leaf saw them. So the four equations stop being deciders for any
+option the enumerator covers; their math is ratified and stays, as leaf internals and optionally as
+pruning approximations.
+
+**Deleted by this ratification:** `keep-a-bench` (+60) — it guards nothing the filter does not
+already guarantee at MAIN (the filter runs *after* `_finish_turn_last`), and per Issue #231's own
+numbers it IS the spare-body cliff (1.96 → 61.96). Deletion is measured, not blind.
+
 Everything else with a tuned weight is deleted by its owning track.
 
 ## 7. POC acceptance (the definition of done)

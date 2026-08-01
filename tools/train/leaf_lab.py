@@ -326,6 +326,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd")
     cap = sub.add_parser("capture", help="write a baseline report artifact (the gate's reference)")
     cap.add_argument("--out", type=Path, required=True)
+    res = sub.add_parser("restamp", help="rewrite ONLY the recorded git_rev (a rebase moved the base)")
+    res.add_argument("--baseline", type=Path, required=True)
+    res.add_argument("--rev", default=None, help="the revision to stamp (default: this checkout's)")
     dif = sub.add_parser("diff", help="Discrimination Gate: diff this build against a capture")
     dif.add_argument("--baseline", type=Path, required=True)
     dif.add_argument("--out", type=Path, default=None,
@@ -334,19 +337,39 @@ def main(argv=None) -> int:
 
     # Read ONCE and threaded through both subcommands — the rulings are one corpus, not a property of
     # a capture, so a capture and the diff reading it must not resolve two different voided sets.
-    from train.gates import orphan_rulings, ruling_index, voided_frames
+    from train.gates import orphan_rulings, restamp_artifact, ruling_index, voided_frames
+
+    # A re-stamp never re-reads the build, so it runs BEFORE the corpus replay — that separation is
+    # the point of the subcommand existing (ADR-0094 decision 2), not an optimisation.
+    if args.cmd == "restamp":
+        rev = args.rev or _git_rev()
+        restamp_artifact(args.baseline, rev)
+        print(f"-> re-stamped {args.baseline} to {rev} (verdicts untouched)")
+        return 0
+
     index = ruling_index(args.store)
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)
     rpt = _build_report(args.store, args.agent, voided=set(voided))
 
     if args.cmd == "capture":
-        from train.gates import print_ruling_readout, write_json_artifact
-        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
-        _print_report(rpt)
-        print_ruling_readout(index, voided, orphans=orphans, detail=True)
-        print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
-        return 0
+        from train.gates import (discrimination_fail_keys, guarded_capture, leaf_lab_diff,
+                                 print_ruling_readout, write_json_artifact)
+        # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
+        # this build degrades OK -> MISS may only become the new reference once a human has ruled it.
+        # The convention has HELD historically (every absorbed flip carried a ruling, measured over
+        # the whole baseline history) — this removes the reliance on discipline, it does not repair a
+        # breach (ADR-0094 decision 1).
+        def _write():
+            write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
+            _print_report(rpt)
+            print_ruling_readout(index, voided, orphans=orphans, detail=True)
+            print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
+
+        return guarded_capture(
+            args.out, rpt, index=index, write=_write,
+            diff_fn=lambda before, after: leaf_lab_diff(before, after, voided=set(voided)),
+            fail_keys_fn=discrimination_fail_keys)
 
     if args.cmd == "diff":
         from train.gates import (discrimination_gate_verdict, held_out_frames, leaf_lab_diff,

@@ -662,6 +662,136 @@ def write_json_artifact(path, doc) -> None:
     path.write_bytes(_json.dumps(doc, indent=2).encode("utf-8"))
 
 
+class RecaptureRefused(RuntimeError):
+    """A `capture` that would overwrite a verdict the human still owes a ruling on (ADR-0094).
+
+    Carries ``keys`` — EVERY offending frame, sorted — because an operator who learns the scope of
+    what they were about to overwrite one frame at a time will simply re-run until it stops
+    complaining, which is the behaviour this exists to prevent."""
+
+    def __init__(self, keys):
+        self.keys = list(keys)
+        # ASCII only: this reaches the operator on stderr, which neither lab reconfigures to UTF-8,
+        # so an em dash arrives as a replacement char on a Windows console (measured). Dev is Windows
+        # and the grader is Linux (CLAUDE.md) — a message that garbles on the box it is most likely
+        # to be read on is a message that gets ignored.
+        super().__init__(
+            "re-capture refused: {} frame(s) would move in the FAIL direction with no ruling on "
+            "record -- {}. A baseline is a RULING RECORD (CLAUDE.md): rule the flip first (a wave "
+            "packet), or use `restamp` if you only need the recorded revision moved."
+            .format(len(self.keys), ", ".join(self.keys)))
+
+
+def decision_fail_keys(diff: dict) -> list:
+    """The Decision Gate's fail-direction frames — the keys whose pick moved OFF the human's ruling
+    (``REGRESSION``), read straight off a `decider_lab_diff`.
+
+    A thin reader rather than a second classifier, deliberately: `decider_lab_diff` already decides
+    what "worse" means (``satisfies_human`` True -> False), and a guard computing its own answer
+    would be free to drift from the gate it is protecting."""
+    return sorted(r["key"] for r in (diff or {}).get("rows") or [] if r.get("verdict") == "REGRESSION")
+
+
+def discrimination_fail_keys(diff: dict) -> list:
+    """The Discrimination Gate's fail-direction frames — the ``OK -> MISS`` keys, read straight off a
+    `leaf_lab_diff`.
+
+    Exists so the two labs are ACTUALLY symmetric rather than merely described as such. The first
+    build gave the decider a named reader and left the leaf inlining
+    ``[f["key"] for f in leaf_lab_diff(...)["ok_to_miss"]]`` at its call site, which is the shape
+    where one lab quietly grows a filter the other lacks."""
+    return sorted(f["key"] for f in (diff or {}).get("ok_to_miss") or [])
+
+
+def guarded_capture(out, fresh, *, index, diff_fn, fail_keys_fn, write) -> int:
+    """The whole ruling-gated write, shared by both labs: diff against the outgoing baseline, refuse
+    on an unruled fail-direction move, otherwise write. Returns a process exit code.
+
+    Both labs had copied the same six lines — read the outgoing artifact, diff, extract fail keys,
+    refuse, print, return 1 — differing only in which diff they called. That is the Duplicated Code
+    a third lab turns into three edits, and the place a divergence would hide: the labs must agree on
+    *when* a capture is refused even though they disagree on what "worse" means.
+
+    ``diff_fn(outgoing, fresh)`` and ``fail_keys_fn(diff)`` are the two genuinely per-lab pieces;
+    ``write()`` performs the actual artifact write once the guard passes. A first capture (no
+    outgoing artifact) writes freely — there is no prior ruling record to protect."""
+    from pathlib import Path
+    import json as _json
+    out = Path(out)
+    if out.exists():
+        outgoing = _json.loads(out.read_text(encoding="utf-8"))
+        try:
+            refuse_unruled_recapture(fail_keys_fn(diff_fn(outgoing, fresh)), index=index)
+        except RecaptureRefused as refused:   # an operator error, not a crash: say so plainly and
+            print(f"REFUSED: {refused}")      # leave the committed baseline untouched
+            return 1
+    write()
+    return 0
+
+
+def unruled_recapture_moves(fail_keys, *, index) -> list:
+    """Of the frames moving in the fail direction, the ones carrying NO ruling — what a re-capture
+    must refuse to overwrite (ADR-0094 decision 1).
+
+    **One predicate, no special cases.** `ruling_index` already folds every store a ruling can live
+    in — `reviewed.json` dispositions AND the Held-out Ledger — into one map, so "has a human said
+    anything about this frame?" is exactly ``index.get(key)``. Adding a second test here for
+    held-out or voided frames would be a second idea of what it means for a frame to have been
+    ruled, which is the defect ADR-0087 decision 2 charges for one store over.
+
+    Note the asymmetry with the GATES: they excuse a voided frame because its ruling can no longer
+    grade the agent. This excuses it because a human looked at it. Same set, different reason, and
+    both are honest — what neither may do is let a frame nobody has ever looked at become the new
+    reference."""
+    return sorted(k for k in (fail_keys or ()) if not (index or {}).get(k))
+
+
+def refuse_unruled_recapture(fail_keys, *, index) -> None:
+    """Raise `RecaptureRefused` if any fail-direction frame carries no ruling. Silent otherwise.
+
+    This is the enforcement `CLAUDE.md`'s "a baseline is a ruling record, never auto-recaptured"
+    always described and never had.
+
+    **Measured before building it, and the honest result is that the convention has HELD.** Every
+    transition of `data/leaf_lab/baseline.json` across its whole history was replayed against the
+    Ruling Index (2026-08-01): three re-captures absorbed an `OK -> MISS`, five flips in total, and
+    **every one carried a ruling**. There is no historical breach — the discipline worked.
+
+    So this guard is not a repair, and must not be sold as one. What it removes is the *reliance on
+    discipline*: the rule had no mechanism, the six-track POC has every track rebasing against these
+    baselines, and a re-capture is precisely the moment nobody re-reads the writer. A guard that has
+    never needed to fire is the cheapest possible insurance — it costs one diff of an artifact the
+    command is already reading."""
+    offenders = unruled_recapture_moves(fail_keys, index=index)
+    if offenders:
+        raise RecaptureRefused(offenders)
+
+
+def restamp_artifact(path, git_rev: str) -> dict:
+    """Rewrite ONLY a committed gate artifact's recorded ``git_rev``. Returns the updated document.
+
+    Four of the twelve committed re-captures moved NOTHING but the recorded revision — a rebase had
+    orphaned the SHA. Serving that need through `capture` means re-reading the build, which is the
+    ruling-bearing operation, to achieve a metadata edit. This separates them: `restamp` cannot move
+    a verdict because it never looks at the build, and `capture` is guarded by
+    `refuse_unruled_recapture`. They stop being one command that does both by accident.
+
+    Refuses an artifact carrying no ``git_rev``: a document without one is not a gate baseline, and
+    silently adding the field would let a re-stamp manufacture provenance. Writes through
+    `write_json_artifact`, so the LF framing the committed baselines carry survives a Windows box."""
+    from pathlib import Path
+    import json as _json
+    path = Path(path)
+    doc = _json.loads(path.read_text(encoding="utf-8"))
+    if "git_rev" not in doc:
+        # ASCII, for the reason `RecaptureRefused` states: this reaches an operator on a console the
+        # labs do not reconfigure, and dev is Windows (CLAUDE.md).
+        raise ValueError(f"{path} carries no `git_rev` -- not a gate baseline, refusing to add one")
+    doc["git_rev"] = str(git_rev)
+    write_json_artifact(path, doc)
+    return doc
+
+
 def correction_frame_key(correction) -> str:
     """One Correction's **Frame Key** — ``frame_key_of(*identity_key(c))``, and the ONLY way any
     instrument derives one (ADR-0087 decision 2).
