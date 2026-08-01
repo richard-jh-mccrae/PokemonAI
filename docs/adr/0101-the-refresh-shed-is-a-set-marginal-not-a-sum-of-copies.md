@@ -76,7 +76,7 @@ Issue #261 item 2b asks the STRIP/GIFT keep-cost-per-hidden-card grading to land
 grill for scope, build, or **park with the rationale recorded**. The third is taken, on measurement.
 
 Design A (`hand-disruption-grill-spec.md` §"Evidence-gated designs") makes
-`_REFRESH_STRIP`/`_REFRESH_GIFT` an `E[keep_cost per card]` over the opponent's hidden hand, with role
+`_REFRESH_OPPONENT_HAND_STRIP`/`_REFRESH_OPPONENT_HAND_GIFT` an `E[keep_cost per card]` over the opponent's hidden hand, with role
 values from the derive-first role sheet (`gusting-keepcost-design.md` §2). That role sheet is
 **design-only and unbuilt**, and the consequence is measurable rather than theoretical
 (measured at `ccd3a28`, 132 refresh frames):
@@ -102,6 +102,27 @@ answer rather than deciding one. The retirement path is unchanged and now has a 
 `gusting-keepcost-design.md` §2's, with §5's gust-side re-audit obligations attached — one layer, two
 consumers, built once for both rather than half-built here for one.
 
+### The flats are RENAMED to say whose hand they price (review, 2026-08-01)
+
+Parking them is not the same as leaving them as they were. `_REFRESH_STRIP` / `_REFRESH_GIFT` /
+`_REFRESH_FRESH` never said *whose hand*, and the natural misreading of "STRIP" is "cards stripped
+from ME" — which inverts the sign of the term. They become
+**`_REFRESH_OPPONENT_HAND_STRIP` / `_REFRESH_OPPONENT_HAND_GIFT` / `_REFRESH_OPPONENT_HAND_FRESH`**,
+and the equation's docstring is re-laid-out by SIDE rather than as a flat list of four lines.
+
+The rename is behaviour-free (both gates and the suite are bit-identical across it), and it records
+the structural fact the parking rests on: **the two sides are priced by different means because one
+hand is face-up and one is not.** My hand's leg can interrogate each held card; theirs can only ever
+be `count × rate`, because `handCount` is all the engine gives us. Two further facts fall out of the
+same reading and are now stated in the code rather than left to be re-derived:
+
+* STRIP and GIFT are **one leg split by sign**, not two terms — both read the single signed
+  `opp_net`, so `max(-opp_net, 0)` and `max(opp_net, 0)` can never both be non-zero;
+* a **one-sided** refresh (Lillie's, Lacey — they shuffle only my hand) zeroes `opp_net` outright, so
+  the opponent legs vanish and the swing is exactly `CYCLE − SHED`. That is why frame
+  `83969481|0|decision|55` below turns purely on the shed: `20 − 17.8 = +2.2`, with no opponent-side
+  term in it at all.
+
 ## As measured (2026-08-01, this build)
 
 **The shadow's final reading, before deletion** (96 refresh decisions, at `ccd3a28`): 16 sign-flips;
@@ -125,10 +146,37 @@ nothing else:
 | `83665798\|1\|decision\|39` | `[3] → [4]` | `[4]` | **FIX** — the hand prices UP (16.4 → 22.5); refresh declined, attack taken |
 | `83117367\|0\|decision\|34` | `[2] → [3]` | `[2]` | REGRESSION — shed 30.0 → 33.0 puts Harlequin at −1.0; the attack preempts |
 | `83661649\|0\|decision\|30` | `[2] → [0]` | `[2]` | REGRESSION — shed 29.4 → 26.1 lifts Harlequin to +1.9; it preempts the attack |
-| `83969481\|0\|decision\|55` | `[4] → [1]` | `[4]` | REGRESSION — shed 21.6 → 17.8 lifts Lillie's to +2.2; it preempts the attack |
+| `83969481\|0\|decision\|55` | `[4] → [1]` | `[4]` | REGRESSION — shed 21.6 → 17.8 lifts Lillie's to +2.2; it preempts the attack. **Also a committed PIN** — dissected below |
 
 The three regressions go to the **wave-2 ruling packet** exactly as ADR-0092 §5 prescribes; the
 Decision Gate baseline is NOT re-captured until they carry verdicts (ADR-0094 enforces the refusal).
+
+**`83969481|0|decision|55` was dissected, because it is the one frame the swap reaches from two
+directions** — it is a Decision-Gate regression *and* a committed PIN in
+`test_hyperclosure_corpus.py`, whose stated premise is *"Lillie's stands down holding the Wally's
+that answers next-turn Nebula — `clutch_heal` worth 20"*. The slot resolution on that board:
+
+```
+my_bench=0  active_doomed=FALSE  my_hand=5  opp_hand=7  prizes me/opp = 5/2
+  Wally's Compassion (worth 20)  ->  general:1229   value 9.00   keep_v2 9.00
+  Mega Signal        (worth 10)  ->  supply_wincon  value 10.00  keep_v2 4.50   resupply 0.73
+  Salvatore          (worth 10)  ->  draw_engine    value  8.00  keep_v2 4.28   resupply 0.47
+  Cinderace          (worth 12)  ->  (no slot)                   keep_v2 0.00   deploy 0.00
+```
+
+v1 charged the Wally's its full tier-20 keep. **v2 gives it a `general` slot at
+`20 × _GENERAL_WORTH_W (0.45) = 9.0`** — latent worth, not a live answer — because
+`board.active_doomed` is **FALSE**: the `answer_doom` slot reads the CURRENT board, and the threat
+the pin names is *next* turn's. So the divergence is real and located, and it is **not** the near-zero
+noise the other two regressions are.
+
+Whether it is *wrong* turns on a question this item must not answer alone: **should `answer_doom`
+carry a one-turn lookahead?** `_resolve_needs` is the SHARED resolver, so changing it also moves the
+discard decider's 12/12 — that is the keep-value resolver's own bench, not a refresh swap's. The pin
+is therefore demoted to a strict-xfail TARGET **provisionally**, carrying that question by name, and
+the wave-2 verdict decides: *reject* ⇒ fix the resolver and re-promote; *accept* ⇒ delete the TARGET
+entry and re-capture. Recording it as a TARGET rather than deleting it keeps the strict-xfail
+ratchet: if the frame starts passing again, the suite goes red rather than quietly green.
 
 **Performance, since the shed moved onto the hot path** (it now runs per refresh PLAY option and
 inside the develop rollout, where the shadow was `_planning`-guarded out): measured 0.25 ms per call

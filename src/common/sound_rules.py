@@ -199,8 +199,8 @@ WHITELIST: tuple[SoundRule, ...] = (
                "behaviour to no benefit before there is anything fitted to replace them.",
         reconciliation="Queued wholesale for the post-POC learning phases (Issues #146–#148). Not "
                        "individually reconciled — the queue is the commitment. ONE member carries a "
-                       "named PREREQUISITE besides the queue: the refresh swing's `_REFRESH_STRIP` (4) "
-                       "/ `_REFRESH_GIFT` (8) (ADR-0101, Issue #261 item 2b, discharging Issue #222). "
+                       "named PREREQUISITE besides the queue: the refresh swing's `_REFRESH_OPPONENT_HAND_STRIP` (4) "
+                       "/ `_REFRESH_OPPONENT_HAND_GIFT` (8) (ADR-0101, Issue #261 item 2b, discharging Issue #222). "
                        "Grading them is designed (hand-disruption-grill-spec.md design A) and PARKED "
                        "on measurement — 59.4% of an opponent's representative build prices "
                        "`role_value` 0 today, and the missing 59% is exactly their attackers and "

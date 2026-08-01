@@ -53,19 +53,43 @@ from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 en
 # DRAW reached +76 and went straight through `hold-wincon-dont-shuffle` (−25),
 # `hold-irreplaceable-tool-dont-shuffle` (−30) and `dont-refresh-into-a-probable-miss` (−25), which
 # were all calibrated against `dig-before-commit`'s flat +20.
+#
+# The four legs split by WHOSE HAND they price, and the two sides are priced by different means for a
+# structural reason: my hand is FACE-UP to me, so its leg can ask each held card what my board loses
+# without it (the graded SHED); theirs is a `handCount` and nothing else, so their legs can only ever
+# be `card count × a per-card rate`. The constants below carry `OPPONENT_HAND` in their names because
+# reading `_REFRESH_STRIP` as "cards stripped from ME" is the natural misreading, and it inverts the
+# sign of the whole term (Issue #261 review, 2026-08-01).
+#
+#   MY hand:     _REFRESH_CYCLE (+, flat)          · the SHED (−, GRADED — `_refresh_shed_keepcost`)
+#   THEIR hand:  _REFRESH_OPPONENT_HAND_STRIP (+)  · _OPPONENT_HAND_FRESH (+)  · _OPPONENT_HAND_GIFT (−)
+#
+# STRIP and GIFT are one leg split by SIGN, never two live terms: both read the single signed
+# `opp_net`, so `max(-opp_net, 0)` and `max(opp_net, 0)` cannot both be non-zero. A one-sided refresh
+# (Lillie's, Lacey — they shuffle only MY hand) zeroes `opp_net` outright, leaving `CYCLE − SHED`.
 _REFRESH_CYCLE = 20        # the DRAW side, flat: cards I have not seen are speculative and only as
                            # good as what the deck can still supply — which is precisely what the
                            # `hold-*-dont-shuffle` / probable-miss guards adjudicate. Bounded and flat
                            # so those guards can still cancel it, exactly as they could cancel the +20
                            # `dig-before-commit` used to supply blindly.
-# _REFRESH_SHED (the flat −8/card-lost shed) RETIRED 2026-07-18 (ADR-0065): the shed side is now the
-# GRADED Σ keep_cost over the actual hand (`_refresh_shed_keepcost`) — a wincon costs its role value ×
-# how UN-recoverable it is, a dreg ~0. ENERGY_TIER (8, `common.card_worth`) is the old flat anchor.
-_REFRESH_STRIP = 4         # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
-_REFRESH_GIFT = 8          # per card HANDED to them: Judge into a 1-card opponent hand REFILLS them to
-                           # 4. Priced like a shed — a card in their hand is as real as one in mine.
-_REFRESH_FRESH = 2         # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0): live
-                           # resources denied, versus cards they have demonstrably been unable to play.
+# _REFRESH_SHED (the flat −8/card-lost shed) RETIRED 2026-07-18 (ADR-0065), and its Σ-over-copies
+# successor RETIRED 2026-08-01 (ADR-0101): the shed side is now the v2 assignment SET marginal over
+# the whole hand (`_refresh_shed_keepcost`). ENERGY_TIER (8, `common.card_worth`) is the old flat anchor.
+#
+# The three OPPONENT-HAND rates below stay FLAT deliberately, and the reason is measured rather than
+# doctrinal (ADR-0101; hand-disruption-grill-spec.md design A, PARKED). Grading them needs a worth for
+# cards we cannot see, i.e. an expectation over their representative build — and 59.4% of that build
+# prices `_role_value` 0 today, because role declarations come from OUR deck. The missing 59% is
+# exactly their attackers and wincons, so a "derived" GIFT would be biased DOWNWARD precisely where it
+# matters, making "Judge into their small hand" look cheap — ml f111's CRITICAL blunder. They retire
+# when `gusting-keepcost-design.md` §2's shared opponent role sheet exists, not before.
+_REFRESH_OPPONENT_HAND_STRIP = 4   # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
+_REFRESH_OPPONENT_HAND_GIFT = 8    # per card HANDED to them: Judge into a 1-card opponent hand REFILLS
+                           # them to 4. Priced like a shed — a card in their hand is as real as one in
+                           # mine. The 4-vs-8 ratio is the denial haircut: denying them a card is worth
+                           # about half handing them one, because they redraw into a fresh one.
+_REFRESH_OPPONENT_HAND_FRESH = 2   # per stripped card THEY DREW LAST TURN (`opp_hand_size_delta` > 0):
+                           # live resources denied, versus cards they have demonstrably been unable to play.
 # _REFRESH_BENCH_BODY / `_refresh_cycle_adaptive` (the ADAPTIVE draw credit — "CYCLE should scale to
 # the open bench-deploy need", ep83038055 f40) DELETED 2026-08-01 with the shadow that was its only
 # reader (ADR-0101). It reported beside the flat CYCLE and decided nothing, so it fell with
@@ -3441,10 +3465,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         card's printed count, so the play is fully described by how many cards move, in which direction
         (strategy/refresh.py):
 
-            CYCLE                                  the draw side — flat, speculative, guard-cancellable
-            - set_keep_v2(whole hand)              the graded SHED — what shuffling my hand costs
-            + STRIP * max(-opp_net, 0)  + FRESH*f  cards stripped from them        (certain)
-            - GIFT  * max(opp_net, 0)              cards handed to them            (certain)
+          MY hand      CYCLE                                 flat, speculative, guard-cancellable
+                     - set_keep_v2(whole hand)               the graded SHED — what I lose
+          THEIR hand + OPPONENT_HAND_STRIP * max(-opp_net,0) cards their shuffle takes  (certain)
+                     + OPPONENT_HAND_FRESH * f               …of which they drew last turn
+                     - OPPONENT_HAND_GIFT  * max(opp_net,0)  cards their redraw hands them (certain)
+
+        Both opponent-side rates read the ONE signed `opp_net`, so STRIP and GIFT are a single leg
+        split by sign and can never both fire; a one-sided refresh (Lillie's/Lacey shuffle only MY
+        hand) zeroes `opp_net` and leaves `CYCLE − SHED` alone.
 
         The card's own printed draw count is the break-even. **The SHED side is graded** (WP7): it was
         a flat ``_REFRESH_SHED × cards-lost``, propped up by the hand-QUALITY guards (`hold-wincon` /
@@ -3468,9 +3497,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         fresh = fresh_cards(ctx.card_id, board.opp_hand_size, board.opp_hand_size_delta)
         return (_REFRESH_CYCLE
                 - self._refresh_shed_keepcost(obs, board, ctx)
-                + _REFRESH_STRIP * stripped
-                + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
-                - _REFRESH_GIFT * max(opp_net, 0.0))
+                + _REFRESH_OPPONENT_HAND_STRIP * stripped
+                + (_REFRESH_OPPONENT_HAND_FRESH * fresh if stripped > 0 else 0.0)
+                - _REFRESH_OPPONENT_HAND_GIFT * max(opp_net, 0.0))
 
     def _hand_size_relief(self, obs: dict, ctx) -> float:
         """REPORTING-ONLY (hand-disruption grill, 2026-07-19): the signed Powerful-Hand damage swing a

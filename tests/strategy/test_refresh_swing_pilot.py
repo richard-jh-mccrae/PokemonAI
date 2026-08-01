@@ -148,7 +148,7 @@ def test_the_shed_leg_is_the_v2_assignment_set_marginal(refresh_ctx):
     decider equals the module call over the resolved rows) plus the swing identity: the SHED is the
     only hand-side term, so `swing == CYCLE − shed + (the opponent-side legs)`."""
     from common import needs
-    from common.pilot import _REFRESH_CYCLE, _REFRESH_FRESH, _REFRESH_GIFT, _REFRESH_STRIP
+    from common.pilot import _REFRESH_CYCLE, _REFRESH_OPPONENT_HAND_FRESH, _REFRESH_OPPONENT_HAND_GIFT, _REFRESH_OPPONENT_HAND_STRIP
     from common.strategy.refresh import fresh_cards, net_change
     pilot, obs, board, ctx = refresh_ctx("ms_dont_lillies_away_the_bigger_hand_f94.json", LILLIES)
     rows = pilot._needs_hand_rows(obs, board, exclude_cid=LILLIES)
@@ -162,9 +162,9 @@ def test_the_shed_leg_is_the_v2_assignment_set_marginal(refresh_ctx):
                                   opp_prizes_remaining=board.opp_prizes_remaining)
     stripped = max(-opp_net, 0.0)
     fresh = fresh_cards(LILLIES, board.opp_hand_size, board.opp_hand_size_delta)
-    expected = (_REFRESH_CYCLE - shed + _REFRESH_STRIP * stripped
-                + (_REFRESH_FRESH * fresh if stripped > 0 else 0.0)
-                - _REFRESH_GIFT * max(opp_net, 0.0))
+    expected = (_REFRESH_CYCLE - shed + _REFRESH_OPPONENT_HAND_STRIP * stripped
+                + (_REFRESH_OPPONENT_HAND_FRESH * fresh if stripped > 0 else 0.0)
+                - _REFRESH_OPPONENT_HAND_GIFT * max(opp_net, 0.0))
     assert pilot._refresh_swing_tactical(obs, board, ctx) == pytest.approx(expected, abs=0.05)
 
 
