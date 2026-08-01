@@ -100,7 +100,15 @@ T0 Spine (serial, ~1 session)
  └──> T3 state_value            (critical path)
         └──> T4 Turn Planner    (critical path)
                └──> T5 Purge + integration (joins all lanes)
+
+A1 Term sufficiency audit (parallel AUDIT lane; blocks nothing, read-only)
 ```
+
+**A1 — term sufficiency audit** (Issue #268, report: `term-sufficiency-audit.md`). Walks the four
+DECKS rather than the corpus, because the corpus records what the OLD rung-driven agent looked at,
+so a term the new architecture needs and the old agent never exercised leaves no trace in either
+gate. Feeds T3's registry (its `blind_to` lists) and T4's blind-spot checklist. Read-only — it
+produces findings, not code, and the disposition of each finding is decided after it lands.
 
 Critical path: **T0 → T3 → T4 → T5**. T1 and T2 fill parallel worktree lanes and must land
 before T5 begins. Each track is one issue, one branch, one PR (multi-session inside a track is
