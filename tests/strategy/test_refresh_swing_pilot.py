@@ -45,6 +45,30 @@ def _refresh_traces(pilot, fx, card_id):
     return dec, [t for t in dec.options if t.card_id == card_id]
 
 
+@pytest.fixture
+def refresh_ctx():
+    """The one seam the SHED tests price a refresh through: `(pilot, obs, board, ctx)` for a named
+    fixture file OR a corpus frame (`episode, n`). The ctx carries only what
+    `_refresh_swing_tactical` / `_refresh_shed_keepcost` read — `card_id` and `option_type` — so a
+    test never re-runs the heavyweight per-option `_context` just to price one card."""
+    from types import SimpleNamespace
+
+    from common.strategy.context import _PLAY
+
+    def build(locator, card, agent="mega_starmie"):
+        if isinstance(locator, str):
+            obs = _fx(locator)["obs"]
+        else:
+            sys.path.insert(0, str(REPO / "tests"))
+            from corpus_helpers import corpus_record
+            obs = corpus_record(*locator).obs
+        pilot = _shipped_pilot(agent)
+        board = pilot._board_hypothetical(obs)
+        return pilot, obs, board, SimpleNamespace(card_id=card, option_type=_PLAY)
+
+    return build
+
+
 @pytest.mark.parametrize("agent,fixture,card,label", [
     ("mega_lucario", "ml_dont_judge_away_the_bigger_hand_f111.json", JUDGE, "Judge my8/opp1"),
     ("mega_starmie", "ms_dont_harlequin_away_the_bigger_hand_f60.json", HARLEQUIN, "Harlequin my11/opp2"),
@@ -117,23 +141,56 @@ def test_the_refresh_oracle_owns_the_shuffle_refresh_value():
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_refresh_shed_v2_shadow_rides_the_decision_with_the_swing_identity():
-    """WP-N4b: at a real shuffle-refresh the keep-value v2 MAGNITUDE shadow rides the Decision — v1's
-    Σ keep_cost (`_refresh_shed_keepcost`) beside v2's whole-hand assignment marginal
-    (`needs.set_keep_v2`), the two refresh swings, and the SIGN-agreement bit. Deciding NOTHING: the
-    shed still uses v1. The swing identity `swing_v2 = swing_v1 + (v1_shed − v2_shed)` holds exactly
-    (the shed is the only term that changes), and every held row carries its `keep_v2`."""
-    fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
-    s = _shipped_pilot("mega_starmie").explain(fx["obs"]).refresh_shadow
-    assert s is not None and isinstance(s["sign_agree"], bool)
-    assert s["swing_v2"] == pytest.approx(s["swing_v1"] + s["v1_shed"] - s["v2_shed"], abs=0.05)
-    assert s["cid"] == LILLIES and all("keep_v2" in r for r in s["eq"])
-    # The two magnitudes measure different things: v1 discounts each copy by its re-access odds;
-    # v2 prices the hand as an ASSIGNMENT (sets-not-sums) with slot resupply live over the refresh
-    # window (`_refresh_slot_resupply`). A divergence in EITHER direction is real telemetry — v2 <
-    # v1 is over-counted duplicates, v2 > v1 is resupply the specific slots can't see. Both are
-    # non-negative (V is monotone in the held set).
-    assert s["v1_shed"] >= 0.0 and s["v2_shed"] >= 0.0
+def test_the_shed_leg_is_the_v2_assignment_set_marginal(refresh_ctx):
+    """ADR-0101: the SHED leg of the live swing IS `needs.set_keep_v2` over the whole shuffled hand —
+    the same resolver/resupply the discard decider reads, not a second summation. The shadow that
+    used to carry this number is gone; the equation carries it. Asserted as a seam identity (the
+    decider equals the module call over the resolved rows) plus the swing identity: the SHED is the
+    only hand-side term, so `swing == CYCLE − shed + (the opponent-side legs)`."""
+    from common import needs
+    from common.pilot import _REFRESH_CYCLE, _REFRESH_OPPONENT_HAND_FRESH, _REFRESH_OPPONENT_HAND_GIFT, _REFRESH_OPPONENT_HAND_STRIP
+    from common.strategy.refresh import fresh_cards, net_change
+    pilot, obs, board, ctx = refresh_ctx("ms_dont_lillies_away_the_bigger_hand_f94.json", LILLIES)
+    rows = pilot._needs_hand_rows(obs, board, exclude_cid=LILLIES)
+    slots, elig = pilot._resolve_needs(obs, board, rows)
+    resupply = pilot._refresh_slot_resupply(slots, elig, rows, obs, board, draws=6)
+    shed = pilot._refresh_shed_keepcost(obs, board, ctx)
+    assert shed == pytest.approx(needs.set_keep_v2(slots, elig, resupply, range(len(rows))), abs=0.05)
+    assert shed > 0.0                       # this hand holds live plan pieces — shuffling it is not free
+    _my_net, opp_net = net_change(LILLIES, my_hand=board.my_hand_size, opp_hand=board.opp_hand_size,
+                                  my_prizes_remaining=board.my_prizes_remaining,
+                                  opp_prizes_remaining=board.opp_prizes_remaining)
+    stripped = max(-opp_net, 0.0)
+    fresh = fresh_cards(LILLIES, board.opp_hand_size, board.opp_hand_size_delta)
+    expected = (_REFRESH_CYCLE - shed + _REFRESH_OPPONENT_HAND_STRIP * stripped
+                + (_REFRESH_OPPONENT_HAND_FRESH * fresh if stripped > 0 else 0.0)
+                - _REFRESH_OPPONENT_HAND_GIFT * max(opp_net, 0.0))
+    assert pilot._refresh_swing_tactical(obs, board, ctx) == pytest.approx(expected, abs=0.05)
+
+
+@pytest.mark.req("REQ-NEEDS-0007")
+def test_the_shed_prices_the_hand_as_a_set_not_a_sum(refresh_ctx):
+    """The swap's whole substance (ep82522698 f36, two Wally's Compassion): v1 summed the copies, so a
+    duplicate plan piece was charged TWICE and the refresh looked too costly. The v2 shed is the SET
+    marginal `V(hand) − V(∅)`, and the assignment is submodular, so it is never below the sum of the
+    per-copy marginals — on this frame STRICTLY above, because each Wally's solo-prices 0 (its sibling
+    covers the one de-duplicated slot) while shuffling BOTH really does lose the class.
+
+    A per-copy sum cannot express that: it reads the pair as free. This is the frame the keep-value
+    handoff named as a v2 scope gap, and it is the one the set marginal exists for."""
+    from common import needs
+    pilot, obs, board, ctx = refresh_ctx(("82522698", 36), HARLEQUIN)
+    rows = pilot._needs_hand_rows(obs, board, exclude_cid=HARLEQUIN)
+    wally = [k for k, r in enumerate(rows) if r["cid"] == 1229]
+    assert len(wally) == 2, "the frame holds two Wally's Compassion"
+    slots, elig = pilot._resolve_needs(obs, board, rows)
+    resupply = pilot._refresh_slot_resupply(slots, elig, rows, obs, board, draws=4)
+    solo = [needs.keep_v2(slots, elig, resupply, k) for k in wally]
+    pair = needs.set_keep_v2(slots, elig, resupply, wally)
+    assert max(solo) == pytest.approx(0.0), "a duplicate must solo-price 0 — the sibling covers"
+    assert pair > sum(solo), "the PAIR must cost what the class is worth, not twice nothing"
+    shed = pilot._refresh_shed_keepcost(obs, board, ctx)
+    assert shed >= needs.set_keep_v2(slots, elig, resupply, range(len(rows))) - 0.05
 
 
 @pytest.mark.req("REQ-NEEDS-0008")
@@ -169,15 +226,15 @@ def test_refresh_slot_resupply_discounts_by_kind_and_window():
 
 
 @pytest.mark.req("REQ-NEEDS-0008")
-def test_refresh_shed_v2_is_resupply_discounted():
-    """The shadow's v2 shed with the live resupply leg is no dearer than the same assignment at
-    resupply 0.0 (the retired v0 pricing), while v1's shed — a different jurisdiction — is
-    untouched. Strict inequality on this fixture: its resolver finds a live draw-engine slot."""
-    fx = _fx("ms_dont_lillies_away_the_bigger_hand_f94.json")
-    live = _shipped_pilot("mega_starmie").explain(fx["obs"]).refresh_shadow
-    frozen_pilot = _shipped_pilot("mega_starmie")
-    frozen_pilot._refresh_slot_resupply = (
+def test_the_live_shed_is_resupply_discounted(refresh_ctx):
+    """The resupply leg reaches the DECIDER now, not a shadow column: the shed with the live
+    per-slot re-supply odds is cheaper than the same assignment frozen at 0.0 (the retired v0
+    pricing), so the swing it feeds is correspondingly higher. Strict on this fixture — its
+    resolver finds a live draw-engine slot the closure can point backwards at."""
+    pilot, obs, board, ctx = refresh_ctx("ms_dont_lillies_away_the_bigger_hand_f94.json", LILLIES)
+    live_shed = pilot._refresh_shed_keepcost(obs, board, ctx)
+    live_swing = pilot._refresh_swing_tactical(obs, board, ctx)
+    pilot._refresh_slot_resupply = (
         lambda slots, elig, rows, obs, board, draws: [0.0] * len(slots))
-    frozen = frozen_pilot.explain(fx["obs"]).refresh_shadow
-    assert live["v1_shed"] == frozen["v1_shed"]
-    assert live["v2_shed"] < frozen["v2_shed"]
+    assert live_shed < pilot._refresh_shed_keepcost(obs, board, ctx)
+    assert live_swing > pilot._refresh_swing_tactical(obs, board, ctx)

@@ -1,24 +1,23 @@
-"""Needs sweep — the keep-value v2 corpus reports (ADR-0065 WP-N3/N4b acceptance numbers).
+"""Needs sweep — the keep-value v2 DISCARD report (ADR-0065 WP-N3/N4 acceptance number).
 
 Replays every committed correction through a FRESH shipped Pilot per frame (the pilots are
 stateful — sharing one across games pollutes verdicts, the `test_hyperclosure_corpus` lesson) and
-prints the two v2 shadow reports:
+prints the v2 discard shadow report: per forced-discard frame the DECIDED pick, v1's ranking
+(`eq_pick`), v2's needs-assignment pick (`eq2_pick`), `agree_v2`, and the human `correct`. The
+WP-N4 swap's acceptance was agree_v2 12/12 (2026-07-20), re-confirmed at `4be1db3` over the full
+372-frame corpus.
 
-  * DISCARD  — per forced-discard frame: the DECIDED pick, v1's ranking (`eq_pick`), v2's
-    needs-assignment pick (`eq2_pick`), `agree_v2`, and the human `correct`. The WP-N4 swap's
-    acceptance was agree_v2 12/12 here (2026-07-20).
-  * REFRESH  — per frame where the refresh-SHED magnitude shadow fired: v1's Σ keep_cost vs v2's
-    whole-hand assignment marginal, the two swings, the SIGN-agreement bit, and the aggregate
-    under-/over-pricing split. WP-N4b's verdict numbers (18 sign-flips, 46 under-priced), WP-N5's
-    improvement (13 / 19), and WP-N6's (8 flips, mean |Δ| 9.7→6.7 with the resupply leg live)
-    came from this report; the residual flips are the v2 scope gaps the grill spec's WP-N6 entry
-    names (the answer_doom flat tier, the engine band).
+    python tools/train/probes/needs_sweep.py
 
-    python tools/train/probes/needs_sweep.py            # both reports
-    python tools/train/probes/needs_sweep.py --refresh  # refresh only (the slower one)
-    python tools/train/probes/needs_sweep.py --discard
+**The REFRESH half is gone (ADR-0101, Issue #261 item 2b).** It measured v1's Σ keep_cost against
+v2's whole-hand assignment marginal to decide whether to promote the SHED; the promotion HAPPENED,
+so the question it existed to answer is answered and its script is retired rather than left
+runnable — a diagnostic whose shadow no longer exists can only report on itself (ADR-0089 Probe
+Fate: a RULING's script is deleted once its answer is written down). Its final reading — 96 frames
+fired, 16 sign-flips, v2 under-prices 53 / over-prices 39, measured at `ccd3a28` — is recorded in
+ADR-0101 with the per-frame table, and the frames it named are the wave-2 ruling packet.
 
-Offline and read-only; ~2-4 min for the full corpus (one engine-backed Pilot build per frame).
+Offline and read-only; ~1-2 min for the full corpus (one engine-backed Pilot build per frame).
 """
 from __future__ import annotations
 
@@ -64,44 +63,16 @@ def sweep_discard(tune, frames) -> None:
     print(f"\ndiscard agree_v2: {agree}/{total}\n")
 
 
-def sweep_refresh(tune, frames) -> None:
-    print(f"{'id':<14} {'agent':<14} {'cid':<6} {'v1_shed':>8} {'v2_shed':>8} "
-          f"{'swing_v1':>9} {'swing_v2':>9} sign_agree")
-    fired = flips = under = over = 0
-    for (ep, fr), rec in frames:
-        if (rec.obs.get("select") or {}).get("context") == _DISCARD:
-            continue
-        try:
-            s = tune._build_pilot(rec.agent)[0].explain(rec.obs).refresh_shadow
-        except Exception:
-            continue
-        if s is None:
-            continue
-        fired += 1
-        delta = s["v2_shed"] - s["v1_shed"]
-        under += delta < -0.05
-        over += delta > 0.05
-        flips += not s["sign_agree"]
-        print(f"{ep + '-' + str(fr):<14} {rec.agent:<14} {s['cid']:<6} {s['v1_shed']:>8} "
-              f"{s['v2_shed']:>8} {s['swing_v1']:>9} {s['swing_v2']:>9} {s['sign_agree']}")
-    print(f"\nrefresh: fired={fired}  sign-flips={flips}  "
-          f"v2-under-prices(UNSAFE)={under}  v2-over-prices(safe; the missing resupply)={over}")
-
-
 def main(argv=None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
-    ap = argparse.ArgumentParser(description="Keep-value v2 shadow sweeps over the corrections corpus")
-    ap.add_argument("--discard", action="store_true", help="discard report only")
-    ap.add_argument("--refresh", action="store_true", help="refresh report only")
-    args = ap.parse_args(argv)
-    tune, frames = _tune(), _frames()
-    if not args.refresh:
-        sweep_discard(tune, frames)
-    if not args.discard:
-        sweep_refresh(tune, frames)
+    # No flags left now the refresh half is retired — the parser stays so `--help` works and a
+    # stale `--refresh` from muscle memory is REFUSED rather than silently ignored.
+    argparse.ArgumentParser(
+        description="Keep-value v2 discard shadow sweep over the corrections corpus").parse_args(argv)
+    sweep_discard(_tune(), _frames())
     return 0
 
 

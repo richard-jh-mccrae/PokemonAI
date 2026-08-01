@@ -190,14 +190,23 @@ WHITELIST: tuple[SoundRule, ...] = (
     SoundRule(
         id="firing-equation-constants",
         entry="authored constants inside firing equations (ROLE_TIER / TAG_TIER, readiness-leaf "
-              "values, planner sub-prize constants, confidence seeds)",
+              "values, planner sub-prize constants, confidence seeds, the refresh swing's "
+              "opponent-side STRIP / GIFT / FRESH per-card prices)",
         type=AUTHORED_SCAFFOLD,
         fact="magnitudes inside equations that already fire correctly",
         reason="Tolerated for the POC: these sit INSIDE equations whose shape is right, so they "
                "scale an answer rather than decide one. Deleting them would remove working "
                "behaviour to no benefit before there is anything fitted to replace them.",
         reconciliation="Queued wholesale for the post-POC learning phases (Issues #146–#148). Not "
-                       "individually reconciled — the queue is the commitment.",
+                       "individually reconciled — the queue is the commitment. ONE member carries a "
+                       "named PREREQUISITE besides the queue: the refresh swing's `_REFRESH_OPPONENT_HAND_STRIP` (4) "
+                       "/ `_REFRESH_OPPONENT_HAND_GIFT` (8) (ADR-0101, Issue #261 item 2b, discharging Issue #222). "
+                       "Grading them is designed (hand-disruption-grill-spec.md design A) and PARKED "
+                       "on measurement — 59.4% of an opponent's representative build prices "
+                       "`role_value` 0 today, and the missing 59% is exactly their attackers and "
+                       "wincons, so a derived GIFT would be biased in ADR-0060's CRITICAL direction. "
+                       "They retire when gusting-keepcost-design.md §2's shared opponent role sheet "
+                       "exists, not before.",
     ),
     SoundRule(
         id="poc-worth-prize-rate",

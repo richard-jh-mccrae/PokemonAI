@@ -72,8 +72,13 @@ def test_doomed_successor_rides_a_full_tier_this_turn_succession_slot():
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)  # exclude the played Harlequin
     succ = [s for s in slots if s.key.endswith(":succ")]
     assert succ and succ[0].value == pytest.approx(30.0) and succ[0].deadline == 0
-    s = pilot.explain(obs).refresh_shadow
-    assert s is not None and s["cid"] == 1223 and s["swing_v2"] < 0.0  # the refresh is declined
+    # …and the LIVE swing (the v2 shed decides since ADR-0101) is negative: don't Harlequin.
+    from types import SimpleNamespace
+
+    from common.strategy.context import _PLAY
+    board = pilot._board_hypothetical(obs)
+    ctx = SimpleNamespace(card_id=1223, option_type=_PLAY)
+    assert pilot._refresh_swing_tactical(obs, board, ctx) < 0.0
 
 
 @pytest.mark.req("REQ-NEEDS-0009")
@@ -114,3 +119,77 @@ def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     assert max(s.value for s in gust_target) <= 3.0
     d = pilot.explain(obs)
     assert 4 in d.chosen                                        # plays Harlequin (correction [4])
+
+
+@pytest.mark.req("REQ-NEEDS-0009")
+def test_a_heal_insuring_the_last_wincon_is_not_latent_worth():
+    """ep83969481 f55 (wave-2 ruling, Issue #261 — the user's words: "preserve our healer when we
+    only have a single wincon remaining"). The Active Mega Starmie ex is the LAST playable wincon —
+    both Staryu are in the discard, none in deck/hand/play, so the spare Mega Starmie ex in the deck
+    is stranded — and the Bench is empty, making its loss terminal (`docs/rules.md` §7 case 2).
+
+    A held Wally's Compassion there is NOT latent worth. `_GENERAL_WORTH_W` (0.45) prices a card
+    ~one deploy away from mattering; this one is the survival plan. It takes an INSURANCE slot at its
+    full `clutch_heal` tier (20) instead of the 9.0 haircut, which prices the shed above the flat
+    CYCLE and makes the (one-sided, so opponent-leg-free) Lillie's swing negative — the agent
+    attacks, which is the human's `correct`.
+
+    Deadline 1, not 0: the threat is NEXT turn, which is exactly why `answer_doom` correctly stays
+    shut here (reviewed.json rules that in as many words). The slot still takes the answer-doom
+    KIND, so `_refresh_slot_resupply` gives it NO re-access credit — deliberate, and the deadline is
+    documentary rather than load-bearing: the ruling is about certainty, and a heal you are relying
+    on to survive may not be priced at "I'll probably redraw it" (`needs.insure_wincon_slot`)."""
+    from types import SimpleNamespace
+
+    from common.strategy.context import _PLAY
+    pilot = _shipped_pilot("mega_starmie")
+    obs = _corpus_frame("83969481", 55).obs
+    board = pilot._board_hypothetical(obs)
+    assert not board.active_doomed, "the premise: NOT doomed this turn — answer_doom must stay shut"
+    _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1227)
+    insure = [s for s in slots if s.key == "insure:1229"]
+    assert insure and insure[0].value == pytest.approx(20.0) and insure[0].deadline == 1
+    assert not [s for s in slots if s.key == "general:1229"], "the latency haircut must not ALSO fire"
+    ctx = SimpleNamespace(card_id=1227, option_type=_PLAY)
+    assert pilot._refresh_swing_tactical(obs, board, ctx) < 0.0    # the refresh is declined
+    assert 4 in pilot.explain(obs).chosen                          # …and the agent attacks
+
+
+@pytest.mark.req("REQ-NEEDS-0009")
+def test_the_insurance_slot_stands_down_when_a_second_wincon_is_in_play():
+    """The clause that keeps the insurance slot from becoming a blanket "never shuffle a heal":
+    ep83661649 f30 holds a SECOND Mega Starmie ex on the Bench, undamaged. The line survives the
+    Active's KO, so the Wally's insures nothing irreplaceable and keeps its ordinary general-worth
+    slot. Same card, same tag, same undoomed Active as the frame above — only the successor's
+    existence differs, which is the fact the slot is keyed on."""
+    pilot = _shipped_pilot("mega_starmie")
+    obs = _corpus_frame("83661649", 30).obs
+    _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1223)
+    assert [s for s in slots if s.key == "general:1229"], "the heal keeps its latent-worth slot"
+    assert not [s for s in slots if s.key.startswith("insure:")], "nothing irreplaceable to insure"
+
+
+@pytest.mark.req("REQ-NEEDS-0009")
+def test_the_insurance_slot_reads_copies_remaining_not_board_shape():
+    """The clause an earlier draft got wrong, covered by a test so it cannot regress: "our LAST wincon" is a
+    claim about COPIES REMAINING, not about an empty Bench.
+
+    ep82525101 f87 has the same board shape as the frame two tests up — empty Bench, wincon Active,
+    a Wally's in hand, not doomed — but its deck still holds the Staryu the line rebuilds from. A
+    board-only reading fired here too and cost the Discrimination Gate this frame (rank 1 -> 2). The
+    unseen-pool clause is what separates the two, and keeps this off §6's double-counting list: an
+    empty Bench under a knock-outable Active already has `empty-bench-filter` and `_predicted_loss`,
+    so a third guard on that fact would be the error the POC plan names."""
+    pilot = _shipped_pilot("mega_starmie")
+    rec = _corpus_frame("82525101", 87)
+    obs = rec.obs
+    board = pilot._board_hypothetical(obs)
+    me = pilot._my_player(obs)
+    assert board.my_bench == 0 and not board.active_doomed      # the same shape as f55…
+    held = [c["id"] for c in (me.get("hand") or []) if c and c.get("id") is not None]
+    assert 1229 in held, "the fixture holds a Wally's Compassion"
+    # …but the line is REBUILDABLE, so the insurance slot must stand down
+    assert not pilot._heal_insures_the_last_wincon(1229, me)
+    _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1227)
+    assert not [s for s in slots if s.key.startswith("insure:")]
+    assert set(rec.correct) <= set(pilot.explain(obs).chosen)

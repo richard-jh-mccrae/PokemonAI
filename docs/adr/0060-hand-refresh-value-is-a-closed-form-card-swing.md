@@ -104,6 +104,13 @@ on — **positive delta = they grew their hand = fresh.**
   (`handCount` absent). Judge is a refill: playing it there hands them 4 cards and *arms the very
   attacker being disrupted* (0 cards = 0 damage; 4 cards = 80). The old scorer could not represent a
   gift, so nobody noticed. Both boards were fixed; neither assertion was.
+- **The SHED leg has since been re-denominated twice, and the swing's shape survived both.**
+  ADR-0065 replaced the flat `SHED × cards-lost` with `Σ keep_cost` over the actual hand; **ADR-0101**
+  (2026-08-01) replaced that sum with the v2 assignment SET marginal `needs.set_keep_v2`, so a shuffled
+  duplicate costs what the pair is worth rather than twice one copy. All six corrections above still
+  hold under both. The STRIP / GIFT / FRESH constants below are untouched by either and remain
+  authored (`firing-equation-constants`, the ratified POC whitelist) — grading them needs an opponent
+  role sheet that does not exist yet; ADR-0101 §"STRIP/GIFT" records the measurement and the parking.
 - **ADR-0024's anti-hoarding finding survives** — the ~3:1 mirror cost of hoarding the refresh. It
   now lives inside `_REFRESH_CYCLE` rather than in a hand-blind rung.
 

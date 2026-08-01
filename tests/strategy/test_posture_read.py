@@ -935,7 +935,7 @@ def test_strip_the_stacked_engine_hand_holds_below_the_threshold_or_off_an_engin
     # The HOLD side: silent when the hand is small (nothing stacked to strip) and when NO draw engine
     # is in play (a non-engine deck has no swing turn to hold for). The old "my hand is as large →
     # would gift them a refresh" case is GONE from this rung: a one-sided strip cannot gift, and the
-    # gift a SYMMETRIC refill makes is now priced per card by the swing oracle (`_REFRESH_GIFT`)
+    # gift a SYMMETRIC refill makes is now priced per card by the swing oracle (`_REFRESH_OPPONENT_HAND_GIFT`)
     # rather than approximated by a hand-size comparison.
     p = _mp_disruption_pilot()
 

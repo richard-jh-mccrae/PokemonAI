@@ -89,8 +89,10 @@ PINS = {
     # shuffling them and the refresh stands down — the agent attacks instead.
     "82749168-65": "worth: Lillie's stands down (−) holding the Ignition burst before a KO attack "
                    "— `discard_eot` worth 30 (the ladder keep-key band), promoted from a TARGET",
-    "83969481-55": "worth: Lillie's stands down (−1.9) holding the Wally's that answers next-turn "
-                   "Nebula — `clutch_heal` worth 20, promoted from a TARGET",
+    "83969481-55": "keep: preserve the healer insuring the LAST wincon — a held `clutch_heal` "
+                   "covering an irreplaceable Active takes an insurance slot at its full tier "
+                   "instead of the 0.45 latency haircut, so Lillie's prices -8.8 and the agent "
+                   "attacks (ADR-0101 amendment; wave-2 ruling, Issue #261)",
     "83686860-13": "keep: don't refresh a live hand — end the turn",
     "83661652-40": "keep: play the Riolu, don't shuffle it into Lillie's",
     "82750161-60": "keep: attack (Jetting Blow) over Harlequin at 11-vs-2 (the ADR-0060 anchor)",

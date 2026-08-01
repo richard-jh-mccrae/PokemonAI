@@ -95,9 +95,9 @@ HYPOTHESES = [
     # `hold-wincon-dont-shuffle` (−25), `hold-line-piece-dont-shuffle` (−25) and
     # `hold-wincon-with-base-dont-shuffle` (−15) RETIRED 2026-07-18 (ADR-0065): they were the flat
     # SHED's hand-QUALITY proxy — a fixed penalty for holding a specific good card that the flat
-    # `_REFRESH_SHED × cards-lost` couldn't see. The SHED is now GRADED (`pilot._refresh_shed_keepcost`
-    # = Σ keep_cost over the actual hand), so a held wincon/line-piece is priced by role value × how
-    # UN-recoverable it is through the closure — the guards fold into that one currency (the
+    # `_REFRESH_SHED × cards-lost` couldn't see. The SHED is GRADED (`pilot._refresh_shed_keepcost`;
+    # since ADR-0101 the v2 assignment SET marginal over the whole hand, not a per-copy sum), so a held
+    # wincon/line-piece is priced by what the board would actually lose — the guards fold into that one currency (the
     # currency-zone rule: replace the family, never bolt on beside it). `hold-successor-when-doomed`
     # (−35) RETIRED 2026-07-19 — the LAST flat refresh guard: its `active_doomed` premise is now the
     # PRESSURE GATE (`gate_library.closing_gate_reaccess` via `planner._gate_closing`, the Round-8 §3

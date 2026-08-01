@@ -165,8 +165,9 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
   that hand-built knowledge is treated as *scaffolding with an exit plan* — compiled from
   corrections, consolidated into an equation, then derived away by a general mechanism that must
   beat the corpus before it may decide, with every retirement provable.
-- **Every number is reproducible offline**: `tools/train/probes/needs_sweep.py` (the 12/12 and the
-  refresh split), `tools/train/leaf_lab.py` (the 267-frame board-value bench), the corpus suite
+- **Every number is reproducible offline**: `tools/train/probes/needs_sweep.py` (the 12/12; the
+  refresh split retired with its shadow, see below), `tools/train/leaf_lab.py` (the 267-frame
+  board-value bench), the corpus suite
   (`tests/strategy/test_hyperclosure_corpus.py`). No ladder round-trip needed.
 
   > **Corpus Provenance** (ADR-0089 decision 2). `needs_sweep.py` read the corpus through a raw
@@ -176,10 +177,14 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
   >
   > * **`discard agree_v2` — the acceptance number — HOLDS: 12/12**, measured at `4be1db3`, full
   >   corpus. This is the one that gates a claim, and the widening does not move it.
-  > * **The refresh split is a DIAGNOSTIC, and its population grew with the corpus**: 83 refresh
-  >   decisions before, **96** now (measured at `4be1db3`) — sign-flips 16, v2 under-prices 51,
-  >   v2 over-prices 41. ADR-0065's figures (83 frames; sign-flips 13→11 across its amendments) are
+  > * **The refresh split was a DIAGNOSTIC, and its population grew with the corpus**: 83 refresh
+  >   decisions before, **96** at its last reading (`ccd3a28`) — sign-flips 16, v2 under-prices 53,
+  >   v2 over-prices 39. ADR-0065's figures (83 frames; sign-flips 13→11 across its amendments) are
   >   historical readings *of their own corpus* and stay as recorded; they are not restated here.
+  >   **The report itself is gone (2026-08-01, ADR-0101):** the SHED it compared has swapped to v2, so
+  >   the question it answered is answered and its script was deleted rather than left runnable
+  >   (ADR-0089 Probe Fate). The reading above is its record; `discard agree_v2` 12/12 is unaffected
+  >   and still reproduces.
   >
   > This is precisely why a corpus-wide ruling carries its commit and frame count. An unstamped "the
   > numbers reproduce" would have quietly meant a different set of numbers.
@@ -193,7 +198,7 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
 | artifact | role |
 |---|---|
 | `src/common/needs.py` | the slot vocabulary, exact assignment, soundness nets |
-| `src/common/pilot.py` (`_resolve_needs`, `_needs_v2`, shadows) | the board→slots resolver + emitters |
+| `src/common/pilot.py` (`_resolve_needs`, `_needs_v2`, `_refresh_shed_keepcost`) | the board→slots resolver + its two deciders |
 | `src/common/{card_worth,deck_odds,gate_library,fetch_closure}.py` | the v1 oracle (Worth · Odds · Gates · Closure) |
 | `docs/adr/0065-glossary.md` | the five-term ubiquitous language |
 | `docs/plans/keep-value-needs-assignment-grill-spec.md` | the grill, rulings, WP build log with all measurements |

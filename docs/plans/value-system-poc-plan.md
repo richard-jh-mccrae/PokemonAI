@@ -68,8 +68,8 @@ needs-assignment (ADR-0065) · refresh-swing v1 SHED (ADR-0060) · energy-deny m
 recorded) · `leaf_hand_value` · `value_model` (parked; post-POC Issue #147 replaces it).
 
 **SHADOW (computes, decides nothing — all die in this build):** `_discard_shadow`,
-`_refresh_shed_shadow`, `_threat_shadow`, `_recur_shadow`, `_opponent_target_shadow`,
-`hand_size_relief` (reporting-only).
+~~`_refresh_shed_shadow`~~ (DEAD 2026-08-01, ADR-0101 — item 2b promoted its subject),
+`_threat_shadow`, `_recur_shadow`, `_opponent_target_shadow`, `hand_size_relief` (reporting-only).
 
 **UNCONSUMED (dead surface):** StateModel TheirSide clock family (every live consumer bypasses
 to CombatMath with `charged`/`forward_ids`/harvest kwargs `build()` never receives) · sharing
@@ -214,9 +214,13 @@ deliberate list; gates green; flips → wave 2.
   priced by the T4 differencing once available; T2 does the *target/keep* side cleanup on the
   shared marginal and stages the rung deletion behind T4's landing (single-commit swap, no
   shadow).
-- **Refresh v2 swap (old Issues #220/#222):** `set_keep_v2` SHED replaces v1 Σ keep-cost as the
-  decider; STRIP/GIFT keep-cost grading resolved in the same swap; `_refresh_shed_shadow`
-  DELETED.
+- **Refresh v2 swap (old Issues #220/#222): DONE 2026-08-01 (ADR-0101).** `set_keep_v2` SHED
+  replaces v1 Σ keep-cost as the decider; `_refresh_shed_shadow` DELETED (with its telemetry key,
+  `needs_sweep`'s refresh half, and the newly-dead `_refresh_cycle_adaptive`). STRIP/GIFT grading
+  **resolved as PARKED on measurement** — 59.4% of an opponent's rep prices `role_value` 0, so
+  design A would bias the GIFT leg in ADR-0060's CRITICAL direction; the flats stay typed under
+  `firing-equation-constants` and the prerequisite (`gusting-keepcost-design.md` §2's shared role
+  sheet) is named. Gates: Discrimination PASS/0 moved, Decision 2 FIX + 3 REGRESSION → wave 2.
 - **Relief promote (old Issue #221):** `hand_size_relief` into score; the three flat disruption
   rungs deleted; the reporting-only field dies.
 - **Deploy finish (old Issues #237/#232):** price the `_TO_BENCH` entry point, `bench_harvest`
@@ -302,7 +306,7 @@ table uses this same label.
 | `doom-ceiling-fail-direction` | worst-case doom ceiling as survival fail-direction | `structural` | fail-direction policy (a *policy parameter* after T1's fold) | — |
 | `declaration-rungs` | opening/mulligan declaration rungs | `structural` | deck-declared, not tuned | — |
 | `lethal-solver-preemption` | Lethal-Solver preemption above the planner | `structural` | sound win detection outranks every heuristic | — |
-| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds) | `authored-scaffold` | tolerated for POC | post-POC learning phases |
+| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds, the refresh swing's STRIP/GIFT/FRESH) | `authored-scaffold` | tolerated for POC | post-POC learning phases — plus one named prerequisite: STRIP/GIFT retire on `gusting-keepcost-design.md` §2's shared opponent role sheet (ADR-0101) |
 | `poc-worth-prize-rate` | `POC_WORTH_PRIZE_RATE` (T3-local) | `authored-scaffold` | reconciled against trainer ≈1.0 / energy ≈6.7 / deploy ≈0.83 (ADR-0097) | post-POC fit against ruled spend-vs-hold frames converges |
 | `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
 | `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |

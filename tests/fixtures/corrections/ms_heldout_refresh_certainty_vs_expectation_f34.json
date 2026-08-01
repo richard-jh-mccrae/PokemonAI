@@ -1,0 +1,355 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [
+                3,
+                3,
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 4
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 8
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 11
+                }
+              ],
+              "hp": 330,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 0,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 0,
+                  "serial": 20
+                }
+              ],
+              "serial": 24,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 22,
+              "tools": []
+            },
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 21,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 39,
+          "discard": [
+            {
+              "id": 1145,
+              "playerIndex": 0,
+              "serial": 41
+            },
+            {
+              "id": 1225,
+              "playerIndex": 0,
+              "serial": 54
+            },
+            {
+              "id": 666,
+              "playerIndex": 0,
+              "serial": 19
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 3
+            }
+          ],
+          "hand": [
+            {
+              "id": 1227,
+              "playerIndex": 0,
+              "serial": 57
+            },
+            {
+              "id": 1189,
+              "playerIndex": 0,
+              "serial": 48
+            },
+            {
+              "id": 1223,
+              "playerIndex": 0,
+              "serial": 52
+            },
+            {
+              "id": 1031,
+              "playerIndex": 0,
+              "serial": 25
+            }
+          ],
+          "handCount": 4,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                3,
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 89
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 116
+                }
+              ],
+              "hp": 300,
+              "id": 723,
+              "maxHp": 350,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 722,
+                  "playerIndex": 1,
+                  "serial": 69
+                }
+              ],
+              "serial": 73,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 150,
+              "id": 721,
+              "maxHp": 150,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 64,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 90,
+              "id": 722,
+              "maxHp": 90,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 68,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 150,
+              "id": 721,
+              "maxHp": 150,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 65,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 32,
+          "discard": [
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 75
+            },
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 76
+            },
+            {
+              "id": 1227,
+              "playerIndex": 1,
+              "serial": 80
+            },
+            {
+              "id": 3,
+              "playerIndex": 1,
+              "serial": 102
+            },
+            {
+              "id": 3,
+              "playerIndex": 1,
+              "serial": 117
+            },
+            {
+              "id": 3,
+              "playerIndex": 1,
+              "serial": 108
+            },
+            {
+              "id": 3,
+              "playerIndex": 1,
+              "serial": 114
+            },
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 74
+            },
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 77
+            }
+          ],
+          "hand": null,
+          "handCount": 7,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 4,
+      "turnActionCount": 4,
+      "yourIndex": 0
+    },
+    "logs": [
+      {
+        "cardId": 1030,
+        "playerIndex": 0,
+        "serial": 21,
+        "type": 10
+      }
+    ],
+    "remainingOverageTime": 598.8649750000001,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 0,
+          "type": 7
+        },
+        {
+          "index": 1,
+          "type": 7
+        },
+        {
+          "index": 2,
+          "type": 7
+        },
+        {
+          "attackId": 1487,
+          "type": 13
+        },
+        {
+          "attackId": 1488,
+          "type": 13
+        },
+        {
+          "type": 12
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    },
+    "step": 35,
+    "own_prizes": {
+      "1031": 1
+    }
+  },
+  "chosen": [
+    1
+  ],
+  "correct": [
+    2
+  ],
+  "correct_label": "Play Harlequin",
+  "frame_key": "83117367|0|decision|34",
+  "note": "Held out onto its named owner by the Issue #261 wave-2 ruling. See claims.why.",
+  "claims": {
+    "decision": {
+      "correct": [
+        2
+      ],
+      "owner": "#262",
+      "ruled": "2026-08-01",
+      "why": "HELD OUT by user ruling 2026-08-01 (Issue #261 wave-2 packet, item 2b). The ruling is REJECT -- the agent should play Harlequin -- and it is NOT satisfiable by the refresh SHED, which is why it moves to T3/T4 rather than staying open against a swap that cannot answer it.\n\nMEASURED, so the owner does not re-derive it. This frame and ep83037962 f49 are the same board to the shed: opponent hand 7 on both, so STRIP is +12 on both, so both decline iff shed > 32. The user ruled them OPPOSITE ways (play here, refuse there). Two fixes were built and reverted, and NEITHER can hold both:\n  succession spike value 30 -> 15 : f34 shed 33.0 -> 16.5 PLAYS (ok), f49 PLAYS (breaks it)\n  succession re-access 0 -> 0.77  : f34 shed 33.0 -> 16.5 PLAYS (ok), f49 46.1 -> 24.1 PLAYS (breaks it)\nThe two Basic {W} do not carry f49: they price 2.49 each, correctly -- 8 Energy outs in a 43-card pool over 5 draws is a 66% recovery, so the fund-attack slot discounts to 31% of tier.\n\nTHE AXIS IS CERTAINTY, NOT MAGNITUDE. The shed is a RISK-NEUTRAL expectation: it prices a 79%-recoverable Mega Starmie ex at 79% recovered. The user's f49 reasoning is a RISK calculation -- 'in our hand is what we need to respond to the possible KO with a new Starmie with energy, THAT GUARANTEE is what we risk' -- and the odds bear it out: ~40% to redraw both pieces against ~15pp of KO reduction (their Ignition -> Nebula Beam 210 is exact lethal on a 210 HP Active; 3 unseen in a pool of 45 gives 45.2% at hand 8 vs 30.4% at hand 5). The old resupply=0.0 closing edge was a crude proxy for that preference; it over-fires here, where the same card has 8 outs at 67% and the rest of the hand is dead (Salvatore wastes -- the last Mega Starmie is PRIZED with none in deck -- and neither benched Staryu can be evolved this turn, rules.md 4).\n\nExpressing 'guaranteed vs expected under an imminent KO' is variance, which lives in the gamble machinery (ADR-0039) and T3's state_value, not in a slot's resupply term. Returns to gating when that exists -- delete this owner then.\n\nNOTE for the owner: a doom-read theory was tested and REFUTED. active_doomed reads True here and it is NOT a worst-case artifact -- the opponent is Kyogre / Mega Abomasnow ex (Read confident; 2x Kyogre benched), Hammer-lanche {W}{W} is payable NOW with 2 attached, and the rep build puts 29 Basic {W} in 44 unseen (66%), so its EXPECTED roll is ~300-395 against a 330 HP Active. Both frames are genuinely doomed; doom does not separate them.\n\nOWNER: #262 (POC-T3, state_value) -- it owns the prize-denominated scalar the variance term must live in, alongside the gamble machinery (ADR-0039)."
+    }
+  }
+}

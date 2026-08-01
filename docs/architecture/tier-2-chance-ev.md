@@ -231,7 +231,10 @@ is in. `common/fetch_closure.py` owns the tutor/recycle/search graph as pure fun
 delegate, so the fetch doctrine, the gamble gain side, and the keep-cost read ONE implementation.
 `common/card_worth.py` owns the worth currency + `role_value` / `keep_cost` primitives (the Pilot
 delegates). The **refresh SHED** convergence has landed (2026-07-18): `_refresh_swing_tactical`'s flat
-`_REFRESH_SHED × cards-lost` is now `Σ keep_cost` over the actual hand (`_refresh_shed_keepcost`), and
+`_REFRESH_SHED × cards-lost` became `Σ keep_cost` over the actual hand (`_refresh_shed_keepcost`) — and
+since **ADR-0101** (Issue #261 item 2b) that site reads the v2 assignment SET marginal
+(`needs.set_keep_v2`) instead, so a shuffled duplicate costs what the PAIR is worth rather than twice
+what one copy is; `planner._hand_keep` keeps the summation for the gamble keep-floor alone. And
 the four `hold-*` hand-quality guards fold into it — all six ADR-0060 corrections hold, one corpus
 target flipped to a pin. The **fetch grab/pitch** shadow was measured and found ALREADY subsumed
 (2026-07-18 — its tuned discard ladder prices roles + redundancy; the residue is the gate library's,
@@ -245,7 +248,8 @@ evolution sheds freely.
 plan-tier-credit convergence (the last WP7 shadow), and the skill loop (deck-genie Role Sheet /
 deck-align fold). Landed 2026-07-19: the held-card-risk seam and the tutor-chain grab value (corpus
 targets `85163634-17` / `85059103-9` promoted), the keep-cost duplicate-copy reconciliation
-(`planner._hand_keep` — one summation for the gamble keep-floor and the refresh SHED), and the
+(`planner._hand_keep` — then one summation for the gamble keep-floor and the refresh SHED; the
+refresh half moved to the set marginal in ADR-0101, so the summation is now the gamble's alone), and the
 **gate library completed** — fetcher (a provably-dead searcher/recycler sheds free), pressure (the
 closing-edge spike; retired `hold-successor-when-doomed`, the last flat refresh guard), and quota
 (duplicate once-per-turn cards shed by deadline rank) — ADR-0065 §Build status.

@@ -53,9 +53,14 @@ and the refresh plays **−50.3**. The agent already does the free action first.
 
 ## Methodological caveat (for future refresh grills)
 
-`tools/train/probes/needs_sweep.py` and the ad-hoc refresh-grill probe report `swing_v1` /
-`swing_v2` / `swing_v2_cyc` — the **isolated** shuffle term. That is the right lens for the
-**promotion** question (v1 vs v2 shed pricing), but the **wrong** lens for "does the agent blunder."
+The retired refresh probe (`needs_sweep.py`'s REFRESH half, deleted 2026-08-01 with the shadow it
+read — ADR-0101) reported `swing_v1` / `swing_v2` / `swing_v2_cyc` — the **isolated** shuffle term.
+That was the right lens for the **promotion** question (v1 vs v2 shed pricing, now settled), and the
+**wrong** lens for "does the agent blunder." The point outlives the probe: the **Decision Gate**
+(`decider_lab.py`) is the decision-level instrument, and it is what the ADR-0101 swap was measured on.
+⚠️ Three rows of the table above MOVED at that swap — `83117367-34`, `83661649-30` and `83969481-55`
+are Decision-Gate REGRESSIONs routed to the wave-2 ruling packet, so read them against ADR-0101 rather
+than as current state.
 For a decision-level verdict, compare `pilot.explain(obs).chosen` against the correction's `correct`
 indices (as this handoff does). A positive isolated shuffle swing on a frame the human ruled
 "don't shuffle" is expected and benign when the human's correction is "do a free action first" — the

@@ -5,7 +5,7 @@
 evidence-gated designs. Round 0 measured first (below); four rulings (user,
 2026-07-19). Sibling of the gusting grill — same opponent-worth input layer, disruptor jurisdiction:
 the two FLAT per-card prices on THEIR cards inside ADR-0060's closed-form refresh swing
-(`_REFRESH_STRIP = 4` / `_REFRESH_GIFT = 8`, `pilot._refresh_swing_tactical`) and the
+(`_REFRESH_OPPONENT_HAND_STRIP = 4` / `_REFRESH_OPPONENT_HAND_GIFT = 8`, `pilot._refresh_swing_tactical`) and the
 hand-size-attacker damage leg (`play-harlequin-vs-hand-size` +25, `disrupt-when-unfavored` +18,
 `baseline_disruption.py`). **Nothing is built here** — build items go to a follow-up session under
 the corpus + score-diff gate; evidence-gated designs wait for their gates to trip (the grab/pitch
@@ -142,7 +142,20 @@ term), it is never re-added as a flat.
 
 ### A. Grading STRIP/GIFT — their expected keep-cost per hidden card
 
-`_REFRESH_STRIP`/`_REFRESH_GIFT` become E[keep_cost per card] over the opponent's HIDDEN hand,
+> **PARKED 2026-08-01 on measurement (ADR-0101, Issue #261 item 2b, discharging Issue #222 step 3).**
+> The gate below is still untripped, and the design now has a second, measured blocker: its role
+> values come from §2's derive-first sheet, which is unbuilt, so today's `_role_value` would supply
+> them — and **59.4% of the cards in an opponent's representative build price `role_value` = 0**
+> (measured at `ccd3a28` over the 115 of 132 refresh frames where a rep is reachable; `E[role_value]`
+> = 5.67 against the flat GIFT anchor of 8.0). The blindness is not uniform: what survives is
+> Energy / gust / recycle / ACE SPEC, what vanishes is exactly their attackers and wincons. Grading
+> GIFT *down* because we cannot see their payoff line makes "Judge into their small hand" look cheap —
+> ml f111's CRITICAL shape. **Prerequisite, named:** `gusting-keepcost-design.md` §2's shared role
+> sheet, with §5's gust-side re-audit obligations, built once for both consumers. Until then
+> `_REFRESH_OPPONENT_HAND_STRIP = 4` / `_REFRESH_OPPONENT_HAND_GIFT = 8` stay, typed `authored-scaffold` under the POC
+> whitelist's `firing-equation-constants`.
+
+`_REFRESH_OPPONENT_HAND_STRIP`/`_REFRESH_OPPONENT_HAND_GIFT` become E[keep_cost per card] over the opponent's HIDDEN hand,
 where the expectation base is their rep's composition (decklist − tracker-observed — the shared
 layer's rep) and the role values come from the shared derive-first role sheet
 (`gusting-keepcost-design.md` §2) — one layer, two consumers. **Fail directions:** unknown/thin

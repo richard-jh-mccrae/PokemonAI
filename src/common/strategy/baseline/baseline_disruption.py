@@ -113,7 +113,7 @@ HYPOTHESES = [
                   "Dudunsparce / Budew class) AND their hand stacked to `_STACKED_HAND`+. It cannot gift "
                   "them a fresh hand (no self-refill), so my own hand size is irrelevant — the old "
                   "don't-gift guard was only ever needed for the SYMMETRIC case, which is now priced "
-                  "exactly (a symmetric refill's gift is `_REFRESH_GIFT` per card handed back). NOTE: no "
+                  "exactly (a symmetric refill's gift is `_REFRESH_OPPONENT_HAND_GIFT` per card handed back). NOTE: no "
                   "card in the current pool is one-sided — this is a live forward contract, not dead code, "
                   "and it is why the symmetric branch had to leave rather than the rung.",
         when=lambda c: c.option_type == _PLAY

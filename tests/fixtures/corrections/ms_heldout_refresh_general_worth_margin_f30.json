@@ -1,0 +1,299 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": true,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [
+                3,
+                3,
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 4
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 5
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 7
+                }
+              ],
+              "hp": 280,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 0,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 0,
+                  "serial": 20
+                }
+              ],
+              "serial": 23,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 8
+                }
+              ],
+              "hp": 330,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 0,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 0,
+                  "serial": 21
+                }
+              ],
+              "serial": 25,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 38,
+          "discard": [
+            {
+              "id": 1086,
+              "playerIndex": 0,
+              "serial": 26
+            },
+            {
+              "id": 1225,
+              "playerIndex": 0,
+              "serial": 54
+            },
+            {
+              "id": 666,
+              "playerIndex": 0,
+              "serial": 18
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 6
+            }
+          ],
+          "hand": [
+            {
+              "id": 17,
+              "playerIndex": 0,
+              "serial": 14
+            },
+            {
+              "id": 1223,
+              "playerIndex": 0,
+              "serial": 52
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 3
+            },
+            {
+              "id": 1229,
+              "playerIndex": 0,
+              "serial": 59
+            }
+          ],
+          "handCount": 4,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 69
+                }
+              ],
+              "hp": 280,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 1,
+                  "serial": 81
+                }
+              ],
+              "serial": 83,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 80,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 82,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 42,
+          "discard": [
+            {
+              "id": 1086,
+              "playerIndex": 1,
+              "serial": 87
+            },
+            {
+              "id": 1189,
+              "playerIndex": 1,
+              "serial": 108
+            }
+          ],
+          "hand": null,
+          "handCount": 6,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 4,
+      "turnActionCount": 4,
+      "yourIndex": 0
+    },
+    "logs": [
+      {
+        "cardId": 3,
+        "cardIdTarget": 1031,
+        "playerIndex": 0,
+        "serial": 8,
+        "serialTarget": 25,
+        "type": 11
+      }
+    ],
+    "remainingOverageTime": 598.7740440000001,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 1,
+          "type": 7
+        },
+        {
+          "index": 3,
+          "type": 7
+        },
+        {
+          "attackId": 1487,
+          "type": 13
+        },
+        {
+          "attackId": 1488,
+          "type": 13
+        },
+        {
+          "type": 12
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    },
+    "step": 31
+  },
+  "chosen": [
+    3
+  ],
+  "correct": [
+    2
+  ],
+  "correct_label": "Attack with Jetting Blow",
+  "frame_key": "83661649|0|decision|30",
+  "note": "Held out onto its named owner by the Issue #261 wave-2 ruling. See claims.why.",
+  "claims": {
+    "decision": {
+      "correct": [
+        2
+      ],
+      "owner": "#272",
+      "ruled": "2026-08-01",
+      "why": "HELD OUT by user ruling 2026-08-01 (Issue #261 wave-2 packet, item 2b). The ruling is REJECT -- the agent should attack with Jetting Blow, as the correction states -- and the cause is a FITTED CONSTANT sitting inside its own margin, which a refresh swap must not re-fit.\n\nMEASURED. All three held cards cover exactly one general slot each, so the shed IS the haircut sum:\n  Ignition Energy 30 x 0.45 = 13.5 | Basic {W} 8 x 0.45 = 3.6 | Wally's 20 x 0.45 = 9.0\n  total 26.1 -- the shed, exactly. v1 charged 29.4 (same cards, full tier, re-access only).\nThe whole -1.4 -> +1.9 flip is _GENERAL_WORTH_W = 0.45. The swing declines iff shed > 28.0, i.e. 58 x W > 28, i.e. W > 0.483. The constant is 0.45 -- this frame sits 7% away from a fitted number.\n\nNOT re-fitted here, deliberately. _GENERAL_WORTH_W was measured (WP-N5: under-pricing 46->19 came from W alone) and pilot._refresh_slot_resupply's docstring carries a standing instruction: 'Re-open only as a JOINT re-measure of W and r, never r alone.' Moving W to satisfy one frame is the rung-fitting the POC exists to delete, and it would move every keep-value site including the discard decider's 12/12.\n\nTWO THEORIES TESTED AND REFUTED, so the owner need not re-run them:\n  * the deferred 'non-Active fund bodies' leg -- the bench holds a 2nd Mega Starmie ex on 1     {W} needing 3, so fund slots were prototyped for benched bodies: shed 26.10 -> 26.10, no     movement. The Energy already sit on general slots worth more than ENERGY_TIER 8, so the     assignment does not re-route them.\n  * the insurance slot (ADR-0101, which fixes ep83969481 f55) -- correctly declines here: a     SECOND Mega Starmie ex sits undamaged on the bench, so the line survives the Active's KO     and nothing irreplaceable is being insured.\n\nReturns to gating when W and r are jointly re-measured -- delete this owner then.\n\nOWNER: #272 (POC-B2, term-weight calibration) -- it owns exactly this question, whether the agent's fitted term weights sit right, and _GENERAL_WORTH_W is one of them."
+    }
+  }
+}
