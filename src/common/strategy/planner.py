@@ -24,8 +24,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from common import playability
+from common import needs, playability
 from common.option_equivalence import class_representatives, fan_out, option_equivalence
+from common.state_model import StateModel
+from common.state_value import state_value
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
                                      _COIN_HEAD, _END, _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY,
                                      _TO_HAND, KO_SCORE)
@@ -566,7 +568,7 @@ class PlannerMixin:
         if not ranked:
             return None                                  # nothing simmable at all — defer to the tuned
                                                          # scoring rather than pick blind
-        ranked.sort(key=lambda t: t[0], reverse=True)
+        ranked.sort(key=lambda t: self._develop_tiebreak(obs, select, options, t))
         best_val, best_i = ranked[0]
         if best_val >= KO_SCORE:
             return None                                  # a KO_SCORE-class leaf is an UNSOUND rollout-win
@@ -579,6 +581,35 @@ class PlannerMixin:
         return TurnLine(next_step=[best_i], goal="develop", value=best_val,
                         rationale="develop: best end-of-turn board by rollout",
                         ranked_by="engine", diverged=(best_i != greedy_idx))
+
+    def _develop_tiebreak(self, obs, select, options, entry) -> tuple:
+        """The rollout's **deterministic option ordering** — old Issue #145's amendment D.
+
+        ``(-value, -worth of the touched card, card id, option index)``, so the sort NEVER falls
+        through to menu index while two options still differ in something meaningful.
+
+        Amendment D exists because the zero-score index-pick class produced at least three distinct
+        CRITICAL bug clusters on record: ADR-0062's oldest-attached fall-through, mega_starmie
+        ep82867148 f48/f87, and mega_lucario ep83661652 f33/f40/f44 — *"benched whichever Basic sat
+        lowest in the menu"*. A leaf that ties is not a leaf that has no opinion; it is a leaf whose
+        opinion the secondary key has to supply, and menu order is the one key that carries no
+        information about the game at all.
+
+        Worth is `_role_value` — the same currency every keep, deploy and discard site reads, so the
+        tie-break agrees with the rest of the ladder about what a card is for rather than inventing a
+        private ordering. Card id then index are pure STABILITY tails: they never decide between two
+        genuinely different cards, they only stop equal-worth siblings from depending on menu
+        position. (Byte-identical siblings are already ONE decision by Option Equivalence, so this
+        tail fires only for distinct cards of equal worth.)
+
+        Index survives as the LAST key rather than being removed, deliberately: a total order needs a
+        total tail, and an unstable sort is a worse answer to index-dependence than a documented one.
+        """
+        value, i = entry
+        option = options[i] if 0 <= i < len(options) else {}
+        cid = self._option_card_id(obs, select, option)
+        return (-float(value), -float(self._role_value(cid)),
+                cid if cid is not None else 1 << 30, i)
 
     def _option_equivalence(self, obs, options) -> dict:
         """The frame's **Option Equivalence Class** map, or ``{}`` when the kill-switch is off.
@@ -3291,20 +3322,46 @@ class PlannerMixin:
     # ---- Tier-1 Engine Search (ADR-0031 phase 3): simulate a line to its end-of-turn board -----------
     def _engine_leaf_value(self, obs, first_step, *, spend_account: bool = True,
                            with_stream: bool = False):
-        """The leaf-eval value of a candidate line computed on its ENGINE-SIMULATED end-of-turn board
-        (ADR-0031 phase 3): the exact prizes taken and my Active's survival vs Incoming, read off the
-        board the simulator produces rather than closed-form-approximated, PLUS the MY-side ``readiness``
-        of that board (the board-state value function, `_readiness`) + the signed line account (Σ
-        ability-fire credits − Σ spend costs accrued along the simmed line) — ``turn_value = readiness(end)
-        + Σ ability-fire − Σ spend``. A line that finishes the game in my favour scores above any prize
-        count (dominant). None when the search is unavailable — the caller then keeps the closed-form leaf
-        value (never crashes, decision 7). ``spend_account=False`` drops the line term (a pure-readiness
-        terminal leaf — the apples-to-apples column the Gate-0 search probe grades both its columns on).
-        ``with_stream=True`` returns ``(value, stream)`` — the sim's engine-RNG bit beside the value, so
-        a caller whose OVERRIDE authority needs a reproducible board (the develop rollout) can treat a
-        stream-riding value as unrankable noise. The VALUE itself is unaffected by that bit: the win
-        short-circuit below stays gated on ``coins`` alone, because the leaf's own numbers feed
-        ADR-0072's pinned Discrimination Gate (see `_simulate_line`)."""
+        """The leaf-eval value of a candidate line, scored on its ENGINE-SIMULATED end-of-turn board
+        by **`state_value`** (POC-T3 / Issue #262, ADR-0092 §4-T3).
+
+        ``leaf = KO_SCORE x state_value(end board) + min(_LINE_CAP, line account)``
+
+        **What changed and why the arithmetic is an identity, not a rescale.** The hand-composed
+        leaf — ``_leaf_value(prizes, active_survives, readiness, value, line) + _predicted_loss`` —
+        is replaced by the one prize-denominated scalar. Every part of the old composition has a home
+        in it rather than being dropped: prizes taken and the race are `prize_race` (whose lead leg
+        has UNIT slope, which is exactly the old ``KO_SCORE * prizes`` term), my Active's survival vs
+        Incoming and the ADR-0064 bench-empty doom are `survival` (`_predicted_loss` survives inside
+        it as a terminal term at :data:`~common.state_value.LOSS_PRIZES`), the readiness leaf is
+        `readiness` + `development`, and the held hand is `hand`. The `KO_SCORE` multiplier is what
+        makes this a port and not a retune: one prize IS `KO_SCORE` on this axis — the old dominant
+        term was literally ``KO_SCORE * prizes`` — so every sibling rung, the ``>= KO_SCORE`` phantom-
+        win veto and `_commit_best`'s mixed ranking keep speaking the units they were written in.
+
+        **The line account stays OUTSIDE the scalar**, and that is a category statement rather than a
+        leftover: `state_value` scores a BOARD, while `_line_account`'s referent is the ACTION taken
+        (its own docstring insists on this — "never a score of the resulting BOARD"). It is the same
+        category as `attack_ev`, which is why the terminal registry is separate from the six. Its
+        SPEND half is on its way to being subsumed — `hand` now prices what leaving my hand costs —
+        but only where a Needs resolution reaches the model, which on this simulated path it does not
+        unless the sim injected a hand; so there is no double count today, and T4 deletes the
+        `_CLASS_B_SPEND_IDS` rungs behind it. Its ability-fire half is genuinely unpriced and is
+        NAMED as such in `readiness`'s `blind_to`.
+
+        **The Tier-5 learned term (`_value_term`) is no longer consulted.** It was a second opinion
+        about the same board, and ADR-0092 decision 4 forbids a rival scorer beside the equation
+        rather than under it; the seam is parked for post-POC Issue #147.
+
+        A line that finishes the game in my favour still scores above any prize count (dominant).
+        None when the search is unavailable — the caller then keeps the closed-form leaf value (never
+        crashes, decision 7). ``spend_account=False`` drops the line term (the apples-to-apples column
+        the Gate-0 search probe grades both its columns on). ``with_stream=True`` returns
+        ``(value, stream)`` — the sim's engine-RNG bit beside the value, so a caller whose OVERRIDE
+        authority needs a reproducible board (the develop rollout) can treat a stream-riding value as
+        unrankable noise. The VALUE itself is unaffected by that bit: the win short-circuit below
+        stays gated on ``coins`` alone, because the leaf's own numbers feed ADR-0072's pinned
+        Discrimination Gate (see `_simulate_line`)."""
         sim = self._simulate_line(obs, first_step)
         if sim is None:
             return (None, False) if with_stream else None
@@ -3325,20 +3382,71 @@ class PlannerMixin:
                                                           # the SOUND win rung (the f24 Meowth mirage;
                                                           # `_commit_best`'s below-one-prize veto then
                                                           # defers exactly as designed)
-        prizes_taken = max(0, start_prizes - len(me.get("prize") or []))
-        active = next((p for p in (me.get("active") or []) if p), None)
-        survives = False
-        if active and active.get("hp"):
-            bodies = (opp.get("active") or []) + (opp.get("bench") or [])
-            survives = self._incoming_worst(active.get("id"), active.get("hp", 0), bodies) < active.get("hp", 0)
-        readiness = self._readiness(me)
-        if getattr(self, "leaf_hand_value", False):        # WP-N5b (armed OFF): readiness CONSUMES the
-            readiness += self._hand_readiness(end, my_index)  # needs module — the held-hand slot coverage
-        return _out(self._leaf_value(prizes=prizes_taken, active_survives=survives,
-                                     readiness=readiness,
-                                     value=self._value_term(end),    # Tier-5 learned leaf (ADR-0042)
-                                     line=(line_val if spend_account else 0.0))
-                    + self._predicted_loss(me, opp))             # ADR-0064: bench-empty-doom loss rung
+        board_value = KO_SCORE * state_value(self._leaf_state_model(end, my_index),
+                                             working=getattr(self, "_leaf_working", None))
+        return _out(board_value + min(_LINE_CAP, line_val if spend_account else 0.0))
+
+    def _leaf_state_model(self, end, my_index: int):
+        """The simulated end-of-turn board, as a :class:`StateModel` for `state_value` to score.
+
+        The engine hands back an observation-shaped dict, which is exactly what `StateModel.build`
+        takes, so this is a construction rather than a translation — no second reading of the board
+        is created and nothing here re-derives a fact the snapshot already owns.
+
+        Three suppliers are threaded because `state_value`'s families genuinely need them and the
+        model is the only route to them (the sole-supplier ruling): ``deck`` for the Count Triple and
+        the evolution topology, ``role_worth`` for the deck-DECLARED Roles that `readiness` and
+        `development` weigh by (Roles are declaration, not card data), and ``needs`` for the
+        assignment the `hand` family's `set_keep_v2` spine reads. ``needs`` resolves LAZILY — the
+        model invokes the callable only if some family asks — so a leaf that never reaches the hand
+        term pays nothing for the DP, which is the whole point of ADR-0068's laziness.
+
+        ``my_index`` is passed explicitly rather than left to ``yourIndex``: the simulated board is
+        handed back from whichever seat the sim ended on, and reading the wrong side would score the
+        opponent's position and rank every candidate backwards."""
+        return StateModel.build(
+            end, combat=self.combat, my_index=my_index, deck=self.deck,
+            role_worth=self._role_value,
+            needs=lambda: self._leaf_needs_resolution(end, my_index))
+
+    def _leaf_needs_resolution(self, end, my_index: int):
+        """The `needs.Resolution` for a simulated end board's HAND, or None when there is no hand to
+        resolve.
+
+        The sim only injects my hand when the hand-value plumbing is on, and a board without one
+        cannot be asked what its hand covers — so this returns None and `state_value`'s `hand` family
+        prices a REAL zero (no cards, no coverage) rather than a hidden one. Never raises: a
+        featurize slip must not crash ranking, exactly as `_hand_readiness` established.
+
+        `include_general=False` keeps the LATENT worth out of the assignment and hands it over as
+        `latent_worth` instead, because the two enter `hand` as separate legs and letting the general
+        slot carry it as well would price one card twice — this module's headline rule, one seam
+        over."""
+        cur = (end or {}).get("current") or {}
+        players = cur.get("players") or []
+        me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
+        if not me.get("hand"):
+            return None
+        mobs = {**end, "current": {**cur, "yourIndex": my_index}}
+        try:
+            board = self._board_hypothetical(mobs)
+            rows = self._needs_hand_rows(mobs, board)
+            if not rows:
+                return None
+            slots, elig = self._resolve_needs(mobs, board, rows, include_general=False)
+            # Deferred import: `_GENERAL_WORTH_W` lives in `common.pilot`, which imports THIS
+            # module, so a top-level import would be a cycle. Function-local rather than a second
+            # copy of the constant — a hand-kept duplicate is the drift ADR-0087 charges for.
+            from common.pilot import _GENERAL_WORTH_W
+            covered = {i for i, e in enumerate(elig) if e}
+            latent = sum(_GENERAL_WORTH_W * self._role_value(r["cid"])
+                         for i, r in enumerate(rows) if i not in covered)
+            return needs.Resolution(slots=tuple(slots), eligibility=tuple(elig),
+                                    resupply=tuple([0.0] * len(slots)),
+                                    hand_ids=tuple(r["cid"] for r in rows),
+                                    latent_worth=float(latent))
+        except Exception:
+            return None
 
     def _board_hypothetical(self, obs):
         """Build a :class:`Board` on a HYPOTHETICAL obs (a simmed end-of-turn board) for FEATURES
@@ -3793,7 +3901,29 @@ class PlannerMixin:
             # Injected into the end obs (the `heldCtx` private key beside the injected `hand`).
             # Seeded from the live start-of-turn state (fallback if the turn ends before any
             # my-select). v1 caveat: the capture is BEFORE my final action, so it is one action
-            # stale. Gated — off = the sim is byte-identical.
+            # stale.
+            #
+            # Gated — off = the sim is byte-identical.
+            #
+            # **POC-T3 (Issue #262) tried arming this unconditionally and MEASURED it worse.**
+            # `state_value`'s `hand` family has no data without this capture, and a family that can
+            # never receive data is the silent-zero the registry exists to prevent — so arming it
+            # looked obviously right. It is not, and the reason is the v1 caveat two lines up: the
+            # snapshot is taken BEFORE my final action, so it is one action stale, and *how* stale
+            # differs per branch (a line that ends the turn at once captures its start-of-turn hand;
+            # a line that plays three cards captures the hand after two). Fed into the one family
+            # whose whole job is pricing what leaving my hand COSTS, that made a branch which SPENT a
+            # card score a HIGHER hand value than one that spent nothing — 83686860|1|decision|13,
+            # hand +0.586 for the play against +0.442 for End. The Discrimination Gate agreed:
+            # 104 unruled OK->MISS armed against 67 unarmed.
+            #
+            # Fixing it properly needs a snapshot at the TRUE end of my turn, which this loop cannot
+            # take: the end observation is opponent-perspective, so my hand is hidden by then. That
+            # is a substrate gap, not a tuning choice. So the capture stays off, `hand` prices a
+            # REAL zero on the leaf path (no hand on the board, no coverage), and the gap is NAMED in
+            # `state_value.REGISTRY`'s `hand.blind_to` where Issue #263 reads it as a blind spot
+            # rather than discovering it as a mystery. Old Issue #145's grill item 3
+            # (*"`leaf_hand_value` fate"*) therefore stays open, with a measurement attached.
             capture_hand = getattr(self, "leaf_hand_value", False)
 
             def _held_snapshot(player: dict, current: dict):

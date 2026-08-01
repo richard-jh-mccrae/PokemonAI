@@ -212,8 +212,59 @@ KO_LINE_PROFILE = frozenset({
     "mine.deck_energy_p",
 })
 
+#: The fields **`state_value`** adds when the planner leaf scores its end board (POC-T3 / Issue #262).
+#:
+#: This is the tripwire above FIRING and being answered, not being widened away. The pin's own note
+#: says the moment `state_value` reads a field the ordinary decision path does not, *"the per-leaf
+#: cost needs measuring against the 2-vCPU / ~10-min grader bank"* — so it was measured, on the same
+#: real turn-1 engine drive the tripwire itself uses (`test_planner_engine.py`, dragapult_ex):
+#:
+#:     leaf, hand-composed (`_leaf_value` + `_readiness` + `_value_term`)   16.76 ms median / 20.98 p95
+#:     leaf, `KO_SCORE x state_value(end board)`                             3.83 ms median /  5.31 p95
+#:     `state_value` alone, on a FRESH model (the T4 1-ply ordering cost)     247 us median /   354 p95
+#:     `state_value` re-scored on a WARM model (the ADR-0068 memo hit)         81 us median /   113 p95
+#:
+#: **The leaf got ~4x cheaper, not dearer**, which is the opposite of what a wider field set
+#: suggests and is worth stating plainly: the retired composition ran `_readiness` over every body
+#: with its eleven sub-helpers plus the Tier-5 `_value_term`'s hypothetical board build, and the
+#: scalar replaces all of that with reads that memoize on the ONE model. The field count went up
+#: because the model is now doing the work that used to happen beside it.
+#:
+#: Every row below is a read some family in the registry is on record as making:
+#:   * `mine.active.attacks` / `.payoff_attack` — `readiness` asks `readiness_p` about the body's
+#:     PAYOFF attack rather than about "any attack"; pairing a max-damage payoff with the famine
+#:     probability saturates the term and prunes the attach that completes it.
+#:   * `mine.*.prize_value` + `theirs.turns_to_ko_me` — `survival`, both areas, Bench-Harvest-aware.
+#:   * `theirs.active.hp_remaining` — `threat`'s reachability filter (can I actually reach this KO).
+#:   * `mine.forward_index` / `forward_payoff` — `development`'s evolution topology, over MY decklist.
+#:   * `mine.mine_turns_to_afford` — the forward leg of `readiness`'s odds, so a mid-turn board with
+#:     the attach already spent does not go flat.
+#:   * `mine.role_worth` — the deck-DECLARED Roles `readiness` and `development` weigh by.
+#:   * `mine.needs` — the `hand` family's `set_keep_v2` spine. LAZY: on a simulated board with no
+#:     injected hand the resolver returns None and the DP never runs.
+STATE_VALUE_PROFILE = frozenset({
+    "mine.active.attacks",
+    "mine.active.hp_remaining",
+    "mine.active.payoff_attack",
+    "mine.active.prize_value",
+    "mine.bench.attacks",
+    "mine.bench.hp_remaining",
+    "mine.bench.payoff_attack",
+    "mine.bench.prize_value",
+    "mine.bench.stat",
+    "mine.forward_index",
+    "mine.forward_payoff",
+    "mine.mine_turns_to_afford",
+    "mine.needs",
+    "mine.readiness_p",
+    "mine.role_worth",
+    "theirs.active.hp_remaining",
+    "theirs.reachable_incoming",
+    "theirs.turns_to_ko_me",
+})
+
 LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE
-                | DENY_SLOT_PROFILE | KO_LINE_PROFILE)
+                | DENY_SLOT_PROFILE | KO_LINE_PROFILE | STATE_VALUE_PROFILE)
 
 
 class _Probe:
