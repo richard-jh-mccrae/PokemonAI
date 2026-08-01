@@ -83,10 +83,11 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.gates import (classes_of, decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         equivalence_index, held_out_frames, keyed_corrections, orphan_rulings,
-                         print_agree_delta, print_gate_report, print_ruling_moves,
-                         print_ruling_readout, ruling_index, satisfies_human, split_excused,
-                         voided_frames, write_json_artifact)
+                         equivalence_index, fail_direction_keys, held_out_frames,
+                         keyed_corrections, orphan_rulings, print_agree_delta, print_gate_report,
+                         print_ruling_moves, print_ruling_readout, RecaptureRefused,
+                         refuse_unruled_recapture, restamp_artifact, ruling_index, satisfies_human,
+                         split_excused, voided_frames, write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -220,6 +221,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd")
     cap = sub.add_parser("capture", help="write the baseline artifact (the gate's reference)")
     cap.add_argument("--out", type=Path, required=True)
+    res = sub.add_parser("restamp", help="rewrite ONLY the recorded git_rev (a rebase moved the base)")
+    res.add_argument("--baseline", type=Path, required=True)
+    res.add_argument("--rev", default=None, help="the revision to stamp (default: this checkout's)")
     dif = sub.add_parser("diff", help="Decision Gate: diff this build against a capture")
     dif.add_argument("--baseline", type=Path, required=True)
     dif.add_argument("--context", type=int, default=None,
@@ -230,6 +234,14 @@ def main(argv=None) -> int:
     # The **Ruling Index** is read ONCE and threaded through both subcommands: the rulings are one
     # corpus, not a property of a capture, so a capture and the diff that reads it must not resolve
     # two different voided sets (ADR-0088 decision 2).
+    # A re-stamp never re-reads the build, so it runs BEFORE the corpus replay — that separation is
+    # the point of the subcommand existing (ADR-TEMP-259 decision 2), not an optimisation.
+    if args.cmd == "restamp":
+        rev = args.rev or _git_rev()
+        restamp_artifact(args.baseline, rev)
+        print(f"-> re-stamped {args.baseline} to {rev} (verdicts untouched)")
+        return 0
+
     index = ruling_index(args.store)
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)
@@ -240,6 +252,20 @@ def main(argv=None) -> int:
     rpt = build_report(args.store, args.agent, voided=set(voided), equiv=equiv)
 
     if args.cmd == "capture":
+        # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
+        # whose pick this build moves OFF the human's ruling may only become the new reference once a
+        # human has ruled it. The fail direction is `decider_lab_diff`'s own REGRESSION verdict, so
+        # the guard and the gate cannot drift into two ideas of "worse" (ADR-TEMP-259 decision 1).
+        if args.out.exists():
+            outgoing = json.loads(args.out.read_text(encoding="utf-8"))
+            try:
+                refuse_unruled_recapture(
+                    fail_direction_keys(decider_lab_diff(outgoing, rpt, voided=set(voided),
+                                                         equiv=equiv)["rows"]),
+                    index=index)
+            except RecaptureRefused as refused:   # an operator error, not a crash: say so plainly
+                print(f"REFUSED: {refused}")      # and leave the committed baseline untouched
+                return 1
         write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
         _print_summary(rpt, equiv)
         print_ruling_readout(index, voided, orphans=orphans, detail=True)
