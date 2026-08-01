@@ -19,7 +19,7 @@ its number (2026-07-14):
 `0050-glossary.md` is *not* an ADR — it is the companion vocabulary doc for ADR-0050 (lethal
 verification), and its filename prefix is correct.
 
-**Next free number: 0101.**  
+**Next free number: 0102.**  
 *(**0100** is on disk as of the 0073 collision resolution below, and **0094-0099** landed with PR #266 (Issue #259, POC-T0). Both were in flight at once, which is why PR #267 numbered past them rather than taking 0094: a number claimed by an OPEN PR is taken even though a disk scan of `main` cannot see it. `tests/test_adr_index.py` now fails if this pointer is not actually free.)*  
 *(The pointer read `0092` while `0092` was already taken on disk — Issue #228's ADR scanned `docs/adr/` rather than trusting it, as this file's own instruction says to, and took **0093**. Second time the disk scan has caught a stale pointer; the instruction is earning its keep.)*  
 *(**Collided.** Issue #250's ADR was `ADR-TEMP-250` and took **0089** at its `/open-pr` rebase, when both the pointer and a disk scan said `0089` was free. Issue #243's PR #252 then merged first with its own **0089**. Per this log's convention the first-merged keeps the number, so Issue #250 renumbered to **0090** on its next rebase. This is the residual race the temp-naming convention narrows but cannot close — and the first time it has actually fired. It cost one mechanical commit, not a scramble across a long-lived branch, which is the convention working as designed.)*  
