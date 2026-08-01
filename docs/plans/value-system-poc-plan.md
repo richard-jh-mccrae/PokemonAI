@@ -242,17 +242,37 @@ Three touches, nothing else: (1) wave ruling packets — per-frame verdicts, min
 next wave packet; it never opens a grill. Budgeted escape-hatch count: ≤2 across the build
 (build-rule 11 says arming exposes defects; expect them in T2/T4).
 
-## 6. Sound-rule whitelist (draft — wave-1 ratification)
+## 6. Sound-rule whitelist (RATIFIED wave 1, 2026-08-01 — amended by the Issue #259 grill)
 
 Rules that SURVIVE the purge because they encode game structure or fail-direction policy, not
-strategy hypotheses: `KO_SCORE` structural band + `_LINE_CAP` invariant · the empty-Bench forced
-deploy filter + `keep-a-bench` (loss guard; Issue #231 recommendation: keep unconditional) ·
-`_predicted_loss` (−KO_SCORE bench-empty doom) · `_finish_turn_last` sequencing tiers · the
-worst-case doom ceiling as the survival fail-direction (now a *policy parameter* after T1's
-fold) · opening/mulligan declaration rungs (deck-declared, not tuned) · Lethal-Solver
-preemption above the planner · authored constants inside firing equations (ROLE_TIER/TAG_TIER,
-readiness-leaf values, planner sub-prize constants, confidence seeds) — tolerated for POC,
-queued for the post-POC learning phases · `POC_WORTH_PRIZE_RATE` (authored scaffold, T3-local).
+strategy hypotheses. **Every entry is TYPED and names the board fact it guards** (ADR-TEMP-259f):
+`structural` = permanent; `provisional` = a substrate-gap workaround, which MUST carry a dated
+retirement test; `authored-scaffold` = a constant, which MUST carry a reconciliation note and a
+post-POC fitting queue entry. **An untyped entry is rejected by the T0 registry** — the flat draft
+list put ONE board fact (an empty Bench under a knock-outable Active) on §6 three times in three
+shapes, violating T0's own double-counting rule, and nothing about writing it prompted the catch.
+
+**`src/common/sound_rules.py` is the machine-checkable authority**; this table is its rendering, and
+`tests/strategy/test_sound_rules.py` cross-checks the two by `id` so they cannot drift.
+
+| id | entry | type | fact guarded / reason | retires when |
+|---|---|---|---|---|
+| `ko-score-band` | `KO_SCORE` band + `_LINE_CAP` invariant | `structural` | a prize is never outbid by a positional term | — |
+| `setup-never-bench` | Set-Up never-bench (ADR-0086 d9, `pilot.py:1750`) | `structural` | deferring is weakly dominant — optional placement (rulebook L97), no attack reaches me first either seat, zero damage-counter Abilities on a Basic | — |
+| `empty-bench-filter` | empty-Bench forced deploy filter | **`provisional`** | loss condition, `docs/rules.md` §7 case 2 | after T1: `reachable_incoming` answers on every post-setup empty-Bench corpus frame AND both gates green without it → `_predicted_loss` becomes the sole guard |
+| `predicted-loss` | `_predicted_loss` (−KO_SCORE bench-empty doom) | `structural` | same fact, CombatMath-gated — the ONE surviving guard on retirement | — |
+| `information-before-commitment` | `_finish_turn_last` — the **information-before-commitment** boundary | `structural` | an informative reversible play weakly dominates a commitment; the engine re-presents the menu | — |
+| `doom-ceiling-fail-direction` | worst-case doom ceiling as survival fail-direction | `structural` | fail-direction policy (a *policy parameter* after T1's fold) | — |
+| `declaration-rungs` | opening/mulligan declaration rungs | `structural` | deck-declared, not tuned | — |
+| `lethal-solver-preemption` | Lethal-Solver preemption above the planner | `structural` | sound win detection outranks every heuristic | — |
+| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds) | `authored-scaffold` | tolerated for POC | post-POC learning phases |
+| `poc-worth-prize-rate` | `POC_WORTH_PRIZE_RATE` (T3-local) | `authored-scaffold` | reconciled against trainer ≈1.0 / energy ≈6.7 / deploy ≈0.83 (ADR-TEMP-259d) | post-POC fit against ruled spend-vs-hold frames converges |
+| `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-TEMP-259e d3 | post-POC review as the seam table grows |
+
+**Deleted by this ratification:** `keep-a-bench` (+60) — it guards nothing the filter does not
+already guarantee at MAIN (the filter runs *after* `_finish_turn_last`), and per Issue #231's own
+numbers it IS the spare-body cliff (1.96 → 61.96). Deletion is measured, not blind.
+
 Everything else with a tuned weight is deleted by its owning track.
 
 ## 7. POC acceptance (the definition of done)

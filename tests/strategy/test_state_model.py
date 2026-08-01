@@ -147,6 +147,48 @@ def test_their_side_exposes_the_opponent_model_facade_rather_than_its_own_infere
     assert theirs.opponent is sentinel
 
 
+# ── the discard is public in BOTH directions (POC-T0 / Issue #259) ─────────────────────────────
+
+def test_the_full_discard_contents_are_readable_on_BOTH_sides():
+    """A discard pile is public to both players, so THEIR discard is sound knowledge and not an
+    estimate — the asymmetry that governs `hand_ids` does not apply here.
+
+    Until T0 the model exposed only `discard_energy_counts`, a Basic-Energy projection, so every
+    consumer wanting *what is actually in there* (a recur target, a Night Stretcher line, a rebuilt
+    evolution line) had to reach past the model to the raw observation — the bypass ADR-0092's
+    "the StateModel is the SOLE data supplier" ruling forbids."""
+    m = _model(_player(active=_pult(), discard=[CRISPIN, E_R]),
+               _player(active=_poke(RIOLU, hp=80), discard=[MEGA_LUC, E_P, E_P]))
+    assert m.mine.discard_ids == (CRISPIN, E_R)
+    assert m.theirs.discard_ids == (MEGA_LUC, E_P, E_P)
+
+
+def test_the_discard_read_is_ORDERED_and_keeps_duplicates():
+    """The zone is ordered and a consumer reasoning about the most recently discarded card cannot
+    recover that from counts — which is exactly what `discard_energy_counts` gives and why it is not
+    a substitute. Duplicates survive for the same reason a multiset would lose them."""
+    m = _model(_player(active=_pult()),
+               _player(active=_poke(RIOLU, hp=80), discard=[E_P, MEGA_LUC, E_P]))
+    assert m.theirs.discard_ids == (E_P, MEGA_LUC, E_P)
+
+
+def test_the_discard_read_and_its_energy_projection_agree():
+    """Two readings of one zone must not be able to disagree. `discard_energy_counts` is the Basic
+    Energy projection of exactly this list, so a regression in either shows up as a mismatch here
+    rather than as two internally-consistent answers."""
+    m = _model(_player(active=_pult()),
+               _player(active=_poke(RIOLU, hp=80), discard=[E_P, MEGA_LUC, E_P, E_R]))
+    assert m.theirs.discard_ids == (E_P, MEGA_LUC, E_P, E_R)
+    assert m.theirs.discard_energy_counts == {PSYCHIC: 2, FIRE: 1}
+
+
+def test_an_empty_discard_reads_as_empty_rather_than_unknown():
+    """A public zone is never unknown. Returning None for "nothing there" would make a sound read
+    look like a missing one, and the fail-open callers would then guess about a fact they can see."""
+    m = _model(_player(active=_pult()), _player(active=_poke(RIOLU, hp=80)))
+    assert m.theirs.discard_ids == () and m.mine.discard_ids == ()
+
+
 # ── laziness ───────────────────────────────────────────────────────────────────────────────────
 
 def test_build_computes_nothing_and_a_read_pays_only_for_what_it_touches():
@@ -244,6 +286,18 @@ def test_stripping_their_energy_makes_reuse_miss():
 def test_inflicting_a_condition_makes_reuse_miss():
     confused = _their_base() | {"confused": True}
     assert _fp(_their_base()) != _fp(confused)
+
+
+def test_moving_a_card_into_their_discard_makes_reuse_miss():
+    """The wholesale hash earning its keep. `discard_ids` (POC-T0) is a NEW readable fact, and their
+    discard moves during MY turn — a Knock Out sends their body and its attachments there, a Hammer
+    sends an Energy. A hand-picked fingerprint would have had to be extended for it and would have
+    failed OPEN in the meantime, serving a stale discard to every shared read.
+
+    This is the "plus the next disruption card nobody thought of" clause asserted rather than
+    trusted: the field was added and the guard needed no change."""
+    discarded = _their_base() | {"discard": [{"id": MEGA_LUC}]}
+    assert _fp(_their_base()) != _fp(discarded)
 
 
 def test_taking_a_prize_makes_reuse_miss():

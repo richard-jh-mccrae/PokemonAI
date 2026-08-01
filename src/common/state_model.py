@@ -356,6 +356,30 @@ class _SideBase(_Lazily):
                 out[stat.energyType] += 1
         return dict(out)
 
+    @lazy
+    def discard_ids(self) -> tuple:
+        """Every card id in this side's discard, in zone order — the FULL public contents
+        (POC-T0 / Issue #259, ADR-0092's "the StateModel is the SOLE data supplier" ruling).
+
+        A discard pile is public in **both** directions (`docs/rules.md` — "DISCARD [pub — both may
+        look]"), so this is sound knowledge about the opponent, not an estimate, and it belongs on
+        the shared base rather than on `TheirSide` alone. Until now the model exposed only
+        :meth:`discard_energy_counts` — a Basic-Energy projection — so every consumer wanting *what
+        is actually in there* (a recur target, a Night Stretcher line, a used-up Item count, a rebuilt
+        evolution line) had to reach past the model to the raw observation, which is precisely the
+        bypass the standing ruling forbids.
+
+        Ids rather than resolved stats, deliberately: a card id is what every downstream oracle keys
+        on (`CardStat`, Function Tags, `deck_odds`), and resolving here would make the model hold a
+        second opinion about card identity. Ordered rather than a multiset because the zone IS
+        ordered and a consumer reasoning about the most recently discarded card (a same-turn
+        recursion read) cannot recover that from counts.
+
+        INERT at T0 — no consumer yet; T1 (Issue #260) migrates the raw-observation readers onto it.
+        """
+        return tuple((c or {}).get("id") for c in (self.player.get("discard") or [])
+                     if (c or {}).get("id") is not None)
+
 
 class MySide(_SideBase):
     """MY half — the side with open information: real hand cards, the **Attach Budget**, per-body
@@ -764,7 +788,14 @@ class TheirSide(_SideBase):
     def hand_size(self) -> int:
         """Cards in their hand. The engine gives the count and never the contents (``hand`` is None
         for the opponent), so this is the whole of v1's hand knowledge — anything richer is
-        cross-decision inference with no Phase-1 consumer, and belongs behind the facade."""
+        cross-decision inference with no Phase-1 consumer, and belongs behind the facade.
+
+        **This is THE supplier of the opponent hand count** (POC-T0 / Issue #259). `Board`'s
+        `opp_hand_size` reads ``handCount`` off the raw observation at `pilot.py`, and two readers of
+        one fact is the shape ADR-0087 charges for — they cannot disagree today, which is exactly why
+        the drift would be invisible when one of them later grows a policy (a Read-adjusted estimate,
+        a post-disruption projection). T1 (Issue #260) re-points `Board` here; the frozen contract is
+        that the raw read has ONE home and it is this method."""
         return int(self.player.get("handCount") or 0)
 
     @lazy
@@ -810,7 +841,20 @@ class TheirSide(_SideBase):
         `survival_shift`). Deliberately NOT bench-aware — it is one-sided, so it cannot see MY bench,
         and a Bench Harvest is a fact about the whole bench. A caller wanting the benched area must
         pass `my_bench` / `key_ids` / `reading` itself (`MySide.bench_raws` supplies the first);
-        through here it would silently get the solo body at the conservative reading."""
+        through here it would silently get the solo body at the conservative reading.
+
+        **T0 contract for the threading T1 owes** (Issue #259 -> Issue #260). The reason every live
+        caller bypasses this method is that the model route is *strictly worse* than the direct
+        `CombatMath` call: the bypasses carry arguments this signature cannot express — the Bench
+        Harvest args (``my_bench`` / ``key_ids`` / ``reading``), ``opp_active``, and the
+        switch-enabler. A model route that silently answers a DIFFERENT question than the bypass is
+        worse than no route at all, so the fix is to widen the signature, never to re-point callers
+        at the narrower one.
+
+        T1 threads those kwargs through and migrates the bypass census onto this route. Any bypass
+        that deliberately SURVIVES must document why at its call site (a one-fact-one-source rule),
+        because "no undocumented CombatMath bypasses on model-covered questions" is T1's acceptance
+        criterion and an undocumented one is indistinguishable from an unmigrated one."""
         return self._memoized(("turns_to_ko_me", id(my_body) if my_body is not None else None),
                               lambda: self._combat.turns_to_ko_me(my_body, self.body_raws,
                                                                   charged=self._charged))
