@@ -7,11 +7,28 @@ produced closed-form by `common.apply_option`. One mechanism replaces ~60 hypoth
 
 **IMPLEMENTED by T3 (Issue #262).** T0 (Issue #259) shipped the registry, the signatures and the
 docstrings; this module now carries the equations. Nothing here invents math: every family is a
-composition of an already-FIRING equation (survival off `turns_to_ko_me` + Bench Harvest, threat off
-`needs.opponent_target_value`, readiness off the Attach-Budget / `readiness_p` machinery, hand off
-`needs.set_keep_v2`, development off the deploy/evolve marginals, prize_race off `PrizeRace`), and
-where a coverage gap remains it is NAMED in :attr:`TermFamily.blind_to` rather than priced at a
-silent zero.
+composition of an already-FIRING equation, and where a coverage gap remains it is NAMED in
+:attr:`TermFamily.blind_to` rather than priced at a silent zero:
+
+    prize_race    `StateModel.prize_race`
+    survival      `theirs.turns_to_ko_me` (Bench-Harvest kwargs threaded) + `grading.halve`
+    threat        `needs.opponent_target_value` + `needs.phase_scale`
+    readiness     `mine.readiness_p` + `mine.turns_to_afford`, at `planner._READINESS_ATTACK_W`'s band
+    hand          `needs.assignment_split` — `set_keep_v2`'s own `_keep_slot_dp`, read as its two
+                  halves rather than as the set marginal, so `coverage` and `re_access` arrive
+                  separately the way the frozen composition asks for them
+    development   `currency.deploy_relevance_to_damage` (the deploy marginal's own bridge) and
+                  `EvolveBody.p_arrive`'s `halve(hops)` grading
+
+**`development` composes those two BRIDGES, not `deploy_value()` and `evolve_value()` themselves**,
+and the distinction is stated rather than glossed because the issue's one-line summary reads the
+other way. Both functions answer a MARGINAL question — *what would adding, or evolving, this be
+worth* — and take inputs a board does not carry (a capacity-bounded Needs assignment, ability odds,
+`this_turn` damage). Summing marginals over bodies already in play would answer a different question
+from the one a STATE valuation asks, and would double-count against `readiness` besides. What
+transfers intact is their currency and their decay convention, which is what keeps this family and
+those deciders from forming different opinions about the same body. Recorded as a deviation for the
+wave packet, not filed as equivalent.
 
 ## Unit basis
 
@@ -55,6 +72,29 @@ incumbent leaf drew the same line with the same numbers: `_predicted_loss` at �
 :data:`LOSS_PRIZES` then sits above BOTH, DERIVED from the rulebook maxima rather than authored, so
 the terminal `_predicted_loss` dominance the incumbent −`KO_SCORE` rung had is preserved by
 construction instead of by a hopeful constant.
+
+## Old Issue #145's five amendments, each with its disposition
+
+Issue #262 carries them forward by name ("its amendments A-E carry over"), so each is answered here
+rather than left for a reader to check off:
+
+* **A — incremental leaf evaluation.** Met as memo-per-model; see :func:`state_value`, which records
+  why cross-model deltas are not the POC's answer.
+* **B — attack value is a random variable.** Met by :func:`attack_ev`: `ko_probability` carries the
+  residual uncertainty, so a coin attack is the same equation rather than an archetype branch.
+* **C — shared term basis, weights never gate a term's existence.** Met by construction: all six
+  families are evaluated for every board and every deck, and a structurally inapplicable one reaches
+  zero through its own inputs (no forward form -> `evolve_marginal` 0) rather than through an `if`.
+* **D — deterministic tie-breaks.** NOT this track's, and deliberately: Issue #262's fourth
+  amendment moved the rule to Issue #263, leaving T3 only `state_value`'s own bit-identical
+  determinism, which the purity test asserts.
+* **E — phase/regime-bucketed weight sets.** NOT BUILT, and this is the one to argue with. E asks for
+  separate weight sets keyed on prizes-remaining and a race/interaction classifier, explicitly
+  scoping the real version to "Phase 4" — the learning phases (Issues #146-#148) ADR-0092 cut from
+  the POC. What exists instead is the single regime scalar already shipped: `needs.phase_scale`,
+  read by `threat` through `opponent_target_value`, which is keyed on exactly E's cheap
+  discriminator (the opponent's prize proximity). So the POC has E's *discriminator* and none of its
+  *bucketing*. Recorded as a gap rather than claimed as met.
 
 ## The double-counting rule
 
@@ -540,7 +580,21 @@ def state_value(model: "StateModel", *, working: dict | None = None) -> float:
 
     **Incremental evaluation** rides the StateModel's existing lazy memo (ADR-0068 amendment A) —
     the model is the unit of caching, so a family re-reading an already-derived clock pays once per
-    model, not once per call.
+    model, not once per call. **This function memoizes on the model too**, through the same
+    `_memoized` channel every parameterised derivation uses, so a second call on one model is a dict
+    lookup rather than six re-evaluated families. That matters because the leaf and the wave-3
+    workings dump both score the same model, and Issue #263's composer scores each candidate's model
+    once for ordering and may meet it again inside a sequence.
+
+    The memo holds the per-family dict, not the scalar, so a caller that passes ``working`` gets the
+    full breakdown on a cache HIT as well as on a miss — a cache that silently stopped filling the
+    diagnostic would send wave-3 triage after the wrong term. ``working.update`` copies, so a caller
+    cannot reach through it and corrupt the cached dict for every later reader.
+
+    Old Issue #145's amendment A asked for incremental leaf evaluation across boards. The POC answer
+    is memo-per-model, recorded here rather than left implicit: the apply-seam hands out a FRESH
+    model per hypothetical, so there is no cross-model delta to exploit, and cost control is term
+    laziness plus the planner's branching caps. Revisit post-POC only if profiling demands it.
 
     **PROVENANCE-AGNOSTIC** (ruled 2026-08-01, Issue #262). ``model`` is a StateModel and nothing
     here may branch on how it was produced. Issue #259 §3b gives the apply-seam three fates, two of
@@ -556,9 +610,19 @@ def state_value(model: "StateModel", *, working: dict | None = None) -> float:
     benched but not yet evolved — so no term keys off "the turn is over" or off having attacked, and
     every term degrades continuously: a half-built attacker scores partial readiness through
     `readiness_p`, never 0 and never full. `test_state_value.py`'s monotonicity class is the guard."""
-    mine, theirs = model.mine, model.theirs
+    terms = model._memoized(("state_value",), lambda: _terms(model))
+    if working is not None:
+        working.update(terms)
+    return float(sum(terms.values()))
+
+
+def _terms(model: "StateModel") -> dict:
+    """The six families, evaluated once. **Insertion order is the REGISTRY's order and that is a
+    contract** (Issue #262's purity amendment: *"fixed term-iteration order — never dict/set
+    iteration that could reorder"*). Floating-point addition is not associative, so a reordering
+    would move the last bits of the sum; `test_the_term_iteration_order_is_FIXED_...` asserts it."""
     race = model.prize_race
-    terms = {
+    return {
         "prize_race": prize_race(my_prizes_remaining=race.my_prizes_remaining,
                                  their_prizes_remaining=race.opp_prizes_remaining),
         "survival": survival(_exposed_bodies(model), predicted_loss=_predicted_loss(model)),
@@ -567,9 +631,6 @@ def state_value(model: "StateModel", *, working: dict | None = None) -> float:
         "hand": hand(**_hand_legs(model)),
         "development": development(**_development_legs(model)),
     }
-    if working is not None:
-        working.update(terms)
-    return float(sum(terms.values()))
 
 
 # ── the extractors — StateModel -> the families' plain numbers ────────────────────────────────────

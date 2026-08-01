@@ -243,6 +243,9 @@ KO_LINE_PROFILE = frozenset({
 #:   * `mine.needs` — the `hand` family's `set_keep_v2` spine. LAZY: on a simulated board with no
 #:     injected hand the resolver returns None and the DP never runs.
 STATE_VALUE_PROFILE = frozenset({
+    # `state_value` memoizes its own per-family dict on the model (Issue #262's incremental-eval
+    # line), so the scalar itself appears as a cross-side memo key beside the fields it reads.
+    "model.state_value",
     "mine.active.attacks",
     "mine.active.hp_remaining",
     "mine.active.payoff_attack",
