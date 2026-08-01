@@ -16,7 +16,8 @@ manufactures a fake misplay).
      strip -- it dies anyway. It says nothing about a benched body banking Energy. Hammer the bench,
      then take the KO. ms 82748422 f26.
 
-  3. ENERGY ON A PRE-EVOLUTION IS BANKED, NOT SPENT.  `denial_value` read the target's OWN attacks, so
+  3. ENERGY ON A PRE-EVOLUTION IS BANKED, NOT SPENT.  The retired `denial_value` (deleted with the
+     rest of the magnitude oracle, Issue #228) read the target's OWN attacks, so
      a Riolu holding 1 Energy priced at 30 (Accelerating Stab {F}) -- when rules.md:98 says "Evolving
      keeps attached cards", and that same Energy pays Mega Lucario ex's Aura Jab ({F}, 130) the turn
      it evolves. ms 82225643 f12 is the case FOR it; dragapult 85046350 f32 is the CEILING on it --
