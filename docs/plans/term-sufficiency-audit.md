@@ -144,10 +144,19 @@ kyogre_mega_abomasnow Metal ×2). This is the single most repeated strategic con
 opponent-facing corpus.
 
 **Cheapest fix.** Do not write new math — `threat`'s reachability read is the wrong oracle for a
-question that has a right one. Replace the gate's `best_reachable_damage` with the damage-model read
-against the actual defender (`CombatMath.predicted_max_damage(attacker_stat, defender_raw,
-context=…)`, the same call `incoming` makes one layer down). One call site, no new constant, and it
-closes the over-claim and the under-claim together.
+question that has a right one. Read the damage model against the actual defender instead of the
+printed number; no new constant, and it closes the over-claim and the under-claim together.
+
+> **Corrected 2026-08-01 while specifying Issue #278 S3** — the first draft of this paragraph said
+> *"replace the gate's `best_reachable_damage` with `predicted_max_damage`, one call site"*, and both
+> halves were wrong. `predicted_max_damage` is the **Incoming** (worst-case) read and explicitly
+> *"does NOT filter by the opponent's Energy affordability"* (`combat.py:359-361`), so it is the wrong
+> instrument for an OFFENSIVE gate. And `best_reachable_damage` must not be replaced at all: it is the
+> counterfactual leg of the attach marginal (ADR-0069 §2) and is deliberately opponent-independent, so
+> retuning it moves the corpus-ruled `attach_value`. The correct shape is a SIBLING that keeps
+> `reachable_attach`'s Budget filter and swaps the damage read to the per-attack `predicted_damage`,
+> plus a model accessor — see Issue #278 S3 for the specified version, which is authoritative over
+> this line.
 
 **Ruled?** **New.** No `blind_to` entry mentions Weakness, Resistance or damage prevention. The
 registry's own `registry_gaps()` cannot see it: it is self-referential and only catches facts
@@ -179,10 +188,21 @@ readings of the same board fact are dark at once.
 and it is the second-most-played archetype in the tracked meta. `CardStat.handSizeDamage` already
 exists and is already parsed — this is a dropped argument, not a missing capability.
 
-**Cheapest fix.** Thread it: `context={"atk_hand": model.theirs.hand_size}` into the
-`turns_to_ko_me` call in `_exposed_bodies` and the `reachable_incoming` call in `_predicted_loss`.
-`theirs.hand_size` is a HOMED zone (`snapshot_coverage.WRITABLE`) with a live accessor
-(`state_model.py:788`). Two kwargs.
+**Cheapest fix.** Thread a context into the `turns_to_ko_me` call in `_exposed_bodies` and the
+`reachable_incoming` call in `_predicted_loss`. `theirs.hand_size` is a HOMED zone
+(`snapshot_coverage.WRITABLE`) with a live accessor (`state_model.py:788`), so the fact is available;
+what is missing is the argument.
+
+> **Corrected 2026-08-01 while specifying Issue #278 S2** — the first draft said *"pass
+> `context={"atk_hand": model.theirs.hand_size}`, two kwargs"*, and a literal reading of that would
+> introduce a worse bug than it fixes. The clock memoizes on **`id(context)`**
+> (`state_model.py:818`, `:867`), so a freshly-allocated dict per call busts the memo on every call —
+> and a freed dict's `id` can be reused by a later allocation, letting two different contexts collide
+> on one memo entry. The context must be allocated ONCE per model. It must also be
+> **direction-aware**: the Damage Formula's variables are named relative to the attacker, so
+> `survival` needs the `theirs` reading and `threat` (F1) needs `mine` — one dict is wrong for both.
+> Issue #278 S1 specifies the shared `StateModel.damage_context(attacker=…)` accessor that S2, S3 and
+> S4 all consume, and is authoritative over this line.
 
 **Ruled?** **New**, and of a distinct kind from the rest: this is not a term that declines to read a
 fact, it is a term that intends to read it and loses it at the call. `threat.blind_to` names *their
@@ -555,26 +575,41 @@ is not the clock's true value either. A damping constant fitted before F1 and F2
 fitted to a measurement artifact. The flat 0.3 damping measuring *worse* (69 unruled vs 67) is at
 least consistent with that reading.
 
-**What would change the verdict.** F1 + F2 + F4 are one context argument threaded through three call
-sites and one snapshot zone homed. If those land, the terms become sufficient for the combat game as
-well, and the residue is F3 (one extractor, no new family), F5 + F6 (two questions terms do not yet
-ask), and a ruled ledger whose top three entries — Stadium, Tools, Ability readiness — are already
-owed to T1 with named owners. That is a short list, and none of it is research.
+**What would change the verdict.** F1 + F2 + F4 are **one shared damage context**, consumed at three
+call sites, plus one snapshot zone homed. If those land, the terms become sufficient for the combat
+game as well, and the residue is F3 (one extractor, no new family), F5 + F6 (two questions terms do
+not yet ask), and a ruled ledger whose top three entries — Stadium, Tools, Ability readiness — are
+already owed to T1 with named owners. That is a short list, and none of it is research.
+
+> **Sharpened 2026-08-01 during Issue #278's specification.** This paragraph originally read *"one
+> context argument threaded through three call sites"*, which understated it: the context has to be
+> **model-owned, memo-stable and direction-aware** before any of the three can consume it safely
+> (F2's correction note explains why a per-call dict is actively harmful). That is Issue #278's S1 —
+> a subtask of its own, ahead of the three fixes, and it changes nothing about this verdict except
+> the word "argument". The claim that the three are ONE fact rather than three coincidences survived
+> the specification, which was the load-bearing half of the prediction.
 
 ## Findings by disposition
 
 Issue #268 says findings become Issue #262 amendments or new issues, decided after this report lands.
-The audit does not make that decision; it groups them so it can be made quickly.
+The audit did not make that decision; it grouped them so it could be made quickly.
 
-| Finding | Disposition suggestion | Why |
+**DECIDED 2026-08-01.** The developer ruled a single remediation track rather than a scatter of
+amendments and new issues: **Issue #278 (POC-T3.5)**, inserted into the critical path as
+**#262 → #278 → #263**, with all thirteen findings as spec'd subtasks worked one at a time. The
+column below records the audit's original suggestion against where each finding actually landed;
+**Issue #278 is authoritative** wherever the two differ.
+
+| Finding | Audit's suggestion | Where it landed |
 |---|---|---|
-| F1, F2, F4 | **Issue #262 amendments** | One call-site fix each, inside terms that already exist. F4 additionally needs T1's `transient_grants` |
-| F3 | **Issue #262 amendment** | Extends `predicted_loss`, an existing terminal term |
-| F5, F6 | **New issues** | Each teaches a term a question it does not ask; F6 also interacts with `attack_ev`'s unwired snipe rider |
-| F7, F11, F12 | **New issues** | New supplier (`known_top`), new clause use (`condition` on payoff), new backward-topology read |
-| F8 | **Issue #262 amendment** | Discount the forward leg on a rider already in the vocabulary |
-| F9, F10 | **No action — ruled** | Recorded with exposure so #262/#263 can rank them. Do not re-litigate |
-| F13 | **Issue #262 amendment (documentation)** | Add to `attack_ev.blind_to` so the zero is declared |
+| F1, F2, F4 | Issue #262 amendments | **#278 S3, S2, S4** — behind new substrate **S1** (the shared damage context), which the audit did not foresee as its own step |
+| F3 | Issue #262 amendment | **#278 S5** — extends `predicted_loss`, as suggested |
+| F5, F6 | New issues | **#278 S7, S6** — sequenced S6→S7 (same function) and S6 after S3, or it inherits F1's printed-damage cliff |
+| F7, F11, F12 | New issues | **#278 S11, S9, S10**. S11 gated on a design decision before any code; **S10 moved out of `state_value`** into the Pilot's needs resolver, so one fix serves the rung system and the differencing system |
+| F8 | Issue #262 amendment | **#278 S8** |
+| F9, F10 | No action — ruled | **Out of scope, tabulated with owners** in #278. Do not re-litigate |
+| F13 | Issue #262 amendment (documentation) | **#278 S12**, joined by the `deck_order` HIDDEN rationale and, if S11 is declined, `known_top` |
+| — | — | **#278 S13** — closeout: reconcile this report, re-measure the passivity signal, record the P95 for #263 |
 
 ## Re-running this audit
 
