@@ -10,8 +10,6 @@ two actors 0087 never faced) and **[ADR-0049](0049-corrections-carry-a-scope-dec
 **Repairs the two defects [ADR-0088](0088-a-voided-ruling-leaves-the-agree-rate-and-the-gate.md)
 decision 3a's `orphan_rulings` detector found.** Does **not** supersede anything.
 
-⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
-
 **Context issues:** Issue #250 (this grill), Issue #239 / ADR-0088 (built the detector that found
 these two, and established the void-and-re-capture protocol), Issue #241 / ADR-0087 (the same
 hand-built-key defect one store over, on the reader), ADR-0049 (the three Scope key shapes).
