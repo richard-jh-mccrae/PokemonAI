@@ -3580,7 +3580,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         JOINTLY — v1's per-copy sum was never the price of the move it was pricing.
 
         0 when the hand resolves to no rows or the card is not a known refresh — the CYCLE credit
-        alone stands, matching the retired flat term's floor."""
+        alone stands, matching the retired flat term's floor.
+
+        **One floor moved, and in the safe direction.** v1 returned 0 when the deck bookkeeping was
+        unresolved (no anchor and no usable unseen composition); v2 still prices the hand, because
+        `_refresh_slot_resupply` returns all-zero resupply in that case and the assignment then
+        charges the UNDISCOUNTED set marginal. So an unresolved tracker now makes the shed dearer
+        rather than free — it over-prices the shuffle instead of under-pricing it, which is the
+        fail direction this site has taken throughout (the WP-N6 sweep's "safe side")."""
         from common import needs
         from common.strategy.refresh import refresh_branches
         branches = refresh_branches(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
@@ -4116,17 +4123,20 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 # ep83969481 f55): `_GENERAL_WORTH_W` prices a card that is ~one deploy away from
                 # mattering. A `clutch_heal` covering an IRREPLACEABLE Active is not one deploy away —
                 # it is the survival plan, and the latency haircut is simply the wrong model of it.
-                # Full tier, deadline 1: the threat is NEXT turn (so `answer_doom`, a this-turn read,
-                # correctly stays shut — reviewed.json rules exactly that), which also leaves the
-                # closure's re-access window open rather than forcing the closing edge.
-                if self._heal_insures_the_last_wincon(cid, board, me):
-                    _emit(needs.Slot("answer_doom", worth, 1, f"insure:{cid}"), live)
+                # Full tier at deadline 1 (the threat is NEXT turn, which is why `answer_doom` — a
+                # this-turn read — correctly stays shut here; reviewed.json rules exactly that), and
+                # the slot takes the answer-doom KIND so it also takes that kind's closing edge:
+                # `_refresh_slot_resupply` gives it no re-access credit. Deliberate — the ruling is
+                # about CERTAINTY, and a heal you are relying on to survive may not be priced at
+                # "I'll probably redraw it". `needs.insure_wincon_slot` carries the reasoning.
+                if self._heal_insures_the_last_wincon(cid, me):
+                    _emit(needs.insure_wincon_slot(f"insure:{cid}", value=worth * deploy), live)
                     continue
                 _emit(needs.general_worth_slot(f"general:{cid}",
                                                value=worth * deploy * _GENERAL_WORTH_W * liq), live)
         return slots, elig
 
-    def _heal_insures_the_last_wincon(self, cid, board: Board, me: dict) -> bool:
+    def _heal_insures_the_last_wincon(self, cid, me: dict) -> bool:
         """Is held card ``cid`` the heal keeping my LAST win-condition alive? — the user's wave-2
         ruling on ep83969481 f55, stated as a board fact: *"preserve our healer when we only have a
         single wincon remaining."*
@@ -6910,12 +6920,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         not have arrived this turn: `docs/rules.md` §4 `[RULE: rulebook L123-128]` `[ENGINE-LEGAL]`
         — *"cannot evolve a Pokémon the turn it was played/put into play."*
 
-        The narrow question the URGENT succession spike needs, and deliberately NOT
+        Consumed by `_heal_insures_the_last_wincon` (clause 3: a successor that LANDS this turn
+        means the line is not exhausted, so the heal insures nothing irreplaceable). Deliberately NOT
         `board.line_preevo_in_play`, which asks the looser *"is there anything a rush-evolve tutor
         could aim at"* and is read by other consumers. Both clauses matter: name-matching alone says
         yes on a board where the engine offers no evolve option at all (ep83117367 f34 — two Staryu,
-        both benched this turn, so the held Mega Starmie ex has no playable option on the menu), and
-        the spike then charges its full tier against a card that cannot be used until next turn."""
+        both benched this turn, so the held Mega Starmie ex has no playable option on the menu).
+
+        It was also built as the URGENT succession spike's gate and REVERTED — see `line_slots`'
+        docstring and ADR-0101: that narrowing contradicts the ep83037962 f49 ruling."""
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
         base = getattr(st, "evolvesFrom", None) if st is not None else None
         if not base:

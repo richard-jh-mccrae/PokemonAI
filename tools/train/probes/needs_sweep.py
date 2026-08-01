@@ -68,6 +68,8 @@ def main(argv=None) -> int:
         sys.stdout.reconfigure(encoding="utf-8")
     except (AttributeError, ValueError):
         pass
+    # No flags left now the refresh half is retired — the parser stays so `--help` works and a
+    # stale `--refresh` from muscle memory is REFUSED rather than silently ignored.
     argparse.ArgumentParser(
         description="Keep-value v2 discard shadow sweep over the corrections corpus").parse_args(argv)
     sweep_discard(_tune(), _frames())

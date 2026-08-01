@@ -135,7 +135,10 @@ def test_a_heal_insuring_the_last_wincon_is_not_latent_worth():
     attacks, which is the human's `correct`.
 
     Deadline 1, not 0: the threat is NEXT turn, which is exactly why `answer_doom` correctly stays
-    shut here (reviewed.json rules that in as many words) and why re-access still discounts."""
+    shut here (reviewed.json rules that in as many words). The slot still takes the answer-doom
+    KIND, so `_refresh_slot_resupply` gives it NO re-access credit — deliberate, and the deadline is
+    documentary rather than load-bearing: the ruling is about certainty, and a heal you are relying
+    on to survive may not be priced at "I'll probably redraw it" (`needs.insure_wincon_slot`)."""
     from types import SimpleNamespace
 
     from common.strategy.context import _PLAY
@@ -168,7 +171,7 @@ def test_the_insurance_slot_stands_down_when_a_second_wincon_is_in_play():
 
 @pytest.mark.req("REQ-NEEDS-0009")
 def test_the_insurance_slot_reads_copies_remaining_not_board_shape():
-    """The clause an earlier draft got wrong, pinned so it cannot regress: "our LAST wincon" is a
+    """The clause an earlier draft got wrong, covered by a test so it cannot regress: "our LAST wincon" is a
     claim about COPIES REMAINING, not about an empty Bench.
 
     ep82525101 f87 has the same board shape as the frame two tests up — empty Bench, wincon Active,
@@ -186,7 +189,7 @@ def test_the_insurance_slot_reads_copies_remaining_not_board_shape():
     held = [c["id"] for c in (me.get("hand") or []) if c and c.get("id") is not None]
     assert 1229 in held, "the fixture holds a Wally's Compassion"
     # …but the line is REBUILDABLE, so the insurance slot must stand down
-    assert not pilot._heal_insures_the_last_wincon(1229, board, me)
+    assert not pilot._heal_insures_the_last_wincon(1229, me)
     _, rows, slots, elig = _refresh_hand_slots(pilot, obs, exclude_cid=1227)
     assert not [s for s in slots if s.key.startswith("insure:")]
     assert set(rec.correct) <= set(pilot.explain(obs).chosen)

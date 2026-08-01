@@ -62,18 +62,29 @@ all. Its promotion question is not lost, it is **re-homed**: a starved bench is 
 re-homing is the point of this decision — an unconsumed reporter left in the tree is the "runnable
 script nobody watches" failure one layer down.
 
-**4. The near-zero band is named, not tuned.** All three regressions below are one mechanism: the
-swing lands within ±3 of zero and `_finish_turn_last`'s `score > 0` promotion turns that sign into
-*play before attacking*. That is a boundary between an equation and a structural rung, not a shed
-mis-pricing, and it is **not** patched here — patching it would be tuning a threshold to make three
-corpus frames green, which is what the POC exists to stop. It is named so wave 2 rules the flips
-knowing what actually moved them.
+**4. Nothing is tuned to make a corpus frame green.** The three regressions all present the same way
+— the swing lands within ±3 of zero and `_finish_turn_last`'s `score > 0` promotion turns that sign
+into *play before attacking* — and an early draft of this ADR concluded from that they were ONE
+mechanism, the near-zero band. **They are not, and the amendment below records what each actually
+turned out to be**: an insurance mis-pricing (fixed), a certainty-vs-expectation gap (held out to
+#262), and a fitted constant 7% inside its own margin (held out to #272). The shared symptom hid three
+different causes, which is exactly why each was dissected rather than threshold-tuned. The standing
+rule survives the correction: a threshold moved to make three frames green is what the POC exists to
+stop.
 
 ## STRIP/GIFT (old Issue #222) — **PARKED, rationale recorded**
 
 Issue #261 item 2b asks the STRIP/GIFT keep-cost-per-hidden-card grading to land in the same swap
 *"so the swing's three legs share one grading"*. Issue #222's own charter offers three outcomes —
 grill for scope, build, or **park with the rationale recorded**. The third is taken, on measurement.
+
+**This was RULED BY THE USER, not decided by the build.** Issue #222 step 1 is *"grill with the user:
+in scope now, or parked for later?"* and ADR-0092 §5 gives a track hitting a doctrine fork exactly one
+move — file ONE question. That question was put to the user during the build, with the three options
+below and the measurement that motivates the recommendation; the user chose to park. The escape-hatch
+budget (≤2 across the POC) is therefore spent once here. The consequence is stated plainly rather than
+buried: **item 2b's "the swing's three legs share one grading" is NOT delivered**, and cannot be until
+the shared opponent role sheet exists.
 
 Design A (`hand-disruption-grill-spec.md` §"Evidence-gated designs") makes
 `_REFRESH_OPPONENT_HAND_STRIP`/`_REFRESH_OPPONENT_HAND_GIFT` an `E[keep_cost per card]` over the opponent's hidden hand, with role
@@ -203,8 +214,14 @@ mattering; it is the survival plan. `_heal_insures_the_last_wincon` gives it an 
 full tier, deadline 1, and the frame goes `Lillie's +2.2 → −8.8` — the agent attacks.
 
 Deadline **1**, not 0, on purpose: the threat is next turn, which is precisely why `answer_doom`
-correctly stays shut (`reviewed.json` rules exactly that) and why the closure's re-access window
-stays open rather than taking the closing edge. The four gate clauses are in the helper's docstring;
+correctly stays shut (`reviewed.json` rules exactly that). The slot nonetheless carries the
+answer-doom **kind**, so `_refresh_slot_resupply` gives it **no re-access credit** — the closing
+edge, deliberately, which makes the deadline documentary rather than load-bearing here. That is the
+point rather than an oversight: the ruling is about **certainty**, and a heal you are relying on to
+survive may not be priced at *"I'll probably redraw it."* An earlier draft of this ADR, of the code
+comment and of the test all claimed the opposite (that re-access stayed open); the code always did
+this, and the prose is now corrected to match it. `needs.insure_wincon_slot` carries the reasoning
+so a reader meets it at the constructor rather than three files away. The four gate clauses are in the helper's docstring;
 clause 3 (no other wincon body in play) is what keeps `83661649|0|decision|30` — two Mega Starmie ex
 in play — out of this slot. **It is deliberately not keyed on an empty Bench**: that fact already
 carries `empty-bench-filter` and `_predicted_loss`, and §6 names putting it on the list a third time

@@ -102,7 +102,8 @@ PINS = {
     "85785067-54": "res: Lunatone's discard-to-draw over the inert attach",
     "85058574-16": "res: Lunar Cycle fuel over the benched Solrock attach",
 }
-TARGETS = {    # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
+TARGETS = {
+    # Re-ruled from a PIN on the evolve swap (#140, user 2026-07-25). The `correct` label names an
     # evolve, but the blunder is the DEAD Buddy-Buddy Poffin: it fetches Basics of 70 HP or less,
     # Staryu is the only such card in the deck, and all 3 copies were on the board. Evolving either
     # Staryu is merely FINE — the evolve decider scores both exactly 0.0, i.e. correctly indifferent —

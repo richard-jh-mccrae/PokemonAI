@@ -133,6 +133,26 @@ def answer_doom_slot(*, value: float, deadline: int = 0) -> Slot:
     return Slot("answer_doom", float(value), int(deadline), "answer_doom")
 
 
+def insure_wincon_slot(key: str, *, value: float, deadline: int = 1) -> Slot:
+    """The heal that INSURES an irreplaceable win condition (ADR-0101 amendment, Issue #261 wave-2
+    ruling on ep83969481 f55: *"preserve our healer when we only have a single wincon remaining"*).
+
+    Distinct from `answer_doom_slot` in WHEN it opens and identical to it in KIND, and both halves
+    are deliberate:
+
+    * it opens on the win-condition LINE being exhausted, not on `active_doomed` — the threat is a
+      turn out, which is exactly why the answer-doom read correctly stays shut (`reviewed.json` rules
+      that on the frame in as many words), hence the deadline-1 default;
+    * it carries kind ``answer_doom`` so it inherits that kind's CLOSING EDGE — `_refresh_slot_
+      resupply` zeroes re-access for it. That is the point rather than a side effect: the ruling is
+      about **certainty**, and a heal you are relying on to survive is not one you may price at "I'll
+      probably redraw it." The deadline is documentary here; the kind is what carries the semantics.
+
+    Its own ``key`` (rather than `answer_doom_slot`'s fixed one) so it can coexist with a real
+    answer-doom slot on a board that opens both."""
+    return Slot("answer_doom", float(value), int(deadline), key)
+
+
 def draw_engine_slot(*, engines_online: int, value: float | None = None) -> Slot:
     """The recurring draw need, SATURATING (the readiness leaf's term, and the engine-supporter
     premise re-derived): with an engine already online the marginal engine's value halves — kept
