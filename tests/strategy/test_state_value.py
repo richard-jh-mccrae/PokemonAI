@@ -24,7 +24,7 @@ from common import state_value as sv
 # ── the coverage map — T0's headline rule, executable ─────────────────────────────────────────────
 
 
-@pytest.mark.req("REQ-VALUE-0001")
+@pytest.mark.req("REQ-STATEVALUE-0001")
 def test_no_fact_is_priced_twice():
     """`every board fact enters through exactly ONE term family` (ADR-0092 §4-T0).
 
@@ -34,7 +34,7 @@ def test_no_fact_is_priced_twice():
     assert sv.double_counted() == []
 
 
-@pytest.mark.req("REQ-VALUE-0001")
+@pytest.mark.req("REQ-STATEVALUE-0001")
 def test_no_fact_is_priced_by_nobody():
     """The rule's other half. A play that changes state and that no family reads prices 0 — and a
     silent 0 is indistinguishable from a correct 0. `does_not_read` is what gives a gap an address:
@@ -43,7 +43,7 @@ def test_no_fact_is_priced_by_nobody():
     assert sv.registry_gaps() == []
 
 
-@pytest.mark.req("REQ-VALUE-0001")
+@pytest.mark.req("REQ-STATEVALUE-0001")
 def test_the_registry_holds_exactly_the_six_families_the_plan_names():
     """The families are ADR-0092 §4-T0's, and the set is the contract other tracks build against —
     T3 implements these and no others, and `working` carries exactly these keys."""
@@ -52,7 +52,7 @@ def test_the_registry_holds_exactly_the_six_families_the_plan_names():
     assert set(sv.FAMILIES) == {f.name for f in sv.REGISTRY}
 
 
-@pytest.mark.req("REQ-VALUE-0001")
+@pytest.mark.req("REQ-STATEVALUE-0001")
 def test_every_family_states_what_it_refuses_as_well_as_what_it_prices():
     """A family declaring no `does_not_read` has opted out of the gap-detection above — it can never
     contribute a named hole, so the coverage map would silently weaken as families were added."""
@@ -65,14 +65,14 @@ def test_every_family_states_what_it_refuses_as_well_as_what_it_prices():
 # ── the unit basis ────────────────────────────────────────────────────────────────────────────────
 
 
-@pytest.mark.req("REQ-VALUE-0002")
+@pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_is_absent_until_T3_authors_it_with_its_reasoning():
     """T0 approves the MECHANISM and its bindings, never a number (ADR-TEMP-259d). A default value
     here would be the authored constant arriving without the reconciliation that makes it honest."""
     assert sv.POC_WORTH_PRIZE_RATE is None
 
 
-@pytest.mark.req("REQ-VALUE-0002")
+@pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_never_migrates_into_currency():
     """`common/currency.py`'s contract is "DERIVED and never tuned"; this constant is the opposite,
     and ADR-0080's underivability measurement stands as the historical record of what was true.
@@ -89,7 +89,7 @@ def test_the_worth_scaffold_never_migrates_into_currency():
 # ── inertness — T0 ships a contract, not an implementation ────────────────────────────────────────
 
 
-@pytest.mark.req("REQ-VALUE-0003")
+@pytest.mark.req("REQ-STATEVALUE-0003")
 def test_every_scoring_entry_point_refuses_rather_than_returning_a_plausible_zero():
     """0.0 is exactly what a correct-but-neutral position scores, so a stub returning it would make
     an unimplemented build read as a working one right up until the ladder disagreed. Every entry
@@ -100,11 +100,11 @@ def test_every_scoring_entry_point_refuses_rather_than_returning_a_plausible_zer
     with pytest.raises(NotImplementedError):
         sv.prize_race(my_prizes_remaining=6, their_prizes_remaining=6)
     with pytest.raises(NotImplementedError):
-        sv.survival([(1.0, 2)])
+        sv.survival([sv.ExposedBody(prize_at_risk=1.0, turns_to_ko_me=2)])
     with pytest.raises(NotImplementedError):
         sv.threat([1.0])
     with pytest.raises(NotImplementedError):
-        sv.readiness([(1.0, 0.5, 1.0)])
+        sv.readiness([sv.ReadyBody(payoff=1.0, readiness_odds=0.5, role_relevance=1.0)])
     with pytest.raises(NotImplementedError):
         sv.hand(assignment_coverage=0.0, re_access=0.0, hand_worth=0.0)
     with pytest.raises(NotImplementedError):
@@ -112,7 +112,52 @@ def test_every_scoring_entry_point_refuses_rather_than_returning_a_plausible_zer
                        line_topology=0.0)
 
 
-@pytest.mark.req("REQ-VALUE-0003")
+@pytest.mark.req("REQ-STATEVALUE-0003")
+def test_the_per_body_inputs_are_NAMED_so_a_frozen_contract_cannot_be_transposed():
+    """`survival` and `readiness` take three-and-two-field records, not anonymous tuples. This is a
+    contract T3 implements against months from now: a transposed `(payoff, odds, relevance)` would
+    still type-check, still run, and price the board wrong in a direction nobody would look."""
+    body = sv.ExposedBody(prize_at_risk=2.0, turns_to_ko_me=1)
+    assert (body.prize_at_risk, body.turns_to_ko_me) == (2.0, 1)
+
+    ready = sv.ReadyBody(payoff=3.0, readiness_odds=0.25, role_relevance=1.0)
+    assert (ready.payoff, ready.readiness_odds, ready.role_relevance) == (3.0, 0.25, 1.0)
+
+    # Still tuples, so a T3 implementation may unpack positionally without ceremony.
+    assert tuple(ready) == (3.0, 0.25, 1.0)
+
+
+# ── the two tests T0 OWES but cannot yet write ────────────────────────────────────────────────────
+#
+# Declared as skips rather than omitted. The T0 spec names both under Testing Decisions, and an owed
+# test that simply is not there reads identically to one nobody thought of — which is the failure
+# the registry's `does_not_read` exists to prevent one layer down. These fail the moment T3 makes
+# them writable, which is the point at which they stop being deferred.
+
+
+@pytest.mark.req("REQ-STATEVALUE-0004")
+@pytest.mark.skipif(sv.POC_WORTH_PRIZE_RATE is None,
+                    reason="T3 (Issue #262) authors the rate; scale invariance is unassertable "
+                           "while every family raises and the constant is None")
+def test_the_worth_leg_is_scale_invariant():
+    """THE test that matters most once T3 lands, modelled on
+    `test_deploy_value.py::test_the_worth_legs_are_dimensionless`: re-point the rate and assert what
+    does and does not move. A regression reintroducing a raw magnitude where a ratio belongs would
+    otherwise be silent, because the numbers would still look plausible."""
+    raise AssertionError("unreachable while the guard holds — T3 writes the body")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0004")
+@pytest.mark.skip(reason="T3 (Issue #262): `working` cannot be summed while every family raises")
+def test_the_working_breakdown_sums_to_the_returned_scalar():
+    """The contract `state_value`'s docstring states — a filled `working` sums to the return value.
+    Unassertable at T0 because the entry point raises by design; the moment T3 implements the
+    families this becomes the check that the breakdown is the decomposition and not a parallel
+    narrative about it."""
+    raise AssertionError("unreachable while the guard holds — T3 writes the body")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0003")
 def test_the_module_reaches_for_no_engine_no_obs_and_no_pilot():
     """The seam, asserted at import: `state_value` takes a StateModel and the families take plain
     numbers, so nothing here may pull in the Pilot, the native engine or cgpy. A value equation that

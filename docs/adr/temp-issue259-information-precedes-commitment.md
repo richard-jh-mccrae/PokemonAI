@@ -15,9 +15,11 @@ Does **not** supersede anything.
 
 ## Context
 
-Wave-1 packet item 2 reported that arming `deny_relevance` regresses
-`82225643|1|decision|11` (`OK -> MISS`, rank 1 -> 3) and diagnosed it as the free-Item hold price:
-"a FREE Item still spends a card." The user ruled the frame directly:
+Wave-1 packet item 2 reported that arming `deny_relevance` regressed
+`82225643|1|decision|11` and diagnosed it as the free-Item hold price: "a FREE Item still spends a
+card." **That framing did not survive** — PR #265 / ADR-0093 armed deny on a different diagnosis and
+the regression does not exist (see the re-measurement below). What survives is the user's ruling on
+the frame, which was never about deny at all:
 
 > "This goes into the box of 'Collect information before committing'. Do PokeGear first. Then, most
 > likely, you'll also play Hammer and Ignition Energy in this same turn."
@@ -36,8 +38,34 @@ HAND 6  Ignition Energy · Crushing Hammer x2 · Pokegear 3.0 x2 · Hero's Cape
         no basic Energy in hand; 8 Basic {W} in deck
 OPP     Riolu active carrying their ONLY energy in play (1x Basic {F})
         bench Riolu / Solrock / Makuhita, all bare
-ruled correct [0] Play Pokegear 3.0     today's agent (deny OFF) chooses [3] Play Crushing Hammer
+ruled correct [0] Play Pokegear 3.0     today's agent chooses [3] Play Crushing Hammer
 ```
+
+⚠️ **Re-measured 2026-08-01 after rebasing onto `27b1c00`** (PR #265 / ADR-0093, *"an ABSENT read is
+not a measured zero"*, which ARMED deny for real). The first draft of this ADR rested on "arming
+deny regresses this frame". **That evidence is gone**, and the correction matters more than the
+conclusion:
+
+```
+deny now armed by DEFAULT in PROFILE
+Discrimination Gate  PASS  0 moved      Decision Gate  PASS  0 moved
+83686860|1|decision|13   correct [1]  chosen [1]   <- fully RESOLVED, no longer disagrees
+82225643|1|decision|11   correct [0]  chosen [3]   <- still wrong, and NOT a regression
+```
+
+So the frame is a **standing disagreement**, not a regression: the baseline records the same wrong
+pick, so no gate flags it, and my "two unruled regressions" were artifacts of a stale base.
+
+**The doctrine survives on different, weaker, still-sufficient evidence:**
+
+1. the user ruled it directly — *"This goes into the box of 'Collect information before committing'.
+   Do PokeGear first. Then, most likely, you'll also play Hammer and Ignition Energy in this same
+   turn"*;
+2. the agent still picks `[3]` where the ruling says `[0]` — an uncorrected misplay, merely one the
+   gates cannot see because the baseline shares it;
+3. the code fact below is unchanged on the fixed tree.
+
+What it is NOT is a blocker on arming deny. Deny is armed and both gates are green.
 
 Card text verified at `data/EN_Card_Data.csv`: Crushing Hammer is *"Flip a coin. If heads, discard an
 Energy from 1 of your opponent's Pokémon"*; Ignition Energy is *"discard it at the end of your turn"*.
@@ -47,7 +75,7 @@ The coin is **already** priced — `coin_odds(ctx.card_id) * weight * value - _D
 
 The real mechanism is in the sequencer. `_finish_turn_last` states the doctrine as its own purpose —
 *"take the most informative, reversible actions first and the irreversible ones last"* — but
-`_tier()` ends on a bare `return 0` (`pilot.py:1981`), so **every endorsed free `_PLAY` lands in
+`_tier()` ends on a bare `return 0` (`pilot.py:1986` on the rebased tree), so **every endorsed free `_PLAY` lands in
 tier 0**, and tier 0 is "stable -> within a tier, score order":
 
 ```
@@ -82,19 +110,22 @@ average over reveals rather than branching on them. **Therefore information-firs
 derivable by the machinery T0 freezes, and stays structural.** The `apply_option` docstring states
 this limitation rather than leaving it to be discovered.
 
-**4. Deny arms only after the sequencing fix, not before it.** Issue #212's generalization of
-`_DENIAL_ITEM_COST` (`pilot.py:141`, currently Hammers-only) and this tier split both land before
-`deny_relevance` / `deny_strip_delta` flip ON. T2's deny item gains an internal ordering; it is no
-longer independently parallel. No regression is ruled-and-shipped in exchange for arming.
+**4. ~~Deny arms only after the sequencing fix~~ — WITHDRAWN, moot.** The first draft sequenced deny
+arming behind this tier split and Issue #212's free-Item hold price, so that no regression was
+ruled-and-shipped in exchange for arming. PR #265 / ADR-0093 armed deny on a different and better
+diagnosis (an ABSENT read misread as a measured zero), and both gates are green with 0 moved. There
+is no regression to trade, and T2's deny item is **not** sequenced behind this work. Recorded as
+withdrawn rather than deleted: a decision that shaped a track's ordering should leave a trace when it
+stops applying.
 
 ## Consequences
 
-- Expected on re-measure: `82225643|1|decision|11` returns to rank 1 on the Discrimination Gate and
-  the Decision Gate's `chosen [3]` moves to `[0]`. Neither is assumed — both are re-run.
-- `83686860|1|decision|13` (the second, unlisted deny regression found 2026-08-01) is **not ruled
-  now**. It is re-measured after this lands; if it clears, no ruling is spent, and if it persists it
-  becomes a wave item on its own merits. Ruling a frame that may not flip is exactly the waste
-  packet item 1 turned out to be.
+- **Re-measured, not predicted.** `83686860|1|decision|13` is fully resolved by PR #265 (`correct [1]`,
+  `chosen [1]`) and needs no ruling — the caution about not spending a ruling on a frame that may not
+  flip was right, and the frame indeed did not flip. `82225643|1|decision|11` still picks `[3]` where
+  the ruling says `[0]`: a standing disagreement the gates cannot flag, which is what this boundary
+  is expected to correct when T2 lands it. That correction is the falsifiable prediction this ADR
+  leaves behind.
 - A Function Tag audit is owed: every Item must classify as informative or committing. Untagged
   defaults to committing — the conservative direction, since a mis-tagged commitment sequencing
   early is the error that costs a card.

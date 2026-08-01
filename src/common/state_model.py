@@ -834,30 +834,42 @@ class TheirSide(_SideBase):
                                   body.body, forward_ids=self._forward_ids,
                                   attaches_per_turn=attaches_per_turn))
 
-    def turns_to_ko_me(self, my_body: dict | None) -> int:
+    def turns_to_ko_me(self, my_body: dict | None, *, my_benched: bool = False, my_bench=(),
+                       key_ids=frozenset(), reading: str | None = None,
+                       opp_active: dict | None = None, switch_enabler: bool = False,
+                       context: dict | None = None) -> int:
         """The ACTIVE-area survival clock — accumulating, per ADR-0071 decision 4.
 
-        UNCONSUMED today: both live callers reach `CombatMath` directly (`pilot.py`'s evolve read and
-        `survival_shift`). Deliberately NOT bench-aware — it is one-sided, so it cannot see MY bench,
-        and a Bench Harvest is a fact about the whole bench. A caller wanting the benched area must
-        pass `my_bench` / `key_ids` / `reading` itself (`MySide.bench_raws` supplies the first);
-        through here it would silently get the solo body at the conservative reading.
+        **The kwargs are the point** (POC-T0, Issue #259). Every live caller used to bypass this
+        method and reach `CombatMath` directly, and the reason was structural rather than habitual:
+        the bypasses carry arguments the old one-argument signature could not express — the Bench
+        Harvest trio (``my_bench`` / ``key_ids`` / ``reading``, with ``my_benched`` selecting the
+        benched leg), ``opp_active``, and ``switch_enabler``. A model route that silently answers a
+        DIFFERENT question than the bypass is worse than no route at all, so the fix is to widen the
+        signature — never to re-point callers at a narrower one.
 
-        **T0 contract for the threading T1 owes** (Issue #259 -> Issue #260). The reason every live
-        caller bypasses this method is that the model route is *strictly worse* than the direct
-        `CombatMath` call: the bypasses carry arguments this signature cannot express — the Bench
-        Harvest args (``my_bench`` / ``key_ids`` / ``reading``), ``opp_active``, and the
-        switch-enabler. A model route that silently answers a DIFFERENT question than the bypass is
-        worse than no route at all, so the fix is to widen the signature, never to re-point callers
-        at the narrower one.
+        Defaults reproduce the previous behaviour exactly, so this widening moves no decision: the
+        solo body at the oracle's own default reading, which is what the single-argument form asked
+        for. ``reading=None`` defers to `CombatMath`'s default rather than restating it here, so the
+        harvest vocabulary keeps ONE home.
 
-        T1 threads those kwargs through and migrates the bypass census onto this route. Any bypass
-        that deliberately SURVIVES must document why at its call site (a one-fact-one-source rule),
-        because "no undocumented CombatMath bypasses on model-covered questions" is T1's acceptance
-        criterion and an undocumented one is indistinguishable from an unmigrated one."""
-        return self._memoized(("turns_to_ko_me", id(my_body) if my_body is not None else None),
-                              lambda: self._combat.turns_to_ko_me(my_body, self.body_raws,
-                                                                  charged=self._charged))
+        Every argument is in the memo key. A memo that silently ignores an argument is a trap the
+        sibling :meth:`incoming` already had to be fixed for (Issue #213) — two callers passing
+        different harvest readings must not share one answer.
+
+        T1 (Issue #260) migrates the bypass census onto this route. Any bypass that deliberately
+        SURVIVES must document why at its call site, because "no undocumented CombatMath bypasses on
+        model-covered questions" is T1's acceptance criterion, and an undocumented bypass is
+        indistinguishable from an unmigrated one."""
+        key = ("turns_to_ko_me", id(my_body) if my_body is not None else None, bool(my_benched),
+               tuple(id(b) for b in my_bench or ()), frozenset(key_ids or ()), reading,
+               id(opp_active) if opp_active is not None else None, bool(switch_enabler),
+               id(context) if context is not None else None)
+        extra = {} if reading is None else {"reading": reading}
+        return self._memoized(key, lambda: self._combat.turns_to_ko_me(
+            my_body, self.body_raws, charged=self._charged, my_benched=my_benched,
+            my_bench=my_bench, key_ids=key_ids, opp_active=opp_active,
+            switch_enabler=switch_enabler, context=context, **extra))
 
     def discard_recur_fuel(self, body: BodyView) -> int:
         """Basic Energy their discard can reload onto ``body`` (the Aura-Jab class) — the recursion

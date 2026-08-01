@@ -1515,7 +1515,7 @@ def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
     assert aware["before"] == (1, 1) and aware["after"] == (1, 1)
 
 
-# ── a re-capture may not move a verdict without a ruling (ADR-TEMP-259) ───────────────────────────
+# ── a re-capture may not move a verdict without a ruling (ADR-TEMP-259a) ───────────────────────────
 #
 # `CLAUDE.md` says a baseline is a ruling record and is never auto-recaptured. Nothing enforced it.
 #
@@ -1594,8 +1594,51 @@ def test_the_decider_fail_direction_is_REGRESSION_not_any_movement():
                       {"key": "e|0|decision|2", "chosen": [1], "correct": [0], "context": 0}])
     after = _report([{"key": "e|0|decision|1", "chosen": [1], "correct": [0], "context": 0},
                      {"key": "e|0|decision|2", "chosen": [2], "correct": [0], "context": 0}])
-    rows = gates.decider_lab_diff(before, after)["rows"]
-    assert gates.fail_direction_keys(rows) == ["e|0|decision|1"]   # f2 moved, but was already wrong
+    diff = gates.decider_lab_diff(before, after)
+    assert gates.decision_fail_keys(diff) == ["e|0|decision|1"]   # f2 moved, but was already wrong
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_both_labs_read_their_fail_direction_through_a_NAMED_reader():
+    """The two labs must be actually symmetric, not merely described as such. The first build gave
+    the decider `decision_fail_keys` and left the leaf inlining its `ok_to_miss` comprehension at the
+    call site — the shape where one lab quietly grows a filter the other lacks."""
+    leaf = leaf_lab_diff(_report([_row("a", "OK")]), _report([_row("a", "MISS")]))
+    assert gates.discrimination_fail_keys(leaf) == ["a"]
+    assert gates.discrimination_fail_keys({}) == []          # absent key, not a crash
+    assert gates.decision_fail_keys({}) == []
+
+
+@pytest.mark.req("REQ-GATE-0012")
+def test_the_shared_guarded_capture_writes_refuses_and_never_half_writes(tmp_path):
+    """The whole ruling-gated write, shared by both labs. Three behaviours in one seam: a FIRST
+    capture writes freely (no prior ruling record to protect); a clean re-capture writes; a
+    fail-direction move with no ruling returns 1 and leaves the artifact byte-identical."""
+    out = tmp_path / "baseline.json"
+    fresh_ok = _report([_row("a", "OK")])
+    wrote = []
+
+    # first capture — nothing to guard against
+    rc = gates.guarded_capture(out, fresh_ok, index={}, diff_fn=leaf_lab_diff,
+                               fail_keys_fn=gates.discrimination_fail_keys,
+                               write=lambda: (wrote.append(1),
+                                              gates.write_json_artifact(out, fresh_ok)))
+    assert rc == 0 and wrote == [1]
+    before_bytes = out.read_bytes()
+
+    # a re-capture that degrades an UNRULED frame — refused, and the file is untouched
+    rc = gates.guarded_capture(out, _report([_row("a", "MISS")]), index={}, diff_fn=leaf_lab_diff,
+                               fail_keys_fn=gates.discrimination_fail_keys,
+                               write=lambda: wrote.append(2))
+    assert rc == 1 and wrote == [1]                          # `write` never ran
+    assert out.read_bytes() == before_bytes                  # not even partially rewritten
+
+    # the same degrade, once the frame carries a ruling — allowed
+    rc = gates.guarded_capture(out, _report([_row("a", "MISS")]),
+                               index={"a": (gates.Ruling("covered", "reviewed"),)},
+                               diff_fn=leaf_lab_diff, fail_keys_fn=gates.discrimination_fail_keys,
+                               write=lambda: wrote.append(3))
+    assert rc == 0 and wrote == [1, 3]
 
 
 @pytest.mark.req("REQ-GATE-0012")

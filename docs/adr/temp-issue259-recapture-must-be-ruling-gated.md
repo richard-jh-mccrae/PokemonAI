@@ -1,19 +1,23 @@
-# ADR-TEMP-259 — A baseline re-capture may not move a frame's verdict without a ruling
+# ADR-TEMP-259a — A baseline re-capture may not move a frame's verdict without a ruling
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 1).
-**Build = Issue #259 (POC-T0).**
+**Build = Issue #259 (POC-T0). Scope: NOT in Issue #259's stated scope** — it rides with T0 because
+T0 is the serial track and all five downstream lanes are graded against exactly these baselines.
+Shipped as its own commit for that reason.
 **Extends [ADR-0072](0072-two-gates-guard-the-decider-and-the-leaf.md)** (the Discrimination and
 Decision Gates and their "never auto-recapture" rule — this rules on the one actor 0072 left
 unguarded: the *capture* command itself) and
 **[ADR-0092](0092-the-value-system-poc-builds-by-differencing-tracks-with-wave-rulings.md)**
-(the POC's wave-ruling verification story, which this defect falsifies).
+(the POC's wave-ruling verification story, which this **enforces** — an earlier draft of this ADR
+said "falsifies", on a claim the Context section below disproves).
 Does **not** supersede anything.
 
 ⚠️ **Temp-named, not numbered.** Real number assigned at `/open-pr` rebase time. Cite the issue.
 
-**Context issues:** Issue #259 (this grill / POC-T0), Issue #247 / ADR-0091 (whose rebase produced
-the re-capture commit at fault), Issue #228 (owner of the two deny flips), Issue #213
-(`scaled_threat_rank`, the pricing change whose regression was absorbed).
+**Context issues:** Issue #259 (this grill / POC-T0), Issue #197 (whose re-capture `d5f7211` moved
+the frame the first draft mis-attributed — legitimately, the frame being ruled), Issue #165 (holds
+that frame out), Issue #228 / ADR-0093 (armed deny for real, and dissolved both of the flips this
+ADR's first draft measured).
 
 ## Context
 

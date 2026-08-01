@@ -78,9 +78,11 @@ WHITELIST: tuple[SoundRule, ...] = (
         entry="`KO_SCORE` structural band + `_LINE_CAP` invariant",
         type=STRUCTURAL,
         fact="a prize is worth more than any positional term",
-        reason="Max positional (readiness 300 + survival 50 + threat 100 + value 40 + line 100) = "
-               "590 < 1000 = KO_SCORE, deliberately, so no positional term can outrank a real prize. "
-               "The band is what makes 'un-outbiddable' expressible at all.",
+        reason="The positional caps SUM to 590 (readiness 300 + survival 50 + threat 100 + value 40 "
+               "+ line 100) against KO_SCORE 1000, deliberately, so no positional term can outrank a "
+               "real prize. `_LINE_CAP` is the line term's 100 (`strategy/planner.py`), one summand "
+               "of that band rather than the band itself. The invariant is what makes "
+               "'un-outbiddable' expressible at all.",
     ),
     SoundRule(
         id="setup-never-bench",

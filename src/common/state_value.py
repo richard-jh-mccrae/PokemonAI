@@ -38,12 +38,10 @@ and is not a gap in this registry.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
 
-# Read through the MODULE, never by binding the names: `currency` is the one source for the derived
-# bridges, and a `from currency import ...` would defeat the scale-invariance test that re-points the
-# yardstick to prove the ratios are dimensionless (`deploy_value` makes the same argument).
-from common import currency  # noqa: F401  (the contract's unit basis; consumed by T3)
+if TYPE_CHECKING:                      # the seam, expressed without importing the Pilot's world at
+    from common.state_model import StateModel   # runtime — `deploy_value`'s "no engine, no obs" rule
 
 #: **The Worth -> prize scaffold** (ADR-TEMP-259d, ratified wave 1). Damage-per-worth-point is the
 #: bridge `common/currency.py` deliberately does NOT hold: the anchor gate was RUN and FAILED twice
@@ -77,6 +75,31 @@ from common import currency  # noqa: F401  (the contract's unit basis; consumed 
 #: **The value itself is T3's** (Issue #262), authored with its reasoning recorded. `None` here is
 #: the contract saying so: T0 approves the mechanism and its bindings, not a number.
 POC_WORTH_PRIZE_RATE: float | None = None
+
+
+class ExposedBody(NamedTuple):
+    """One of MY bodies as `survival` reads it.
+
+    NAMED rather than a bare ``(float, int)`` because this is a FROZEN contract and T3 implements
+    against it months from now: an anonymous pair invites a transposed call that still type-checks,
+    still runs, and prices the board wrong in a direction nobody would think to look for."""
+
+    #: Prizes the opponent collects if this body is Knocked Out (`combat.prize_value`).
+    prize_at_risk: float
+    #: Turns until they can Knock it Out. The grading is `halve(turns_to_ko_me - 1)`, so 1 = now.
+    turns_to_ko_me: int
+
+
+class ReadyBody(NamedTuple):
+    """One of MY bodies as `readiness` reads it. Named for the same reason as :class:`ExposedBody`,
+    and more urgently — three consecutive floats are trivially transposable."""
+
+    #: What this body achieves once it is online, in prizes.
+    payoff: float
+    #: Probability it gets there, from the Attach-Budget / readiness-odds machinery. In [0, 1].
+    readiness_odds: float
+    #: How much this body's role matters to the current plan. In [0, 1].
+    role_relevance: float
 
 
 @dataclass(frozen=True)
@@ -117,9 +140,12 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("my_prizes_remaining", "readiness_odds"),
         composition="Sum over MY bodies, both areas, of prize_at_risk x halve(turns_to_ko_me - 1), "
                     "Bench-Harvest-aware. `_predicted_loss` (-KO_SCORE bench-empty doom, ADR-0064) "
-                    "survives here as a TERMINAL term, outside the positional band by construction "
-                    "— `_LINE_CAP` caps positional at 590 against KO_SCORE 1000, so a loss-avoidance "
-                    "value cannot be both bounded under that band and un-outbiddable.",
+                    "survives here as a TERMINAL term, outside the positional band by construction. "
+                    "The band is the SUM of the positional caps (readiness 300 + survival 50 + "
+                    "threat 100 + value 40 + line 100 = 590) against KO_SCORE 1000, of which "
+                    "`_LINE_CAP` is the line term's 100 (`strategy/planner.py`) — a loss-avoidance "
+                    "value cannot be both bounded under that band AND un-outbiddable, so it is "
+                    "neither.",
     ),
     TermFamily(
         name="threat",
@@ -163,7 +189,7 @@ REGISTRY: tuple[TermFamily, ...] = (
 FAMILIES: Mapping[str, TermFamily] = {f.name: f for f in REGISTRY}
 
 
-def state_value(model, *, working: dict | None = None) -> float:
+def state_value(model: "StateModel", *, working: dict | None = None) -> float:
     """The board's worth **in prizes**. Higher is better for ME.
 
     ``model`` is a :class:`common.state_model.StateModel` — the SOLE data supplier, both sides
@@ -173,8 +199,14 @@ def state_value(model, *, working: dict | None = None) -> float:
     A caller-supplied dict rather than a second entry point or a wrapper type, for one reason: the
     Turn Planner evaluates this once per candidate sequence and must pay nothing for a diagnostic it
     is not reading, while a correction round wants the breakdown on the one frame it is disputing.
-    Passing nothing costs nothing; the sum of a filled ``working`` equals the return value, asserted
-    by test.
+    Passing nothing costs nothing; the sum of a filled ``working`` equals the return value.
+
+    **Deviation from the issue's literal wording, recorded rather than slipped in:** Issue #259 and
+    the T0 spec both say "a ``working()`` per-term breakdown dict", which reads as a second callable.
+    An out-parameter was chosen instead because a second callable either re-computes every family
+    (paying twice on the planner's hot path) or forces a cache the contract would then have to
+    specify. The BREAKDOWN is what the contract owes; how it is delivered is this module's choice,
+    and a wave reviewer should overrule it here if they disagree.
 
     **Incremental evaluation** rides the StateModel's existing lazy memo (ADR-0068 amendment A) —
     the model is the unit of caching, so a family re-reading an already-derived clock pays once per
@@ -204,10 +236,10 @@ def prize_race(*, my_prizes_remaining: int, their_prizes_remaining: int) -> floa
     raise NotImplementedError("prize_race is POC-T3 (Issue #262)")
 
 
-def survival(bodies: Iterable[tuple[float, int]], *, predicted_loss: bool = False) -> float:
+def survival(bodies: Iterable[ExposedBody], *, predicted_loss: bool = False) -> float:
     """My bodies' exposure, in prizes — **negative**, since it is what I stand to lose.
 
-    ``bodies`` is ``(prize_at_risk, turns_to_ko_me)`` per body across BOTH areas, Active and Bench.
+    ``bodies`` is one :class:`ExposedBody` per body across BOTH areas, Active and Bench.
     Each is graded by `common.grading.halve(turns_to_ko_me - 1)`: a body they can Knock Out THIS
     coming turn is undiscounted, and one they cannot reach for three turns is worth an eighth of the
     worry. `halve` is the shipped convention, reused rather than a new decay rate per equation.
@@ -227,10 +259,10 @@ def threat(targets: Iterable[float]) -> float:
     raise NotImplementedError("threat is POC-T3 (Issue #262)")
 
 
-def readiness(bodies: Iterable[tuple[float, float, float]]) -> float:
+def readiness(bodies: Iterable[ReadyBody]) -> float:
     """How close my board is to DOING something, in prizes.
 
-    ``bodies`` is ``(payoff, readiness_odds, role_relevance)`` per body. Multiplicative, not additive:
+    ``bodies`` is one :class:`ReadyBody` per body. Multiplicative, not additive:
     a huge payoff at zero odds is worth zero, and the shipped Attach-Budget / readiness-odds
     machinery already answers the odds question — this composes that answer rather than forming a
     second opinion about it."""
@@ -267,7 +299,15 @@ def registry_gaps() -> list[str]:
 
     Empty is the contract. This is the double-counting rule's other half made executable: the rule
     forbids a fact entering twice, and this catches a fact entering zero times, which is the failure
-    mode that looks like a working build (`a play that changes state no term reads prices 0`)."""
+    mode that looks like a working build (`a play that changes state no term reads prices 0`).
+
+    **Known limitation, stated so it is not mistaken for coverage.** This is SELF-REFERENTIAL: it can
+    only see facts somebody already typed into a ``does_not_read``. A board signal nobody wrote down
+    anywhere is still invisible to it. The issue nominates the 2026-07-31 value-stack audit's
+    Board-signal map as the real checklist, and reconciling this registry against that map is owed —
+    T3 (Issue #262) does it as it implements each family, because that is the point at which a
+    missing input actually bites. Until then, an empty result means "nothing DECLARED is orphaned",
+    not "every board fact is priced"."""
     read = {fact for f in REGISTRY for fact in f.reads}
     return sorted({fact for f in REGISTRY for fact in f.does_not_read} - read)
 
@@ -286,7 +326,7 @@ def double_counted() -> list[str]:
 
 
 __all__: Sequence[str] = (
-    "POC_WORTH_PRIZE_RATE", "REGISTRY", "FAMILIES", "TermFamily", "state_value",
-    "prize_race", "survival", "threat", "readiness", "hand", "development",
+    "POC_WORTH_PRIZE_RATE", "REGISTRY", "FAMILIES", "TermFamily", "ExposedBody", "ReadyBody",
+    "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",
     "registry_gaps", "double_counted",
 )

@@ -83,11 +83,10 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.gates import (classes_of, decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         equivalence_index, fail_direction_keys, held_out_frames,
+                         decision_fail_keys, equivalence_index, guarded_capture, held_out_frames,
                          keyed_corrections, orphan_rulings, print_agree_delta, print_gate_report,
-                         print_ruling_moves, print_ruling_readout, RecaptureRefused,
-                         refuse_unruled_recapture, restamp_artifact, ruling_index, satisfies_human,
-                         split_excused, voided_frames, write_json_artifact)
+                         print_ruling_moves, print_ruling_readout, restamp_artifact, ruling_index,
+                         satisfies_human, split_excused, voided_frames, write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -235,7 +234,7 @@ def main(argv=None) -> int:
     # corpus, not a property of a capture, so a capture and the diff that reads it must not resolve
     # two different voided sets (ADR-0088 decision 2).
     # A re-stamp never re-reads the build, so it runs BEFORE the corpus replay — that separation is
-    # the point of the subcommand existing (ADR-TEMP-259 decision 2), not an optimisation.
+    # the point of the subcommand existing (ADR-TEMP-259a decision 2), not an optimisation.
     if args.cmd == "restamp":
         rev = args.rev or _git_rev()
         restamp_artifact(args.baseline, rev)
@@ -255,22 +254,18 @@ def main(argv=None) -> int:
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
         # whose pick this build moves OFF the human's ruling may only become the new reference once a
         # human has ruled it. The fail direction is `decider_lab_diff`'s own REGRESSION verdict, so
-        # the guard and the gate cannot drift into two ideas of "worse" (ADR-TEMP-259 decision 1).
-        if args.out.exists():
-            outgoing = json.loads(args.out.read_text(encoding="utf-8"))
-            try:
-                refuse_unruled_recapture(
-                    fail_direction_keys(decider_lab_diff(outgoing, rpt, voided=set(voided),
-                                                         equiv=equiv)["rows"]),
-                    index=index)
-            except RecaptureRefused as refused:   # an operator error, not a crash: say so plainly
-                print(f"REFUSED: {refused}")      # and leave the committed baseline untouched
-                return 1
-        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
-        _print_summary(rpt, equiv)
-        print_ruling_readout(index, voided, orphans=orphans, detail=True)
-        print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
-        return 0
+        # the guard and the gate cannot drift into two ideas of "worse" (ADR-TEMP-259a decision 1).
+        def _write():
+            write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
+            _print_summary(rpt, equiv)
+            print_ruling_readout(index, voided, orphans=orphans, detail=True)
+            print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
+
+        return guarded_capture(
+            args.out, rpt, index=index, write=_write,
+            diff_fn=lambda before, after: decider_lab_diff(before, after, voided=set(voided),
+                                                           equiv=equiv),
+            fail_keys_fn=decision_fail_keys)
 
     if args.cmd == "diff":
         before = json.loads(args.baseline.read_text(encoding="utf-8"))

@@ -663,7 +663,7 @@ def write_json_artifact(path, doc) -> None:
 
 
 class RecaptureRefused(RuntimeError):
-    """A `capture` that would overwrite a verdict the human still owes a ruling on (ADR-TEMP-259).
+    """A `capture` that would overwrite a verdict the human still owes a ruling on (ADR-TEMP-259a).
 
     Carries ``keys`` — EVERY offending frame, sorted — because an operator who learns the scope of
     what they were about to overwrite one frame at a time will simply re-run until it stops
@@ -682,20 +682,56 @@ class RecaptureRefused(RuntimeError):
             .format(len(self.keys), ", ".join(self.keys)))
 
 
-def fail_direction_keys(rows) -> list:
-    """The Decision Gate's fail-direction frames from a `decider_lab_diff` row list — the keys whose
-    pick moved OFF the human's ruling (``REGRESSION``).
+def decision_fail_keys(diff: dict) -> list:
+    """The Decision Gate's fail-direction frames — the keys whose pick moved OFF the human's ruling
+    (``REGRESSION``), read straight off a `decider_lab_diff`.
 
     A thin reader rather than a second classifier, deliberately: `decider_lab_diff` already decides
     what "worse" means (``satisfies_human`` True -> False), and a guard computing its own answer
-    would be free to drift from the gate it is protecting. The Leaf Lab needs no equivalent — its
-    fail direction is `leaf_lab_diff`'s ``ok_to_miss`` list, which is already keys."""
-    return sorted(r["key"] for r in rows or [] if r.get("verdict") == "REGRESSION")
+    would be free to drift from the gate it is protecting."""
+    return sorted(r["key"] for r in (diff or {}).get("rows") or [] if r.get("verdict") == "REGRESSION")
+
+
+def discrimination_fail_keys(diff: dict) -> list:
+    """The Discrimination Gate's fail-direction frames — the ``OK -> MISS`` keys, read straight off a
+    `leaf_lab_diff`.
+
+    Exists so the two labs are ACTUALLY symmetric rather than merely described as such. The first
+    build gave the decider a named reader and left the leaf inlining
+    ``[f["key"] for f in leaf_lab_diff(...)["ok_to_miss"]]`` at its call site, which is the shape
+    where one lab quietly grows a filter the other lacks."""
+    return sorted(f["key"] for f in (diff or {}).get("ok_to_miss") or [])
+
+
+def guarded_capture(out, fresh, *, index, diff_fn, fail_keys_fn, write) -> int:
+    """The whole ruling-gated write, shared by both labs: diff against the outgoing baseline, refuse
+    on an unruled fail-direction move, otherwise write. Returns a process exit code.
+
+    Both labs had copied the same six lines — read the outgoing artifact, diff, extract fail keys,
+    refuse, print, return 1 — differing only in which diff they called. That is the Duplicated Code
+    a third lab turns into three edits, and the place a divergence would hide: the labs must agree on
+    *when* a capture is refused even though they disagree on what "worse" means.
+
+    ``diff_fn(outgoing, fresh)`` and ``fail_keys_fn(diff)`` are the two genuinely per-lab pieces;
+    ``write()`` performs the actual artifact write once the guard passes. A first capture (no
+    outgoing artifact) writes freely — there is no prior ruling record to protect."""
+    from pathlib import Path
+    import json as _json
+    out = Path(out)
+    if out.exists():
+        outgoing = _json.loads(out.read_text(encoding="utf-8"))
+        try:
+            refuse_unruled_recapture(fail_keys_fn(diff_fn(outgoing, fresh)), index=index)
+        except RecaptureRefused as refused:   # an operator error, not a crash: say so plainly and
+            print(f"REFUSED: {refused}")      # leave the committed baseline untouched
+            return 1
+    write()
+    return 0
 
 
 def unruled_recapture_moves(fail_keys, *, index) -> list:
     """Of the frames moving in the fail direction, the ones carrying NO ruling — what a re-capture
-    must refuse to overwrite (ADR-TEMP-259 decision 1).
+    must refuse to overwrite (ADR-TEMP-259a decision 1).
 
     **One predicate, no special cases.** `ruling_index` already folds every store a ruling can live
     in — `reviewed.json` dispositions AND the Held-out Ledger — into one map, so "has a human said
@@ -748,7 +784,9 @@ def restamp_artifact(path, git_rev: str) -> dict:
     path = Path(path)
     doc = _json.loads(path.read_text(encoding="utf-8"))
     if "git_rev" not in doc:
-        raise ValueError(f"{path} carries no `git_rev` — not a gate baseline, refusing to add one")
+        # ASCII, for the reason `RecaptureRefused` states: this reaches an operator on a console the
+        # labs do not reconfigure, and dev is Windows (CLAUDE.md).
+        raise ValueError(f"{path} carries no `git_rev` -- not a gate baseline, refusing to add one")
     doc["git_rev"] = str(git_rev)
     write_json_artifact(path, doc)
     return doc

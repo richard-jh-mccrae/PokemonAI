@@ -340,7 +340,7 @@ def main(argv=None) -> int:
     from train.gates import orphan_rulings, restamp_artifact, ruling_index, voided_frames
 
     # A re-stamp never re-reads the build, so it runs BEFORE the corpus replay — that separation is
-    # the point of the subcommand existing (ADR-TEMP-259 decision 2), not an optimisation.
+    # the point of the subcommand existing (ADR-TEMP-259a decision 2), not an optimisation.
     if args.cmd == "restamp":
         rev = args.rev or _git_rev()
         restamp_artifact(args.baseline, rev)
@@ -353,28 +353,23 @@ def main(argv=None) -> int:
     rpt = _build_report(args.store, args.agent, voided=set(voided))
 
     if args.cmd == "capture":
-        from train.gates import (RecaptureRefused, leaf_lab_diff, print_ruling_readout,
-                                 refuse_unruled_recapture, write_json_artifact)
+        from train.gates import (discrimination_fail_keys, guarded_capture, leaf_lab_diff,
+                                 print_ruling_readout, write_json_artifact)
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
         # this build degrades OK -> MISS may only become the new reference once a human has ruled it.
         # The convention has HELD historically (every absorbed flip carried a ruling, measured over
         # the whole baseline history) — this removes the reliance on discipline, it does not repair a
-        # breach (ADR-TEMP-259 decision 1).
-        if args.out.exists():
-            outgoing = json.loads(args.out.read_text(encoding="utf-8"))
-            try:
-                refuse_unruled_recapture(
-                    [f["key"]
-                     for f in leaf_lab_diff(outgoing, rpt, voided=set(voided))["ok_to_miss"]],
-                    index=index)
-            except RecaptureRefused as refused:   # an operator error, not a crash: say so plainly
-                print(f"REFUSED: {refused}")      # and leave the committed baseline untouched
-                return 1
-        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
-        _print_report(rpt)
-        print_ruling_readout(index, voided, orphans=orphans, detail=True)
-        print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
-        return 0
+        # breach (ADR-TEMP-259a decision 1).
+        def _write():
+            write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
+            _print_report(rpt)
+            print_ruling_readout(index, voided, orphans=orphans, detail=True)
+            print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
+
+        return guarded_capture(
+            args.out, rpt, index=index, write=_write,
+            diff_fn=lambda before, after: leaf_lab_diff(before, after, voided=set(voided)),
+            fail_keys_fn=discrimination_fail_keys)
 
     if args.cmd == "diff":
         from train.gates import (discrimination_gate_verdict, held_out_frames, leaf_lab_diff,

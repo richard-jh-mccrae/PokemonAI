@@ -189,6 +189,48 @@ def test_an_empty_discard_reads_as_empty_rather_than_unknown():
     assert m.theirs.discard_ids == () and m.mine.discard_ids == ()
 
 
+# ── the survival clock carries what the bypasses carry (POC-T0 / Issue #259) ───────────────────
+
+def test_the_survival_clock_accepts_the_kwargs_the_bypasses_carry():
+    """Every live caller used to reach `CombatMath` directly because the one-argument model route
+    could not express the Bench Harvest trio, `opp_active` or `switch_enabler` — a route that
+    silently answers a DIFFERENT question than the bypass is worse than no route.
+
+    Defaults must reproduce the old behaviour exactly, so the widening moves no decision."""
+    m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)]),
+               _player(active=_poke(MEGA_LUC, hp=340, serial=3, energies=[E_R, E_R])))
+    body = m.mine.active.body
+
+    plain = m.theirs.turns_to_ko_me(body)
+    assert m.theirs.turns_to_ko_me(body, my_benched=False) == plain      # default == old behaviour
+    # every kwarg is ACCEPTED — T1 migrates the callers, T0 freezes the shape
+    m.theirs.turns_to_ko_me(body, my_benched=True, my_bench=m.mine.bench_raws,
+                            key_ids=frozenset({DRAGAPULT}), opp_active=None,
+                            switch_enabler=True, context=None)
+
+
+def test_the_survival_clock_memo_keys_on_its_arguments():
+    """A memo that ignores an argument is a trap the sibling `incoming` already had to be fixed for
+    (Issue #213): two callers passing different harvest readings must not share one answer. Asserted
+    by giving one call a distinguishing argument and requiring the oracle to be consulted again."""
+    m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)]),
+               _player(active=_poke(MEGA_LUC, hp=340, serial=3, energies=[E_R, E_R])))
+    body = m.mine.active.body
+
+    calls = []
+    real = m.theirs._combat.turns_to_ko_me
+
+    def counting(*a, **kw):
+        calls.append(kw.get("my_benched"))
+        return real(*a, **kw)
+
+    m.theirs._combat.turns_to_ko_me = counting
+    m.theirs.turns_to_ko_me(body, my_benched=False)
+    m.theirs.turns_to_ko_me(body, my_benched=False)          # memo hit — no second consult
+    m.theirs.turns_to_ko_me(body, my_benched=True)           # different question — must re-consult
+    assert calls == [False, True]
+
+
 # ── laziness ───────────────────────────────────────────────────────────────────────────────────
 
 def test_build_computes_nothing_and_a_read_pays_only_for_what_it_touches():

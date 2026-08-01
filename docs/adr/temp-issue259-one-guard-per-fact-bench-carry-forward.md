@@ -92,10 +92,10 @@ source-checked facts) — not bundled with it.
 
 | source | finding | lands as |
 |---|---|---|
-| #231 | conditional guard? | `survival` — one guard, `_predicted_loss`, CombatMath-gated |
-| #232 | spare body 1.96 vs 61.96 | `development` — an escalating slot price; the cliff is the +60 |
-| #237 | `_TO_BENCH` + `bench_harvest` | one deploy marginal owns every entry point |
-| #254 | rollout slot ordering | Option-Equivalence: open slots are indistinguishable = ONE class |
+| Issue #231 | conditional guard? | `survival` — one guard, `_predicted_loss`, CombatMath-gated |
+| Issue #232 | spare body 1.96 vs 61.96 | `development` — an escalating slot price; the cliff is the +60 |
+| Issue #237 | `_TO_BENCH` + `bench_harvest` | one deploy marginal owns every entry point |
+| Issue #254 | rollout slot ordering | Option-Equivalence: open slots are indistinguishable = ONE class |
 | doctrine | never bench at Set Up | whitelisted as-is, own line |
 | doctrine | Meowth ex = Ability only | `ability_marginal` leg weighed against the slot price |
 
