@@ -118,9 +118,11 @@ confidence, threats, targets). **Posture** consumes it through the seams above, 
 
 1. **SHIPPED** — a deck-agnostic generic core in the Pilot: the Read is on `Board`
    (`Board.read`/`favorability`/`posture_confidence`, M2.0 / PR#7) and lever A
-   (**calibrate aggression to favourability**) is live BOTH ways — `disrupt-when-unfavored`
-   (≤ 0.45) and `dont-gift-a-refresh-when-favored` (≥ 0.55, the variance-denial favored half,
-   ADR-0026 amendment 2026-07-03)
+   (**calibrate aggression to favourability**) is live BOTH ways — the unfavored half as a
+   MULTIPLIER inside the instrument it scales rather than a flat rung (`_DENIAL_UNFAVORED` in
+   `_denial_play_tactical`; `needs.phase_scale` where the term is survival-denominated, ADR-0102 —
+   the flat `disrupt-when-unfavored` is deleted), and `dont-gift-a-refresh-when-favored` (≥ 0.55,
+   the variance-denial favored half, ADR-0026 amendment 2026-07-03)
    ([baseline_disruption.py](../src/common/strategy/baseline/baseline_disruption.py)), fed by the
    deck's own `my_archetype` declaration (M2.1b / PR#8). Kill-switch: `main.py` `posture=` param.
 2. **pending** — deck-specific Read-conditioned Hypotheses;
@@ -192,7 +194,8 @@ tools/
   the engine `CardStat`; the Tier-0 Tactical Evaluator applies **Weakness ×2** (Active only);
   `CardFunctions`; mega_starmie wired end-to-end.
 - **Partially wired**: Posture (the Read → play) — the Read is on the `Board` and generic-core
-  lever A (favourability → `disrupt-when-unfavored`) is shipped (PR#7/#8, ADR-0026); deck-specific
+  lever A (favourability, as a multiplier inside the instrument it scales) is shipped (PR#7/#8,
+  ADR-0026; re-expressed by ADR-0080 decision 3 and ADR-0102); deck-specific
   Read-conditioned Hypotheses and Tier-1 search-feeding remain.
 - **Designed, not yet wired**: the richer Tactical Evaluator (Jetting-Blow bench-snipe /
   wall-disruption); the [General Strategy](general-strategy.md) roadmap (board-state rules); the

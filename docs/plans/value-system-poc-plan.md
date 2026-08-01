@@ -69,7 +69,9 @@ recorded) · `leaf_hand_value` · `value_model` (parked; post-POC Issue #147 rep
 
 **SHADOW (computes, decides nothing — all die in this build):** `_discard_shadow`,
 ~~`_refresh_shed_shadow`~~ (DEAD 2026-08-01, ADR-0101 — item 2b promoted its subject),
-`_threat_shadow`, `_recur_shadow`, `_opponent_target_shadow`, `hand_size_relief` (reporting-only).
+`_threat_shadow`, `_recur_shadow`, `_opponent_target_shadow`,
+~~`hand_size_relief` (reporting-only)~~ (DEAD 2026-08-02, ADR-0102 — item 2c promoted its subject
+into `score`, so the field and its `hs_relief` telemetry key went with the flats they reported past).
 
 **UNCONSUMED (dead surface):** StateModel TheirSide clock family (every live consumer bypasses
 to CombatMath with `charged`/`forward_ids`/harvest kwargs `build()` never receives) · sharing
@@ -239,8 +241,17 @@ deliberate list; gates green; flips → wave 2.
   design A would bias the GIFT leg in ADR-0060's CRITICAL direction; the flats stay typed under
   `firing-equation-constants` and the prerequisite (`gusting-keepcost-design.md` §2's shared role
   sheet) is named. Gates: Discrimination PASS/0 moved, Decision 2 FIX + 3 REGRESSION → wave 2.
-- **Relief promote (old Issue #221):** `hand_size_relief` into score; the three flat disruption
-  rungs deleted; the reporting-only field dies.
+- **Relief promote (old Issue #221): DONE 2026-08-02 (ADR-0102).** `hand_size_relief` enters score
+  as the SURVIVAL a refresh buys — two `turns_to_ko_me` reads across one counterfactual on the
+  Damage Formula's own `atk_hand` / `def_hand` keys, in the shared sub-prize survival currency. It
+  prices **both** hands, because the set scales off both: Alakazam's Powerful Hand (20/card, theirs)
+  and Mega Froslass ex's Resentful Refrain (50/card, MINE), the latter moved by every refresh
+  including a self-only Lillie's. `play-harlequin-vs-hand-size` (+25), `disrupt-when-unfavored`
+  (+18), `strip-the-stacked-engine-hand` (+22), the reporting-only field/telemetry and the two Board
+  signals left unconsumed are all deleted. Lever A returns as `phase_scale`, not a second
+  `_DENIAL_UNFAVORED` (ADR-0078 decision 6). Gates: Decision PASS / 0 unruled; Discrimination 2
+  `OK → MISS` **held out onto #262** — both caused by the +25's deletion alone, neither a decision
+  move (the agent still plays the human's option on both).
 - **Deploy finish (old Issues #237/#232):** price the `_TO_BENCH` entry point, `bench_harvest`
   sharpening, and resolve the spare-body cliff inside the marginal.
 - **Rollout order fix (old Issue #254):** canonical slot ordering via Option-Equivalence.

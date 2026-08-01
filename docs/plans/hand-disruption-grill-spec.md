@@ -1,15 +1,20 @@
 # Hand disruption — grill ruling: the disruptor swing stays half-flat until evidence
 
 **Status.** GRILLED and RESOLVED 2026-07-19; the two measured build items are **BUILT the same day**
-(see "Build list" below, suite green 3084). The flats and the damage-leg replacement stay
-evidence-gated designs. Round 0 measured first (below); four rulings (user,
+(see "Build list" below, suite green 3084). **Design B — the damage-leg replacement — is BUILT
+2026-08-02 as ADR-0102** (Issue #261 item 2c), which retired rather than met its evidence gate and
+amended it in three places; read the box at the head of §B before the design text. **Design A — the
+STRIP/GIFT flats — is PARKED on measurement** (ADR-0101). Round 0 measured first (below); four
+rulings (user,
 2026-07-19). Sibling of the gusting grill — same opponent-worth input layer, disruptor jurisdiction:
 the two FLAT per-card prices on THEIR cards inside ADR-0060's closed-form refresh swing
 (`_REFRESH_OPPONENT_HAND_STRIP = 4` / `_REFRESH_OPPONENT_HAND_GIFT = 8`, `pilot._refresh_swing_tactical`) and the
 hand-size-attacker damage leg (`play-harlequin-vs-hand-size` +25, `disrupt-when-unfavored` +18,
 `baseline_disruption.py`). **Nothing is built here** — build items go to a follow-up session under
 the corpus + score-diff gate; evidence-gated designs wait for their gates to trip (the grab/pitch
-precedent, ADR-0065; re-confirmed by the gusting Round 0).
+precedent, ADR-0065; re-confirmed by the gusting Round 0). *That last clause is the one this doc got
+wrong: ADR-0092's POC retired the wait-for-a-witness standard for rung piles a track is deleting
+anyway. It stands as written because the reasoning it records is what ADR-0102 had to answer.*
 
 ## The shared layer — CONSUMED from the gusting grill, not designed
 
@@ -120,11 +125,18 @@ meta_tracker dashboard tests, untouched by this change).
 
 ## The fold list
 
-**Fold ONLY when the damage-term evidence gate trips (design B):** `play-harlequin-vs-hand-size`
-(+25) and `disrupt-when-unfavored` (+18) — both REPLACED by the signed damage term, never stacked
-beside it (currency-zone rule). Note +18's unfavored-posture half does not survive separately: per
-the ADR-0062 precedent, posture SCALES the oracle (`_DENIAL_UNFAVORED`-style multiplier inside the
-term), it is never re-added as a flat.
+**FOLDED 2026-08-02 (ADR-0102):** `play-harlequin-vs-hand-size` (+25) and `disrupt-when-unfavored`
+(+18) — both REPLACED by the promoted survival term, never stacked beside it (currency-zone rule).
++18's unfavored-posture half did not survive separately, exactly as this list required; it returns
+as a multiplier INSIDE the term, though as `needs.phase_scale` rather than the `_DENIAL_UNFAVORED`
+this list names (design B's amendment 3, above).
+
+**Also folded, on a different ground:** `strip-the-stacked-engine-hand` (+22), listed below as a
+surviving forward contract. It survives as DOCTRINE — the entry below stands as the record — but not
+as a live weight. No one-sided strip is in the pool, so it has never fired on a real board, and the
+POC's standard is that a nonzero weight behind an unfired gate is an untested rung that will fire at
+full strength the first time the set grows. Its weight-0 mirror `disrupt-the-tailored-hand` carries
+the same contract inertly and stays.
 
 **Survive on their own axes (do NOT fold — confirmed):**
 - `dont-refresh-into-a-probable-miss` — draw quality, its own jurisdiction (the DRAW side of
@@ -164,7 +176,40 @@ claims; unrecognized opponent → flat. **Evidence gate:** a correction that tur
 stripped or gifted (content, not count) — none exist today; every strip/gift correction in the
 corpus is count-based and already priced by the closed-form swing.
 
-### B. The signed hand-size damage term — GRILLED 2026-07-19 (rulings 1a/2a); reporting BUILT, scoring gated
+### B. The signed hand-size damage term — **BUILT 2026-08-02 (ADR-0102, Issue #261 item 2c)**
+
+> **The promotion gate at the foot of this section was RETIRED, not met.** It waited on *"a
+> correction demonstrating the refill misfire or a mispriced strip"*, and none arrived. ADR-0092's
+> POC replaced that standard: a track deletes its rung pile and lets the two deterministic gates rule
+> the flips, rather than waiting for a blunder round to supply a witness. What shipped differs from
+> the sketch below in three ways, each recorded in ADR-0102:
+>
+> 1. **The clock, not the boolean.** *"Whether my Active survives"* ships as Δ `turns_to_ko_me`
+>    rather than a flip of `active_doomed`. The boolean is a cliff and it is blind on this doc's own
+>    motivating frame: on ml f111 a refill need not flip a 200 HP Active from safe to doomed to be a
+>    blunder — it moves the clock from ten turns to three and the boolean never moves. Doom is
+>    `ko_me <= 1`, so this is the finer reading of the same oracle: price the quantity, don't
+>    threshold it.
+> 2. **BOTH hands.** This section reframes the leg as *incoming damage to me* and then prices only
+>    THEIR hand. The set scales off mine too, and harder: **Mega Froslass ex** (861, Resentful
+>    Refrain, *"50 damage for each card in your opponent's hand"*) and **Chandelure** (98, Mind
+>    Ruler, 30/card) read MY hand at up to 50 a card against Powerful Hand's 20, and EVERY refresh
+>    moves my hand — including the self-only Lillie's this doc excludes. The `def_hand` leg fires on
+>    a real corpus board (83967840-54, opponent Active Mega Froslass ex, Lillie's at −46.67).
+> 3. **Lever A returns as `phase_scale`, not as `_DENIAL_UNFAVORED`.** The fold list below is right
+>    that the posture half must scale rather than re-add; it names the wrong scaler. ADR-0078
+>    decision 6 rules that a path carrying both multiplies one race read by itself, and ADR-0080
+>    decision 3 kept the Read-gated scaler for deny only because *"deny reads `phase_scale` on no
+>    surface"* — a condition this term does not meet, since `phase_scale` IS its survival currency's
+>    scaler.
+>
+> Measured: suite 4430 green; Decision Gate PASS, 0 unruled. Discrimination Gate 2 `OK → MISS`, both
+> **held out onto Issue #262** by user ruling 2026-08-02 — measured in the gate's own process, both
+> are caused by the +25's deletion alone (neutralising the new term leaves them in place; restoring
+> the +25 clears the gate), and neither is a decision move: the agent still plays the human's ruled
+> option on both frames.
+
+#### The original design, as grilled 2026-07-19 (rulings 1a/2a)
 
 **The reframe (verified at source).** The hand-size leg is NOT opponent-worth — Powerful Hand
 (Alakazam MEG 743: *"Place 2 damage counters … for each card in your hand"* = **20 dmg/card in
@@ -207,25 +252,38 @@ while it earns promotion — the house telemetry-only pattern (`play-safe-when-a
   (pinned inert: `score == Σ fired weights + tactical`). Pins: `test_hand_size_relief.py`
   (+80 at hand 8, −60 at hand 1, 0 at redraw/no-attacker/self-only, inert).
 
-**Promotion gate (still evidence-gated):** flip the inert signal into `score` (marginal vs
-`active_doomed`, posture-scaled) AND retire +25/+18 — waits on a correction demonstrating the refill
-misfire or a mispriced strip. None exist today; f64, the only live exercise of the +25, is endorsed
-correctly. Until then the rungs drive and the signal only reports. **Fail direction:** their
-next-turn hand size beyond the redraw count is unknowable → the reported swing uses the deterministic
-redraw count only, never a speculative refill projection.
+**Promotion gate — RETIRED unmet, and discharged (2026-08-02, ADR-0102).** It read: *flip the inert
+signal into `score` AND retire +25/+18 — waits on a correction demonstrating the refill misfire or a
+mispriced strip.* No such correction ever arrived, and ADR-0092 replaced the standard (a POC track
+deletes its rung pile and lets the deterministic gates rule the flips). The obligation this gate was
+really protecting — **f64, the only live exercise of the +25, must stay endorsed without it** — is
+MET and measured: on `82226759-64` (opponent Active Alakazam, their hand 21, the human's own words
+*"opponents deck requires a large hand to deal heavy damage, therefore play harlequin to reduce their
+handsize"*) the promoted term prices Harlequin at **+90.00**, the `_SURVIVAL_CAP` ceiling — 3.6× the
+flat it replaces, on the frame the flat was right about. Across the whole committed corpus the term
+is non-zero on 5 of 282 refresh-holding frames, and the Decision Gate moved none of them.
+
+**Fail direction (unchanged, and now on both hands):** neither hand's size beyond the redraw count is
+knowable → both clock reads use the deterministic redraw count only, never a speculative refill
+projection.
 
 ## Re-baseline surface (whoever builds)
 
 - `tests/strategy/test_refresh_swing_pilot.py` — the six-pin net (ml f111, ms f60/f94/f45/f100/f64)
   survives EVERY build above; f111 (Judge −32.36) is the refill counter-pin, f64 the
-  strip-endorsement fixture that design B must reproduce without the +25.
+  strip-endorsement fixture that design B must reproduce without the +25. **Discharged 2026-08-02:**
+  the net is green and f64 prices at +90.00 through the promoted term (see the promotion-gate note).
 - Rung-pinned tests to re-point on any fold: `test_baseline_clusters.py`,
   `test_deferred_disruption_cluster.py`, `test_deferred_cluster_pins.py`,
   `test_posture_cardfacts.py`, `test_posture_read.py`, `test_shuffle_refresh.py`,
-  `test_energy_denial_guards.py` (the ADR-0062 currency neighbors).
+  `test_energy_denial_guards.py` (the ADR-0062 currency neighbors). **Re-pointed 2026-08-02** by
+  ADR-0102, except the last two, which named the rungs only in prose. Three of them asserted the
+  card fact through the `hand_size_attacker` LABEL and now carry the `handSizeDamage` scaler the
+  clock actually reads.
 - New pins: `test_grab_refresh_draw.py` (item 1, 86088989-29); `test_hand_size_relief.py` (the
-  reporting-only Design-B signal — the inertness pin `score == Σ fired + tactical` MUST survive
-  promotion's rewiring, re-pointed not deleted when the signal enters `score`).
+  Design-B signal — the inertness pin `score == Σ fired + tactical` MUST survive promotion's
+  rewiring, re-pointed not deleted when the signal enters `score`. **It did:** the invariant is about
+  the trace's shape, not about this term, and the relief now arrives inside `tactical`).
 - Routed residuals (recorded, not disruptor work): 86091435-96 → attach doctrine (off-type attach
   nets +3 while `attach-before-hand-shuffle` counts it as a reason to hold Lillie's);
   83664991-43 → ADR-0065 SHED (held Ignition Energy + strong-hand keep-cost underpriced at +10.70);
