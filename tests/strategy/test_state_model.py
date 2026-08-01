@@ -128,7 +128,8 @@ def test_both_sides_are_read_from_one_snapshot():
     assert m.theirs.active.card_id == RIOLU
     assert len(m.theirs.bodies) == 2
     assert m.mine.prizes_remaining == 4 and m.theirs.prizes_remaining == 6
-    assert m.turn == 5
+    assert m.mine.turn == 5      # the turn's ONE home (POC-T1 retired the duplicate
+    #                             `StateModel.turn` property — a second reader of one fact)
 
 
 def test_my_side_carries_cards_and_their_side_carries_only_a_count():
@@ -267,12 +268,12 @@ def test_two_builds_on_one_observation_agree_field_for_field():
     assert a.mine.unseen_counts == b.mine.unseen_counts
     assert a.prize_race == b.prize_race
     assert a.opponent_fingerprint == b.opponent_fingerprint
-    assert a.mine.famine == b.mine.famine
+    assert a.mine.active_famine == b.mine.active_famine
 
 
 def test_reading_the_model_twice_is_stable():
     m = _model(_player(active=_pult(), hand=[CRISPIN]), _player(active=_poke(RIOLU, hp=80)))
-    assert m.mine.famine is m.mine.famine
+    assert m.mine.active_famine is m.mine.active_famine
     assert m.mine.deck_energy_types == m.mine.deck_energy_types
 
 
@@ -280,7 +281,7 @@ def test_the_model_never_writes_the_carried_state_it_was_given():
     carried = CarriedState.of(phase_prev="RACE")
     m = StateModel.build(_obs(_player(active=_pult()), _player(active=_poke(RIOLU, hp=80))),
                          combat=_combat(), deck=DECK, carried=carried)
-    _ = m.mine.famine, m.prize_race, m.opponent_fingerprint
+    _ = m.mine.active_famine, m.prize_race, m.opponent_fingerprint
     assert m.carried is carried and m.carried.get("phase_prev") == "RACE"
 
 
@@ -397,7 +398,7 @@ def test_pre_anchor_the_legs_diverge():
     assert d.floor == 0                      # both {D} could be prized
     assert 0.0 < d.expected < 2.0            # a fraction — never comparable to a cost
     assert d.ceiling == 2
-    assert d.anchored is False and d.possible is True
+    assert d.floor < d.ceiling and d.possible is True     # legs apart: not yet anchored
 
 
 def test_anchored_all_three_legs_collapse_to_the_exact_count():
@@ -407,7 +408,7 @@ def test_anchored_all_three_legs_collapse_to_the_exact_count():
                own_prizes={E_R: 1, DRAGAPULT: 1})
     d = m.mine.deck_energy_counts[DARKNESS]
     assert (d.floor, d.expected, d.ceiling) == (2, 2.0, 2)
-    assert d.anchored is True
+    assert d.floor == d.ceiling                           # legs collapsed: anchored
 
 
 def test_the_pigeonhole_floor_is_sound_when_copies_outnumber_hidden_prizes():
@@ -530,14 +531,14 @@ def test_f70_is_not_a_famine_when_read_off_the_model():
     m = _model(_player(active=_pult(), hand=[CRISPIN], prize=4),
                _player(active=_poke(RIOLU, hp=80)))
     assert m.mine.reachable_attach(m.mine.active, PHANTOM_DIVE) is True
-    assert m.mine.famine is False
+    assert m.mine.active_famine is False
 
 
 def test_a_provable_famine_still_fires():
     """Fail-closed stays fail-closed through the model: empty hand, manual attach spent."""
     m = _model(_player(active=_pult(), prize=4), _player(active=_poke(RIOLU, hp=80)),
                energy_attached=True)
-    assert m.mine.famine is True
+    assert m.mine.active_famine is True
 
 
 def test_the_budget_is_per_body_and_memoised_per_body():
@@ -570,7 +571,7 @@ def test_readiness_p_is_certain_when_the_budget_already_reaches_and_closed_witho
 
 def test_famine_makes_no_claim_without_an_active():
     m = _model(_player(), _player(active=_poke(RIOLU, hp=80)))
-    assert m.mine.famine is False
+    assert m.mine.active_famine is False
     assert m.mine.reachable_attach(None) is False
 
 
@@ -601,9 +602,11 @@ def test_the_prize_race_is_one_cross_side_derivation():
                        bench=[_poke(MEGA_LUC, hp=340, serial=4)], prize=5))
     race = m.prize_race
     assert (race.my_prizes_remaining, race.opp_prizes_remaining) == (2, 5)
-    assert race.prize_diff == 3                              # positive = I am ahead
-    assert dict(race.prize_map)[MEGA_LUC] == 3               # a Mega ex yields three
-    assert race.ko_wins_now(2) is True and race.ko_wins_now(1) is False
+    # POC-T1 (Issue #260) retired `prize_diff` / `prize_map` / `ko_wins_now` — three consumer-less
+    # derivations over the two counts. The counts are the composite; the per-body prize YIELD is
+    # read off the BodyView a caller is already holding.
+    assert race.opp_prizes_remaining - race.my_prizes_remaining == 3     # positive = I am ahead
+    assert {b.card_id: b.prize_value for b in m.theirs.bodies}[MEGA_LUC] == 3
 
 
 def test_prize_yield_stays_card_knowledge_on_the_oracle():
@@ -626,15 +629,17 @@ def test_the_channel_rejects_undeclared_members():
     """Narrow BY CONSTRUCTION rather than by convention — the whole point of declaring the channel."""
     with pytest.raises(ValueError):
         CarriedState.of(some_new_memory=1)
-    with pytest.raises(ValueError):
-        CarriedState().with_("some_new_memory", 1)
 
 
 def test_an_update_returns_a_new_snapshot_and_never_mutates_the_old():
     """A member is read in and handed back — the caller stores it. Nothing mutates as a side effect
-    of being computed, which is what keeps the model pure."""
+    of being computed, which is what keeps the model pure.
+
+    Written through `of` since POC-T1 (Issue #260) retired the single-member `with_` rebind: every
+    real caller rebuilds the WHOLE channel, which is what keeps the hand-back discipline visible at
+    the call site rather than hidden behind a mutator-shaped name."""
     before = CarriedState.of(phase_prev="RACE")
-    after = before.with_("phase_prev", "STABILIZE")
+    after = CarriedState.of(phase_prev="STABILIZE")
     assert before.get("phase_prev") == "RACE"
     assert after.get("phase_prev") == "STABILIZE"
     assert before is not after

@@ -18,6 +18,8 @@ FIGHTING = 6
 COLORLESS = 0
 RIOLU = 677
 MLUC = 678          # Mega Lucario ex — discard_energy_recur ({F}), one hop from Riolu
+F_ENERGY_CARD = 6   # Basic {F} Energy, the CARD id (EnergyType.FIGHTING is also 6 —
+                    # a coincidence in the data, never a rule; see pilot_helpers.poke)
 
 
 def _combat(tags):
@@ -63,11 +65,15 @@ def test_recur_shadow_emits_the_fuel_delta_and_respects_the_midsim_guard():
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
     p._planning = False
+    # The {F} sits in their REAL discard: POC-T1 gave the shadow one source for that zone (the
+    # snapshot), rather than a sparse guard off the Board field and a fuel read off a second walk.
     obs = {"current": {"yourIndex": 0, "players": [
         {"active": [{"id": 999999, "hp": 200, "energies": []}]},           # my Active
-        {"active": [{"id": MLUC, "hp": 340, "energies": []}], "bench": []},  # opp refueler (678)
+        {"active": [{"id": MLUC, "hp": 340, "energies": []}], "bench": [],
+         "discard": [{"id": F_ENERGY_CARD}] * 3},                          # opp refueler (678)
     ]}}
     board = types.SimpleNamespace(opp_discard_energy={FIGHTING: 3})
+    p._snapshot(obs)                  # the shadow reads both clocks off the snapshot (POC-T1)
     sh = p._recur_shadow(obs, board)
     assert sh is not None and sh["bodies"]
     row = sh["bodies"][0]
@@ -78,4 +84,6 @@ def test_recur_shadow_emits_the_fuel_delta_and_respects_the_midsim_guard():
     assert p._recur_shadow(obs, board) is None
     # no opponent discard fuel → sparse
     p._planning = False
+    p._snapshot({"current": {"yourIndex": 0, "players": [obs["current"]["players"][0],
+                                                         {"active": [], "bench": [], "discard": []}]}})
     assert p._recur_shadow(obs, types.SimpleNamespace(opp_discard_energy={})) is None

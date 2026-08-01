@@ -154,10 +154,10 @@ class GustMixin:
             # per-attack oracle (ADR-0032): KO check honors the attack's own ignore flags
             if self.predicted_damage(getattr(my_stat, "cardId", None), aid, target) >= t_hp:
                 best = max(best,
-                           self._snipe_ko_prizes(others, self._rider_snipe(aid)),
+                           self._snipe_ko_prizes(others, self.combat.rider_snipe(aid)),
                            # the spread rider is the same drag-and-finish synergy (ADR-0066;
                            # ep85046350 f81: gust Roserade, Phantom Dive KOs it AND the Gible)
-                           self._spread_ko_prizes(others, self._rider_spread(aid)))
+                           self._spread_ko_prizes(others, self.combat.rider_spread(aid)))
         return best
 
     def _gust_forward_denial(self, target: dict) -> float:
@@ -340,8 +340,8 @@ class GustMixin:
             main = (self._prize_value(oa)
                     if oa_hp and self.predicted_damage(getattr(my_stat, "cardId", None),
                                                        aid, oa) >= oa_hp else 0)
-            rider = max(self._snipe_ko_prizes(bench, self._rider_snipe(aid)),
-                        self._spread_ko_prizes(bench, self._rider_spread(aid)))
+            rider = max(self._snipe_ko_prizes(bench, self.combat.rider_snipe(aid)),
+                        self._spread_ko_prizes(bench, self.combat.rider_spread(aid)))
             best = max(best, main + rider)
         return max(best, self._active_ko_prizes(ma, oa, payable))
 

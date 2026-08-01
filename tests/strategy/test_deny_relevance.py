@@ -80,6 +80,7 @@ def _obs(bench=(), *, active=None, my_energies=()):
 
 
 def _rows(pilot, obs, board=BOARD):
+    pilot._snapshot(obs)              # the per-decision StateModel these rows now read (POC-T1)
     result = pilot._opponent_target_rows(obs, board)
     assert result is not None, "expected opponent-target rows for this board"
     return result[1]

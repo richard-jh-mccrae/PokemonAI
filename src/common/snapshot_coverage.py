@@ -96,21 +96,22 @@ WRITABLE: tuple[Zone, ...] = (
     Zone("allowance_supporter_played", "the one-Supporter-per-turn allowance", HOMED,
          home="supporter_played"),
 
-    # ── owed: enumerated by §3c, no public read yet. T0 ships interfaces; T1 implements. ──────────
-    Zone("attached_tools", "Pokémon Tools attached to a body", OWED,
-         owner="T1 / Issue #260 — the raws already carry a `tools` key (`_SideBase` body raws); "
-               "what is missing is a typed BodyView read, so this is a promotion, not new plumbing"),
-    Zone("special_conditions", "per-body Special Conditions (Asleep/Paralyzed/Burned/Poisoned/"
-                               "Confused)", OWED,
-         owner="T1 / Issue #260 — `MySide.attack_blocked` derives the two that block acting "
-               "(rulebook L190/L206) but collapses them to one bool on the SIDE; the per-body "
-               "condition set has no read"),
-    Zone("allowance_retreat_used", "whether the one-Retreat-per-turn allowance is spent", OWED,
-         owner="T1 / Issue #260 — the observation carries `current.retreated`; the snapshot does "
-               "not surface it, so a retreat's own legality cannot be differenced"),
-    Zone("transient_grants", "ADR-0033 transient grants and locks in force this turn", OWED,
-         owner="T1 / Issue #260 — only `StateModel._transient_generation` exists, and it is a "
-               "PRIVATE cache-invalidation counter, not a read of the grants themselves"),
+    # ── homed by T1 (Issue #260). Each was `owed` at T0 with this track named as its owner. ───────
+    Zone("attached_tools", "Pokémon Tools attached to a body", HOMED,
+         home="mine.active.tool_ids"),
+    Zone("special_conditions", "Special Conditions on the Active (only the Active can carry one — "
+                               "`docs/rules.md` §8, which is why the engine puts the five flags on "
+                               "PlayerState rather than on the body)", HOMED,
+         home="mine.conditions,theirs.conditions"),
+    Zone("allowance_retreat_used", "whether the one-Retreat-per-turn allowance is spent", HOMED,
+         home="retreated"),
+    Zone("transient_grants", "ADR-0033 transient grants and locks in force this turn", HOMED,
+         home="mine.active.grant"),
+    Zone("bench_occupancy", "how many bodies each Bench holds, and whether it is full — the loss "
+                            "condition's own state (`docs/rules.md` §7 case 2)", HOMED,
+         home="mine.bench_count,theirs.bench_count"),
+    Zone("allowance_stadium_played", "the one-Stadium-per-turn allowance", HOMED,
+         home="stadium_played"),
 
     # ── hidden: no field can hold it. Recorded so nobody 'fixes' it. ──────────────────────────────
     Zone("deck_order", "the ORDER of cards in a deck — what a shuffle and a to-bottom rider change",
@@ -134,6 +135,10 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "coin": frozenset(),                     # writes nothing: it is an RNG READ. See COIN below.
     "draw": frozenset({"my_hand_ids", "my_deck_count", "deck_odds"}),
     "energy_provide": frozenset({"attached_energy", "allowance_energy_attached"}),
+    # Issue #204: a `discard_energy_recur` line reloading Basic Energy from its OWN discard pile
+    # onto a body in play. No deck zone — unlike `accel`, the source is the visible discard, which
+    # is why the clock may read it soundly rather than through the odds machinery.
+    "energy_recur": frozenset({"attached_energy", "my_discard_contents"}),
     "fetch": frozenset({"my_hand_ids", "bodies_in_play", "my_deck_count", "deck_odds"}),
     "heal": frozenset({"damage_counters"}),
     # riders

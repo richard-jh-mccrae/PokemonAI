@@ -37,6 +37,15 @@ def _combat():
 MY_BODY = {"id": MY, "hp": 270}
 
 
+def _doom(oracle, ma, oa, *, context=None) -> bool:
+    """The DOOM policy read, oracle-level. POC-T1 (Issue #260) folded `active_doomed` onto the curve
+    and then deleted it once the census moved its consumers onto the snapshot, where the composed
+    form lives as `TheirSide.doomed`; this is the same composition without a model to hand."""
+    from common.strategy.combat import UNCHARGED
+    hp = (ma or {}).get("hp", 0)
+    return bool(hp) and int(oracle.incoming(ma, [oa], 1, charged=UNCHARGED, context=context)) >= hp
+
+
 def _opp(n):
     return {"id": OPP, "hp": 200, "energies": [0] * n}
 
@@ -47,7 +56,7 @@ def test_doomed_incoming_agrees_when_the_active_can_afford_its_lethal():
     oa = _opp(2)                                        # 2 Energy → affords {C}{C} 300 >= my 270
     assert c.incoming(MY_BODY, [oa], 1) == 300
     assert c.doomed_incoming(MY_BODY, oa) >= MY_BODY["hp"]        # curve: doomed
-    assert c.active_doomed(MY_BODY, oa) is True                   # incumbent: doomed → agree
+    assert _doom(c, MY_BODY, oa) is True                          # doom policy: doomed → agree
 
 
 # REQ-DOOMSHADOW-0002 — the KNOWN affordability divergence (the shadow's whole reason to exist).
@@ -58,7 +67,7 @@ def test_doomed_incoming_diverges_on_the_unaffordable_current_form():
     # not a bug — it is why the swap is shadowed, not blind.
     c = _combat()
     oa = _opp(0)
-    assert c.active_doomed(MY_BODY, oa) is True                   # incumbent doom (worst-case)
+    assert _doom(c, MY_BODY, oa) is True                          # doom policy (worst-case)
     assert c.doomed_incoming(MY_BODY, oa) == 0                    # curve: current form unaffordable
     assert not (c.doomed_incoming(MY_BODY, oa) >= MY_BODY["hp"])  # → curve reads "survives" (diverges)
 
@@ -73,6 +82,7 @@ def test_threat_shadow_emits_the_agreement_bit_and_respects_the_midsim_guard():
         {"active": [{"id": OPP, "hp": 200, "energies": []}]},
     ]}}
     board = types.SimpleNamespace(active_doomed=True)
+    p._snapshot(obs)                  # the shadow reads both policies off the snapshot (POC-T1)
     sh = p._threat_shadow(obs, board)
     assert sh is not None
     assert set(sh) >= {"doom_old", "doom_curve", "doom_incoming", "my_hp", "agree",
@@ -81,7 +91,7 @@ def test_threat_shadow_emits_the_agreement_bit_and_respects_the_midsim_guard():
     # value, exposed separately as doom_final — which mirrors what was fed in here).
     ma = obs["current"]["players"][0]["active"][0]
     opp = obs["current"]["players"][1]
-    assert sh["doom_old"] == p.combat.active_doomed(ma, opp["active"][0], opp)
+    assert sh["doom_old"] == p._state_model.theirs.doomed(ma, bodies=[opp["active"][0]])
     assert sh["doom_final"] is True
     assert sh["agree"] == (sh["doom_old"] == sh["doom_curve"])
     # mid-sim → sparse (no shadow work during rollouts)
@@ -100,11 +110,12 @@ def test_the_two_doom_reads_agree_on_a_hand_size_attacker():
     combat = _build_pilot("mega_lucario")[0].combat
     ALAKAZAM, KADABRA = 743, 742
     my = {"id": MY, "hp": 130}                      # 140 kills, 120 does not
-    opp = {"handCount": 7}
-    ctx = {"atk_hand": 7}
+    ctx = {"atk_hand": 7}                           # the hand-size scaler's measured variable — the
+    #                                                 vestigial `opp` dict the old `active_doomed`
+    #                                                 took is gone with it (POC-T1, Issue #260)
     for body in ({"id": ALAKAZAM, "hp": 140, "energies": [5]},       # already the attacker
                  {"id": KADABRA, "hp": 90, "energies": [5]}):        # one evolution away
-        worst = combat.active_doomed(my, body, opp, context=ctx)
+        worst = _doom(combat, my, body, context=ctx)
         curve = combat.doomed_incoming(my, body, context=ctx)
         assert curve == 140                          # 20 dmg/card x a 7-card hand
         assert worst is True and (curve >= my["hp"]) is True         # they AGREE
@@ -112,5 +123,5 @@ def test_the_two_doom_reads_agree_on_a_hand_size_attacker():
     # the case the retired branch used to make diverge, by crediting a card-level roll-up that the
     # curve had no equivalent for.
     kadabra = {"id": KADABRA, "hp": 90, "energies": [5]}
-    assert combat.active_doomed(my, kadabra, opp, context=None) is False
+    assert _doom(combat, my, kadabra, context=None) is False
     assert combat.doomed_incoming(my, kadabra, context=None) < my["hp"]

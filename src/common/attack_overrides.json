@@ -31,6 +31,10 @@
   "damageMin": 10,
   "damageMax": 10
  },
+ "120": {
+  "scaleVar": "both_active_energy",
+  "scalePerUnit": 30
+ },
  "126": {
   "damageMin": 10,
   "damageMax": 10
@@ -75,6 +79,10 @@
   "scaleVar": "both_bench",
   "scalePerUnit": 20
  },
+ "292": {
+  "scaleVar": "def_counters_all",
+  "scalePerUnit": 10
+ },
  "326": {
   "damageMin": 0,
   "damageMax": 30
@@ -99,6 +107,10 @@
   "scaleVar": "both_bench",
   "scalePerUnit": 20
  },
+ "390": {
+  "scaleVar": "atk_bench_stage2",
+  "scalePerUnit": 40
+ },
  "391": {
   "damageMin": 20,
   "damageMax": 20
@@ -110,6 +122,10 @@
  "408": {
   "damageMin": 0,
   "damageMax": 360
+ },
+ "425": {
+  "scaleVar": "def_ex_in_play",
+  "scalePerUnit": 60
  },
  "469": {
   "damageMin": 140,

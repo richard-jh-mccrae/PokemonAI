@@ -171,13 +171,35 @@ vocabulary has three **direction classes**: `atk_` (attacker-relative), `def_` (
 and `both_` — a variable counting BOTH sides at once, e.g. "for each Benched Pokémon (both yours and
 your opponent's)". A `both_` variable is the sum of its two per-side halves and is therefore
 direction-SYMMETRIC: one value is correct whichever side is attacking (ADR-0083, Issue #213).
+A variable may also be a **filtered count** — a predicate over a zone rather than the zone's size
+(`atk_bench_stage2` = Stage 2 Pokémon on my Bench; `def_ex_in_play` = their `{ex}` in play). Filtered
+counts take **flat names**, and the closed vocabulary deliberately did NOT grow a filtered-count
+*form* to hold them (ruled with Issue #225, POC-T1): ADR-0083 §4 already rejected letting `scaleVar`
+carry an expression, because that turns a closed vocabulary of named facts into a mini-language
+inside the damage oracle — and a parameterised form is the first step of exactly that. Two members
+are also not a shape: the ADR's own test for growing one is that "the very next candidate has the
+same shape", and a stage predicate over MY bench and a rule-box predicate over THEIR whole board do
+not. The cost is the one ADR-0083 already accepted for `both_bench`: a future card with the same text
+needs its own per-`attackId` entry. The benefit is that the oracle stays ONE dict lookup per scaler —
+every variable name IS a context key, with `atk_discard_energy` the single documented exception.
 Damage that scales on **visible** state is
 thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hidden**-state scaler
 (Mega Abomasnow ex's deck-discard) is bounded soundly via the deck tracker (pigeonhole floor) and
 estimated via Deck-Content Odds; only **true randomness** (coin flips) is carried as measured
 `min`/`max` bounds — my Lethal math reads the floor (sound), Incoming reads the ceiling (worst-case).
 Fitted by sweep-probing the engine (varying one state variable and regressing the dealt damage),
-never text-parsed.
+never text-parsed — with one recorded exception. Issue #225's four families
+(`both_active_energy`, `atk_bench_stage2`, `def_counters_all`, `def_ex_in_play`) ship as
+**text-verified** per-`attackId` override entries, because each needed a sweep capability the harness
+does not have (a defender-side attach driver, stage-filtered fodder, ex-only fodder, a board-spread
+driver) and one of them — Dudunsparce ex's `60×` Tenacious Tail — was computing to literal ZERO
+meanwhile. The rule they bend is about a *fitter* inventing a plausible variable name from a regex;
+one human reading one card's printed sentence into one attackId is not that mechanism. The
+measurement debt is **owned by Issue #275** (ratified 2026-08-01), which builds the two sweep axes
+that can separate these variables and scopes them to the two cards a corpus could ever see — 283
+Mamoswine ex and 217 Azelf are provably absent from every deck, dossier, Brief and correction frame,
+so measuring them would verify a number nothing consumes. See
+`tests/strategy/test_visible_state_scalers.py`, which asserts that absence so the claim cannot rot.
 _Avoid_: expected value (a probability blend — breaks soundness in both directions), printed damage
 (the base term only), bounds (the coin-RNG fallback, not the general shape)
 

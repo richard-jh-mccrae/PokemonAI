@@ -46,7 +46,11 @@ def _setup(*, recur_fuel_relax: bool, fuel_energy_count: int):
     pilot._incoming_budget = {"base_attach": 1, "burst_on_evo": 0}   # any truthy γ-matched value
     ma = {"id": MY_ID, "hp": 150, "energies": []}
     oa = {"id": REFUEL, "hp": 100, "energies": []}
-    opp = {"discard": [{"id": BASIC_F}] * fuel_energy_count}
+    opp = {"active": [oa], "bench": [], "discard": [{"id": BASIC_F}] * fuel_energy_count}
+    # The doom read goes through the per-decision snapshot now (POC-T1) — and re-stamp the budget,
+    # since `_snapshot` reads it off the Pilot at build time.
+    pilot._snapshot({"current": {"yourIndex": 0, "players": [
+        {"active": [ma], "bench": []}, opp]}})
     return pilot, ma, oa, opp
 
 
