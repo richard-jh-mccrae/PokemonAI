@@ -1515,7 +1515,7 @@ def test_the_diff_restates_BOTH_sides_against_one_equivalence_map():
     assert aware["before"] == (1, 1) and aware["after"] == (1, 1)
 
 
-# ── a re-capture may not move a verdict without a ruling (ADR-TEMP-259a) ───────────────────────────
+# ── a re-capture may not move a verdict without a ruling (ADR-0094) ───────────────────────────
 #
 # `CLAUDE.md` says a baseline is a ruling record and is never auto-recaptured. Nothing enforced it.
 #

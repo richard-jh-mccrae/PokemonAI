@@ -1,4 +1,4 @@
-# ADR-TEMP-259f — A whitelist entry is TYPED, names its fact, and (if provisional) names what retires it
+# ADR-0099 — A whitelist entry is TYPED, names its fact, and (if provisional) names what retires it
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 5).
 **Build = Issue #259 (POC-T0).**
@@ -49,17 +49,17 @@ the failure above actually lived.
 
 **3. §6 is ratified as amended by this grill**, not as drafted. Four lines changed:
 
-- `keep-a-bench` **deleted** (ADR-TEMP-259c d2 — it is the spare-body cliff, and guards nothing the
+- `keep-a-bench` **deleted** (ADR-0096 d2 — it is the spare-body cliff, and guards nothing the
   filter does not already guarantee at MAIN).
 - the **empty-Bench filter** re-typed `provisional`, with the retirement test stated
-  (ADR-TEMP-259c d1).
+  (ADR-0096 d1).
 - **Set-Up never-bench** split onto its own `structural` line with its own reason — weak dominance
   from three source-checked facts (`pilot.py:1750`) — rather than bundled with the in-game guard.
 - **`_finish_turn_last`** narrowed from "the sequencing tiers" to the named
-  *information-before-commitment* boundary (ADR-TEMP-259b d2); a line saying only "the tiers are
+  *information-before-commitment* boundary (ADR-0095 d2); a line saying only "the tiers are
   sound" is unfalsifiable, and was in fact false in the free band.
-- **`POC_WORTH_PRIZE_RATE`** typed `authored-scaffold` and bound (ADR-TEMP-259d).
-- **apply-seam coverage floors** added, typed `authored-scaffold` (ADR-TEMP-259e d3).
+- **`POC_WORTH_PRIZE_RATE`** typed `authored-scaffold` and bound (ADR-0097).
+- **apply-seam coverage floors** added, typed `authored-scaffold` (ADR-0098 d3).
 
 ## Consequences
 

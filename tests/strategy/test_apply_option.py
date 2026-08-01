@@ -1,4 +1,4 @@
-"""The **apply-seam** contract (`common/apply_option.py`, POC-T0 / Issue #259, ADR-TEMP-259e).
+"""The **apply-seam** contract (`common/apply_option.py`, POC-T0 / Issue #259, ADR-0098).
 
 T0 freezes the contract; T4 (Issue #263) implements the transitions. So what is testable now is the
 option-kind table, the terminal boundary, the Expectation shape and — most importantly — that
@@ -113,7 +113,7 @@ def test_an_expectation_defaults_to_empty_rather_than_to_a_certain_outcome():
 
 @pytest.mark.req("REQ-APPLY-0004")
 def test_nothing_is_quarantined_before_the_parity_lane_exists():
-    """The registry the planner reads to refuse a diverging option kind (ADR-TEMP-259e decision 4).
+    """The registry the planner reads to refuse a diverging option kind (ADR-0098 decision 4).
     Empty until T4 wires the lane — and it lives beside the seam, because the SEAM is what diverges
     and more than one consumer (the planner, the coverage report, the telemetry line) must read one
     answer."""

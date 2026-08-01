@@ -1,4 +1,4 @@
-"""The **typed sound-rule whitelist** (`common/sound_rules.py`, POC-T0 / Issue #259, ADR-TEMP-259f).
+"""The **typed sound-rule whitelist** (`common/sound_rules.py`, POC-T0 / Issue #259, ADR-0099).
 
 The whitelist decides which hand-authored rules survive the POC's purge, and six parallel tracks each
 delete rungs against it. A flat prose list already failed once: ONE board fact — an empty Bench under
@@ -42,7 +42,7 @@ def _doc_ids() -> list[str]:
 
 @pytest.mark.req("REQ-WHITELIST-0001")
 def test_the_whitelist_is_valid():
-    """The T0 registry REJECTS an untyped entry (ADR-TEMP-259f decision 1). Every problem at once,
+    """The T0 registry REJECTS an untyped entry (ADR-0099 decision 1). Every problem at once,
     because an author fixing a whitelist wants the whole list of complaints, not the first."""
     assert sr.validate() == []
 
@@ -95,7 +95,7 @@ def test_ids_are_unique():
 
 @pytest.mark.req("REQ-WHITELIST-0002")
 def test_keep_a_bench_is_not_on_the_whitelist():
-    """Deleted by ADR-TEMP-259c decision 2: it guards nothing the filter does not already guarantee
+    """Deleted by ADR-0096 decision 2: it guards nothing the filter does not already guarantee
     at MAIN, and per Issue #231's own numbers it IS the spare-body cliff (a spare body priced 1.96 on
     a non-empty Bench against 61.96 on an empty one — the entire gap was this rung)."""
     entries = " ".join(r.entry for r in sr.WHITELIST).lower()
@@ -106,7 +106,7 @@ def test_keep_a_bench_is_not_on_the_whitelist():
 def test_the_empty_bench_filter_is_provisional_and_names_the_measurement_that_retires_it():
     """Kept unconditional — it guards a loss condition and the read that would replace it depends on
     the substrate T1 is delivering — but NOT permanent. The retirement test is written down now so it
-    cannot quietly become permanent (ADR-TEMP-259c decision 1)."""
+    cannot quietly become permanent (ADR-0096 decision 1)."""
     r = sr.BY_ID["empty-bench-filter"]
     assert r.type == sr.PROVISIONAL
     assert "reachable_incoming" in r.retirement_test and "both gates" in r.retirement_test

@@ -1,4 +1,4 @@
-# ADR-TEMP-259a — A baseline re-capture may not move a frame's verdict without a ruling
+# ADR-0094 — A baseline re-capture may not move a frame's verdict without a ruling
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 1).
 **Build = Issue #259 (POC-T0). Scope: NOT in Issue #259's stated scope** — it rides with T0 because

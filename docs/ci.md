@@ -157,7 +157,7 @@ python tools/train/leaf_lab.py capture --out data/leaf_lab/baseline.json
 
 and only after the flips it would absorb have been **ruled** with the user.
 
-**That precondition is now ENFORCED, not just documented** (ADR-TEMP-259a, Issue #259). `capture`
+**That precondition is now ENFORCED, not just documented** (ADR-0094, Issue #259). `capture`
 reads the outgoing baseline first and **refuses to write** if any frame would move in the fail
 direction (`OK → MISS` here, `agree → disagree` for the Decision Gate) without carrying a ruling in
 the Ruling Index. It names every offending frame and leaves the baseline untouched:

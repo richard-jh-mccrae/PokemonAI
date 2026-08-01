@@ -8,7 +8,7 @@ The two tests that matter most here are `test_no_fact_is_priced_twice` and
 `test_no_fact_is_priced_by_nobody`. They are the executable form of T0's headline rule, and the rule
 earned its enforcement — an empty Bench under a knock-outable Active reached the draft sound-rule
 whitelist through THREE mechanisms simultaneously (a terminal rung, an order filter and a +60
-weight), and nothing about writing that list prompted the question (ADR-TEMP-259c).
+weight), and nothing about writing that list prompted the question (ADR-0096).
 
 Prior art for the style: `test_deploy_value.py` (a value equation asserted as plain arithmetic, no
 engine / obs / Pilot) and `test_currency.py` (a constant asserted against its derivation rather than
@@ -67,7 +67,7 @@ def test_every_family_states_what_it_refuses_as_well_as_what_it_prices():
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_is_absent_until_T3_authors_it_with_its_reasoning():
-    """T0 approves the MECHANISM and its bindings, never a number (ADR-TEMP-259d). A default value
+    """T0 approves the MECHANISM and its bindings, never a number (ADR-0097). A default value
     here would be the authored constant arriving without the reconciliation that makes it honest."""
     assert sv.POC_WORTH_PRIZE_RATE is None
 

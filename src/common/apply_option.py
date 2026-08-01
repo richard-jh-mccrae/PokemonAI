@@ -1,5 +1,5 @@
 """**The apply-seam** — the closed-form hypothetical transition (POC-T4, contract frozen by POC-T0 /
-Issue #259, ADR-0092 §4-T0 item 3, ADR-TEMP-259e).
+Issue #259, ADR-0092 §4-T0 item 3, ADR-0098).
 
 `apply_option(model, option)` answers *what would the board be if I did this?* — arithmetically, from
 the StateModel, stepping no engine. It is what lets the Turn Planner price a play by **differencing**
@@ -16,7 +16,7 @@ plausible answer, so an unimplemented build would read as "this play is worthles
 
 The native engine CAN fork — `search_begin` / `search_step` (`src/cg/api.py`) fork an independent
 position and the Pilot already uses them live for the Lethal Solver. The fork was declined for the
-POC anyway, on two measured objections (ADR-TEMP-259e):
+POC anyway, on two measured objections (ADR-0098):
 
 1. **Single sample, not expectation.** Past a shuffle a rollout returns one Monte-Carlo draw from the
    sim's own RNG. Measured on ml f24, 2026-07-27: the same first step scored
@@ -41,7 +41,7 @@ when a planner evaluates a contingent policy rather than a committed sequence �
 planning is depth-2 search, scoped OUT of the POC by ADR-0092 (post-POC Issue #150).
 
 So information-first sequencing stays a STRUCTURAL rule on the sound-rule whitelist
-(`_finish_turn_last`'s information-before-commitment boundary, ADR-TEMP-259b), and is not a defect in
+(`_finish_turn_last`'s information-before-commitment boundary, ADR-0095), and is not a defect in
 this module. Recorded here because the alternative is a later track assuming the planner will
 discover it, and quietly shipping an agent that commits before it digs.
 """
@@ -151,7 +151,7 @@ def apply_option(model, option: Mapping):
     Raises `UnsupportedTransition` for an option kind the seam does not declare, and
     `NotImplementedError` until T4 (Issue #263) implements the kinds it does.
 
-    **Quarantine** (ADR-TEMP-259e decision 4): when the parity lane finds a divergence for an option
+    **Quarantine** (ADR-0098 decision 4): when the parity lane finds a divergence for an option
     kind, that kind is marked unverified and the planner refuses to enumerate sequences through it,
     deferring to the whitelisted sound ladder. `quarantined_kinds` is the registry that decision
     reads; a parity failure therefore DEGRADES the agent rather than silently mis-playing it."""
@@ -164,7 +164,7 @@ def apply_option(model, option: Mapping):
 
 def quarantined_kinds() -> frozenset[int]:
     """Option kinds the parity lane has found diverging — the planner must not enumerate through
-    these (ADR-TEMP-259e decision 4).
+    these (ADR-0098 decision 4).
 
     Empty until T4 wires the parity lane. The registry lives here rather than in the planner because
     the seam is what diverges: the planner is one consumer of that fact, and a second consumer (the

@@ -663,7 +663,7 @@ def write_json_artifact(path, doc) -> None:
 
 
 class RecaptureRefused(RuntimeError):
-    """A `capture` that would overwrite a verdict the human still owes a ruling on (ADR-TEMP-259a).
+    """A `capture` that would overwrite a verdict the human still owes a ruling on (ADR-0094).
 
     Carries ``keys`` — EVERY offending frame, sorted — because an operator who learns the scope of
     what they were about to overwrite one frame at a time will simply re-run until it stops
@@ -731,7 +731,7 @@ def guarded_capture(out, fresh, *, index, diff_fn, fail_keys_fn, write) -> int:
 
 def unruled_recapture_moves(fail_keys, *, index) -> list:
     """Of the frames moving in the fail direction, the ones carrying NO ruling — what a re-capture
-    must refuse to overwrite (ADR-TEMP-259a decision 1).
+    must refuse to overwrite (ADR-0094 decision 1).
 
     **One predicate, no special cases.** `ruling_index` already folds every store a ruling can live
     in — `reviewed.json` dispositions AND the Held-out Ledger — into one map, so "has a human said

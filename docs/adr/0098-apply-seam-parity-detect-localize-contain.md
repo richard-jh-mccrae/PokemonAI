@@ -1,4 +1,4 @@
-# ADR-TEMP-259e — The apply-seam is guarded by detect → localize → classify → CONTAIN
+# ADR-0098 — The apply-seam is guarded by detect → localize → classify → CONTAIN
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 6 —
 the escape-hatch doctrine fork, plus the user's remedy requirement).

@@ -31,7 +31,7 @@ pairwise disjoint and that every `does_not_read` entry is claimed by some other 
 
 Information ordering. Playing an informative card before a committing one versus after reaches the
 **same end state**, so no function of the end state can separate them — see
-`apply_option`'s own note and ADR-TEMP-259b decision 3. Information-first sequencing therefore stays
+`apply_option`'s own note and ADR-0095 decision 3. Information-first sequencing therefore stays
 a structural rule on the whitelist (`_finish_turn_last`'s information-before-commitment boundary),
 and is not a gap in this registry.
 """
@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
 if TYPE_CHECKING:                      # the seam, expressed without importing the Pilot's world at
     from common.state_model import StateModel   # runtime — `deploy_value`'s "no engine, no obs" rule
 
-#: **The Worth -> prize scaffold** (ADR-TEMP-259d, ratified wave 1). Damage-per-worth-point is the
+#: **The Worth -> prize scaffold** (ADR-0097, ratified wave 1). Damage-per-worth-point is the
 #: bridge `common/currency.py` deliberately does NOT hold: the anchor gate was RUN and FAILED twice
 #: (ADR-0080 for deny, ADR-0086 for deploy), so the constant is absent there BY DESIGN, not pending.
 #:
@@ -60,7 +60,7 @@ if TYPE_CHECKING:                      # the seam, expressed without importing t
 #: spends a card. The corpus consequently begins generating anchors (every ruled spend-vs-hold frame)
 #: that the old architecture structurally could not produce.
 #:
-#: **Reconciliation, recorded rather than hidden** (ADR-TEMP-259d decision 1). Converted to
+#: **Reconciliation, recorded rather than hidden** (ADR-0097 decision 1). Converted to
 #: damage-per-worth-point this must be stated against the three rates already catalogued in
 #: `currency.py`, which disagree by ~6.7x among themselves:
 #:
@@ -317,7 +317,7 @@ def double_counted() -> list[str]:
 
     Empty is the contract (ADR-0092 §4-T0). The rule earned its enforcement: an empty Bench under a
     knock-outable Active reached the draft whitelist through THREE mechanisms at once, and nothing
-    about writing that list prompted the question (ADR-TEMP-259c)."""
+    about writing that list prompted the question (ADR-0096)."""
     seen: dict[str, int] = {}
     for f in REGISTRY:
         for fact in f.reads:

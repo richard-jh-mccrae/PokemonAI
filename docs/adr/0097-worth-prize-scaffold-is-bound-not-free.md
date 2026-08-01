@@ -1,4 +1,4 @@
-# ADR-TEMP-259d — The Worth→prize scaffold is BOUND: reconciled, dated, and its underivability premise is void
+# ADR-0097 — The Worth→prize scaffold is BOUND: reconciled, dated, and its underivability premise is void
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 4).
 **Build = Issue #259 (POC-T0 registry + contract note), value authored in T3.**
@@ -85,7 +85,7 @@ largest blast radius yet.
 **2. A pre-registered retirement test.** Stated in the T0 registry now: post-POC, fit the rate
 against ruled spend-vs-hold frames; retire the authored value iff the fit converges. An authored
 scaffold with no retirement test becomes permanent — the same failure mode this grill's bench filter
-decision guards against (ADR-TEMP-259c decision 1).
+decision guards against (ADR-0096 decision 1).
 
 **3. The underivability premise is recorded VOID.** The T0 registry states that ADR-0080/0086's
 structural argument does not survive differencing, so the post-POC derivation begins from a stated
@@ -100,7 +100,7 @@ does not edit it.
 
 - Authoring the number now requires arithmetic against three incumbent rates and publishing a
   disagreement. That is the cost, and it is the point.
-- A second dated obligation joins the registry beside ADR-TEMP-259c's filter-retirement test.
+- A second dated obligation joins the registry beside ADR-0096's filter-retirement test.
 - If the reconciliation shows `POC_WORTH_PRIZE_RATE` landing far outside the ~0.83–6.7 spread, that
   is evidence about the *incumbents* as much as about this constant — ADR-0078's own rule ("a
   disagreement is evidence about ONE of the two rather than automatically about this one") applies.

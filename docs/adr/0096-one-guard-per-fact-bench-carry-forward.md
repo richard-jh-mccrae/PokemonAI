@@ -1,4 +1,4 @@
-# ADR-TEMP-259c — One guard per fact: the Bench doctrine carries forward as term-family entries
+# ADR-0096 — One guard per fact: the Bench doctrine carries forward as term-family entries
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 3).
 **Build = Issue #259 (POC-T0 registry), with retirement owned by T1 and deletions by T2.**

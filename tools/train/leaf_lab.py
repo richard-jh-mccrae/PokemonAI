@@ -340,7 +340,7 @@ def main(argv=None) -> int:
     from train.gates import orphan_rulings, restamp_artifact, ruling_index, voided_frames
 
     # A re-stamp never re-reads the build, so it runs BEFORE the corpus replay — that separation is
-    # the point of the subcommand existing (ADR-TEMP-259a decision 2), not an optimisation.
+    # the point of the subcommand existing (ADR-0094 decision 2), not an optimisation.
     if args.cmd == "restamp":
         rev = args.rev or _git_rev()
         restamp_artifact(args.baseline, rev)
@@ -359,7 +359,7 @@ def main(argv=None) -> int:
         # this build degrades OK -> MISS may only become the new reference once a human has ruled it.
         # The convention has HELD historically (every absorbed flip carried a ruling, measured over
         # the whole baseline history) — this removes the reliance on discipline, it does not repair a
-        # breach (ADR-TEMP-259a decision 1).
+        # breach (ADR-0094 decision 1).
         def _write():
             write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
             _print_report(rpt)

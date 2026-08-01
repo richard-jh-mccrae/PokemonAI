@@ -1,4 +1,4 @@
-# ADR-TEMP-259b — Information precedes commitment, and the apply-seam cannot derive it
+# ADR-0095 — Information precedes commitment, and the apply-seam cannot derive it
 
 **Status:** Accepted (grilled 2026-08-01, `/grill-with-docs` on Issue #259, wave-1 packet item 2).
 **Build = Issue #259 (POC-T0), with the sequencer change owned by T2 and the contract note by T0.**

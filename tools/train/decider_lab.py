@@ -234,7 +234,7 @@ def main(argv=None) -> int:
     # corpus, not a property of a capture, so a capture and the diff that reads it must not resolve
     # two different voided sets (ADR-0088 decision 2).
     # A re-stamp never re-reads the build, so it runs BEFORE the corpus replay — that separation is
-    # the point of the subcommand existing (ADR-TEMP-259a decision 2), not an optimisation.
+    # the point of the subcommand existing (ADR-0094 decision 2), not an optimisation.
     if args.cmd == "restamp":
         rev = args.rev or _git_rev()
         restamp_artifact(args.baseline, rev)
@@ -254,7 +254,7 @@ def main(argv=None) -> int:
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
         # whose pick this build moves OFF the human's ruling may only become the new reference once a
         # human has ruled it. The fail direction is `decider_lab_diff`'s own REGRESSION verdict, so
-        # the guard and the gate cannot drift into two ideas of "worse" (ADR-TEMP-259a decision 1).
+        # the guard and the gate cannot drift into two ideas of "worse" (ADR-0094 decision 1).
         def _write():
             write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
             _print_summary(rpt, equiv)

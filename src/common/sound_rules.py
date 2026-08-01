@@ -1,4 +1,4 @@
-"""**The sound-rule whitelist**, as data (POC-T0 / Issue #259, ADR-TEMP-259f; ratified wave 1).
+"""**The sound-rule whitelist**, as data (POC-T0 / Issue #259, ADR-0099; ratified wave 1).
 
 The rules that SURVIVE the POC's purge because they encode game structure or fail-direction policy
 rather than a strategy hypothesis. Every other tuned weight is deleted by its owning track.
@@ -129,7 +129,7 @@ WHITELIST: tuple[SoundRule, ...] = (
                "re-presents the menu after every non-ending action, so taking the dig first cannot "
                "cost the commitment but can improve it. NOT derivable by the planner — both orders "
                "reach the same end state, so no function of that state separates them "
-               "(ADR-TEMP-259b decision 3). Narrowed from 'the sequencing tiers': the old line was "
+               "(ADR-0095 decision 3). Narrowed from 'the sequencing tiers': the old line was "
                "unfalsifiable, and was in fact FALSE in the free band, where tier 0 conflated "
                "'free' with 'informative'.",
     ),
@@ -182,7 +182,7 @@ WHITELIST: tuple[SoundRule, ...] = (
                "Item strictly worth playing.",
         reconciliation="Stated at authoring against the three rates `currency.py` already "
                        "catalogues — trainer ~1.0, energy ~6.7, deploy DEPLOY_BAND/DEPLOY_WORTH_SCALE "
-                       "~0.83 — with disagreement RECORDED, not hidden (ADR-TEMP-259d decision 1). "
+                       "~0.83 — with disagreement RECORDED, not hidden (ADR-0097 decision 1). "
                        "Retires when a post-POC fit against ruled spend-vs-hold frames converges. "
                        "`common/currency.py` and `test_currency.py` stay untouched.",
     ),
@@ -192,7 +192,7 @@ WHITELIST: tuple[SoundRule, ...] = (
         type=AUTHORED_SCAFFOLD,
         fact="how much parity evidence an option kind needs before it is trusted",
         reason="The floors turn a thin parity fixture into a BUILD FAILURE rather than a silent gap "
-               "— the exposure accepted when the engine route was declined (ADR-TEMP-259e "
+               "— the exposure accepted when the engine route was declined (ADR-0098 "
                "decision 3). A floor is authored because there is no principled derivation of 'enough "
                "evidence' yet.",
         reconciliation="Reviewed post-POC as the option-kind table grows; a floor that never fails "
@@ -207,7 +207,7 @@ BY_ID = {r.id: r for r in WHITELIST}
 def validate(rules: Sequence[SoundRule] = WHITELIST) -> list[str]:
     """Every way an entry fails the typing discipline, as readable problems. Empty is the contract.
 
-    The T0 registry REJECTS an untyped entry (ADR-TEMP-259f decision 1) — this is that rejection,
+    The T0 registry REJECTS an untyped entry (ADR-0099 decision 1) — this is that rejection,
     executable. It is deliberately a list of problems rather than a raise: an author fixing a
     whitelist wants every complaint at once, not the first one."""
     problems: list[str] = []
