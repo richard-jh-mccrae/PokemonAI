@@ -66,6 +66,9 @@ from dataclasses import dataclass
 
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
+from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
+from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
+from common.strategy.damage_context import damage_context as _assemble_damage_context
 
 #: Sentinel for "use the policy threaded at :meth:`StateModel.build`". A clock consumer that wants a
 #: DIFFERENT conservatism than the Read's — the catastrophe-grade doom budget, the deny Δ's zero-attach
@@ -316,6 +319,37 @@ class BodyView(_Lazily):
         return int(self.body.get("hp") or 0)
 
     @lazy
+    def damage_counters(self) -> int:
+        """Damage counters ON this body — ``(maxHp - hp) // 10``, floored at 0.
+
+        A counter is 10 damage (`docs/rulebook.txt` L172: *"put 1 damage counter on your opponent's
+        Active Pokémon for each 10 damage"*; the glossary at L533 restates it — *"A counter put on
+        your Pokémon to show it has taken 10 damage"*), so the count is the printed COUNTABLE a
+        scaler names ("for each damage counter on this Pokémon"), not the damage. Both numbers are
+        visible on every body in play, in both directions, which makes the family exactly priceable.
+
+        Fail-closed on a body the observation gives without HP fields: ``maxHp`` and ``hp`` both read
+        0 and the body claims no counters, rather than inventing a full bar's worth."""
+        body = self.body
+        return max(0, int(body.get("maxHp") or 0) - int(body.get("hp") or 0)) // 10
+
+    @lazy
+    def is_ex(self) -> bool:
+        """This body is a Pokémon ``{ex}`` — **including a Mega Evolution Pokémon ex**, which IS an
+        ``{ex}`` (`docs/rulebook.txt` L337). Card knowledge, so the answer comes off the ``CardStat``
+        (``is_ex_body``) and the model only holds it. False without a resolvable stat: a body that
+        makes no claim is not counted."""
+        return bool(self.stat is not None and self.stat.is_ex_body)
+
+    @lazy
+    def is_stage2(self) -> bool:
+        """This body is a Stage 2 Pokémon (engine ``CardData.stage2``). Fail-CLOSED on an
+        unresolvable card, and the direction matters: the scaler that reads this counts the
+        ATTACKER's own Bench, so over-reading it inflates MY damage estimate — which is the error
+        class that manufactures a phantom lethal."""
+        return bool(getattr(self.stat, "stage2", False))
+
+    @lazy
     def attached_types(self) -> dict:
         """``{EnergyType: count}`` attached — the typed supply a cost shape is matched against."""
         return self._combat.attached_type_counts(self.body)
@@ -393,11 +427,19 @@ class _SideBase(_Lazily):
     is cards and theirs is a number, and making that an AttributeError rather than a silently-None
     field is the point."""
 
-    def __init__(self, player: dict, *, combat, probe=None, prefix="side"):
+    def __init__(self, player: dict, *, combat, probe=None, prefix="side", turn_boosts=()):
         super().__init__(probe=probe)
         self._probe_prefix = prefix
         self.player = player or {}
         self._combat = combat
+        #: This side's this-turn flat damage-boost PLAYS, as ``TurnBoostTracker`` recorded them —
+        #: ``((amount, attackerEnergyType|None, vsExOnly), …)``. Threaded in rather than derived
+        #: because it is a fact about the LOG, not about the board: "During this turn, attacks used
+        #: by your … Pokémon do N more damage" leaves no trace in any zone once the card is in the
+        #: discard, so no snapshot of the board could recover it. The tracker is match-scoped and
+        #: side-keyed, and only :meth:`StateModel.build` knows which seat is which, so the
+        #: resolution happens there and the side holds the resolved tuple.
+        self._turn_boosts = tuple(turn_boosts or ())
 
     # -- bodies ---------------------------------------------------------------------------------
     @lazy
@@ -492,11 +534,40 @@ class _SideBase(_Lazily):
         return frozenset(c for c in ("poisoned", "burned", "asleep", "paralyzed", "confused")
                          if self.player.get(c))
 
+    # -- hand ------------------------------------------------------------------------------------
+    @property
+    def hand_size(self) -> int:
+        """Cards in this side's hand — **required of both subclasses**, which is why it is declared
+        here even though neither derivation lives here (POC-T3.5, Issue #279).
+
+        The class docstring's rule is that asymmetric detail stays subclass-only, and it still holds
+        for the CONTENTS: my hand is cards (:attr:`MySide.hand_ids`) and theirs is nothing at all.
+        The SIZE is the one hand fact both sides can answer, which is exactly why the Damage Formula
+        names it in both directions (`atk_hand`, `def_hand`) — and why :attr:`damage_facts` may read
+        it off a plain ``_SideBase``. The two derivations differ (mine falls back to the card list
+        when the observation omits ``handCount``; theirs has only the count), so this stays a
+        declaration of the contract rather than an implementation: a subclass that forgets it gets
+        this error, not a silently-zero hand feeding a scaler."""
+        raise NotImplementedError(f"{type(self).__name__} must answer hand_size")
+
     # -- prizes / zones -------------------------------------------------------------------------
     @lazy
     def prizes_remaining(self) -> int:
         """Prizes this side still needs to take."""
         return len(self.player.get("prize") or [])
+
+    @lazy
+    def prizes_taken(self) -> int:
+        """Prizes this side has ALREADY taken — the Damage Formula's ``*_prizes_taken`` countable.
+
+        Deliberately NOT ``_PRIZE_CARDS - prizes_remaining``, and the difference is the fail
+        direction rather than a style choice. :attr:`prizes_remaining` reads an absent ``prize`` zone
+        as an empty list — the right answer for "how many are left to take" on a board that carries
+        no zone — but subtracting that from 6 turns the absence into *"all six taken"*, the maximal
+        positive claim, on exactly the hand-built boards where nothing is known. So the zone's
+        ABSENCE is checked first and claims 0."""
+        prize = self.player.get("prize")
+        return max(0, PRIZE_CARDS - len(prize)) if prize is not None else 0
 
     @lazy
     def discard_energy_counts(self) -> dict:
@@ -536,6 +607,84 @@ class _SideBase(_Lazily):
         return tuple((c or {}).get("id") for c in (self.player.get("discard") or [])
                      if (c or {}).get("id") is not None)
 
+    @lazy
+    def discard_energy_total(self) -> int:
+        """EVERY Energy card in this side's discard — Basic and Special alike (POC-T3.5, Issue #279).
+
+        The sibling of :attr:`discard_energy_counts`, and a genuinely different question rather than
+        a projection of it: the typed histogram answers *which colours* the pile can supply (the
+        Attach Budget's discard clauses, the recursion fuel), while this answers *how many Energy
+        cards are in there* — which is what an UNTYPED Riptide-class scaler counts ("for each Energy
+        card in your discard pile"). A Special Energy is in one and not the other, so collapsing them
+        would under-read that scaler by exactly the Special Energy the pile holds.
+
+        Reads :attr:`discard_ids` rather than re-walking the zone, so the two projections share one
+        idea of what the zone contains. Unresolvable cards count 0 (fail-closed)."""
+        return sum(1 for cid in self.discard_ids
+                   if (st := self._combat._card_stat(cid)) is not None and st.is_energy)
+
+    # -- the Damage Formula's per-side countables (POC-T3.5, Issue #279) ------------------------
+    @lazy
+    def damage_boosts(self) -> tuple:
+        """Flat damage boosts live for THIS side's attacks — ``((amount, type, vsEx), …)``.
+
+        Two sources, both open information in either direction, so both are read whichever side is
+        attacking: the this-turn Trainer PLAYS the match-scoped tracker recorded
+        (:attr:`_turn_boosts` — Premium Power Pro, Black Belt's Training) and the Tools ATTACHED to
+        this side's Active (Maximum Belt), which are visible board state read off the holder.
+
+        The tracker's own contract already draws that line (``transients.TurnBoostTracker``: *"Tool
+        boosts are NOT tracked here — an attached Tool is visible board state, read directly at
+        damage-context build"*), and this is that build. Play order first, then Tools, which is the
+        order the shipped builder produced — the oracle sums them, so order is not load-bearing, but
+        matching it keeps the two suppliers comparable key-for-key."""
+        out = list(self._turn_boosts)
+        active = self.active
+        for cid in (active.tool_ids if active is not None else ()):
+            stat = self._combat._card_stat(cid)
+            if stat is not None and getattr(stat, "damageBoost", 0):
+                out.append((stat.damageBoost, stat.damageBoostType, stat.damageBoostVsEx))
+        return tuple(out)
+
+    @lazy
+    def damage_facts(self) -> SideFacts:
+        """This side's :class:`~common.strategy.damage_context.SideFacts` — every countable the
+        Damage Formula can name about ONE side, direction-neutral.
+
+        The gatherer both suppliers share. It records what this side HAS and never what it is doing:
+        which of ``atk_``/``def_`` a fact becomes is
+        :func:`~common.strategy.damage_context.damage_context`'s decision alone, made once, from the
+        two records. That split is what makes a mirrored key impossible to get wrong at a gathering
+        site — there is no mirroring here to get wrong.
+
+        The deck leg comes from :meth:`_deck_facts`, which claims nothing on a side whose deck is not
+        exactly known (every side but mine, and mine only once the prizes are anchored)."""
+        active = self.active
+        deck_count, deck_by_type = self._deck_facts()
+        return SideFacts(
+            hand_size=self.hand_size,
+            active_energy=active.energy_count if active is not None else 0,
+            bench_count=self.bench_count,
+            prizes_taken=self.prizes_taken,
+            active_counters=active.damage_counters if active is not None else 0,
+            counters_in_play=sum(b.damage_counters for b in self.bodies),
+            bench_stage2=sum(1 for b in self.bench if b.is_stage2),
+            ex_in_play=sum(1 for b in self.bodies if b.is_ex),
+            discard_energy_total=self.discard_energy_total,
+            discard_basic_by_type=self.discard_energy_counts,
+            bench_names=tuple((b.stat.name if b.stat is not None else "") for b in self.bench),
+            damage_boosts=self.damage_boosts,
+            deck_count=deck_count, deck_basic_by_type=deck_by_type)
+
+    def _deck_facts(self) -> tuple:
+        """``(deck_count, {EnergyType: Basic-Energy count})`` for a side whose deck is EXACTLY known,
+        else ``(None, None)`` — the hook :attr:`damage_facts` reads.
+
+        ``(None, None)`` on this base is the honest answer for the opponent, whose deck contents are
+        hidden by construction, and the fail-closed default for a hand-built side. :class:`MySide`
+        overrides it."""
+        return (None, None)
+
 
 class MySide(_SideBase):
     """MY half — the side with open information: real hand cards, the **Attach Budget**, per-body
@@ -545,11 +694,34 @@ class MySide(_SideBase):
 
     def __init__(self, player: dict, *, combat, deck=None, deck_empty=frozenset(),
                  own_prizes=None, energy_attached=False, supporter_played=False,
-                 more_prizes_than_opp=False, turn=0, probe=None):
-        super().__init__(player, combat=combat, probe=probe, prefix="mine")
+                 more_prizes_than_opp=False, turn=0, probe=None, turn_boosts=(),
+                 deck_known=None):
+        super().__init__(player, combat=combat, probe=probe, prefix="mine",
+                         turn_boosts=turn_boosts)
         self._deck = tuple(deck or ())
         self._deck_empty = frozenset(deck_empty or ())
         self._own_prizes = own_prizes
+        #: ``{card id: copies still in my deck}`` from the deck TRACKER (``deck_tracker``'s
+        #: ``OwnCardModel``: anchored on the first search, exact for the rest of the match), or None
+        #: while the prizes are unresolved.
+        #:
+        #: **Threaded rather than derived from** :attr:`unseen_counts` **because that field is
+        #: currently WRONG**, not because the two are different readings of one fact. The tracker
+        #: and its Pilot-side consumer both walk a body's ``energyCards`` — the attached Energy
+        #: CARDS. :meth:`_count_in_play` walks ``energies``, which `cg/api.py` L345 declares as
+        #: ``list[EnergyType]``: **type codes, not card ids.** It survives only on the coincidence
+        #: that Basic Energy card ids 1-8 equal EnergyType 1-8 (the trap ``pilot_helpers.poke``
+        #: documents in as many words — *"the coincidence fails on the very next Energy a test
+        #: reaches for — Ignition Energy is card id 17"*). On Special Energy it does fail: an
+        #: attached Ignition renders ``[0, 0, 0]`` and leaves card 17 counted as still in the deck;
+        #: an attached Rock Fighting Energy renders ``[6]`` and decrements **Basic {F} Energy**
+        #: instead of itself. Measured on the committed corpus: **19 of 934 bodies** disagree.
+        #:
+        #: That corrupts :attr:`unseen_counts` -> :attr:`deck_energy_types` -> the Attach Budget, so
+        #: fixing it MOVES SCORING and cannot land in a substrate issue whose acceptance is
+        #: byte-identical gates (Issue #279). **Owed with an owner: Issue #297** — fix the walk,
+        #: rule the gate flips, then this argument retires in favour of :attr:`unseen_counts`.
+        self._deck_known = deck_known
         self.energy_attached = bool(energy_attached)
         self.supporter_played = bool(supporter_played)
         self.more_prizes_than_opp = bool(more_prizes_than_opp)
@@ -721,6 +893,30 @@ class MySide(_SideBase):
         allowed = self.deck_energy_types                    # already `_narrowed`, so sound-capped
         return {t: (c.p_any if t in allowed else 0.0)
                 for t, c in self.deck_energy_counts.items()}
+
+    def _deck_facts(self) -> tuple:
+        """The Damage Formula's hidden-scaler fuel: ``(cards left in my deck, {EnergyType: Basic
+        Energy count})`` — exact, or ``(None, None)`` while the prizes are unresolved.
+
+        A Hammer-lanche-class scaler discards the top N of the ATTACKER's deck and counts the Energy
+        among them, so the oracle needs the deck's SIZE and its Energy fuel to turn hidden ORDER into
+        a pigeonhole floor / hypergeometric mean (`strategy/damage.py`). Neither is knowable while
+        unseen copies could still be sitting in a face-down prize, which is why the pair is absent
+        rather than zero until the tracker anchors — see
+        :func:`~common.strategy.damage_context.damage_context` for why that distinction is
+        load-bearing at the oracle.
+
+        Reads the threaded :attr:`_deck_known`; see its note for why the model does not derive it
+        from :attr:`unseen_counts` yet."""
+        known = self._deck_known
+        if not known:
+            return (None, None)
+        by_type: Counter = Counter()
+        for cid, n in known.items():
+            stat = self._combat._card_stat(cid)
+            if stat is not None and stat.is_typed_basic_energy:
+                by_type[stat.energyType] += n
+        return (sum(known.values()), dict(by_type))
 
     def _narrowed(self, types: frozenset) -> frozenset:
         """``types`` intersected with what the caller's sound emptiness oracle still allows. Both
@@ -943,8 +1139,9 @@ class TheirSide(_SideBase):
 
     def __init__(self, player: dict, *, combat, read=None, brief=None, matchup_plan=None,
                  posture_confidence=0.0, favorability=0.5, matchup_coverage=0.0,
-                 opponent=None, forward_ids=None, charged=None, probe=None):
-        super().__init__(player, combat=combat, probe=probe, prefix="theirs")
+                 opponent=None, forward_ids=None, charged=None, probe=None, turn_boosts=()):
+        super().__init__(player, combat=combat, probe=probe, prefix="theirs",
+                         turn_boosts=turn_boosts)
         self.read = read
         self.brief = brief
         self.matchup_plan = matchup_plan
@@ -1259,7 +1456,8 @@ class StateModel(_Lazily):
               read=None, brief=None, matchup_plan=None, posture_confidence=0.0,
               favorability=0.5, matchup_coverage=0.0, opponent=None, forward_ids=None,
               charged=None, carried: CarriedState = CarriedState(), probe=None,
-              their_side: TheirSide | None = None) -> "StateModel":
+              their_side: TheirSide | None = None, turn_boosts=None,
+              deck_known=None) -> "StateModel":
         """The snapshot for one decision point — cheap, because it computes nothing yet.
 
         ``their_side`` accepts an already-built :class:`TheirSide` for REUSE, and the caller is
@@ -1267,6 +1465,16 @@ class StateModel(_Lazily):
         mechanism: they cannot act during my turn, so their expensive clock derivations survive
         across the selects of a turn and across the planner's forked leaves; #150's sampled worlds
         reuse MY side symmetrically. Sharing is never assumed — a fingerprint mismatch rebuilds.
+
+        ``turn_boosts`` is the match-scoped ``TurnBoostTracker`` (POC-T3.5, Issue #279), resolved to
+        a per-side tuple HERE because this is the only place that knows which seat is mine. It is a
+        log fact rather than a board fact — a played "during this turn" boost leaves no trace in any
+        zone once the card reaches the discard — so no snapshot could recover it; None models a
+        board with no live boosts, which is what a hand-built obs and a stat-blind build both want.
+
+        ``deck_known`` is the deck tracker's exact ``{card id: copies left in my deck}`` once the
+        prizes are anchored, threaded beside ``deck`` / ``own_prizes`` / ``deck_empty`` for the
+        reason recorded on :attr:`MySide._deck_known`.
         """
         state = (obs or {}).get("current") or {}
         players = state.get("players") or []
@@ -1274,17 +1482,20 @@ class StateModel(_Lazily):
         me = players[mi] if 0 <= mi < len(players) and players[mi] else {}
         opp = players[1 - mi] if 0 <= 1 - mi < len(players) and players[1 - mi] else {}
         my_prizes, opp_prizes = len(me.get("prize") or []), len(opp.get("prize") or [])
+        boosts_for = getattr(turn_boosts, "boosts_for", None)
         mine = MySide(me, combat=combat, deck=deck, deck_empty=deck_empty,
                       own_prizes=(obs or {}).get("own_prizes"),
                       energy_attached=bool(state.get("energyAttached")),
                       supporter_played=bool(state.get("supporterPlayed")),
                       more_prizes_than_opp=(my_prizes > opp_prizes),
-                      turn=state.get("turn", 0), probe=probe)
+                      turn=state.get("turn", 0), probe=probe, deck_known=deck_known,
+                      turn_boosts=() if boosts_for is None else tuple(boosts_for(mi)))
         theirs = their_side if their_side is not None else TheirSide(
             opp, combat=combat, read=read, brief=brief, matchup_plan=matchup_plan,
             posture_confidence=posture_confidence, favorability=favorability,
             matchup_coverage=matchup_coverage, opponent=opponent, forward_ids=forward_ids,
-            charged=charged, probe=probe)
+            charged=charged, probe=probe,
+            turn_boosts=() if boosts_for is None else tuple(boosts_for(1 - mi)))
         return cls(mine=mine, theirs=theirs, state=state, my_index=mi, carried=carried, probe=probe)
 
     # -- turn / quota facts (observation reads, not Carried State) ------------------------------
@@ -1347,6 +1558,50 @@ class StateModel(_Lazily):
         return PrizeRace(my_prizes_remaining=self.mine.prizes_remaining,
                          opp_prizes_remaining=self.theirs.prizes_remaining)
 
+    def damage_context(self, *, attacker: str) -> dict:
+        """The Damage Formula's scaler context, built from THIS model, memoized per direction
+        (POC-T3.5, Issue #279).
+
+        ``attacker`` is ``"mine"`` or ``"theirs"`` — the side whose attack is being priced. The
+        Formula's variables are named relative to the attacker (``atk_*``/``def_*``), so the two
+        directions are different dicts, not one dict read twice: `survival` asks *their attack on
+        me* and `threat` asks *my attack on them*, and one dict cannot answer both. ``both_bench``
+        and ``both_active_energy`` exist precisely because they are the direction-SYMMETRIC
+        variables (ADR-0083 §4, Issue #213).
+
+        **Why the model owns a builder at all**, when the Pilot already had one: ``state_value``
+        takes a StateModel and reads nothing else (the sole-supplier ruling —
+        `docs/plans/value-system-poc-plan.md` §4-T0, restated on `state_value`), so a context threaded
+        down from the Pilot is a second data supplier and is forbidden there. Both suppliers assemble
+        through the ONE
+        :func:`~common.strategy.damage_context.damage_context`, from the ONE
+        :attr:`_SideBase.damage_facts` gatherer, and `test_damage_context` pins them key-for-key on
+        corpus frames — because two hand-rolled builders of one fact is exactly the defect
+        ``CombatMath.card_level_damage`` was extracted to end.
+
+        **Identity-stable for the model's lifetime**, which is the point of memoizing it here rather
+        than letting each consumer build one. Every clock read that prices a scaler carries the
+        context in its memo key (:meth:`TheirSide.incoming`, :meth:`TheirSide.turns_to_ko_me`, both
+        through ``_Lazily._key``), and that key primitive caches its canonical projection PER OBJECT
+        — so a stable dict is canonicalised once and then costs a dict lookup, while a
+        freshly-allocated one re-walks the whole context on every read and grows the projection cache
+        without bound. The keys are sound either way (the cache holds a reference and re-checks
+        identity, so a freed address cannot be reused under a live entry); what identity buys is that
+        the memo HITS.
+
+        An unknown direction raises rather than defaulting: a survival read handed MY attacker's
+        scalers under-reads their damage, and under-reading incoming damage is the one direction a
+        survival estimate may never fail in.
+        """
+        if attacker == "mine":
+            atk, dfn = self.mine, self.theirs
+        elif attacker == "theirs":
+            atk, dfn = self.theirs, self.mine
+        else:
+            raise ValueError(f"attacker must be 'mine' or 'theirs', got {attacker!r}")
+        return self._memoized(("damage_context", attacker),
+                              lambda: _assemble_damage_context(atk.damage_facts, dfn.damage_facts))
+
     # -- the sharing guard ----------------------------------------------------------------------
     @lazy
     def opponent_fingerprint(self) -> int:
@@ -1359,12 +1614,23 @@ class StateModel(_Lazily):
         list fails OPEN silently; this fails toward a redundant rebuild, which costs time and stays
         correct.
 
-        Two things outside their ``PlayerState`` still move their derivations, so both are folded in:
-        the shared ``stadium`` (it can change what their bodies effectively are) and the
+        THREE things outside their ``PlayerState`` still move their derivations, so all three are
+        folded in: the shared ``stadium`` (it can change what their bodies effectively are), the
         transient-grant generation (a lock or shield I imposed on their Active is honoured by the
-        clock reads but lives in the match-scoped tracker, ADR-0033).
+        clock reads but lives in the match-scoped tracker, ADR-0033), and their live damage-BOOST
+        plays (:attr:`_SideBase._turn_boosts`).
+
+        The third joined in POC-T3.5 (Issue #279) **with** the field that made it possible to miss.
+        A "during this turn" boost is a log fact — the card is in the discard by the time anyone
+        reads the board — so it is threaded onto the side rather than derived from it, and a
+        threaded field is precisely what the wholesale hash of ``player`` cannot see. A reused
+        ``their_side=`` would otherwise have carried a stale boost tuple into their damage context,
+        which is the fail-OPEN direction this hash exists to refuse. Inert today (nothing calls
+        :meth:`shares_opponent_with` at runtime), which is exactly why it had to be closed now: the
+        hole would have surfaced in Issue #150's sampled worlds, one layer away from its cause.
         """
-        return hash((_canonical(self.theirs.player), self.stadium, self._transient_generation))
+        return hash((_canonical(self.theirs.player), self.stadium, self._transient_generation,
+                     self.theirs._turn_boosts))
 
     @lazy
     def _transient_generation(self):

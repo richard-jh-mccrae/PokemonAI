@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from common.card_worth import ROLE_TIER, ENERGY_TIER
+from common.strategy.context import PRIZE_CARDS   # the rules' own constant, one home (leaf module)
 
 #: Every slot kind the vocabulary knows. The coverage lint rejects a SUPPLIES entry naming
 #: anything outside this set; adding a kind here without a supplier or a deriving gate is inert.
@@ -238,7 +239,9 @@ def deny_slot(key: str, *, oracle_value: float, turns_to_ready: int) -> Slot:
 
 
 # ─────────────────────────── the two-term opponent-target marginal (Opponent Value Equation, S3)
-_PRIZES_START = 6           # the Prize-count both players race down from
+_PRIZES_START = PRIZE_CARDS # the Prize-count both players race down from — the rules' own constant,
+                            # homed once in `strategy.context` (POC-T3.5, Issue #279) because the
+                            # Damage Formula's prizes-taken scalers read the same 6. Value unchanged.
 _PHASE_BASE = 0.3           # neutral phase weight (no race read)
 _PHASE_RACE_W = 0.15        # per turn-of-race-margin: being BEHIND (race_ahead < 0) sharpens every
                             # survival turn toward a full prize; being ahead flattens it. Seed —
