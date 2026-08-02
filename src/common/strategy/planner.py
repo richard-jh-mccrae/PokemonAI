@@ -1981,10 +1981,11 @@ class PlannerMixin:
         86091435-68).** A non-payoff win-condition Line member (`_line_preevo_set`: Dreepy AND the
         middle Drakloak on Dreepy→Drakloak→Dragapult ex) is worth its `win_condition_base` tier even
         when the deck declared only the base — a Line stage is a plan piece, not junk. WORTH-ONLY: the
-        Line-membership fact enters the value currency here but NOT `_roles_of` / `c.roles` — the
-        discard-ladder rungs keep their tuned routing (`_BASE_ROLES` exemptions, the covered-vs-
-        uncovered Drakloak discrimination on 83686860-18) as the GATED seam-D migration, never flipped
-        as a side effect of pricing worth."""
+        Line-membership fact enters the value currency here but NOT `_roles_of` / `c.roles`. That
+        separation outlived its original reason — it kept the tuned discard ladder's routing intact
+        across the seam-D migration, and Issue #261 item 2h deleted that ladder — but it stands on its
+        own: worth is what a card is WORTH, and `c.roles` is what the deck DECLARED, and a derived
+        Line membership is the first and not the second."""
         from common.card_worth import role_value
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
         roles = self._roles_of(cid)

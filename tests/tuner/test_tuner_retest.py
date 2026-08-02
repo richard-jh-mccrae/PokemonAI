@@ -78,12 +78,16 @@ def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
                                               poke(677, energy=2, hp=80, max_hp=80)]))
     corr = _correction(obs, correct=[0], live_trace={"chosen": [1], "margin": 0})
 
-    # A bare Pilot scores both at 0.0, so the pick is settled by the canonical tie-break (ADR-0102)
-    # rather than by the menu index — which copy that lands on is not this guard's subject, only that
-    # the two are NOT reconciled to each other.
+    # The guard's actual subject, asserted directly rather than through whichever copy the pick lands
+    # on: attached Energy is game-visible, so the two options are in NO shared class. Since ADR-0102 a
+    # bare Pilot (both options 0.0) settles the pick by the canonical tie-break rather than the menu
+    # index, and pinning that index here would pin the tie-break, not the reconciliation.
+    from common.option_equivalence import option_equivalence
+    assert option_equivalence(obs["select"]["option"], obs) == {}   # not one decision — no class
+
     r = retest(corr, Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
     assert r["chosen_after"] != corr.correct   # a real positional miss, not a transposed twin
-    assert r["fixed"] is False                 # the copies differ in energy — different bodies
+    assert r["fixed"] is False                 # …and it is NOT reconciled away
 
 
 def test_retest_reconciles_the_reopened_f75_duplicate_riolu_snipe():

@@ -293,18 +293,35 @@ deliberate list; gates green; flips → wave 2.
   with the three probes whose entire contract was reading them (`threat_sweep`, `needs_sweep`,
   `doom_audit` — ADR-0089: a RULING's script dies with its answer) and the blunder shell's
   discard-shadow dropdown. Gates green, suite green, zero decision movement.
-  **The tuned `_DISCARD` ladder is NOT deleted** — it is also the scoring basis of `_pitch_value_of`
-  / `_shed_signals`, i.e. of three live cost-netting fetch rungs, which the item's spec does not
-  address. Open question, escape-hatch budgeted.
+  **The tuned `_DISCARD` ladder is deleted too** (12 rungs, by name in the PR body), but only after
+  its SECOND consumer was re-pointed: it was also the scoring basis of the fetch doctrine's shed
+  predictor, so deleting it blind would have silenced three live cost-netting rungs
+  (`costly-fetch-sheds-junk`, `dont-shed-a-live-card`, `dont-shed-a-key-card`) — the Issue #238
+  shape. User-ruled 2026-08-02: re-point the predictor onto the equation that DECIDES the discard.
+  `_shed_signals` now prices the two cards the v2 assignment would actually shed
+  (`needs.removal_score`, extracted so the predictor and `cheapest_removal` share one objective),
+  and the deadness/re-access derivations are shared by both row builders rather than spelled twice.
+  Every ladder case pinned as a corpus ruling is reproduced by v2 unchanged. Decision Gate PASS and
+  the agree rate RISES (249/345 → 251/345). Discrimination Gate is RED on two frames
+  (`85045840|0|decision|10`, `|12`) → wave 2: the shipped decision on both is unchanged and already
+  matches the human, but the re-pointed bands decline the Ultra Ball inside the sim's continuation,
+  so the human's line develops less on the simmed end board. Not self-ruled and not tuned around.
   Two findings the sweep surfaced rather than caused, both pre-existing on `main` at `ce28431`:
   **Issue #294** — `cheapest_removal` is blind to the `pitch` term, so two RULED ladder-win cases
   shed the wrong card in shipped play (kept as strict-xfail TARGETs so the deletion of the shadow
-  that showed it does not bury it); and the leaf-profile pin was crediting the deny slot for
+  that showed it does not bury it); and the leaf-profile test was crediting the deny slot for
   `_recur_shadow`'s model reads, so `DENY_SLOT_PROFILE` turns out to be unexercised by that file's
   corpus.
 
 Acceptance: PROFILE has zero OFF value flags (except `value_model`, deleted-or-inert pending
 post-POC Issue #147); zero shadow emitters; gates green; flips → wave 2.
+
+⚠️ **The OFF-flag clause is not met and no item in this track owns it.** After item 2h,
+`PROFILE` carries TWO `False` value flags: the named exception `value_model`, and
+**`leaf_hand_value`** (ADR-0065 WP-N5b — the develop-rung leaf's actionable-resource term, armed-off
+2026-07-20 pending its leaf-lab bench). Items 2a–2h between them touch nothing that arms or retires
+it. Flagged here rather than quietly satisfied by counting only the flags a track happened to reach:
+T5's PROFILE collapse is the natural owner, and it needs either the bench result or a deletion.
 
 ### T3 — `state_value` (critical path; old Issue #145 merged)
 

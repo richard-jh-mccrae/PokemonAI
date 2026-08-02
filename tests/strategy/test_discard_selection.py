@@ -3,6 +3,12 @@
 Pitch the dead weight — a redundant tutor (its win-condition already in hand) and a setup-only opener
 you can no longer play — while protecting the ACE SPEC and keeping the reliable engine Supporters over
 filler / a situational hand-disruption card.
+
+Graded on the DECISION only, since Issue #261 item 2h deleted the tuned `_DISCARD` ladder these cases
+were written against. Each pick is reproduced unchanged by the keep-value v2 needs-assignment that
+now stands alone at a forced discard — which is the evidence that the ladder was redundant as a
+decider rather than load-bearing, and it is worth more than the rung-name assertions it replaced:
+those graded HOW the answer was reached, and the answer is what the blunders were about.
 """
 import pytest
 
@@ -15,10 +21,6 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 DISCARD = 8
 MEGA, STARYU, CINDERACE, SALVATORE, HILDA, LILLIES, HARLEQUIN, WALLYS, CAPE, WATER = (
     1031, 1030, 666, 1189, 1225, 1227, 1223, 1229, 1159, 3)
-
-
-def _fired(t):
-    return {h.id for h, _ in t.fired}
 
 
 def _setup(hand_ids):
@@ -53,9 +55,7 @@ def test_discards_the_redundant_tutor_and_protects_the_ace_spec_and_engine():
     # pitch Salvatore + spare Water.
     pilot, obs = _setup([MEGA, CAPE, WALLYS, WATER, SALVATORE])           # idx: 0..4
     sel = obs["select"]
-    dec = pilot.explain(obs)
-    assert "discard-the-redundant-tutor" in _fired(dec.options[4])        # Salvatore
-    assert "keep-key-cards-at-discard" in _fired(dec.options[1])          # Hero's Cape (ACE SPEC)
+    dec = pilot.explain(obs)        # Salvatore
     assert set(pilot.decide(obs)) == {4, 3}                               # Salvatore + Water, not Cape/Wally's
 
 
@@ -63,10 +63,7 @@ def test_discards_the_redundant_tutor_and_protects_the_ace_spec_and_engine():
 def test_discards_the_dead_opener_and_the_disruption_card_over_the_engine():
     # Post-opening: Cinderace dead in hand; Harlequin (hand_disruption) is filler. Keep Lillie's + Hilda.
     pilot, obs = _setup([LILLIES, HILDA, HARLEQUIN, CINDERACE])           # idx: 0..3
-    dec = pilot.explain(obs)
-    assert "discard-the-dead-opener" in _fired(dec.options[3])            # Cinderace
-    assert "keep-engine-supporter-at-discard" in _fired(dec.options[0])   # Lillie's: kept
-    assert "keep-engine-supporter-at-discard" not in _fired(dec.options[2])  # Harlequin: disruption, fodder
+    dec = pilot.explain(obs)            # Cinderace   # Lillie's: kept  # Harlequin: disruption, fodder
     assert set(pilot.decide(obs)) == {3, 2}                               # Cinderace + Harlequin
 
 
@@ -95,8 +92,7 @@ def test_burst_energy_keep_decays_once_the_active_is_fully_powered():
     urgent job, so the keep-key premise is void and the hand-refresh engine Supporter (Lillie's)
     outkeeps it: pitch [dead opener, Ignition], keep Lillie's."""
     pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=3)
-    dec = pilot.explain(obs)
-    assert "keep-key-cards-at-discard" not in _fired(dec.options[2])      # premise void: no keep
+    dec = pilot.explain(obs)      # premise void: no keep
     assert set(pilot.decide(obs)) == {0, 2}                               # pitch opener + Ignition
 
 
@@ -105,6 +101,5 @@ def test_burst_energy_stays_protected_while_the_active_still_needs_it():
     """Control: the same hand with the Active at 1 Energy — the burst is still the route to the big
     attack, so `keep-key-cards-at-discard` protects Ignition and the pitch falls elsewhere."""
     pilot, obs = _powered_setup([CINDERACE, LILLIES, IGNITION], active_energy=1)
-    dec = pilot.explain(obs)
-    assert "keep-key-cards-at-discard" in _fired(dec.options[2])          # still protected
+    dec = pilot.explain(obs)          # still protected
     assert IGNITION not in {[CINDERACE, LILLIES, IGNITION][i] for i in pilot.decide(obs)}

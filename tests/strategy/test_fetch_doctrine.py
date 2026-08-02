@@ -94,15 +94,17 @@ def test_fetch_deck_priority_grabs_the_decks_top_listed_candidate():
 @pytest.mark.req("REQ-GEN-0038")
 def test_discard_the_redundant_sheds_a_duplicate_already_in_play():
     """The discard side of the comparator: among cards you must pitch, shed the one whose need is
-    already satisfied — here a duplicate of a Pokémon already in play — over one you still lack."""
+    already satisfied — here a duplicate of a Pokémon already in play — over one you still lack.
+
+    Graded on the DECISION since Issue #261 item 2h deleted the `_DISCARD` ladder: the keep-value v2
+    needs-assignment reproduces this pick without the rung, which is the evidence that the rung was
+    redundant rather than load-bearing."""
     stats = DictCardStatProvider({DUP: CardStat(DUP, hp=90), NEEDED: CardStat(NEEDED, hp=90)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # forced to discard one of {DUP, NEEDED}: DUP already benched (redundant); NEEDED not in play.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(bench=[poke(DUP)], hand=[DUP, NEEDED]))
     assert pilot.decide(obs) == [0]                                   # pitch redundant duplicate
-    assert "discard-the-redundant" in _fired(pilot.explain(obs).options[0])
-    assert "discard-the-redundant" not in _fired(pilot.explain(obs).options[1])
 
 
 # --- fetch the deployable base over a payoff you can't yet evolve --------------------------------
@@ -172,8 +174,6 @@ def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singl
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)], context=DISCARD_SEL,
                       current=state(hand=[HANDDUP, HANDDUP, HSINGLE]))
     assert pilot.decide(obs) in ([0], [1])                            # dup copy, not singleton
-    assert "discard-the-hand-duplicate" in _fired(pilot.explain(obs).options[0])
-    assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[2])
 
 
 @pytest.mark.req("REQ-GEN-0038")
@@ -184,7 +184,6 @@ def test_discard_the_hand_duplicate_excludes_fungible_energy():
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(hand=[DUPENERGY, DUPENERGY]))
-    assert "discard-the-hand-duplicate" not in _fired(pilot.explain(obs).options[0])
 
 
 # --- prefer-good-in-discard: a deck redirects the pitch to its discard-synergy fodder ------------
@@ -198,8 +197,6 @@ def test_prefer_good_in_discard_pitches_the_decks_fodder_card():
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(hand=[FODDER, KEEPCARD]))
     assert pilot.decide(obs) == [0]                                   # pitch deck's discard-synergy card
-    assert "prefer-good-in-discard" in _fired(pilot.explain(obs).options[0])
-    assert "prefer-good-in-discard" not in _fired(pilot.explain(obs).options[1])
 
 
 # --- multi-pick (greedy gap-update): a single max>1 grab dedups a satisfied need -----------------
@@ -532,9 +529,13 @@ def test_fetch_the_support_never_endorses_a_stranded_support():
 JUNKMON = 660           # a Basic duplicated in play AND hand -> a provably-junk shed
 
 
+STARYU = 1030           # WINC's base — WITHOUT it in play the wincon is STRANDED, not key
+
+
 def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None):
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
+                                  STARYU: CardStat(STARYU, name="Staryu", hp=70),
                                   JUNKMON: CardStat(JUNKMON, hp=70), **(extra_stats or {})})
     fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"], **(extra_funcs or {})}
     funcs = CardFunctions(fmap)
@@ -586,12 +587,18 @@ def test_dont_shed_a_live_card_suppresses_the_fetch_below_end():
 def test_dont_shed_a_key_card_stacks_the_fetch_unliftably_negative():
     """A KEY card (the win-condition) forced into the predicted sheds fires `dont-shed-a-key-card`
     ON TOP of the live suppressor (−45 total): never pitch the wincon to dig — no normal-band
-    endorsement stack can lift it back."""
+    endorsement stack can lift it back.
+
+    The Staryu on the bench is load-bearing since the predictor moved onto the v2 keep-value
+    equation (Issue #261 item 2h): WITHOUT a base in play the Mega is STRANDED — it can never be
+    put into play this game — so v2 prices it keep 0 with a positive pitch term and correctly
+    declines to call it key. The retired ladder's flat `keep-key-cards-at-discard` −30 could not
+    see that, and this fixture was relying on the blindness."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON])
-    # only two shed candidates: one junk, one the WIN-CONDITION (keep-key floor fires on it).
+    # only two shed candidates: one junk, one the WIN-CONDITION (the keep floor fires on it).
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),
-                                    bench=[poke(JUNKMON), poke(702)],
+                                    bench=[poke(JUNKMON), poke(STARYU)],
                                     hand=[ULTRA, JUNKMON, WINC]))
     trace = pilot.explain(obs).options[0]
     assert "dont-shed-a-key-card" in _fired(trace)

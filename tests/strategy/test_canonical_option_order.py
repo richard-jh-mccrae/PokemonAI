@@ -61,7 +61,7 @@ def _picked_body(pilot, bench):
 
 @pytest.mark.req("REQ-PILOT-0028")
 def test_an_exact_tie_picks_the_SAME_body_from_a_permuted_menu():
-    """The #254 property. Two distinguishable bodies (one damaged), both scoring exactly 0.0 — the
+    """The Issue #254 property. Two distinguishable bodies (one damaged), both scoring exactly 0.0 — the
     live case, since most options score 0.0 and the tie is the norm rather than the exception. Under
     the old positional tie-break each menu picked its own option 0, i.e. a different body."""
     p = _pilot()

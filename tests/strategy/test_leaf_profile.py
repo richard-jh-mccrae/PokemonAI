@@ -162,10 +162,10 @@ PROMOTE_DECIDER_PROFILE = frozenset({
 #: ⚠️ **UNEXERCISED by this file's corpus, as of Issue #261 item 2h.** Both fields were being read on
 #: every frame here — but by `_recur_shadow`, which ran on every decision and which that item
 #: deleted. With it gone, neither field is touched by ANY frame in `_frames()` or `_attach_frames()`,
-#: which means this pin was crediting the deny slot for a shadow's reads and no frame in the corpus
+#: which means this test was crediting the deny slot for a shadow's reads and no frame in the corpus
 #: actually fires the deny slot's deadline grade. Kept defined, and kept in `LEAF_PROFILE` (the cost
 #: claim about the consumer is unchanged and still true where it fires), but no longer asserted as
-#: ADDED by the attach pin, because asserting a read no frame makes is how a pin goes vacuous.
+#: ADDED by the attach test, because asserting a read no frame makes is how a test goes vacuous.
 DENY_SLOT_PROFILE = frozenset({
     "theirs.discard_recur_fuel",
     "theirs.turns_to_afford",

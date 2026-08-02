@@ -126,7 +126,7 @@ def test_the_probe_dispositions_landed():
     rulings plus a vacuous gate; Issue #261 item 2h retired three more, and for the same reason one
     layer up — `threat_sweep`, `needs_sweep` and `doom_audit` read nothing but the four shadows that
     item deleted, so each one's whole contract went with its subject. `threat_sweep`'s own vacuous
-    `--slots` mode was already gone by #243; the rest of the file went with the shadows."""
+    `--slots` mode was already gone by Issue #243; the rest of the file went with the shadows."""
     probes = REPO / "tools" / "train" / "probes"
     for gone in ("deploy_decider_sweep", "deny_gate1", "deny_gate217", "deploy_anchor_sweep"):
         assert not (probes / f"{gone}.py").exists(), f"{gone} was deleted by Issue #243"

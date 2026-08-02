@@ -54,12 +54,12 @@ def _doom(fx, deck, *, relax=None, recur=None):
     read the doom DECISION plus the two facts it turns on.
 
     These pins used to read `Decision.threat_shadow`, a diagnostic Issue #261 item 2h deleted along
-    with the other three shadows. They lose nothing by it: every field they asserted is either the
-    decided value itself (`doom_final` was `Board.active_doomed`) or one of the live decider's own
-    inputs, so the read moves onto `_active_doomed`'s surfaces rather than onto a second computation
-    of them. `decided` is the one field that was the shadow's own arithmetic — the relax-only
-    conjunction — so it is derived here from the same three facts the decider branches on, and the
-    ruling it serves (`doom_final`) is asserted independently either way."""
+    with the other three shadows. They lose nothing by it, because every field they asserted is now
+    read off the live decider rather than off a second computation of it: `doom_final` IS
+    `Board.active_doomed`, `matched`/`fueled` come from `_doom_relax_inputs`, and `decided` is
+    `_doom_relax_consulted` — the predicate `_active_doomed` itself branches on, extracted for exactly
+    this reason. Re-deriving that conjunction here would have left these pins asserting against the
+    test's own arithmetic."""
     pilot = _pilot(deck)
     if relax is not None:
         pilot.doom_matched_relax = relax
@@ -81,8 +81,7 @@ def _doom(fx, deck, *, relax=None, recur=None):
                if matched else None)
     return {"doom_old": old, "my_hp": int(ma.get("hp", 0) or 0), "doom_charged": charged,
             "matched": matched,
-            "decided": bool(old and pilot.doom_matched_relax and matched
-                            and (not fueled or pilot.recur_fuel_relax)),
+            "decided": pilot._doom_relax_consulted(old, matched, fueled),
             "doom_final": bool(getattr(board, "active_doomed", False))}
 
 

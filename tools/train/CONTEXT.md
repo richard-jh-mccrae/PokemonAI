@@ -404,8 +404,8 @@ where the leaf ranks one of two identical options 12× above the other still rea
 Lab reports it per row, and **never gates on it** (the doctrine the tie metrics already carry): a
 metric nobody has ruled on must not start failing `main`. Decision 5 canonicalises the leaf to the
 class MAXIMUM, which removes the asymmetry without touching the rollout; the rollout's own
-order-dependence was **Issue #254**, CLOSED by **ADR-0102** (the tie-break is class identity, not
-menu position).
+order-dependence was **Issue #254**, CLOSED by **ADR-0102**, which re-keyed the policy's ordering
+onto class identity instead of menu position.
 _Avoid_: leaf noise (it is deterministic), scoring bug (the board scorer is fine — the ROLLOUT that
 reaches the board is incomplete), tie-break
 
