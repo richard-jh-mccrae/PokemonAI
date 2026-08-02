@@ -570,7 +570,7 @@ BURST, NEUT_SINGLE, POWERED_ATK = 17, 662, 900
 
 @pytest.mark.req("REQ-GEN-0065")
 def test_the_shed_predictor_ranks_by_DEADNESS_like_the_decider_it_predicts():
-    """The predictor and the discard DECIDER share one ranking (ADR-TEMP-294, `Pilot.
+    """The predictor and the discard DECIDER share one ranking (ADR-0106, `Pilot.
     _removal_ranking_legs`), and this is the shape where that bites — three shed candidates, all
     priced 0 by the assignment, so nothing but the ranking legs can separate them:
 

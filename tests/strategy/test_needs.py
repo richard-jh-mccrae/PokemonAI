@@ -257,7 +257,7 @@ def test_cheapest_removal_ties_break_by_residual_worth():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_deadness_ranks_an_exact_tie_the_index_used_to_decide():
-    """ADR-TEMP-294 / Issue #294, the seam-D Finding-3 case: a role-less spare and a card whose role has
+    """ADR-0106 / Issue #294, the seam-D Finding-3 case: a role-less spare and a card whose role has
     EXPIRED both cover nothing, so both price 0 and both carry residual worth 0. The equation is
     right to call them equal — `P(met | keep) == P(met | pitch) == 0` for each — so the preference
     "shed the dead one" rides the ranking key, and the menu index stops deciding."""
@@ -296,7 +296,7 @@ def test_deadness_is_ordering_only_and_never_beats_a_real_cost():
 
 @pytest.mark.req("REQ-NEEDS-0004")
 def test_a_fuel_card_that_also_funds_the_attack_is_not_dead_weight():
-    """`83966336|0|decision|27`, the defect found while building ADR-TEMP-294. A fuel Energy that ALSO
+    """`83966336|0|decision|27`, the defect found while building ADR-0106. A fuel Energy that ALSO
     covers the only `fund_attack` slot nets to a tie — the pitch gain and the keep loss cancel — so
     whatever ranks that tie decides it. Passing the whole `pitch` count (which carries the fuel zone
     sign) prices fuel TWICE and sheds the attack's only funder; the deadness leg carries the five

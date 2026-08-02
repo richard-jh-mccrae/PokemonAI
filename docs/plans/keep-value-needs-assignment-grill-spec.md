@@ -206,7 +206,7 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
      equal-marginal removals the lower residual worth sheds first — v1's worth tie-break
      re-derived (83967840-54), and the deploy-dead Cinderace sheds before a live spare.
      ⚠️ **The second half of that sentence was never true in shipped play, and is now true by a
-     different mechanism** (ADR-TEMP-294, Issue #294). `deploy` knows about dead evolutions, dead
+     different mechanism** (ADR-0106, Issue #294). `deploy` knows about dead evolutions, dead
      fetchers and need-met tutors, and about none of the five expired-role facts
      `_apply_pitch_terms` derives — so a spent `opener` kept a `deploy` of 1.0 and the Cinderace
      case fell through to the menu index, while a spent burst's residual worth (catalog tier 30)

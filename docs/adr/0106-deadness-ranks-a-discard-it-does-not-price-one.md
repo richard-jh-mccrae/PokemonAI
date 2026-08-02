@@ -1,4 +1,4 @@
-# ADR-TEMP-294 — Deadness RANKS a discard; it does not price one
+# ADR-0106 — Deadness RANKS a discard; it does not price one
 
 **Status:** Accepted (ruled by the user 2026-08-02 on Issue #294, option 1 of two offered); **BUILT**.
 **Amends [ADR-0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)** — it

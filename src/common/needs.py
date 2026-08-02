@@ -547,7 +547,7 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
     both are ordering-only: neither can make a removal look cheaper than one that genuinely costs
     less, which is the property that lets a CATEGORICAL fact rank without being handed a magnitude.
 
-    ``deadness`` (per-card, ADR-TEMP-294): a CATEGORICAL 0/1 — a card whose role has EXPIRED (a
+    ``deadness`` (per-card, ADR-0106): a CATEGORICAL 0/1 — a card whose role has EXPIRED (a
     spent `opener`, a burst whose Active is already powered, a tutor whose target is in hand, a
     stranded evolution, declared fodder) is actively best gone. Keep-cost cannot express that:
     `keep_cost = Worth × Odds × Gates` is a product of non-negative factors, and for a dead card

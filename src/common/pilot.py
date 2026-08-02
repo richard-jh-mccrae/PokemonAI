@@ -4013,7 +4013,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (wincon in hand → the tutor's target is had), a stranded evolution (payoff with no base), the
         declared `discard_fodder`, `fuel` (zone sign), and the SPENT burst. ``pitch`` is the COUNT.
 
-        TWO terms, and each difference between them is load-bearing (ADR-TEMP-294).
+        TWO terms, and each difference between them is load-bearing (ADR-0106).
 
         ``deadness`` is the five expired-role bits, **categorical** — dead, or not — and it is what
         RANKS a discard among cards the assignment prices equal (`needs.cheapest_removal`'s deadness
@@ -4094,7 +4094,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `_refresh_slot_resupply` over the refresh draw window), non-Active fund bodies, and
         non-option hand cards as fixed coverage (a real forced discard offers the whole hand).
 
-        The pick's ranking key carries two ORDERING legs below the score (ADR-TEMP-294) — see
+        The pick's ranking key carries two ORDERING legs below the score (ADR-0106) — see
         `_removal_ranking_legs`. Both only discriminate where the assignment prices removals EQUAL,
         which for a forced discard is the common case: that is what the pitch term exists to rank
         and what a keep FLOOR can never express."""

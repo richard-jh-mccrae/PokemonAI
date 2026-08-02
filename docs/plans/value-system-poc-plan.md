@@ -338,7 +338,7 @@ deliberate list; gates green; flips → wave 2.
   Two findings the sweep surfaced rather than caused, both pre-existing on `main` at `ce28431`:
   **Issue #294** — `cheapest_removal` is blind to the `pitch` term, so two RULED ladder-win cases
   shed the wrong card in shipped play (kept as strict-xfail TARGETs so the deletion of the shadow
-  that showed it does not bury it). **CLOSED 2026-08-02, ADR-TEMP-294**: the ranking key gained a
+  that showed it does not bury it). **CLOSED 2026-08-02, ADR-0106**: the ranking key gained a
   DEADNESS leg above residual worth — deadness RANKS a discard, it does not price one, because for a
   dead card `P(met | keep) == P(met | pitch) == 0` and a signed credit would have to invent its
   magnitude. Both TARGETs now grade as ordinary tests; both gates byte-identical to the pre-change

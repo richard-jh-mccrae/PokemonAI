@@ -367,7 +367,7 @@ comparator) and ADR-0032 (Effect-Clause tier).
   both sites" claim is retired, deliberately: the two sites ask different questions (one card's floor
   vs the hand's joint price) and shared an answer.
 
-- **WP-N10 — the pitch term reaches the assignment that decides (2026-08-02, ADR-TEMP-294,
+- **WP-N10 — the pitch term reaches the assignment that decides (2026-08-02, ADR-0106,
   Issue #294).** WP-N3's own build note above says the residual-worth tiebreak makes *"the
   deploy-dead Cinderace shed before a live spare"*; it never did. `deploy` sees dead evolutions,
   dead fetchers and need-met tutors, and none of the five expired-role facts `_apply_pitch_terms`
