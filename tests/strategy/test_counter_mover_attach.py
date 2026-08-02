@@ -21,6 +21,14 @@ still-building Dreepy keeps gating Munkidori's own attack. Making the gate per-c
 measured and INVERTS the committed 86091728-19 correction (the human ruled the line eats the {P}
 first even though the {D} beside it is dead to the line), so the correction wins and that pin is
 marked. The choices are written up in `docs/plans/attach-decider-swap-review.md` §Ruling 3.
+
+**The third pin's marker was rewritten 2026-08-02, and the reason is worth keeping.** It asserted an
+OUTCOME (`d.chosen == [psy_active]`) under a NON-strict xfail, and once ADR-0103's canonical ordering
+landed it began to XPASS — silently, because non-strict xfail reports neither direction. The gap had
+not closed: the {P} arm-up and the dead second {D} score EXACTLY equal (1.000 each, from a rung that
+fires on both), so the "pass" was the tie-break landing somewhere new. The marker now asserts the
+substance — whether the ranking distinguishes them at all — and is STRICT, so closing the gap turns
+the test red and forces the marker off instead of letting it rot into another quiet XPASS.
 """
 from __future__ import annotations
 
@@ -136,13 +144,32 @@ def test_the_line_still_eats_first_in_setup():
 
 
 @pytest.mark.req("REQ-CORPUS-0001")
-@pytest.mark.xfail(strict=False, reason="RULING OWED — same ruling as "
-                   "test_dark_fuel_wins_the_turn_once_the_line_is_fed "
-                   "(docs/plans/attach-decider-swap-review.md).")
+@pytest.mark.xfail(strict=True, reason="RULING OWED — the role gate discards the very "
+                   "discrimination the doctrine turns on; see the docstring and "
+                   "docs/plans/attach-decider-swap-review.md §Ruling 3.")
 def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
     """Line fed, Munkidori Active already fuelled with its {D}, no better benched body to promote
     (two 1-Energy Dreepy): the user doctrine says the {P} goes to Munkidori so Mind Bend (60 +
-    Confusion) is live."""
+    Confusion) is live.
+
+    **What this asserts, and why it changed (2026-08-02).** It used to assert the OUTCOME —
+    ``d.chosen == [psy_active]`` — under a NON-strict xfail, and that combination went quietly
+    XPASS once ADR-0103's canonical ordering landed. Measured on the board below, the pass was
+    luck, not the doctrine returning:
+
+        psy : total 1.000   build 45.0   ability_fuel 0.0   role_gated True
+        dark: total 1.000   build  0.0   ability_fuel 0.0   role_gated True
+
+    The two attaches score **exactly equal**, so nothing in the ranking prefers the {P} — the 1.000
+    is `prefer-active-attach-in-setup`, which fires identically on both, and the winner is whichever
+    the tie-break hands over. A non-strict xfail turned that into silence in both directions.
+
+    So the assertion now names the SUBSTANCE: does the decider distinguish the arm-up from the dead
+    second {D} at all? It does not, and the working says why — the discrimination exists (`build`
+    45 vs 0) and the ATTACK-AXIS ROLE GATE zeroes it, exactly as ADR-0069 §4 specifies while a Line
+    member is in play. That is the owed ruling, unchanged. **Strict**, so the day the gate learns
+    this case the test goes red and the marker must be removed deliberately rather than decaying
+    into another silent XPASS."""
     rec = _record()
     obs = copy.deepcopy(rec.obs)
     _feed_the_line(obs)
@@ -151,9 +178,11 @@ def test_stuck_active_munkidori_takes_the_psychic_on_top_of_the_dark():
     active["energyCards"] = [{"id": _D_ENERGY, "playerIndex": 0, "serial": 99}]
     d = _pilot(rec.agent).explain(obs)
     [psy_active] = _attach_options(rec, obs, card=_P_ENERGY, area=_ACTIVE_AREA)
+    [dark_active] = _attach_options(rec, obs, card=_D_ENERGY, area=_ACTIVE_AREA)
+    score = {t.index: t.score for t in d.options}
+    assert score[psy_active] > score[dark_active], (
+        f"the arm-up {{P}} [{psy_active}] does not out-score the dead second {{D}} [{dark_active}]: "
+        f"{score[psy_active]} vs {score[dark_active]} — the ranking has no opinion, so whichever "
+        f"wins does so on the tie-break")
     assert d.chosen == [psy_active], (
         f"expected the {{P}}→Active-Munkidori arm-up [{psy_active}], got {d.chosen}")
-    trace = next(t for t in d.options if t.index == psy_active)
-    assert "prefer-active-attach-in-setup" in {h.id for h, _ in trace.fired}, (
-        "the Active preference did not return once the benched line was fed")
-    assert trace is not None
