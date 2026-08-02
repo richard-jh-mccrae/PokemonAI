@@ -39,6 +39,18 @@ Issue #281 adds four more, every field read off `data/EN_Card_Data.csv` (the num
     `preventsDamageFrom="ex"`. The over-claim defender.
   * Larry's Braviary (1008) Stage 1, HP 130, {C}, Weakness {L}, **Resistance {F}** — the −30
     defender (`docs/rules.md` §5: a uniform flat −30 in this set).
+
+Issue #280 adds ONE, and it is the attacker the Damage Formula's context exists for:
+  * Alakazam (743, MEG 56) Stage 2, evolvesFrom **Kadabra**, HP 140, {P}, Weakness {D},
+    Resistance {F}, Retreat 1 — **Powerful Hand** ``{P}``, printed damage *n/a*:
+    *"Place 2 damage counters on your opponent's Active Pokémon for each card in your hand."*
+    Read through `card_text.parse_attack_scaling`, that sentence is
+    ``("atk_hand", 20, True, None)`` — the Damage Formula scaler ``atk_hand`` at **20 per card**
+    (2 counters), and the trailing ``True`` is *counter-placement*, which
+    `provider.build_attack_stats` turns into ``ignoresWeakness/Resistance/Effects`` because
+    counters are not damage. So this attacker's output is EXACTLY ``20 x hand`` with no
+    Weakness/Resistance leg to disentangle, which is what makes it the clean instrument for a
+    context test. Rank 2 by play-rate in the tracked meta (`docs/matchups/alakazam.md`).
 """
 from __future__ import annotations
 
@@ -58,9 +70,10 @@ COLORLESS, GRASS, FIRE, WATER = 0, 1, 2, 3
 LIGHTNING, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 4, 5, 6, 7, 9
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 MEGA_STARMIE, GOUGING_FIRE, CRUSTLE, BRAVIARY = 1031, 46, 345, 1008
+ALAKAZAM = 743
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
 JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
-HEAT_BLAST, BLAZE_BLITZ = 946, 947
+HEAT_BLAST, BLAZE_BLITZ, POWERFUL_HAND = 946, 947, 9743
 E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
 
 _STATS = {
@@ -92,6 +105,11 @@ _STATS = {
                        weakness=LIGHTNING, resistance=FIGHTING, evolvesFrom="Larry's Rufflet",
                        maxDamage=50, maxDamageCost=2, minAttackCost=2, minCostDamage=50,
                        attacks=(CLUTCH,), cardType=0),
+    # ── Issue #280's context cast: an attacker whose damage IS a context variable ──────────────
+    ALAKAZAM: CardStat(ALAKAZAM, name="Alakazam", hp=140, stage2=True, evolvesFrom="Kadabra",
+                       energyType=PSYCHIC, weakness=DARKNESS, resistance=FIGHTING,
+                       maxDamage=0, maxDamageCost=1, minAttackCost=1, minCostDamage=0,
+                       handSizeDamage=20, attacks=(POWERFUL_HAND,), cardType=0),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
@@ -113,6 +131,11 @@ _ATTACKS = {
     HEAT_BLAST: AttackStat(HEAT_BLAST, damage=60, cost=2, energyTypes=(FIRE, COLORLESS)),
     BLAZE_BLITZ: AttackStat(BLAZE_BLITZ, damage=260, cost=3,
                             energyTypes=(FIRE, FIRE, COLORLESS)),
+    # Counter placement, so all three ignore flags are set — see the module docstring. Printed 0:
+    # with no context this attack deals NOTHING, which is precisely the flat axis Issue #280 removes.
+    POWERFUL_HAND: AttackStat(POWERFUL_HAND, damage=0, cost=1, energyTypes=(PSYCHIC,),
+                              scaleVar="atk_hand", scalePerUnit=20,
+                              ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 
@@ -171,6 +194,24 @@ def _starmie_board(their_active, *, my_energies=(E_W,)):
         _player(active=_poke(MEGA_STARMIE, hp=330, energies=list(my_energies)), prize=4),
         _player(active=their_active, prize=4),
         energy_attached=True)
+
+
+def _alakazam_board(their_hand: int, *, my_active=None, my_hand=()):
+    """THEIR Alakazam Active — the ``atk_hand`` attacker — against a chosen body of mine.
+
+    Their hand is a COUNT with no contents, which is the engine's own shape for a hidden zone
+    (`TheirSide.hand_size` reads ``handCount``, and the opponent's ``hand`` is never populated);
+    mine is real cards. So the two directions of the Damage Formula's hand variable are
+    DISTINGUISHABLE on this board by construction — which is what lets a direction error be a test
+    failure rather than a plausible-looking number.
+
+    One {P} is attached, which is exactly Powerful Hand's cost, so affordability is settled and the
+    only thing moving between boards is the hand."""
+    theirs = _player(active=_poke(ALAKAZAM, hp=140, energies=[E_P], serial=9), prize=4)
+    theirs["hand"], theirs["handCount"] = [], int(their_hand)
+    return _model(
+        _player(active=my_active or _poke(MEGA_LUC, hp=340), hand=list(my_hand), prize=4),
+        theirs)
 
 
 # ── the coverage map — T0's headline rule, executable ─────────────────────────────────────────────
@@ -811,6 +852,96 @@ def test_the_new_read_keeps_the_incumbents_BUDGET_affordability_filter():
     assert _reach(funded)[0] == 210, "three Energy reaches Nebula Beam, so the printed max moves"
 
 
+# ── `survival` threads the DAMAGE CONTEXT into its clocks (Issue #280) ────────────────────────────
+#
+# `survival` takes two damage reads — the `turns_to_ko_me` clock and `_predicted_loss`'s Incoming —
+# and both took a `context` nobody gave them, so every context-scaled term of the Damage Formula
+# contributed 0 on THEIR attack: an opponent holding twelve cards and one holding two produced the
+# same `turns_to_ko_me`. The direction is THEIRS — their attack on my body — and getting it
+# backwards reads MY hand as THEIR damage scaler, which is silently plausible. So every case below
+# is built on a board whose two hands DIFFER.
+
+
+def _survival_of(model) -> float:
+    working: dict = {}
+    sv.state_value(model, working=working)
+    return working["survival"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_survivals_clock_shortens_as_THEIR_hand_grows():
+    """Powerful Hand deals ``20 x hand`` and nothing else (module docstring, verified at source), so
+    against my Mega Lucario ex's 340 HP the ACCUMULATING clock (ADR-0071 decision 4) is exactly
+    ``ceil(340 / (20 x hand))``, answering ``max_t + 1 = 9`` beyond the 8-turn horizon.
+
+    Without the context that scaler contributes 0, Powerful Hand's PRINTED damage is 0, and every
+    hand size answers 9 — the flat axis this issue exists to remove. The ladder is asserted
+    value-by-value rather than as a trend because the trend alone would also pass on a term that
+    moved for some other reason."""
+    ladder = {1: 9, 2: 9, 3: 6, 4: 5, 5: 4, 6: 3, 9: 2, 17: 1}
+    for hand, turns in ladder.items():
+        exposed = sv._exposed_bodies(_alakazam_board(hand))
+        assert len(exposed) == 1, "one Active, empty Bench — the ladder is about one body's clock"
+        assert exposed[0].turns_to_ko_me == turns, (
+            f"their hand {hand} => {20 * hand}/turn into 340 HP => turn {turns}")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_the_survival_clock_reads_THEIR_hand_and_never_MINE():
+    """The direction regression the issue asks for, stated as a pair of boards that a single shared
+    context would price EXACTLY BACKWARDS rather than merely differently.
+
+    Both boards hold the same twelve-and-two hands; they differ only in who holds which. With
+    ``attacker="theirs"`` the clock follows THEIR hand (12 cards => 240/turn => turn 2; 2 cards =>
+    40/turn => the body survives the horizon). With ``attacker="mine"`` the two answers swap. There
+    is no assignment of one dict to both directions that passes this."""
+    theirs_big = _alakazam_board(12, my_hand=[E_F, E_F])
+    mine_big = _alakazam_board(2, my_hand=[E_F] * 12)
+
+    ctx = theirs_big.damage_context(attacker="theirs")
+    assert ctx["atk_hand"] == theirs_big.theirs.hand_size == 12, "the ATTACKER here is theirs"
+    assert ctx["def_hand"] == theirs_big.mine.hand_size == 2, "my hand is the DEFENDER's hand"
+
+    assert sv._exposed_bodies(theirs_big)[0].turns_to_ko_me == 2
+    assert sv._exposed_bodies(mine_big)[0].turns_to_ko_me == 9
+    # Mega Lucario ex yields 3 prizes (`docs/rules.md` §6), and one body ranks first, so `survival`
+    # is `-(3 x halve(t - 1))` on both boards.
+    assert _survival_of(theirs_big) == pytest.approx(-3.0 * 0.5)
+    assert _survival_of(mine_big) == pytest.approx(-3.0 / 256)
+    assert _survival_of(theirs_big) < _survival_of(mine_big)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_the_bench_empty_doom_reads_their_SCALED_damage_too():
+    """`_predicted_loss` is the second call site and the more consequential one: it is a TERMINAL
+    term at `-LOSS_PRIZES`, so damage it cannot see is a game loss it cannot see.
+
+    Munkidori's 70 HP sits between a three-card hand (60) and a four-card hand (80), so one card
+    decides the rung. The third board is the direction control: twelve cards in MY hand is
+    ``def_hand`` here and must move nothing at all."""
+    safe = _alakazam_board(3, my_active=_poke(MUNKIDORI, hp=70, serial=3))
+    doomed = _alakazam_board(4, my_active=_poke(MUNKIDORI, hp=70, serial=3))
+    my_hand_big = _alakazam_board(3, my_active=_poke(MUNKIDORI, hp=70, serial=3),
+                                  my_hand=[E_F] * 12)
+
+    assert sv._predicted_loss(safe) is False, "60 damage does not fell a 70 HP Active"
+    assert sv._predicted_loss(doomed) is True, "80 does, and my Bench is empty (rules.md §7 case 2)"
+    assert sv._predicted_loss(my_hand_big) is False, "MY hand is `def_hand` — it is not their damage"
+
+    assert _survival_of(doomed) <= -sv.LOSS_PRIZES
+    assert _survival_of(safe) > -sv.LOSS_PRIZES
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_more_cards_in_THEIR_hand_never_improves_survival():
+    """The monotonicity class Issue #262 requires, on this issue's axis. Hands 1..12 keep the sweep
+    clear of the bench-empty doom (340 HP needs a 17-card hand), so this is the POSITIONAL term
+    alone."""
+    values = [_survival_of(_alakazam_board(n)) for n in range(1, 13)]
+    assert all(after <= before for before, after in zip(values, values[1:])), values
+    assert values[-1] < values[0], "the axis is flat — the context is not reaching the clock"
+
+
 @pytest.mark.req("REQ-STATEVALUE-0009")
 @pytest.mark.xfail(strict=True, reason="OPEN DEFECT, diagnosed and parked — see the test body and "
                                        "`threat`'s `blind_to` entry 'SATURATION INTO ONE BIT'")
@@ -998,6 +1129,141 @@ def test_on_real_frames_the_incumbent_printed_read_still_returns_a_PRINTED_numbe
     assert compared, "no corpus frame offered both Actives — the class would pass vacuously"
     assert diverged, ("positive control FAILED: the damage-model read never once differed from the "
                       "printed read, so the instrument is not measuring what this issue changed")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_on_real_frames_their_context_only_ever_SHORTENS_the_survival_clock(corpus_models):
+    """Issue #280's wiring and fail-direction guard, on boards nobody designed for it.
+
+    Three properties, all about the clock `survival` actually reads:
+
+    * **The extractor asks the threaded question.** ``_exposed_bodies``' clock must equal the clock
+      the model gives for the same body WITH their context. Composed from the model's own public
+      accessor rather than re-derived, which is what keeps it a check and not a copy (Issue #281's
+      incumbent guard has the same shape one side over).
+    * **The direction is theirs.** ``atk_hand`` must be THEIR hand and ``def_hand`` MINE, asserted
+      per frame with a positive control that the two actually differ somewhere — on a board where
+      the hands happen to be equal, the assertion cannot fail however wrong the direction is.
+    * **Monotone the safe way.** Every clock read reaches the oracle at ``bound="max"`` and every
+      Damage Formula scaler the parser can emit ADDS, so threading the context can shorten a clock
+      and never lengthen one. On a SURVIVAL read a longer clock is the one direction that must
+      never appear from better information (ADR-0064's bounded pessimism).
+
+      That monotonicity is PARSER-contingent rather than rule-contingent, and is asserted here
+      rather than assumed for exactly that reason: `data/EN_Card_Data.csv` does contain
+      *reducing* scaler text (*"does 30 less damage for each {C} in your opponent's Active
+      Pokémon's Retreat Cost"*, *"does 60 less damage for each Energy attached to your opponent's
+      Active Pokémon"*), and `card_text._SCALE_FAMILIES` has no pattern for either, so today they
+      parse to no scaler at all and contribute 0. The day one does parse, this assertion is the
+      thing that says so.
+
+    The strict-shortening count is the positive control the first property needs (CLAUDE.md): where
+    the blind and threaded clocks agree, "the extractor is threaded" and "the extractor is not"
+    produce identical evidence.
+
+    This sample carries no `handSizeDamage` attacker — measured, not assumed — so the issue's own
+    archetype is covered by the sibling below, which scans the whole corpus for it."""
+    shortened, hands_differ, bodies = 0, 0, 0
+    for key, pilot, obs in corpus_models:
+        my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
+        model = pilot._leaf_state_model(obs, my_index)
+        ctx = model.damage_context(attacker="theirs")
+        assert ctx["atk_hand"] == model.theirs.hand_size, f"{key}: the ATTACKER is theirs"
+        assert ctx["def_hand"] == model.mine.hand_size, f"{key}: the DEFENDER is mine"
+        hands_differ += ctx["atk_hand"] != ctx["def_hand"]
+        bench_raws, opp_active = model.mine.bench_raws, model.theirs.active_raw
+        exposed = sv._exposed_bodies(model)
+        assert len(exposed) == len(model.mine.bodies)
+        for body, read in zip(model.mine.bodies, exposed):
+            bodies += 1
+            clock = dict(my_benched=not body.is_active, my_bench=bench_raws, opp_active=opp_active)
+            blind = int(model.theirs.turns_to_ko_me(body.body, **clock))
+            threaded = int(model.theirs.turns_to_ko_me(body.body, context=ctx, **clock))
+            assert threaded <= blind, (
+                f"{key}: body {body.card_id}'s clock LENGTHENED from {blind} to {threaded} once "
+                f"their damage context was threaded — a scaler can only add damage")
+            assert read.turns_to_ko_me == threaded, (
+                f"{key}: `survival` read body {body.card_id}'s clock as {read.turns_to_ko_me}; "
+                f"their damage context says {threaded}")
+            shortened += threaded < blind
+    assert bodies, "no corpus frame offered a body of mine — the class would pass vacuously"
+    assert hands_differ, ("positive control FAILED: no frame had asymmetric hands, so the direction "
+                          "assertions above could not have caught a swapped context")
+    assert shortened, ("positive control FAILED: their damage context never once shortened a clock, "
+                       "so the instrument is not measuring what this issue changed")
+
+
+def _hand_scaler_frames():
+    """``(key, pilot, obs, my_index)`` for every corpus frame with a `handSizeDamage` attacker
+    across the table — Issue #280's named archetype (`docs/matchups/alakazam.md`, rank 2 by
+    play-rate), FOUND rather than assumed.
+
+    Scans the whole index rather than reusing `corpus_models`' 40-frame sample, because the
+    archetype is absent from that sample; the scan itself is card-id lookups against an
+    already-built Stat Provider, not model builds, and measures ~0.6 s over the full corpus."""
+    from corpus_helpers import corpus_index
+    from train.tune import _build_pilot
+    out, built = [], {}
+    for (episode, frame), rec in sorted(corpus_index().items()):
+        if rec.agent not in built:
+            try:
+                built[rec.agent] = _build_pilot(rec.agent)[0]
+            except Exception:                       # an unbuildable agent is skipped, never fatal
+                built[rec.agent] = None
+        pilot = built[rec.agent]
+        if pilot is None or pilot.stats is None:
+            continue
+        cur = (rec.obs or {}).get("current") or {}
+        players = cur.get("players") or []
+        my_index = cur.get("yourIndex", 0)
+        if len(players) < 2:
+            continue
+        opp = players[1 - my_index] or {}
+        ids = [(b or {}).get("id")
+               for b in ((opp.get("active") or []) + (opp.get("bench") or [])) if b]
+        if any(getattr(pilot.stats.get(i), "handSizeDamage", 0) for i in ids if i is not None):
+            out.append((f"{episode}|{frame}", pilot, rec.obs, my_index))
+    return out
+
+
+@pytest.fixture(scope="module")
+def hand_scaler_frames():
+    frames = _hand_scaler_frames()
+    if not frames:
+        pytest.skip("no corpus frame carries a `handSizeDamage` attacker opposite")
+    return frames
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_on_real_frames_a_hand_size_attacker_shortens_the_clock_as_their_hand_grows(
+        hand_scaler_frames):
+    """Issue #280's headline case, on the boards it was filed about rather than on a fixture:
+    *"an opponent holding twelve cards and one holding two produce the same `turns_to_ko_me`"*.
+
+    Their hand is a COUNT and nothing else (`TheirSide.hand_size` reads ``handCount``), so the
+    perturbation is exactly one integer — which is what makes this a controlled comparison on a real
+    board rather than a second synthetic fixture wearing a corpus costume.
+
+    Asserted as monotone non-increasing PER FRAME with at least one strict move across the set: a
+    frame can be genuinely indifferent (my Active already falls on turn 1, or the scaling attacker
+    is Benched behind a shut promotion gate), and demanding strictness everywhere would fail on
+    correct behaviour. Measured: 8 frames carry the archetype and 3 of them move."""
+    import copy
+    hands = (1, 3, 6, 10, 20)
+    strict = 0
+    for key, pilot, obs, my_index in hand_scaler_frames:
+        ladder = []
+        for hand in hands:
+            board = copy.deepcopy(obs)          # `corpus_index` caches obs — never mutate in place
+            board["current"]["players"][1 - my_index]["handCount"] = hand
+            model = pilot._leaf_state_model(board, my_index)
+            ladder.append(tuple(b.turns_to_ko_me for b in sv._exposed_bodies(model)))
+        for (before, after), (h0, h1) in zip(zip(ladder, ladder[1:]), zip(hands, hands[1:])):
+            assert all(y <= x for x, y in zip(before, after)), (
+                f"{key}: their hand {h0} -> {h1} LENGTHENED a survival clock, {before} -> {after}")
+        strict += ladder[0] != ladder[-1]
+    assert strict, ("positive control FAILED: no frame's clock moved between a 1-card and a 20-card "
+                    "opponent hand, so the monotonicity above is being asserted over constants")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")

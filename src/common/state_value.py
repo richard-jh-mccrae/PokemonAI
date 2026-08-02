@@ -432,7 +432,12 @@ REGISTRY: tuple[TermFamily, ...] = (
         reads=("prize_at_risk", "turns_to_ko_me", "bench_harvest", "predicted_loss"),
         does_not_read=("my_prizes_remaining", "readiness_odds"),
         composition="Sum over MY bodies, both areas, of prize_at_risk x halve(turns_to_ko_me - 1), "
-                    "Bench-Harvest-aware. `_predicted_loss` (-KO_SCORE bench-empty doom, ADR-0064) "
+                    "Bench-Harvest-aware. Both of this family's damage reads — the "
+                    "`turns_to_ko_me` clock and `_predicted_loss`'s Incoming — are taken at "
+                    "`damage_context(attacker='theirs')`, so a scaling attack of theirs prices its "
+                    "actual damage rather than its printed 0 (Issue #280); the direction is the "
+                    "attacker's, and on a survival read the attacker is them. "
+                    "`_predicted_loss` (-KO_SCORE bench-empty doom, ADR-0064) "
                     "survives here as a TERMINAL term, outside the positional band by construction. "
                     "The band is the SUM of the positional caps (readiness 300 + survival 50 + "
                     "threat 100 + value 40 + line 100 = 590) against KO_SCORE 1000, of which "
@@ -468,9 +473,17 @@ REGISTRY: tuple[TermFamily, ...] = (
             "their Energy denial / resource strip — removing fuel lengthens their clock without "
             "removing a body, and `opponent_target_value` prices bodies. `deny_relevance` is the "
             "instrument and is still dark (T2 / Issue #228 arms it).",
-            "their hand and deck — `theirs.hand_size` and `theirs.deck_count` have suppliers and "
-            "no reader, so hand disruption (a Judge, a discard effect) prices exactly 0. This is "
-            "the single largest uncovered family; T4 must always-expand disruption plays.",
+            "their hand and deck AS A RESOURCE — hand disruption (a Judge, a discard effect) still "
+            "prices exactly 0 in THIS family: `opponent_target_value` prices bodies, and cards in "
+            "hand are options rather than a body. Issue #280 closed the other half — `survival`'s "
+            "clocks now read `theirs.hand_size` through the Damage Formula, so shrinking the hand "
+            "of a scaling attacker IS priced, as the lengthened clock it buys. What remains dark is "
+            "the resource reading (the Supporter they no longer hold, the search they cannot make) "
+            "and `theirs.deck_count`, which still has a supplier and no reader — the Formula's "
+            "hidden-deck pair is OMITTED for a side whose deck is not exactly known, and the "
+            "opponent's never is (`_SideBase._deck_facts` claims `(None, None)`), so threading the "
+            "context did NOT quietly give the deck count a reader the way it gave the hand size "
+            "one. Narrowed, not closed; T4 must always-expand disruption plays.",
             "SATURATION INTO ONE BIT — this family cannot tell a 1-prize Basic from a 3-prize Mega "
             "ex. `needs.opponent_target_value` returns `prize_advance` essentially unscaled at the "
             "``survival_shift=0`` this module passes, so `min(_THREAT_CAP, sum)` binds on EVERY "
@@ -741,14 +754,39 @@ def _exposed_bodies(model: "StateModel") -> tuple:
     The harvest kwargs are the point of T0's widened `turns_to_ko_me` signature: a benched body's
     clock is a different question from the Active's (`my_benched`), and a shared rider budget is a
     fact about the whole bench that one body cannot express (`my_bench`). Passing the defaults would
-    silently ask the solo-body question for six bodies."""
+    silently ask the solo-body question for six bodies.
+
+    ``context`` is the same argument one level further out (Issue #280). The clock prices THEIR
+    attacks through the Damage Formula, whose scaling attacks read their counts off a context dict —
+    and a variable absent from that dict contributes 0 (`strategy/damage.py`). Passing none meant
+    every scaler read 0, so an opponent holding twelve cards and one holding two produced the SAME
+    clock: `docs/matchups/alakazam.md` is the second-most-played archetype in the tracked meta and
+    its damage *is* its hand size (Powerful Hand, 20 per card, no floor). Measured on the 371-frame
+    corrections corpus, threading it moves 20 body clocks.
+
+    ``attacker="theirs"`` is the whole of the correctness here and is not boilerplate. The Formula's
+    variables are named relative to the attacker (`atk_*`/`def_*`) and the attacker on a SURVIVAL
+    read is the opponent; handing this `mine` would read my own hand as their damage scaler, which is
+    silently plausible and wrong in the one direction a survival estimate may never fail in. The
+    board's other half is not lost by choosing — a Mega Froslass ex scaling off `def_hand` (my hand)
+    is in the same dict, on the defender's side of it, which is exactly why one dict cannot serve
+    both directions.
+
+    It is passed for BENCHED bodies too, where the oracle currently has nothing to do with it: the
+    bench leg is the Bench Harvest, whose payloads are the printed snipe/spread riders, and riders
+    ignore Weakness/Resistance by rule (ADR-0022) so they never route through the damage model. The
+    call site states the DIRECTION of the read and leaves which leg consumes it to the oracle;
+    branching here would encode the oracle's internals in `state_value` and would go stale the day a
+    rider learns to scale. The cost is nil — the context is memoized per direction and
+    identity-stable, so it canonicalises once into the clock's memo key."""
     bench_raws = model.mine.bench_raws
     opp_active = model.theirs.active_raw
+    context = model.damage_context(attacker="theirs")
     return tuple(
         ExposedBody(prize_at_risk=float(b.prize_value),
                     turns_to_ko_me=int(model.theirs.turns_to_ko_me(
                         b.body, my_benched=not b.is_active, my_bench=bench_raws,
-                        opp_active=opp_active)))
+                        opp_active=opp_active, context=context)))
         for b in model.mine.bodies)
 
 
@@ -759,11 +797,27 @@ def _predicted_loss(model: "StateModel") -> bool:
     ``evo_min_energy=1`` is ADR-0064's bounded-pessimism guard carried over verbatim — an
     evolution-based Knock Out counts only off a pre-evolution that ALREADY carries Energy, because a
     bare 0-Energy pre-evo is not a credible next-turn game-ender. Dropping it would make this rung
-    fire on boards the incumbent leaves alone, which is a behaviour change disguised as a port."""
+    fire on boards the incumbent leaves alone, which is a behaviour change disguised as a port.
+
+    ``context`` completes that port (Issue #280). The rung this is a port OF —
+    `planner.Planner._predicted_loss` — makes the same `reachable_incoming(evo_min_energy=1)` call
+    WITH ``context=self._opp_attack_context``, the Pilot's own THEIRS-direction dict
+    (`pilot._damage_context(obs, attacker_is_me=False)`, *"OPPONENT-as-attacker context"*); it
+    differs only in naming a simulated end board through ``bodies=``, which is that rung's question
+    and not this one's. So the direction here is the incumbent's own, not a fresh judgement about
+    which side attacks — this call site was simply the one that dropped it. Omitting it did not make
+    this rung conservative, it made it BLIND: every Damage Formula scaler contributed 0, so a
+    Powerful Hand at 21 cards read as 0 damage rather than 420 and a doomed board with an empty
+    Bench scored as a healthy one. Measured on the corrections corpus, five bench-empty frames read
+    a different Incoming once the context is threaded; on `82226759|64` it is 30 → 420 against a
+    330 HP Active. Under-reading incoming damage is the one direction a survival estimate may never
+    fail in, and a terminal `-KO_SCORE` rung is where that failure costs the most."""
     active = model.mine.active
     if active is None or not active.hp_remaining or model.mine.bench:
         return False
-    return model.theirs.reachable_incoming(active.body, evo_min_energy=1) >= active.hp_remaining
+    return model.theirs.reachable_incoming(
+        active.body, evo_min_energy=1,
+        context=model.damage_context(attacker="theirs")) >= active.hp_remaining
 
 
 def _reachable_target_values(model: "StateModel") -> tuple:

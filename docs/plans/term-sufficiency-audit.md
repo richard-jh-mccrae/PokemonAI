@@ -173,7 +173,22 @@ somebody already typed into a `does_not_read`.
 
 ### F2 — `survival` drops the hand-size damage scaler by omitting one kwarg  ·  BLOCKER
 
-**Unread dimension.** The opponent's hand size, where their attack scales on it.
+> **BUILT — Issue #280, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). Both call sites now read
+> `model.damage_context(attacker="theirs")` — `_exposed_bodies` on `turns_to_ko_me` and
+> `_predicted_loss` on `reachable_incoming`. Measured on the 371-frame corrections corpus: **20 body
+> clocks move and 5 bench-empty doom reads move.**
+>
+> The audit's "cheapest fix" is named for `atk_hand`, but the shared context (Issue #279) is what
+> was actually threaded, so **eight** Damage Formula variables arrive at once, not one. The
+> opponent scaling attacks present in that corpus: Alakazam (`atk_hand`), Kyogre
+> (`atk_discard_energy`), Lillie's Clefairy ex (`both_bench`), Duraludon and N's Reshiram
+> (`atk_self_counters`), Teal Mask Ogerpon ex (`both_active_energy`), Terapagos ex and Dipplin
+> (`atk_bench`), Iono's Voltorb (`atk_active_energy`), and Mega Froslass ex (`def_hand` — MY hand,
+> read off the DEFENDER's side of the same dict, which is the concrete reason one dict cannot serve
+> both directions). Mega Abomasnow ex's hidden deck scaler is in the corpus too and is deliberately
+> NOT in that count: for a hidden deck the oracle's `bound="max"` leg already assumed every sampled
+> card fuels, with or without a context.
 
 `_exposed_bodies` calls `model.theirs.turns_to_ko_me(b.body, my_benched=…, my_bench=…,
 opp_active=…)` and passes **no `context`**. The hand-size leg reads the hand straight from that

@@ -275,10 +275,20 @@ STATE_VALUE_PROFILE = frozenset({
     # **Measured before re-pinning**, as this pin's own note demands. On the 40-frame corrections
     # corpus, against a `state_value` whose fresh-model median on those (much richer) boards is
     # ~6.7 ms: `damage_context(attacker="mine")` costs **111 us median / 149 us p95 on a FRESH
-    # model** and is memoized per direction for the model's lifetime, so every later reader — Issue
-    # #280's survival direction included — pays a dict lookup. The damage read itself is not new
-    # cost: it is the same per-attack loop under the same Budget filter, one closed-form call
-    # (`predicted_damage`) where there used to be one field read (`attack_damage`).
+    # model** and is memoized per direction for the model's lifetime, so every later reader pays a
+    # dict lookup. The damage read itself is not new cost: it is the same per-attack loop under the
+    # same Budget filter, one closed-form call (`predicted_damage`) where there used to be one field
+    # read (`attack_damage`).
+    #
+    # **Issue #280 added the SECOND direction** (`survival`'s clocks read `attacker="theirs"`) and
+    # re-measured, because the sentence above originally predicted it would cost a dict lookup and
+    # that was the one number worth checking rather than inheriting. Same 40 frames, same method:
+    # one direction on a fresh model 102 us median, BOTH directions on a fresh model **107 us
+    # median** — the second direction is ~5 us, not another 100. The reason is structural rather
+    # than lucky: the cost is `_SideBase.damage_facts`, one `@lazy` per SIDE that both directions
+    # share, and `damage_context` itself only decides which side's record becomes `atk_`/`def_`.
+    # So the profile below does not grow at all for Issue #280 — the second direction reads no
+    # field the first did not.
     "mine.best_reachable_damage_vs",
     "model.damage_context",
     # the gatherer, and the per-side countables it walks (`_SideBase.damage_facts`). Both sides,
