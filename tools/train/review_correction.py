@@ -77,8 +77,26 @@ def _resolve_or_report(locator: str, store, *, quiet: bool = False) -> str | Non
 
 
 def _save(path: Path, data: dict) -> None:
+    """Write the ledger as UTF-8 bytes, **framed with the line ending the file already uses**.
+
+    `Path.write_text` frames newlines per the WRITING platform, so one ruling edit emitted LF from
+    Linux and CRLF from Windows and the loser re-serialised the whole file. The committed ledger is
+    CRLF, so recording the wave-3 verdicts from Linux turned a four-entry ruling change into a
+    726-line rewrite (measured 2026-08-02, Issue #262) — burying the only thing a reviewer of a
+    ruling edit needs to see, and taking `git blame` on every standing ruling with it.
+
+    `gates.write_json_artifact` fixed exactly this defect for the two gate baselines and states the
+    reason at length; this writer was missed. It deliberately does not *share* that function: the
+    baselines are LF and ASCII-escaped, while this ledger is CRLF and `ensure_ascii=False` because
+    its reasons carry real em dashes — routing it through the artifact writer would escape every one
+    of them and rewrite the file it is trying to leave alone.
+
+    A ledger that does not exist yet is written LF: new files should not inherit a framing from
+    whichever platform happened to create them."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    newline = b"\r\n" if path.exists() and b"\r\n" in path.read_bytes() else b"\n"
+    body = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    path.write_bytes(body.encode("utf-8").replace(b"\n", newline))
 
 
 def main(argv=None) -> int:

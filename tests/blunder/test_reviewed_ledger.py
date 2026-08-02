@@ -206,6 +206,27 @@ def test_cli_records_lists_and_removes(tmp_path, capsys):
 
 
 @pytest.mark.req("REQ-TUNE-0033")
+def test_the_writer_PRESERVES_the_ledgers_own_line_ending(tmp_path):
+    """A ruling edit must move the ruled lines and nothing else.
+
+    `Path.write_text` frames newlines per the WRITING platform, so the same one-entry edit emitted LF
+    on Linux and CRLF on Windows. The committed ledger is CRLF (the two gate baselines are LF), so a
+    Linux edit re-serialised all 726 lines and buried a two-line ruling change in a whole-file diff —
+    measured 2026-08-02 recording the wave-3 verdicts (Issue #262). `gates.write_json_artifact` was
+    fixed for the same defect on the baselines; this writer was missed, and it cannot simply share
+    that one: the ledger is `ensure_ascii=False` (its reasons carry real em dashes) and newline
+    terminated, so re-serialising it through the artifact writer would escape every one of them."""
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    assert cli(["81904451-37", "refuted", "a", "--path", str(p), "--store", str(store)]) == 0
+    p.write_bytes(p.read_bytes().replace(b"\n", b"\r\n"))     # make it a CRLF store, as committed
+    assert cli(["86091435-t14s0", "covered", "b", "--path", str(p), "--store", str(store)]) == 0
+
+    blob = p.read_bytes()
+    assert b"\r\n" in blob and blob.replace(b"\r\n", b"") .count(b"\n") == 0, "CRLF was not preserved"
+    assert json.loads(blob.decode("utf-8"))["86091435-t14s0"]["reason"] == "b"
+
+
+@pytest.mark.req("REQ-TUNE-0033")
 def test_cli_rejects_an_unknown_disposition(tmp_path):
     with pytest.raises(SystemExit):                          # argparse choices= guard
         cli(["81904451-37", "bogus", "x", "--path", str(tmp_path / "r.json")])
