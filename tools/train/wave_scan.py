@@ -45,6 +45,31 @@ def ruled_keys(path: Path) -> set:
     return {m.replace("\\|", "|") for m in re.findall(r"`(\d+\\\|\d+\\\|\w+\\\|\d+)`", text)}
 
 
+def intent_of(correction) -> str:
+    """What the developer said they wanted, from WHEREVER this Correction's scope records it.
+
+    A decision-scope record carries it in ``rationale``. A **turn**-scope record carries it in
+    ``turn_plan`` (``intended_line`` + ``expected_end_board``) and its ``rationale`` is empty — so
+    reading only ``rationale`` reports a turn Correction as having no stated intent at all.
+
+    Measured 2026-08-02 (Issue #262): `86090164|1|turn|2` reached the developer's triage list as
+    *"no rationale is recorded"* and got flagged as the one frame that could not be triaged from the
+    corpus. It has a turn plan — *"Attach energy to our active dreepy, retreat to Budew, DO NOT play
+    Lillie's this turn, because we want to evolve our Dunsparce next turn"* — which decides the frame
+    outright. The blank was this generator's, not the corpus's, and a blank that reads as "the human
+    never said" is the worst possible failure for a sheet whose entire job is to relay what they
+    said."""
+    rationale = " ".join((getattr(correction, "rationale", "") or "").split())
+    if rationale:
+        return rationale
+    plan = getattr(correction, "turn_plan", None) or {}
+    line = " ".join(str(plan.get("intended_line") or "").split())
+    end = " ".join(str(plan.get("expected_end_board") or "").split())
+    if line and end:
+        return f"[turn plan] {line} — expected end board: {end}"
+    return f"[turn plan] {line or end}" if (line or end) else ""
+
+
 def scan_rows(diff: dict, *, ruled=()) -> list:
     """One row per flip still owed a ruling, worst-ranked first."""
     from train.blunder.frame_view import _Cards, _option_summary
@@ -76,7 +101,7 @@ def scan_rows(diff: dict, *, ruled=()) -> list:
         rows.append({
             "key": key, "agent": c.agent, "category": c.category,
             "your_pick": c.correct_label or (label(c.correct[0]) if c.correct else "?"),
-            "rationale": " ".join((c.rationale or "").split()),
+            "rationale": intent_of(c),
             "leaf_pick": label(top),
             "rank": row.get("correct_rank"), "n": row.get("n_options"),
         })

@@ -141,6 +141,42 @@ reveals. Two independent instances now, both pointing at
 [ADR-0095](../../docs/adr/0095-information-precedes-commitment.md) and both unrepresentable by a turn
 plan fixed at the start of the turn. Recorded for Issue #263.
 
+### Batch 7 (2026-08-02) — the last eight of the triaged 17. **All REVERT.**
+
+| frame | verdict | developer's line |
+|---|---|---|
+| `82752604\|0\|decision\|16` | **REVERT** | just attack, as the rationale says |
+| `83037962\|0\|decision\|49` | **REVERT** | just attack, as the rationale says |
+| `83038055\|0\|decision\|51` | **REVERT** | the hand is strong, so don't shuffle it away — attack with Nebula Beam |
+| `83053965\|1\|decision\|6` | **REVERT** | play Mega Signal |
+| `83456015\|0\|decision\|38` | **REVERT** | attack with Nebula Beam for the Knock Out |
+| `83966968\|0\|decision\|45` | **REVERT** | play Harlequin first, before attacking |
+| `86089638\|0\|decision\|18` | **REVERT** | energize Dreepy with the {P} Energy |
+| `86090164\|1\|turn\|2` | **REVERT** | attach to the active Dreepy, retreat to Budew, do NOT play Lillie's this turn, because we want to evolve our Dunsparce next turn |
+
+**`86090164|1|turn|2` was never missing a rationale — my scan sheet was.** It reached the developer's
+triage list labelled *"no rationale is recorded"* and flagged as the one frame that could not be
+triaged from the corpus. Both claims were wrong, and the fault was `wave_scan.py`'s:
+
+- The record is **turn-scoped**, so its intent lives in `turn_plan` (`intended_line` +
+  `expected_end_board`), and its `rationale` field is empty by construction. The generator read only
+  `rationale`. Fixed by `wave_scan.intent_of`, which reads the intent from wherever the scope records
+  it; measured after the fix, **4 of 372** corpus corrections have no recoverable intent, and none of
+  them is in this wave.
+- `frame_view 86090164-2` failing is not a broken frame either. **2 is the TURN number**, not a frame
+  — the record's Anchor is `86090164-17`, which renders fine and shows exactly this decision. That is
+  the anchor-vs-key trap ADR-0090 was built for, and `frame_view`'s own error already prints the
+  resolvable frames (which is where the developer's list came from).
+
+A blank that reads as *"the human never said"* is the worst failure available to a sheet whose whole
+job is relaying what they said, so it is recorded here rather than quietly patched.
+
+**A third instance of the same Dragapult line.** `86090164|turn|2`'s plan — attach to the active
+Dreepy so it can retreat to Budew — is the same shape as `85046350|21`'s. Budew's **Itchy Pollen**
+costs no Energy and stops the opponent playing Item cards next turn, and Dreepy's retreat is 1, so
+the attach IS the retreat cost. Three independent rulings now describe this line; it is doctrine, not
+a one-off read.
+
 † one of the 15 the developer deferred to Issue #278 S13
 ([comment](https://github.com/richard-jh-mccrae/PokemonAI/issues/262#issuecomment-5153527951)); the
 per-frame verdict supersedes that deferral.
@@ -332,6 +368,18 @@ recorded rationale.
 - `82228017|0|decision|4` — "This is about wasting a card that has no value to our game at the moment
   which could otherwise perhaps be used as Ultra Ball fodder. I would play Buddy buddy, attach energy
   to Cinderace, attack Turbo Flare"
+- `82752604|0|decision|16` — "Just attack, as rationale says"
+- `83037962|0|decision|49` — "Just attack, as rationale says"
+- `83038055|0|decision|51` — "as rationale says, we have a strong hand so dont shuffle it away.
+  Attack with Nebula Beam."
+- `83053965|1|decision|6` — "as rationale says. Play Mega Signal"
+- `83456015|0|decision|38` — "as rationale says. attack with Nebula for KO"
+- `83966968|0|decision|45` — "as correction states, play Harlequin first, before attacking."
+- `86089638|0|decision|18` — "as correction states, energize dreepy with P energy"
+- `86090164|1|turn|2` — the record's own TURN PLAN, which the scan sheet had failed to surface:
+  "Attach energy to our active dreepy, retreat to Budew, DO NOT play Lillie's this turn, because we
+  want to evolve our Dunsparce next turn." Expected end board: "Budew in active, to attack with
+  Itchy Pollen"
 - `82866415|0|decision|43` — "Dont attach cape to a benched preevolution when our wincon is active
   and energized."
 - `82867148|0|decision|62` — "leak plays buddy buddy and doesnt retrat. good!"
@@ -400,9 +448,11 @@ went into committed ledger reasons:
 
 ## The pattern these verdicts are making
 
-32 frames ruled, **three CONFORM**. The packet recommended CONFORM on 15 and 14 were overturned, so
-the packet's read was wrong and should not be trusted for the remainder. Eight of the triaged 17
-remain.
+**40 frames ruled explicitly, three CONFORM — and the wave is COMPLETE.** All 17 triaged frames now
+carry a verdict, and the remaining 28 of the 45 take the stated default (silence = REVERT), so every
+flip in the set has a disposition. The packet recommended CONFORM on 15 and 14 were overturned, which
+is why the triage that closed the wave rested on what the rationales SAY rather than on my read of
+the moves.
 
 Two things recur:
 
