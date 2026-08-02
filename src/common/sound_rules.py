@@ -197,7 +197,8 @@ WHITELIST: tuple[SoundRule, ...] = (
         entry="authored constants inside firing equations (ROLE_TIER / TAG_TIER, readiness-leaf "
               "values, planner sub-prize constants, confidence seeds, the refresh swing's "
               "opponent-side STRIP / GIFT / FRESH per-card prices, the free-Item hold floor "
-              "`hold_value.ITEM_HOLD_FLOOR` and its seam rate `currency.ITEM_HOLD_WORTH_RATE`)",
+              "`hold_value.ITEM_HOLD_FLOOR` and its seam rate `currency.ITEM_HOLD_WORTH_RATE`, and "
+              "the gust-target seam's `currency.GUST_TARGET_BAND`)",
         type=AUTHORED_SCAFFOLD,
         fact="magnitudes inside equations that already fire correctly",
         reason="Tolerated for the POC: these sit INSIDE equations whose shape is right, so they "
@@ -220,7 +221,18 @@ WHITELIST: tuple[SoundRule, ...] = (
                        "`currency.ITEM_HOLD_WORTH_RATE` beside `DEPLOY_BAND`. Both carry the deploy "
                        "band's reconciliation debt: if a general Worth Damage Rate is derived (the "
                        "`poc-worth-prize-rate` entry is the candidate), they are checked against it, "
-                       "and a disagreement is evidence about ONE of the two.",
+                       "and a disagreement is evidence about ONE of the two. A THIRD member joined "
+                       "2026-08-02 (Issue #313 item 2g) and it adds no NUMBER at all: "
+                       "`currency.GUST_TARGET_BAND` IS `TAG_TIER['gust']`, already listed above, read "
+                       "at import as the ceiling of a ratio whose divisor "
+                       "(`needs.TARGET_VALUE_CEILING`) is derived from the card set's own largest "
+                       "prize value and the existing survival cap. Its rate "
+                       "(`GUST_TARGET_WORTH_RATE`, ~2.564 worth per prize-equivalent) is the "
+                       "quotient, not an authored figure — but it is listed here because its "
+                       "reconciliation is the sharpest of the three: composing the two SHIPPED legs "
+                       "(`PRIZE_DAMAGE_RATE` 100 / `ITEM_HOLD_WORTH_RATE` 1.0) says ~100 worth per "
+                       "prize, a ~39x disagreement recorded in `currency.py` rather than smoothed "
+                       "over. `POC_WORTH_PRIZE_RATE` settles it.",
     ),
     SoundRule(
         id="poc-worth-prize-rate",

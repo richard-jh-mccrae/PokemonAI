@@ -27,6 +27,17 @@ conversion: opponent-side value never re-enters `card_worth`'s unit; the two cur
 at the prize scale. Consequence: denial can flip a ≤1-prize gap, never a 2-prize one — KO_SCORE
 arithmetic stays untouched.
 
+> **Scope qualifier added 2026-08-02 (ADR-0107, Issue #313 item 2g).** The "NO worth-points↔prizes
+> conversion" sentence governs THIS equation — the **play-side** `gust_value(T)` above, where
+> `their_keep_cost` is already in effective prizes and our own value is prize-denominated, so the two
+> genuinely do meet at the prize scale. It is **not** a rule about the **keep-side** `gust_target`
+> slot, which prices OUR held card inside `needs`' worth-summing assignment. That slot does now cross,
+> at `currency.target_value_to_worth` — and it crosses as a `[0, 1]` FRACTION of `TAG_TIER["gust"]`,
+> so no prize-denominated magnitude lands in `card_worth`'s unit either; the prize scale is divided
+> out first, the way ADR-0086 amendment B's deploy ratios divide out the worth scale. Recorded here
+> because the two files otherwise contradict each other on their face, which is a worse failure than
+> either position.
+
 **What ADR-0066 already banked, and how it folds in (currency-zone rule — replace, never stack):**
 
 | shipped term | fate under the full equation |

@@ -17,9 +17,20 @@ assert roughly an eighth of honest value and made the promote/retreat equation e
 """
 from __future__ import annotations
 
-# The Worth scale itself, for the deploy yardstick at the foot of this module. `card_worth` is a
-# leaf (it imports nothing from `common`), so this cannot cycle.
-from common.card_worth import ROLE_TIER as _ROLE_TIER
+# The Worth scale itself, for the deploy yardstick and the gust-target band at the foot of this
+# module. `card_worth` is a leaf (it imports nothing from `common`), so this cannot cycle.
+from common.card_worth import ROLE_TIER as _ROLE_TIER, TAG_TIER as _TAG_TIER
+# The PRIZE-equivalent yardstick, for the gust-target band. `common.needs` imports `card_worth` and
+# `strategy.context` (both leaves) and never this module, so the arrow runs one way and this cannot
+# cycle either. IMPORTED rather than restated so the bound and the equation it bounds — the two
+# halves of ONE fact — cannot drift apart; aliased private because `needs` is its home and this
+# module must not become a second place to read it from.
+#
+# The cost, stated rather than left to be discovered: this module was leaf-only until now, so every
+# importer of `currency` (`hold_value`, `state_value`, `deploy_value`, `promote_retreat_value`,
+# `snipe_relevance`, `sound_rules`) now pulls `needs` transitively. Accepted because the alternative
+# is a second spelling of the ceiling, and `needs` itself imports nothing that could close a loop.
+from common.needs import TARGET_VALUE_CEILING as _TARGET_VALUE_CEILING
 
 #: The **Prize Damage Rate** — damage per prize, bridging prizes ↔ damage.
 #:
@@ -47,10 +58,12 @@ PRIZE_DAMAGE_RATE = 100.0
 # ⚠️ **Read that sentence with its qualifier: it is about a GENERAL rate.** Two SEAM-SCOPED
 # worth<->damage rates do live in this module, both honestly labelled at their own definitions —
 # `DEPLOY_BAND / DEPLOY_WORTH_SCALE` (ADR-0086 amendment C) and `ITEM_HOLD_WORTH_RATE` (Issue #261
-# item 2f) — and each carries a recorded reconciliation debt against a general rate if one is ever
-# derived. Stated here, at the guard, rather than only at the definitions: a reader who takes the
-# paragraph above at face value and then meets two such constants further down has been misled by
-# this file, which is the ADR-0078 complaint being repeated rather than paid down.
+# item 2f) — and a THIRD seam-scoped rate sits on a different scale PAIR entirely,
+# `GUST_TARGET_WORTH_RATE` (prize<->worth, ADR-0107). Each carries a recorded reconciliation debt
+# against a general rate if one is ever derived. Stated here, at the guard, rather than only at the
+# definitions: a reader who takes the paragraph above at face value and then meets three such
+# constants further down has been misled by this file, which is the ADR-0078 complaint being repeated
+# rather than paid down.
 #
 # The missing bridge is **damage per card-worth point**, from which prize → worth composes as
 # `PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`. It cannot be read off the shipped constants, because two
@@ -199,6 +212,93 @@ def item_hold_to_damage(keep_worth: float) -> float:
     the rate above is stated as a PRESERVATION choice with a reconciliation debt, on exactly the
     terms `DEPLOY_BAND` is."""
     return float(keep_worth) * ITEM_HOLD_WORTH_RATE
+
+
+# ── The GUST-TARGET band — prizes → WORTH, the third seam-scoped rate (ADR-0107, item 2g) ───
+#
+# The first crossing on the **prize ↔ worth** pair. The two above are worth ↔ damage; `PRIZE_DAMAGE_
+# RATE` is prize ↔ damage; this is the leg that had no bridge at all, and one consumer was crossing
+# it silently.
+#
+# **The defect.** ADR-0076 decision 1 prices the `gust_target` slot by `needs.opponent_target_value`,
+# which is denominated in PRIZE-EQUIVALENTS (1.0 – 3.9). Every other slot kind in the same *summed*
+# `needs._keep_slot_dp` assignment is denominated in CARD-WORTH points (wincon 30, `discard_eot` 30,
+# `deny` 10, Energy 8) — and `needs.py`'s own module docstring says slots are valued "in the ONE
+# currency". ADR-0076 Amendment E recorded that as a debt and called it *"latent, not firing"*;
+# ADR-0080 decision 4 re-inherited it here with Amendment F reversed. Measured over the corpus
+# (2026-08-02, 80 frames emitting 228 slots) it is worse than latent: the slot's MEDIAN value is
+# 1.000, against a `general` slot the very same card opens at up to `TAG_TIER["gust"] x
+# _GENERAL_WORTH_W` = 4.5 — so the assignment COVERED a `gust_target` slot on **1 frame in 80**. The
+# "0 decision flips" that armed the flag was the instrument being all but INERT, not the instrument
+# agreeing. Denominated, the same measurement reads **25 of 80**.
+#
+# (The 1-in-80 is measured, not inferred. `3.9 < 4.5` does NOT prove it: the general slot is
+# `worth x deploy x _GENERAL_WORTH_W x liq`, so 4.5 is its CEILING and it can fall below the gust
+# slot — which is exactly what happens on the one frame. The reading comes from zeroing the
+# gust_target slots and watching V drop.)
+#
+# **Why this is a RATIO and not a rate lookup.** `opponent_target_value` has a natural, derived
+# ceiling — `needs.TARGET_VALUE_CEILING` = `MAX_PRIZE_VALUE` (3) + `_SURVIVAL_CAP` (0.9) = 3.9 — so
+# the prize scale can be divided out into a dimensionless [0, 1] fraction and never escapes the
+# marginal. That is ADR-0086 amendment B's deploy argument, and it is why no general prize↔worth rate
+# is needed. It is also what makes the two members of the opponent-target slot FAMILY finally
+# identical in shape: `deny` is already `TAG_TIER["gust"] x relevance∈[0,1]` (ADR-0080 decision 3),
+# and `gust_target` now is too.
+#
+# **Stated plainly rather than buried, exactly as the two bands above are: `GUST_TARGET_WORTH_RATE`
+# has units of worth-per-prize-equivalent. It IS a prize<->worth rate, scoped to one seam.** It is a
+# FOURTH catalogue entry — on a different scale PAIR from the three above, so it does not join their
+# ~6.7x spread; it opens its own row.
+#
+# ⚠️ **The composed cross-check DISAGREES by ~39x, and that is recorded rather than reconciled.**
+# Composing the two shipped legs — `PRIZE_DAMAGE_RATE` 100 damage/prize ÷ `ITEM_HOLD_WORTH_RATE` 1.0
+# damage/worth — says one prize-equivalent is ~100 WORTH points. This rate says 2.56. Both cannot be
+# right, and the disagreement is evidence about the WORTH scale rather than about this seam: that
+# scale's whole range is 0–30 by construction (`ROLE_TIER`), so a 100-point slot would not price a
+# held card, it would delete every other card's contribution from the assignment — the `_PRIZE_UNIT
+# = 12` failure mode with the sign reversed. Pricing the hand ON ITS OWN SCALE is what the DP is for.
+# `state_value.POC_WORTH_PRIZE_RATE` (ADR-0097) is the constant that must settle this; it is `None`
+# and T3 (Issue #262) owns authoring it, so this is the same RECONCILIATION DEBT `DEPLOY_BAND` and
+# `ITEM_HOLD_WORTH_RATE` carry — with the disagreement quantified here so it is tripped over rather
+# than discovered.
+
+#: What a FULL-ceiling gust target is worth on the WORTH scale — the disruption-Trainer band.
+#:
+#: **A PRESERVATION CHOICE, never a derivation** (`DEPLOY_BAND`'s discipline, applied verbatim), and
+#: it introduces NO new number: it is `card_worth.TAG_TIER["gust"]`, read at import so a re-band of
+#: the tiers moves it rather than silently re-scaling the slot. The incumbent it preserves is the
+#: routing ADR-0076 replaced — before the `gust_target` kind existed, a held Boss's Orders opened a
+#: `deny` slot worth exactly `TAG_TIER["gust"] / 2**t`.
+#:
+#: Measured against that incumbent over the same 228 corpus slots (2026-08-02): the old routing
+#: priced them median **2.500** / mean **2.695** / max **10.0**; at this band the new denomination
+#: prices them median **2.564** / mean **3.082** / max **8.184**. So the band is not merely asserted
+#: to be behaviour-preserving — the distribution it reproduces is the recorded one, which is the check
+#: ADR-0100's `_PRIZE_UNIT = 12` (wrong by ~8x) never had.
+GUST_TARGET_BAND = _TAG_TIER["gust"]                  # == 10.0
+
+#: Worth points per prize-equivalent AT THE GUST-TARGET SEAM. Not authored — the quotient of the band
+#: above and the derived ceiling, named so a reviewer can dispute a rate instead of an arithmetic.
+GUST_TARGET_WORTH_RATE = GUST_TARGET_BAND / _TARGET_VALUE_CEILING     # ~= 2.564
+
+
+def target_value_to_worth(prize_equivalents: float) -> float:
+    """Convert an opponent-target marginal into the card-WORTH scale at the seam-scoped rate.
+
+    The ONE place a prize-denominated `needs.opponent_target_value` may enter the Worth-summing Needs
+    assignment. Callers hand a PRIZE-EQUIVALENT (a row's ``value`` off `_opponent_target_rows`), never
+    a worth magnitude — that would be a double conversion.
+
+    Clamped at the ceiling rather than trusted to it. The bound holds for every shipped caller
+    (`_opponent_target_rows` passes `prize_advance = CardStat.prize_value <= MAX_PRIZE_VALUE`, and
+    `survival_value` is capped), so the clamp is never reached — it is there because the two bounds
+    live in `needs` and a future set with a 4-prize body would otherwise push a slot silently above
+    the band it is defined to top out at.
+
+    Written through `GUST_TARGET_WORTH_RATE` rather than re-deriving `ratio x band`, so the constant
+    a reviewer disputes is the constant the arithmetic uses — the `_DENIAL_ITEM_COST` lesson
+    (ADR-0105 decision 3: a rate that never meets an expression is a rate nothing stops drifting)."""
+    return max(0.0, min(float(prize_equivalents), _TARGET_VALUE_CEILING)) * GUST_TARGET_WORTH_RATE
 
 
 def prize_to_damage(prize_equivalents: float) -> float:

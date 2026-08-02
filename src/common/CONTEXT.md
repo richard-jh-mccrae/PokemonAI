@@ -467,6 +467,12 @@ Trainer cards, bench-only per `doctrine_gust.py`) keep-prices against the real p
 `opponent_target_value` / `phase_scale` marginal instead of the flat disruption tier `deny` still
 uses; `Pilot.gust_target_slots` shipped ON (`needs.SUPPLIES`'s `gust` tag routes to `gust_target`
 INSTEAD of `deny`, never both) after clearing the ADR-0072 mid-build paired-A/B gauntlet tripwire.
+That marginal is prize-denominated and the DP sums card-worth, so since **ADR-0107 (Issue #313 item
+2g)** the emission crosses at the seam-scoped **Gust-Target Band** (see that term) — until then the
+slot topped out at 3.9 against the same card's own `general` slot (up to 4.5) and the assignment
+covered one on **1 corpus frame in 80** — measured by zeroing the slots and watching V drop, not
+inferred from `3.9 < 4.5`, which does not hold (the general slot is `worth x deploy x
+_GENERAL_WORTH_W x liq`, so 4.5 is its ceiling). Denominated: 25 in 80.
 Snipe and the ADR-0044 forced-promotion pre-chip stay OUTSIDE the DP entirely (neither is a held
 card competing for a slot) — both read the shared marginal directly; #188 is where either is wired
 in as a live decider. Pure modules,
@@ -929,12 +935,40 @@ under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate 
 `m × PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE` and no Δ policy rescues it; both cards the endorsed ruling
 pitches price `0.0` themselves, so even a nonzero `m` would only assert *worth > 0*. Deny no longer
 needs the rate at all (it became a **Deny Relevance** instrument), so this leg is unbuilt by DESIGN,
-not by backlog. It remains genuinely owed to **gust**, whose `gust_target_slot` still feeds a
-prize-equivalent straight into the worth-summing DP with no conversion — latent only because Boss's
-Orders' `TAG_TIER["gust"]` floor absorbs it (ADR-0076 Amendment E, returned to Issue #189).
+not by backlog. **Gust no longer owes it either, as of Issue #313 item 2g (ADR-0107).** Its
+`gust_target_slot` did feed a prize-equivalent straight into the worth-summing DP with no conversion —
+and the reading that it was "latent, absorbed by the `TAG_TIER["gust"]` floor" was too kind: measured
+over 80 frames the value's MEDIAN is 1.000 against a general slot topping out at 4.5, and the
+assignment covered a `gust_target` slot on 1 of those 80 — so ADR-0076's instrument was all but
+inert. It now crosses at
+`currency.target_value_to_worth`, a **Gust-Target Band** ratio needing no general rate — see that
+term.
 _Avoid_: Prize Damage Rate (the prizes↔damage leg — this is the worth leg), Worth (the scale, not the
 rate that converts it), calibration (a value chosen to preserve an incumbent is not a derivation),
 "pending"/"not yet derived" for the deny case (it is moot there — say moot)
+
+**Gust-Target Band**:
+The prize↔worth crossing at ONE seam — `currency.GUST_TARGET_BAND` (10.0, i.e. `TAG_TIER["gust"]`)
+over `needs.TARGET_VALUE_CEILING` (3.9), giving `GUST_TARGET_WORTH_RATE` ≈ **2.564 worth points per
+prize-equivalent** (ADR-0107, Issue #313 item 2g; ADR-0080 decision 4 re-inheriting ADR-0076
+Amendment E's currency debt). It is what lets the `gust_target` slot's prize-denominated marginal
+enter the Worth-summing Needs DP **without** a general prize↔worth rate: the marginal is divided by
+its own DERIVED ceiling (`MAX_PRIZE_VALUE` 3 + `_SURVIVAL_CAP` 0.9) into a dimensionless [0, 1]
+fraction first, so the prize scale never escapes — ADR-0086 amendment B's deploy argument, reused. The
+consequence is that the two members of the opponent-target slot family are finally the same SHAPE:
+`deny` is `TAG_TIER["gust"] × relevance∈[0,1]`, and `gust_target` now is too. The band is a
+**preservation** choice measured against the routing ADR-0076 replaced (a `deny` slot at
+`TAG_TIER["gust"] / 2**t`): over 228 corpus slots the old routing priced median 2.500 / mean 2.695,
+the new denomination median 2.564 / mean 3.082, and the share of frames whose assignment actually
+COVERS the slot goes 1/80 -> 25/80. It adds no new NUMBER — both ends are constants that
+already shipped — but it does carry `DEPLOY_BAND`'s reconciliation debt, and the sharpest version of
+it: composing the two shipped legs (`PRIZE_DAMAGE_RATE` 100 ÷ `ITEM_HOLD_WORTH_RATE` 1.0) says ~100
+worth per prize, a ~39× disagreement. That is evidence about the WORTH scale (range 0–30 by
+construction, so a 100-point slot would erase every other card's contribution rather than price one),
+and `state_value.POC_WORTH_PRIZE_RATE` is what settles it.
+_Avoid_: Worth Damage Rate (a different scale PAIR, and still absent by design), prize_to_worth (the
+GENERAL rate this is not — `test_currency.py` fails the moment that name appears), "conversion factor"
+for the ratio itself (the ratio is dimensionless; only the band carries units)
 
 **Deny Relevance**:
 Deny's value, and the answer to *"is this Energy doing important work for the opponent's plan?"* — a

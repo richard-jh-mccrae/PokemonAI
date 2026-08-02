@@ -93,6 +93,23 @@ _MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active
 #: shape ADR-0087 charges for even when both readers happen to agree today.
 PRIZE_CARDS = 6
 
+#: The largest prize value a single body can be worth — **3**, a Mega Pokémon ex (`docs/rules.md` §6,
+#: ADR-0056; the same table `CardStat.prize_value` reads: Mega ex 3, ex 2, else 1). Read at source,
+#: never recalled.
+#:
+#: Homed here beside `PRIZE_CARDS` because it is the same KIND of fact — a rules constant about the
+#: prize scale — and because the opponent-target marginal needs the CEILING of its own prize leg to
+#: normalise against (`needs.TARGET_VALUE_CEILING`, Issue #313 item 2g).
+#:
+#: `CardStat.prize_value` is the OTHER reader and deliberately does NOT import this: `common.scouting`
+#: must not depend on `common.strategy` (the Provider is the card-facts leaf every strategy module
+#: reads, so the arrow only runs one way). That leaves two spellings of one fact, which ADR-0087
+#: charges for — so the net is a TEST rather than a shared import:
+#: `test_currency.py::test_the_target_ceiling_is_the_card_sets_own_prize_ceiling` recomputes the max
+#: over every body in `data/EN_Card_Data.csv` **through the Provider**, so both readers are pinned to
+#: one measured fact and a future set re-derives it instead of inheriting it.
+MAX_PRIZE_VALUE = 3
+
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
 #: Per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X} from discard") on a

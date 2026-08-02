@@ -4152,7 +4152,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         worth rewards HOARDING over deploying (the WP-N5b regression — 676/677 held for +23 beat the
         line that played them). The grill's own term is "held cards with a LIVE use" = the SPECIFIC
         needs only (deploy-now / fund / answer-doom / supply-wincon / fuel / line), not latent worth."""
-        from common import needs
+        from common import currency, needs
         from common.card_worth import ROLE_TIER, ACE_SPEC_TIER, ENERGY_TIER, TAG_TIER
         me = self._my_player(obs)
         line_roles = {r for r, kinds in needs.SUPPLIES.items() if "line" in kinds and r in ROLE_TIER}
@@ -4362,6 +4362,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # forces a switch of a BENCHED Pokémon (verified at source, `doctrine_gust.py`); the
         # opponent's Active is never a legal gust target, so it never opens a slot here (unlike deny,
         # which strips Energy off either area).
+        # DENOMINATION (ADR-0107, Issue #313 item 2g — ADR-0080 decision 4 re-inheriting ADR-0076's
+        # currency debt): the row's `value` is PRIZE-equivalents and this assignment sums CARD-WORTH
+        # points, so it crosses at the seam-scoped `currency.target_value_to_worth` — the marginal's
+        # own derived ceiling (3.9) divided out to a [0,1] fraction of the disruption band, which is
+        # the identical `band x fraction` shape the armed `deny` slot above already has. Fed raw it
+        # topped out at 3.9 against a wincon's 30 and usually lost even to the SAME card's `general`
+        # slot (up to 4.5), so the assignment covered a `gust_target` slot on 1 corpus frame in 80 —
+        # measured, not inferred. Denominated: 25 in 80.
         if self.gust_target_slots:
             gusters = _playable_only([k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])])
             if gusters:
@@ -4375,7 +4383,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         if r["area"] != "bench" or r["value"] <= 0:
                             continue           # off-area, or a removal that isn't worth anything
                         _emit(needs.gust_target_slot(
-                            f"gust_target:{r['area']}{r['bi']}:{r['id']}", value=r["value"]),
+                            f"gust_target:{r['area']}{r['bi']}:{r['id']}",
+                            value=currency.target_value_to_worth(r["value"])),
                             gusters)
         fuels = _playable_only([k for k, r in enumerate(rows) if r.get("fuel")])
         if fuels:
