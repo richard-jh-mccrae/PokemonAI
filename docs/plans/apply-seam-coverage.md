@@ -387,18 +387,24 @@ A Tool attach is structurally MODELLED: it writes `attached_tools`, which is hom
 |---|---|---|---|---|
 | 1174 | Air Balloon | 3 | 0.05 | retreatReduction |
 | 1159 | Hero’s Cape | 1 | 0.35 | hpBonus |
-| 1156 | Lucky Helmet | 1 | 0.07 | **none — prices at ~0** |
-| 1175 | Brave Bangle | 1 | 0.03 | **none — prices at ~0** |
-| 1171 | Hop’s Choice Band | 0 | 0.80 | **none — prices at ~0** |
-| 1173 | Cynthia's Power Weight | 0 | 0.04 | **none — prices at ~0** |
+| 1156 | Lucky Helmet | 1 | 0.07 | none — DELIBERATE: REACTIVE — draws 2 when the holder is damaged in the Active Spot |
+| 1175 | Brave Bangle | 1 | 0.03 | none — DELIBERATE: GATED on a holder predicate we cannot decide — +30 vs {ex} only if the holder has no Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test would fail OPEN and over-credit |
+| 1171 | Hop’s Choice Band | 0 | 0.80 | attackCostReduction, damageBoost, holderNameFamily (Hop’s) |
+| 1173 | Cynthia's Power Weight | 0 | 0.04 | hpBonus, holderNameFamily (Cynthia’s) |
 | 1158 | Maximum Belt | 0 | 0.03 | damageBoost |
-| 1166 | Gravity Gemstone | 0 | 0.03 | **none — prices at ~0** |
-| 1167 | Deluxe Bomb | 0 | 0.01 | **none — prices at ~0** |
-| 1172 | Lillie’s Pearl | 0 | 0.00 | **none — prices at ~0** |
+| 1166 | Gravity Gemstone | 0 | 0.03 | retreatReduction (-1) |
+| 1167 | Deluxe Bomb | 0 | 0.01 | none — DELIBERATE: REACTIVE — 12 counters onto the attacker when the holder is damaged |
+| 1172 | Lillie’s Pearl | 0 | 0.00 | none — DELIBERATE: REACTIVE — the opponent takes 1 fewer Prize for KOing the holder |
 | 1157 | Rescue Board | 0 | 0.00 | retreatReduction, retreatFreeAtHp |
-| 1161 | Handheld Fan | 0 | 0.00 | **none — prices at ~0** |
-| 1163 | Powerglass | 0 | 0.00 | **none — prices at ~0** |
-| 1180 | Core Memory | 0 | 0.00 | **none — prices at ~0** |
+| 1161 | Handheld Fan | 0 | 0.00 | none — DELIBERATE: REACTIVE — moves an Energy off the attacker when the holder is damaged |
+| 1163 | Powerglass | 0 | 0.00 | none — DELIBERATE: REACTIVE — end-of-turn Energy from discard while the holder is Active |
+| 1180 | Core Memory | 0 | 0.00 | none — DELIBERATE: EXOTIC — grants an attack printed on the Tool itself, to one named body |
+
+7 of 14 recover nothing, and **7 of those are DELIBERATE**, each named with its reason above — the reactive family needs a term that prices a conditional FUTURE event on a body, which `state_value` has no shape for (adjacent to Issue #278's survival work) — a design question, not a parser gap. None is left unexplained.
+
+Two rows that DO recover a field are still only partly modelled, and say so here rather than reading as covered. **Gravity Gemstone** carries the holder's surcharge as a negative `retreatReduction`, which is exact (a body only ever pays a Retreat Cost from the Active Spot, precisely when the clause is live) — but its SYMMETRIC leg, the opponent's Active paying `{C}` more too, has no per-card field on my Tool that could hold a fact about their body. **Hop's Choice Band** recovers both its legs, but see the next paragraph on the cost one.
+
+A field listed here is RECOVERED, which is not the same as PRICED. `attackCostReduction` (Hop's Choice Band) is parsed and has **no live consumer**: affordability is asked ~20 times as `_attack_cost(aid) <= energy`, all ATTACK-keyed, and a body-keyed discount cannot be threaded through them without a redesign — nor safely, since a wrong credit manufactures a KO_SCORE-class phantom. It is a T4 `state_value` input. `holderNameFamily` is the opposite: it is a GATE, and every consumer of the amount it guards (`hpBonus`, `damageBoost`) tests it through `CardStat.applies_to_holder`.
 
 ### Per-deck exposure
 
@@ -471,13 +477,45 @@ is homed. Nothing to do here.
 **tool — MODELLED to attach, and that is not the same as priced.** Every Tool attach is structurally
 modelled: it writes `attached_tools`, which T1 homed. But differencing prices the attach at what
 `state_value` reads off the body *afterwards*, and that is the stat provider's parse of the Tool's
-printed text, not this seam's. Measured with the shipped parsers, **10 of the 14 Tools in the pool
-recover no CardStat field at all** — Lucky Helmet, Brave Bangle, Hop's Choice Band (0.80 meta copies,
-the most-played Tool we will face), Cynthia's Power Weight, Gravity Gemstone, Deluxe Bomb, Lillie's
-Pearl, Handheld Fan, Powerglass and Core Memory. Each of those attaches for a delta of ~0 and sorts
-to the bottom of every menu. This is not an apply-seam defect and Issue #263 cannot fix it; it
+printed text, not this seam's. This is not an apply-seam defect and Issue #263 cannot fix it; it
 belongs to the stat provider, and it is recorded here because the seam will *look* like it covers
 Tools.
+
+When first measured, **10 of the 14 Tools in the pool recovered no CardStat field at all**, each
+attaching for a delta of ~0 and sorting to the bottom of every menu. **Issue #306 closed three of
+those** and named the rest:
+
+- **Cynthia's Power Weight** (`hpBonus` 70) and **Hop's Choice Band** (`damageBoost` 30 +
+  `attackCostReduction` 1 — 0.80 meta copies, the most-played Tool we will face) were missed only
+  because their subject carries an owner qualifier: *"the **Cynthia's** Pokémon this card is attached
+  to"*. `docs/rules.md` §9 records that the owner prefix IS part of the printed card name (`Iono's
+  Tadbulb` ≠ `Tadbulb`), so that names an exact membership test over a holder we already know — and
+  the amount now travels with its condition, in `CardStat.holderNameFamily`, tested at every consumer
+  through `CardStat.applies_to_holder`. It is *not* the predicate class `card_text` refuses: N's
+  Castle sweeps every "N's Pokémon **in play**", both players', which is a board question, not a
+  question about this card's one holder.
+- **Gravity Gemstone** is the only Tool whose static effect is a **cost**, and `retreatReduction` is
+  now SIGNED (−1) rather than gaining a second `retreatIncrease` field — two fields for one quantity
+  is how a sign gets dropped later. Every consumer was audited: the three that subtract it clamp at
+  0, the four that look for an *enabling* Tool test `> 0` and correctly reject a surcharge, and
+  `_retreat_shortfall` — which sized a KO_SCORE-class retreat claim off the **printed** cost — was
+  fixed to read the effective one, since ignoring a surcharge under-states the need.
+- **The seven that stay unmodelled are named as such in the table above, each with its reason** —
+  per "no silent caps", a group that reads as covered when it is not is worse than one that reads as
+  missing. Five are REACTIVE (Lucky Helmet, Handheld Fan, Deluxe Bomb, Powerglass, Lillie's Pearl):
+  they fire on the holder being *attacked*, so pricing them needs a term that values a conditional
+  FUTURE event on a body — a `state_value` design question adjacent to Issue #278, not a parser gap,
+  and inventing a `CardStat` shape for it here would be guessing at the term that has to consume it.
+  Core Memory grants an attack printed on the Tool itself. **Brave Bangle**'s +30 is gated on the
+  holder having no Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so that test would
+  fail OPEN and over-credit.
+
+Two caveats the table states rather than hiding: Gravity Gemstone's **symmetric** leg (the opponent's
+Active also pays `{C}` more) has no per-card field on my Tool that could carry a fact about their
+body, and `attackCostReduction` is **parsed but not priced** — affordability is asked ~20 times as
+`_attack_cost(aid) <= energy`, all attack-keyed, and threading a body-keyed discount through them is
+a redesign this issue did not carry (and an unsafe one to guess at, since a wrong credit manufactures
+a KO_SCORE-class phantom). It is a T4 `state_value` input, which is what this whole track produces.
 
 **stadium — structurally hampered.** 14 refused sites, all needing vocabulary that does not exist.
 `snapshot_coverage` homes `stadium` (which Stadium is in play) and T1 added

@@ -838,15 +838,24 @@ class PlannerMixin:
                    for j, p in enumerate(me.get("bench") or []) if p)
 
     def _retreat_shortfall(self, ma) -> int:
-        """Energy the Active is SHORT of paying its printed Retreat Cost this turn (>0 iff it can't retreat
-        now). A retreat-reduction Tool whose reduction covers this frees the retreat (Air Balloon −2 on a
-        retreat-2 Makuhita with 0 attached -> shortfall 2 -> free)."""
+        """Energy the Active is SHORT of paying its EFFECTIVE Retreat Cost this turn (>0 iff it can't
+        retreat now). A retreat-reduction Tool whose reduction covers this frees the retreat (Air Balloon
+        −2 on a retreat-2 Makuhita with 0 attached -> shortfall 2 -> free).
+
+        "Effective", not printed, since Issue #306. This used to read the printed cost and ignore the
+        Tools ALREADY attached, which merely over-stated the need while every Tool was a discount —
+        fail-closed, so it survived. Gravity Gemstone makes a retreat cost {C} MORE
+        (`retreatReduction` −1), and an ignored surcharge UNDER-states the need, which would let
+        `_grab_retreat_tool_lethal_tactical` / `_attach_retreat_tool_lethal_tactical` accept a Tool
+        that does not in fact free the retreat and score the phantom at KO_SCORE. Shared with
+        `_can_retreat` through `_attached_retreat_delta`, so the two cannot disagree about a body."""
         if not (ma and self.stats):
             return 0
         st = self.stats.get(ma.get("id"))
         if st is None:
             return 0
-        return max(0, getattr(st, "retreatCost", 0) - len(ma.get("energies") or []))
+        eff = getattr(st, "retreatCost", 0) - self._attached_retreat_delta(ma)
+        return max(0, eff - len(ma.get("energies") or []))
 
     def _is_trainer_tutor(self, obs, select, option) -> bool:
         """This PLAY option is a `tutor_trainer` Supporter (Petrel class) — it searches ANY Trainer card
@@ -2476,6 +2485,10 @@ class PlannerMixin:
                 return False                                  # attacker-type gate
             if bst.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
                 return False                                  # defender {ex} gate
+            if not bst.applies_to_holder(stat):
+                return False                                  # owner-family HOLDER gate (#306): a Tool
+                                                              # boost reaches only "the Hop's Pokémon
+                                                              # this card is attached to"
             return best_dmg < hp <= best_dmg + bst.damageBoost   # short by ≤ this one boost
         if any(_crosses(self.stats.get(cid) if self.stats else None) for cid in hand_ids):
             return []                                         # held boost crosses -> deterministic line
@@ -3445,8 +3458,9 @@ class PlannerMixin:
 
         Reads PUBLIC end-board facts, all verified at source (rules.md §3, rulebook L142/618: retreat
         once per turn, DISCARD attached Energy equal to the Retreat Cost, free when 0):
-        - the Active's EFFECTIVE retreat cost = printed `retreatCost` − Σ `retreatReduction` of its
-          attached Tools (Air Balloon "{C}{C} less" → 2, parsed from card text, never recalled) — 0 ⇒
+        - the Active's EFFECTIVE retreat cost = printed `retreatCost` − the SIGNED
+          `_attached_retreat_delta` (Air Balloon "{C}{C} less" → 2; Gravity Gemstone "{C} more" → −1,
+          so the cost RISES — parsed from card text, never recalled) — 0 ⇒
           free retreat, ease 1.0 (the retreat-tool ROUTING: a retreat Tool on the Active is position);
         - a `switch`-tagged card (Switch: "Switch your Active Pokémon with 1 of your Benched Pokémon")
           in my VISIBLE hand ⇒ ease `_READINESS_SWITCH_EASE` — readable only off the sim's injected hand
@@ -3460,12 +3474,7 @@ class PlannerMixin:
         stat = self.stats.get(active.get("id"))
         if stat is None:
             return 0.0
-        eff = getattr(stat, "retreatCost", 0)
-        for tool in (active.get("tools") or []):           # attached retreat-reduction Tools lower it
-            tid = tool.get("id") if isinstance(tool, dict) else tool
-            tstat = self.stats.get(tid) if tid is not None else None
-            eff -= getattr(tstat, "retreatReduction", 0) if tstat is not None else 0
-        eff = max(0, eff)
+        eff = max(0, getattr(stat, "retreatCost", 0) - self._attached_retreat_delta(active))
         if eff == 0:
             ease = 1.0
         elif len(active.get("energies") or []) >= eff:

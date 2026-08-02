@@ -132,6 +132,24 @@ parallel per-mechanic dicts, and the synth fallback.)_
 _Avoid_: provider (bare — say Stat Provider), card database, CardStat/AttackStat (the records it hands
 out, not the seam), Function Tag / Effect Clause (behavioral JSON tables — separate, offline-built feeds)
 
+**Holder Gate**:
+The condition a Pokémon Tool's static modifier places on the body it is attached to — carried as
+`CardStat.holderNameFamily` and evaluated, always, through `CardStat.applies_to_holder(holder)`.
+Today's only vocabulary is the **owner name family**: Cynthia's Power Weight grants +70 HP to *"the
+Cynthia's Pokémon this card is attached to"*, Hop's Choice Band its `{C}` discount and +30 to *"the
+Hop's Pokémon"*. That is decidable rather than a guess, because `docs/rules.md` §9 makes the owner
+prefix part of the printed card name (`Iono's Tadbulb` ≠ `Tadbulb`), so membership is a prefix test
+on a holder already in play — not the board-sweep predicate class the retreat-grant parsers refuse
+(N's Castle's "N's Pokémon **in play**", both players'). The amount and its gate are parsed once and
+travel together: a consumer that reads `hpBonus` / `damageBoost` / `attackCostReduction` must ask
+`applies_to_holder` for the candidate body, and None means *unconditional*, so an unrestricted Tool
+behaves exactly as it did before the concept existed. Fail-CLOSED on an unreadable holder.
+_(Issue #306, built 2026-08-02.)_
+_Avoid_: name match / substring (it is a prefix test on the printed name, and a substring would claim
+`Amulet of Hope` for the `Hop's` family), attacker-type gate (`damageBoostType` — a different
+condition, on the attacker's Energy type), `{ex}` gate (`damageBoostVsEx` — a condition on the
+DEFENDER, not the holder)
+
 **Function Tag**:
 A coarse label for a *behavioral* function a card performs (`draw`, `search`, `energy_accel`,
 `gust`, `heal`, `spread`, `poison`, …) — derived offline by **probing** the card in the engine
@@ -154,7 +172,8 @@ when a lock-free attack was affordable), and the **bench-partner condition** ("d
 opponent can bench the partner first). The card-tier sibling for Trainers is the **damage-boost
 fact** (`CardStat.damageBoost` — Premium Power Pro / Maximum Belt: this-turn plays tracked
 match-scoped by `TurnBoostTracker`, attached Tools read off the holder, both priced before W/R and
-crossing-checked by the boost-lethal tactical). **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
+crossing-checked by the boost-lethal tactical; a Tool whose boost carries a **Holder Gate** —
+Hop's Choice Band — contributes only on a holder inside its family). **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
 card-tier structural stats (`CardStat`) and the behavioral, card-level `Function Tag`. Consumed by the
 closed-form (**Tier-0**) combat math so the agent picks the right attack *before* paying the Engine
 Search sim budget — e.g. Mega Starmie ex's Nebula Beam lands through Crustle's ex-damage immunity

@@ -65,8 +65,9 @@ from common import apply_option as seam                                        #
 from common import snapshot_coverage                                           # noqa: E402
 from common.strategy.context import _ABILITY, _ATTACH, _EVOLVE, _PLAY          # noqa: E402
 from common.scouting.card_text import (                                        # noqa: E402
-    _parse_retreat_free_grant, _parse_tool_hp_bonus, _parse_tool_retreat_free_at_hp,
-    _parse_tool_retreat_reduction, parse_card_damage_boost)
+    _parse_retreat_free_grant, _parse_tool_attack_cost_reduction, _parse_tool_holder_family,
+    _parse_tool_hp_bonus, _parse_tool_retreat_free_at_hp, _parse_tool_retreat_reduction,
+    parse_card_damage_boost)
 
 
 CARDS_JSON = _ROOT / "tools" / "meta_tracker" / "cards.json"
@@ -525,23 +526,60 @@ class _SkillShim:
         self.skills = [self._Skill(a.get("text") or "") for a in (card.get("abilities") or [])]
 
 
+#: Tools whose printed effect is DELIBERATELY not modelled, with the reason. Per "no silent caps",
+#: a group that reads as covered when it is not is worse than one that reads as missing — so these
+#: are named in the report rather than left to sit in the same "**none**" bucket as an oversight.
+#: Ruled at Issue #306; each needs a `state_value` shape that does not exist, not a parser fix.
+DELIBERATELY_UNMODELLED_TOOLS = {
+    1156: "REACTIVE — draws 2 when the holder is damaged in the Active Spot",
+    1161: "REACTIVE — moves an Energy off the attacker when the holder is damaged",
+    1167: "REACTIVE — 12 counters onto the attacker when the holder is damaged",
+    1163: "REACTIVE — end-of-turn Energy from discard while the holder is Active",
+    1172: "REACTIVE — the opponent takes 1 fewer Prize for KOing the holder",
+    1180: "EXOTIC — grants an attack printed on the Tool itself, to one named body",
+    1175: ("GATED on a holder predicate we cannot decide — +30 vs {ex} only if the holder has no "
+           "Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test "
+           "would fail OPEN and over-credit"),
+}
+
+#: Why the whole group stays out. Pricing *"when this body is attacked, X happens"* needs a term
+#: that values a CONDITIONAL FUTURE event on a body — a `state_value` design question adjacent to
+#: Issue #278's survival work, not a `card_text` gap. Inventing a `CardStat` shape for it here would
+#: be guessing at the term that has to consume it.
+UNMODELLED_TOOLS_REASON = (
+    "a term that prices a conditional FUTURE event on a body, which `state_value` has no shape for "
+    "(adjacent to Issue #278's survival work) — a design question, not a parser gap")
+
+
 def tool_static_reads(card: dict) -> list[str]:
     """Which CardStat fields the shipped parsers actually recover from a Tool's printed text.
 
     Empty means the Tool attaches, writes `attached_tools`, and moves NO term of `state_value` — so
-    under 1-ply differencing it prices at ~0 and sorts to the bottom of the menu."""
+    under 1-ply differencing it prices at ~0 and sorts to the bottom of the menu.
+
+    A field is listed when it is RECOVERED, which is not the same as PRICED: `attackCostReduction`
+    (Issue #306) is parsed and has no live consumer yet — see the report's tool verdict, which says
+    so rather than letting the row read as covered."""
     c = _SkillShim(card)
     got = []
     if _parse_tool_hp_bonus(c):
         got.append("hpBonus")
-    if _parse_tool_retreat_reduction(c):
-        got.append("retreatReduction")
+    rr = _parse_tool_retreat_reduction(c)
+    if rr:
+        # SIGNED. Rendered with the sign when negative so a surcharge Tool (Gravity Gemstone) can
+        # never be skim-read off this table as a benefit recovered.
+        got.append("retreatReduction" if rr > 0 else f"retreatReduction ({rr})")
+    if _parse_tool_attack_cost_reduction(c):
+        got.append("attackCostReduction")
     if _parse_tool_retreat_free_at_hp(c):
         got.append("retreatFreeAtHp")
     if _parse_retreat_free_grant(c):
         got.append("retreatFreeGrant")
     if parse_card_damage_boost(c)[0]:
         got.append("damageBoost")
+    fam = _parse_tool_holder_family(c)
+    if fam and got:
+        got.append(f"holderNameFamily ({fam})")
     return got
 
 # ── exposure ──────────────────────────────────────────────────────────────────────────────────────
@@ -848,12 +886,45 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         "of every menu. Measured with the SHIPPED parsers (`common.scouting.card_text`):")
     add("")
     rows = []
-    for s in sorted((s for s in sites if s.category == "tool"),
-                    key=lambda s: (-ours.get(s.card_id, 0), -meta.get(s.card_id, 0.0))):
+    tool_sites = sorted((s for s in sites if s.category == "tool"),
+                        key=lambda s: (-ours.get(s.card_id, 0), -meta.get(s.card_id, 0.0)))
+    unread = 0
+    for s in tool_sites:
         reads = tool_static_reads(cards_by_id[s.card_id])
+        if reads:
+            cell = ", ".join(reads)
+        elif s.card_id in DELIBERATELY_UNMODELLED_TOOLS:
+            cell = f"none — DELIBERATE: {DELIBERATELY_UNMODELLED_TOOLS[s.card_id]}"
+            unread += 1
+        else:
+            cell = "**none — prices at ~0**"
+            unread += 1
         rows.append([s.card_id, s.name, ours.get(s.card_id, 0), f"{meta.get(s.card_id, 0.0):.2f}",
-                     ", ".join(reads) if reads else "**none — prices at ~0**"])
+                     cell])
     add(_table(rows, ["id", "tool", "our copies", "meta copies", "CardStat fields recovered"]))
+    add("")
+    named = sum(1 for s in tool_sites if s.card_id in DELIBERATELY_UNMODELLED_TOOLS)
+    residue = (f"The remaining {unread - named} are unexplained and belong to whoever picks this up "
+               f"next." if unread > named else "None is left unexplained.")
+    add(f"{unread} of {len(tool_sites)} recover nothing, and **{named} of those are DELIBERATE**, "
+        f"each named with its reason above — the reactive family needs {UNMODELLED_TOOLS_REASON}. "
+        f"{residue}")
+    add("")
+    add("Two rows that DO recover a field are still only partly modelled, and say so here rather "
+        "than reading as covered. **Gravity Gemstone** carries the holder's surcharge as a negative "
+        "`retreatReduction`, which is exact (a body only ever pays a Retreat Cost from the Active "
+        "Spot, precisely when the clause is live) — but its SYMMETRIC leg, the opponent's Active "
+        "paying `{C}` more too, has no per-card field on my Tool that could hold a fact about their "
+        "body. **Hop's Choice Band** recovers both its legs, but see the next paragraph on the "
+        "cost one.")
+    add("")
+    add("A field listed here is RECOVERED, which is not the same as PRICED. "
+        "`attackCostReduction` (Hop's Choice Band) is parsed and has **no live consumer**: "
+        "affordability is asked ~20 times as `_attack_cost(aid) <= energy`, all ATTACK-keyed, and a "
+        "body-keyed discount cannot be threaded through them without a redesign — nor safely, since "
+        "a wrong credit manufactures a KO_SCORE-class phantom. It is a T4 `state_value` input. "
+        "`holderNameFamily` is the opposite: it is a GATE, and every consumer of the amount it "
+        "guards (`hpBonus`, `damageBoost`) tests it through `CardStat.applies_to_holder`.")
     add("")
 
     add("### Per-deck exposure")

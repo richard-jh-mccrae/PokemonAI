@@ -596,6 +596,10 @@ target). → fold into the general Tool / HP-breakpoint work, don't leave it a b
    tools → 0, never over-credited); new **general** `deploy-hp-tool-on-breakpoint` (+50) reads it +
    `Board.incoming_active_damage`, so ANY unconditional +HP Tool / ANY weakness inherits the breakpoint
    deploy. The deck-specific `deploy-heros-cape-on-breakpoint` (hardcoded +100) was removed as subsumed.
-   Live-engine verified: Hero's Cape → hpBonus 100, Cynthia's Power Weight → 0. Remaining general work:
+   Live-engine verified: Hero's Cape → hpBonus 100, Cynthia's Power Weight → 0. **Amended by Issue
+   #306 (2026-08-02):** Power Weight now reads hpBonus 70 with `holderNameFamily "Cynthia's"` — the
+   owner prefix is part of the printed card name (`docs/rules.md` §9), so the restriction is an exact
+   test over a known holder rather than an unevaluable predicate. The deploy picker evaluates the gate
+   per candidate carrier, so "never over-credited" still holds. Remaining general work:
    the comprehensive Boss's Orders strategy (**designed** 2026-06-29, ADR-0022; build pending); the
    **damage**-boost OHKO-line model (Maximum Belt et al.).

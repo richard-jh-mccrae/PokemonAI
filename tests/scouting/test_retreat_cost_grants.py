@@ -28,7 +28,7 @@ be built as a Pilot and owns no corpus frames. The debt is named here rather tha
 1. A real-deck end-to-end test: a `slowking` Pilot on a real frame where the retreat DECISION changes
    because Latias ex is in play, through `decide()` with engine-backed card data — not a synthetic
    statline calling `_effective_retreat_cost` directly.
-2. **A KNOWN DIVERGENCE to reconcile.** `_effective_retreat_cost` is now grant-aware; the other nine
+2. **A KNOWN DIVERGENCE to reconcile.** `_effective_retreat_cost` is now grant-aware; the other
    retreat-cost readers in the codebase are NOT. Measured on a synthetic board with Latias ex benched
    and a Basic Active at printed retreat 2 with ZERO Energy attached:
 
@@ -36,9 +36,17 @@ be built as a Pilot and owns no corpus frames. The debt is named here rather tha
        _can_retreat(active)                  ->  False  (printed cost 2 > 0 Energy attached)
 
    So the promote/retreat decider would price a free pivot that the affordability gate denies. The
-   same blindness sits in `planner.py`'s duplicate of this arithmetic (:3212-3231), `_retreat_shortfall`
-   (:698), `objectives.py` (:400) and `combat.py` (:965) — the "one function owns the fact" lesson
-   ADR-0070 drew for `_build_standing`, not yet applied to retreat cost.
+   same blindness sits in `objectives.py` (:400) and `combat.py` (:965) — the "one function owns the
+   fact" lesson ADR-0070 drew for `_build_standing`, not yet applied to retreat cost.
+
+   **Partly discharged by Issue #306.** The *attached-Tool* half is now one function:
+   `Pilot._attached_retreat_delta` is the single, SIGNED reader that `_effective_retreat_cost`,
+   `_can_retreat`, `planner._promotion_ease` and `planner._retreat_shortfall` all call — extracted
+   because Gravity Gemstone parses to −1 and the arithmetic stopped being a subtraction of
+   non-negatives. `_retreat_shortfall` had omitted it entirely, which merely over-stated the need
+   while every Tool was a discount but would UNDER-state it against a surcharge, and that sizes a
+   KO_SCORE-class claim. The BOARD-LEVEL half (`retreatFreeGrant`) is still `_effective_retreat_cost`
+   alone, so the divergence above stands exactly as written.
 
    **This is LATENT, not live**: every reader agrees on the four decks that have strategy modules,
    because none of them runs a board-level grant (`grimmsnarl_ex`/`mega_lucario` run Air Balloon,
@@ -110,8 +118,15 @@ def test_archaludon_reads_as_a_board_level_typed_grant():
 
 def test_an_unmodelled_grant_parses_to_nothing_so_the_printed_cost_stands():
     """FAIL-CLOSED, the ruling's core safety property. N's Castle grants no Retreat Cost to "N's
-    Pokémon in play" — a card-NAME family the Pilot has no membership oracle for — so it must parse
-    to None and leave the printed cost standing, rather than guess a predicate it cannot evaluate."""
+    Pokémon in play" — an unauthored predicate — so it must parse to None and leave the printed cost
+    standing, rather than guess something it cannot evaluate.
+
+    The reason is no longer *"no membership oracle exists"*: Issue #306 built one, for the holder of
+    a Tool. It does not rescue this card, and the difference is the point. A Tool's subject is ONE
+    body whose name we hold; N's Castle sweeps every "N's Pokémon **in play**", *both players'*,
+    which is a board question — and `retreatFreeGrant` carries a single predicate NAME evaluated
+    against the one body that wants to retreat, with no shape for a family argument. Authoring it
+    means a new predicate and a consumer that can ask the board, not a wider regex."""
     assert _parse_retreat_free_grant(
         _Card("N's Pokémon in play (both yours and your opponent's) have no Retreat Cost.")) is None
     assert _parse_tool_retreat_free_at_hp(_Card("Attach a Pokémon Tool to 1 of your Pokémon.")) == 0

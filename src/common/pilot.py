@@ -2763,20 +2763,39 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         stat = self.stats.get(ma.get("id"))
         if stat is None:
             return 0
-        cost = getattr(stat, "retreatCost", 0)
         hp = ma.get("hp") or 0
-        for tool in (ma.get("tools") or []):
-            tid = tool.get("id") if isinstance(tool, dict) else tool
-            tstat = self.stats.get(tid) if tid is not None else None
-            if tstat is None:
-                continue
+        for tstat in self._attached_tool_stats(ma):
             free_at = getattr(tstat, "retreatFreeAtHp", 0)
             if free_at and hp and hp <= free_at:
                 return 0                                  # Rescue Board on a damaged holder
-            cost -= getattr(tstat, "retreatReduction", 0)
+        cost = getattr(stat, "retreatCost", 0) - self._attached_retreat_delta(ma)
         if cost > 0 and self._retreat_free_granted(obs, ma, stat):
             return 0
         return max(0, cost)
+
+    def _attached_tool_stats(self, body: dict | None):
+        """The ``CardStat`` of every Tool attached to ``body`` — the one place the engine's
+        ``tools`` list (ids or id-carrying dicts, both shapes appear) is resolved. Unknown ids are
+        skipped, so a caller only ever sees Tools it can actually read."""
+        if not body or not self.stats:
+            return
+        for tool in (body.get("tools") or []):
+            tid = tool.get("id") if isinstance(tool, dict) else tool
+            tstat = self.stats.get(tid) if tid is not None else None
+            if tstat is not None:
+                yield tstat
+
+    def _attached_retreat_delta(self, body: dict | None) -> int:
+        """Σ ``retreatReduction`` over the Tools attached to ``body`` — the amount to SUBTRACT from a
+        printed Retreat Cost.
+
+        SIGNED, and extracted precisely because it is (Issue #306): Gravity Gemstone parses to −1,
+        so the sum can be negative and a retreat can cost MORE than printed. The four call sites that
+        needed this arithmetic each open-coded the loop, which is how one of them
+        (``_retreat_shortfall``) came to omit it entirely — survivable while every Tool was a
+        discount, unsound the moment one is a surcharge, because that site sizes a KO_SCORE-class
+        claim."""
+        return sum(getattr(t, "retreatReduction", 0) for t in self._attached_tool_stats(body))
 
     def _retreat_free_granted(self, obs: dict, ma: dict, stat) -> bool:
         """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0100 §8)?
@@ -3229,7 +3248,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _can_retreat(self, ma: dict | None) -> bool:
         """My Active can pay its Retreat Cost this turn — attached Energy >= its EFFECTIVE retreat cost
-        (printed cost minus any ATTACHED retreat-reduction Tool: Air Balloon −2, `retreatReduction`;
+        (printed cost minus the SIGNED `_attached_retreat_delta` — Air Balloon's +2 delta takes the
+        cost DOWN by 2, Gravity Gemstone's −1 delta takes it UP by 1;
         rules.md §Retreat: "pay the Retreat cost in Energy"). Fail-CLOSED on an unknown stat: a
         KO_SCORE-class claim must never assume a retreat it cannot prove (ml f39: a 0-Energy Meowth ex
         with retreat 1 "retreated" into a benched Mega and the grab scored 1001). An attached Tool is a
@@ -3240,12 +3260,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         stat = self.stats.get(ma.get("id"))
         if stat is None:
             return False
-        cost = getattr(stat, "retreatCost", 0)
-        for tool in (ma.get("tools") or []):              # attached retreat-reduction Tools lower it
-            tid = tool.get("id") if isinstance(tool, dict) else tool
-            tstat = self.stats.get(tid) if tid is not None else None
-            cost -= getattr(tstat, "retreatReduction", 0) if tstat is not None else 0
-        cost = max(0, cost)
+        cost = max(0, getattr(stat, "retreatCost", 0) - self._attached_retreat_delta(ma))
         if cost == 0:
             return True                                   # free retreat
         return len(ma.get("energies") or []) >= cost
@@ -3426,6 +3441,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0
         if st.damageBoostType is not None and active.energyType != st.damageBoostType:
             return 0                                        # "your {F} Pokémon" — attacker-type gate
+        if not st.applies_to_holder(active):
+            return 0                                        # "the Hop's Pokémon this card is attached
+                                                            # to" — owner-family HOLDER gate (#306)
         opp_stat = self.stats.get(opp.get("id")) if self.stats else None
         if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
             return 0                                        # "{ex}" defender gate (incl. Mega ex)
