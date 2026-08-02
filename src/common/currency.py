@@ -44,6 +44,14 @@ PRIZE_DAMAGE_RATE = 100.0
 # There is deliberately NO `WORTH_DAMAGE_RATE` constant in this module yet, and adding one without
 # the derivation below is the exact fudge ADR-0065 forbids.
 #
+# ⚠️ **Read that sentence with its qualifier: it is about a GENERAL rate.** Two SEAM-SCOPED
+# worth<->damage rates do live in this module, both honestly labelled at their own definitions —
+# `DEPLOY_BAND / DEPLOY_WORTH_SCALE` (ADR-0086 amendment C) and `ITEM_HOLD_WORTH_RATE` (Issue #261
+# item 2f) — and each carries a recorded reconciliation debt against a general rate if one is ever
+# derived. Stated here, at the guard, rather than only at the definitions: a reader who takes the
+# paragraph above at face value and then meets two such constants further down has been misled by
+# this file, which is the ADR-0078 complaint being repeated rather than paid down.
+#
 # The missing bridge is **damage per card-worth point**, from which prize → worth composes as
 # `PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`. It cannot be read off the shipped constants, because two
 # pairs price the SAME object on both scales and disagree by ~6.7x:
@@ -180,7 +188,16 @@ def item_hold_to_damage(keep_worth: float) -> float:
 
     The ONE place `common.hold_value`'s Worth-denominated price enters a `score` the damage-scale
     rungs also write to. Callers hand a WORTH value (a `needs` assignment marginal floored by
-    `hold_value.ITEM_HOLD_FLOOR`), never a prize-equivalent — that is `prize_to_damage`."""
+    `hold_value.ITEM_HOLD_FLOOR`), never a prize-equivalent — that is `prize_to_damage`.
+
+    **This takes a MAGNITUDE where `deploy_relevance_to_damage` refuses one, and the difference is
+    real rather than an oversight.** The deploy legs are ratios because a deploy marginal HAS a
+    natural yardstick — the ceiling on one card's assignment contribution — so the Worth cancels and
+    no rate is needed. A hold price has no such yardstick: *"what does spending this card cost"* is
+    an amount, not a fraction of anything, so the crossing is unavoidable and the honest response is
+    to name the rate rather than to manufacture a denominator that would only hide it. That is why
+    the rate above is stated as a PRESERVATION choice with a reconciliation debt, on exactly the
+    terms `DEPLOY_BAND` is."""
     return float(keep_worth) * ITEM_HOLD_WORTH_RATE
 
 

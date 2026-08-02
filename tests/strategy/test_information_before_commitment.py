@@ -25,7 +25,6 @@ Two seams, deliberately:
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -33,6 +32,11 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 FIXTURES = REPO / "tests" / "fixtures" / "corrections"
+
+INFORMATIVE_TRAINERS = {"Buddy-Buddy Poffin", "Fighting Gong", "Mega Signal", "Poké Pad",
+                        "Pokégear 3.0", "Ultra Ball", "Unfair Stamp"}
+COMMITTING_TRAINERS = {"Air Balloon", "Crushing Hammer", "Gravity Mountain", "Hero’s Cape",
+                       "Night Stretcher", "Premium Power Pro", "Risky Ruins", "Switch"}
 
 POKEGEAR = 1122        # Pokegear 3.0 — Item, `dig` (card_functions.json)
 HAMMER = 1120          # Crushing Hammer — Item, `energy_denial`; free and COMMITTING
@@ -42,10 +46,8 @@ UNKNOWN_CARD = 9999999  # no CardStat, no Function Tags — the untagged fail-di
 
 
 def _pilot(agent: str):
-    spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    p = mod._build_pilot(agent)[0]
+    from train.tune import _build_pilot          # `tools/` is on the path via tests/conftest.py
+    p = _build_pilot(agent)[0]
     p._planning = False
     return p
 
@@ -100,7 +102,7 @@ def test_the_dig_wins_the_frame_DESPITE_scoring_below_the_options_it_precedes(f1
     hammer = next(o for o in dec.options if o.card_id == HAMMER)
     attach = max((o for o in dec.options if o.card_id == IGNITION), key=lambda o: o.score)
     assert gear.score < hammer.score < attach.score, (
-        f"if the dig ever out-scored its rivals this pin would pass without the boundary; "
+        f"if the dig ever out-scored its rivals this test would pass without the boundary; "
         f"gear={gear.score} hammer={hammer.score} attach={attach.score}")
 
 
@@ -151,6 +153,67 @@ def test_the_four_classification_cases_including_the_untagged_fail_direction(f11
     assert pilot._informative_card(HAMMER) is False, "a Hammer is free and reveals nothing"
     assert pilot._informative_card(UNKNOWN_CARD) is False, "an unknown card must read as COMMITTING"
     assert pilot._informative_card(None) is False, "and so must an option carrying no card at all"
+
+
+def _pool_trainers():
+    """Every non-Pokémon, non-Energy, non-Supporter card across the three shipped decks — i.e. every
+    card that can reach the free `_PLAY` band the boundary splits. Supporters have their own tier and
+    are never in that band; Pokémon and Energy are classified structurally, not by tag."""
+    out = {}
+    for deck in ("mega_starmie", "mega_lucario", "dragapult_ex"):
+        p = _pilot(deck)
+        for cid in sorted(set(p.deck)):
+            st = p.stats.get(cid)
+            if st is None or getattr(st, "is_pokemon", False) or getattr(st, "is_energy", False):
+                continue
+            if getattr(st, "is_supporter", False):
+                continue
+            out[getattr(st, "name", str(cid))] = (cid, p._informative_card(cid),
+                                                  set(p.functions.tags(cid) or ()))
+    return out
+
+
+@pytest.mark.req("REQ-INFOFIRST-0005")
+def test_every_trainer_in_the_pool_classifies_and_the_informative_ones_are_exactly_the_tagged_ones():
+    """**The Function Tag audit ADR-0095 says is owed** — *"every Item must classify as informative or
+    committing. Untagged defaults to committing."* Run over the whole shipped pool rather than the
+    handful a fixture happens to hold, because the failure this guards is a card nobody looked at.
+
+    Two claims. The first is a property and cannot rot: informative is EXACTLY the tag-carrying set,
+    so no second classification route can quietly appear for a Trainer. The second pins the committing
+    side BY NAME, and it is deliberately the brittle half — a new Trainer entering the pool untagged
+    lands there silently and correctly (that is the fail direction), and this is the one place that
+    makes it show up in a diff so a human classifies it once."""
+    pool = _pool_trainers()
+    assert pool, "the audit must actually see the pool, or it asserts nothing"
+    from common.pilot import _INFORMATIVE_TAGS
+    for name, (cid, informative, tags) in pool.items():
+        assert informative == bool(_INFORMATIVE_TAGS & tags), (
+            f"{name} ({cid}) classifies {informative} on tags {sorted(tags)} — informative must be "
+            f"exactly the tag-carrying set for a Trainer")
+    informative = {n for n, (_c, i, _t) in pool.items() if i}
+    committing = {n for n, (_c, i, _t) in pool.items() if not i}
+    assert informative == INFORMATIVE_TRAINERS, f"informative set moved: {informative}"
+    assert committing == COMMITTING_TRAINERS, (
+        f"committing set moved: {committing}. A NEW Trainer here has defaulted to committing, which "
+        f"is the safe direction but is a classification nobody has made yet — read its card text and "
+        f"either add the tag or add it to this list.")
+
+
+@pytest.mark.req("REQ-INFOFIRST-0005")
+def test_the_two_committing_classes_that_never_reach_the_new_branch_anyway():
+    """Non-vacuity for the audit above, and the correction of an example that was wrong in this
+    file's first draft: a **Tool** (Air Balloon, Hero's Cape) is played as an `_ATTACH`, not a
+    `_PLAY`, so it takes the blind-commitment tier and never meets the free-band boundary; **Ultra
+    Ball** is informative by tag but is `cost_discard`, and that branch is checked FIRST, so it takes
+    the costly-commitment tier too.
+
+    Both are still classified — the audit covers them — but their tier comes from elsewhere, and
+    saying so here stops the next reader inferring a tier from a classification."""
+    pool = _pool_trainers()
+    assert pool["Ultra Ball"][1] is True and "cost_discard" in pool["Ultra Ball"][2]
+    assert all("tool" in pool[n][2] for n in ("Air Balloon", "Hero’s Cape"))
+    assert all(pool[n][1] is False for n in ("Air Balloon", "Hero’s Cape"))
 
 
 @pytest.mark.req("REQ-INFOFIRST-0004")

@@ -21,7 +21,6 @@ suite prices identically before and after, because the floor binds on all of the
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import pytest
@@ -84,8 +83,7 @@ def test_the_worth_to_damage_crossing_goes_through_currency_and_is_named():
 # ── the Pilot resolver, on real boards ───────────────────────────────────────────────────────────
 
 def _pilot(deck="mega_starmie"):
-    sys.path.insert(0, str(REPO / "tools"))
-    from train.tune import _build_pilot
+    from train.tune import _build_pilot          # `tools/` is on the path via tests/conftest.py
     p = _build_pilot(deck)[0]
     p._planning = False
     return p

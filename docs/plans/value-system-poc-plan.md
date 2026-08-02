@@ -293,10 +293,11 @@ deliberate list; gates green; flips → wave 2.
   already decide on. **The floor is load-bearing and was measured before it was written:** on all four
   committed deny anchors a role-less Hammer's `keep_v2` reads `0.00 / 4.82 / 3.57 / 0.00`, because its
   only slot is the very `deny` slot the fire rung is pricing — so a pure keep reading collapses to 0
-  on exactly the boards where the strip whiffs and re-opens ADR-0093 decision 4's defect. Because the
-  floor binds on every anchor the swap is arithmetically identical for deny, which is how Issue #212's
-  *"must not perturb the deny 5/5"* is met by construction and how the build's gate movement stays
-  attributable. The ~1.0 worth↔damage rate the constant silently implied is now explicit and
+  on exactly the boards where the strip whiffs and re-opens ADR-0093 decision 4's defect. The floor
+  binds on all four anchors, so the swap is arithmetically identical for deny on every ruled frame —
+  Issue #212's *"must not perturb the deny 5/5"* met by MEASUREMENT (not by construction: a Hammer
+  covering a second live `deny` slot would price above the floor, which is the equation working) —
+  and that is what keeps the build's gate movement attributable to the sequencer half. The ~1.0 worth↔damage rate the constant silently implied is now explicit and
   seam-scoped beside `DEPLOY_BAND`, with the same reconciliation debt against `poc-worth-prize-rate`.
   **This item also lands ADR-0095 decision 1**, the sequencer change that ADR assigns to T2 and no
   other item owns: `_finish_turn_last`'s free band splits on INFORMATION

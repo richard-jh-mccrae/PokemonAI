@@ -874,6 +874,38 @@ prize-denominated marginal uses to enter a damage-scale score, so its home moves
 `promote_retreat_value.py` (one consumer) into a shared one (four); the CSV-recomputing test moves
 with it, since falsifiability is the point rather than an incidental.
 
+**Hold Price**:
+What SPENDING a held card costs, in the damage currency — the term every **free-Item decider**
+subtracts so it can reach a negative score and DECLINE (`common/hold_value.py`,
+`Pilot._item_hold_price`; Issue #261 item 2f, generalizing ADR-0062's deleted `_DENIAL_ITEM_COST`).
+`max(needs.keep_v2(card), ITEM_HOLD_FLOOR) × ITEM_HOLD_WORTH_RATE`. Two facts and both are
+load-bearing: the ASSIGNMENT leg is the card's exact counterfactual marginal against the board's
+resolved Needs (a card covering a live need is dear; one covering nothing is cheap), and the FLOOR is
+the finiteness the assignment cannot see. The floor is not decoration — a role-less Crushing Hammer's
+only slot is the `deny` slot, so its `keep_v2` measures 0.00 on exactly the boards where the strip
+whiffs, and two copies solo-price 0 each against one slot; a pure keep reading would make the copy
+being spent look free precisely when the hand is richest in it. **`max`, not `+`** — the floor is a
+lower BOUND on what the card is worth, never a surcharge on top of it. Why it must be strictly
+positive at all is the sequencer, not the card: `_finish_turn_last` promotes on `score > 0` and ties
+End at exactly 0, so a hold of 0 is not "free", it is "played by option index" (ADR-0093 decision 4).
+_Avoid_: keep price (the KEEP sites' own name for the assignment leg alone — the hold price is that
+leg **floored** and **crossed** into damage), `_DENIAL_ITEM_COST` (deleted; it was this price hard-gated
+to `energy_denial`), item cost (the card's catalog worth, which for a Hammer is 0)
+
+**Information Before Commitment**:
+The boundary inside `_finish_turn_last`'s FREE band: an option that ENLARGES the information set
+sequences strictly ahead of an endorsed free play that COMMITS a card at a target (ADR-0095
+decision 1, built by Issue #261 item 2f). Classification is `Pilot._informative_card` — a
+`draw`/`search`/`dig` Function Tag, or a Pokémon play (Bench fill) — and **untagged defaults to
+committing**, because a mis-classified commitment sequencing early spends a card before the dig that
+would have re-aimed it, while a mis-classified dig sequencing late costs only ordering. It is a TIER
+and not a score, and cannot become one: playing the dig first and playing it second reach the SAME
+end state, so no function of that state separates them. Hence `sound_rules`
+`information-before-commitment`, typed `structural`.
+_Avoid_: "free" as a synonym for informative (the conflation this boundary ends — a Crushing Hammer
+is free and reveals nothing), tier numbers as prose (`_TIER_*` are named constants; the band shifted
+once already)
+
 **Worth Damage Rate**:
 The MISSING third leg of the currency triangle, and the one ADR-0100 deliberately declined to build:
 **damage per card-worth point**, bridging the Worth scale (`ROLE_TIER` ≤ 30, `ENERGY_TIER` 8,

@@ -430,8 +430,9 @@ discard is cheap); a **Supporter** fetch must beat the best alternative Supporte
 split [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md) already built). The **bar is
 Plan-scaled** (low in `SETUP` where digging is king, higher in `RACE`/`CLOSE` where tempo is precious).
 Sequencing stays structural in `_finish_turn_last` ([pilot.py](../src/common/pilot.py)) — free Item
-digs first (tier 0), then a free but **committing** play (tier 1: a Hammer, a Tool, a non-KO gust
-Item — it spends a card at a target and reveals nothing), then the one-per-turn **Supporter** (tier 2,
+digs first (tier 0), then a free but **committing** play (tier 1: a Hammer, a Switch, a Stadium, a
+non-KO gust Item — it spends a card at a target and reveals nothing; a **Tool** is an `_ATTACH`, so it
+takes tier 3 instead), then the one-per-turn **Supporter** (tier 2,
 so a Pokégear may upgrade which one you commit), then the blind Energy attach / `cost_discard` search
 (tier 3), then a `shuffle_hand` Supporter (tier 4, attach before nuking the hand), then the turn-ender
 (tier 5).

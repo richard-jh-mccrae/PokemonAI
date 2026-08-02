@@ -295,8 +295,10 @@ _POSTURE_GAMMA_HI = 0.85    # at/above this, Posture at full strength
 # `deferred` marking below compares against the LAST tier, and it was a literal `4`).
 _TIER_INFORMATIVE = 0   # free AND informative: the digs, the Bench fill, the benched evolve — plus the
                         # lethal/winning special cases, which out-score everything else in the band
-_TIER_COMMIT_FREE = 1   # free but COMMITTING: an endorsed free play that spends a card at a target and
-                        # reveals nothing (a Hammer, a Tool, a non-KO gust Item). ADR-0095's boundary
+_TIER_COMMIT_FREE = 1   # free but COMMITTING: an endorsed free PLAY that spends a card at a target and
+                        # reveals nothing (a Hammer, a Switch, a Stadium, a non-KO gust Item).
+                        # ADR-0095's boundary. NOT a Tool — a Tool is an `_ATTACH`, so it takes the
+                        # blind-commitment tier below and never meets this branch.
 _TIER_SUPPORTER = 2     # the one-per-turn Supporter (non-shuffle)
 _TIER_COMMITMENT = 3    # the blind / costly commitments: the Energy attach, a `cost_discard` search
 _TIER_SHUFFLE = 4       # a hand-SHUFFLE Supporter — it nukes the hand, so attach before it
@@ -1928,11 +1930,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """Does PLAYING this card ENLARGE the information set? — ADR-0095 decision 1's classification,
         and the boundary `_finish_turn_last` splits its free band on.
 
-        Two ways in, both card FACTS rather than card names (the ADR is explicit that the
-        classification is keyed off a behavioural Function Tag): a `_INFORMATIVE_TAGS` tag — draw /
-        search / dig — or the card being a Pokémon, i.e. a Bench fill, which tier 0's docstring has
-        always listed as free development (*"fill the Bench, play a Pokémon"*) and which reveals the
-        slot's occupant to the rest of the turn's pricing.
+        Two ways in, both card FACTS rather than card names. The first is the behavioural Function
+        Tag the ADR specifies — `_INFORMATIVE_TAGS`, draw / search / dig. The second is a CardStat
+        fact rather than a tag, and is called out as such: the card being a Pokémon, i.e. a Bench
+        fill, which the ADR's own list names as informative and which tier 0's docstring has always
+        carried (*"fill the Bench, play a Pokémon"*). There is no `bench_fill`-shaped tag on every
+        Basic and inventing one to satisfy the letter of "keyed off a tag" would put a second,
+        hand-maintained copy of `is_pokemon` in `card_functions.json`.
 
         **Untagged defaults to COMMITTING**, per the ADR, and the asymmetry is the reason: a
         mis-classified commitment sequencing EARLY spends a card before the dig that would have
@@ -1966,7 +1970,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                   attack-last is intact; ep83037962 f78).
                   Free, and reveals a better target before you commit.
           tier 1  free but COMMITTING — an endorsed free PLAY that spends a card at a target and
-                  reveals nothing: a Crushing Hammer, a Tool, a non-KO gust Item.
+                  reveals nothing: a Crushing Hammer, a Switch, a Stadium, a non-KO gust Item. (Not
+                  a Tool: a Tool is an `_ATTACH` and lands in tier 3.)
           tier 2  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
                   so commit it AFTER the free Item digs (a Pokégear may upgrade which Supporter you
                   play) but before the blind attach. A KO-enabling gust Supporter stays in tier 0.
@@ -5976,7 +5981,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _denial_play_tactical(self, obs: dict, board: Board, ctx) -> float:
         """Value of PLAYING an energy-denial Item (ADR-0062): what the strip actually takes away,
-        priced by its odds, net of keeping the card.
+        priced by its odds, net of the HOLD PRICE — what spending the card costs.
 
             coin_odds(card) * _DENIAL_PLAY_W * (unfavored?) * value  -  _item_hold_price(card)
 
@@ -5989,11 +5994,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         tiers a free Item ahead of everything"* — is a property of the SEQUENCER, true of every free
         Item and priced for exactly one card class. `_item_hold_price` generalises it onto the Needs
         assignment: `max(needs.keep_v2(this card), hold_value.ITEM_HOLD_FLOOR)` crossed at
-        `currency.ITEM_HOLD_WORTH_RATE`. On all four committed deny anchors the floor BINDS (a
-        role-less Hammer's `keep_v2` measures 0.00 / 4.82 / 3.57 / 0.00 — its only slot is the very
-        `deny` slot this rung is already pricing), so the swap is arithmetically identical here and
-        Issue #212's *"must not perturb the deny 5/5"* is met by construction rather than by
-        calibration. What changes is that a hold price now EXISTS for the rest of the pool.
+        `currency.ITEM_HOLD_WORTH_RATE`. On all four committed deny anchors the floor BINDS — a
+        role-less Hammer's only slot is the very `deny` slot this rung is already pricing, so its
+        assignment marginal collapses on exactly the boards where the strip whiffs; `hold_value`'s
+        module docstring carries that measurement and the reasoning, once, rather than here as well.
+        The consequence for THIS rung: the swap is arithmetically identical on every ruled frame.
 
         Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy, no affordable
         attack, or the only energized body is one I am about to KO) still pays the hold price and so

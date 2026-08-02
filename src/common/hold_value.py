@@ -40,11 +40,15 @@ on top of it, so a card whose live need already exceeds it is not charged twice.
 shape `needs.keep_v2` uses for its own `intrinsic` hedge, deliberately: this is a second hedge of
 that kind and not a new arithmetic.
 
-**Consequence, stated rather than discovered:** because the floor binds on every committed deny
-anchor, this swap is byte-identical for deny by construction. That is the point — Issue #212's own
-scope note (*"Generalising must not perturb the deny 5/5"*) is met by arithmetic instead of by
-calibration, and any gate movement in this build is attributable to the sequencer boundary that
-lands beside it, not to the price.
+**Consequence, stated precisely rather than over-claimed:** the swap is byte-identical for deny
+*wherever the floor binds*, and the floor binds on **every committed deny anchor** — measured, four
+of four, not asserted. It is NOT identical by construction: `keep_v2` above the floor is reachable
+in principle (a Hammer covering a second live `deny` slot), and if a future board reaches it the
+Hammer costs more to spend than the incumbent charged, which is the equation working rather than
+drifting. Issue #212's scope note (*"Generalising must not perturb the deny 5/5"*) is therefore met
+by MEASUREMENT over the ruled frames, and the useful corollary holds on those frames: gate movement
+in the build that introduced this is attributable to the sequencer boundary beside it, not to the
+price.
 
 Pure and lib-free; the Pilot resolves the board facts and passes the keep value
 (`pilot._item_hold_price`) — the `gate_library` / `deploy_value` pattern.

@@ -12,9 +12,9 @@ decision 1**, whose sequencer change that ADR assigned to T2 and which no other 
 falsifiable prediction held. Does **not** supersede anything.
 
 **Context issues:** Issue #261 (POC-T2, item 2f), Issue #212 (the structural half of the free-Item
-hold, closed as superseded and restated by #261), Issue #228 / ADR-0093 (which made a whiffing free
-Item decline, and is the half #261 says is *already discharged*), Issue #259 / ADR-0095 (the
-information boundary), Issue #259 / ADR-0097 (the Worth→prize scaffold this reconciles against),
+hold, closed as superseded and restated by Issue #261), Issue #228 / ADR-0093 (which made a whiffing
+free Item decline, and is the half Issue #261 says is *already discharged*), Issue #259 / ADR-0095
+(the information boundary), Issue #259 / ADR-0097 (the Worth→prize scaffold this reconciles against),
 Issue #262 (POC-T3, where the hold stops being a seam and becomes the `hand` term's difference).
 
 ## Context
@@ -95,12 +95,15 @@ a card whose live need already exceeds it is not charged twice. This is the ADR-
 pointed at a cost, and it is the same shape `needs.keep_v2` already uses for its own `intrinsic`
 hedge — a second hedge of that kind, not a new arithmetic.
 
-**Consequence, stated rather than discovered.** Because the floor binds on every committed deny
-anchor, the swap is **arithmetically identical for deny**. Issue #212's scope note — *"Generalising
-must not perturb the deny 5/5"* — is therefore met by construction rather than by calibration, and
-every deny fixture in the suite prices the same before and after. The corollary matters more than the
-reassurance: **no gate movement in this build is attributable to the price**, which is what makes
-decision 4's movement attributable to decision 4.
+**Consequence, stated precisely rather than over-claimed.** The swap is arithmetically identical for
+deny **wherever the floor binds**, and the floor binds on every committed deny anchor — measured,
+four of four, and every deny fixture in the suite prices the same before and after. It is *not*
+identical **by construction**: `keep_v2` above the floor is reachable in principle (a Hammer covering
+a second live `deny` slot), and if a board reaches it the Hammer costs more to spend than the
+incumbent charged — which is the equation working rather than drifting, and is the whole point of
+generalising. So Issue #212's scope note is met by MEASUREMENT over the ruled frames, not by
+arithmetic identity. The corollary is what matters here: **no gate movement in this build is
+attributable to the price**, which is what makes decision 4's movement attributable to decision 4.
 
 ## Decision 2 — the value is RE-HOMED, deliberately not re-derived
 
