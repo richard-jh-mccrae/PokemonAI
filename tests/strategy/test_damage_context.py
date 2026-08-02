@@ -226,6 +226,35 @@ def test_an_absent_prize_zone_claims_nothing_rather_than_six_taken(combat):
 
 
 @pytest.mark.req("REQ-DMGCTX-0002")
+def test_a_live_boost_moves_the_opponent_fingerprint(combat):
+    """The sharing guard must see the boost tuple, which the wholesale hash of their `PlayerState`
+    structurally cannot: a "during this turn" boost is a LOG fact, threaded onto the side rather
+    than derived from it, so nothing in their player dict changes when one is played.
+
+    `opponent_fingerprint` is what licenses reusing a built `TheirSide` across the selects of a turn
+    (and, from Issue #150, across sampled worlds). Without this the reuse would serve a stale boost
+    tuple into their damage context — an under-read of THEIR damage, which is the fail-open
+    direction the hash exists to refuse."""
+    obs = _asymmetric_obs()
+
+    class _Tracker:                                  # the TurnBoostTracker's one duck-typed method
+        def __init__(self, boosts):
+            self._boosts = boosts
+
+        def boosts_for(self, side):
+            return self._boosts if side == 1 else ()
+
+    plain = StateModel.build(obs, combat=combat, turn_boosts=_Tracker(()))
+    boosted = StateModel.build(obs, combat=combat,
+                               turn_boosts=_Tracker([(30, None, False)]))
+    assert plain.theirs.player is boosted.theirs.player, "the board itself must be unchanged"
+    assert plain.opponent_fingerprint != boosted.opponent_fingerprint
+    assert not plain.shares_opponent_with(boosted)
+    assert boosted.damage_context(attacker="theirs")["atk_boosts"] == ((30, None, False),)
+    assert plain.damage_context(attacker="theirs")["atk_boosts"] == ()
+
+
+@pytest.mark.req("REQ-DMGCTX-0002")
 def test_an_unknown_direction_is_rejected(combat):
     """The Formula has exactly two directions. A typo must be an error, never a silently-mine dict:
     a survival read handed MY attacker's scalers under-reads their damage, which is the one
@@ -236,22 +265,34 @@ def test_an_unknown_direction_is_rejected(combat):
 
 
 @pytest.mark.req("REQ-DMGCTX-0002")
-def test_two_clock_reads_at_one_direction_share_one_memo_entry(combat):
-    """Memo soundness, the point of identity stability — asserted through the model's own probe.
+def test_a_stable_context_is_canonicalised_once_where_a_fresh_one_is_not(combat):
+    """What identity stability actually buys, asserted where it can actually fail.
 
-    `turns_to_ko_me` puts the context in its memo key. Called twice with the SAME direction's
-    context the second call must be a memo HIT, which the probe shows as a single recorded access
-    per read and an unchanged memo size."""
+    Issue #279 argued for it as MEMO SOUNDNESS — *"a freed dict's `id` can be reused by a later
+    allocation, so two different contexts can collide on one memo entry"*. That premise is stale:
+    POC-T1 (Issue #260) moved the clock memos off `id(context)` onto `_Lazily._key`, which projects
+    by VALUE and holds a reference beside each cached projection, so the collision is impossible and
+    an equal-but-fresh dict is answered correctly either way. A test written to the issue's literal
+    wording therefore passes with the accessor UN-memoized, which is a dead guard.
+
+    The live property is COST, and it is one layer down: `_key` caches its canonical projection per
+    OBJECT, so a stable context is walked once and every later read is a dict lookup, while a fresh
+    one pays a fresh walk and leaves a fresh entry behind on every call. `_canon` growth is what
+    separates the two, so that is what this asserts — and the identity guarantee itself is pinned by
+    `test_the_context_is_the_same_object_on_every_read` above."""
     probe: set = set()
     model = StateModel.build(_asymmetric_obs(), combat=combat, probe=probe)
-    ctx = model.damage_context(attacker="theirs")
-    body = model.mine.active.body
-    before = len(model.theirs._memo)
-    first = model.theirs.turns_to_ko_me(body, context=ctx)
-    grew = len(model.theirs._memo) - before
-    second = model.theirs.turns_to_ko_me(body, context=model.damage_context(attacker="theirs"))
-    assert first == second
-    assert len(model.theirs._memo) - before == grew, "the second read allocated a second memo entry"
+    theirs, body = model.theirs, model.mine.active.body
+    first = theirs.turns_to_ko_me(body, context=model.damage_context(attacker="theirs"))
+    memo, canon = len(theirs._memo), len(theirs._canon)
+    # the SAME object again: a memo hit, and no second canonical projection of the context
+    assert theirs.turns_to_ko_me(body, context=model.damage_context(attacker="theirs")) == first
+    assert (len(theirs._memo), len(theirs._canon)) == (memo, canon)
+    # an EQUAL but freshly-allocated dict: still the right answer (the key is by value — that is
+    # what POC-T1 bought), still one memo entry, but it re-walks the whole context to get there
+    assert theirs.turns_to_ko_me(body, context=dict(model.damage_context(attacker="theirs"))) == first
+    assert len(theirs._memo) == memo, "a value-keyed memo must not gain an entry for an equal context"
+    assert len(theirs._canon) > canon, "a fresh dict must cost a fresh canonical projection"
     assert "model.damage_context" in probe
 
 

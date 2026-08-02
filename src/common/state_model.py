@@ -1603,12 +1603,23 @@ class StateModel(_Lazily):
         list fails OPEN silently; this fails toward a redundant rebuild, which costs time and stays
         correct.
 
-        Two things outside their ``PlayerState`` still move their derivations, so both are folded in:
-        the shared ``stadium`` (it can change what their bodies effectively are) and the
+        THREE things outside their ``PlayerState`` still move their derivations, so all three are
+        folded in: the shared ``stadium`` (it can change what their bodies effectively are), the
         transient-grant generation (a lock or shield I imposed on their Active is honoured by the
-        clock reads but lives in the match-scoped tracker, ADR-0033).
+        clock reads but lives in the match-scoped tracker, ADR-0033), and their live damage-BOOST
+        plays (:attr:`_SideBase._turn_boosts`).
+
+        The third joined in POC-T3.5 (Issue #279) **with** the field that made it possible to miss.
+        A "during this turn" boost is a log fact — the card is in the discard by the time anyone
+        reads the board — so it is threaded onto the side rather than derived from it, and a
+        threaded field is precisely what the wholesale hash of ``player`` cannot see. A reused
+        ``their_side=`` would otherwise have carried a stale boost tuple into their damage context,
+        which is the fail-OPEN direction this hash exists to refuse. Inert today (nothing calls
+        :meth:`shares_opponent_with` at runtime), which is exactly why it had to be closed now: the
+        hole would have surfaced in Issue #150's sampled worlds, one layer away from its cause.
         """
-        return hash((_canonical(self.theirs.player), self.stadium, self._transient_generation))
+        return hash((_canonical(self.theirs.player), self.stadium, self._transient_generation,
+                     self.theirs._turn_boosts))
 
     @lazy
     def _transient_generation(self):
