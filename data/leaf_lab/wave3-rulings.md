@@ -516,21 +516,43 @@ had named:
    the prize. `ko-score-band` is not violated — it binds positional terms and `survival` is
    prize-denominated — but the effect is the one that rule exists to prevent.
 
-4. **`threat` was a ONE-BIT term, and that is now fixed.** `needs.opponent_target_value` returns the
-   target's prize value essentially unscaled at the `survival_shift=0` this module passes, so
-   `min(_THREAT_CAP, sum)` bound on 100% of non-empty inputs: 0.0 on 20 frames, exactly the cap on
-   2, never between. A 1-prize Basic and a 3-prize Mega ex priced identically. The cause is a unit
-   slip in the port — the incumbent rung is `min(cap, _PLANNER_THREAT_W * magnitude)` over DAMAGE
-   points, and T3 re-denominated the input into prizes while carrying the cap and not the weight, so
-   `threat` became the one positional family with a runaway guard and no scale anchor. Closed by
-   `_THREAT_W = _THREAT_CAP / _MAX_PRIZE_VALUE`, derived from two constants the module already
-   verifies at source, leaving the positional band and `POSITIONAL_MAX` untouched.
+4. **`threat` is a ONE-BIT term.** `needs.opponent_target_value` returns the target's prize value
+   essentially unscaled at the `survival_shift=0` this module passes, so `min(_THREAT_CAP, sum)`
+   binds on 100% of non-empty inputs: 0.0 on 20 frames, exactly the cap on 2, never between. A
+   1-prize Basic and a 3-prize Mega ex price identically. The cause is a unit slip in the port — the
+   incumbent rung is `min(cap, _PLANNER_THREAT_W * magnitude)` over DAMAGE points, and T3
+   re-denominated the input into prizes while carrying the cap and not the weight, so `threat`
+   became the one positional family with a runaway guard and no scale anchor, against the rule the
+   module header states for all four.
 
-**Finding 4 does not move any of the 22**, and the reason is worth stating rather than leaving for a
-reader to notice: every reachable target across these frames is a 3-prize Mega ex, which is exactly
-where the anchor is derived to land — at the cap, the value the unscaled form already returned. The
-fix changes what a 1- or 2-prize target is worth, and no such target is reachable in this set. It is
-a correctness fix to a term that could not discriminate, not a gate-shrinking one.
+### Finding 4's fix was applied, MEASURED, and reverted — the measurement is the point
+
+The anchor is `_THREAT_CAP / _MAX_PRIZE_VALUE`: derived from two constants the module already
+verifies at source, leaving the positional band and `POSITIONAL_MAX` untouched, and it makes the term
+grade (1 prize → 0.033, 2 → 0.067, 3 → 0.1). It looked like the one finding here that was a defect
+rather than a calibration, so it was applied. Then the Discrimination Gate was re-run:
+
+```
+unruled OK -> MISS   65 -> 68        (+3: 85785606|19, 85785606|21, 82752604|88)
+MISS -> OK           18 -> 16        (-2: 85058574|88, 85785609|turn|8)
+```
+
+**Five frames worse, none better.** The mechanism is exact, not a guess: each of the five was winning
+by a margin SMALLER than the 0.067 prizes of threat advantage the saturation was handing it — every
+one reaches a 1- or 2-prize target that the unscaled term priced at the 3-prize maximum. On
+`85785606|19` the ruled option trails on `development` (-0.0473) and `readiness` (-0.0413) and was
+carried entirely by a 1-prize target priced as a Mega ex.
+
+So removing the windfall is *correct* and it *costs rulings*, and the equation does not get to write
+them. Reverted, and the finding is now recorded three ways instead: `threat`'s `blind_to` carries the
+measurement and the derivation, `test_state_value.py` carries it as a strict-xfail TARGET that turns
+red the day the fix lands, and `sound_rules.py`'s `firing-equation-constants` entry names
+`_THREAT_CAP` as the one family cap with no anchor in front of it.
+
+This also corrects a claim made when the fix was first committed — *"finding 4 moves none of the
+22"*. That was true of the 22 and was checked; the rest of the corpus was not, and that is where the
+five frames are. Diagnosing on a subset and shipping against the whole corpus is the error, recorded
+so the next fix measures the gate BEFORE the commit rather than after.
 
 ### What is deliberately NOT done here
 
@@ -546,7 +568,9 @@ the one it already holds. Writing `ceil(hp / damage)` in `state_value` instead w
 opinion. The accessor is substrate and belongs to T1's completeness contract (Issue #260); the gap
 is recorded in `threat`'s `blind_to` with that owner.
 
-**Findings 2 and 3 are not retuned.** Both are calibration between terms whose shapes are right —
+**Findings 2, 3 and 4 are not retuned.** All three are calibration between terms whose shapes are
+right — and finding 4 earned its place on that list by measurement rather than by category, which is
+the most useful thing this pass produced. Detail below for 2 and 3 —
 `development`'s credit against a spend charge that lives outside the scalar, and `survival`'s
 magnitude against a `threat` that cannot yet see a multi-turn KO plan. Moving either constant to
 satisfy ten ruled frames would be fitting the equation to the corpus by hand, which is what the

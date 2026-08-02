@@ -272,9 +272,9 @@ _READINESS_CAP = 0.3
 #: their exposure is a standing POSITION, and the prize for actually converting it is `attack_ev`'s
 #: at the terminal action. See :func:`threat` for why the my-side/their-side asymmetry is real.
 #:
-#: A RUNAWAY GUARD, like its three positional siblings — which means it must not bite in normal
-#: play. It is paired with :data:`_THREAT_W` below for exactly that reason; see there for the
-#: measurement that showed the unpaired cap biting on 100% of inputs.
+#: Nominally a RUNAWAY GUARD, like its three positional siblings — which means it should not bite in
+#: normal play. It bites on 100% of inputs instead, because it has no SCALE ANCHOR in front of it;
+#: `threat`'s `blind_to` carries the measurement and the derivation of the anchor that would fix it.
 _THREAT_CAP = 0.1
 
 #: **The per-body deploy band, in prizes** — `currency.DEPLOY_BAND` (25 damage) across
@@ -322,36 +322,6 @@ _MAX_BODIES = _BENCH_MAX + 1
 #: `docs/rules.md` §6's prize table (`megaEx` -> 3, `[RULE: L333]`), and `CardStat.prize_value` is
 #: the runtime authority that returns it.
 _MAX_PRIZE_VALUE = 3.0
-
-#: **`threat`'s scale anchor into the positional zone — DERIVED, and it closes a PORTING defect.**
-#:
-#: The module header states the rule every positional family follows: *each crosses into the
-#: positional zone on a shipped SCALE anchor and is then bounded by a runaway guard that must not
-#: bite in normal play*. `readiness` has :data:`_READINESS_W`, `development` has
-#: :data:`_DEPLOY_PRIZE_BAND`, `hand` has :data:`POC_WORTH_PRIZE_RATE`. `threat` had NONE — its
-#: input went straight to :data:`_THREAT_CAP` — and that was not a design choice but a unit slip in
-#: the port. The incumbent rung is ``min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)``
-#: with `_PLANNER_THREAT_W` 0.1 per DAMAGE point over a magnitude that is a printed attack's damage
-#: (`planner._threat_magnitude`), so its guard bit only past 1000 damage — never. T3 re-denominated
-#: the input into PRIZES and carried the cap across but not the weight, so a 0.1-prize guard began
-#: receiving 1..3-prize inputs.
-#:
-#: Measured 2026-08-02 on the 22 gating Discrimination-Gate frames Issue #262 owns: `threat` read
-#: 0.0 on 20 and exactly `_THREAT_CAP` on 2 — never a value in between. `needs.opponent_target_value`
-#: returns `prize_advance` essentially unscaled at ``survival_shift=0`` (the fail-closed supplier gap
-#: named in the family's `blind_to`), so the cap binds on 100% of non-empty inputs and the family is
-#: a ONE-BIT term: *can I Knock Out their Active right now, yes or no*. A 1-prize Basic and a 3-prize
-#: Mega ex score identically, which is the discrimination the family exists to provide.
-#:
-#: The anchor is the band divided by the largest yield ONE body can carry, so a maximum-value target
-#: lands exactly at the guard and everything below it grades: 1 prize -> 0.033, 2 -> 0.067, 3 -> 0.1.
-#: Both terms are already source-verified constants of this module, so nothing here is authored — and
-#: the positional band is unchanged, which is what keeps `ko-score-band` and :data:`POSITIONAL_MAX`
-#: untouched by the fix. The guard now bites only when two bodies are simultaneously reachable, which
-#: is the "does not bite in normal play" the header promises (only their Active is reachable by
-#: damage at all — see :func:`threat`).
-_THREAT_W = _THREAT_CAP / _MAX_PRIZE_VALUE
-
 #: The Prize count both players race down from. Verified at source: *"Prize cards are 6 cards that
 #: each player sets aside"* (`docs/rulebook.txt` L57, and the setup step at L102). Read from
 #: `needs` rather than re-declared — one fact, one home (ADR-0087).
@@ -498,6 +468,28 @@ REGISTRY: tuple[TermFamily, ...] = (
             "their hand and deck — `theirs.hand_size` and `theirs.deck_count` have suppliers and "
             "no reader, so hand disruption (a Judge, a discard effect) prices exactly 0. This is "
             "the single largest uncovered family; T4 must always-expand disruption plays.",
+            "SATURATION INTO ONE BIT — this family cannot tell a 1-prize Basic from a 3-prize Mega "
+            "ex. `needs.opponent_target_value` returns `prize_advance` essentially unscaled at the "
+            "``survival_shift=0`` this module passes, so `min(_THREAT_CAP, sum)` binds on EVERY "
+            "non-empty input. Measured 2026-08-02 across Issue #262's 22 gating frames: 0.0 on 20 "
+            "and exactly the cap on 2, never a value between. The cause is a unit slip in the port "
+            "— the incumbent rung is `min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * magnitude)` with "
+            "`_PLANNER_THREAT_W` 0.1 per DAMAGE point (`planner._threat_magnitude`), so its guard "
+            "bit only past 1000 damage; T3 re-denominated the input into PRIZES and carried the cap "
+            "across without the weight, leaving this the one positional family with a runaway guard "
+            "and no scale anchor, against the rule the module header states for all four. "
+            "**The fix is derived and MEASURED, and deliberately NOT applied.** It is "
+            "`_THREAT_CAP / _MAX_PRIZE_VALUE`, so a maximum-yield target lands at the band and "
+            "everything below grades (1 prize -> 0.033, 2 -> 0.067, 3 -> 0.1), leaving "
+            "`POSITIONAL_MAX` and `ko-score-band` untouched. Applied, its ONLY measured effect on "
+            "the corpus is negative: the Discrimination Gate goes 65 -> 68 unruled and loses two "
+            "`MISS -> OK` improvements, five frames worse and none better. All five were winning by "
+            "a margin SMALLER than the 0.067 prizes of threat advantage the saturation handed them "
+            "— each reaches a 1- or 2-prize target the unscaled term priced at the 3-prize maximum "
+            "— so removing the windfall is correct and still costs rulings this module cannot "
+            "write. Parked with the other calibration findings for the post-POC fit against a "
+            "held-out set (Issues #146-#148); `test_state_value.py`'s strict-xfail TARGET is the "
+            "standing record and turns red the day it lands.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
             "STEP: `_reachable_target_values` returns nothing at all unless my Active's best "
             "reachable damage already meets the target's remaining HP, so a Mega Lucario chipped "
@@ -1081,21 +1073,17 @@ def threat(targets: Iterable[float]) -> float:
     terms — a benched body is reachable only through a snipe rider, which `attack_ev` prices at the
     terminal action and this family deliberately does not (see its `blind_to`).
 
-    **POSITIONAL, so SCALED then capped** — :data:`_THREAT_W` crosses into the positional zone and
-    :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 / `KO_SCORE`) is the runaway guard above
-    it. That is where the my-side/their-side asymmetry described in the module header lives: their
-    exposure standing on the board is worth something — it constrains what they can afford to leave
-    in front — but the PRIZE for converting it belongs to the attack that converts it, and
-    `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for one Knock Out
-    twice.
+    **POSITIONAL, so capped** at :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 /
+    `KO_SCORE`), which is where the my-side/their-side asymmetry described in the module header
+    lives. Their exposure standing on the board is worth something — it constrains what they can
+    afford to leave in front — but the PRIZE for converting it belongs to the attack that converts
+    it, and `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for one
+    Knock Out twice.
 
-    **The scale is not decoration.** Without it this function was ``min(0.1, sum)`` over inputs that
-    are prize values of 1..3, so the guard bound on every non-empty input and the family collapsed to
-    one bit — see :data:`_THREAT_W` for the measurement on Issue #262's 22 gating frames. A saturated
-    term has zero derivative, and this module's own doctrine (`readiness`'s docstring, `blind_to`'s
-    contract) is that under 1-ply differencing a zero derivative means *never explored*, not merely
-    undervalued."""
-    return min(_THREAT_CAP, _THREAT_W * float(sum(float(t) for t in targets)))
+    **This family SATURATES, and that is a known open defect** — see its `blind_to` entry
+    *"saturation into one bit"* for the measurement, the derivation of the fix, and the measured
+    reason the fix is not applied here yet."""
+    return min(_THREAT_CAP, float(sum(float(t) for t in targets)))
 
 
 def readiness(bodies: Iterable[ReadyBody]) -> float:

@@ -214,12 +214,13 @@ WHITELIST: tuple[SoundRule, ...] = (
               "the gust-target seam's `currency.GUST_TARGET_BAND`) — and, "
                "since POC-T3, the `state_value` scale anchors and runaway guards: `_READINESS_W`, "
                "`_SATURATED`, `_ROLE_FLOOR`, `_PROXIMITY_W`, `_DEPLOY_PRIZE_BAND`, "
-               "`_BENCH_SLOT_PRICE` and the four family caps. `state_value._THREAT_W` is "
-               "deliberately NOT in that list and its absence is a claim, not an oversight: it is "
-               "`_THREAT_CAP / _MAX_PRIZE_VALUE`, both already-verified constants of that module, "
-               "so it is DERIVED and carries no scaffold debt (added 2026-08-02, Issue #262 — the "
-               "port had left `threat` the one positional family with a cap and no anchor, and the "
-               "unpaired cap bound on 100% of inputs)",
+               "`_BENCH_SLOT_PRICE` and the four family caps. `_THREAT_CAP` is in that list for a "
+               "second reason as of 2026-08-02 (Issue #262): it is the one family cap with NO scale "
+               "anchor in front of it, so it binds on 100% of inputs and `threat` answers one bit "
+               "rather than grading. The anchor that fixes it is derived rather than authored and "
+               "would therefore ADD no scaffold debt, but applying it measured -5/+0 on the "
+               "Discrimination Gate, so it is parked with the rest of this entry's queue and "
+               "recorded as a strict-xfail TARGET instead",
         type=AUTHORED_SCAFFOLD,
         fact="magnitudes inside equations that already fire correctly",
         reason="Tolerated for the POC: these sit INSIDE equations whose shape is right, so they "

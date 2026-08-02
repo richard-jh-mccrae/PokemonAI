@@ -651,20 +651,32 @@ def test_a_reachable_knockout_on_their_active_raises_threat_but_never_by_a_prize
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
+@pytest.mark.xfail(strict=True, reason="OPEN DEFECT, diagnosed and parked — see the test body and "
+                                       "`threat`'s `blind_to` entry 'SATURATION INTO ONE BIT'")
 def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit():
-    """The scale anchor `_THREAT_W` restores, and the porting defect it closes (Issue #262).
+    """A strict-xfail **TARGET** (the `test_hyperclosure_corpus.py` idiom): a defect stated as the
+    assertion that will pass the day it is fixed, so the fix cannot land silently and the defect
+    cannot rot into scenery. Green while `threat` is still broken; a red XPASS is the signal to
+    delete this mark.
 
     `threat`'s inputs are `needs.opponent_target_value`, which at the fail-closed
     ``survival_shift=0`` this module passes returns the target's PRIZE value essentially unscaled —
     1, 2 or 3 (`docs/rules.md` §6, verified at source: regular / ex / Mega ex). Against a 0.1-prize
-    cap and with no weight between them, `min(cap, sum)` bound on **every** non-empty input, so the
-    family answered one bit — *is their Active reachable at all* — and a 1-prize Basic priced the
-    same as a 3-prize Mega ex. Measured on the 22 gating Discrimination-Gate frames: `threat` read
-    0.0 on 20 and exactly the cap on 2, never a value between.
+    cap with no weight in front of it, `min(cap, sum)` binds on **every** non-empty input, so the
+    family answers one bit — *is their Active reachable at all* — and a 1-prize Basic prices the
+    same as a 3-prize Mega ex. Measured on Issue #262's 22 gating Discrimination-Gate frames:
+    `threat` read 0.0 on 20 and exactly the cap on 2, never a value between.
 
-    So the assertion is STRICT monotonicity, which is precisely what the unscaled form could not
-    satisfy, plus the two band properties that must survive the fix: a maximum-yield target lands at
-    the band rather than above it, and the cap still guards a multi-target sum."""
+    **Why the fix is not applied**, since it is derived rather than authored
+    (`_THREAT_CAP / _MAX_PRIZE_VALUE`) and leaves the positional band untouched: measured on the
+    corpus, its only effect is negative — the Discrimination Gate goes 65 -> 68 unruled and loses
+    two `MISS -> OK` improvements. Five frames were winning by a margin smaller than the 0.067
+    prizes of threat advantage the saturation handed them. Removing a windfall is correct AND costs
+    rulings, and this module does not get to write them; the fix is parked with the other
+    calibration findings for the post-POC fit (Issues #146-#148).
+
+    The assertion is STRICT monotonicity, which is exactly what the saturated form cannot satisfy,
+    plus the two band properties any fix must preserve."""
     assert sv.threat([1.0]) < sv.threat([2.0]) < sv.threat([3.0])
     assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_CAP)
     assert sv.threat([3.0, 3.0]) == pytest.approx(sv._THREAT_CAP)
