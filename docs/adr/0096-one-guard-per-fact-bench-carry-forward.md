@@ -114,3 +114,23 @@ Issue #231 is closed as **ruled-keep-provisional** on this ADR.
   post-POC learning phases, like every other authored constant inside a firing equation.
 - Issues #232 / #237 / #254 are **not** re-grilled. Their content is carried by the table above; the
   owning tracks implement against it.
+
+## Build note — decision 2 is DONE; decision 5 is confirmed as T3's, not T2's (2026-08-02)
+
+*(Issue #261 item 2d. Nothing re-ruled.)*
+
+`keep-a-bench` (+60) is **deleted**, and `baseline_bench.py` with it — that rung was the module's
+only remaining member, so the BENCH cluster is gone rather than left holding an empty tuple. Deletion
+was measured, as decision 2 required: **both gates PASS with the rung removed** (Decision Gate
+250/346, unchanged; Discrimination Gate 182/248 → 183/248), and the unscoped `when()` was probed in
+the `_SETUP_BENCH` context decision 9 excludes the filter from — no frame moved there either. One
+board fact, two mechanisms remain, on the schedule decision 1 set: `_empty_bench_forced`
+(provisional, dated retirement test) and `_predicted_loss`.
+
+**Issue #261's item 2d also says "resolve the spare-body cliff INSIDE the marginal", and that is what
+the deletion does** — the second body's price now comes from the equation rather than from the edge
+of a rung. The *escalating* slot price of decision 5 is NOT part of it: this ADR's own Consequences
+say so ("new work in T3's `development` family, not a port of an existing term"), the pointer is
+already recorded in `state_value.REGISTRY`'s `development` entry, and authoring a convexity here
+would be a T2 rung standing in for a T3 term family. Stated explicitly because "resolve the cliff"
+reads like it could mean both.

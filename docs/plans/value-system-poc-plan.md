@@ -262,8 +262,17 @@ deliberate list; gates green; flips → wave 2.
   `_DENIAL_UNFAVORED` (ADR-0078 decision 6). Gates: Decision PASS / 0 unruled; Discrimination 2
   `OK → MISS` **held out onto Issue #262** — both caused by the +25's deletion alone, neither a decision
   move (the agent still plays the human's option on both).
-- **Deploy finish (old Issues #237/#232):** price the `_TO_BENCH` entry point, `bench_harvest`
-  sharpening, and resolve the spare-body cliff inside the marginal.
+- **Deploy finish (old Issues #237/#232): DONE 2026-08-02 (ADR-0086 amendment G, ADR-0096 build
+  note).** `_TO_BENCH` is priced — the supplier split is by CERTAINTY, not zone, so a revealed fetch
+  candidate joins the hand on the ready side and leaves the deck counts. `bench_harvest` enters as a
+  SECOND ROUTE to a benched body (riders reach it without a promotion, out of one shared budget), on
+  one derivation shared with the live path so the delta's two sides cannot drift. The spare-body
+  cliff is resolved by DELETING `keep-a-bench` (+60) — the whole gap — with `baseline_bench.py`;
+  the *escalating* slot price stays T3's `development` work per ADR-0096's own Consequences.
+  `bench-fill-a-basic` (+12) deleted with the wiring; the bench take-fewer bar moves to `< 0`.
+  Gates: Discrimination PASS, 1 IMPROVED (182→183/248); Decision PASS, 250/346 unchanged. The
+  motivating frame `86091728-43` does NOT flip and the reason is recorded: its ruling needs the
+  deck-tracker's prize inference and an `item_lock` worth entry, neither a deploy-seam gap.
 - **Rollout order fix (old Issue #254):** canonical slot ordering via Option-Equivalence.
 - **Free-Item hold (old Issue #212):** generalize `_DENIAL_ITEM_COST` into the keep machinery.
 - **Shadow deletion:** `_discard_shadow`, `_threat_shadow`, `_recur_shadow`,
@@ -363,7 +372,10 @@ pruning approximations.
 
 **Deleted by this ratification:** `keep-a-bench` (+60) — it guards nothing the filter does not
 already guarantee at MAIN (the filter runs *after* `_finish_turn_last`), and per Issue #231's own
-numbers it IS the spare-body cliff (1.96 → 61.96). Deletion is measured, not blind.
+numbers it IS the spare-body cliff (1.96 → 61.96). Deletion is measured, not blind. **Carried out
+2026-08-02 by T2 item 2d**, together with `baseline_bench.py` (the rung was the module's only
+remaining member): both gates PASS with it removed — Decision 250/346 unchanged, Discrimination
+182 → 183/248.
 
 Everything else with a tuned weight is deleted by its owning track.
 

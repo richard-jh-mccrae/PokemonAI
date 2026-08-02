@@ -17,6 +17,11 @@ in direct violation of T0's own headline rule ("every board fact enters through 
 family"), and nothing about writing the line prompted the question. Six parallel tracks will each
 delete rungs against this list, so the discipline has to be enforced rather than remembered.
 
+The third mechanism is now GONE — `keep-a-bench` was deleted by T2 (Issue #261 item 2d) on ADR-0096
+decision 2, and `baseline_bench.py` with it, since that rung was the whole module. Two remain, by
+schedule rather than by exception: `empty-bench-filter` is typed `provisional` with a dated
+retirement test, after which `predicted-loss` is the sole guard.
+
 ## The four types, and what each MUST carry
 
 * ``structural``        — permanent. Encodes a game rule or a fail-direction policy. Must name it.

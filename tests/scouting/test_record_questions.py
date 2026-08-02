@@ -34,7 +34,7 @@ def test_is_ex_body_covers_ex_and_mega_ex():
 
 @pytest.mark.req("REQ-STAT-0001")
 def test_is_pokemon_reads_hp():
-    # Trainers/Energy report hp 0 (the baseline_bench._is_pokemon fact).
+    # Trainers/Energy report hp 0 (the deploy path's is-a-Pokemon fact).
     assert CardStat(333, hp=70).is_pokemon
     assert not CardStat(1086, hp=0).is_pokemon
 

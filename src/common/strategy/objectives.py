@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 
 from common.grading import HORIZON as _HORIZON
-from common.strategy.context import _PLAY
+from common.strategy.context import _PLAY, _SETUP_BENCH, _TO_BENCH
 
 _RACE_HORIZON = 8        # give up beyond this many turns — no wall math on an unbounded grind
 _RACE_LATER_CHIP = 0.9   # later-turn chip is slightly less certain than chip banked THIS turn
@@ -190,6 +190,22 @@ def prize_paths(bodies, prizes_needed: int, reach=None):
     if best is None:
         return frozenset(), None
     return best[4], float(best[0])
+
+
+def _reaches_my_bench(select, option) -> bool:
+    """This option puts a Pokémon onto MY Bench — the question the exposure leg is really asking.
+
+    Three engine shapes say it (ADR-0086 decision 6's three entry points): a `PLAY` from hand at the
+    main menu, the pregame `_SETUP_BENCH` placement, and a `_TO_BENCH` fetch. The last two carry a
+    CARD-target option, not a `PLAY`, which is why gating on the option TYPE alone made the exposure
+    leg silently zero at the entry point Issue #261 item 2d wired up.
+
+    The caller still checks that the card is a Pokémon with HP; this answers only "does taking it
+    land a body on my side of the board"."""
+    ctx = (select or {}).get("context")
+    if ctx in (_TO_BENCH, _SETUP_BENCH):
+        return True
+    return option.get("type") == _PLAY
 
 
 def _phase_from(prev, base, race_ahead, active_doomed: bool, my_prizes: int,
@@ -401,6 +417,63 @@ class ObjectivesMixin:
                 return 0
         return _PATH_BENCH_EXTRA
 
+    def _their_harvest_turns(self, my_bench: list, body: dict) -> float | None:
+        """Their fewest turns to fell MY BENCHED ``body`` **with riders alone**, or None when the
+        Bench Harvest cannot reach it inside the horizon.
+
+        ADR-0086 decision 5's *reachability sharpening*, and the reason it is not a refinement of the
+        existing read but a SECOND ROUTE: `_their_turns_to_ko` measures printed damage, which lands
+        on the Active — so it can only describe a benched body being dragged up and hit, which is why
+        the Prize Path charges it `_PATH_BENCH_EXTRA`. Riders (snipes and spreads) reach the Bench
+        directly, pay no promotion, and — because attacking ENDS their turn — come out of ONE shared
+        per-turn budget, so no per-body read can express them (ADR-0071). Their cheapest route to a
+        benched body of mine is therefore the MIN of the two, and this is the leg that was missing.
+
+        `HARVEST_POSSIBLE` (the oracle's default) is the right declaration here: this is a THREAT
+        read, and ADR-0071 decision 3 is explicit that such a read "must not call a body safe just
+        because they could kill a different one". The rescue-side consumers declare UNAVOIDABLE for
+        the mirror-image reason.
+
+        Routed through the SNAPSHOT rather than `CombatMath` — T1's acceptance criterion, and it is
+        what makes the per-option cost bearable: the memo is keyed by the bench snapshot, so the real
+        Bench is solved once per decision however many deploy options are priced against it. No
+        snapshot means NO CLAIM (None), never a model-free second clock."""
+        model = getattr(self, "_state_model", None)
+        if model is None or not my_bench:
+            return None
+        t = model.theirs.turns_to_ko_me(
+            body, my_benched=True, my_bench=list(my_bench),
+            key_ids=self._harvest_key_ids(), context=self._opp_attack_context,
+            opp_active=model.theirs.active_raw,
+            switch_enabler=self._opp_switch_enabler())
+        return float(t) if t is not None and t < _HORIZON else None
+
+    def _their_path_items(self, opp: dict, ma: dict | None, my_bench: list,
+                          read=None, gamma: float = 0.0) -> list:
+        """``[(key, prize_value, turns, card_id), …]`` — MY bodies as targets on THEIR Prize Path.
+
+        ONE derivation for both consumers (`_path_signals`' live read and `_bench_path_delta`'s
+        hypothetical), because `_bench_path_delta` differences its own answer against
+        `board.their_path_turns`: two spellings of "how fast do they fell my bodies" would make that
+        subtraction meaningless the moment they drifted.
+
+        The Active is reached by printed damage. A BENCHED body is reached the sooner of two ways —
+        promoted and hit (`+_PATH_BENCH_EXTRA`), or harvested where it stands
+        (:meth:`_their_harvest_turns`) — and a body neither route reaches is simply absent, which is
+        how an unreachable body keeps a route uncompletable."""
+        items = []
+        for body, extra in ([(ma, 0)] if ma else []) + [(b, _PATH_BENCH_EXTRA)
+                                                        for b in (my_bench or []) if b]:
+            t = self._their_turns_to_ko(opp, body, read, gamma)
+            t = None if t is None else t + extra
+            if extra:
+                harvest = self._their_harvest_turns(my_bench, body)
+                if harvest is not None:
+                    t = harvest if t is None else min(t, harvest)
+            if t is not None:
+                items.append((id(body), self._prize_value(body), t, body.get("id")))
+        return items
+
     def _path_signals(self, obs, me: dict, opp: dict, ma: dict | None, oa: dict | None,
                       my_prizes: int, opp_prizes: int, read=None, gamma: float = 0.0,
                       *, carried=None) -> dict:
@@ -422,12 +495,8 @@ class ObjectivesMixin:
                 if rider > 0:            # a benched body (extra>0) my rider can finish rides ~free
                     hp = body.get("hp", 0) or 0   # alongside my main KOs; the Active (extra==0) is
                     reach[key] = math.ceil(hp / rider) if extra else 0.0   # hit by the main attack
-        theirs = []
-        for body, extra in ([(ma, 0)] if ma else []) + [(b, _PATH_BENCH_EXTRA)
-                                                        for b in (me.get("bench") or []) if b]:
-            t = self._their_turns_to_ko(opp, body, read, gamma)
-            if t is not None:
-                theirs.append((id(body), self._prize_value(body), t + extra, body.get("id")))
+        theirs = self._their_path_items(opp, ma, [b for b in (me.get("bench") or []) if b],
+                                        read, gamma)
         my_keys, my_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in mine], my_prizes,
                                         reach=reach or None)
         my_keys, my_turns = self._sticky_path(mine, my_prizes, my_keys, my_turns, carried=carried)
@@ -583,13 +652,20 @@ class ObjectivesMixin:
         a bare one-turn improvement. It grades against the shared `HORIZON` — `turns_to_ko_me`'s own
         "survives the horizon" answer — rather than a constant invented for this leg.
 
-        0 when the play gifts nothing: they cannot damage the body, the path is no shorter, the
-        option is not a Pokémon play, they have no prizes left to take, or `objectives_path` is off.
-        That last one matters because the Deploy Marginal needs a DEFINED exposure when the
+        Reachability is the SHARED derivation (:meth:`_their_path_items`), so a benched body is
+        reached the sooner of promoted-and-hit or harvested-where-it-stands — decision 5's
+        `bench_harvest` sharpening. That matters twice here: the hypothetical body itself may be
+        rider-reachable without ever being promoted, and adding it splits a shared rider budget the
+        per-body read could not see at all. The comparison is against `board.their_path_turns`, which
+        the same derivation produced, so the two sides of the subtraction cannot drift.
+
+        0 when the play gifts nothing: they cannot reach the body at all, the path is no shorter, the
+        option does not put a body on my Bench, they have no prizes left to take, or `objectives_path`
+        is off. That last one matters because the Deploy Marginal needs a DEFINED exposure when the
         Prize-Path machinery is dark — fail-closed, never an estimate (ADR-0069 decision 5)."""
         if not getattr(self, "objectives_path", False):
             return 0.0
-        if option.get("type") != _PLAY or not stat or getattr(stat, "hp", 0) <= 0:
+        if not _reaches_my_bench(select, option) or not stat or getattr(stat, "hp", 0) <= 0:
             return 0.0
         if board.opp_prizes_remaining <= 0:
             return 0.0
@@ -599,20 +675,14 @@ class ObjectivesMixin:
         me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
         ma = next((p for p in (me.get("active") or []) if p), None)
-        theirs = []
-        for body, extra in ([(ma, 0)] if ma else []) + [(b, _PATH_BENCH_EXTRA)
-                                                        for b in (me.get("bench") or []) if b]:
-            t = self._their_turns_to_ko(opp, body)
-            if t is not None:
-                theirs.append((id(body), self._prize_value(body), t + extra))
         cid = self._option_card_id(obs, select, option)
-        hypo = {"id": cid, "hp": getattr(stat, "hp", 0)}
-        t_new = self._their_turns_to_ko(opp, hypo)
-        if t_new is None:
-            return 0.0                       # they can't even damage it — benching gifts nothing
-        _keys, new_turns = prize_paths(
-            theirs + [("hypo", self._prize_value(hypo), t_new + _PATH_BENCH_EXTRA)],
-            board.opp_prizes_remaining)
+        hypo = {"id": cid, "hp": getattr(stat, "hp", 0), "energies": []}
+        bench_after = [b for b in (me.get("bench") or []) if b] + [hypo]
+        after = self._their_path_items(opp, ma, bench_after)
+        if not any(k == id(hypo) for k, _pv, _t, _cid in after):
+            return 0.0                       # they cannot reach it at all — benching gifts nothing
+        _keys, new_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in after],
+                                       board.opp_prizes_remaining)
         old_turns = board.their_path_turns
         if new_turns is None:
             return 0.0                       # still uncompletable even WITH the body — no gift

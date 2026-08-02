@@ -19,9 +19,11 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from pilot_helpers import (
-    ACTIVE, BENCH, HAND, MAIN, NO, PLAY, TO_HAND, YES,
+    ACTIVE, BENCH, DECK, HAND, MAIN, NO, PLAY, TO_HAND, YES,
     attack_opt, card_opt, make_select, opt, poke, state,
 )
+
+TO_BENCH = 5            # SelectContext.TO_BENCH — a fetch straight onto the Bench (Buddy-Buddy Poffin)
 
 # Load the shipped deck Strategy (pure data; imports only common.strategy).
 _REAL = Path(__file__).resolve().parents[2] / "src" / "agents" / "mega_lucario" / "strategy.py"
@@ -142,6 +144,29 @@ def _deploy_ability_relevance(hand):
     obs = make_select([opt(PLAY, index=0)], context=MAIN,
                       current=state(active=poke(MAKUHITA, hp=80), hand=hand))
     return p.explain(obs).options[0].deploy_working["ability_relevance"]
+
+
+@pytest.mark.req("REQ-ML-0015")
+def test_a_fetched_bench_drop_earns_no_ability_yield():
+    """WHERE the body comes from decides whether the trigger exists — a CARD FACT, checked at source
+    rather than assumed (Issue #261 item 2d).
+
+    Every bench-drop Ability in the pool reads "when you play this Pokémon **from your hand** onto
+    your Bench" — Meowth ex 1071's Last-Ditch Catch and the six siblings in `EN_Card_Data.csv`. A
+    Poffin-class fetch puts the body there from the DECK, so the clause is unsatisfiable and the leg
+    is structurally 0, exactly as it is at `_SETUP_BENCH` for decision 3's reason. Without this the
+    newly-priced `_TO_BENCH` entry point would pay a fetched Meowth ex for an Ability that never
+    fires, and prefer it over every other body on the menu."""
+    from train.tune import _build_pilot
+    p, _ = _build_pilot("mega_lucario")
+    played = make_select([opt(PLAY, index=0)], context=MAIN,
+                         current=state(active=poke(MAKUHITA, hp=80), hand=[MEOWTH_EX]))
+    assert p.explain(played).options[0].deploy_working["ability_relevance"] > 0
+
+    fetched = make_select([card_opt(DECK, 0)], min_count=0, max_count=1, context=TO_BENCH,
+                          deck=[{"id": MEOWTH_EX}],
+                          current=state(active=poke(MAKUHITA, hp=80), hand=[]))
+    assert p.explain(fetched).options[0].deploy_working["ability_relevance"] == 0
 
 
 @pytest.mark.req("REQ-ML-0015")

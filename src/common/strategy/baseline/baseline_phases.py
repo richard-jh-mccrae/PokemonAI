@@ -25,8 +25,9 @@ HYPOTHESES = [
         rationale="CLOSE band (ADR-0040): payoff online and ≤2 prizes left — long-horizon development "
                   "(benching fresh bodies) stops paying before the match ends, so lean those plays "
                   "down slightly and let the finishing lines win ties. A band, not a gate: "
-                  "`keep-a-bench` (+60) still dominates an empty-bench emergency, and any real "
-                  "KO/lethal is KO_SCORE-class regardless.",
+                  "`Pilot._empty_bench_forced` is a FILTER above every score, so it still "
+                  "dominates an empty-bench emergency, and any real KO/lethal is KO_SCORE-class "
+                  "regardless.",
         when=lambda c: c.board.phase == Plan.CLOSE and c.option_type == _PLAY
         and getattr(c.stat, "hp", 0) > 0,
         weight=-6, status="testing"),

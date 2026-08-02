@@ -146,6 +146,11 @@ priority-key audit on the next support-heavy deck.)
 ## Provenance
 
 - Rule: `src/common/strategy/baseline/baseline_bench.py` → `develop-the-wincon-base-first`.
+  **Both are gone.** The rung was deleted by ADR-0086 (its job is the Deploy Marginal's
+  assignment relevance), and the module itself by Issue #261 item 2d once `keep-a-bench` —
+  its last member — went with ADR-0096 decision 2. This round's finding stands as the record
+  of why a flat develop rung could not rank the wincon base; the fix now lives in the
+  equation.
 - Gate: `tests/strategy/test_blunder_20260703_develop_wincon_base.py` (3 replay fixtures + negative).
 - Run report: `docs/tuning/runs/mega_lucario_20260705-130130.md`.
 - Ledger: `data/corrections/reviewed.json` (f30/f33/f44 covered/rule-fixed, real-Pilot confirmed).

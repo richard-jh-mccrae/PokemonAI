@@ -357,8 +357,10 @@ hypothetical board change*: the netted **Slot Displacement** and the **Ability y
 (the Prize-Path delta the new body hands the opponent), both already damage-native. It is strictly a
 VALUE layer: the loss-avoidance guard (an empty Bench under a KO'd Active loses on the spot,
 `rules.md` §7) is NOT a leg — it is a post-setup sound rung ABOVE the equation, because `_LINE_CAP`'s
-band invariant means a bounded positional term can never be un-outbiddable. Replaces nine of the ten
-shipped bench rules; `keep-a-bench` is promoted to that rung rather than deleted.
+band invariant means a bounded positional term can never be un-outbiddable. Replaces ALL TEN
+shipped bench rules — the tenth, `keep-a-bench` (+60), was promoted to that rung by decision 7
+and then DELETED by ADR-0096 decision 2 (Issue #261 item 2d), because `Pilot._empty_bench_forced`
+already guards the same fact and the rung WAS the spare-body cliff.
 _(Accepted design 2026-07-29, `/grill-with-docs`; ADR-0086, Issue #197, amendments A–C. **Unblocked** —
 the Worth legs are ratios, so no `WORTH_DAMAGE_RATE` is referenced and ADR-0080's currency guard
 stands. `BAND / D` is nevertheless a seam-scoped worth↔damage rate, honestly labelled and pinned to

@@ -563,15 +563,34 @@ class FetchMixin:
         candidate, mark its need satisfied (a virtual board where acquired cards count as had), re-score
         the rest, repeat. So a second copy of an already-met need stands down. TAKE-FEWER: once min_count
         is met, stop as soon as no remaining candidate has positive grab value — don't over-grab (e.g.
-        bench a prize-liability body you don't need). ADR-0023; only for `_GRAB_CONTEXTS`."""
+        bench a prize-liability body you don't need). ADR-0023; only for `_GRAB_CONTEXTS`.
+
+        **The decline bar differs by context, and the difference is about who prices the COST**
+        (Issue #261 item 2d). At a BENCH grab the Deploy Marginal prices the whole cost — the slot
+        it displaces and the Prize-Path exposure it hands over — so a candidate at exactly 0 is one
+        that genuinely costs nothing, and the search that revealed it is already spent. ADR-0086
+        decision 6 says so in its own words: take-fewer "is how a BELOW-zero deploy expresses
+        itself". Declining at 0 there is the Buddy-Poffin whiff. At a `_TO_HAND` grab there is no
+        equation, only one-sided endorsement rungs, so 0 means "no rung spoke" rather than "free" —
+        and a card taken into hand is not free (it thins the deck and must then be held). Those
+        stay declined, which is also the `<= 0` bar every ruled fetch frame was captured under."""
         bench_ctx = select.get("context") in (_TO_BENCH, _SETUP_BENCH)
+        if bench_ctx:
+            # The Bench holds FIVE (`docs/rulebook.txt` L75, L122) — a game rule, so it bounds the
+            # pick as a filter rather than through a price. The marginal is 0 for a body that cannot
+            # be placed (there is no counterfactual for an impossible play), and the bench take-fewer
+            # bar declines only BELOW zero, so without this bound the greedy would keep grabbing past
+            # a full Bench. `min_count` still wins if the engine somehow asks for more, because
+            # refusing a mandatory pick is the one failure worse than an over-grab.
+            max_count = max(int(min_count), min(int(max_count),
+                                                _BENCH_MAX - int(getattr(board, "my_bench", 0) or 0)))
         remaining = set(range(len(options)))
         cur = traces
         chosen: list[int] = []
         acquired: list = []
         while len(chosen) < max_count and remaining:
             i = max(remaining, key=lambda j: (cur[j].score, -j))
-            if len(chosen) >= min_count and cur[i].score <= 0:
+            if len(chosen) >= min_count and (cur[i].score < 0 if bench_ctx else cur[i].score <= 0):
                 break                                        # take-fewer: nothing more worth grabbing
             chosen.append(i)
             remaining.discard(i)
@@ -855,20 +874,11 @@ HYPOTHESES = [
         when=lambda c: c.select_context == _TO_HAND and "item_lock" in c.tags
         and c.card_is_starter and c.board.my_bench < _THIN_BENCH,
         weight=30, status="assumed"),
-    Hypothesis(
-        id="bench-fill-a-basic",
-        rationale="At an in-game bench-PLACEMENT grab (`_TO_BENCH`), take a startable Basic — the "
-                  "bench-context mirror of `fetch-a-starter`. Needed because a CARD-target candidate is invisible "
-                  "to the `option_type==_PLAY` bench reflexes, so every candidate would score 0 and greedy "
-                  "take-fewer benches NOTHING (the Buddy-Poffin whiff that cost ~3:1 in the mirror); skips a "
-                  "multi-prizer (ex/Mega ex) and stands down once the Bench is full. `_SETUP_BENCH` was DROPPED "
-                  "from the scope by ADR-0086 decision 9 — we never bench during Set Up, so a +12 that could only "
-                  "argue for a placement the rule already refuses is dead weight, and leaving it would let a "
-                  "reader think the pregame is still being scored.",
-        when=lambda c: c.select_context == _TO_BENCH and c.card_is_starter
-        and c.board.my_bench < _BENCH_MAX
-        and not (c.stat and getattr(c.stat, "is_ex_body", False)),
-        weight=12, status="testing"),
+    # `bench-fill-a-basic` (+12) is DELETED (Issue #261 item 2d, ADR-0086 decision 6). Its whole
+    # reason was that "a CARD-target candidate is invisible to the `option_type==_PLAY` bench
+    # reflexes, so every candidate would score 0" — the Deploy Marginal now prices the `_TO_BENCH`
+    # entry point, so the invisibility it papered over is gone and a flat +12 that ties every
+    # candidate is exactly the indifference Issue #197 was opened to remove.
     Hypothesis(
         id="dont-fetch-the-setup-only-opener",
         rationale="Never take a SETUP-ONLY opener into hand at a search: an `opener`-tagged Pokémon whose "
