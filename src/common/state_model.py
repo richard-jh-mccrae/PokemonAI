@@ -66,6 +66,7 @@ from dataclasses import dataclass
 
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
+from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
 from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
 from common.strategy.damage_context import damage_context as _assemble_damage_context
 
@@ -81,13 +82,6 @@ _THREADED = object()
 #: one time"*, restated at L122). Only a hand-built board ever reaches it; a real observation carries
 #: the field, and reading THAT is what keeps the model honest if the format ever changes.
 _BENCH_MAX = 5
-
-#: Prize cards each player sets aside at setup — 6 (`docs/rulebook.txt` L57: *"Prize cards are 6
-#: cards that each player sets aside, face down, from the top of their own deck while setting up to
-#: play"*, restated at L102). The constant behind "prizes TAKEN", which the engine never reports
-#: directly: it gives what REMAINS, and the Damage Formula's `atk_prizes_taken` / `def_prizes_taken`
-#: scalers count the other half. Unlike `benchMax` the engine carries no per-match field for it.
-_PRIZE_CARDS = 6
 
 # ── the lazy field descriptor ──────────────────────────────────────────────────────────────────
 
@@ -328,10 +322,11 @@ class BodyView(_Lazily):
     def damage_counters(self) -> int:
         """Damage counters ON this body — ``(maxHp - hp) // 10``, floored at 0.
 
-        A counter is 10 damage (`docs/rulebook.txt` L166: *"place damage counters on it—one for each
-        10 damage"*), so the count is the printed COUNTABLE a scaler names ("for each damage counter
-        on this Pokémon"), not the damage. Both numbers are visible on every body in play, in both
-        directions, which is what makes the family exactly priceable.
+        A counter is 10 damage (`docs/rulebook.txt` L172: *"put 1 damage counter on your opponent's
+        Active Pokémon for each 10 damage"*; the glossary at L533 restates it — *"A counter put on
+        your Pokémon to show it has taken 10 damage"*), so the count is the printed COUNTABLE a
+        scaler names ("for each damage counter on this Pokémon"), not the damage. Both numbers are
+        visible on every body in play, in both directions, which makes the family exactly priceable.
 
         Fail-closed on a body the observation gives without HP fields: ``maxHp`` and ``hp`` both read
         0 and the body claims no counters, rather than inventing a full bar's worth."""
@@ -539,6 +534,22 @@ class _SideBase(_Lazily):
         return frozenset(c for c in ("poisoned", "burned", "asleep", "paralyzed", "confused")
                          if self.player.get(c))
 
+    # -- hand ------------------------------------------------------------------------------------
+    @property
+    def hand_size(self) -> int:
+        """Cards in this side's hand — **required of both subclasses**, which is why it is declared
+        here even though neither derivation lives here (POC-T3.5, Issue #279).
+
+        The class docstring's rule is that asymmetric detail stays subclass-only, and it still holds
+        for the CONTENTS: my hand is cards (:attr:`MySide.hand_ids`) and theirs is nothing at all.
+        The SIZE is the one hand fact both sides can answer, which is exactly why the Damage Formula
+        names it in both directions (`atk_hand`, `def_hand`) — and why :attr:`damage_facts` may read
+        it off a plain ``_SideBase``. The two derivations differ (mine falls back to the card list
+        when the observation omits ``handCount``; theirs has only the count), so this stays a
+        declaration of the contract rather than an implementation: a subclass that forgets it gets
+        this error, not a silently-zero hand feeding a scaler."""
+        raise NotImplementedError(f"{type(self).__name__} must answer hand_size")
+
     # -- prizes / zones -------------------------------------------------------------------------
     @lazy
     def prizes_remaining(self) -> int:
@@ -556,7 +567,7 @@ class _SideBase(_Lazily):
         positive claim, on exactly the hand-built boards where nothing is known. So the zone's
         ABSENCE is checked first and claims 0."""
         prize = self.player.get("prize")
-        return max(0, _PRIZE_CARDS - len(prize)) if prize is not None else 0
+        return max(0, PRIZE_CARDS - len(prize)) if prize is not None else 0
 
     @lazy
     def discard_energy_counts(self) -> dict:
@@ -697,7 +708,7 @@ class MySide(_SideBase):
         #: CARDS (``energyCards``) while :attr:`visible_counts` counts the UNITS those cards provide
         #: (``energies``). The two agree on a Basic Energy and need not in general, and reconciling
         #: them moves :attr:`deck_energy_types` — hence the Attach Budget, hence scoring — which
-        #: POC-T3.5's substrate issue (#279) may not do. **Owed:** one walk, ruled, then this
+        #: POC-T3.5's substrate Issue #279 may not do. **Owed:** one walk, ruled, then this
         #: argument retires in favour of :attr:`unseen_counts`.
         self._deck_known = deck_known
         self.energy_attached = bool(energy_attached)
@@ -1548,7 +1559,8 @@ class StateModel(_Lazily):
         variables (ADR-0083 §4, Issue #213).
 
         **Why the model owns a builder at all**, when the Pilot already had one: ``state_value``
-        takes a StateModel and reads nothing else (ADR-0092 standing ruling), so a context threaded
+        takes a StateModel and reads nothing else (the sole-supplier ruling —
+        `docs/plans/value-system-poc-plan.md` §4-T0, restated on `state_value`), so a context threaded
         down from the Pilot is a second data supplier and is forbidden there. Both suppliers assemble
         through the ONE
         :func:`~common.strategy.damage_context.damage_context`, from the ONE

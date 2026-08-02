@@ -49,6 +49,14 @@ from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
 from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 energy denial)
+
+#: "derive this from the observation" — the DEFAULT sentinel for a `_snapshot` argument whose own
+#: vocabulary already spends None on a meaning. `deck_known=None` is the deck tracker's answer for
+#: *"the prizes are not resolved, so I claim nothing"*, a real value a caller may legitimately pass,
+#: so "unset" needs a distinct marker or the two collapse and an honest no-claim silently re-derives
+#: (POC-T3.5, Issue #279). Deliberately NOT in the scoring-weight table below — it is not a weight.
+_DERIVE = object()
+
 # A shuffle-refresh moves cards in four directions and they are NOT worth the same per card. Pricing
 # them symmetrically is what broke the guard family on the first cut: a per-card credit for cards I
 # DRAW reached +76 and went straight through `hold-wincon-dont-shuffle` (−25),
@@ -229,12 +237,6 @@ _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped En
                            # forces 0.154 < _DENIAL_FORWARD < 0.8.
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
-#: "derive this from the observation" for a `_snapshot` argument whose own vocabulary already spends
-#: None on a meaning. `deck_known=None` is the deck tracker's answer for *"the prizes are not
-#: resolved, so I claim nothing"* — a real value the caller may legitimately pass — so "unset" needs
-#: a distinct sentinel or the two collapse and an honest no-claim silently re-derives (POC-T3.5).
-_DERIVE = object()
-
 _FOLLOWUP_W = 0.5          # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
                            # < 1 because damage THIS turn is certain and next turn's is not (they move in
                            # between) — so at equal two-turn totals the front-loaded nuke wins, which is
@@ -5883,7 +5885,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         **The assembly is no longer here** (POC-T3.5, Issue #279). This method used to BE the
         builder — the only full construction of the context anywhere — and POC-T3.5 needed a second
         one on the StateModel, because ``state_value(model)`` may read nothing but the model
-        (ADR-0092 standing ruling) and so cannot be handed a context threaded down from here. Two
+        (the sole-supplier ruling — `docs/plans/value-system-poc-plan.md` §4-T0, restated on
+        `state_value`) and so cannot be handed a context threaded down from here. Two
         hand-rolled builders of one fact is the exact defect ``CombatMath.card_level_damage`` was
         extracted to end (*"One fact, two hand-rolled call sites, free to drift — and they did"*),
         so the shape moved out rather than being copied: the per-side countables are gathered by
@@ -5949,6 +5952,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         argument `_Lazily._key` makes for its own projection cache. A hypothetical board (a planner
         leaf, a re-scored root) is a different obs and rebuilds; the model's purity contract
         (ADR-0068) is what says the observation does not change under a snapshot.
+
+        **The obs is not the whole key**, and the second half is a sequencing fact rather than a
+        proof: the context also reads `_turn_boosts`, which is match-scoped mutable state. It is
+        safe because `_evaluate` consumes the log stream ONCE, before `_board`, so the tracker
+        cannot move between two reads within a decision — and because a planner leaf runs with
+        `_planning` set, which suppresses `observe` outright (the engine-sim future must never
+        mutate match state). Anything that later observes mid-decision must invalidate here too.
         """
         if self._my_attack_context_obs is not obs:
             self._my_attack_context_obs, self._my_attack_context = obs, self._damage_context(obs)
@@ -6683,12 +6693,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             players = state.get("players") or []
             me = players[mi] if 0 <= mi < len(players) and players[mi] else {}
             raw_prizes = obs.get("own_prizes")
-            # `_board` and `_damage_context` both keep an EMPTY multiset as itself here; this
-            # fallback has always collapsed it to None for `deck_empty`, so the two expressions stay
-            # separate rather than being unified in a substrate issue that may not move scoring.
-            prizes = ({int(k): v for k, v in raw_prizes.items()} if raw_prizes
-                      else raw_prizes if raw_prizes is not None else None)
+            prizes = {int(k): v for k, v in raw_prizes.items()} if raw_prizes else raw_prizes
             if deck_empty is None:
+                # `or None` collapses an EMPTY multiset, which is what this fallback has always
+                # done for `deck_empty` — preserved verbatim rather than unified with the line
+                # below, because changing it would move the sound emptiness oracle and this issue
+                # may not move scoring. `_board` and `_damage_context` both keep `{}` as itself.
                 deck_empty = self._deck_empty_ids(me, prizes or None)
             if deck_known is _DERIVE:
                 deck_known = self._deck_known_counts(me, prizes)

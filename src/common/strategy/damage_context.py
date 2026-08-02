@@ -11,7 +11,8 @@ records and get the context back.
 
 **Why it is a module rather than a method on either supplier.** Before this, the ONE full
 construction lived on the Pilot, and Issue #279's substrate needed a second one on the StateModel
-(``state_value`` may read nothing but the model, ADR-0092). Two hand-rolled builders of one fact is
+(``state_value`` may read nothing but the model — the sole-supplier ruling,
+``docs/plans/value-system-poc-plan.md`` §4-T0). Two hand-rolled builders of one fact is
 precisely the defect ``CombatMath.card_level_damage`` was extracted to end — *"One fact, two
 hand-rolled call sites, free to drift — and they did"* (``strategy/combat.py``) — so the shape is
 pulled out here instead, and ``tests/strategy/test_damage_context.py`` pins the two suppliers
@@ -129,7 +130,12 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
         # exception to "every variable name IS a context key": it reads whichever of these two the
         # attack's own type filter selects (`strategy/damage.py`).
         "atk_discard_energy_total": attacker.discard_energy_total,
-        "atk_discard_basic_by_type": attacker.discard_basic_by_type,
+        # COPIED, not aliased. A supplier's histogram may be its own memoized field — the
+        # StateModel's `discard_energy_counts` is, and it also feeds the Attach Budget — while the
+        # context is handed to arbitrary consumers. `SideFacts` is frozen; a Mapping inside it is
+        # not, so sharing the object would let a context reader corrupt a snapshot field. Small
+        # dicts, and the whole context is memoized per direction, so the copy is paid once.
+        "atk_discard_basic_by_type": dict(attacker.discard_basic_by_type or {}),
         "atk_bench_names": tuple(attacker.bench_names),
         "atk_boosts": tuple(attacker.damage_boosts),
         "atk_self_counters": attacker.active_counters,
@@ -145,7 +151,7 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
     }
     if attacker.deck_count is not None:
         ctx["atk_deck_count"] = attacker.deck_count
-        ctx["atk_deck_basic_by_type"] = attacker.deck_basic_by_type or {}
+        ctx["atk_deck_basic_by_type"] = dict(attacker.deck_basic_by_type or {})
     return ctx
 
 

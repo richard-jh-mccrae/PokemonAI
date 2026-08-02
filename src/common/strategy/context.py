@@ -74,6 +74,18 @@ _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player
 # ── LogType (cg/api.py) ──
 _MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active/Bench placement logs)
 
+# ── the rules' own constants ──
+#: Prize cards each player sets aside at Set Up — 6 (`docs/rulebook.txt` L57: *"Prize cards are 6
+#: cards that each player sets aside, face down, from the top of their own deck while setting up to
+#: play"*, restated at L102 step 7). Read at source, never recalled.
+#:
+#: Public and homed here because TWO packages race down from it and the engine reports only what
+#: REMAINS: `needs`' Opponent Value Equation (prize proximity) and the Damage Formula's
+#: `atk_prizes_taken` / `def_prizes_taken` scalers (`state_model`). It lived as a private constant in
+#: each until POC-T3.5 (Issue #279) — two spellings of one rule, which is the two-readers-of-one-fact
+#: shape ADR-0087 charges for even when both readers happen to agree today.
+PRIZE_CARDS = 6
+
 # ── scoring / classification vocabulary ──
 KO_SCORE = 1000            # a KO option dominates a mere chip
 #: Per-Energy value of a recover rider (Aura Jab: "attach up to N Basic {X} from discard") on a

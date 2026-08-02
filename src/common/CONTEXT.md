@@ -187,7 +187,8 @@ Issue #279): a direction-NEUTRAL `SideFacts` per side — gathered once, by `_Si
 and a `damage_context(attacker, defender)` that is the only place a per-side fact becomes an
 `atk_`/`def_`/`both_` key. Two suppliers call it, `Pilot._damage_context` and
 `StateModel.damage_context(attacker=)`, and a parity test pins them key-for-key on corpus frames;
-the model needs its own because `state_value(model)` may read no second supplier (ADR-0092).
+the model needs its own because `state_value(model)` may read no second supplier (the sole-supplier
+ruling, `docs/plans/value-system-poc-plan.md` §4-T0).
 Damage that scales on **visible** state is
 thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hidden**-state scaler
 (Mega Abomasnow ex's deck-discard) is bounded soundly via the deck tracker (pigeonhole floor) and

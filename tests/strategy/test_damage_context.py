@@ -118,9 +118,14 @@ def test_the_deck_leg_appears_only_when_the_prizes_are_anchored():
 def test_the_key_set_is_exactly_the_shipped_vocabulary():
     """The closed vocabulary, pinned. Every name here is either a `scaleVar` the parser can emit
     (`scouting/card_text.py`), an override-only `scaleVar` (`attack_overrides.json`), or one of the
-    three non-scaler riders the oracle reads off the same dict (`atk_bench_names` for a
-    bench-partner condition, `atk_boosts` for a flat Trainer/Tool boost, the `atk_deck_*` pair for a
-    hidden deck scaler). A key added without a consumer is dead weight; one removed is a silent 0."""
+    non-scaler riders the oracle reads off the same dict (`atk_bench_names` for a bench-partner
+    condition, `atk_boosts` for a flat Trainer/Tool boost, the `atk_deck_*` pair for a hidden deck
+    scaler). A key added without a consumer is dead weight; one removed is a silent 0.
+
+    `hidden_units` is deliberately ABSENT though the oracle reads it (`strategy/damage.py`): it is a
+    caller's direct OVERRIDE of the hidden-scaler count, which this builder answers instead with the
+    deck facts the oracle turns into a pigeonhole floor / hypergeometric mean. Emitting both would
+    be two answers to one question, and the override wins — so the builder must not offer one."""
     assert set(damage_context(_facts(), _facts())) == {
         "atk_hand", "def_hand",
         "atk_active_energy", "def_active_energy", "both_active_energy",
