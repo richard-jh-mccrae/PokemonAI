@@ -36,7 +36,7 @@ def test_deploy_odds_prices_the_playability_verdict_and_defaults_to_keep():
     """The gate is the ARITHMETIC only: a playable evolution keeps full worth, an unplayable one
     collapses to 0 (ep83966336 f44 — a Mega Lucario ex with every Riolu evolved/gone is a dead card,
     so its keep-value collapses and a refresh shuffles it to dig). WHETHER it is playable is
-    `common.playability`'s backward walk (ADR-0103, Issue #288), resolved by the caller: the three
+    `common.playability`'s backward walk (ADR-0104, Issue #288), resolved by the caller: the three
     zone booleans this used to OR together here were only its shallowest correct version, blind to
     the ``evolvesFrom`` chain and to Rare Candy. The default is ``playable=True`` — an unsure caller
     discounts nothing, the same fail-open direction as every other gate in this module."""

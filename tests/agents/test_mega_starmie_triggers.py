@@ -37,7 +37,7 @@ _STATS = DictCardStatProvider({
     CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160,
                         name="Cinderace", evolvesFrom="Raboot"),
     # Raboot is PRINTED but never on the deck list — which is what strands the Cinderace.
-    # "Stranded" is a claim about the DECK; `common.playability` (ADR-0103) fails OPEN on a previous
+    # "Stranded" is a claim about the DECK; `common.playability` (ADR-0104) fails OPEN on a previous
     # stage the pool holds no printing of, because that is unreadable data, not a dead card.
     RABOOT: CardStat(RABOOT, energyType=FIRE, weakness=WATER, hp=90, name="Raboot"),
 })

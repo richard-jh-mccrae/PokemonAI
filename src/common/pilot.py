@@ -3515,7 +3515,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         so computed once; empty without a stats provider (fail-open — no card is called dead
         on unknown facts).
 
-        The DECK-STATIC reading of `common.playability` (ADR-0103): same backward walk, with the
+        The DECK-STATIC reading of `common.playability` (ADR-0104): same backward walk, with the
         whole decklist standing in for the reachable zone and nothing in play. Consolidated onto the
         one oracle by Issue #288 — this used to carry a private copy of the recursion, and the copy
         had no Rare Candy escape, so a deck running Rare Candy but no Stage 1 would have had its
@@ -4009,7 +4009,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         slots: list = []
         elig: list = [set() for _ in rows]
 
-        # The PLAYABILITY gate (ADR-0103, Issue #288 — the audit's F12): a card that can NEVER be
+        # The PLAYABILITY gate (ADR-0104, Issue #288 — the audit's F12): a card that can NEVER be
         # played covers NOTHING. Applied to the ELIGIBILITY construction rather than to any one
         # slot's value, which is the whole point — the shipped `deploy` factor already zeroes the
         # slots keyed on the card ITSELF (`line`, `general`), but left the row eligible for every
@@ -4345,7 +4345,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return zones
 
     def _unplayable_rows(self, obs: dict, board: Board, rows: list) -> frozenset:
-        """Row indices whose card can NEVER be played (ADR-0103). The `_resolve_needs` gate.
+        """Row indices whose card can NEVER be played (ADR-0104). The `_resolve_needs` gate.
 
         Fails OPEN as a whole without a stat provider: with no card facts there is no evidence, and a
         gate that strips eligibility on missing evidence would shed live cards — the fail direction

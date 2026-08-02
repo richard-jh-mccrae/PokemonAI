@@ -412,7 +412,7 @@ def test_stranded_chain_check_walks_the_full_previous_stage_chain():
         RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),
         SCORBUNNY: CardStat(SCORBUNNY, name="Scorbunny", hp=60),   # POOL only — OFF the deck list,
         #   which is what strands the chain. Printing it keeps the test on its own subject: a pool
-        #   with no Scorbunny at all is UNREADABLE data, which ADR-0103 fails open on by design.
+        #   with no Scorbunny at all is UNREADABLE data, which ADR-0104 fails open on by design.
         BASIC: CardStat(BASIC, hp=70)})
     funcs = CardFunctions({OPENER: ["opener"]})
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
@@ -656,7 +656,7 @@ def _recycle_pilot(deck):
         NIGHTS: CardStat(NIGHTS, hp=0),
         STRANDED: CardStat(STRANDED, name="Cinderace", hp=160, evolvesFrom="Raboot"),
         RABOOT_POOL: CardStat(RABOOT_POOL, name="Raboot", hp=90),   # in the POOL, never on the deck
-        #   list. "Stranded" is a claim about the DECK; `common.playability` (ADR-0103) fails OPEN on
+        #   list. "Stranded" is a claim about the DECK; `common.playability` (ADR-0104) fails OPEN on
         #   a previous stage with no printing at all, because that is unreadable data, not a dead card.
         LIVEMON: CardStat(LIVEMON, name="Staryu", hp=70),
         WENERGY: CardStat(WENERGY, name="Basic {W} Energy", hp=0, energyType=3),

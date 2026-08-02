@@ -1,5 +1,5 @@
 """Backward line topology — a hand card that can NEVER be played must cover no slot (Issue #288,
-ADR-0103; the term-sufficiency audit's F12).
+ADR-0104; the term-sufficiency audit's F12).
 
 `development.line_topology` asks the FORWARD question (is this line's payoff still reachable?).
 Nothing asked the mirror one: is this hand card's own PRE-EVOLUTION still reachable? Without it the

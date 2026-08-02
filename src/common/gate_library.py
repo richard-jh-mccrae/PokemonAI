@@ -11,7 +11,7 @@ Stage 1 is the **evolution gate**: an evolution card realises its role only by b
 base. If nothing it can be put onto can reach the board, the card is dead — its keep-value
 collapses, so a refresh / gamble sheds it freely to dig, instead of hoarding it (ep83966336 f44, the
 retired ``hold-wincon-dont-shuffle`` ``wincon_in_hand_undeployable`` stand-down, now graded). WHETHER
-it can is `common.playability`'s question (ADR-0103), resolved by the caller and passed in as one
+it can is `common.playability`'s question (ADR-0104), resolved by the caller and passed in as one
 boolean; this module only prices the answer.
 
 The **fetcher gate** (`fetch_deploy_odds`) is the searcher/recycler leg (scope doc stage 3, pulled

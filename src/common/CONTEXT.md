@@ -444,13 +444,13 @@ seam this composes), combat module (bare)
 **Card-Worth Oracle** (ADR-0065):
 The ONE closed-form home for card keep/shed valuation — every equation is `value = Worth × Odds`.
 Six modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
-for the five; the sixth, **Playability**, is ADR-0103's and has no glossary term of its own):
+for the five; the sixth, **Playability**, is ADR-0104's and has no glossary term of its own):
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
 probability), **Odds** ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
 ([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
 factor, the closing-edge spike, the quota window; all four legs built — evolution, fetcher,
-pressure, quota. Since ADR-0103 it prices the evolution leg's answer and no longer derives it),
+pressure, quota. Since ADR-0104 it prices the evolution leg's answer and no longer derives it),
 **Playability** ([playability.py](playability.py) — CAN a held card ever reach the board: BACKWARD
 line topology, the `evolvesFrom` chain walked against play / hand / the sound unseen-deck read, with
 the Rare Candy escape and fail-open epistemics. The one oracle behind both the `deploy_odds`

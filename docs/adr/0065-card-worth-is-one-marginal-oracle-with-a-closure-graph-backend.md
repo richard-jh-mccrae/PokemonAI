@@ -391,7 +391,7 @@ already converged; its residue rides with the gate library.
   `common/gate_library.py` owns the odds; `planner._deploy_odds` resolves base presence (the evolution
   gate: a bare base by `evolvesFrom` name in play / hand / the deck counts). An undeployable evolution
   (base gone from every zone) collapses to `deploy_odds = 0` → shed freely; everything else stays 1.0.
-  **Amended 2026-08-02 by [ADR-0103](0103-a-hand-card-that-can-never-be-played-covers-no-slot.md)
+  **Amended 2026-08-02 by [ADR-0104](0104-a-hand-card-that-can-never-be-played-covers-no-slot.md)
   (Issue #288):** the parenthesis above is no longer how the evolution gate resolves. That one-hop
   comparison is superseded by `common.playability`'s backward CHAIN walk with the Rare Candy escape,
   and `gate_library.deploy_odds` now takes the resolved `playable` boolean rather than three zone

@@ -498,7 +498,7 @@ That this is the deck Issue #149 nominates as the validation case is not a coinc
 (`unseen_counts`) the rest of the snapshot already uses. Feed it into the `needs` resolution as a
 playability gate so the card covers no slot.
 
-> **Corrected 2026-08-02 by the build (Issue #288, ADR-0103).** Two halves of that line were wrong,
+> **Corrected 2026-08-02 by the build (Issue #288, ADR-0104).** Two halves of that line were wrong,
 > and both were found by measuring rather than reading.
 >
 > * *"`CardStat.evolvesFrom` resolved against three zones"* is ONE HOP, and one hop is not the

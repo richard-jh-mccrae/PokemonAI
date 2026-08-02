@@ -1,4 +1,4 @@
-# ADR-0103 — A hand card that can never be played covers no slot: backward line topology is one oracle
+# ADR-0104 — A hand card that can never be played covers no slot: backward line topology is one oracle
 
 **Status:** Accepted (built 2026-08-02, `/implement` on
 [Issue #288](https://github.com/richard-jh-mccrae/PokemonAI/issues/288), T3.5/10 of the Value System

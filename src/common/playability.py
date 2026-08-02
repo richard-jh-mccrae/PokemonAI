@@ -1,5 +1,5 @@
 """Playability — BACKWARD line topology: can a card held in hand ever reach the board at all?
-(ADR-0103, Issue #288; the term-sufficiency audit's finding F12.)
+(ADR-0104, Issue #288; the term-sufficiency audit's finding F12.)
 
 `development.line_topology` asks the FORWARD question — is this line's payoff still reachable? This
 module is its mirror, and until Issue #288 nothing asked it: an Evolution card realises nothing at

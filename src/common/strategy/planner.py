@@ -2119,7 +2119,7 @@ class PlannerMixin:
         the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega Lucario ex with every
         Riolu evolved/gone).
 
-        That question is `common.playability`'s (ADR-0103), not this method's, and Issue #288 is why:
+        That question is `common.playability`'s (ADR-0104), not this method's, and Issue #288 is why:
         the version inlined here compared ONE ``evolvesFrom`` name against the three zones, which
         gets two cases wrong. It called a Metagross live because a Metang sat in hand with every
         Beldum gone (the chain), and it called `grimmsnarl_ex`'s win condition DEAD whenever its
@@ -2893,7 +2893,7 @@ class PlannerMixin:
         HONEST NOTE (updated 2026-08-02, Issue #288): this was recorded as INERT because none of the then-3
         agent decks ran Rare Candy or a Basic→Stage-1→Stage-2 line. **`grimmsnarl_ex` runs both** — 1 Rare
         Candy and Marnie's Impidimp → Morgrem → Grimmsnarl ex — so the branch is live for that deck, and the
-        same pair is what forces the Rare Candy escape in `common.playability` (ADR-0103 decision 3). The
+        same pair is what forces the Rare Candy escape in `common.playability` (ADR-0104 decision 3). The
         other three decks are still inert. None when no composite reaches a KO."""
         if board.turn <= 1:
             return None                                   # Rare Candy is illegal on your first turn
