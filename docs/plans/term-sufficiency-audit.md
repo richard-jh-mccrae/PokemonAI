@@ -498,6 +498,23 @@ That this is the deck Issue #149 nominates as the validation case is not a coinc
 (`unseen_counts`) the rest of the snapshot already uses. Feed it into the `needs` resolution as a
 playability gate so the card covers no slot.
 
+> **Corrected 2026-08-02 by the build (Issue #288, ADR-0103).** Two halves of that line were wrong,
+> and both were found by measuring rather than reading.
+>
+> * *"`CardStat.evolvesFrom` resolved against three zones"* is ONE HOP, and one hop is not the
+>   question. A Metang in hand does not make a Metagross playable when every Beldum is gone. The walk
+>   is the whole chain, grounding out on a body already in play or on a Basic.
+> * It omits **Rare Candy** (*"...put that card onto the Basic Pokémon to evolve it, skipping the
+>   Stage 1"*, card text id 1079), so a gate built to the line as written would have called
+>   `grimmsnarl_ex`'s win condition dead with the enabler sitting in hand — a false positive worse
+>   than the finding.
+>
+> The finding's own EXPOSURE claim also understated the defect. It is not only that a dead card is
+> *priced* as coverage: on `grimmsnarl_ex` a stranded Froslass **covered** the `draw_engine` slot, so
+> the live draw Supporter beside it priced at 0 and shed for free, **and** raised that slot's band
+> from 8 to 12, because the band reads off its eligible rows. The shipped `deploy` factor could reach
+> neither — it prices a card, and this is about which rows are candidates.
+
 **Ruled?** **New.** `development.line_topology` is the forward half and is implemented;
 `hand.blind_to` names hand SIZE and information ordering, neither of which is playability.
 

@@ -32,22 +32,18 @@ def test_deploy_odds_is_one_for_a_non_evolution():
 
 
 @pytest.mark.req("REQ-GATE-0001")
-def test_deploy_odds_is_one_when_the_base_is_reachable_anywhere():
-    """A held evolution is deployable — worth keeping — when its base is on board, in hand, or still
-    reachable in the deck. Any one of the three suffices."""
+def test_deploy_odds_prices_the_playability_verdict_and_defaults_to_keep():
+    """The gate is the ARITHMETIC only: a playable evolution keeps full worth, an unplayable one
+    collapses to 0 (ep83966336 f44 — a Mega Lucario ex with every Riolu evolved/gone is a dead card,
+    so its keep-value collapses and a refresh shuffles it to dig). WHETHER it is playable is
+    `common.playability`'s backward walk (ADR-0103, Issue #288), resolved by the caller: the three
+    zone booleans this used to OR together here were only its shallowest correct version, blind to
+    the ``evolvesFrom`` chain and to Rare Candy. The default is ``playable=True`` — an unsure caller
+    discounts nothing, the same fail-open direction as every other gate in this module."""
     mega = _Stat(evolvesFrom="Riolu", name="Mega Lucario ex")
-    assert gate_library.deploy_odds(mega, base_in_play=True) == 1.0
-    assert gate_library.deploy_odds(mega, base_in_hand=True) == 1.0
-    assert gate_library.deploy_odds(mega, base_reachable_in_deck=True) == 1.0
-
-
-@pytest.mark.req("REQ-GATE-0001")
-def test_deploy_odds_is_zero_when_the_base_is_provably_gone():
-    """The undeployable case (ep83966336 f44): a Mega Lucario ex with NO Riolu in play, hand, OR deck is
-    a dead card — its role can never be realised, so its keep-value collapses (shuffle it to dig)."""
-    mega = _Stat(evolvesFrom="Riolu", name="Mega Lucario ex")
-    assert gate_library.deploy_odds(mega, base_in_play=False, base_in_hand=False,
-                                    base_reachable_in_deck=False) == 0.0
+    assert gate_library.deploy_odds(mega, playable=True) == 1.0
+    assert gate_library.deploy_odds(mega) == 1.0
+    assert gate_library.deploy_odds(mega, playable=False) == 0.0
 
 
 @pytest.mark.req("REQ-GATE-0005")

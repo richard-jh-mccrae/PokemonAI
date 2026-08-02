@@ -3513,23 +3513,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Basic using only cards on the deck list — e.g. a Stage-2 Explosiveness opener with no
         Stage 1 in the deck (Cinderace without Raboot): in hand it is a dead card. Deck-static,
         so computed once; empty without a stats provider (fail-open — no card is called dead
-        on unknown facts)."""
+        on unknown facts).
+
+        The DECK-STATIC reading of `common.playability` (ADR-0103): same backward walk, with the
+        whole decklist standing in for the reachable zone and nothing in play. Consolidated onto the
+        one oracle by Issue #288 — this used to carry a private copy of the recursion, and the copy
+        had no Rare Candy escape, so a deck running Rare Candy but no Stage 1 would have had its
+        Stage 2 called permanently dead. That fix is provably silent on all four shipped decks (none
+        holds both), which is exactly why the duplicate could survive."""
         cached = getattr(self, "_stranded_cache", None)
         if cached is not None:
             return cached
-        stats = {cid: self.stats.get(cid) for cid in set(self.deck)} if self.stats else {}
-        by_name = {st.name: st for st in stats.values() if st and st.name}
-
-        def deployable(st, seen=()) -> bool:
-            if st is None or not st.evolvesFrom:      # unknown facts fail-open; a Basic grounds out
-                return True
-            if st.evolvesFrom in seen:                # a name cycle can't ground out in a Basic
-                return False
-            prev = by_name.get(st.evolvesFrom)
-            return prev is not None and deployable(prev, (*seen, st.evolvesFrom))
-
+        if not self.stats:
+            self._stranded_cache = frozenset()     # no facts, no card called dead
+            return self._stranded_cache
+        from common import playability
+        deck_ids = set(self.deck or ())
+        candy = any(playability.RARE_CANDY_TAG in set(self.functions.tags(cid))
+                    for cid in deck_ids) if self.functions else False
+        zones = playability.zones(self.stats, deck_ids=deck_ids, rare_candy_reachable=candy)
         self._stranded_cache = frozenset(
-            cid for cid, st in stats.items() if st and st.evolvesFrom and not deployable(st))
+            cid for cid in deck_ids
+            if (st := self.stats.get(cid)) is not None and st.evolvesFrom
+            and not playability.playable_from_hand(cid, stats=self.stats, zones=zones))
         return self._stranded_cache
 
     # `_rider_snipe` / `_rider_spread` / `_rider_recoil` were DELETED by POC-T1 (Issue #260) and
@@ -3801,11 +3807,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         from collections import Counter
         hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
         held = Counter(hand_ids)
-        counts = board.deck_known_counts
-        if not counts:
-            unseen = Counter(self.deck)
-            unseen.subtract(self._visible_card_counts(me))
-            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        counts = self._unseen_deck_counts(me, board)
         from common import fetch_closure
         def _recyclers(stat):
             in_hand = in_deck = 0
@@ -4008,11 +4010,36 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         slots: list = []
         elig: list = [set() for _ in rows]
 
+        # The PLAYABILITY gate (ADR-0103, Issue #288 — the audit's F12): a card that can NEVER be
+        # played covers NOTHING. Applied to the ELIGIBILITY construction rather than to any one
+        # slot's value, which is the whole point — the shipped `deploy` factor already zeroes the
+        # slots keyed on the card ITSELF (`line`, `general`), but left the row eligible for every
+        # SHARED slot, so a stranded Froslass both covered `grimmsnarl_ex`'s draw need (the real
+        # Supporter beside it priced 0 and shed for free) and RAISED that slot's band to the
+        # engine-BODY tier, because the band reads off its eligible rows. `deploy` is also the wrong
+        # predicate to reuse: it folds in the fetcher and need-met gates, whose cards are perfectly
+        # playable and must keep supplying. Deriving it here rather than off the rows keeps the ONE
+        # resolver answering for every caller — including `_deploy_decision`, whose DECK rows carry
+        # no hand zone at all.
+        unplayable = self._unplayable_rows(obs, board, rows)
+
         def _emit(slot, members) -> None:
+            live = [m for m in members if m not in unplayable]
+            if not live:
+                return                             # a need only its dead cards could fill is no need
             j = len(slots)
             slots.append(slot)
-            for m in members:
+            for m in live:
                 elig[m].add(j)
+
+        def _live(ks) -> list:
+            """The candidate rows of a leg, minus the unplayable ones. Applied to EVERY leg's
+            candidate list rather than only to `_emit`, because two legs read their SLOT VALUE off
+            the candidates: `draw_engine`'s band is the engine-BODY tier if any candidate is an
+            engine body, and the general-worth suppression set is keyed off the same list. Filtering
+            only at emission would have left a dead Froslass pricing `grimmsnarl_ex`'s draw need at
+            12 instead of the engine-supporter band 8."""
+            return [k for k in ks if k not in unplayable]
 
         def _tags(cid) -> set:
             return set(self.functions.tags(cid)) if (self.functions and cid is not None) else set()
@@ -4067,10 +4094,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     _emit(s, members)
             if cid in getattr(board, "deploy_now_ids", frozenset()):
                 _emit(needs.deploy_now_slot(f"deploy:{cid}", value=self._role_value(cid)), members)
-        tutors = [k for k, r in enumerate(rows)
-                  if r.get("deploy", 1.0) > 0
-                  and ("tutor" in self._roles_of(r["cid"])
-                       or ({"rush_evolve", "tutor_mega"} & _tags(r["cid"])))]
+        tutors = _live([k for k, r in enumerate(rows)
+                        if r.get("deploy", 1.0) > 0
+                        and ("tutor" in self._roles_of(r["cid"])
+                             or ({"rush_evolve", "tutor_mega"} & _tags(r["cid"])))])
         supply = needs.supply_wincon_slot(
             wincon_in_hand=bool(getattr(board, "wincon_in_hand", False)), target_reachable=True)
         if supply is not None and tutors:
@@ -4083,7 +4110,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             and (_ENGINE_KEEP_TAGS & _tags(cid))
                             and "hand_disruption" not in _tags(cid)))
 
-        engines = [k for k, r in enumerate(rows) if _engine(r["cid"])]
+        engines = _live([k for k, r in enumerate(rows) if _engine(r["cid"])])
         if engines:
             online = sum(1 for pid in board.in_play_ids if "engine" in self._roles_of(pid))
             # The band reads off the eligible suppliers: an engine BODY need is the engine-role
@@ -4098,9 +4125,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             ast = self.stats.get(active.get("id")) if self.stats else None
             remaining = max(0, (getattr(ast, "maxDamageCost", 0) or 0)
                             - len(active.get("energies") or []))
-            funders = [k for k, r in enumerate(rows)
-                       if getattr(self.stats.get(r["cid"]) if self.stats else None,
-                                  "is_basic_energy", False) or "discard_eot" in _tags(r["cid"])]
+            funders = _live([k for k, r in enumerate(rows)
+                             if getattr(self.stats.get(r["cid"]) if self.stats else None,
+                                        "is_basic_energy", False)
+                             or "discard_eot" in _tags(r["cid"])])
             if remaining and funders:
                 for s in needs.fund_attack_slots("active", remaining,
                                                  quota_spent=bool(board.energy_attached)):
@@ -4113,7 +4141,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # and is not worth a card to save. NOT the flat clutch_heal tier, NOT the swap's catalog
             # worth. No slot when the active is worthless (`_role_value` 0 → `answer_doom_slot`
             # emits value 0, priced out by the assignment).
-            answers = [k for k, r in enumerate(rows) if {"clutch_heal", "switch"} & _tags(r["cid"])]
+            answers = _live([k for k, r in enumerate(rows)
+                             if {"clutch_heal", "switch"} & _tags(r["cid"])])
             preserved = self._role_value(active.get("id")) if active is not None else 0.0
             if answers and preserved > 0:
                 _emit(needs.answer_doom_slot(value=preserved), answers)
@@ -4144,7 +4173,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         gust_tags = {src for src, kinds in needs.SUPPLIES.items() if "gust_target" in kinds}
         if self.gust_target_slots:
             deny_tags = deny_tags - gust_tags
-        deniers = [k for k, r in enumerate(rows) if deny_tags & _tags(r["cid"])]
+        deniers = _live([k for k, r in enumerate(rows) if deny_tags & _tags(r["cid"])])
         deny_tier = TAG_TIER["gust"]
         # ARMED (ADR-0080, Issue #187): the keep price stops being the FLAT disruption tier and becomes
         # `tier x relevance(this body)` — a Hammer is worth keeping in proportion to how much the
@@ -4185,7 +4214,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # opponent's Active is never a legal gust target, so it never opens a slot here (unlike deny,
         # which strips Energy off either area).
         if self.gust_target_slots:
-            gusters = [k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])]
+            gusters = _live([k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])])
             if gusters:
                 # ONE ladder, `_deny_rows` — this used to open-code the cache-or-compute walk, a
                 # second spelling of the same three lines. Issue #228 extracted
@@ -4199,7 +4228,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         _emit(needs.gust_target_slot(
                             f"gust_target:{r['area']}{r['bi']}:{r['id']}", value=r["value"]),
                             gusters)
-        fuels = [k for k, r in enumerate(rows) if r.get("fuel")]
+        fuels = _live([k for k, r in enumerate(rows) if r.get("fuel")])
         if fuels:
             _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
         # GENERAL-WORTH slots (WP-N5): a held card with role worth that fills no SPECIFIC need still
@@ -4250,6 +4279,76 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 _emit(needs.general_worth_slot(f"general:{cid}",
                                                value=worth * deploy * _GENERAL_WORTH_W * liq), live)
         return slots, elig
+
+    def _unseen_deck_counts(self, me: dict, board: Board) -> dict:
+        """My deck as *"not provably gone"* counts: the match tracker's EXACT per-card remainder
+        (`Board.deck_known_counts`) once it has anchored, else the decklist minus everything visible
+        (`_visible_card_counts` — in play, hand, discard; face-down prizes stay counted, which is
+        what keeps the read SOUND rather than merely observed).
+
+        One spelling for what was three identical five-line walks — `_discard_equation_rows`,
+        `_needs_hand_rows` and `_deploy_supplier_rows` each carried their own copy, and the
+        playability gate (Issue #288) would have made it four. Every deck-availability question in
+        the keep-value family therefore answers off the same counts by construction."""
+        counts = board.deck_known_counts
+        if counts:
+            return counts
+        from collections import Counter
+        unseen = Counter(self.deck)
+        unseen.subtract(self._visible_card_counts(me))
+        return {cid: n for cid, n in unseen.items() if n > 0}
+
+    def _playability_zones(self, board: Board, counts: dict):
+        """The zone reads `common.playability` walks: what is IN PLAY (the walk grounds out there),
+        what is REACHABLE (my hand plus the sound ``counts`` deck read), and whether a Rare Candy is
+        reachable at all (its Stage-2 escape).
+
+        Rare Candy is found by its `rare_candy` Function Tag rather than by card id — ADR-0006's
+        rule, and the reason `planner._is_rare_candy` now reads the same tag instead of a private
+        constant. With no tag table the escape never fires; that is the only fail-CLOSED step in the
+        chain, and it is contained by `_unplayable_rows` refusing to run at all in that case.
+
+        Memoised for the decision on the IDENTITY of its two inputs: `_deploy_odds` asks per ROW, so
+        a ten-card hand rebuilt these frozensets ten times over the same board. The cache holds
+        strong references to ``board`` and ``counts`` rather than their ``id()``s deliberately — an
+        id-keyed cache is a use-after-free waiting to happen, since CPython reuses the address of a
+        collected object and the next dict built there would silently read the old answer."""
+        from common import playability
+        cached = getattr(self, "_playability_zone_cache", None)
+        if cached is not None and cached[0] is board and cached[1] is counts:
+            return cached[2]
+        hand_ids = frozenset(getattr(board, "hand_ids", None) or ())
+        deck_ids = frozenset(cid for cid, n in (counts or {}).items() if n > 0)
+        candy = any(playability.RARE_CANDY_TAG in set(self.functions.tags(cid))
+                    for cid in (hand_ids | deck_ids)) if self.functions else False
+        zones = playability.zones(self.stats, hand_ids=hand_ids, deck_ids=deck_ids,
+                                  in_play_ids=getattr(board, "in_play_ids", None) or (),
+                                  rare_candy_reachable=candy)
+        self._playability_zone_cache = (board, counts, zones)
+        return zones
+
+    def _unplayable_rows(self, obs: dict, board: Board, rows: list) -> frozenset:
+        """Row indices whose card can NEVER be played (ADR-0103). The `_resolve_needs` gate.
+
+        Fails OPEN as a whole, not just per card: without a stat provider or a Function Tag table
+        there is no evidence, and a gate that strips eligibility on missing evidence would shed live
+        cards — the fail direction the whole keep-value family forbids. Deck-availability comes from
+        the ONE `_unseen_deck_counts` read, so the gate cannot disagree with the `deploy` factor,
+        which resolves the same oracle over the same counts."""
+        if not (self.stats and self.functions) or not rows:
+            return frozenset()
+        from common import playability
+        counts = self._unseen_deck_counts(self._my_player(obs), board)
+        zones = self._playability_zones(board, counts)
+        verdict: dict = {}
+        dead = set()
+        for k, r in enumerate(rows):
+            cid = r.get("cid")
+            if cid not in verdict:
+                verdict[cid] = playability.playable_from_hand(cid, stats=self.stats, zones=zones)
+            if not verdict[cid]:
+                dead.add(k)
+        return frozenset(dead)
 
     def _heal_insures_the_last_wincon(self, cid, me: dict) -> bool:
         """Is held card ``cid`` the heal keeping my LAST win-condition alive? — the user's wave-2
@@ -4307,17 +4406,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `_hand_keep`), carrying the fields `_resolve_needs` reads (``cid``, ``deploy`` — the v1 gate
         factor v2 consumes — and ``fuel``) plus ``worth`` for display. The refresh analog of
         `_discard_equation_rows`' per-card facts, over the hand instead of the discard options."""
-        from collections import Counter
         me = self._my_player(obs)
         hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
         ids = list(hand_ids)
         if exclude_cid in ids:
             ids.remove(exclude_cid)
-        counts = board.deck_known_counts
-        if not counts:
-            unseen = Counter(self.deck)
-            unseen.subtract(self._visible_card_counts(me))
-            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        counts = self._unseen_deck_counts(me, board)
         fuel_types = self._discard_fuel_types()
         rows = []
         for k, cid in enumerate(ids):
@@ -5027,13 +5121,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         it and the Bench — it belongs on the ready side with the hand, and its copy is removed from
         the deck counts so the same physical card cannot also re-supply the slot it is about to
         fill (which would discount it against itself)."""
-        from collections import Counter
         me = self._my_player(obs)
-        counts = board.deck_known_counts
-        if not counts:
-            unseen = Counter(self.deck)
-            unseen.subtract(self._visible_card_counts(me))
-            counts = {cid: n for cid, n in unseen.items() if n > 0}
+        counts = self._unseen_deck_counts(me, board)
 
         offered = [cid for cid in offered if self._is_body_card(cid)]
         if offered:

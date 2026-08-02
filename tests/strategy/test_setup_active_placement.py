@@ -41,7 +41,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.cards import CardFunctions  # noqa: E402
 from common.pilot import Pilot  # noqa: E402
-from common.scouting.provider import CardStat  # noqa: E402
+from common.scouting.provider import CardStat, DictCardStatProvider  # noqa: E402
 from common.strategy import Strategy  # noqa: E402
 from common.strategy.context import _SETUP_ACTIVE  # noqa: E402
 from common.strategy.general_strategy import GENERAL_STRATEGY  # noqa: E402
@@ -165,8 +165,8 @@ def test_a_declared_multiprize_starter_is_not_demoted():
     """The `_WINCON_ROLES` escape the old guard needed is now structural: a deck that MEANS to open a
     multi-prize body just ranks it first, and nothing subtracts from that. This is the case the
     grill's rejected 1..N rank scale got wrong (5 − 15 = −10, losing to an unranked Basic)."""
-    stats = {MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", hp=170, ex=True),
-             RIOLU: CardStat(RIOLU, name="Riolu", hp=80)}
+    stats = DictCardStatProvider({MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", hp=170, ex=True),
+                                  RIOLU: CardStat(RIOLU, name="Riolu", hp=80)})
     pilot = Pilot(Strategy(starter_priority=[MEOWTH_EX, RIOLU]), deck=[1] * 60,
                   general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}))
     assert pilot.decide(_setup_active_obs([MEOWTH_EX, RIOLU])) == [0]
@@ -208,7 +208,8 @@ def test_an_undeclared_deck_is_untouched():
     """Deck-keyed opt-in (ADR-0034): with no declaration the rule is silent and scores nothing, so a
     pre-doctrine agent behaves exactly as it would with the rule absent. This is what makes the
     completeness invariant below load-bearing rather than decorative."""
-    stats = {RIOLU: CardStat(RIOLU, name="Riolu", hp=80), STARYU: CardStat(STARYU, name="Staryu", hp=70)}
+    stats = DictCardStatProvider({RIOLU: CardStat(RIOLU, name="Riolu", hp=80),
+                                  STARYU: CardStat(STARYU, name="Staryu", hp=70)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=CardFunctions({}))
     trace = pilot.explain(_setup_active_obs([RIOLU, STARYU]))
@@ -325,14 +326,14 @@ def test_the_setup_only_body_still_opens_against_a_large_in_line_payoff():
 _OPENER, _BASE, _PAYOFF, _PRE = 9001, 9002, 9003, 9004
 _RIVAL, _WINCON = 9005, 9006
 
-_SYNTH_STATS = {
+_SYNTH_STATS = DictCardStatProvider({
     _OPENER: CardStat(_OPENER, name="Opener", hp=160, evolvesFrom="Pre", maxDamage=50),
     _BASE:   CardStat(_BASE, name="Base", hp=70, maxDamage=20),
     _PAYOFF: CardStat(_PAYOFF, name="Payoff", hp=210, evolvesFrom="Base", maxDamage=210),
     _PRE:    CardStat(_PRE, name="Pre", hp=90, maxDamage=30),
     _RIVAL:  CardStat(_RIVAL, name="Rival", hp=80, maxDamage=20),
     _WINCON: CardStat(_WINCON, name="Wincon", hp=300, evolvesFrom="Rival", maxDamage=250),
-}
+})
 
 
 _UNSET = object()

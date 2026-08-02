@@ -406,10 +406,13 @@ def test_dont_fetch_the_setup_only_opener_requires_the_stranded_evolution_chain(
 @pytest.mark.req("REQ-GEN-0061")
 def test_stranded_chain_check_walks_the_full_previous_stage_chain():
     """Chain reachability is FULL-depth: Stage 1 present but ITS Basic missing -> still stranded."""
-    OPENER, RABOOT = 666, 667
+    OPENER, RABOOT, SCORBUNNY = 666, 667, 668
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
-        RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),  # own base missing
+        RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),
+        SCORBUNNY: CardStat(SCORBUNNY, name="Scorbunny", hp=60),   # POOL only — OFF the deck list,
+        #   which is what strands the chain. Printing it keeps the test on its own subject: a pool
+        #   with no Scorbunny at all is UNREADABLE data, which ADR-0103 fails open on by design.
         BASIC: CardStat(BASIC, hp=70)})
     funcs = CardFunctions({OPENER: ["opener"]})
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
@@ -512,6 +515,7 @@ def test_fetch_the_support_never_endorses_a_stranded_support():
     OPENER, LIVEMON, PLAINMON = 666, 868, 869
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
+        667: CardStat(667, name="Raboot", hp=90),                    # POOL only — never on the list
         LIVEMON: CardStat(LIVEMON, name="Livemon", hp=90),           # a Basic support
         PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=80)})       # non-engine Active
     funcs = CardFunctions({OPENER: ["opener", "energy_accel"], LIVEMON: ["energy_accel"]})
@@ -642,6 +646,7 @@ def test_junk_boost_is_gated_on_a_real_need():
 # --- dont-recycle-the-dead: a discard-recycler with only dead targets is a wasted card -----------
 NIGHTS = 1097          # Night Stretcher-like recycler (Function Tag `recycle`)
 STRANDED = 666         # a Stage-2 setup-only opener (Cinderace): hand-unplayable in this deck
+RABOOT_POOL = 667      # its previous stage — printed in the pool, absent from the deck list
 LIVEMON = 764          # a Basic Pokémon: always a live recycle target
 WENERGY = 3            # a Basic {W} Energy: never dead
 
@@ -650,6 +655,9 @@ def _recycle_pilot(deck):
     stats = DictCardStatProvider({
         NIGHTS: CardStat(NIGHTS, hp=0),
         STRANDED: CardStat(STRANDED, name="Cinderace", hp=160, evolvesFrom="Raboot"),
+        RABOOT_POOL: CardStat(RABOOT_POOL, name="Raboot", hp=90),   # in the POOL, never on the deck
+        #   list. "Stranded" is a claim about the DECK; `common.playability` (ADR-0103) fails OPEN on
+        #   a previous stage with no printing at all, because that is unreadable data, not a dead card.
         LIVEMON: CardStat(LIVEMON, name="Staryu", hp=70),
         WENERGY: CardStat(WENERGY, name="Basic {W} Energy", hp=0, energyType=3),
     })

@@ -19,6 +19,7 @@ import types
 from common.cards import CardFunctions as _CardFunctions
 from common.effects import CardEffects as _CardEffects
 from common.pilot import Board, Context, Pilot
+from common.playability import RARE_CANDY_TAG
 from common.runtime import PROFILE
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Plan, Strategy
@@ -26,7 +27,7 @@ from common.strategy.baseline import SEQUENCING_HYPOTHESES
 from common.strategy.context import KO_SCORE, _ATTACH, _PLAY
 from common.strategy.planner import (_PLANNER_DECKOUT_TURNS, _PLANNER_DECKOUT_W,
                                      _PLANNER_ENABLER_FREE, _PLANNER_ENABLER_ITEM_BASE,
-                                     _PLANNER_ENABLER_ITEM_SLOT, _RARE_CANDY_ID)
+                                     _PLANNER_ENABLER_ITEM_SLOT)
 from pilot_helpers import PLAY, make_select, opt, poke, state
 
 _NEW_FLAGS = ("ko_target_whiff", "opp_resource_reads", "enabler_item_composer")
@@ -309,6 +310,8 @@ def test_energy_chain_line_appears_only_with_the_flag_on():
 # the branch is inert for them — forward-looking generality, exercised only here.
 
 _RC_BASIC, _RC_MID, _RC_TOP, _RC_AID = 210, 211, 212, 9903
+_RARE_CANDY_ID = 1079        # Rare Candy (Item, SVI 191), carried locally now that the planner
+                             # matches it by its `rare_candy` Function Tag rather than by id
 
 
 def _rare_candy_pilot():
@@ -319,7 +322,7 @@ def _rare_candy_pilot():
                           evolvesFrom="RcMid", attacks=(_RC_AID,)),                 # the in-hand Stage-2
         _RARE_CANDY_ID: CardStat(cardId=_RARE_CANDY_ID, cardType=1),               # Rare Candy (Item)
     }, {_RC_AID: AttackStat(attackId=_RC_AID, damage=200, cost=1, damageMax=200)})  # 1-Energy 200-dmg KO
-    fns = _CardFunctions({_RARE_CANDY_ID: []})                                     # Rare Candy: no tag today
+    fns = _CardFunctions({_RARE_CANDY_ID: [RARE_CANDY_TAG]})                       # the tag the planner reads
     return _deck_pilot([_RARE_CANDY_ID, _RC_TOP, _RC_BASIC, _RC_MID], stats=stats, functions=fns,
                   enabler_item_composer=True)
 
