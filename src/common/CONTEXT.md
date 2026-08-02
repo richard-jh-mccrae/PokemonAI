@@ -874,14 +874,49 @@ prize-denominated marginal uses to enter a damage-scale score, so its home moves
 `promote_retreat_value.py` (one consumer) into a shared one (four); the CSV-recomputing test moves
 with it, since falsifiability is the point rather than an incidental.
 
+**Hold Price**:
+What SPENDING a held card costs, in the damage currency — the term every **free-Item decider**
+subtracts so it can reach a negative score and DECLINE (`common/hold_value.py`,
+`Pilot._item_hold_price`; Issue #261 item 2f, generalizing ADR-0062's deleted `_DENIAL_ITEM_COST`).
+`max(needs.keep_v2(card), ITEM_HOLD_FLOOR) × ITEM_HOLD_WORTH_RATE`. Two facts and both are
+load-bearing: the ASSIGNMENT leg is the card's exact counterfactual marginal against the board's
+resolved Needs (a card covering a live need is dear; one covering nothing is cheap), and the FLOOR is
+the finiteness the assignment cannot see. The floor is not decoration — a role-less Crushing Hammer's
+only slot is the `deny` slot, so its `keep_v2` measures 0.00 on exactly the boards where the strip
+whiffs, and two copies solo-price 0 each against one slot; a pure keep reading would make the copy
+being spent look free precisely when the hand is richest in it. **`max`, not `+`** — the floor is a
+lower BOUND on what the card is worth, never a surcharge on top of it. Why it must be strictly
+positive at all is the sequencer, not the card: `_finish_turn_last` promotes on `score > 0` and ties
+End at exactly 0, so a hold of 0 is not "free", it is "played by option index" (ADR-0093 decision 4).
+_Avoid_: keep price (the KEEP sites' own name for the assignment leg alone — the hold price is that
+leg **floored** and **crossed** into damage), `_DENIAL_ITEM_COST` (deleted; it was this price hard-gated
+to `energy_denial`), item cost (the card's catalog worth, which for a Hammer is 0)
+
+**Information Before Commitment**:
+The boundary inside `_finish_turn_last`'s FREE band: an option that ENLARGES the information set
+sequences strictly ahead of an endorsed free play that COMMITS a card at a target (ADR-0095
+decision 1, built by Issue #261 item 2f). Classification is `Pilot._informative_card` — a
+`draw`/`search`/`dig` Function Tag, or a Pokémon play (Bench fill) — and **untagged defaults to
+committing**, because a mis-classified commitment sequencing early spends a card before the dig that
+would have re-aimed it, while a mis-classified dig sequencing late costs only ordering. It is a TIER
+and not a score, and cannot become one: playing the dig first and playing it second reach the SAME
+end state, so no function of that state separates them. Hence `sound_rules`
+`information-before-commitment`, typed `structural`.
+_Avoid_: "free" as a synonym for informative (the conflation this boundary ends — a Crushing Hammer
+is free and reveals nothing), tier numbers as prose (`_TIER_*` are named constants; the band shifted
+once already)
+
 **Worth Damage Rate**:
 The MISSING third leg of the currency triangle, and the one ADR-0100 deliberately declined to build:
 **damage per card-worth point**, bridging the Worth scale (`ROLE_TIER` ≤ 30, `ENERGY_TIER` 8,
 `TAG_TIER` 10–30 — what the Needs DP sums) to the damage scale the tactical rungs and the Prize Damage
 Rate already share. Named and specified by ADR-0078 (#187 grill, 2026-07-28); **not yet derived, and
 deliberately not guessed.** Two shipped constant-pairs price the same object on both scales and
-disagree by ~9× — keeping a gust/denial Trainer is `TAG_TIER["gust"]` 10.0 vs `_DENIAL_ITEM_COST` 10
-(⇒ ~1 dmg/worth-pt), one Energy is `ENERGY_TIER` 8.0 vs `ENERGY_RECOVER` 75 (⇒ ~9.4) — so the rate
+disagree by ~9× — keeping a gust/denial Trainer is `TAG_TIER["gust"]` 10.0 vs `ITEM_HOLD_WORTH_RATE`
+1.0 (⇒ ~1 dmg/worth-pt; that row read `_DENIAL_ITEM_COST` 10 until Issue #261 item 2f deleted the
+constant and made its implied rate an explicit, seam-scoped one beside `DEPLOY_BAND` — same value,
+now readable and therefore disputable), one Energy is `ENERGY_TIER` 8.0 vs `ENERGY_RECOVER` 75
+(⇒ ~9.4) — so the rate
 cannot be read off existing constants and needs a corpus anchor, which does not exist yet (every
 committed deny fixture is a play/hold frame, none a DISCARD select). Until that anchor is captured and
 adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0100's own
@@ -928,8 +963,9 @@ spends a finite Item on a threat that has not arrived (measured — ms f21/f29 f
 Hammer the human ruled against). The Brief sharpener likewise applies to the rank/keep side only
 (`_DENIAL_BENCH` did too, until Issue #228 deleted it with the rest of the ADR-0062 magnitude path —
 its QUESTION, whether a benched body can reach the Active position at all, survives as ADR-0071's
-promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
-is an override, not a boost (the f17 ruling).
+promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above the **free-Item
+hold price** (`common/hold_value.py`, Issue #261 item 2f — the generalisation of the deleted
+`_DENIAL_ITEM_COST`), which is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
 strip Δ as deny's VALUE (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
 typed-unlock leg, its two-term form does not — Issue #217 revives `strip_shift` itself in ONE narrow

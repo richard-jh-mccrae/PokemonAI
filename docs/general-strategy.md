@@ -430,9 +430,22 @@ discard is cheap); a **Supporter** fetch must beat the best alternative Supporte
 split [ADR-0022](adr/0022-gust-is-closed-form-lethal-lookahead.md) already built). The **bar is
 Plan-scaled** (low in `SETUP` where digging is king, higher in `RACE`/`CLOSE` where tempo is precious).
 Sequencing stays structural in `_finish_turn_last` ([pilot.py](../src/common/pilot.py)) — free Item
-digs first (tier 0), then the one-per-turn **Supporter** (tier 1, so a Pokégear may upgrade which one
-you commit), then the blind Energy attach / `cost_discard` search (tier 2), then a `shuffle_hand`
-Supporter (tier 3, attach before nuking the hand), then the turn-ender (tier 4).
+digs first (tier 0), then a free but **committing** play (tier 1: a Hammer, a Switch, a Stadium, a
+non-KO gust Item — it spends a card at a target and reveals nothing; a **Tool** is an `_ATTACH`, so it
+takes tier 3 instead), then the one-per-turn **Supporter** (tier 2,
+so a Pokégear may upgrade which one you commit), then the blind Energy attach / `cost_discard` search
+(tier 3), then a `shuffle_hand` Supporter (tier 4, attach before nuking the hand), then the turn-ender
+(tier 5).
+
+Tiers 0 and 1 are the **information-before-commitment** boundary
+([ADR-0095](adr/0095-information-precedes-commitment.md) decision 1, landed by Issue #261 item 2f).
+The free band used to be one tier, which conflated *free* with *informative*: a Crushing Hammer is
+free and reveals nothing, so once deny armed it out-scored a Pokégear and sequenced ahead of it. No
+score can fix that — digging first and digging second reach the same end state — which is why the
+boundary is a tier and sits on the sound-rule whitelist. The classification keys off a Function Tag
+(`draw` / `search` / `dig`, or a Pokémon play = Bench fill); **untagged defaults to committing**,
+since a mis-classified commitment sequencing early costs a card while a mis-classified dig sequencing
+late costs only ordering.
 
 **Deferred (designed-in seams, not built):** **(A) Supporter-economy opportunity cost + Plan-scaled
 bar** — shed-side cost-netting shipped 2026-07-03 (the three `fetch_sheds_*` rungs); the
@@ -588,8 +601,8 @@ it, with **no grab and no discard** decision:
 
 **The refresh is endorsed by default, and only ever sees the dregs.** The 2026-06-30 refutation
 (hoarding cost ~3:1 in the mirror) made `dig-before-commit` (+20) endorse every Shuffle-Refresh as the
-hand-cycling draw it is; `_finish_turn_last` tiers it **3** (after every endorsed play, the tier-1
-Supporter and the tier-2 attach), so by shuffle time the hand is the residual. The keep-value
+hand-cycling draw it is; `_finish_turn_last` tiers it **4** (after every endorsed play, the tier-2
+Supporter and the tier-3 attach), so by shuffle time the hand is the residual. The keep-value
 **floors** guard what's keep-worthy-but-unplayable: `hold-wincon-dont-shuffle` (−25),
 `attach-before-hand-shuffle` (−60), `hold-wincon-with-base-dont-shuffle` (−15, stacking),
 `hold-successor-when-doomed` (−35). The `refresh-when-hand-is-dead` (+8) rung and its `hand_is_dead`
@@ -644,8 +657,8 @@ survival turn.
 
 #### `deploy-hp-tool` · weight 40 · status: assumed
 > Equip the +HP Tool onto the body the survival-turns picker chose (`attach_is_tool_deploy_target`). A
-positive weight → tier-2 attach → sequenced **before** a tier-3 hand-shuffle Supporter (the root-cause fix:
-a ≤0 equip drops to tier 4, below the shuffle). Positional, so a lethal KO still outranks it.
+positive weight → tier-3 attach → sequenced **before** a tier-4 hand-shuffle Supporter (the root-cause fix:
+a ≤0 equip drops to the last tier, below the shuffle). Positional, so a lethal KO still outranks it.
 
 #### `hold-irreplaceable-tool-dont-shuffle` · weight −30 · status: assumed
 > Don't play a `shuffle_hand` Supporter while holding an unattached **irreplaceable** Tool (ACE SPEC, not

@@ -201,7 +201,7 @@ intact.
 - **General-Strategy disposition:** the **fetch** side is covered (`fetch-the-support` sees Dudunsparce as a `draw`
   engine; Drakloak also fills `support_in_play`). The **activation** side is the open question — a pure `draw`
   `_ABILITY` (option-type 10) has **no combat value** and `dig-before-commit` keys on `_PLAY` (7), so it may score
-  0 → drop to `_finish_turn_last` tier 4 and be **skipped before the turn-ending attack**. **This is load-bearing
+  0 → drop to `_finish_turn_last`'s LAST tier and be **skipped before the turn-ending attack**. **This is load-bearing
   (Run Away Draw AND Drakloak Recon share the mechanism) → being verified empirically** (workflow `wjzvrtwbk`);
   if confirmed, a new GENERAL `use-the-draw-engine-ability` rule (§6) fixes both. *(Munkidori's Adrena-Brain
   auto-activates only because its counter-move earns tactical value — pure draw/dig abilities don't.)*
@@ -432,8 +432,8 @@ discard-fuel needs its own keep-value term; deferred (general discard keep-value
 > Activate a benched engine Pokémon's once-per-turn **draw/dig Ability** (`_ABILITY` option on a Pokémon whose
 > ability carries a `draw`/`dig` engine tag — Drakloak Recon Directive, Dudunsparce Run Away Draw) during SETUP/RACE,
 > sequenced early (before the turn-ending attack), because a pure card-advantage ability has no combat value and
-> `dig-before-commit` (keyed on `_PLAY`) never reaches it — so nothing currently lifts it above `_finish_turn_last`
-> tier 4, and the engine **is** skipped.
+> `dig-before-commit` (keyed on `_PLAY`) never reaches it — so nothing currently lifts it above `_finish_turn_last`'s
+> LAST tier, and the engine **is** skipped.
 
 **Trigger sketch:** `option_type == _ABILITY` AND the option's ability/card carries a `draw` or `dig` tag AND not
 `cost_discard`. **Fires:** SETUP/RACE. **Lives in:** **GENERAL** `baseline_sequencing` (the free-dig family) — a

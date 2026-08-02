@@ -64,7 +64,7 @@ if TYPE_CHECKING:                      # the seam, expressed without importing t
 #: damage-per-worth-point this must be stated against the three rates already catalogued in
 #: `currency.py`, which disagree by ~6.7x among themselves:
 #:
-#:     trainer   TAG_TIER["gust"] 10.0  vs  _DENIAL_ITEM_COST 10       ~1.0
+#:     trainer   TAG_TIER["gust"] 10.0  vs  ITEM_HOLD_WORTH_RATE 1.0   ~1.0
 #:     energy    ENERGY_TIER      8.0   vs  ENERGY_RECOVER  160/3      ~6.7
 #:     deploy    DEPLOY_BAND / DEPLOY_WORTH_SCALE = 25/30              ~0.83
 #:
@@ -279,7 +279,11 @@ def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
     Worth crosses into prizes anywhere in this module.
 
     Pricing the hand at zero was considered and rejected: it makes every free Item strictly worth
-    playing, which is the defect `_DENIAL_ITEM_COST` patches for Hammers and Issue #212 generalises."""
+    playing, which is the defect `_DENIAL_ITEM_COST` patched for Hammers and `common.hold_value`
+    generalises (Issue #261 item 2f, discharging old Issue #212). This family is where that price
+    stops being a seam-scoped constant: under differencing the card leaves `hand` and arrives in
+    `readiness`/`development`, so the hold is the Worth this term loses — and
+    :data:`POC_WORTH_PRIZE_RATE` is what `currency.ITEM_HOLD_WORTH_RATE` reconciles against."""
     raise NotImplementedError("hand is POC-T3 (Issue #262)")
 
 

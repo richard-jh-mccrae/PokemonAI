@@ -286,7 +286,34 @@ deliberate list; gates green; flips → wave 2.
   (`86089120|0|decision|14`): the user ruled the two tied attaches genuinely equal in value on a bare
   Dreepy, so the correction's `correct` names one of an indistinguishable-by-value pair — recorded as
   a **`transposition`** (ADR-0088), the first since ADR-0091 retired the last one. Both gates PASS.
-- **Free-Item hold (old Issue #212):** generalize `_DENIAL_ITEM_COST` into the keep machinery.
+- **Free-Item hold (old Issue #212): DONE 2026-08-02 (ADR-0105, item 2f).** `_DENIAL_ITEM_COST`
+  is DELETED and generalized into the keep machinery as
+  `max(needs.keep_v2(card), hold_value.ITEM_HOLD_FLOOR) × currency.ITEM_HOLD_WORTH_RATE` —
+  `Pilot._item_hold_price` off the same `_resolve_needs` the refresh SHED and the discard decider
+  already decide on. **The floor is load-bearing and was measured before it was written:** on all four
+  committed deny anchors a role-less Hammer's `keep_v2` reads `0.00 / 4.82 / 3.57 / 0.00`, because its
+  only slot is the very `deny` slot the fire rung is pricing — so a pure keep reading collapses to 0
+  on exactly the boards where the strip whiffs and re-opens ADR-0093 decision 4's defect. The floor
+  binds on all four anchors, so the swap is arithmetically identical for deny on every ruled frame —
+  Issue #212's *"must not perturb the deny 5/5"* met by MEASUREMENT (not by construction: a Hammer
+  covering a second live `deny` slot would price above the floor, which is the equation working) —
+  and that is what keeps the build's gate movement attributable to the sequencer half. The ~1.0 worth↔damage rate the constant silently implied is now explicit and
+  seam-scoped beside `DEPLOY_BAND`, with the same reconciliation debt against `poc-worth-prize-rate`.
+  **This item also lands ADR-0095 decision 1**, the sequencer change that ADR assigns to T2 and no
+  other item owns: `_finish_turn_last`'s free band splits on INFORMATION
+  (`0 informative · 1 committing · 2 Supporter · 3 attach · 4 shuffle · 5 ender`), keyed off a
+  Function Tag with untagged defaulting to committing. **ADR-0095's falsifiable prediction held** —
+  `82225643|1|decision|11` now takes the human's Pokégear while the Hammer stays ENDORSED (an ordering,
+  not a suppression, exactly as the ruling asks). Gates: Discrimination PASS (0 unruled, held-outs
+  unchanged); Decision surfaced **1 REGRESSION** — `82225643|1|decision|12`, the next frame of the
+  same turn, and the same frame the Discrimination Gate reports `MISS → OK`, so the valuation agrees
+  with its ruling and only the SEQUENCER re-orders. Not self-ruled: put to the user with its
+  evidence and **USER-RULED ACCEPT 2026-08-02** (`fixed`, non-voiding — the boundary orders the dig
+  ahead of the Hammer across two actions of one turn, which is what the adjacent f11 ruling asks for,
+  and f12's own `correct` was adjudicating Hammer-vs-ATTACK). Baseline re-captured at the ruling
+  commit; **both gates PASS**, agree 251/345, suite 4540 (re-stated against the rebased base; both gates re-run with 0 picks moved, so the baseline was re-stamped rather than re-captured). The leaf baseline is deliberately not
+  re-captured (it passes), and what the Decision re-capture absorbed beyond its own ruling is named
+  in `docs/ci.md`'s provenance table.
 - **Shadow deletion: DONE 2026-08-02 (item 2h), except the `_DISCARD` ladder.** All four shadows,
   their `Decision` fields and telemetry keys, the v1 discard fallback (`discard_keep_value` flag +
   `_discard_equation_pick`) and `_discard_equation_rows`' now-unread v1 ranking are deleted, along
@@ -393,11 +420,11 @@ table uses this same label.
 | `setup-never-bench` | Set-Up never-bench (ADR-0086 d9, `pilot.py:1750`) | `structural` | deferring is weakly dominant — optional placement (rulebook L97), no attack reaches me first either seat, zero damage-counter Abilities on a Basic | — |
 | `empty-bench-filter` | empty-Bench forced deploy filter | **`provisional`** | loss condition, `docs/rules.md` §7 case 2 | after T1: `reachable_incoming` answers on every post-setup empty-Bench corpus frame AND both gates green without it → `_predicted_loss` becomes the sole guard |
 | `predicted-loss` | `_predicted_loss` (−KO_SCORE bench-empty doom) | `structural` | same fact, CombatMath-gated — the ONE surviving guard on retirement | — |
-| `information-before-commitment` | `_finish_turn_last` — the **information-before-commitment** boundary | `structural` | an informative reversible play weakly dominates a commitment; the engine re-presents the menu | — |
+| `information-before-commitment` | `_finish_turn_last` — the **information-before-commitment** boundary | `structural` | an informative reversible play weakly dominates a commitment; the engine re-presents the menu | — *(BUILT 2026-08-02 by item 2f, ADR-0095 d1: until then the free band was ONE tier and the entry described an intent, not a boundary)* |
 | `doom-ceiling-fail-direction` | worst-case doom ceiling as survival fail-direction | `structural` | fail-direction policy (a *policy parameter* after T1's fold) | — |
 | `declaration-rungs` | opening/mulligan declaration rungs | `structural` | deck-declared, not tuned | — |
 | `lethal-solver-preemption` | Lethal-Solver preemption above the planner | `structural` | sound win detection outranks every heuristic | — |
-| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds, the refresh swing's STRIP/GIFT/FRESH) | `authored-scaffold` | tolerated for POC | post-POC learning phases — plus one named prerequisite: STRIP/GIFT retire on `gusting-keepcost-design.md` §2's shared opponent role sheet (ADR-0101) |
+| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds, the refresh swing's STRIP/GIFT/FRESH, the free-Item hold floor `hold_value.ITEM_HOLD_FLOOR` + its seam rate `currency.ITEM_HOLD_WORTH_RATE`) | `authored-scaffold` | tolerated for POC | post-POC learning phases — plus one named prerequisite: STRIP/GIFT retire on `gusting-keepcost-design.md` §2's shared opponent role sheet (ADR-0101). The hold floor/rate joined 2026-08-02 as a net REDUCTION (item 2f: the deleted `_DENIAL_ITEM_COST` was the same number hard-gated to one card class) and carry `DEPLOY_BAND`'s reconciliation debt against `poc-worth-prize-rate` |
 | `poc-worth-prize-rate` | `POC_WORTH_PRIZE_RATE` (T3-local) | `authored-scaffold` | reconciled against trainer ≈1.0 / energy ≈6.7 / deploy ≈0.83 (ADR-0097) | post-POC fit against ruled spend-vs-hold frames converges |
 | `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
 | `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |

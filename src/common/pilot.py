@@ -155,10 +155,15 @@ _DENIAL_PLAY_W = 1.0       # points per damage-point denied, at the PLAY. REPLAC
                            # flat +20, which paid the same for turning off a 270 nuke as for shaving 70
                            # off a benched body. Same lesson as ADR-0060: price the quantity, don't
                            # threshold it.
-_DENIAL_ITEM_COST = 10     # the value of KEEPING the Hammer. An Item is finite, and a free Item is tiered
-                           # ahead of everything by `_finish_turn_last` — so a purely positive term could
-                           # never decline one: any score above zero gets it played. The strip must beat
-                           # the hold (ms f29: "wasted crushing hammer").
+# `_DENIAL_ITEM_COST = 10` DELETED 2026-08-02 (Issue #261 item 2f, old Issue #212). It priced "the
+# value of KEEPING the Hammer" — an Item is finite, and `_finish_turn_last` tiers a free Item ahead
+# of everything, so a purely positive term could never decline one. That reasoning is GENERAL and the
+# constant was not: its only consumer was gated shut for every card outside `energy_denial`, so the
+# finiteness price existed for Crushing / Enhanced Hammer and for nothing else in the pool.
+# `common/hold_value.py` + `_item_hold_price` now own it for every free-Item decider, off the same
+# Needs assignment the refresh SHED and the discard decider already decide on. The value survives as
+# `hold_value.ITEM_HOLD_FLOOR` (re-homed, deliberately not re-derived — Issue #212 scoped that out),
+# and the ~1.0 worth<->damage rate it implied is now explicit as `currency.ITEM_HOLD_WORTH_RATE`.
 _BRIEF_THREAT_BOOST = 1.25 # Deny Relevance's Brief SHARPENER (ADR-0080 decision 2, Issue #199): a body
                            # the matched Matchup Brief names among its `threats` is scored up, then
                            # clipped back into [0,1]. A MULTIPLIER, never a source — authored scouting
@@ -282,6 +287,33 @@ _RESISTANCE = 30           # damage Resistance subtracts when defender resists a
 # Read's top posterior over [LO, HI], discount by unmatched mass -> unknown opponent → γ≈0.
 _POSTURE_GAMMA_LO = 0.5     # below this top-posterior, Posture off (recognition too weak to act on)
 _POSTURE_GAMMA_HI = 0.85    # at/above this, Posture at full strength
+
+# ── `_finish_turn_last`'s tiers, NAMED (ADR-0095 decision 1, Issue #261 item 2f) ──────────────────
+# The sequencer's bands, as constants rather than the literals its docstring used to narrate. Named
+# because the free band GAINED a boundary and every later number shifted by one: a renumbering
+# expressed in bare integers is exactly the edit whose one missed occurrence is invisible (the
+# `deferred` marking below compares against the LAST tier, and it was a literal `4`).
+_TIER_INFORMATIVE = 0   # free AND informative: the digs, the Bench fill, the benched evolve — plus the
+                        # lethal/winning special cases, which out-score everything else in the band
+_TIER_COMMIT_FREE = 1   # free but COMMITTING: an endorsed free PLAY that spends a card at a target and
+                        # reveals nothing (a Hammer, a Switch, a Stadium, a non-KO gust Item).
+                        # ADR-0095's boundary. NOT a Tool — a Tool is an `_ATTACH`, so it takes the
+                        # blind-commitment tier below and never meets this branch.
+_TIER_SUPPORTER = 2     # the one-per-turn Supporter (non-shuffle)
+_TIER_COMMITMENT = 3    # the blind / costly commitments: the Energy attach, a `cost_discard` search
+_TIER_SHUFFLE = 4       # a hand-SHUFFLE Supporter — it nukes the hand, so attach before it
+_TIER_ENDER = 5         # the turn-ENDING attack, plus Retreat / End / non-beneficial options
+
+#: Behavioural Function Tags that make a PLAY *informative* — it ENLARGES the information set, so it
+#: weakly dominates a commitment and sequences ahead of one (ADR-0095 decision 1; the classification
+#: is keyed off a tag, never a card name). `dig:N` riders always accompany a bare `dig`/`draw` in
+#: `card_functions.json`, so a plain intersection is enough.
+#:
+#: Deliberately NOT `_ENGINE_KEEP_TAGS`, which holds the same three strings today and asks a different
+#: question — *"is this card a draw ENGINE worth keeping over filler"* (a discard-context keep floor).
+#: The two may legitimately diverge: a future `reveal`-shaped tag would be informative without being
+#: an engine. Sharing one name would make that divergence an edit nobody knows to make.
+_INFORMATIVE_TAGS = frozenset({"draw", "search", "dig"})
 
 
 def _posture_gamma(read) -> float:
@@ -1520,6 +1552,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # every deck-zone target class, dig/trigger included
         self._chain_target_cache: dict = {}             # memo: tutor card id -> FULL-scope deck fetch
                                                         # targets (the tutor-chain graph leg, seam C)
+        self._item_hold_cache: dict = {}                # PER-DECISION (reset in `_board`), keyed by card
+                                                        # id: the free-Item hold price. Initialised here
+                                                        # so a hand-built Pilot that scores an option
+                                                        # without going through `_board()` still resolves
+                                                        # — it then memoises for that Pilot's lifetime,
+                                                        # which is the same contract every other
+                                                        # per-decision cache gives such a caller.
         self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
         self._discard_fuel_cache = None                 # memo: energy types a discard-source accel attack
                                                         # wants IN the discard (deck-fixed; Aura Jab class)
@@ -1887,27 +1926,80 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         seen = set(deploys)
         return deploys + [i for i in order if i not in seen]
 
+    def _informative_card(self, cid) -> bool:
+        """Does PLAYING this card ENLARGE the information set? — ADR-0095 decision 1's classification,
+        and the boundary `_finish_turn_last` splits its free band on.
+
+        Two ways in, both card FACTS rather than card names. The first is the behavioural Function
+        Tag the ADR specifies — `_INFORMATIVE_TAGS`, draw / search / dig. The second is a CardStat
+        fact rather than a tag, and is called out as such: the card being a Pokémon, i.e. a Bench
+        fill, which the ADR's own list names as informative and which tier 0's docstring has always
+        carried (*"fill the Bench, play a Pokémon"*). There is no `bench_fill`-shaped tag on every
+        Basic and inventing one to satisfy the letter of "keyed off a tag" would put a second,
+        hand-maintained copy of `is_pokemon` in `card_functions.json`.
+
+        **Untagged defaults to COMMITTING**, per the ADR, and the asymmetry is the reason: a
+        mis-classified commitment sequencing EARLY spends a card before the dig that would have
+        re-aimed it, while a mis-classified dig sequencing one band LATE costs nothing but ordering —
+        the engine re-presents the menu either way. Unknown stats, unknown functions and a `None` card
+        id therefore all read as committing.
+
+        A method rather than a closure inside the sequencer: the fail direction above is the part
+        most worth a test, and it is only decidable per CARD (`test_information_before_commitment.py`
+        walks the four classes through here). A predicate reachable only via a full menu would be
+        pinned by whichever cards a fixture happened to hold."""
+        if cid is None:
+            return False
+        st = self.stats.get(cid) if self.stats else None
+        if st is not None and getattr(st, "is_pokemon", False):
+            return True
+        tags = self.functions.tags(cid) if self.functions else ()
+        return bool(_INFORMATIVE_TAGS & set(tags))
+
     def _finish_turn_last(self, obs: dict, board: Board, options: list, traces: list, order: list,
                           max_count: int, select_context: int | None) -> list:
         """Sequence the turn's commitments LAST. The engine re-presents the open turn menu after each
         non-ending action, so the whole turn still happens — which means you should take the most
         informative, reversible actions first and the irreversible ones last:
 
-          tier 0  free informative development — draw / search, fill the Bench, evolve a benched
+          tier 0  free and INFORMATIVE — a draw / search / dig, fill the Bench, evolve a benched
                   Pokémon, play a Pokémon (and an attach / gust that UNLOCKS a KO — take the win). A
                   GAME-WINNING attack (a KO that takes my last prize) also sits here: when this action
                   wins the match there is nothing to develop FOR, so take it immediately rather than
                   dig/develop first (a non-winning KO still develops-first — the whole point of
                   attack-last is intact; ep83037962 f78).
                   Free, and reveals a better target before you commit.
-          tier 1  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
+          tier 1  free but COMMITTING — an endorsed free PLAY that spends a card at a target and
+                  reveals nothing: a Crushing Hammer, a Switch, a Stadium, a non-KO gust Item. (Not
+                  a Tool: a Tool is an `_ATTACH` and lands in tier 3.)
+          tier 2  your one-per-turn SUPPORTER (non-shuffle) — informative (draws / searches / tutors),
                   so commit it AFTER the free Item digs (a Pokégear may upgrade which Supporter you
                   play) but before the blind attach. A KO-enabling gust Supporter stays in tier 0.
-          tier 2  the blind / costly COMMITMENTS — the Energy attach, and a discard-COST search
+          tier 3  the blind / costly COMMITMENTS — the Energy attach, and a discard-COST search
                   (`cost_discard`, e.g. Ultra Ball: pays 2 cards from hand).
-          tier 3  a hand-SHUFFLE Supporter (`shuffle_hand`, e.g. Lillie's / Harlequin) — it nukes the
-                  hand, so attach your held Energy (tier 2) FIRST, then shuffle the dregs away.
-          tier 4  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
+          tier 4  a hand-SHUFFLE Supporter (`shuffle_hand`, e.g. Lillie's / Harlequin) — it nukes the
+                  hand, so attach your held Energy (tier 3) FIRST, then shuffle the dregs away.
+          tier 5  the turn-ENDING attack, plus Retreat / End / non-beneficial options.
+
+        **Tiers 0 and 1 are ADR-0095 decision 1's boundary, and T2 (Issue #261 item 2f) is where it
+        lands.** The free band used to be ONE tier, so this method stated the doctrine as its own
+        purpose while `_tier` ended on a bare `return 0` and conflated *free* with *informative*:
+
+            Pokegear 3.0     free, INFORMATIVE   -> tier 0
+            Crushing Hammer  free, COMMITTING    -> tier 0     <- same band; score decides
+
+        Arm deny, the Hammer out-scores the Pokégear, and the Hammer sequences first — which is
+        `82225643|1|decision|11`, where the human ruled *"Collect information before committing. Do
+        PokeGear first. Then, most likely, you'll also play Hammer and Ignition Energy in this same
+        turn."* All three plays are legal in one turn (`docs/rules.md` §3: Items unlimited), so it was
+        never a selection; it was an ORDERING, and no score could express it. This is also why the
+        boundary is STRUCTURAL and cannot be left to the POC's differencing: digging first and digging
+        second reach the **same end state**, so no function of that state separates them (ADR-0095
+        decision 3; `sound_rules.information-before-commitment`).
+
+        Scoped to `_PLAY`, which is where the defect was diagnosed — an Evolve or an Ability commits no
+        card from hand at a target, and widening the boundary to them would re-sequence bands the ADR
+        did not measure.
 
         An option is sequenced early only when a Hypothesis endorses it (score > 0). A knockout is
         never forfeited: an Evolve of the Active drops to the last tier when a KO is on the menu, and
@@ -1959,27 +2051,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             o = options[i]
             t = o.get("type")
             if t in (_ATTACH, _PLAY, _RETREAT) and traces[i].tactical >= KO_SCORE:  # a lethal play/attach
-                return 0    # unlocks a KO, or a gust/retreat-to-lethal swap — take the win, don't dig first (REQ-GUST-0001)
+                return _TIER_INFORMATIVE   # unlocks a KO, or a gust/retreat-to-lethal swap — take the win,
+                                           # don't dig first (REQ-GUST-0001). It shares the top band with the
+                                           # digs and out-scores them by a KO_SCORE margin, so "strictly
+                                           # first" needs no tier of its own.
             if t == _PLAY and _gust_enables_ko(i):                   # a KO-enabling gust: `gust-for-the-ko`
-                return 0                                             # fires only when the gust-KO takes MORE
+                return _TIER_INFORMATIVE                             # fires only when the gust-KO takes MORE
                                                                      # prizes than any menu attack (its own gate),
                                                                      # so take the gust-setup first, then KO the
-                                                                     # dragged-up body — not tier-1 Supporter filler,
-                                                                     # nor tier-4 behind the KO it out-values (f79/f81)
+                                                                     # dragged-up body — not Supporter filler,
+                                                                     # nor behind the KO it out-values (f79/f81)
             if t == _RETREAT and _retreat_walls_the_line(i):         # retreat-to-promote the sacrificial
-                return 0                                             # item-lock wall (dragapult f32/f20): the
+                return _TIER_INFORMATIVE                             # item-lock wall (dragapult f32/f20): the
                                                                      # retreat is STEP 1 of the maneuver, ahead
                                                                      # of a free evolve / Item strip; the
                                                                      # promote + item-lock + develop follow on
                                                                      # later frames via their own rungs
             if t == _ATTACK and _wins_now(i):                        # a game-winning KO: take the win now,
-                return 0                                             # don't dig/develop first (ep83037962 f78)
+                return _TIER_INFORMATIVE                             # don't dig/develop first (ep83037962 f78)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
-                return 4
+                return _TIER_ENDER
             if t == _EVOLVE and o.get("inPlayArea") == _ACTIVE and ko_available:
-                return 4                                             # would forfeit an available KO
+                return _TIER_ENDER                                   # would forfeit an available KO
             if t == _PLAY and _is_gust_card(i) and board.active_can_ko:
-                return 4                                             # a gust SWAPS the defender: never ahead of
+                return _TIER_ENDER                                   # a gust SWAPS the defender: never ahead of
                                                                      # a KO of the ACTIVE it would forfeit
                                                                      # (ep83456015 f38: 3-prize Nebula ≻ gust).
                                                                      # The old test was ANY menu KO — but a KO
@@ -1990,7 +2085,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # the one-per-turn slot (dragapult f81)
             if (t == _EVOLVE and o.get("inPlayArea") != _ACTIVE      # FREE DEVELOPMENT, tier 0 already
                     and traces[i].score >= 0):                       # names it: "evolve a benched
-                return 0                                             # Pokémon". A same-line bench evolve
+                return _TIER_INFORMATIVE                             # Pokémon". A same-line bench evolve
                                                                      # nets to exactly 0.0 — the pre-evo is
                                                                      # pre-credited with the LINE's payoff
                                                                      # (`_line_payoff_stat`), so the deploy
@@ -2008,37 +2103,49 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                      # This is NOT the `>= 0` loosening
                                                                      # ADR-0070 rejected — that was the whole
                                                                      # sequencer; a zero-priced ATTACH still
-                                                                     # drops to 4 below (the attach-anyway
-                                                                     # blunder class, 82749168-21/82867148-34).
+                                                                     # drops to the LAST tier below (the
+                                                                     # attach-anyway blunder class,
+                                                                     # 82749168-21/82867148-34).
             if traces[i].score <= 0:                                 # only an endorsed action sequences early
-                return 4                                             # — incl. an attach the decider prices at
+                return _TIER_ENDER                                   # — incl. an attach the decider prices at
                                                                      # ZERO: sequencing that ahead of End is
                                                                      # attach-anyway, the blunder class
                                                                      # ADR-0069 rejected an epsilon floor for
                                                                      # (measured: 82749168-21, 82867148-34)
             if t == _PLAY and _is_shuffle_refresh(i):                # hand-nuke: AFTER the Energy attach, so
-                return 3                                             # held Energy placed before the shuffle
+                return _TIER_SHUFFLE                                 # held Energy placed before the shuffle
             if t == _PLAY and _is_supporter(i):                      # one-per-turn Supporter: after the
-                return 1                                             # free Item digs, before the blind attach
+                return _TIER_SUPPORTER                               # free Item digs, before the blind attach
             if t == _ATTACH or (t == _PLAY and _cost_discard(i)):    # blind/costly commitment: after free dev
-                return 2                                             # THIS is `attach-energy-last` (ADR-0069
+                return _TIER_COMMITMENT                              # THIS is `attach-energy-last` (ADR-0069
                                                                      # §7): the deleted −5 rung became this
                                                                      # deferral, so attach-late costs an attach
                                                                      # no SCORE — an irreversible commitment is
                                                                      # simply ORDERED after the draw/search that
                                                                      # would reveal a better target. Tier-aware
                                                                      # by construction: it stands DOWN against a
-                                                                     # hand-shuffle finisher (tier 3 above), so
+                                                                     # hand-shuffle finisher (tier 4 above), so
                                                                      # development → attach → hand-shuffle →
                                                                      # attack is structural, not a coincidence
                                                                      # of −5 vs −60. Score-invisible, which is
                                                                      # what let the desperation floor stop
                                                                      # depending on out-scoring that −5.
-            return 0
+            if t == _PLAY and not self._informative_card(traces[i].card_id):  # ADR-0095 d1: an endorsed free
+                return _TIER_COMMIT_FREE                             # PLAY that COMMITS a card at a target and
+                                                                     # reveals nothing sequences behind the digs.
+                                                                     # Everything above has already claimed the
+                                                                     # exclusive/costly plays, so what reaches
+                                                                     # here is exactly the free band — which is
+                                                                     # the band the ADR says the boundary is
+                                                                     # INSIDE. Scoped to `_PLAY`: an Evolve or
+                                                                     # an Ability spends no card at a target,
+                                                                     # and re-banding those is measurement this
+                                                                     # ADR did not do.
+            return _TIER_INFORMATIVE
 
-        if any(_tier(i) < 4 for i in order):                         # legibility: mark the held-back attacks
+        if any(_tier(i) < _TIER_ENDER for i in order):               # legibility: mark the held-back attacks
             for i in order:
-                if options[i].get("type") == _ATTACK and _tier(i) == 4:  # a winning attack (tier 0) not held
+                if options[i].get("type") == _ATTACK and _tier(i) == _TIER_ENDER:  # a winning attack not held
                     traces[i].deferred = True
         return sorted(order, key=_tier)                             # stable -> within a tier, score order
 
@@ -4445,6 +4552,48 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                           "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
         return rows
 
+    def _item_hold_price(self, obs: dict, board: Board, cid) -> float:
+        """What SPENDING held card ``cid`` costs, in the damage currency — the ONE hold price every
+        free-Item decider subtracts (Issue #261 item 2f, old Issue #212; the equation and its
+        reasoning are `common/hold_value.py`).
+
+        The Pilot-side half is a resolver, nothing more: it reads the hand through the SAME
+        `_needs_hand_rows` → `_resolve_needs` pair the refresh SHED (`_refresh_shed_keepcost`) and the
+        discard decider (`_needs_v2`) read, and asks `needs.keep_v2` for this card's counterfactual
+        marginal. One keep question, one answer — a second opinion about what a held card is worth is
+        exactly the drift ADR-0103 amendment A had to unwind on the shed predictor.
+
+        **Resupply is all-0.0, and that is a policy rather than a stub.** It is the discard decider's
+        own setting, for the discard decider's own reason: playing a card opens no draw window to
+        re-access it through, so nothing discounts the loss. The refresh site is the exception that
+        proves it — `_refresh_slot_resupply` exists there because the refresh's printed draw count IS
+        a redraw window. Erring toward KEEP is also the safe direction here: it can only make a free
+        Item harder to spend.
+
+        The whole hand is priced, INCLUDING the card being played (no `exclude_cid`): the question is
+        what losing this copy costs, which is precisely `keep_v2`'s counterfactual, and duplicates
+        price marginally through the assignment rather than by hand. A card that is not in hand at all
+        (a fetched option, a hand-built test board) resolves to no row and takes the bare floor —
+        fail-toward-the-incumbent, since the floor is what the deleted constant charged.
+
+        Memoised per DECISION, keyed by card id: `_denial_play_tactical` runs per option, a hand
+        routinely holds two copies of the same Item, and `_resolve_needs` walks the whole hand each
+        time. The cache is reset in `_board()`, which is per `_evaluate` — so a rollout step, which
+        re-runs `_evaluate` on its own SearchState, gets its own resolution rather than the root's."""
+        from common import hold_value, needs
+        cache = self._item_hold_cache
+        if cid in cache:
+            return cache[cid]
+        keep = 0.0
+        if cid is not None:
+            rows = self._needs_hand_rows(obs, board)
+            k = next((i for i, r in enumerate(rows) if r["cid"] == cid), None)
+            if k is not None:
+                slots, elig = self._resolve_needs(obs, board, rows)
+                keep = needs.keep_v2(slots, elig, [0.0] * len(slots), k)
+        price = cache[cid] = hold_value.hold_price(keep)
+        return price
+
     def _as_discard_rows(self, rows: list, obs: dict, board: Board) -> list:
         """`_needs_hand_rows` output re-read in DISCARD context — the pitch terms plus the two cheap
         re-access facts, on copies.
@@ -5832,17 +5981,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _denial_play_tactical(self, obs: dict, board: Board, ctx) -> float:
         """Value of PLAYING an energy-denial Item (ADR-0062): what the strip actually takes away,
-        priced by its odds, net of keeping the card.
+        priced by its odds, net of the HOLD PRICE — what spending the card costs.
 
-            coin_odds(card) * _DENIAL_PLAY_W * (unfavored?) * value  -  _DENIAL_ITEM_COST
+            coin_odds(card) * _DENIAL_PLAY_W * (unfavored?) * value  -  _item_hold_price(card)
 
         where ``value`` is `K x relevance` (ADR-0080, Issue #187). It was the ADR-0062 damage
         magnitude `opp_denial_best` until Issue #228 armed the flag and deleted that oracle; OFF now
         stands the rung down entirely — DEGRADED MODE, never a rollback.
 
+        **The hold is no longer deny's own constant** (Issue #261 item 2f, old Issue #212). It was
+        `_DENIAL_ITEM_COST = 10`, and its rationale — *"an Item is finite, and `_finish_turn_last`
+        tiers a free Item ahead of everything"* — is a property of the SEQUENCER, true of every free
+        Item and priced for exactly one card class. `_item_hold_price` generalises it onto the Needs
+        assignment: `max(needs.keep_v2(this card), hold_value.ITEM_HOLD_FLOOR)` crossed at
+        `currency.ITEM_HOLD_WORTH_RATE`. On all four committed deny anchors the floor BINDS — a
+        role-less Hammer's only slot is the very `deny` slot this rung is already pricing, so its
+        assignment marginal collapses on exactly the boards where the strip whiffs; `hold_value`'s
+        module docstring carries that measurement and the reasoning, once, rather than here as well.
+        The consequence for THIS rung: the swap is arithmetically identical on every ruled frame.
+
         Silent unless the card is `energy_denial`. A whiff (value 0 — surplus Energy, no affordable
-        attack, or the only energized body is one I am about to KO) still pays the keep price and so
-        prices at **-`_DENIAL_ITEM_COST`**, which DECLINES. It used to short-circuit to a bare 0.0,
+        attack, or the only energized body is one I am about to KO) still pays the hold price and so
+        prices at **-`hold`**, which DECLINES. It used to short-circuit to a bare 0.0,
         and this docstring used to claim that "prices at 0 and is held" — it did not: `_finish_turn_last`
         promotes only on `score > 0`, so a 0.0 free Item landed in the last tier TIED with End and
         stable score order played it by option index (Issue #228; the asymmetry ADR-0084 decision 8
@@ -5865,13 +6025,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         value = _DENY_RELEVANCE_K * self._deny_relevance_best(obs, board)
         weight = _DENIAL_PLAY_W * (1.0 + _DENIAL_UNFAVORED if self._unfavored(board) else 1.0)
         # NO whiff short-circuit. A `value` of 0 is a real read saying "nothing here", and it must
-        # still pay the keep price: `odds x weight x 0 - _DENIAL_ITEM_COST` = -10.0, which DECLINES.
+        # still pay the hold price: `odds x weight x 0 - hold` = -10.0 on the anchors, which DECLINES.
         # Returning a bare 0.0 here did not — `_finish_turn_last` promotes only on `score > 0`, so a
         # 0.0 free Item landed in the last tier TIED with End and stable score order played it by
         # option index. The OFF path escaped that by arithmetic accident (its magnitude is rarely
         # exactly 0 while the card is playable); a categorical [0,1] scalar is 0 routinely and by
         # design, which is what turned a latent contract violation into a live defect at arming time.
-        return coin_odds(ctx.card_id) * weight * value - _DENIAL_ITEM_COST
+        # `hold_value.hold_price` is STRICTLY POSITIVE for the same reason the constant had to be:
+        # a keep-machinery reading alone goes to 0 on exactly the boards where the strip whiffs.
+        return (coin_odds(ctx.card_id) * weight * value
+                - self._item_hold_price(obs, board, ctx.card_id))
 
     def _denial_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """Rank the Crushing Hammer's TARGET once its coin comes up heads (ADR-0062).
@@ -7154,6 +7317,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # cached (the `_opp_attack_context` stash precedent) — the deny fire rung and the
         # live `gust_target` slot emission read this SAME cache rather than each re-running the
         # per-body `turns_to_ko_me` simulation from scratch.
+        self._item_hold_cache = {}                  # per-decision, keyed by CARD ID — the free-Item
+                                                    # hold price (`_item_hold_price`, Issue #261 item
+                                                    # 2f). Resolving it walks the whole hand through
+                                                    # `_resolve_needs`, and the deciders that read it
+                                                    # run per OPTION over a hand that routinely holds
+                                                    # two copies of the same Item.
         self._snipe_relevance_cache = {}            # per-decision, keyed by id(body) — the curve
                                                     # reads are per BODY while `_context` runs per
                                                     # OPTION, and a DAMAGE select offers the same
@@ -8889,7 +9058,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if b.get("id") in (brief_ids or ()):
             # The Brief sharpens the RANK (ADR-0080 decision 2's own word) — the keep price and the
             # target pick. It deliberately does NOT touch the fire reading: that one is compared
-            # against `_DENIAL_ITEM_COST`, so a multiplier there can lift a hold above zero, and "a
+            # against the free-Item HOLD PRICE, so a multiplier there can lift a hold above zero, and "a
             # booster must scale the oracle, never override it" is the f17 ruling (ADR-0062). Measured:
             # boosting the fire leg turns f21's -1.25 into +0.94 and plays the Hammer the human ruled
             # against, on a board where the ONLY thing that changed is that the body is Brief-named.
