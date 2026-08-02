@@ -19,7 +19,8 @@ from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
                                           promote_value)
 from common.opponent_model import OpponentModel
-from common.state_model import StateModel
+from common.state_model import MySide, StateModel, TheirSide
+from common.strategy.damage_context import damage_context as _assemble_damage_context
 from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
@@ -228,6 +229,12 @@ _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped En
                            # forces 0.154 < _DENIAL_FORWARD < 0.8.
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
+#: "derive this from the observation" for a `_snapshot` argument whose own vocabulary already spends
+#: None on a meaning. `deck_known=None` is the deck tracker's answer for *"the prizes are not
+#: resolved, so I claim nothing"* — a real value the caller may legitimately pass — so "unset" needs
+#: a distinct sentinel or the two collapse and an honest no-claim silently re-derives (POC-T3.5).
+_DERIVE = object()
+
 _FOLLOWUP_W = 0.5          # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
                            # < 1 because damage THIS turn is certain and next turn's is not (they move in
                            # between) — so at equal two-turn totals the front-loaded nuke wins, which is
@@ -1520,6 +1527,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # AttributeError.
         self._opp_attack_context = None                 # the opponent-as-attacker Damage-Formula context,
                                                         # same lifecycle, declared for the same reason
+        self._my_attack_context = None                  # ... and MY direction (see `_my_damage_context`),
+        self._my_attack_context_obs = None              # anchored to the obs it was built from
         from common.strategy.combat import CombatMath
         self.combat = CombatMath(stats, functions, transients=self._transients,
                                  effects=self.effects)                            # the KO oracle
@@ -2845,7 +2854,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         hp = (opp or {}).get("hp", 0)
         # Damage oracle (ADR-0032): prevention/W/R pierced by the attack's own ignore flags; a
         # prevented ACTIVE hit (0) no longer hides bench-snipe credit below. Context scores scalers exactly.
-        dmg_ctx = self._damage_context(obs)
+        dmg_ctx = self._my_damage_context(obs)
         dmg = self.predicted_damage(self._my_active_id(obs), attack_id, opp, context=dmg_ctx)
         eff = _EFFICIENCY * self._attack_cost(attack_id, 0)   # cheaper of equal outcomes wins
         recover = self._recover_units(attack_id, dmg_ctx, board, obs)  # usable re-attachable fuel (Aura Jab)
@@ -3134,7 +3143,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         active = self.stats.get(board.my_active_id) if board.my_active_id is not None else None
         if not active:
             return 0.0
-        ctx = self._damage_context(obs)
+        ctx = self._my_damage_context(obs)
         have = set(ctx.get("atk_bench_names") or ())
         would_have = have | {stat.name}
         for aid in (getattr(active, "attacks", None) or ()):
@@ -3418,7 +3427,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         opp_stat = self.stats.get(opp.get("id")) if self.stats else None
         if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
             return 0                                        # "{ex}" defender gate (incl. Mega ex)
-        ctx = self._damage_context(obs)
+        ctx = self._my_damage_context(obs)
         for aid in (active.attacks or ()):
             cost = self._attack_cost(aid)
             if cost > board.my_active_energy:
@@ -5869,107 +5878,81 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ATTACKER-relative: ``attacker_is_me=True`` prices MY attack this decision;
         ``False`` mirrors every key for the opponent-as-attacker (the Incoming direction —
         their hand/bench/Active-Energy AND their discard, all open information). Includes the
-        attacker's discard Energy histograms (Riptide-class scalers)."""
+        attacker's discard Energy histograms (Riptide-class scalers).
+
+        **The assembly is no longer here** (POC-T3.5, Issue #279). This method used to BE the
+        builder — the only full construction of the context anywhere — and POC-T3.5 needed a second
+        one on the StateModel, because ``state_value(model)`` may read nothing but the model
+        (ADR-0092 standing ruling) and so cannot be handed a context threaded down from here. Two
+        hand-rolled builders of one fact is the exact defect ``CombatMath.card_level_damage`` was
+        extracted to end (*"One fact, two hand-rolled call sites, free to drift — and they did"*),
+        so the shape moved out rather than being copied: the per-side countables are gathered by
+        ``_SideBase.damage_facts`` and assembled by ``common.strategy.damage_context``, and
+        ``test_damage_context`` pins this method and :meth:`StateModel.damage_context` key-for-key on
+        corpus frames.
+
+        What remains here is the ADAPTER: which raw player dict is whose, which side plays the
+        attacker's role, and the two per-decision facts a board snapshot cannot recover on its own —
+        the tracked this-turn damage-boost PLAYS (a log fact; the played card is in the discard by
+        the time anyone reads the board) and the deck tracker's anchored resolution of my deck.
+
+        The two side views are built here rather than read off ``self._state_model``, and that is a
+        SEQUENCING fact rather than a preference: ``_board`` resolves the opponent-as-attacker
+        context before the snapshot exists, because the snapshot's own ``TheirSide`` takes the Read's
+        clock policy as a constructor argument and the Read is resolved further down. Constructing a
+        side is free (every field is lazy, ADR-0068), so the adapter pays for the fields it reads and
+        nothing else.
+        """
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
         me = players[yi] if 0 <= yi < len(players) and players[yi] else {}
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
-        atk, dfn = (me, opp) if attacker_is_me else (opp, me)
-        aa = next((p for p in (atk.get("active") or []) if p), None)
-        da = next((p for p in (dfn.get("active") or []) if p), None)
-        total, by_type = self._discard_energy_counts(atk.get("discard") or [])
-        bench_names = tuple(                                    # bench-partner conditions (Cosmic
-            (self.stats.get(b.get("id")).name if self.stats and self.stats.get(b.get("id")) else "")
-            for b in (atk.get("bench") or []) if b)             # Beam needs Lunatone benched)
-        # flat damage-boosts live for the attacker's attacks: this-turn Trainer plays (tracker) +
-        # Tools ATTACHED to the attacking Active (visible board state; Maximum Belt). Both open
-        # information in either direction — the opponent's Power Pro play and their Belt are as
-        # visible as mine, so Incoming prices them too.
-        side = yi if attacker_is_me else 1 - yi
-        boosts = list(self._turn_boosts.boosts_for(side))
-        for tool in ((aa or {}).get("tools") or []):
-            t_stat = self.stats.get((tool or {}).get("id")) if self.stats else None
-            if t_stat is not None and getattr(t_stat, "damageBoost", 0):
-                boosts.append((t_stat.damageBoost, t_stat.damageBoostType, t_stat.damageBoostVsEx))
-        def _counters(p):
-            return max(0, ((p or {}).get("maxHp", 0) or 0) - ((p or {}).get("hp", 0) or 0)) // 10
+        prizes = obs.get("own_prizes")             # exact prize multiset from deck-tracker, or None
+        if prizes:                                 # keys are card ids: coerce str->int so a
+            prizes = {int(k): v for k, v in prizes.items()}    # JSON-captured obs matches the deck
+        mine = MySide(me, combat=self.combat, deck=self.deck, own_prizes=prizes,
+                      turn_boosts=self._turn_boosts.boosts_for(yi),
+                      # exact deck facts for hidden deck-discard scalers (only MY deck can be
+                      # exact — tracker-anchored): the oracle turns them into a pigeonhole floor /
+                      # hypergeometric EV. Resolved only when I am the attacker, because the pair is
+                      # read for the attacker alone and the walk is not free.
+                      deck_known=self._deck_known_counts(me, prizes) if attacker_is_me else None)
+        theirs = TheirSide(opp, combat=self.combat,
+                           turn_boosts=self._turn_boosts.boosts_for(1 - yi))
+        atk, dfn = (mine, theirs) if attacker_is_me else (theirs, mine)
+        return _assemble_damage_context(atk.damage_facts, dfn.damage_facts)
 
-        def _in_play(player):
-            return [p for p in ((player.get("active") or []) + (player.get("bench") or [])) if p]
+    def _my_damage_context(self, obs: dict) -> dict:
+        """MY-attacker Damage Formula context for THIS decision, built at most once.
 
-        def _stat_of(p):
-            return self.stats.get((p or {}).get("id")) if self.stats else None
+        The missing mirror of `_opp_attack_context`, which `_board` has cached per decision since
+        ADR-0032 P1 for exactly this reason. My own direction had no such home, so the three
+        per-OPTION consumers rebuilt it — once per ATTACK option on the menu, plus once per
+        boost-card option — each getting a fresh, identical dict. That was already waste; POC-T3.5
+        (Issue #279) made it worth removing by routing the gather through the model's lazy typed
+        side views, which pay descriptor overhead the old raw-dict walk did not.
 
-        def _is_ex(p):
-            st = _stat_of(p)
-            return bool(st is not None and st.is_ex_body)
+        **Measured** over mega_starmie's 140 committed correction frames, this tree vs `main`: the
+        builder itself **0.019 → 0.084 ms/call**, one `Board` build (which calls it once, for the
+        OPPONENT direction) **2.07 → 2.22 ms/decision (+7%)**, and the whole `explain()` decision
+        path **5.31 → 5.33 ms** — inside run-to-run noise (the unchanged tree spread 5.05–5.71 ms
+        over three passes). Without this cache the same `explain()` measured ~5.65 ms, so collapsing
+        the per-option rebuilds is what keeps the extraction free where it is actually paid for.
 
-        def _stage2_count(bench):
-            # Fail-CLOSED per body: an unresolvable card is not counted. A scaler that over-reads its
-            # own bench inflates MY damage estimate, which is the direction that manufactures a
-            # phantom lethal — the one error class the Lethal Solver may never make.
-            return sum(1 for p in bench
-                       if p and getattr(_stat_of(p), "stage2", False))
+        A **freshly-allocated dict per call is also the wrong thing to hand downstream**, which is
+        the substrate's own argument one layer down: every clock read that prices a scaler carries
+        the context in its memo key, and a new object cannot hit the memo the previous one filled.
 
-        def _taken(player):
-            prize = player.get("prize")
-            return max(0, 6 - len(prize)) if prize is not None else 0
-
-        atk_bench = sum(1 for p in (atk.get("bench") or []) if p)
-        dfn_bench = sum(1 for p in (dfn.get("bench") or []) if p)
-        ctx = {"atk_hand": atk.get("handCount", len(atk.get("hand") or [])),
-               "def_hand": dfn.get("handCount", len(dfn.get("hand") or [])),
-               "def_active_energy": len((da or {}).get("energies") or []),
-               "atk_active_energy": len((aa or {}).get("energies") or []),
-               "atk_bench": atk_bench,
-               "def_bench": dfn_bench,
-               # `both_` is the THIRD direction class beside atk_/def_ (Issue #213): a variable
-               # counting BOTH sides at once ("for each Benched Pokemon (both yours and your
-               # opponent's)"). The sum is direction-symmetric, so ONE key is correct whichever
-               # side attacks — no mirroring, and the oracle keeps a single lookup per scaler.
-               "both_bench": atk_bench + dfn_bench,
-               "atk_discard_energy_total": total,
-               "atk_discard_basic_by_type": by_type,
-               "atk_bench_names": bench_names,
-               "atk_boosts": tuple(boosts),
-               "atk_self_counters": _counters(aa),      # damage counters on attacking Active
-               "def_counters": _counters(da),           # ... and on defending Active
-               "atk_prizes_taken": _taken(atk),         # prizes each side taken (6 - remaining)
-               "def_prizes_taken": _taken(dfn),
-               # ── Issue #225's four families (POC-T1). Each name is the printed COUNTABLE, read
-               # off the visible board like every other scaler; see `src/common/CONTEXT.md` for
-               # why the two FILTERED counts take flat names rather than growing a filtered form.
-               #
-               # `both_active_energy` is the second member of the `both_` direction class ADR-0083
-               # §4 opened (and the card it named): "for each Energy attached to BOTH Active
-               # Pokémon" — direction-symmetric, so ONE key is right whichever side attacks.
-               "both_active_energy": (len((aa or {}).get("energies") or [])
-                                      + len((da or {}).get("energies") or [])),
-               # "for each Stage 2 Pokémon on YOUR Bench" — attacker-relative, and the first context
-               # key whose count needs a CardStat lookup per body rather than the raw obs shape.
-               "atk_bench_stage2": _stage2_count(atk.get("bench") or []),
-               # "for each damage counter on ALL of your opponent's Pokémon" — every body, not the
-               # Active alone, which is what makes it a different variable from `def_counters`.
-               "def_counters_all": sum(_counters(p) for p in _in_play(dfn)),
-               # "for each of your opponent's Pokémon {ex} in play" — Mega ex counts, since a Mega
-               # Evolution Pokémon ex IS an {ex} (`docs/rulebook.txt` L337), which is exactly what
-               # `CardStat.is_ex_body` answers.
-               "def_ex_in_play": sum(1 for p in _in_play(dfn) if _is_ex(p))}
-        if attacker_is_me:
-            # exact deck facts for hidden deck-discard scalers (only MY deck can be exact —
-            # tracker-anchored): oracle turns them into a pigeonhole floor / hypergeometric EV
-            known = self._deck_known_counts(atk, obs.get("own_prizes")
-                                            and {int(k): v for k, v in obs["own_prizes"].items()})
-            if known:
-                deck_by_type: dict = {}
-                for cid, n in known.items():
-                    st = self.stats.get(cid) if self.stats else None
-                    if st is not None and st.is_typed_basic_energy:
-                        deck_by_type[st.energyType] = deck_by_type.get(st.energyType, 0) + n
-                ctx["atk_deck_count"] = sum(known.values())
-                ctx["atk_deck_basic_by_type"] = deck_by_type
-        return ctx
+        Keyed by the observation's IDENTITY and sound *because the entry holds the obs*: a cached
+        object cannot be collected, so its address cannot be reused under a live entry — the same
+        argument `_Lazily._key` makes for its own projection cache. A hypothetical board (a planner
+        leaf, a re-scored root) is a different obs and rebuilds; the model's purity contract
+        (ADR-0068) is what says the observation does not change under a snapshot.
+        """
+        if self._my_attack_context_obs is not obs:
+            self._my_attack_context_obs, self._my_attack_context = obs, self._damage_context(obs)
+        return self._my_attack_context
 
     def _discard_energy_counts(self, discard: list) -> tuple[int, dict]:
         """Energy histograms of a (fully visible) discard pile: ``(all Energy cards,
@@ -6666,9 +6649,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return CarriedState.of(phase_prev=getattr(self, "_phase_prev", None),
                                my_path_prev=getattr(self, "_my_path_prev", None))
 
-    def _snapshot(self, obs: dict, *, my_index=None, deck_empty=None, read=None, brief=None,
-                  matchup_plan=None, gamma: float = 0.0, favorability: float = 0.5,
-                  matchup_coverage: float = 0.0, carried=None) -> StateModel:
+    def _snapshot(self, obs: dict, *, my_index=None, deck_empty=None, deck_known=_DERIVE,
+                  read=None, brief=None, matchup_plan=None, gamma: float = 0.0,
+                  favorability: float = 0.5, matchup_coverage: float = 0.0,
+                  carried=None) -> StateModel:
         """Build (and stash) the per-decision :class:`StateModel` — **the ONE construction site**.
 
         `_board()` is the production caller and supplies the Read overlay it has just resolved; every
@@ -6684,22 +6668,41 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         it replaces are equal by construction rather than by coincidence), and `charged` is the Read's
         `_incoming_budget` — None on an unrecognized opponent, which is the worst-case ceiling per
         ADR-0064 Decision 1.
+
+        `deck_known` is the deck tracker's anchored `{card id: copies left in my deck}` and defaults
+        to :data:`_DERIVE`, meaning *"work it out from this obs"* — a real sentinel rather than None,
+        because None is the tracker's own answer for *"the prizes are not resolved, claim nothing"*
+        and the two must stay distinguishable. `_board` passes the resolution it already computed;
+        every other caller gets the same one derived here. Threaded because the model's Damage
+        Formula context reads it (POC-T3.5, Issue #279) and the model cannot derive it — see
+        `MySide._deck_known`.
         """
         state = obs.get("current") or {}
         mi = state.get("yourIndex", 0) if my_index is None else my_index
-        if deck_empty is None:
+        if deck_empty is None or deck_known is _DERIVE:
             players = state.get("players") or []
             me = players[mi] if 0 <= mi < len(players) and players[mi] else {}
-            prizes = obs.get("own_prizes")
-            prizes = {int(k): v for k, v in prizes.items()} if prizes else None
-            deck_empty = self._deck_empty_ids(me, prizes)
+            raw_prizes = obs.get("own_prizes")
+            # `_board` and `_damage_context` both keep an EMPTY multiset as itself here; this
+            # fallback has always collapsed it to None for `deck_empty`, so the two expressions stay
+            # separate rather than being unified in a substrate issue that may not move scoring.
+            prizes = ({int(k): v for k, v in raw_prizes.items()} if raw_prizes
+                      else raw_prizes if raw_prizes is not None else None)
+            if deck_empty is None:
+                deck_empty = self._deck_empty_ids(me, prizes or None)
+            if deck_known is _DERIVE:
+                deck_known = self._deck_known_counts(me, prizes)
         self._state_model = model = StateModel.build(
             obs, combat=self.combat, my_index=mi, deck=self.deck, deck_empty=deck_empty,
+            deck_known=deck_known,
             # THEIR half, fully threaded — the Read overlay (ADR-0026/0027/0047/0051) …
             read=read, brief=brief, matchup_plan=matchup_plan, posture_confidence=gamma,
             favorability=favorability, matchup_coverage=matchup_coverage, opponent=self.opponent,
             # … and the two clock parameters (see the docstring).
             forward_ids=self._forward_card_ids, charged=self._incoming_budget,
+            # the this-turn flat damage-boost PLAYS, side-keyed: `build` resolves each side's tuple
+            # because it is the only place that knows which seat is mine (POC-T3.5, Issue #279).
+            turn_boosts=self._turn_boosts,
             carried=carried if carried is not None else self.carried())
         return model
 
@@ -6768,7 +6771,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # it is meant to replace, which is exactly why every live consumer bypassed it. Nothing between
         # the old build site and here reads `self._state_model`, so the move is behaviour-neutral; the
         # threading below is what closes the gap.
-        model = self._snapshot(obs, my_index=yi, deck_empty=deck_empty, read=read, brief=brief,
+        model = self._snapshot(obs, my_index=yi, deck_empty=deck_empty, deck_known=deck_known,
+                               read=read, brief=brief,
                                matchup_plan=matchup_plan, gamma=gamma, favorability=fav,
                                matchup_coverage=cov, carried=carried)
         active_doomed = self._active_doomed(ma, oa, opp)

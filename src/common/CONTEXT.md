@@ -182,6 +182,12 @@ same shape", and a stage predicate over MY bench and a rule-box predicate over T
 not. The cost is the one ADR-0083 already accepted for `both_bench`: a future card with the same text
 needs its own per-`attackId` entry. The benefit is that the oracle stays ONE dict lookup per scaler —
 every variable name IS a context key, with `atk_discard_energy` the single documented exception.
+The context dict itself has **one builder**, `common/strategy/damage_context.py` (POC-T3.5,
+Issue #279): a direction-NEUTRAL `SideFacts` per side — gathered once, by `_SideBase.damage_facts` —
+and a `damage_context(attacker, defender)` that is the only place a per-side fact becomes an
+`atk_`/`def_`/`both_` key. Two suppliers call it, `Pilot._damage_context` and
+`StateModel.damage_context(attacker=)`, and a parity test pins them key-for-key on corpus frames;
+the model needs its own because `state_value(model)` may read no second supplier (ADR-0092).
 Damage that scales on **visible** state is
 thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hidden**-state scaler
 (Mega Abomasnow ex's deck-discard) is bounded soundly via the deck tracker (pigeonhole floor) and
