@@ -221,8 +221,11 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    family cleared (agree_v2 12/12 + the duplicate-pair flip), so its site swapped:
    `Pilot.needs_keep_value` (PROFILE armed ON, kill-switch) makes `_needs_v2`'s `eq2_pick` the
    forced-discard DECIDER — precedence `needs_keep_value` > `discard_keep_value` (v1) > the ladder.
-   Corpus-safe by construction; the duplicate-wincon pair v1 pitched now survives the DECISION
-   (`test_v2_decides_the_discard_under_the_kill_switch`). **Gate dissolution, precisely:** the
+   Corpus-safe by construction; the duplicate-wincon pair v1 pitched now survives the DECISION.
+   ⚠️ **None of that chain survives.** Item 2h deleted `discard_keep_value` and the ladder;
+   Issue #319 deleted `needs_keep_value`, which by then gated nothing. v2 decides the forced discard
+   unflagged. The case above is now `test_v2_STANDS_ALONE_as_the_discard_decider` — item 2h
+   renamed it (`c38bc42`), a year of reading ahead of the flag's own deletion. **Gate dissolution, precisely:** the
    discard DECISION stops running v1's pairwise gate composition and flows through the global
    assignment; the gate code is NOT deleted — `_deploy_odds` / the fuel·burst flags / the quota
    window are CONSUMED by the resolver (a dead evolution's line slot valued ×0 — the ledger derived)

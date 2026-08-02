@@ -218,9 +218,11 @@ that population is the Decision Gate's context-8 slice, quoted above.
   call sites that grew.
 * Runtime is unchanged in order: the key is built from two sums over an already-enumerated subset,
   inside the same `C(n, picks)` loop.
-* **Not addressed, and stated rather than folded in silently:** `Pilot.needs_keep_value` is read
-  nowhere in `src/`, `tests/` or `tools/` — item 2h made the discard path unconditional and left the
-  kill-switch vestigial while three docstrings (`pilot.py`, `runtime.py`) still describe it as the
-  gate. And `docs/general-strategy.md` still documents `discard-the-fodder` /
+* **Not addressed here, and stated rather than folded in silently:** `Pilot.needs_keep_value` is
+  read nowhere in `src/`, `tests/` or `tools/` — item 2h made the discard path unconditional and
+  left the kill-switch vestigial while three docstrings (`pilot.py`, `runtime.py`) still describe it
+  as the gate. **Discharged by Issue #319** (user-ruled delete, 2026-08-02): the flag is gone, and
+  the count was four false statements rather than three — the ctor comment was the fourth and the
+  most misleading, describing an OFF path that did nothing. And `docs/general-strategy.md` still documents `discard-the-fodder` /
   `discard-the-redundant` / `discard-the-hand-duplicate` as live rungs that item 2h deleted. Both are
   Issue #261 residue, both were put to the user and neither was taken into this issue's scope.

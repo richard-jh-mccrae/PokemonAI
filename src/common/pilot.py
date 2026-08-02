@@ -1384,14 +1384,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # the (opponent-perspective) end obs. Gated on the
                                                         # leaf-lab bench (SOLE-top / distinct-values / Gate 0).
         # `needs_keep_value` DELETED (Issue #319): the keep-value v2 needs-assignment decides the
-        # forced discard UNCONDITIONALLY. The flag was read nowhere after Issue #261 item 2h made
-        # `_discard_needs_pick`'s call site unconditional, and it is the one decider flag that could
-        # not be restored: every sibling lever (`attach_value` -> `baseline_energy`, `evolve_value`
-        # -> `baseline_evolution`, `promote_retreat_value` -> `baseline_promote`/`_retreat`,
-        # `snipe_relevance` -> `baseline_snipe`) reverts to a surviving rung ladder, and there is no
-        # `baseline_discard` — item 2h deleted seam-D v1 AND the `_DISCARD` ladder, and no rung
-        # anywhere fires at `_DISCARD`. A switch whose ON state both gates grade and whose OFF state
-        # nothing grades is worse than no switch.
+        # forced discard UNCONDITIONALLY. The flag was assigned here and read NOWHERE once Issue #261
+        # item 2h made `_discard_needs_pick`'s call site unconditional. Rationale lives on
+        # `_discard_needs_pick`; it is deliberately NOT restated here.
         self.promote_retreat_value = promote_retreat_value   # the PROMOTE/RETREAT DECIDER's emergency
                                                         # lever (ADR-0100, shipped ON): the Sub-lethal
                                                         # Residual, one evaluator across the body pick, the
@@ -3894,11 +3889,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         nothing is priceable, and since Issue #261 item 2h there is nothing under it to fall through
         TO — the caller's ordinary scored order takes the pick.
 
-        There is no kill-switch, and that is a decision rather than an omission (Issue #319). This
-        read "the DECIDER under the `needs_keep_value` kill-switch" while that flag was assigned and
-        never read; the flag is deleted rather than rewired because it is the one decider lever with
-        nothing to revert TO — every sibling falls back to a surviving rung ladder, no
-        `baseline_discard` exists, and no rung anywhere fires at `_DISCARD`."""
+        There is no kill-switch (Issue #319). This read "the DECIDER under the `needs_keep_value`
+        kill-switch" while that flag was assigned and never read — item 2h made the call site
+        unconditional and nothing has gated this since. The flag is deleted rather than rewired
+        because there is nothing to revert TO: item 2h deleted seam-D v1 AND the `_DISCARD` ladder,
+        there is no `baseline_discard`, and no rung anywhere fires at `_DISCARD`, so an OFF branch
+        would drop the select to the ordinary scored order — a path nothing has ever graded."""
         rows = self._discard_equation_rows(obs, select, board, options)
         if not rows:
             return None

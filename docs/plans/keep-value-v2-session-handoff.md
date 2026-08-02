@@ -96,6 +96,9 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
    Kaggle-ladder measure (the `develop_rollout` precedent), `needs_keep_value` has zero ladder
    games behind it (armed 2026-07-20, dev window = no submissions ~a week), and folding deletes
    the kill-switch fallback. Stays gated until ladder evidence accrues post-window.
+   ⚠️ **CLOSED by events, not by this item.** Issue #261 item 2h folded the `_DISCARD` rungs out of
+   `doctrine_fetch` outright and Issue #319 deleted the kill-switch, so the thing this item was
+   waiting to be safe enough to do has already happened and the fallback it worried about is gone.
 6. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Resupply (1)
    and deny (2) have now LANDED, but the WP-N7 measurement says deny retires ZERO of the 13/68
    floor firings (the residual firers are engine supporters / burst rows / far-out denies — all

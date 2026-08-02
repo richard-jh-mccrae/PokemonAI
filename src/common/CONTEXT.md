@@ -459,8 +459,9 @@ reach what: the tutor/search graph over the card representation, never a text pa
 ([needs.py](needs.py) — WHAT the position requires: deadline-tagged slots + the exact-assignment
 marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives as "a slot with a
 deadline" and dissolves per the ledger. `pilot._needs_v2` resolves the live board into slots;
-v2 now DECIDES the forced discard (`Pilot.needs_keep_value` armed ON, superseding v1 — the
-duplicate-pair naivety flipped without a new gate), while the gamble/refresh keep-value sites and
+v2 now DECIDES the forced discard, UNFLAGGED (superseding v1 — the duplicate-pair naivety flipped
+without a new gate; the `Pilot.needs_keep_value` switch that armed the 2026-07-20 swap was deleted
+by Issue #319 once item 2h left it reading nowhere), while the gamble/refresh keep-value sites and
 the gate stack stay live pending their own swaps. **Built and ARMED (ADR-0076, #186, 2026-07-27):**
 `deny_slot` generalized to an opponent-target slot FAMILY — a `gust_target` kind (held gust-effect
 Trainer cards, bench-only per `doctrine_gust.py`) keep-prices against the real per-body
