@@ -16,7 +16,7 @@ from typing import NamedTuple
 
 from common.fetch_closure import (FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
                                   FETCH_POKEMON_TARGETS as _FETCH_POKEMON_TARGETS)
-from common.option_equivalence import canonical_keys   # ADR-0102: the grab's tie-break is a board
+from common.option_equivalence import canonical_keys   # ADR-0103: the grab's tie-break is a board
                                                        # fact (the fingerprint), never the menu index
 from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _BENCH_PLACEMENT_CONTEXTS, _CARD,
                                       _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
@@ -574,7 +574,7 @@ class FetchMixin:
         stay declined, which is also the `<= 0` bar every ruled fetch frame was captured under.
 
         The pick breaks an exact tie on the option's **Option Equivalence Class identity**, not on its
-        menu index (ADR-0102, Issue #254). It cannot consume `_score_order`'s ordering directly —
+        menu index (ADR-0103, Issue #254). It cannot consume `_score_order`'s ordering directly —
         it re-scores between picks — so it takes the same `_order_key`, which is why that key is a
         function rather than a lambda at each site. The canonical keys are a pure function of the
         ORIGINAL menu, which the loop never permutes, so they are computed once."""

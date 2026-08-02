@@ -567,7 +567,7 @@ def removal_score(slots, eligibility, resupply, intrinsics, indices) -> float:
     Named and public because two callers need the same number, not just the same argmin: the discard
     decider picks the set that minimises it, and the fetch doctrine's shed PREDICTOR asks what the
     set the decider *would* pick costs, to decide whether a `cost_discard` search is being paid for
-    in junk or in live cards (ADR-0102 amendment, Issue #261 item 2h). Predicting with a different
+    in junk or in live cards (ADR-0103 amendment, Issue #261 item 2h). Predicting with a different
     formula than the one that decides is the drift `_discard_equation_rows` was just narrowed to
     prevent.
 

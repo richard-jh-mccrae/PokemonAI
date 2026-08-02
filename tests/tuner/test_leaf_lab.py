@@ -160,7 +160,7 @@ def test_a_symmetric_class_reports_NO_asymmetry():
 
 
 def test_float_non_associativity_is_NOT_an_asymmetry():
-    """The one class surviving ADR-0102's canonical ordering reports 124.83000000000001 vs
+    """The one class surviving ADR-0103's canonical ordering reports 124.83000000000001 vs
     124.82999999999998 — a 2.8e-14 spread from summing the same terms in a different order, not the
     leaf pricing one decision two ways. An instrument that can never report clean is one readers
     learn to skip, so the tolerance is what makes "zero" expressible."""

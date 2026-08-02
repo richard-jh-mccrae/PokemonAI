@@ -79,7 +79,7 @@ def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
     corr = _correction(obs, correct=[0], live_trace={"chosen": [1], "margin": 0})
 
     # The guard's actual subject, asserted directly rather than through whichever copy the pick lands
-    # on: attached Energy is game-visible, so the two options are in NO shared class. Since ADR-0102 a
+    # on: attached Energy is game-visible, so the two options are in NO shared class. Since ADR-0103 a
     # bare Pilot (both options 0.0) settles the pick by the canonical tie-break rather than the menu
     # index, and pinning that index here would pin the tie-break, not the reconciliation.
     from common.option_equivalence import option_equivalence

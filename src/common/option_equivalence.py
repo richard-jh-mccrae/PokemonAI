@@ -13,7 +13,7 @@ other, and four consumers need to agree on that:
   a measured 1167.0-vs-95.4 split on three byte-identical bodies;
 * the greedy policy's own ordering (`_score_order`, `_greedy_grab`) — an EXACT score tie breaks on
   class identity rather than on the engine's menu index, so the policy is a pure function of the
-  board and two isomorphic positions explore the same line (ADR-0102, Issue #254 — the CAUSE of the
+  board and two isomorphic positions explore the same line (ADR-0103, Issue #254 — the CAUSE of the
   split the develop rung's fan-out corrects downstream).
 
 This module is where that meaning lives, ONCE. Two implementations would drift invisibly, because the
@@ -188,7 +188,7 @@ def class_representatives(equiv: dict, count: int) -> list:
 
 
 def canonical_keys(options, frame: dict | None) -> list:
-    """Per-option ORDERING key — the fingerprint, or ``""`` when the option has none (ADR-0102).
+    """Per-option ORDERING key — the fingerprint, or ``""`` when the option has none (ADR-0103).
 
     The one thing about an option that is not a board fact is its position in the menu, and that is
     exactly what a stable sort falls back on when two options score the same. After an identical

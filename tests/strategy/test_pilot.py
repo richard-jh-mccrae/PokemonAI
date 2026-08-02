@@ -383,7 +383,7 @@ def test_target_energy_flips_the_snipe_and_is_none_off_a_damage_select():
     assert [o.fired for o in off] == [[], []]          # the rule cannot fire, so nothing separates
     assert off[0].score == off[1].score                # the two options; which of an exact tie is
                                                        # picked is the canonical tie-break's business
-                                                       # (ADR-0102), not this rule's — asserting the
+                                                       # (ADR-0103), not this rule's — asserting the
                                                        # index here pinned the old positional one
 
 

@@ -322,7 +322,7 @@ def test_class_of_defaults_to_the_index_alone():
     assert class_of({}, 7) == frozenset({7})
 
 
-# ── canonical ordering keys (ADR-0102, Issue #254) ───────────────────────────────────────────────
+# ── canonical ordering keys (ADR-0103, Issue #254) ───────────────────────────────────────────────
 
 def test_canonical_keys_are_the_fingerprint_per_option():
     """The key IS the class identity — two options that are one decision share a key, so no tie-break

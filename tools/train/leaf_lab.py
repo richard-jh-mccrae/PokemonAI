@@ -148,7 +148,7 @@ def class_asymmetry(values, equiv) -> list:
     ``1167.0 / 95.4 / 95.4`` on three byte-identical Riolu, reproducible across fresh Pilots. The
     cause was `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO from one
     bench slot and missing the isomorphic line from another — search incompleteness presenting as a
-    value difference (**Issue #254**), fixed at its source by ADR-0102's canonical ordering. Re-measured
+    value difference (**Issue #254**), fixed at its source by ADR-0103's canonical ordering. Re-measured
     2026-08-02: **zero real classes**, and the finding is what proved it.
 
     ``_EPS`` is why "zero" is expressible at all. The one class that survives the fix reports

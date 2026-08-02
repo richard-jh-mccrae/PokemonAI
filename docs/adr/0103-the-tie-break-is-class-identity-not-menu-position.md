@@ -1,4 +1,4 @@
-# ADR-0102 — An exact tie breaks on class identity, not on menu position
+# ADR-0103 — An exact tie breaks on class identity, not on menu position
 
 **Status:** Accepted; BUILT 2026-08-02 (Issue #261 POC-T2 item 2e, old Issue #254).
 **Reverses the rejection recorded in

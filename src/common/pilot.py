@@ -26,7 +26,7 @@ from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
 from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
-from common.option_equivalence import canonical_keys   # ADR-0102: the ordering tie-break is a board
+from common.option_equivalence import canonical_keys   # ADR-0103: the ordering tie-break is a board
                                                        # fact (the fingerprint), never the menu index
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
@@ -1701,7 +1701,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "route": len(gp.route), "route_turns": gp.route_turns}
 
     def _score_order(self, obs: dict, options: list, traces: list) -> list:
-        """The menu ranked for `chosen`, **canonically** (ADR-0102, Issue #254).
+        """The menu ranked for `chosen`, **canonically** (ADR-0103, Issue #254).
 
         Primary key = score; the secondary key breaks an EXACT tie toward an attach feeding a needy
         Line body (ep82867148 f87) — a decide()-only ordering nicety, W-route-invisible, never in the
@@ -1740,7 +1740,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     @staticmethod
     def _order_key(trace, canon: str, index: int) -> tuple:
-        """ONE definition of "which of these options goes first" (ADR-0102 decision 5).
+        """ONE definition of "which of these options goes first" (ADR-0103 decision 5).
 
         `_score_order` sorts a whole menu with it; `_greedy_grab` takes the `min` of it repeatedly
         over re-scored traces. Written once because two spellings of one ordering is how a key added

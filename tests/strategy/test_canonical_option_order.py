@@ -1,4 +1,4 @@
-"""The greedy policy's ordering is **canonical**, not positional (ADR-0102, Issue #254).
+"""The greedy policy's ordering is **canonical**, not positional (ADR-0103, Issue #254).
 
 `_evaluate` ranked options by ``(score, attach_to_needy_line)`` and let an EXACT tie fall to the
 engine's menu index. That index is the one thing about an option that is not a board fact: after an
