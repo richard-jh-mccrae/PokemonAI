@@ -239,10 +239,22 @@ engine states, not an uncertainty being resolved optimistically.
 
 **Measured, on the committed corrections corpus:** 32 of 2288 board bodies change their typed
 reading — 25 mine, 7 theirs; 31 of 372 frames touched; by unit code, 83 `COLORLESS` units and 1
-`RAINBOW`. Both ADR-0072 gates PASS with **zero unruled flips**: the Decision Gate is byte-identical
-(0 picks moved), and the Discrimination Gate moves one frame's ranking in the expected direction
-(`81903490|0|decision|49` `correct=[1]`: MISS rank 10/13 -> 7/13, the human's option rising as
-unpayable competitors are suppressed) plus three top-tie counts, none of which gate.
+`RAINBOW`.
+
+Both ADR-0072 gates PASS with **zero unruled flips**, re-measured against the REBASED base
+(`d8ef7a0`) rather than the base the work started on — both baselines were re-captured on `main`
+while this branch was open, so the first measurement pointed at a reference that no longer exists.
+Attribution is branch-vs-BARE-main, each gate run twice on the same rebased tree, because a flip
+`main` already carries must not be charged to this change:
+
+* **Decision Gate — byte-identical to bare main.** 0 picks moved.
+* **Discrimination Gate** — the only branch-attributable movement is one frame's ranking, in the
+  expected direction: `81903490|0|decision|49` `correct=[1]`, MISS rank 10/13 -> 7/13, the human's
+  option rising as unpayable competitors are suppressed. Plus three top-tie counts (+1 each) and
+  `avg top-tie` 2.7 -> 2.8. **No `OK -> MISS` flip**; the two held-out `REGRESSED` rows and the one
+  `IMPROVED` row are on bare main too, so none of them belong here.
+
+Neither baseline is re-captured and nothing joins the Held-out Ledger — there is nothing to rule.
 
 **Not converted, and owned: the retreat-discard cost.** `Pilot._retreat_cost_legs` /
 `_retreat_discard_choice` make the same mistake one layer over — they choose which Energy a retreat
