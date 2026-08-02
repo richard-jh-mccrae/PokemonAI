@@ -271,6 +271,10 @@ _READINESS_CAP = 0.3
 #: `planner._PLANNER_THREAT_CAP` 100 / `KO_SCORE`, and it carries the same meaning it always had:
 #: their exposure is a standing POSITION, and the prize for actually converting it is `attack_ev`'s
 #: at the terminal action. See :func:`threat` for why the my-side/their-side asymmetry is real.
+#:
+#: A RUNAWAY GUARD, like its three positional siblings — which means it must not bite in normal
+#: play. It is paired with :data:`_THREAT_W` below for exactly that reason; see there for the
+#: measurement that showed the unpaired cap biting on 100% of inputs.
 _THREAT_CAP = 0.1
 
 #: **The per-body deploy band, in prizes** — `currency.DEPLOY_BAND` (25 damage) across
@@ -318,6 +322,36 @@ _MAX_BODIES = _BENCH_MAX + 1
 #: `docs/rules.md` §6's prize table (`megaEx` -> 3, `[RULE: L333]`), and `CardStat.prize_value` is
 #: the runtime authority that returns it.
 _MAX_PRIZE_VALUE = 3.0
+
+#: **`threat`'s scale anchor into the positional zone — DERIVED, and it closes a PORTING defect.**
+#:
+#: The module header states the rule every positional family follows: *each crosses into the
+#: positional zone on a shipped SCALE anchor and is then bounded by a runaway guard that must not
+#: bite in normal play*. `readiness` has :data:`_READINESS_W`, `development` has
+#: :data:`_DEPLOY_PRIZE_BAND`, `hand` has :data:`POC_WORTH_PRIZE_RATE`. `threat` had NONE — its
+#: input went straight to :data:`_THREAT_CAP` — and that was not a design choice but a unit slip in
+#: the port. The incumbent rung is ``min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)``
+#: with `_PLANNER_THREAT_W` 0.1 per DAMAGE point over a magnitude that is a printed attack's damage
+#: (`planner._threat_magnitude`), so its guard bit only past 1000 damage — never. T3 re-denominated
+#: the input into PRIZES and carried the cap across but not the weight, so a 0.1-prize guard began
+#: receiving 1..3-prize inputs.
+#:
+#: Measured 2026-08-02 on the 22 gating Discrimination-Gate frames Issue #262 owns: `threat` read
+#: 0.0 on 20 and exactly `_THREAT_CAP` on 2 — never a value in between. `needs.opponent_target_value`
+#: returns `prize_advance` essentially unscaled at ``survival_shift=0`` (the fail-closed supplier gap
+#: named in the family's `blind_to`), so the cap binds on 100% of non-empty inputs and the family is
+#: a ONE-BIT term: *can I Knock Out their Active right now, yes or no*. A 1-prize Basic and a 3-prize
+#: Mega ex score identically, which is the discrimination the family exists to provide.
+#:
+#: The anchor is the band divided by the largest yield ONE body can carry, so a maximum-value target
+#: lands exactly at the guard and everything below it grades: 1 prize -> 0.033, 2 -> 0.067, 3 -> 0.1.
+#: Both terms are already source-verified constants of this module, so nothing here is authored — and
+#: the positional band is unchanged, which is what keeps `ko-score-band` and :data:`POSITIONAL_MAX`
+#: untouched by the fix. The guard now bites only when two bodies are simultaneously reachable, which
+#: is the "does not bite in normal play" the header promises (only their Active is reachable by
+#: damage at all — see :func:`threat`).
+_THREAT_W = _THREAT_CAP / _MAX_PRIZE_VALUE
+
 #: The Prize count both players race down from. Verified at source: *"Prize cards are 6 cards that
 #: each player sets aside"* (`docs/rulebook.txt` L57, and the setup step at L102). Read from
 #: `needs` rather than re-declared — one fact, one home (ADR-0087).
@@ -464,6 +498,22 @@ REGISTRY: tuple[TermFamily, ...] = (
             "their hand and deck — `theirs.hand_size` and `theirs.deck_count` have suppliers and "
             "no reader, so hand disruption (a Judge, a discard effect) prices exactly 0. This is "
             "the single largest uncovered family; T4 must always-expand disruption plays.",
+            "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
+            "STEP: `_reachable_target_values` returns nothing at all unless my Active's best "
+            "reachable damage already meets the target's remaining HP, so a Mega Lucario chipped "
+            "from 330 to 120 scores the same as one at full HP. This family is `survival`'s mirror "
+            "in name and NOT in form — survival grades continuously by a clock "
+            "(`halve(turns_to_ko_me - 1)`), threat is on/off — and the asymmetry is exactly what "
+            "the wave-3 ruling on `83116501|0|decision|60` objects to: *\"Our Starmie cannot KO the "
+            "Lucario in under 3 turns. We can KO it with 2 Jetting Blows and a single Nebula "
+            "Beam.\"* A multi-turn KO plan prices 0 every turn until the last one. Closing it needs "
+            "a MY-side KO clock on the model — `CombatMath.turns_to_ko` is the shipped oracle but "
+            "gates affordability on a raw energy COUNT while this family's reachability filter uses "
+            "the Attach Budget, so routing to it as-is would give the family a second and weaker "
+            "opinion about affordability than the one it already holds (the sole-supplier ruling "
+            "forbids exactly that). The accessor is substrate, owned by T1's completeness contract "
+            "(Issue #260); named here rather than derived inline, because `ceil(hp / damage)` "
+            "written in this module WOULD be the second opinion.",
             "the SURVIVAL half of `opponent_target_value` — its `survival_shift` is a Δ of "
             "`turns_to_ko_me` under REMOVAL of the body, and the model exposes no removal-delta "
             "route (the live consumer at `pilot.py` bypasses to CombatMath, which the sole-supplier "
@@ -516,7 +566,17 @@ REGISTRY: tuple[TermFamily, ...] = (
             "(`planner._simulate_line` carries the measurement — arming it scored a branch that SPENT "
             "a card ABOVE one that spent nothing). A snapshot at the true end of my turn is the fix "
             "and it needs substrate the sim does not have. The family is fully live wherever a REAL "
-            "board is scored, which is every call Issue #263's 1-ply ordering makes.",
+            "board is scored, which is every call Issue #263's 1-ply ordering makes. **MEASURED, no "
+            "longer merely predicted** (2026-08-02, Issue #262): across all 22 gating "
+            "Discrimination-Gate frames the T3 layer owns, this family read exactly 0.0000 on BOTH "
+            "sides of every comparison — inert, 22 for 22. The consequence is the one the entry "
+            "warned of, and it decides ten of those frames on its own: `development` credits the "
+            "body a card play lands while NOTHING on the leaf path charges for the card leaving my "
+            "hand, so spending is free. `_line_account`'s spend charge is the only counterweight, "
+            "and on those ten frames it fires on FOUR and is out-scaled about 3:1 where it does "
+            "(-0.06 prizes against a +0.20 deploy credit) — on the other six nothing charges for "
+            "the card at all. That is why the leaf prefers Ultra Ball / Buddy-Buddy Poffin / "
+            "Lillie's over the developer's *\"just save it for next turn\"* on every one of them.",
             "DECK THINNING as a reason to spend a card. The assignment prices what a card COVERS, so "
             "a card whose slot is already satisfied prices at its latent worth and playing it reads "
             "as a small loss. The wave-3 ruling on `83457493|1|decision|33` says otherwise on a real "
@@ -1021,13 +1081,21 @@ def threat(targets: Iterable[float]) -> float:
     terms — a benched body is reachable only through a snipe rider, which `attack_ev` prices at the
     terminal action and this family deliberately does not (see its `blind_to`).
 
-    **POSITIONAL, so capped** at :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 /
-    `KO_SCORE`), which is where the my-side/their-side asymmetry described in the module header
-    lives. Their exposure standing on the board is worth something — it constrains what they can
-    afford to leave in front — but the PRIZE for converting it belongs to the attack that converts
-    it, and `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for one
-    Knock Out twice."""
-    return min(_THREAT_CAP, float(sum(float(t) for t in targets)))
+    **POSITIONAL, so SCALED then capped** — :data:`_THREAT_W` crosses into the positional zone and
+    :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 / `KO_SCORE`) is the runaway guard above
+    it. That is where the my-side/their-side asymmetry described in the module header lives: their
+    exposure standing on the board is worth something — it constrains what they can afford to leave
+    in front — but the PRIZE for converting it belongs to the attack that converts it, and
+    `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for one Knock Out
+    twice.
+
+    **The scale is not decoration.** Without it this function was ``min(0.1, sum)`` over inputs that
+    are prize values of 1..3, so the guard bound on every non-empty input and the family collapsed to
+    one bit — see :data:`_THREAT_W` for the measurement on Issue #262's 22 gating frames. A saturated
+    term has zero derivative, and this module's own doctrine (`readiness`'s docstring, `blind_to`'s
+    contract) is that under 1-ply differencing a zero derivative means *never explored*, not merely
+    undervalued."""
+    return min(_THREAT_CAP, _THREAT_W * float(sum(float(t) for t in targets)))
 
 
 def readiness(bodies: Iterable[ReadyBody]) -> float:

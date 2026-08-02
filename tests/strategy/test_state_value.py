@@ -650,6 +650,27 @@ def test_a_reachable_knockout_on_their_active_raises_threat_but_never_by_a_prize
     assert exposed["threat"] <= sv._THREAT_CAP < 1.0
 
 
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit():
+    """The scale anchor `_THREAT_W` restores, and the porting defect it closes (Issue #262).
+
+    `threat`'s inputs are `needs.opponent_target_value`, which at the fail-closed
+    ``survival_shift=0`` this module passes returns the target's PRIZE value essentially unscaled —
+    1, 2 or 3 (`docs/rules.md` §6, verified at source: regular / ex / Mega ex). Against a 0.1-prize
+    cap and with no weight between them, `min(cap, sum)` bound on **every** non-empty input, so the
+    family answered one bit — *is their Active reachable at all* — and a 1-prize Basic priced the
+    same as a 3-prize Mega ex. Measured on the 22 gating Discrimination-Gate frames: `threat` read
+    0.0 on 20 and exactly the cap on 2, never a value between.
+
+    So the assertion is STRICT monotonicity, which is precisely what the unscaled form could not
+    satisfy, plus the two band properties that must survive the fix: a maximum-yield target lands at
+    the band rather than above it, and the cap still guards a multi-target sum."""
+    assert sv.threat([1.0]) < sv.threat([2.0]) < sv.threat([3.0])
+    assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_CAP)
+    assert sv.threat([3.0, 3.0]) == pytest.approx(sv._THREAT_CAP)
+    assert sv.threat(()) == 0.0
+
+
 # ── inertness is over; the seam is not ────────────────────────────────────────────────────────────
 
 

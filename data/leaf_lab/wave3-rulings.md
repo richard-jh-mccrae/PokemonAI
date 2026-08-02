@@ -477,3 +477,78 @@ not describe the same decision.** `82228017|4` is filed as *"Resolved by dont-tu
 Mega Signal is a wincon-only tutor…"*, while the developer's ruling is about not wasting Hero's Cape
 that Ultra Ball could eat. Both may be true of the same board, but a `covered` entry that answers a
 different question than the one asked is not evidence the frame is handled. Recorded, not acted on.
+
+## The 22 that are NOT sequencing — diagnosed by term, 2026-08-02
+
+The wave closed with 65 frames still gating. Splitting them by whether the LIVE agent plays the
+ruled option — the Decision Gate's own `chosen` vs `correct`, not a re-reading of the boards —
+gives three buckets with three different owners:
+
+| | frames | owner |
+|---|---|---|
+| plays it right, `sequencing_error` | 21 | Issue #263 (T4). A board valuation scores END STATES; "develop now, attack later this turn" and "attack now" differ in ORDER, so no term can separate them. |
+| plays it right, NOT sequencing | **22** | **this layer** — the subject of this section |
+| plays it **wrong** | 22 | pre-existing. The Decision Gate re-run post-rebase reports `agree 250/347 -> 250/347, 0 picks moved`, so T3 caused none of them and T4's ordering is not why they are wrong. |
+
+`tools/train/family_diag.py` (new) attributes each of the 22 to the `state_value` family that has to
+change for it to flip back, by scoring the ruled option's and the leaf's end boards with
+`state_value(..., working=...)` on the boards `planner._simulate_line` actually produces. The table
+is generated into `t3-term-diagnosis.md` beside this file. Four findings, none of which any ruling
+had named:
+
+1. **The six-family scalar is a TWO-family scalar on this path.** `hand` is flat at exactly 0.0000
+   on both sides of all 22. `threat` moves on 1. `prize_race` moves on 2. `readiness` is the largest
+   delta on 2, at margins of 0.0034 and 0.0004 prizes — noise, not judgement. Every one of the 22 is
+   decided by `development` (10) or `survival` (10).
+
+2. **`development` credits a card play that nothing charges for** — the 10-frame cluster. The leaf
+   plays Ultra Ball / Buddy-Buddy Poffin / Lillie's / Harlequin, banks the deploy marginal for the
+   body it lands, and pays nothing in `hand`, because `hand` prices MY hand and the sim's end
+   observation is opponent-perspective so my hand is hidden. `_line_account`'s spend charge is the
+   only counterweight; it fires on four of the ten and is out-scaled about 3:1 where it does (-0.06
+   prizes against a +0.20 deploy credit), and on the other six nothing charges for the card at all.
+   The family's `blind_to` predicted this; it is now measured, and the entry says so.
+
+3. **`survival` rewards passivity** — the other 10. On `83116501|60`, `82717711|37` and
+   `83007714|8`, `survival` is the ONLY family that moves at all, so retreat-or-pass beats attack
+   purely by lowering exposure. On both `85709280` frames the ruled line BANKS A PRIZE
+   (`prize_race` +1.0156) and `survival` charges 1.37-1.46 more against it, so the scalar declines
+   the prize. `ko-score-band` is not violated — it binds positional terms and `survival` is
+   prize-denominated — but the effect is the one that rule exists to prevent.
+
+4. **`threat` was a ONE-BIT term, and that is now fixed.** `needs.opponent_target_value` returns the
+   target's prize value essentially unscaled at the `survival_shift=0` this module passes, so
+   `min(_THREAT_CAP, sum)` bound on 100% of non-empty inputs: 0.0 on 20 frames, exactly the cap on
+   2, never between. A 1-prize Basic and a 3-prize Mega ex priced identically. The cause is a unit
+   slip in the port — the incumbent rung is `min(cap, _PLANNER_THREAT_W * magnitude)` over DAMAGE
+   points, and T3 re-denominated the input into prizes while carrying the cap and not the weight, so
+   `threat` became the one positional family with a runaway guard and no scale anchor. Closed by
+   `_THREAT_W = _THREAT_CAP / _MAX_PRIZE_VALUE`, derived from two constants the module already
+   verifies at source, leaving the positional band and `POSITIONAL_MAX` untouched.
+
+**Finding 4 does not move any of the 22**, and the reason is worth stating rather than leaving for a
+reader to notice: every reachable target across these frames is a 3-prize Mega ex, which is exactly
+where the anchor is derived to land — at the cap, the value the unscaled form already returned. The
+fix changes what a 1- or 2-prize target is worth, and no such target is reachable in this set. It is
+a correctness fix to a term that could not discriminate, not a gate-shrinking one.
+
+### What is deliberately NOT done here
+
+**Chip damage is left as a NAMED blind spot rather than closed.** Finding 3's mirror-image cause is
+that `threat` reads reachability as a STEP — nothing at all unless my Active's best reachable damage
+already meets the target's remaining HP — so a body chipped from 330 to 120 prices the same as one
+at full HP, and `83116501|60`'s ruling (*"We can KO it with 2 Jetting Blows and a single Nebula
+Beam"*) prices 0 every turn until the last. Grading it by a clock the way `survival` grades
+`turns_to_ko_me` needs a MY-side KO clock on the model. `CombatMath.turns_to_ko` is the shipped
+oracle but gates affordability on a raw energy COUNT while this family's filter uses the Attach
+Budget, so routing to it as-is hands the family a second and weaker opinion about affordability than
+the one it already holds. Writing `ceil(hp / damage)` in `state_value` instead would BE that second
+opinion. The accessor is substrate and belongs to T1's completeness contract (Issue #260); the gap
+is recorded in `threat`'s `blind_to` with that owner.
+
+**Findings 2 and 3 are not retuned.** Both are calibration between terms whose shapes are right —
+`development`'s credit against a spend charge that lives outside the scalar, and `survival`'s
+magnitude against a `threat` that cannot yet see a multi-turn KO plan. Moving either constant to
+satisfy ten ruled frames would be fitting the equation to the corpus by hand, which is what the
+post-POC learning phases (Issues #146-#148) exist to do with a held-out set. The diagnosis is the
+deliverable; the retune is not.
