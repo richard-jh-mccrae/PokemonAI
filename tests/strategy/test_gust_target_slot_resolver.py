@@ -72,7 +72,7 @@ def _setup(hand_ids, *, opp_bench=(), gust_target_slots=False):
 
 def _slots(pilot, obs):
     board = pilot._board(obs)
-    rows, _ = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
+    rows = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
     slots, elig = pilot._resolve_needs(obs, board, rows)
     by_kind = lambda kind: [(j, s) for j, s in enumerate(slots) if s.kind == kind]
     return rows, slots, elig, by_kind("deny"), by_kind("gust_target")
@@ -127,8 +127,13 @@ def test_on_opens_no_gust_target_slot_with_no_gust_supplier_held():
 @pytest.mark.req("REQ-NEEDS-0012")
 def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
     """ADR-0076: `_board()` resolves `_opponent_target_rows` ONCE per decision and caches it
-    (`_opponent_target_cache`) — the gust_target emission and the S3a diagnostic shadow both read
-    that cache rather than each re-running the per-body `turns_to_ko_me` simulation from scratch."""
+    (`_opponent_target_cache`); the `gust_target` emission reads that cache rather than re-running
+    the per-body `turns_to_ko_me` simulation from scratch.
+
+    The S3a diagnostic shadow was the second reader this pinned, and Issue #261 item 2h deleted it.
+    The property is unchanged and is still worth pinning on the reader that survives — the cost the
+    cache exists to avoid is a per-body simulation, and one consumer paying it twice is the same
+    defect two consumers paying it once each would have been."""
     pilot, obs = _setup([BOSS], opp_bench=[_banked(RIOLU, 70)],
                         gust_target_slots=True)
     board = pilot._board(obs)
@@ -144,13 +149,12 @@ def test_the_per_body_value_resolves_once_per_decision_and_is_shared():
         return real(o, b)
     pilot._opponent_target_rows = _spy
 
-    rows, _ = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
+    rows = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
     slots, _elig = pilot._resolve_needs(obs, board, rows)
-    shadow = pilot._opponent_target_shadow(obs, board)
 
-    assert not calls                            # neither consumer recomputed — both read the cache
-    assert any(s.kind == "gust_target" for s in slots)
-    assert shadow is not None and shadow["bodies"][0]["id"] == RIOLU
+    assert not calls                            # the emission did not recompute — it read the cache
+    gust = [x for x in slots if x.kind == "gust_target"]
+    assert gust and cached_rows[0]["id"] == RIOLU
 
 
 @pytest.mark.req("REQ-NEEDS-0016")
@@ -162,10 +166,11 @@ def test_the_gust_slot_survives_the_rollout_because_the_shared_rows_now_run_mid_
     AND the fresh compute returned `None`, so the ladder terminated in nothing and **no `gust_target`
     slot was emitted inside a rollout at all**, with `gust_target_slots` shipped ON the whole time.
 
-    The guard has moved to `_opponent_target_shadow`, where "no shadow work in rollouts" actually
-    applies. Asserted as an identity between the two `_planning` states rather than against a value,
-    for the same reason the deny sibling is: the claim is that the agent scores this the same inside
-    its own rollout as outside it."""
+    The guard moved to `_opponent_target_shadow`, where "no shadow work in rollouts" actually
+    applied — and Issue #261 item 2h then deleted that shadow, so the guard is gone entirely and the
+    live rows simply always run. Asserted as an identity between the two `_planning` states rather
+    than against a value, for the same reason the deny sibling is: the claim is that the agent scores
+    this the same inside its own rollout as outside it."""
     pilot, obs = _setup([BOSS], opp_bench=[{"id": RIOLU, "hp": 70, "energies": []}],
                         gust_target_slots=True)
 

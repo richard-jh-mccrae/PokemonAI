@@ -664,9 +664,9 @@
     "round": "2026-07-13"
   },
   "85045840-10": {
-    "disposition": "covered",
-    "reason": "BUILT 2026-07-10 via /update-strategy (PR #70): gust-for-the-stall gated on opp_active_can_damage_us (doctrine_gust.py) -- don't gust a HARMLESS Active (Kyogre @0 Energy) off to the bench. The earlier 'breaks REQ-GUST-0003' bounce was resolved by completing the DOOM_ACTIVE/KADA synthetic stubs with real attacks; the affordability charge is scoped to the MILD +10 stall ONLY (the +95 famine rung stays worst-case), so it does NOT touch the active_doomed survival boolean (incoming-affordability won't-fix intact). decide() on f10 flips to [2] attach; pinned by test_blunder_20260710_split_fixes.py::test_f10_.",
-    "round": "2026-07-10"
+    "disposition": "fixed",
+    "reason": "USER RULING 2026-08-02 (Issue #261 wave-2, items 2e+2h): ACCEPT the leaf flip. The SHIPPED DECISION on this frame is unchanged and already plays the human's option -- verified on the pre-change tree too, so the ruling is about the LEAF RANKING only, which moved OK -> MISS (rank 1 -> 2). Cause, located: item 2h re-pointed the fetch doctrine's shed predictor off the deleted _DISCARD ladder onto the keep-value v2 assignment, which prices the Ultra Ball's forced discard at 4.5 (its two cheapest sheds include the held Boss's Orders), so dont-shed-a-live-card fires and the greedy continuation INSIDE the sim declines the fetch. The human's line therefore develops less on the simmed end board (12.5 -> 0.0) while the Ultra-Ball-first line is unaffected (10.025) because _engine_leaf_value forces its first step and cannot decline anything. User's words on accepting: 'the decline agrees with that frame's own rationale' -- this frame's own correction says 'save boss's orders for a time when it is actually valuable', which is exactly what the new predictor refuses to spend. Non-voiding: the correction STANDS and keeps gating; the leaf baseline is re-captured against this ruling.",
+    "round": "2026-08-02"
   },
   "85058574-109": {
     "disposition": "covered",
@@ -722,5 +722,15 @@
     "disposition": "fixed",
     "reason": "RE-RULED 2026-07-28 in Issue #177's grill (2d647ba): correct [2] attach -> [10] Play Salvatore, a 2-prize KO on Terapagos ex -- Salvatore evolves the benched Staryu played this turn (its printed text permits it), Ignition Energy provides {C}{C}{C} on an Evolution, Cinderace retreats for 0, Nebula Beam 210 >= 130 remaining. Ledgered 2026-07-29 by ADR-0082 decision 4 / Issue #211, which also synced the stale fixture (ms_doom_relax_bare_terapagos_f29 still carried correct=[2]). The shipped Pilot picks [10]. ADR-0062's deny bound is unaffected -- the Hammer still prices exactly -1.25 and _DENIAL_BENCH < 30/70 still holds (ADR-0062 Amendment A).",
     "round": "2026-07-29"
+  },
+  "86089120-14": {
+    "disposition": "transposition",
+    "reason": "USER RULING 2026-08-02 (Issue #261 wave-2, item 2e). The correction STANDS on its own rationale -- 'Gusting up their main attacker only helps them', i.e. attach rather than play Boss's Orders -- but its correct=[1] names one of TWO options that are equal in value: attaching either Basic {P} (opt 1) or Basic {R} (opt 3) to a bare Dreepy. The user's words: 'attaching either F or P energy to Dreepy should be equal value when it has no energy.' The Dragapult line needs both ({R}{P} Phantom Dive), so neither attach is the wrong one and no agent can be scored on picking between them. Surfaced when ADR-0103 replaced the menu-index tie-break, which had been landing on [1] by position rather than by any read. NOT an equivalence CLASS (ADR-0091 fingerprints differ -- distinct card ids), so satisfies_human cannot absorb it; transposition is the disposition for exactly this.",
+    "round": "2026-08-02"
+  },
+  "85045840-12": {
+    "disposition": "fixed",
+    "reason": "USER RULING 2026-08-02 (Issue #261 wave-2, items 2e+2h): ACCEPT the leaf flip. The SHIPPED DECISION on this frame is unchanged and already plays the human's option -- verified on the pre-change tree too, so the ruling is about the LEAF RANKING only, which moved OK -> MISS (rank 1 -> 2). Cause, located: item 2h re-pointed the fetch doctrine's shed predictor off the deleted _DISCARD ladder onto the keep-value v2 assignment, which prices the Ultra Ball's forced discard at 4.5 (its two cheapest sheds include the held Boss's Orders), so dont-shed-a-live-card fires and the greedy continuation INSIDE the sim declines the fetch. The human's line therefore develops less on the simmed end board (12.5 -> 0.0) while the Ultra-Ball-first line is unaffected (10.025) because _engine_leaf_value forces its first step and cannot decline anything. User's words on accepting: 'the decline agrees with that frame's own rationale' -- this frame's own correction says 'save boss's orders for a time when it is actually valuable', which is exactly what the new predictor refuses to spend. Non-voiding: the correction STANDS and keeps gating; the leaf baseline is re-captured against this ruling.",
+    "round": "2026-08-02"
   }
 }

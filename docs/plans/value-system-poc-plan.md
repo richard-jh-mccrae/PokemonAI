@@ -67,11 +67,12 @@ needs-assignment (ADR-0065) · refresh-swing v1 SHED (ADR-0060) · energy-deny m
 **DARK (built, OFF):** `deny_relevance` + `deny_strip_delta` (Issue #228 debt, two flips
 recorded) · `leaf_hand_value` · `value_model` (parked; post-POC Issue #147 replaces it).
 
-**SHADOW (computes, decides nothing — all die in this build):** `_discard_shadow`,
-~~`_refresh_shed_shadow`~~ (DEAD 2026-08-01, ADR-0101 — item 2b promoted its subject),
-`_threat_shadow`, `_recur_shadow`, `_opponent_target_shadow`,
-~~`hand_size_relief` (reporting-only)~~ (DEAD 2026-08-02, ADR-0102 — item 2c promoted its subject
-into `score`, so the field and its `hs_relief` telemetry key went with the flats they reported past).
+**SHADOW (computes, decides nothing — all die in this build):**
+~~`_discard_shadow`~~ ~~`_refresh_shed_shadow`~~ ~~`_threat_shadow`~~ ~~`_recur_shadow`~~
+~~`_opponent_target_shadow`~~ ~~`hand_size_relief`~~ — **ALL DEAD.** `_refresh_shed_shadow`
+2026-08-01 (ADR-0101, item 2b promoted its subject); `hand_size_relief` 2026-08-02 (item 2c promoted
+its subject into `score`, so the field and its `hs_relief` telemetry key went with the flats they
+reported past); the other four 2026-08-02 (item 2h).
 
 **UNCONSUMED (dead surface):** StateModel TheirSide clock family (every live consumer bypasses
 to CombatMath with `charged`/`forward_ids`/harvest kwargs `build()` never receives) · sharing
@@ -274,14 +275,55 @@ deliberate list; gates green; flips → wave 2.
   unchanged. The
   motivating frame `86091728-43` does NOT flip and the reason is recorded: its ruling needs the
   deck-tracker's prize inference and an `item_lock` worth entry, neither a deploy-seam gap.
-- **Rollout order fix (old Issue #254):** canonical slot ordering via Option-Equivalence.
+- **Rollout order fix (old Issue #254): DONE 2026-08-02 (ADR-0103).** The order-dependence was not
+  the search's but the POLICY's — the develop rollout re-runs `_evaluate` on each intermediate
+  SearchState, whose `(score, needy_line_attach)` sort fell through to the ENGINE MENU INDEX. The
+  third key is now the ADR-0091 fingerprint, index demoted below it; `_greedy_grab` takes the same
+  key (composed with item 2d's context-dependent take-fewer bar, which landed on the same loop).
+  Unconditional and LIVE (a sim-only tie-break would simulate a different agent).
+  **Leaf Lab CLASS ASYMMETRY 5 classes → 0**, Discrimination Gate PASS / 0 moved, leaf SOLE-top
+  38→39. One Decision-Gate REGRESSION went to wave 2 and was **ruled there**
+  (`86089120|0|decision|14`): the user ruled the two tied attaches genuinely equal in value on a bare
+  Dreepy, so the correction's `correct` names one of an indistinguishable-by-value pair — recorded as
+  a **`transposition`** (ADR-0088), the first since ADR-0091 retired the last one. Both gates PASS.
 - **Free-Item hold (old Issue #212):** generalize `_DENIAL_ITEM_COST` into the keep machinery.
-- **Shadow deletion:** `_discard_shadow`, `_threat_shadow`, `_recur_shadow`,
-  `_opponent_target_shadow` and the v1 discard fallback (`discard_keep_value` path) deleted as
-  their consumers confirm; telemetry keys retired.
+- **Shadow deletion: DONE 2026-08-02 (item 2h), except the `_DISCARD` ladder.** All four shadows,
+  their `Decision` fields and telemetry keys, the v1 discard fallback (`discard_keep_value` flag +
+  `_discard_equation_pick`) and `_discard_equation_rows`' now-unread v1 ranking are deleted, along
+  with the three probes whose entire contract was reading them (`threat_sweep`, `needs_sweep`,
+  `doom_audit` — ADR-0089: a RULING's script dies with its answer) and the blunder shell's
+  discard-shadow dropdown. Gates green, suite green, zero decision movement.
+  **The tuned `_DISCARD` ladder is deleted too** (12 rungs, by name in the PR body), but only after
+  its SECOND consumer was re-pointed: it was also the scoring basis of the fetch doctrine's shed
+  predictor, so deleting it blind would have silenced three live cost-netting rungs
+  (`costly-fetch-sheds-junk`, `dont-shed-a-live-card`, `dont-shed-a-key-card`) — the Issue #238
+  shape. User-ruled 2026-08-02: re-point the predictor onto the equation that DECIDES the discard.
+  `_shed_signals` now prices the two cards the v2 assignment would actually shed
+  (`needs.removal_score`, extracted so the predictor and `cheapest_removal` share one objective),
+  and the deadness/re-access derivations are shared by both row builders rather than spelled twice.
+  Every ladder case pinned as a corpus ruling is reproduced by v2 unchanged. Decision Gate PASS and
+  the agree rate RISES (249/345 → 251/345). Discrimination Gate is RED on two frames
+  (`85045840|0|decision|10`, `|12`) → wave 2: the shipped decision on both is unchanged and already
+  matches the human, but the re-pointed bands decline the Ultra Ball inside the sim's continuation,
+  so the human's line develops less on the simmed end board. Not self-ruled and not tuned around —
+  **user-ruled ACCEPT 2026-08-02**, both frames recorded `fixed` (non-voiding) and the leaf baseline
+  re-captured against the ruling. Both gates PASS.
+  Two findings the sweep surfaced rather than caused, both pre-existing on `main` at `ce28431`:
+  **Issue #294** — `cheapest_removal` is blind to the `pitch` term, so two RULED ladder-win cases
+  shed the wrong card in shipped play (kept as strict-xfail TARGETs so the deletion of the shadow
+  that showed it does not bury it); and the leaf-profile test was crediting the deny slot for
+  `_recur_shadow`'s model reads, so `DENY_SLOT_PROFILE` turns out to be unexercised by that file's
+  corpus.
 
 Acceptance: PROFILE has zero OFF value flags (except `value_model`, deleted-or-inert pending
 post-POC Issue #147); zero shadow emitters; gates green; flips → wave 2.
+
+⚠️ **The OFF-flag clause is not met and no item in this track owns it.** After item 2h,
+`PROFILE` carries TWO `False` value flags: the named exception `value_model`, and
+**`leaf_hand_value`** (ADR-0065 WP-N5b — the develop-rung leaf's actionable-resource term, armed-off
+2026-07-20 pending its leaf-lab bench). Items 2a–2h between them touch nothing that arms or retires
+it. Flagged here rather than quietly satisfied by counting only the flags a track happened to reach:
+T5's PROFILE collapse is the natural owner, and it needs either the bench result or a deletion.
 
 ### T3 — `state_value` (critical path; old Issue #145 merged)
 

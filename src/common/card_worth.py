@@ -35,7 +35,7 @@ ENERGY_TIER = 8.0                  # a typed Basic Energy — the mid card, the 
 ACE_SPEC_TIER = 25.0              # a one-per-deck, unrecoverable ACE SPEC — high floor, closure-discounted
 
 # behavioural tag → worth points (ADR-0065 §Build status, TAG_TIER): situational Trainers / special
-# Energy whose keep-value the DISCARD ladder already prices (`keep-key-cards-at-discard` −30 covers
+# Energy whose keep-value the DISCARD ladder priced (`keep-key-cards-at-discard` −30 covers
 # `discard_eot`; `dont-waste-clutch-heal` −40; `keep-gust-and-recovery-at-discard` −10) but the worth
 # oracle could not see — a role-less Wally's / Ignition shuffled away for free. Mirrors the ladder's
 # bands into the ONE currency, scaled to ROLE_TIER (wincon 30 ↔ keep-key −30).

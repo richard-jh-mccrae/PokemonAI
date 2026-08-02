@@ -36,7 +36,7 @@ length.
 seat is regularly prompted *out of turn* — the post-KO ``ToActive`` promotion is the common case —
 and then those flags describe the **opponent's** turn. ``82756664-97`` is exactly that frame, which
 is why the read-out names the turn player explicitly instead of implying "you". Turn player is
-``(firstPlayer + turn - 1) % 2`` for ``turn >= 1`` (`train.probes.doom_audit.turn_player`); ``turn
+``(firstPlayer + turn - 1) % 2`` for ``turn >= 1`` (`turn_player` below); ``turn
 0`` is the shared setup phase with no single actor (`tools/train/CONTEXT.md`).
 
 Card enrichment (printed HP, type, weakness, retreat, attack names/costs, prize value) comes from
@@ -169,7 +169,8 @@ def turn_player(turn, first_player) -> int | None:
     """The seat whose turn ``turn`` (1-based) is — ``firstPlayer`` takes the odd turns.
 
     ``None`` for turn 0 (the shared setup phase, where both seats act) or when either input is
-    missing. Mirrors `train.probes.doom_audit.turn_player`.
+    missing. Was mirrored by `train.probes.doom_audit.turn_player` until Issue #261 item 2h
+    deleted that probe with the shadow it read; this is now the only copy.
     """
     if turn is None or first_player is None:
         return None

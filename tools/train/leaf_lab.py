@@ -34,6 +34,10 @@ from train.gates import print_gate_report                     # noqa: E402
 _PLACEHOLDER_SBI = "leaf-lab-cgpy-reseed"   # any non-empty token passes `_simulate_line`'s gate; cgpy
                                             # then reconstructs the search state from the structured obs
 
+_EPS = 1e-9                                 # `class_asymmetry`'s "the leaf priced this ONE way" bar —
+                                            # measured float non-associativity is 2.8e-14, the leaf's
+                                            # own reporting granularity 1e-3. See that function.
+
 
 def board_leaf_values(pilot, obs) -> list:
     """The leaf value `_engine_leaf_value` assigns to taking EACH menu option first (index-aligned;
@@ -142,21 +146,31 @@ def class_asymmetry(values, equiv) -> list:
     is tie-LENIENT, so a frame where the leaf ranks one of two identical options 12x above the other
     still reads ``OK``. Measured 2026-07-31: five classes, worst `81903490|0|decision|49` at
     ``1167.0 / 95.4 / 95.4`` on three byte-identical Riolu, reproducible across fresh Pilots. The
-    cause is `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO from one bench
-    slot and missing the isomorphic line from another — search incompleteness presenting as a value
-    difference (**Issue #254**).
+    cause was `_engine_leaf_value`'s greedy, index-order-dependent rollout reaching a KO from one
+    bench slot and missing the isomorphic line from another — search incompleteness presenting as a
+    value difference (**Issue #254**), fixed at its source by ADR-0103's canonical ordering. Re-measured
+    2026-08-02: **zero real classes**, and the finding is what proved it.
+
+    ``_EPS`` is why "zero" is expressible at all. The one class that survives the fix reports
+    ``124.83000000000001 / 124.82999999999998`` — a spread of ``2.8e-14``, which is float
+    non-associativity in a sum whose terms arrive in a different order per option, not the leaf pricing
+    one decision two ways. Without the tolerance this instrument would report a finding it can never
+    stop reporting, and a permanent finding is one readers learn to skip. ``1e-9`` sits eleven orders
+    above that noise and six below the ``0.001`` the leaf's own values are rounded to elsewhere, so no
+    difference the leaf can express is swallowed.
 
     **Reported, never gating** — the doctrine the tie metrics already carry (`gates.py` module
-    docstring): a metric nobody has ruled on must not start failing `main`. With the develop rung's
-    canonicalisation armed this should be empty for the rung's own frames; a non-empty finding means
-    either the flag is off or a class is being scored somewhere that does not canonicalise."""
+    docstring): a metric nobody has ruled on must not start failing `main`. A non-empty finding now
+    means either the ordering is not canonical on that path or a class is being scored somewhere that
+    does not canonicalise."""
     from common.option_equivalence import classes
 
     out = []
     for members in classes(equiv):
         vals = [values[i] for i in members if i < len(values) and values[i] is not None]
-        if len(set(vals)) > 1:
-            out.append({"options": list(members), "spread": max(vals) - min(vals)})
+        spread = (max(vals) - min(vals)) if vals else 0.0
+        if spread > _EPS:
+            out.append({"options": list(members), "spread": spread})
     return sorted(out, key=lambda f: -f["spread"])
 
 

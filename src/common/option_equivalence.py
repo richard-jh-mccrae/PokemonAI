@@ -2,7 +2,7 @@
 
 Two options are one decision when the board cannot tell them apart: two identical undamaged Riolu on
 the bench, the same Energy card onto either of two identical Basics. Picking one is picking the
-other, and three consumers need to agree on that:
+other, and four consumers need to agree on that:
 
 * `satisfies_human` (`tools/train/gates.py`) — a ruling naming one member is satisfied by any member,
   so an indistinguishable-options ruling can be satisfied ON PURPOSE rather than merely excused as a
@@ -10,7 +10,11 @@ other, and three consumers need to agree on that:
 * the Leaf Lab — a tie between options that are the same decision is not a discrimination failure,
   and a class whose members score DIFFERENTLY is a defect worth reporting (**Class Asymmetry**);
 * the develop rung — sim ONE representative per class and give every member its value, which removes
-  a measured 1167.0-vs-95.4 split on three byte-identical bodies.
+  a measured 1167.0-vs-95.4 split on three byte-identical bodies;
+* the greedy policy's own ordering (`_score_order`, `_greedy_grab`) — an EXACT score tie breaks on
+  class identity rather than on the engine's menu index, so the policy is a pure function of the
+  board and two isomorphic positions explore the same line (ADR-0103, Issue #254 — the CAUSE of the
+  split the develop rung's fan-out corrects downstream).
 
 This module is where that meaning lives, ONCE. Two implementations would drift invisibly, because the
 agent and the instrument grading it would each stay internally consistent while disagreeing.
@@ -181,6 +185,28 @@ def class_representatives(equiv: dict, count: int) -> list:
 
     Returned in ascending order, so a caller iterating them walks the menu in its natural order."""
     return [i for i in range(count) if min(class_of(equiv, i)) == i]
+
+
+def canonical_keys(options, frame: dict | None) -> list:
+    """Per-option ORDERING key — the fingerprint, or ``""`` when the option has none (ADR-0103).
+
+    The one thing about an option that is not a board fact is its position in the menu, and that is
+    exactly what a stable sort falls back on when two options score the same. After an identical
+    first step onto interchangeable bodies the resulting boards are isomorphic but their menus are
+    *permutations* of each other, so a positional tie-break resolves the same tie toward a different
+    body on each — the search incompleteness `fan_out` corrects downstream and Issue #254 names at
+    its source. Keying the tie-break on the fingerprint instead makes the ordering a pure function of
+    the board: permuting the menu permutes these keys with it and invents no new ones.
+
+    ``""`` for an unfingerprintable option (a face-down DECK reference, END, YES/NO) rather than a
+    guessed identity — blind ⇒ conservative, the same rule `option_fingerprint` keeps. Since a stable
+    sort preserves menu order among equal keys, those options keep exactly the ordering they had, and
+    their *relative* order is itself permutation-invariant (nothing about which bench slot holds what
+    reorders the deck).
+
+    List in, list out, index-aligned — the shape `fan_out` already established, so a caller holding a
+    per-option list indexes it directly instead of writing its own adapter."""
+    return [option_fingerprint(o, frame) or "" for o in (options or [])]
 
 
 def fan_out(values, equiv: dict) -> list:

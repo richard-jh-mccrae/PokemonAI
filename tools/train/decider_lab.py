@@ -145,7 +145,8 @@ def build_report(store, agent=None, *, voided=(), equiv=None) -> dict:
     """Replay every record through a FRESH shipped Pilot and record its decision.
 
     Fresh per frame, deliberately: the Pilot is stateful (deck tracker, caches), and the
-    `needs_sweep` / `threat_sweep` discipline is one pilot per frame so a replay cannot inherit a
+    `needs_sweep` / `threat_sweep` discipline — both probes now deleted with the shadows they read
+    (Issue #261 item 2h), the discipline outliving them — is one pilot per frame so a replay cannot inherit a
     previous frame's board. Unreplayable frames are recorded with `error` rather than dropped —
     a shrinking gated set must be visible, not silent. The *unreadable* ones used to be dropped
     silently, one layer earlier, which is what ADR-0087 fixes.

@@ -94,7 +94,8 @@ def _strategy_and_deck(agent: str):
 
 def _pilot(agent: str, *, seams):
     """A fresh SHIPPED Pilot for ``agent`` — one per frame, because the Pilot is stateful (deck
-    tracker, per-decision caches) and sharing one pollutes verdicts (the `needs_sweep` lesson).
+    tracker, per-decision caches) and sharing one pollutes verdicts (the `needs_sweep` lesson — that
+    probe is gone with the shadow it read, Issue #261 item 2h, but the lesson is not).
 
     No params are overridden and no rungs are zeroed: `common/runtime.py` resolves the single
     deployment PROFILE, and a probe that reads anything else reports an agent nobody runs."""

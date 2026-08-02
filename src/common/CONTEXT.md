@@ -1487,10 +1487,14 @@ option unfingerprintable, so it joins no class: **blind ⇒ conservative, struct
 `option_slot`, which answers *"which one identity does this option target"* and stays untouched.
 Measured 2026-07-31: 101 of 372 corpus frames carry one.
 
-Consumed in two places that must not drift, so both read one helper: the develop rung sims ONE
+Consumed in three places that must not drift, so all read one helper: the develop rung sims ONE
 representative per class (lowest index — deterministic, so the ranking is reproducible) and assigns
-its value to every member, and the graders treat a class member as satisfying a ruling that names its
-sibling. Kill-switch `leaf_option_equivalence` (ON).
+its value to every member; the graders treat a class member as satisfying a ruling that names its
+sibling; and the greedy policy's own ordering breaks an EXACT score tie on the fingerprint rather than
+on the engine's menu index (`_score_order`, `_greedy_grab` — **ADR-0103**), which is what makes the
+policy a pure function of the board and two isomorphic positions explore the same line. The first two
+are kill-switched by `leaf_option_equivalence` (ON); the third is unconditional (it deletes an
+inconsistency, it does not add a term).
 _Avoid_: tie (options scoring equal is the SYMPTOM; being the same decision is the cause — and a leaf
 can score one class member 12× above another, see **Class Asymmetry**), duplicate (the cards are
 distinct objects with distinct serials; it is the DECISION that is one), transposition table (that is

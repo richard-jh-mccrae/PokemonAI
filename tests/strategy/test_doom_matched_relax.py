@@ -51,15 +51,38 @@ def _fixture(name):
 
 def _doom(fx, deck, *, relax=None, recur=None):
     """Replay the fixture through a FRESH shipped Pilot (optionally forcing either kill-switch) and
-    return its threat shadow — `doom_final` is the live `Board.active_doomed` consumers saw."""
+    read the doom DECISION plus the two facts it turns on.
+
+    These pins used to read `Decision.threat_shadow`, a diagnostic Issue #261 item 2h deleted along
+    with the other three shadows. They lose nothing by it, because every field they asserted is now
+    read off the live decider rather than off a second computation of it: `doom_final` IS
+    `Board.active_doomed`, `matched`/`fueled` come from `_doom_relax_inputs`, and `decided` is
+    `_doom_relax_consulted` — the predicate `_active_doomed` itself branches on, extracted for exactly
+    this reason. Re-deriving that conjunction here would have left these pins asserting against the
+    test's own arithmetic."""
     pilot = _pilot(deck)
     if relax is not None:
         pilot.doom_matched_relax = relax
     if recur is not None:
         pilot.recur_fuel_relax = recur
-    shadow = pilot.explain(fx["obs"]).threat_shadow
-    assert shadow is not None
-    return shadow
+    obs = fx["obs"]
+    board = pilot._board(obs, obs.get("select"))
+    state = obs.get("current") or {}
+    players = state.get("players") or []
+    yi = state.get("yourIndex", 0)
+    ma = next((p for p in ((players[yi] or {}).get("active") or []) if p), None)
+    opp = players[1 - yi]
+    oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
+    model, ctx = pilot._state_model, pilot._opp_attack_context
+    old = model.theirs.doomed(ma, bodies=[oa], context=ctx)
+    matched, fueled, read_oa = pilot._doom_relax_inputs(oa, opp)
+    charged = (int(model.theirs.incoming(ma, 1, bodies=[read_oa],
+                                         charged=pilot._DOOM_CHARGED, context=ctx))
+               if matched else None)
+    return {"doom_old": old, "my_hp": int(ma.get("hp", 0) or 0), "doom_charged": charged,
+            "matched": matched,
+            "decided": pilot._doom_relax_consulted(old, matched, fueled),
+            "doom_final": bool(getattr(board, "active_doomed", False))}
 
 
 @pytest.mark.req("REQ-GEN-0078")

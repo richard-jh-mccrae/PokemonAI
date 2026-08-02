@@ -70,14 +70,6 @@ PROFILE = {
                                     # KO/grind lines when the opponent is near deck-out (SOUND deck-out timing)
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
                                     # (Item-tutor / Rare-Candy → evolve → energy → KO; min-bound, sub-prize)
-    "discard_keep_value": True,     # ADR-0065 seam-D armed-ON 2026-07-19 (ladder-testing): the
-                                    # card-worth equation DECIDES the forced discard (keep_cost + pitch
-                                    # term + the gates) in place of the tuned `_DISCARD` ladder.
-                                    # Shadow-validated 11/12 vs the ladder's 9/12 on the corpus (+ the
-                                    # user-endorsed 12th). In-place ladder A/B vs the flag-off ladder;
-                                    # kill-switch if its ladder value is weak (the develop_rollout precedent).
-                                    # SUPERSEDED as the discard decider by `needs_keep_value` below when
-                                    # that is ON; stays the fallback + the gamble/refresh keep-value spine.
     "needs_keep_value": True,       # ADR-0065 WP-N4 armed-ON 2026-07-20 (dev-window ruling): the
                                     # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`) DECIDES the forced
                                     # discard in place of v1's per-card gate composition — the global
@@ -174,7 +166,10 @@ PROFILE = {
                                     # before the CHARGED relax check runs, instead of always standing
                                     # down. Corpus-swept clean (0/331 decision flips, by
                                     # `threat_sweep.py --slots` — a mode DELETED by Issue
-                                    # #243: once this flag shipped ON here, the sweep
+                                    # #243, and the whole probe with it by Issue #261
+                                    # item 2h, so this names a measurement's provenance,
+                                    # not a script you can still run: once this flag
+                                    # shipped ON here, the sweep
                                     # compared the PROFILE against a forced-ON copy of
                                     # itself, so its 0 flips became true by construction
                                     # rather than by measurement; the reading above stands,

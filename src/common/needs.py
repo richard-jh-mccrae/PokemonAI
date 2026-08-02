@@ -552,14 +552,31 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
     tb = list(tiebreak) if tiebreak is not None else [0.0] * n
     best_set, best_key = None, None
     for combo in combinations(range(n), k):
-        floor = max((float(intrinsics[i]) if i < len(intrinsics) else 0.0 for i in combo),
-                    default=0.0)
-        score = (max(set_keep_v2(slots, eligibility, resupply, combo), floor)
-                 - sum(pitch_gain(slots, eligibility, i) for i in combo))
+        score = removal_score(slots, eligibility, resupply, intrinsics, combo)
         key = (score, sum(tb[i] for i in combo if i < len(tb)))
         if best_key is None or key < best_key:
             best_set, best_key = combo, key
     return sorted(best_set or ())
+
+
+def removal_score(slots, eligibility, resupply, intrinsics, indices) -> float:
+    """What shedding ``indices`` COSTS, net — the objective `cheapest_removal` minimises:
+
+        ``max( set_keep_v2(P), max_{i∈P} intrinsic_i ) − Σ_{i∈P} pitch_gain(i)``
+
+    Named and public because two callers need the same number, not just the same argmin: the discard
+    decider picks the set that minimises it, and the fetch doctrine's shed PREDICTOR asks what the
+    set the decider *would* pick costs, to decide whether a `cost_discard` search is being paid for
+    in junk or in live cards (ADR-0103 amendment, Issue #261 item 2h). Predicting with a different
+    formula than the one that decides is the drift `_discard_equation_rows` was just narrowed to
+    prevent.
+
+    ``<= 0`` means the shed is free or actively progress (a fuel pitch gains more than the cards
+    cost); positive is a real price paid."""
+    floor = max((float(intrinsics[i]) if i < len(intrinsics) else 0.0 for i in indices),
+                default=0.0)
+    return (max(set_keep_v2(slots, eligibility, resupply, indices), floor)
+            - sum(pitch_gain(slots, eligibility, i) for i in indices))
 
 
 #: The DISSOLUTION LEDGER: every gate/flag of the v1 keep_value equation → the slot kind that

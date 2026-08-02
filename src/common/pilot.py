@@ -26,6 +26,8 @@ from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
 from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
+from common.option_equivalence import canonical_keys   # ADR-0103: the ordering tie-break is a board
+                                                       # fact (the fingerprint), never the menu index
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
@@ -1057,12 +1059,16 @@ class Context:
     search_confirmed_hit: bool = False  # this option PLAYS a search that PROVABLY hits: a fetch target
                                    # certainly still in deck (`Board.deck_definitely_has`, post-anchor) AND filling
                                    # a need (positive grab value). POSITIVE complement of the two whiff signals (ADR-0029); sound-or-silent. Drives `search-the-confirmed-hit`.
+    # The three COST-NETTING bands, all read off ONE number: what the keep-value v2 assignment says
+    # the two cards it would actually shed cost (`_shed_signals` -> `needs.removal_score`). Priced by
+    # the equation that DECIDES the discard since Issue #261 item 2h retired the ladder they used to
+    # be scored against — a predictor and a decider that disagree is the drift that rots a signal.
     fetch_sheds_junk: bool = False  # this option PLAYS a cost_discard fetch whose 2 predicted sheds
-                                   # (top-2 pitch over hand minus the fetch, same discard rungs) BOTH score > 0 — junk cost, dig at the free band (`costly-fetch-sheds-junk`)
-    fetch_sheds_live: bool = False  # ...a predicted shed scores < 0 — a live card pays the cost
+                                   # cost <= 0 AND are each dead or replaceable — junk cost, so dig at the free band (`costly-fetch-sheds-junk`)
+    fetch_sheds_live: bool = False  # ...the predicted shed costs > 0 — a live card pays for the dig
                                    # (`dont-shed-a-live-card`)
-    fetch_sheds_key: bool = False   # ...`keep-key-cards-at-discard` fires on a predicted shed — an
-                                   # irreplaceable card is forced into the pitch (`dont-shed-a-key-card`)
+    fetch_sheds_key: bool = False   # ...it costs at least ACE_SPEC_TIER — an irreplaceable card is
+                                   # forced into the pitch (`dont-shed-a-key-card`)
     refresh_probable_miss: bool = False  # this option PLAYS a shuffle_hand refresh whose N-card draw
                                    # PROBABLY misses every needed card (post-anchor hypergeometric over the
                                    # shuffle-grown pool, ADR-0024 amendment). Drives `dont-refresh-into-a-probable-miss`.
@@ -1186,12 +1192,6 @@ class Decision:
                                      # correction reader sees WHAT the rung out-scored, not just its pick.
                                      # Sparse: None unless the develop rung fired — keeps a non-develop
                                      # record byte-identical to the pre-rung wire format
-    discard_shadow: dict | None = None  # the DISCARD keep-cost SHADOW (shadow-equations ruling,
-                                     # 2026-07-19): the card-worth oracle's per-candidate working
-                                     # (worth/gates/keep) + its pick + the agreement bit vs the tuned
-                                     # `_DISCARD` ladder, which stays the decider. Deciding NOTHING —
-                                     # the evidence bridge for the discard convergence (seam D).
-                                     # Sparse: None off a real discard choice
     attach_working: dict | None = None  # the ENERGY-ATTACH DECIDER's legible working (ADR-0069 §9):
                                      # the per-option AXES rows — attack_axis (this_turn / build /
                                      # accel_value), retreat_equity, ability_fuel, evaporation_loss,
@@ -1200,30 +1200,6 @@ class Decision:
                                      # not a shadow's), so there is no agreement bit: one emission path,
                                      # one truth. A Pokémon Tool ABSTAINS (not Energy) and is counted.
                                      # Sparse: None off an attach menu / mid-sim
-    threat_shadow: dict | None = None   # the DOOM keep-worst-case SHADOW (Threat-Clock unification
-                                     # S1b, docs/plans/opponent-value-equation-unification.md): the
-                                     # incumbent `active_doomed` (worst-case, the decider) beside its
-                                     # `incoming(t=1)`-curve re-expression (`combat.doomed_incoming`,
-                                     # ceiling policy) + the agreement bit. Surfaces the ONE known
-                                     # divergence (the current-form affordability gate) for the
-                                     # survival-swap adjudication; a second was claimed and RETRACTED
-                                     # (ADR-0064 Amendment A, Issue #213 — the hand-size scaler was
-                                     # always priced by the Damage Formula, on both sides of the
-                                     # comparison). Deciding NOTHING — sparse: None mid-sim / no live
-                                     # my-Active vs opp-Active
-    recur_shadow: dict | None = None    # the DISCARD-RECUR fuel SHADOW (Threat-Clock unification S2):
-                                     # per opponent in-play body whose line refuels from its discard
-                                     # (`discard_energy_recur`), the Threat-Clock reads with-vs-without
-                                     # the discard fuel (incoming(t=1) to my Active + turns_to_afford)
-                                     # — how much the discard reservoir accelerates/sharpens the threat.
-                                     # Deciding NOTHING (live reads pass no fuel) — sparse: None mid-sim
-                                     # / no opponent discard fuel
-    opp_target_shadow: dict | None = None  # the OPPONENT-TARGET value SHADOW (Opponent Value Equation
-                                     # S3, O1 = Option B): per opponent in-play body the two-term removal
-                                     # value in the one currency — prize_advance + phase × survival_shift
-                                     # (needs.opponent_target_value; survival via the S1 turns_to_ko_me
-                                     # curve). Deciding NOTHING — the evidence for the snipe/gust/deny
-                                     # slot-assignment fold. Sparse: None mid-sim / no opp bodies
 
 
 def _slot_cid(slot):
@@ -1255,7 +1231,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
-                 develop_rollout=False, discard_keep_value=False, needs_keep_value=False,
+                 develop_rollout=False, needs_keep_value=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
@@ -1368,10 +1344,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # evolution of an in-play, this-turn-evolvable body →
                                                         # evolve → attach → KO, preferring the cheaper Item
                                                         # enabler over the scarce Supporter tutor
-        self.discard_keep_value = discard_keep_value    # ADR-0065 seam-D kill-switch (default OFF): the
-                                                        # card-worth equation DECIDES a forced discard in
-                                                        # place of the `_DISCARD` ladder. OFF = the ladder
-                                                        # decides and the equation only shadows (telemetry).
         self.leaf_hand_value = leaf_hand_value          # ADR-0065 WP-N5b kill-switch (default OFF): the
                                                         # develop-rung LEAF's actionable-resource term —
                                                         # readiness CONSUMES the needs module (the hand's
@@ -1384,8 +1356,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # `eq2_pick`) decides the forced discard in place of
                                                         # v1 — the per-family swap for the cleared discard
                                                         # family (agree_v2 12/12 + the duplicate-pair flip).
-                                                        # Takes precedence over `discard_keep_value`; OFF =
-                                                        # v1 decides (or the ladder) and v2 only shadows.
+                                                        # It STANDS ALONE since Issue #261 item 2h — seam-D
+                                                        # v1 and the `_DISCARD` ladder beneath it are both
+                                                        # deleted, so OFF is DEGRADED MODE, not a rollback:
+                                                        # the discard falls to the ordinary scored order.
         self.promote_retreat_value = promote_retreat_value   # the PROMOTE/RETREAT DECIDER's emergency
                                                         # lever (ADR-0100, shipped ON): the Sub-lethal
                                                         # Residual, one evaluator across the body pick, the
@@ -1619,11 +1593,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return Decision(chosen=planned_steps,       # Decision shape so a lethal_verify drop is countable
                             options=traces, read=board.read,
                             planned=None if _overridden else planned,
-                            # The doom shadow is a per-decision DIAGNOSTIC, so it must not depend on
-                            # which branch decided. #177 made more KO lines reachable, which sent
-                            # frames like 82749168-29 down this branch for the first time and
-                            # silently blanked their shadow (`ms_doom_relax_bare_terapagos_f29`).
-                            threat_shadow=self._threat_shadow(obs, board),
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
@@ -1633,10 +1602,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             attach_working=self._attach_working(obs, select, board, options),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
-        # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
-        # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
-        by_score = sorted(range(len(options)),
-                          key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
+        by_score = self._score_order(obs, options, traces)
         by_score = self._prefer_soonest_arming_evolve(by_score, options, traces)
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
@@ -1648,17 +1614,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # resequenced the menu; `grabbed` = the greedy multi-pick chose a set by dynamic gap-scoring.
         reordered = order != by_score
         grabbed = max_count > 1 and select.get("context") in _GRAB_CONTEXTS
-        # ADR-0065 SWAP: at a forced discard the card-worth equation DECIDES — the `picks`
-        # cheapest-to-lose cards — replacing the tuned `_DISCARD` ladder. Precedence (each a
-        # kill-switch, OFF falls through): WP-N4 `needs_keep_value` (the v2 needs-assignment,
-        # `_needs_v2`/`eq2_pick`) > seam-D `discard_keep_value` (v1, `_discard_equation_pick`) >
-        # the ladder. Both OFF leaves the ladder deciding and both equations only shadow.
+        # ADR-0065 SWAP: at a forced discard the keep-value v2 needs-assignment DECIDES — the
+        # `picks` cheapest-to-lose cards (`_needs_v2`/`eq2_pick`). It STANDS ALONE (Issue #261 item
+        # 2h): seam-D v1 (`discard_keep_value` / `_discard_equation_pick`) and the tuned `_DISCARD`
+        # ladder under it are both DELETED, so there is nothing left to fall back to. Every ladder
+        # case that was pinned as a corpus ruling is reproduced by v2 unchanged — measured, not
+        # assumed (`test_discard_selection.py`, `test_discard_keep_rows.py`). When v2 returns None
+        # (nothing priceable) the ordinary scored order takes the pick, which is what happens at any
+        # other select with no equation to speak.
         eq_discard = None
         if select.get("context") == _DISCARD and max_count > 0:
-            if getattr(self, "needs_keep_value", False):
-                eq_discard = self._discard_needs_pick(obs, select, board, options, max_count)
-            elif getattr(self, "discard_keep_value", False):
-                eq_discard = self._discard_equation_pick(obs, select, board, options, max_count)
+            eq_discard = self._discard_needs_pick(obs, select, board, options, max_count)
         if eq_discard:
             chosen = eq_discard
         elif grabbed:                                   # greedy gap-update + take-fewer
@@ -1679,11 +1645,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
-                        discard_shadow=self._discard_shadow(obs, select, board, options, chosen),
                         attach_working=self._attach_working(obs, select, board, options),
-                        threat_shadow=self._threat_shadow(obs, board),
-                        recur_shadow=self._recur_shadow(obs, board),
-                        opp_target_shadow=self._opponent_target_shadow(obs, board),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
     @staticmethod
@@ -1737,6 +1699,59 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return {"mode": gp.mode.name, "conf": round(gp.confidence, 3), "goal": gp.directed_goal,
                 "route": len(gp.route), "route_turns": gp.route_turns}
+
+    def _score_order(self, obs: dict, options: list, traces: list) -> list:
+        """The menu ranked for `chosen`, **canonically** (ADR-0103, Issue #254).
+
+        Primary key = score; the secondary key breaks an EXACT tie toward an attach feeding a needy
+        Line body (ep82867148 f87) — a decide()-only ordering nicety, W-route-invisible, never in the
+        weight fit. What is new is the THIRD key, and what it replaces.
+
+        A tie used to fall through to the engine's menu index, and the index is the one thing about
+        an option that is not a board fact. After an identical first step onto interchangeable bodies
+        the resulting boards are isomorphic but their menus are *permutations* of each other, so one
+        tie resolved toward a different body on each: `_engine_leaf_value`'s within-turn rollout
+        re-runs this very policy on each intermediate SearchState, which is how it reached a KO from
+        bench 0 and missed the isomorphic line from bench 1 — `81903490|0|decision|49` scored
+        1167.0 / 95.4 / 95.4 on three byte-identical Riolu, reproducibly. ADR-0091 corrected that
+        *reading* (`fan_out` gives the class its demonstrated maximum) and filed the cause as
+        Issue #254; this is the cause.
+
+        So the tie breaks on the option's **Option Equivalence Class identity** — the ADR-0091
+        fingerprint, a pure function of the board — and only then on the index, which now decides
+        just between options that share a key: either the same decision (interchangeable by
+        definition) or unfingerprintable (no canonical identity exists, so menu order is the honest
+        answer). One consequence stated rather than hidden: this changes which of several EXACTLY
+        tied options is picked in live play too, and deliberately — a policy that is invariant only
+        inside the sim would be simulating something other than itself, which is the drift the
+        develop rung's whole override authority rests on not having.
+
+        Unconditional, like `_prefer_soonest_arming_evolve` below (the same defect one layer up, the
+        same fix): it deletes an inconsistency rather than adding a value term, so there is no OFF
+        branch worth carrying. `leaf_option_equivalence` keeps its own narrower contract — the develop
+        rung's class collapse — untouched.
+
+        Measured 2026-08-02 over 300 corpus frames (2193 options, mean 7.3/frame): the fingerprinting
+        costs **0.031 ms per decision**, ~3% of the ~0.95 ms whole-Board build
+        (`test_leaf_profile.py`'s own reference figure). Recorded because it runs on every live
+        decision AND every rollout step, unflagged."""
+        canon = canonical_keys(options, obs)
+        return sorted(range(len(options)), key=lambda i: self._order_key(traces[i], canon[i], i))
+
+    @staticmethod
+    def _order_key(trace, canon: str, index: int) -> tuple:
+        """ONE definition of "which of these options goes first" (ADR-0103 decision 5).
+
+        `_score_order` sorts a whole menu with it; `_greedy_grab` takes the `min` of it repeatedly
+        over re-scored traces. Written once because two spellings of one ordering is how a key added
+        to one site silently fails to reach the other — the half-application `_option_equivalence`'s
+        own docstring exists to prevent, and the first draft of this change had already committed it
+        (the needy-Line leg was in the sort and absent from the grab).
+
+        Ascending, so every leg is negated where it should rank high: score DESC, the needy-Line
+        attach first, then the board-derived canonical identity, then the menu index — which now
+        separates only options that key EQUAL on everything above it."""
+        return (-trace.score, not trace.attach_to_needy_line, canon, index)
 
     def _prefer_soonest_arming_evolve(self, order: list, options: list, traces: list) -> list:
         """Break an EXACT tie between EVOLVE options toward the body that arms soonest — i.e. put the
@@ -3758,84 +3773,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             self._discard_fuel_cache = frozenset(types)
         return self._discard_fuel_cache
 
-    def _discard_shadow(self, obs: dict, select: dict, board: Board, options: list, chosen: list):
-        """The DISCARD keep-cost SHADOW (the shadow-equations ruling, 2026-07-19 — the first
-        equation shipped under it): compute the card-worth oracle's answer at a real discard pick
-        and EMIT it beside the decision, deciding NOTHING. The tuned `_DISCARD` ladder stays the
-        decider; every disagreement row is either an oracle gap (a premise the gate library doesn't
-        carry yet) or a latent ladder bug — the evidence bridge the discard convergence (seam D,
-        `docs/plans/seam-discard-convergence.md`) swaps on.
-
-        The v1 equation per candidate card — grilled legs only, simplifications EMITTED as terms so
-        a reader can audit WHY (the ADR-0019 full-working standard):
-
-            keep = Worth × Gates × (1 − pitch re-access)
-
-        Worth = `_role_value` (roles / tags / ACE-SPEC / energy); Gates = `_deploy_odds` (the
-        evolution + fetcher legs; the pressure bit rides as ``closing``). PITCH re-access — the
-        DISCARD leg, deliberately distinct from the shuffle leg — is credited only when
-        DETERMINISTIC: a duplicate still in hand (``dup_hand``), a same-card copy already in play
-        (``in_play``), or a matching recycler HELD (``recycler`` — a ``zone: discard`` FETCH clause
-        reaching this card). Probabilistic recycler draws are emitted (``recycler_deck``) but
-        credited 0 — errs toward keep. ``fuel`` (`_discard_fuel_types`) floors the keep at 0 — the
-        zone sign's v1 (a negative keep is deferred). Known naiveties, by design: per-card (sets
-        not sums — a duplicate PAIR both price 0), and no probabilistic recycle window. None off a
-        real choice (no options beyond the forced picks) and never mid-sim (`self._planning`).
-
-        WP-N3 (keep-value v2): each row also carries ``keep_v2`` — the needs-assignment raw
-        counterfactual marginal (`_needs_v2`) — and the record carries ``eq2_pick`` (the v2
-        decider's cheapest removal, hedged at v1's post-gate keep) + ``agree_v2`` (v2 vs the
-        DECIDED picks): the v1-vs-v2 evidence bridge the WP-N4 family swaps ride, deciding
-        nothing."""
-        if self._planning or select.get("context") != _DISCARD:
-            return None
-        picks = len(chosen)
-        if picks <= 0 or len(options) <= picks:
-            return None                                  # no real choice — nothing to shadow
-        rows, order = self._discard_equation_rows(obs, select, board, options)
-        if not rows:
-            return None
-        eq_pick = order[:picks]
-        keeps_v2, eq2_pick = self._needs_v2(obs, board, rows, picks)
-        for r, kv in zip(rows, keeps_v2):
-            r["keep_v2"] = kv
-        rec = {"picks": sorted(chosen), "eq": rows, "eq_pick": sorted(eq_pick),
-               "agree": set(eq_pick) == set(chosen),
-               "eq2_pick": eq2_pick, "agree_v2": set(eq2_pick) == set(chosen)}
-        if getattr(self, "needs_keep_value", False):
-            rec["decided_v2"] = True                     # v2 needs-assignment IS the decider (WP-N4)
-        elif getattr(self, "discard_keep_value", False):
-            rec["decided"] = True                        # v1 IS the decider (seam-D kill-switch ON)
-        return rec
-
-    def _discard_equation_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
-        """The DECIDER under the `discard_keep_value` kill-switch (ADR-0065 seam-D, the SWAP): the
-        forced-discard pick IS the card-worth equation's ranking — the ``picks`` cheapest-to-lose
-        cards (`_discard_equation_rows`), replacing the tuned `_DISCARD` ladder wholesale. None when
-        the equation can't rank (no priceable rows), so the caller keeps the ladder order."""
-        _rows, order = self._discard_equation_rows(obs, select, board, options)
-        return order[:picks] if order else None
-
     def _discard_needs_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
         """The DECIDER under the `needs_keep_value` kill-switch (ADR-0065 WP-N4, the per-family swap):
         the forced-discard pick IS the keep-value v2 needs-assignment's cheapest removal (`_needs_v2`
         → `eq2_pick`, `needs.cheapest_removal` over the resolved slots, hedged at v1's post-gate
         keep), replacing v1's per-card gate composition with the global assignment. Same rows as
         v1's ranking (`_discard_equation_rows` — the deploy gates + fuel/burst flags v2 consumes);
-        None when nothing is priceable, so the caller falls through to v1 / the ladder."""
-        rows, _order = self._discard_equation_rows(obs, select, board, options)
+        None when nothing is priceable, and since Issue #261 item 2h there is nothing under it to
+        fall through TO — the caller's ordinary scored order takes the pick."""
+        rows = self._discard_equation_rows(obs, select, board, options)
         if not rows:
             return None
         _keeps, eq2_pick = self._needs_v2(obs, board, rows, picks)
         return eq2_pick or None
 
     def _discard_equation_rows(self, obs: dict, select: dict, board: Board, options: list):
-        """The card-worth discard equation's per-candidate rows AND the full ranked index order — the
-        shared computation behind the SHADOW (`_discard_shadow`, telemetry) and the DECIDER
-        (`_discard_equation_pick`, under the kill-switch). Pure and deterministic (safe mid-sim). The
-        ranking is ``(keep asc, pitch desc, worth asc, index)``: cheapest-to-lose first, ties broken
-        by DEADNESS then by lower underlying worth then hand index. Returns ``([], [])`` when nothing
-        is priceable."""
+        """The card-worth discard equation's per-candidate rows — the priced input the keep-value v2
+        needs-assignment (`_discard_needs_pick` → `_needs_v2`) consumes, plus the gates/fuel/burst
+        flags the gust and refresh keep-value sites read off the same computation. Pure and
+        deterministic (safe mid-sim). Returns ``[]`` when nothing is priceable.
+
+        It used to return a second value, v1's ``(keep asc, pitch desc, worth asc, index)`` ranking,
+        which was the seam-D decider's whole answer. That decider and the ladder under it are gone
+        (Issue #261 item 2h), and a ranking nobody reads is a second definition of "cheapest to lose"
+        sitting beside `needs.cheapest_removal` waiting to drift — so it goes with them."""
         me = self._my_player(obs)
         from collections import Counter
         hand_ids = [c.get("id") for c in (me.get("hand") or []) if c and c.get("id") is not None]
@@ -3914,7 +3875,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             reaccess = 0.0 if closing else (1.0 if (dup or in_play or rec_hand) else 0.0)
             # A SPENT burst (ladder-win 83454549-36): a `discard_eot` Energy is precious until the
             # Active is fully powered — then it self-discards at end of turn anyway, so it is fodder.
-            # DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it lives in the shadow's
+            # DISCARD-CONTEXT (at a refresh it is a next-turn attach), so it lives in the row's
             # pitch term, not a general Worth gate.
             spent_burst = "discard_eot" in tags and getattr(board, "active_fully_powered", False)
             row["keep"] = 0.0 if (fuel or spent_burst) else round(worth * deploy * (1.0 - reaccess), 1)
@@ -3929,38 +3890,48 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # count; it breaks the zero-keep ties so dead weight sheds before a live spare. The
             # `redundant_tutor` case is now ALSO priced keep 0 by the need-met gate (`_deploy_odds`);
             # the flag stays for the pitch tie-break + display. SHADOW-only, deciding nothing.
-            roles = self._roles_of(cid)
-            dead_opener = "opener" in tags
-            redundant_tutor = bool(getattr(board, "wincon_in_hand", False)
-                                   and ({"rush_evolve", "tutor_mega"} & set(tags)))
-            stranded = cid in self._stranded_evolution_set()
-            fodder = "discard_fodder" in roles
-            if dead_opener:
-                row["dead_opener"] = True
-            if redundant_tutor:
-                row["redundant_tutor"] = True
-            if stranded:
-                row["stranded"] = True
-            if fodder:
-                row["fodder"] = True
-            if spent_burst:
-                row["spent_burst"] = True
-            row["pitch"] = (int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded)
-                            + int(fodder) + int(spent_burst))
+            self._apply_pitch_terms(row, cid, tags, board, fuel=fuel, spent_burst=spent_burst)
             rows.append(row)
-        if not rows:
-            return [], []
-        # Rank: cheapest keep first; among equal keep, the DEADEST (highest pitch) sheds first; then
-        # the LOWER underlying worth (sets-not-sums — a worth-10 duplicate's redundancy is worth
-        # preserving over a worth-0 dreg's, ladder-win 83967840-54); index only as the last resort.
-        order = [r["i"] for r in
-                 sorted(rows, key=lambda r: (r["keep"], -r["pitch"], r["worth"], r["i"]))]
-        return rows, order
+        return rows
+
+    def _apply_pitch_terms(self, row: dict, cid, tags, board, *, fuel: bool, spent_burst: bool):
+        """Write the PITCH-PREFERENCE term and its flags onto a priced row, in place.
+
+        Keep-cost is a KEEP floor and cannot RANK a discard — a dreg, a duplicate and a DEAD card all
+        price keep 0 (seam-D grill Finding 3). The pitch side is `P(met | pitch) − P(met | keep)`
+        going positive: a card whose role is EXPIRED or whose discard is progress is actively best
+        gone. It mirrors the retired `_DISCARD` ladder's positive-pitch premises at SOURCE, never
+        their weights — `discard-the-dead-opener` (opener role spent), `discard-the-redundant-tutor`
+        (wincon in hand → the tutor's target is had), a stranded evolution (payoff with no base), the
+        declared `discard_fodder`, `fuel` (zone sign), and the SPENT burst. ``pitch`` is the COUNT.
+
+        Shared by both row builders (Issue #261 item 2h): `_discard_equation_rows` over a discard
+        menu, and `_needs_hand_rows` over the whole hand, which needs it since the fetch doctrine's
+        shed predictor moved onto the v2 machinery — a card is dead weight or it is not, and two
+        derivations of that would drift the discard decider away from the predictor of it."""
+        roles = self._roles_of(cid)
+        dead_opener = "opener" in tags
+        redundant_tutor = bool(getattr(board, "wincon_in_hand", False)
+                               and ({"rush_evolve", "tutor_mega"} & set(tags)))
+        stranded = cid in self._stranded_evolution_set()
+        fodder = "discard_fodder" in roles
+        if dead_opener:
+            row["dead_opener"] = True
+        if redundant_tutor:
+            row["redundant_tutor"] = True
+        if stranded:
+            row["stranded"] = True
+        if fodder:
+            row["fodder"] = True
+        if spent_burst:
+            row["spent_burst"] = True
+        row["pitch"] = (int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded)
+                        + int(fodder) + int(spent_burst))
 
     def _needs_v2(self, obs: dict, board: Board, rows: list, picks: int):
         """WP-N3 (keep-value v2, `keep-value-needs-assignment-grill-spec.md`): the Pilot-side needs
         RESOLVER — the live board resolved into `common.needs` slots / per-candidate eligibility /
-        resupply, pricing the v2 shadow: per-row ``keep_v2`` (the raw counterfactual marginal,
+        resupply, pricing per-row ``keep_v2`` (the raw counterfactual marginal,
         `needs.keep_v2`) and the v2 decider's pick (`needs.cheapest_removal`), hedged at v1's
         POST-GATE keep — the WP-N3 refinement: v2 never prices below the shipped decider (a
         raw-tier floor would undo the gate knowledge), and a firing floor telemeters a missing
@@ -4207,7 +4178,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                           oracle_value=value, turns_to_ready=t), deniers)
         # GUST-TARGET SLOTS (ADR-0076, kill-switched): held gust-effect Trainer cards keep-priced
         # against the REAL per-body removal value (`_opponent_target_rows`) — reads the per-decision
-        # cache `_board()` stashes when one exists (shared with the S3a shadow, never recomputed
+        # cache `_board()` stashes when one exists (never recomputed
         # twice per decision), falling back to a fresh compute for a hand-built `board` that never
         # went through `_board()` (test fixtures). Not a flat card tier. Bench ONLY — a gust effect
         # forces a switch of a BENCHED Pokémon (verified at source, `doctrine_gust.py`); the
@@ -4354,8 +4325,44 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
                         and (None in fuel_types or getattr(st, "energyType", None) in fuel_types))
             rows.append({"i": k, "cid": cid, "worth": round(self._role_value(cid), 1),
-                         "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
+                          "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
         return rows
+
+    def _as_discard_rows(self, rows: list, obs: dict, board: Board) -> list:
+        """`_needs_hand_rows` output re-read in DISCARD context — the pitch terms plus the two cheap
+        re-access facts, on copies.
+
+        Separate from `_needs_hand_rows` because the pitch terms are **context-dependent and the
+        resolver reads them**: `_resolve_needs` withholds a card's general slot when its pitch term
+        flags it dead, and its own comment says why the refresh rows must not carry one — *"a
+        SHUFFLED burst IS a future attach, so they keep their general worth."* Writing the flags in
+        the row builder made every refresh SHED read its hand as a discard, which is measurable and
+        was measured: the Lillie's big-hand pins and two hyperclosure corpus frames all moved.
+
+        A `cost_discard` fetch is the other case: those cards really are discarded, so discard
+        semantics are the correct ones and the predictor asks for them explicitly.
+
+        The re-access facts (`dup_hand` / `in_play`) carry the same names and meaning as
+        `_discard_equation_rows`', which folds them into its `reaccess` discount. Deliberately NOT
+        the recycler legs — those need that method's per-card effects closure, and omitting them is
+        conservative for the consumer here (the shed predictor's junk band): a recyclable card reads
+        as NOT replaceable, so a costly dig gets less lift than it might deserve, never more."""
+        from collections import Counter
+        held = Counter(r["cid"] for r in rows)
+        out = []
+        for r in rows:
+            cid = r["cid"]
+            tags = self.functions.tags(cid) if (self.functions and cid is not None) else ()
+            row = dict(r)
+            if held.get(cid, 0) >= 2:
+                row["dup_hand"] = True
+            if cid in board.in_play_ids:
+                row["in_play"] = True
+            self._apply_pitch_terms(
+                row, cid, tags, board, fuel=bool(r.get("fuel")),
+                spent_burst="discard_eot" in tags and getattr(board, "active_fully_powered", False))
+            out.append(row)
+        return out
 
     def _held_undeployable(self, cid, ctx: dict) -> bool:
         """WP-N5d — the deployability COUNTERFACTUAL: could this held card NOT have been deployed
@@ -7032,7 +7039,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
         board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
         # ADR-0076: the shared per-body opponent-target value, resolved ONCE per `_board()` call and
-        # cached (the `_opp_attack_context` stash precedent) — both the S3a diagnostic shadow and the
+        # cached (the `_opp_attack_context` stash precedent) — the deny fire rung and the
         # live `gust_target` slot emission read this SAME cache rather than each re-running the
         # per-body `turns_to_ko_me` simulation from scratch.
         self._snipe_relevance_cache = {}            # per-decision, keyed by id(body) — the curve
@@ -8172,8 +8179,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _recur_fueled_oa(self, oa: dict | None, opp: dict | None) -> dict | None:
         """ADR-0076 S2 live (survival-only): augments `oa`'s energies with its discard-recur reload
-        for the CHARGED relax read — the same current-form-energyType proxy the S2 shadow
-        (`_recur_shadow`) already uses; precise per-form reload TARGETING (Aura Jab feeds the
+        for the CHARGED relax read — the same current-form-energyType proxy the S2 recur diagnostic
+        (the S2 recur diagnostic, deleted by Issue #261 item 2h) already used; precise per-form
+        reload TARGETING (Aura Jab feeds the
         BENCH, not itself; Archaludon any {M}) stays a further refinement, not required to make the
         relax gate fuel-aware. Returns `oa` unchanged when there's no fuel, no tag, or the discard/
         stats are unknown — fail-open to the unaugmented read.
@@ -8201,7 +8209,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     def _doom_relax_inputs(self, oa: dict | None, opp: dict | None) -> tuple:
         """Shared inputs for the matched-Read doom relax, read by both the live decider
-        (`_active_doomed`) and its diagnostic (`_threat_shadow`) so they cannot drift: whether a
+        (`_active_doomed`) and, until Issue #261 item 2h deleted it, its diagnostic, so they could
+        not drift: whether a
         γ-matched Brief exists (`matched`), whether the opponent's Active is a POSSIBLE
         discard-recur refueler (`fueled`, `_doom_recur_fueled`'s existing gate), and the oa dict the
         CHARGED read should actually consume (`read_oa`) — augmented with its real fuel reload only
@@ -8248,113 +8257,30 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not (worst and self.doom_matched_relax):
             return worst
         matched, fueled, read_oa = self._doom_relax_inputs(oa, opp)
-        if not matched or (fueled and not self.recur_fuel_relax):
+        if not self._doom_relax_consulted(worst, matched, fueled):
             return worst
         return model.theirs.doomed(ma, bodies=[read_oa], charged=self._DOOM_CHARGED, context=ctx)
 
-    def _threat_shadow(self, obs: dict, board) -> dict | None:
-        """S1b threat-clock doom SHADOW (docs/plans/opponent-value-equation-unification.md): emit the
-        incumbent worst-case doom read (`active_doomed`, the decider) beside its `incoming(t=1)`-curve
-        re-expression (`combat.doomed_incoming`, ceiling policy) + the agreement bit — the evidence
-        bridge for routing survival through the ONE Threat-Clock curve. Deciding NOTHING.
+    def _doom_relax_consulted(self, worst: bool, matched: bool, fueled: bool) -> bool:
+        """Does the CHARGED relax read DECIDE this frame, or does the worst-case oracle keep it?
 
-        Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) or with no live my-Active
-        vs opp-Active to read. ONE divergence remains for the sweep to adjudicate before any swap:
-        the current-form affordability gate (`can_pay_cheapest`) — ADR-0064 §2 kept `active_doomed`
-        unconditionally worst-case. The hand-size counter was listed as a second divergence and was
-        not one; see `CombatMath.doomed_incoming` (Issue #213).
+        RELAX-ONLY, so `worst` is a precondition: the charged curve may clear a doom the incumbent
+        cries, never manufacture one (the 82525101-14 lesson). Behind that, the γ-gate must have held
+        (`matched`) and discard-recur fuel must either be absent or quantified rather than blocking
+        (`recur_fuel_relax`, ADR-0076 §2).
 
-        Post-swap fields (the doom-shadow grill, 2026-07-23 — `doom_matched_relax`): `doom_old` is
-        the worst-case oracle COMPUTED FRESH (the Board bit is now the decided value, not the
-        incumbent), `doom_charged` the `_DOOM_CHARGED` curve damage where a Read matched (None
-        unmatched), `matched`/`decided` whether the γ-gate held / the charged curve decided this
-        frame, and `doom_final` the live `Board.active_doomed` that consumers saw."""
-        if getattr(self, "_planning", False):
-            return None
-        state = obs.get("current") or {}
-        players = state.get("players") or []
-        yi = state.get("yourIndex", 0)
-        me = players[yi] if 0 <= yi < len(players) else None
-        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
-        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
-        oa = next((p for p in ((opp or {}).get("active") or []) if p), None)
-        if not (ma and oa):
-            return None
-        ctx = self._opp_attack_context
-        model = self._state_model
-        if model is None:
-            return None
-        my_hp = ma.get("hp", 0) or 0
-        # Three readings of ONE curve, off the snapshot (POC-T1): the CEILING (`charged=None`, the
-        # `doomed_incoming` re-expression), the DOOM policy (`UNCHARGED`, what the incumbent
-        # `active_doomed` was), and the matched-Read relax budget. The pair this shadow was built to
-        # compare is now one implementation, so what it still measures — and the only thing it ever
-        # really measured — is the gap between two POLICIES.
-        dmg = model.theirs.incoming(ma, 1, bodies=[oa], charged=None, context=ctx)
-        old = model.theirs.doomed(ma, bodies=[oa], context=ctx)
-        new = bool(my_hp and dmg >= my_hp)
-        matched, fueled, read_oa = self._doom_relax_inputs(oa, opp)
-        decided = bool(old and self.doom_matched_relax and matched
-                       and (not fueled or self.recur_fuel_relax))  # relax-only: consulted iff worst cries
-        charged = (int(model.theirs.incoming(ma, 1, bodies=[read_oa],
-                                             charged=self._DOOM_CHARGED, context=ctx))
-                   if matched else None)
-        return {"doom_old": old, "doom_curve": new, "doom_incoming": int(dmg),
-                "my_hp": int(my_hp), "agree": old == new, "doom_charged": charged,
-                "matched": matched, "decided": decided,
-                "doom_final": bool(getattr(board, "active_doomed", False))}
-
-    def _recur_shadow(self, obs: dict, board) -> dict | None:
-        """S2 discard-recur fuel SHADOW (docs/plans/opponent-value-equation-unification.md): for each
-        opponent in-play body whose line refuels from its own discard (`discard_energy_recur` — Mega
-        Lucario ex 678 reloads {F}, Archaludon ex 190 reloads {M}), emit the Threat-Clock reads
-        WITH-vs-WITHOUT the discard fuel — `incoming(t=1)` to my Active and `turns_to_afford` — so the
-        sweep can see how much the discard reservoir accelerates (lower t) and sharpens (higher
-        incoming) the threat. Deciding NOTHING: the live reads pass no fuel; the shadow models it by
-        augmenting a copy of the body's `energies`. Sparse: None mid-sim (`self._planning`), with no
-        opponent discard Energy, or no live opponent board."""
-        if getattr(self, "_planning", False):
-            return None
-        model = self._state_model
-        if model is None or not model.theirs.discard_energy_counts:
-            # ONE source for the discard (POC-T1): the shadow used to take the sparse guard off
-            # `board.opp_discard_energy` and the fuel off a hand-assembled read, which is the drift
-            # hazard `_recur_fueled_oa`'s own docstring warns about — the guard could pass on one
-            # reading while the fuel came back 0 on the other.
-            return None
-        state = obs.get("current") or {}
-        players = state.get("players") or []
-        yi = state.get("yourIndex", 0)
-        me = players[yi] if 0 <= yi < len(players) else None
-        opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else None
-        if not opp:
-            return None
-        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
-        bodies = [p for p in ((opp.get("active") or []) + (opp.get("bench") or [])) if p]
-        rows = []
-        for p in bodies:
-            # The CAUTION reading — "could this line refuel at all" — which is what the shadow has
-            # always reported and what the doom relax gates on. The CLOCK's own reading is narrower
-            # (Issue #204), and the `ttr_*` pair below is exactly that difference measured.
-            fuel = model.theirs.discard_recur_fuel(p)
-            if fuel <= 0:
-                continue
-            st = self.stats.get(p.get("id")) if self.stats else None
-            etype = getattr(st, "energyType", None)
-            fueled = dict(p, energies=list(p.get("energies") or []) + [etype] * fuel)
-            row = {"id": p.get("id"), "fuel": fuel,
-                   "ttr_plain": model.theirs.turns_to_afford(p, fuelled=False),
-                   "ttr_fuel": model.theirs.turns_to_afford(fueled, fuelled=False)}
-            if ma:
-                row["inc_plain"] = model.theirs.incoming(ma, 1, bodies=[p], charged=None)
-                row["inc_fuel"] = model.theirs.incoming(ma, 1, bodies=[fueled], charged=None)
-            rows.append(row)
-        return {"bodies": rows} if rows else None
+        A named predicate rather than an inline `and` chain because it has two readers and they must
+        not drift: `_active_doomed` branches on it, and `test_doom_matched_relax.py` asserts on it.
+        That test used to read the bit off `Decision.threat_shadow` — a diagnostic Issue #261 item 2h
+        deleted — and re-deriving the conjunction in the test would have left the pin asserting
+        against its own arithmetic rather than against the decider's."""
+        return bool(worst and self.doom_matched_relax and matched
+                    and (not fueled or self.recur_fuel_relax))
 
     def _opponent_target_rows(self, obs: dict, board) -> tuple | None:
         """S3 opponent-target value, the SHARED per-body computation (ADR-0076): `prize_advance +
         phase × survival_shift` (`needs.opponent_target_value`) for every opponent in-play body —
-        the ONE place both the S3a diagnostic (`_opponent_target_shadow`) and the live
+        the ONE place both the S3a diagnostic (deleted by Issue #261 item 2h) and the live
         `gust_target` slot emission (`_resolve_needs`) read it, so they cannot drift apart.
         `survival_shift` is the turns of survival bought by removing the body (Δ
         `combat.turns_to_ko_me` via the S1 curve); `prize_advance` is its prize value (the if-KO'd
@@ -8376,8 +8302,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         own rollout than outside it. That is the third confirmed source of continuation collateral
         in this repo (ADR-0072 finding 2, ADR-0070 amendment H, Issue #228). The guard was a COST
         decision, not a correctness one — nothing below starts a nested engine search; `turns_to_ko_me`
-        is the closed-form S1 curve. It now lives on `_opponent_target_shadow`, which is the caller
-        that genuinely wants no shadow work in rollouts."""
+        is the closed-form S1 curve. It moved onto `_opponent_target_shadow`, the caller that
+        genuinely wanted no shadow work in rollouts, and Issue #261 item 2h then deleted that caller
+        — so the guard is gone entirely and these rows simply always run."""
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
@@ -8897,7 +8824,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         plugs its own Δ into the shared currency (the design doc's *"each plugs its own `Δ` into the
         two terms"*), in the shape the user's ruling fixes — see SHAPE below.
 
-        Mechanism mirrors the S2 recur shadow in the opposite direction — it augments a COPY of the
+        Mechanism mirrors the deleted S2 recur diagnostic in the opposite direction — it augments a COPY of the
         body's ``energies`` upward to model discard fuel; this drops one, so no live primitive is
         touched and no caller's body dict is mutated.
 
@@ -8981,33 +8908,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                                # policies would be meaningless
                 "deny_value": needs.opponent_target_value(prize_advance=0.0,
                                                           survival_shift=after - base, phase=phase)}
-
-    def _opponent_target_shadow(self, obs: dict, board) -> dict | None:
-        """S3 opponent-target value SHADOW (docs/plans/opponent-value-equation-unification.md; O1 =
-        Option B): the sweep compares `_opponent_target_rows`' per-body ranking to the shipped snipe
-        / gust / deny picks — the evidence for the Option-B assignment. Deciding NOTHING.
-
-        Reads the per-decision cache `_board()` stashes (ADR-0076) when one exists, so a real
-        decision computes the per-body simulation once and shares it with the live `gust_target`
-        slot emission; falls back to a fresh compute when called directly (off a hand-built `board`
-        that never went through `_board()`, as the existing shadow tests do) — `_board()` always
-        runs first in a real decision, so the cache is never stale by the time this reads it.
-
-        Sparse: None mid-sim (`self._planning`, no shadow work in rollouts) — the guard
-        `_opponent_target_rows` used to carry for everyone. It belongs HERE, on the diagnostic, and
-        not on the live row computation two live instruments read (ADR-0093 decision 3). Same
-        placement as `_threat_shadow` and `_recur_shadow`."""
-        if getattr(self, "_planning", False):
-            return None
-        result = getattr(self, "_opponent_target_cache", None)
-        if result is None:
-            result = self._opponent_target_rows(obs, board)
-        if result is None:
-            return None
-        phase, rows = result
-        return {"phase": round(phase, 3),
-                "bodies": [{"id": r["id"], "prize": r["prize"], "survival_shift": r["survival_shift"],
-                           "value": round(r["value"], 3)} for r in rows]}
 
     def _active_cheap_attack_kos(self, ma: dict | None, oa: dict | None) -> bool:
         """True if my Active's cheapest attack KOs the opponent's CURRENT Active this turn — so a costly

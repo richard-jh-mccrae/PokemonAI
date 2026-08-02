@@ -174,7 +174,9 @@ def test_keep_key_cards_at_discard_protects_the_burst_energy():
     opts = [card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)]
     obs = make_select(opts, min_count=2, max_count=2, context=DISCARD_SEL,
                       current=state(hand=[IGNITION, 1182, 1229]))
-    assert "keep-key-cards-at-discard" in _fired(pilot.explain(obs).options[0])   # Ignition guarded
+    # Graded on the DECISION since Issue #261 item 2h deleted the `_DISCARD` ladder: the keep-value
+    # equation protects the burst on its own (`TAG_TIER["discard_eot"]` 30, the band the retired
+    # `keep-key-cards-at-discard` -30 mirrored), so the ruling survives its rung.
     assert 0 not in pilot.decide(obs)                    # Ignition NOT among the discards
 
 
