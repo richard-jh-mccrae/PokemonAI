@@ -115,7 +115,20 @@ WHITELIST: tuple[SoundRule, ...] = (
                "+ line 100) against KO_SCORE 1000, deliberately, so no positional term can outrank a "
                "real prize. `_LINE_CAP` is the line term's 100 (`strategy/planner.py`), one summand "
                "of that band rather than the band itself. The invariant is what makes "
-               "'un-outbiddable' expressible at all.",
+               "'un-outbiddable' expressible at all. "
+               "**OWED A RULING (POC-T3, Issue #262).** `state_value` does NOT reproduce that "
+               "arithmetic: `survival` is prize-denominated and uncapped (a 3-prize body they can "
+               "Knock Out costs three times a 1-prize one, and a cap under a prize would erase the "
+               "distinction and price a heal at ~0), and `hand`/`development` carry runaway guards "
+               "at 1.5 prizes each rather than the incumbent 0.04/0.1 (transcribed, they saturate, "
+               "and a saturated term has zero derivative — so under 1-ply differencing every play "
+               "touching it prices at 0 delta and is never explored). What T3 preserves is the rule "
+               "restated on DELTAS: an absolute positional level cancels in "
+               "`state_value(after) - state_value(before)`, so what could outbid a prize is a single "
+               "play's MOVE, and the per-body bounds hold that under 1.0. That restatement is a "
+               "change to a ratified structural entry and is filed in the wave-3 packet; it is "
+               "recorded here rather than left as a docstring claim, because a whitelist that "
+               "describes a band the code abandoned is worse than one that says so.",
     ),
     SoundRule(
         id="setup-never-bench",
@@ -198,7 +211,16 @@ WHITELIST: tuple[SoundRule, ...] = (
               "values, planner sub-prize constants, confidence seeds, the refresh swing's "
               "opponent-side STRIP / GIFT / FRESH per-card prices, the free-Item hold floor "
               "`hold_value.ITEM_HOLD_FLOOR` and its seam rate `currency.ITEM_HOLD_WORTH_RATE`, and "
-              "the gust-target seam's `currency.GUST_TARGET_BAND`)",
+              "the gust-target seam's `currency.GUST_TARGET_BAND`) — and, "
+               "since POC-T3, the `state_value` scale anchors and runaway guards: `_READINESS_W`, "
+               "`_SATURATED`, `_ROLE_FLOOR`, `_PROXIMITY_W`, `_DEPLOY_PRIZE_BAND`, "
+               "`_BENCH_SLOT_PRICE` and the four family caps. `_THREAT_CAP` is in that list for a "
+               "second reason as of 2026-08-02 (Issue #262): it is the one family cap with NO scale "
+               "anchor in front of it, so it binds on 100% of inputs and `threat` answers one bit "
+               "rather than grading. The anchor that fixes it is derived rather than authored and "
+               "would therefore ADD no scaffold debt, but applying it measured -5/+0 on the "
+               "Discrimination Gate, so it is parked with the rest of this entry's queue and "
+               "recorded as a strict-xfail TARGET instead",
         type=AUTHORED_SCAFFOLD,
         fact="magnitudes inside equations that already fire correctly",
         reason="Tolerated for the POC: these sit INSIDE equations whose shape is right, so they "
@@ -232,7 +254,24 @@ WHITELIST: tuple[SoundRule, ...] = (
                        "reconciliation is the sharpest of the three: composing the two SHIPPED legs "
                        "(`PRIZE_DAMAGE_RATE` 100 / `ITEM_HOLD_WORTH_RATE` 1.0) says ~100 worth per "
                        "prize, a ~39x disagreement recorded in `currency.py` rather than smoothed "
-                       "over. `POC_WORTH_PRIZE_RATE` settles it.",
+                       "over. `POC_WORTH_PRIZE_RATE` SETTLED it (POC-T3, 2026-08-02) and settled it "
+                       "by REFERENT rather than by moving either number: the gust rate converts a "
+                       "prize-equivalent INTO Worth to rank a slot inside a Worth-denominated DP, "
+                       "while the scaffold converts a HELD CARD's Worth into prizes to price "
+                       "spending it — same pair, opposite directions, different referents. The "
+                       "reductio is that at the gust seam's rate a held `ROLE_TIER['win_condition']` "
+                       "prices at 11.7 prizes, nearly twice the six that END the match. So Worth is "
+                       "an ORDINAL priority scale inside an assignment, not a quantity globally "
+                       "exchangeable with prizes, and no general rate is owed. "
+                       "The T3 additions are "
+                       "NOT free inventions: each is anchored to the constant it replaces at the "
+                       "same band (old Issue #145's seeding method 1, the currency-zone rule) — "
+                       "`_READINESS_W` to `planner._READINESS_ATTACK_W`, `_SATURATED` to "
+                       "`planner._READINESS_SATURATED`, `_ROLE_FLOOR` to the bottom rung of "
+                       "`ROLE_TIER`, `_PROXIMITY_W` to `needs._PHASE_PRIZE_W`, `_DEPLOY_PRIZE_BAND` "
+                       "and `_BENCH_SLOT_PRICE` to `currency.DEPLOY_BAND`. "
+                       "`test_state_value.py` asserts the first two against the planner directly, "
+                       "because that import would be a cycle in the source.",
     ),
     SoundRule(
         id="poc-worth-prize-rate",
@@ -243,11 +282,25 @@ WHITELIST: tuple[SoundRule, ...] = (
                "the card is in `hand` (Worth) before and on the board (prizes) after, so the Worth "
                "does not cancel. Pricing the hand at zero instead was rejected — it makes every free "
                "Item strictly worth playing.",
-        reconciliation="Stated at authoring against the three rates `currency.py` already "
-                       "catalogues — trainer ~1.0, energy ~6.7, deploy DEPLOY_BAND/DEPLOY_WORTH_SCALE "
-                       "~0.83 — with disagreement RECORDED, not hidden (ADR-0097 decision 1). "
+        reconciliation="AUTHORED 1/120 prizes per Worth point, stated against every rate "
+                       "`currency.py` catalogues rather than dropped in beside them (ADR-0097 "
+                       "decision 1). The catalogue grew to FOUR while T3 was in flight, so all four "
+                       "are reconciled: worth<->damage deploy 0.83 (the ANCHOR — 25/30 over "
+                       "PRIZE_DAMAGE_RATE IS this constant), trainer `ITEM_HOLD_WORTH_RATE` 1.0 "
+                       "(within 20%; it replaced the deleted `_DENIAL_ITEM_COST` this note used to "
+                       "cite), energy ~6.7 (DISAGREES ~8x, a real referent difference — a card in "
+                       "hand vs fuel already attached); and on the SAME prize<->worth pair, "
+                       "`GUST_TARGET_WORTH_RATE` 2.564 worth/prize against this constant's 120, "
+                       "~47x. That last one is SETTLED by referent, not split — see the "
+                       "`firing-equation-constants` entry above and the reductio it records. "
+                       "Composing the two shipped legs (PRIZE_DAMAGE_RATE / ITEM_HOLD_WORTH_RATE) "
+                       "gives a second same-pair reading, 100 worth per prize, which this 120 sits "
+                       "inside 20% of — so two independent readings agree and one is explained. "
                        "Retires when a post-POC fit against ruled spend-vs-hold frames converges. "
-                       "`common/currency.py` and `test_currency.py` stay untouched.",
+                       "`common/currency.py` and `test_currency.py` stay untouched — including its "
+                       "now-stale forward pointer saying this constant 'is None and T3 owns "
+                       "authoring it', which is left for its owning track to correct rather than "
+                       "edited here.",
     ),
     SoundRule(
         id="apply-seam-coverage-floors",

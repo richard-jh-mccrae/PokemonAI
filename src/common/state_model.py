@@ -62,8 +62,10 @@ not at this docstring.
 from __future__ import annotations
 
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import NamedTuple
 
+from common import card_worth
 from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk / the ONE unit read
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
@@ -291,6 +293,22 @@ class CarriedState:
 
 # ── body views ────────────────────────────────────────────────────────────────────────────────
 
+class ForwardPayoff(NamedTuple):
+    """What a body's evolution line still OWES it — :meth:`MySide.forward_payoff`'s answer.
+
+    NAMED rather than a bare 3-tuple for the reason `state_value.ExposedBody` gives one field over:
+    three positional values of three different kinds invite a transposed unpack that still runs and
+    still returns a plausible number. Two of these are numbers and one is a flag, so a swap would be
+    caught — but only after it had mis-priced a board."""
+
+    #: Best printed damage anywhere in the forward closure MINUS the card's own, floored at 0.
+    owed_damage: float
+    #: How many evolutions away that best form is. 0 when the card is already the best form.
+    hops: int
+    #: Is every step of that path still available (not provably outside my deck)?
+    reachable: bool
+
+
 class BodyView(_Lazily):
     """One Pokémon in play, with its typed Energy and its attacks' typed cost shapes.
 
@@ -390,6 +408,34 @@ class BodyView(_Lazily):
     # were pass-throughs to card knowledge that has a home already — `stat.attacks` and
     # `CombatMath._attack_slots`. A body VIEW of a fact that does not depend on the body is a second
     # place to look for it, which is the cost the model exists to remove rather than to add.
+
+    @lazy
+    def payoff_attack(self):
+        """The attack id carrying this body's biggest printed damage — its `CardStat.maxDamage`
+        attack. ``None`` when no attack resolves.
+
+        Exists because "is this body ready?" is ambiguous and the two readings disagree in exactly
+        the case that matters. `readiness_p(body)` with no ``attack_id`` asks the FAMINE question —
+        is ANY attack reachable — which is 1.0 for a Mega Lucario ex holding one {F} because Aura Jab
+        costs {F}. But the payoff being priced is Mega Brave's 270, which costs {F}{F}. Pairing a
+        max-damage payoff with an any-attack probability makes the whole term saturate, and a
+        saturated term has zero derivative: the second Energy would price at 0 and never be attached.
+
+        Reads `stat.attacks` directly rather than through a `BodyView.attacks` pass-through, which
+        POC-T1 deleted for having none: this is a body-DEPENDENT question (which of THIS body's
+        attacks pays best), so it earns a view where a bare re-export of card knowledge did not.
+
+        Ties resolve to the FIRST attack in the card's own order — deterministic, because two attacks
+        at equal printed damage are equal payoffs and the tie-break must not depend on dict order."""
+        stat = self.stat
+        best, best_damage = None, -1.0
+        for aid in (getattr(stat, "attacks", None) or ()) if stat is not None else ():
+            astat = self._combat.attack_stat(aid)
+            damage = float(getattr(astat, "damage", 0) or 0) if astat is not None else 0.0
+            if damage > best_damage:
+                best, best_damage = aid, damage
+        return best
+
 
     @lazy
     def prize_value(self) -> int:
@@ -707,7 +753,8 @@ class MySide(_SideBase):
     _probe_prefix = "mine"
 
     def __init__(self, player: dict, *, combat, deck=None, deck_empty=frozenset(),
-                 own_prizes=None, energy_attached=False, supporter_played=False,
+                 own_prizes=None, needs=None, role_worth=None, energy_attached=False,
+                 supporter_played=False,
                  more_prizes_than_opp=False, turn=0, probe=None, turn_boosts=()):
         super().__init__(player, combat=combat, probe=probe, prefix="mine",
                          turn_boosts=turn_boosts)
@@ -724,6 +771,12 @@ class MySide(_SideBase):
         #: be trusted to reproduce it (Issue #279). Issue #297 fixed the field it distrusted — see
         #: :attr:`visible_counts` — so the threading is gone and the model derives the fact.
         self._own_prizes = own_prizes
+        #: The caller-supplied Needs resolution and Role-Worth resolver the `state_value` families
+        #: read (POC-T3, Issue #262). Both are RESOLVERS rather than facts, for the reason
+        #: :meth:`role_worth` spells out: Roles are declared by the Strategy and the assignment is a
+        #: DP over the hand, so neither is derivable from the snapshot the model holds.
+        self._needs = needs
+        self._role_worth = role_worth
         self.energy_attached = bool(energy_attached)
         self.supporter_played = bool(supporter_played)
         self.more_prizes_than_opp = bool(more_prizes_than_opp)
@@ -770,6 +823,38 @@ class MySide(_SideBase):
     # It was doubly dead: the ONE production builder never passed it, so the field was never written
     # AND never read. A seat nobody sits in is not architecture — it is a promise the next reader
     # will believe. T3's `readiness` term brings its own supplier when it needs one.
+
+    def role_worth(self, card_id) -> float:
+        """A card's **Worth**, in `card_worth` points — what job it does for THIS deck.
+
+        ``role_worth`` is a CALLABLE ``card_id -> Worth``, mirroring :attr:`needs`'s resolver one
+        accessor down — a mapping overload was written and removed, because a second accepted
+        shape is a second thing to keep in step for no caller that wanted it.
+
+        Roles are DECLARED (`Strategy.roles`), not a card fact: `card_worth.role_value`'s own
+        docstring says so outright ("the Pilot supplies ``roles`` / ``tags`` / the two flags"), and
+        `CardStat` carries neither. So the resolver is a caller-supplied callable, exactly like
+        :attr:`needs` one accessor up, and for the same reason — the model holds the ANSWER so
+        several equations read one opinion about what a body is for, instead of each re-deriving it.
+
+        Without a resolver this falls back to what card facts alone can claim (the typed-Basic-Energy
+        tier), which is 0 for any Pokémon. That is honest rather than useful, which is why
+        `state_value` applies its own floor on top rather than letting an undeclared body price at
+        exactly zero — see `state_value._role_relevance`."""
+        key = ("role_worth", card_id)
+        return self._memoized(key, lambda: self._role_worth_of(card_id))
+
+    def _role_worth_of(self, card_id) -> float:
+        if card_id is None:
+            return 0.0
+        resolver = self._role_worth
+        if resolver is not None:
+            return float(resolver(card_id) or 0.0)
+        stat = self._combat._card_stat(card_id)
+        if stat is None:
+            return 0.0
+        return card_worth.role_value(
+            (), is_typed_basic_energy=bool(getattr(stat, "is_typed_basic_energy", False)))
 
     # -- deck availability (the Count Triple, ADR-0068 decision 4) ------------------------------
     @lazy
@@ -1137,6 +1222,83 @@ class MySide(_SideBase):
     # one premise, differing silently in what they check, is exactly what the composed read exists to
     # prevent; `active_famine` is the premise.
 
+    @lazy
+    def needs(self):
+        """The position's Needs slots (deadline-tagged, ADR-0065's glossary) as resolved by the
+        caller, or None when not supplied. The model does not own the Needs engine; it holds the
+        resolution so several equations read one assignment instead of each re-running the DP."""
+        resolver = self._needs
+        return resolver() if callable(resolver) else resolver
+
+    # -- evolution topology (the forward closure over MY decklist) ------------------------------
+    @lazy
+    def forward_index(self) -> dict:
+        """``{pre-evolution NAME: (card ids in my deck that evolve from it, …)}``.
+
+        Derived from my decklist and `CardStat.evolvesFrom` — card knowledge plus the deck I
+        declared, both of which the snapshot already holds, so this needs no oracle it does not
+        have. Evolution is by NAME in this set (`docs/rules.md` §4; the card names its previous
+        stage), which is also why an id-keyed index would not work.
+
+        MY deck rather than a universal index on purpose: a forward form I do not run is not a form
+        my line can reach, and pricing topology against cards that are not in the box would credit
+        an evolution that can never arrive.
+        """
+        index: dict = {}
+        for cid in set(self._deck):
+            stat = self._combat._card_stat(cid)
+            base = getattr(stat, "evolvesFrom", None) if stat is not None else None
+            if base:
+                index.setdefault(base, []).append(cid)
+        return {name: tuple(sorted(ids)) for name, ids in index.items()}
+
+    def forward_payoff(self, card_id) -> "ForwardPayoff":
+        """:class:`ForwardPayoff` for ``card_id``'s line — what evolving it still OWES.
+
+        ``owed_damage`` is the best printed damage anywhere in the card's forward closure MINUS the
+        card's own, floored at 0 (a forward form that hits softer owes nothing); ``hops`` is how
+        many evolutions away that best form is; ``reachable`` is whether every step of that path is
+        still available — at least one copy not provably outside my deck, or in hand.
+
+        Reachability is what makes this topology rather than trivia: a Stage-1 whose only two copies
+        sit in the discard leaves its base a dead end however well funded it is, and
+        :attr:`unseen_counts` is the sound read of "not provably gone" the rest of this class
+        already uses. **Card knowledge only** — no engine, no observation beyond the zones the
+        snapshot already owns.
+
+        Fails closed at ``ForwardPayoff(0.0, 0, True)`` for an unknown card: no claim, and no
+        phantom penalty."""
+        return self._memoized(("forward_payoff", card_id), lambda: self._forward_payoff(card_id))
+
+    def _forward_payoff(self, card_id) -> "ForwardPayoff":
+        stat = self._combat._card_stat(card_id) if card_id is not None else None
+        if stat is None:
+            return ForwardPayoff(0.0, 0, True)
+        own = float(getattr(stat, "maxDamage", 0) or 0)
+        held = set(self.hand_ids)
+        unseen = self.unseen_counts
+        best = ForwardPayoff(0.0, 0, True)
+        # Breadth-first over the forward closure. `seen` guards a self-referential decklist rather
+        # than a real evolution cycle — the rules cannot produce one, but a data slip must not hang
+        # a value equation on the grader.
+        frontier = [(card_id, getattr(stat, "name", None), 0, True)]
+        seen = {card_id}
+        while frontier:
+            _cid, name, hops, live = frontier.pop()
+            for nxt in self.forward_index.get(name or "", ()):
+                if nxt in seen:
+                    continue
+                seen.add(nxt)
+                nstat = self._combat._card_stat(nxt)
+                if nstat is None:
+                    continue
+                nlive = live and (unseen.get(nxt, 0) > 0 or nxt in held)
+                owed = max(0.0, float(getattr(nstat, "maxDamage", 0) or 0) - own)
+                if owed > best.owed_damage:
+                    best = ForwardPayoff(owed, hops + 1, nlive)
+                frontier.append((nxt, getattr(nstat, "name", None), hops + 1, nlive))
+        return best
+
 
 class TheirSide(_SideBase):
     """THEIR half — the side with hidden information: hand SIZE only, the clock family, the
@@ -1479,7 +1641,8 @@ class StateModel(_Lazily):
     # -- construction ---------------------------------------------------------------------------
     @classmethod
     def build(cls, obs: dict, *, combat, my_index=None, deck=None, deck_empty=frozenset(),
-              read=None, brief=None, matchup_plan=None, posture_confidence=0.0,
+              needs=None, role_worth=None, read=None, brief=None, matchup_plan=None,
+              posture_confidence=0.0,
               favorability=0.5, matchup_coverage=0.0, opponent=None, forward_ids=None,
               charged=None, carried: CarriedState = CarriedState(), probe=None,
               their_side: TheirSide | None = None, turn_boosts=None) -> "StateModel":
@@ -1510,7 +1673,7 @@ class StateModel(_Lazily):
         my_prizes, opp_prizes = len(me.get("prize") or []), len(opp.get("prize") or [])
         boosts_for = getattr(turn_boosts, "boosts_for", None)
         mine = MySide(me, combat=combat, deck=deck, deck_empty=deck_empty,
-                      own_prizes=(obs or {}).get("own_prizes"),
+                      own_prizes=(obs or {}).get("own_prizes"), needs=needs, role_worth=role_worth,
                       energy_attached=bool(state.get("energyAttached")),
                       supporter_played=bool(state.get("supporterPlayed")),
                       more_prizes_than_opp=(my_prizes > opp_prizes),

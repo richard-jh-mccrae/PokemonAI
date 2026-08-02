@@ -542,6 +542,59 @@ def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> fl
     return best - v_without
 
 
+def assignment_split(slots, eligibility, resupply, *, exclude=frozenset(),
+                     capacity=None) -> tuple:
+    """:func:`assignment_value`'s TWO halves, separately: ``(re_access, coverage)``.
+
+    ``re_access`` is ``Σ_j v_j·r_j`` — what the closure re-supplies with no held card at all — and
+    ``coverage`` is the optimal held coverage on top; ``assignment_value`` is their sum, so this
+    cannot disagree with it (one DP, two readings).
+
+    Exposed for `state_value`'s ``hand`` family (POC-T3, Issue #262), whose frozen composition is
+    *"assignment coverage of LIVE slots PLUS re-access"* — two named sub-values that a single
+    ``V`` has already added together. Recovering them by differencing (``V`` minus ``V`` at zero
+    resupply) would re-run the DP and, worse, would not agree with it at the margin: the coverage
+    half is chosen against the DISCOUNTED weights, so zeroing resupply changes which assignment
+    wins rather than just its price."""
+    base, best = _keep_slot_dp(slots, eligibility, resupply, frozenset(exclude), capacity)
+    return base, best
+
+
+@dataclass(frozen=True)
+class Resolution:
+    """A position's Needs, RESOLVED — the shape :attr:`common.state_model.MySide.needs` carries.
+
+    The model's docstring already promised this: *"the model does not own the Needs engine; it holds
+    the resolution so several equations read one assignment instead of each re-running the DP."*
+    Until POC-T3 nothing supplied one, so `MySide.needs` was `None` in production and every consumer
+    re-resolved. This is the value type that closes that, and it is a plain record on purpose — the
+    Pilot owns the board→slots derivation (`_resolve_needs`), this module owns the assignment maths,
+    and neither reaches into the other.
+
+    ``latent_worth`` is supplied by the RESOLVER rather than derived here because its discount is a
+    Pilot-side constant (`_GENERAL_WORTH_W`); a value equation that reached for it would be reaching
+    into the Pilot, which `state_value` is asserted at import not to do."""
+
+    #: The position's Needs slots.
+    slots: tuple = ()
+    #: Per held card, the slot indices it can supply. Index-aligned with :attr:`hand_ids`.
+    eligibility: tuple = ()
+    #: Per slot, P(the closure re-supplies it inside its deadline). Index-aligned with `slots`.
+    resupply: tuple = ()
+    #: The held cards, in hand order — so a consumer can name which card a marginal belongs to.
+    hand_ids: tuple = ()
+    #: Worth of held cards that fill NO specific slot, already discounted by the resolver.
+    latent_worth: float = 0.0
+
+    def split(self) -> tuple:
+        """``(re_access, coverage)`` over the whole held hand — :func:`assignment_split` applied."""
+        return assignment_split(list(self.slots), list(self.eligibility), list(self.resupply))
+
+    def set_keep(self, indices) -> float:
+        """:func:`set_keep_v2` over this resolution — what losing ``indices`` jointly costs."""
+        return set_keep_v2(list(self.slots), list(self.eligibility), list(self.resupply), indices)
+
+
 def set_keep_v2(slots, eligibility, resupply, indices) -> float:
     """The SET marginal — ``V(all) − V(all − indices)``: what a multi-pick discard jointly costs.
     Two duplicate wincons solo-price 0 each (the sibling covers) but the PAIR prices full — the

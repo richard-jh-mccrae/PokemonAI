@@ -1,0 +1,293 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 0,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 0,
+                  "serial": 29
+                }
+              ],
+              "hp": 300,
+              "id": 723,
+              "maxHp": 350,
+              "playerIndex": 0,
+              "preEvolution": [
+                {
+                  "id": 722,
+                  "playerIndex": 0,
+                  "serial": 8
+                }
+              ],
+              "serial": 10,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 36,
+          "discard": [
+            {
+              "id": 1205,
+              "playerIndex": 0,
+              "serial": 19
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 36
+            },
+            {
+              "id": 1145,
+              "playerIndex": 0,
+              "serial": 17
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 35
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 41
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 39
+            },
+            {
+              "id": 721,
+              "playerIndex": 0,
+              "serial": 5
+            },
+            {
+              "id": 3,
+              "playerIndex": 0,
+              "serial": 62
+            }
+          ],
+          "hand": null,
+          "handCount": 8,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [
+                3,
+                3,
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 64
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 70
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 63
+                }
+              ],
+              "hp": 330,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 1,
+                  "serial": 81
+                }
+              ],
+              "serial": 84,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 40,
+          "discard": [
+            {
+              "id": 1120,
+              "playerIndex": 1,
+              "serial": 93
+            },
+            {
+              "id": 1225,
+              "playerIndex": 1,
+              "serial": 113
+            },
+            {
+              "id": 666,
+              "playerIndex": 1,
+              "serial": 77
+            },
+            {
+              "id": 3,
+              "playerIndex": 1,
+              "serial": 66
+            },
+            {
+              "id": 1120,
+              "playerIndex": 1,
+              "serial": 95
+            }
+          ],
+          "hand": [
+            {
+              "id": 1097,
+              "playerIndex": 1,
+              "serial": 91
+            },
+            {
+              "id": 17,
+              "playerIndex": 1,
+              "serial": 75
+            },
+            {
+              "id": 1227,
+              "playerIndex": 1,
+              "serial": 116
+            },
+            {
+              "id": 17,
+              "playerIndex": 1,
+              "serial": 73
+            }
+          ],
+          "handCount": 4,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 4,
+      "turnActionCount": 4,
+      "yourIndex": 1
+    },
+    "logs": [
+      {
+        "cardId": 3,
+        "fromArea": 8,
+        "playerIndex": 0,
+        "serial": 62,
+        "toArea": 3,
+        "type": 6
+      }
+    ],
+    "remainingOverageTime": 598.963836,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 0,
+          "type": 7
+        },
+        {
+          "area": 2,
+          "inPlayArea": 4,
+          "inPlayIndex": 0,
+          "index": 1,
+          "type": 8
+        },
+        {
+          "index": 2,
+          "type": 7
+        },
+        {
+          "area": 2,
+          "inPlayArea": 4,
+          "inPlayIndex": 0,
+          "index": 3,
+          "type": 8
+        },
+        {
+          "attackId": 1487,
+          "type": 13
+        },
+        {
+          "attackId": 1488,
+          "type": 13
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    }
+  },
+  "chosen": [
+    5
+  ],
+  "correct": [
+    2
+  ],
+  "chosen_label": "Attack with Nebula Beam",
+  "correct_label": "Play Lillie's Determination",
+  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / sequencing_error. Ruling unchanged; scope moved to #263.",
+  "frame_key": "83666442|1|decision|27",
+  "claims": {
+    "decision": {
+      "correct": [
+        2
+      ],
+      "owner": "#263",
+      "ruled": "2026-08-02",
+      "why": "WITHIN-TURN ORDERING, which a board valuation structurally cannot express: 'develop now, attack later this turn' and 'attack now' differ in ORDER, not in end state, so no term of `state_value` can separate them and the leaf prices them the same board. The agent still plays the ruled option on every one of these — only the leaf's ranking weakened. The ruling STANDS; Issue #263's sequence composer owns it."
+    }
+  }
+}
