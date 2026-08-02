@@ -23,9 +23,20 @@ option fails there rather than silently invalidating the census.
 **"Given a full search" is load-bearing.** Both subjects' triggers search a bounded pool this probe
 deck stocks with `_TRIGGER_SUPPORTERS` distinct lines, and 6 face-down prize cards draw from that
 same pool invisibly. Nothing bounds how many turns pass before the target enters play, so a long
-enough drive can draw the pool down to nothing first — measured (Issue #322 follow-up): the search
-comes up short roughly HALF the time once the drive's own deck count falls under 10, against ~0.2%
-otherwise, and that is CI's ~1-in-2-runs flake on this file.
+enough drive can draw the pool down first, at TWO distinct boundaries (Issue #322 follow-up):
+
+* **Partial** — the gate is posed normally, but an accepted search finds fewer than its own
+  ceiling. Measured: the search comes up short roughly HALF the time once the drive's own deck
+  count falls under 10, against ~0.2% otherwise.
+* **Total** (`deckCount == 0`) — the trigger's *"you may…"* gate is never posed at all; the engine
+  fizzles straight through to the next MAIN menu rather than offering a choice with nothing to
+  find. This one breaks BOTH modes, since there is no y/n to accept or decline, and it is what the
+  first attempt at this fix missed: a decline-mode capture on the very next CI run after that fix
+  landed, at `deckCount == 0` — a boundary the partial-shortage check could not see, since it never
+  runs for decline mode at all. Caught by re-measuring rather than trusting the first fix's local
+  pass, which is why the retry now checks BOTH.
+
+Together they are CI's ~1-in-2-runs flake on this file.
 
 **Not shared process state.** The obvious first suspect for a flake that survives 39 other
 live-engine tests run the same way was engine/RNG state leaking BETWEEN repeats in one process —
@@ -35,10 +46,10 @@ repeat sequence. It is per-game board state that this harness under-controls, no
 contamination.
 
 `probe_triggered_ability`'s `search_ceiling` (set per subject below) retries on a fresh shuffle
-when a capture came up short of the trigger's own printed bound, rather than shipping a
-board-dependent record — the SUCCESSFUL shape recorded is byte-identical to what a full search
-always produced, so the committed fixture needed no change. The same idiom
-`audit_attacks.py` uses for a missed setup or bench target.
+when a capture came up short — partially (accept mode) or totally (either mode) — of the trigger's
+own printed bound, rather than shipping a board-dependent record. The SUCCESSFUL shape recorded is
+byte-identical to what a full search always produced, so the committed fixture needed no change.
+The same idiom `audit_attacks.py` uses for a missed setup or bench target.
 
 Usage:
     python -m meta_tracker.probe_triggered_ability [--out PATH]

@@ -841,15 +841,20 @@ def _capture_trigger(battle_select, obs, opt: int, taken: str, me: int, *,
 
 
 #: How many fresh-shuffle attempts a search-based trigger gets before giving up (see
-#: ``_accept_capture_is_exhausted``) — measured, not guessed, per this repo's own discipline
-#: against unmeasured constants. Single-attempt exhaustion is rare (500 raw, single-attempt
-#: captures per subject: Punk Up 4/500 = 0.8%, Last-Ditch Catch 2/500 = 0.4%), so P(every attempt
-#: in a row exhausts) falls to ~4e-9 / ~2.6e-10 at 4 attempts — already six-plus orders of
-#: magnitude past "never observed in any run of this suite". 3 attempts would already clear
-#: 5e-7 / 6e-8; 4 buys another order of magnitude at negligible extra cost (a full multi-turn
-#: drive, not a cheap re-deal — unlike `audit_attacks.py`'s SETUP_DEALS budget, whose retry is
-#: near-free because it aborts before playing a turn) and is the value actually verified end to
-#: end: 0/300 full captures and 15/15 of CI's own 15-repeat backstop invocation, locally.
+#: ``_accept_capture_is_exhausted`` / ``_gate_was_skipped``) — measured, not guessed, per this
+#: repo's own discipline against unmeasured constants, and re-measured once a SECOND exhaustion
+#: channel was found (total shortage, not just partial). Single-attempt exhaustion across BOTH
+#: channels combined (1500 raw, single-attempt accept-mode captures per subject): Punk Up (648)
+#: 6/1500 = 0.40%, Last-Ditch Catch (1071) 24/1500 = 1.60% — the more accessible Basic target
+#: reaches deep, deck-thin games more often than the Stage-2 line does. P(every attempt in a row
+#: exhausts) falls to ~2.6e-10 / ~6.6e-8 at 4 attempts — comfortably past "never observed in any
+#: run of this suite" for either channel or subject. 3 attempts would already clear 6.4e-8 / 4.1e-6;
+#: 4 buys another order of magnitude at negligible extra cost (a full multi-turn drive, not a cheap
+#: re-deal — unlike `audit_attacks.py`'s SETUP_DEALS budget, whose retry is near-free because it
+#: aborts before playing a turn) and is the value actually verified end to end: 0/800 single-mode
+#: captures per subject, 0/400 full captures, and 25/25 of CI's own 15-repeat backstop invocation
+#: (run to 25 rather than 15 the second time, after the first fix's 15/15 local pass still missed
+#: this second channel on CI's very next run), locally.
 _TRIGGER_DRIVE_ATTEMPTS = 4
 
 
@@ -885,6 +890,25 @@ def _accept_capture_is_exhausted(rec: dict, search_ceiling: int | None) -> bool:
     return not es or es[0]["max_count"] < search_ceiling
 
 
+def _gate_was_skipped(rec: dict) -> bool:
+    """True when the trigger's *"you may…"* gate was never posed at all — TOTAL exhaustion
+    (``deckCount == 0`` at play time), a step further than ``_accept_capture_is_exhausted``'s
+    partial shortage.
+
+    Measured directly (Issue #322 follow-up, found on the first CI run after that fix landed — the
+    partial-shortage retry alone was not the whole story): with nothing left in the deck for the
+    search to find, the engine does not offer the y/n choice at all — it fizzles straight through
+    to the next MAIN menu. The select `_capture_trigger` records as ``gate_select`` is then already
+    a MAIN select, never an ACTIVATE one, so `contextCard`/`option` in it describe a DIFFERENT,
+    unrelated decision — cascading into a decline-mode failure the search-only check could not see,
+    since a fizzled gate breaks the shape BOTH `test_the_trigger_is_gated_by_an_ACTIVATE_yes_no...`
+    and `test_no_ABILITY_option_is_ever_posed...` assert, for accept AND decline alike (there is no
+    y/n to accept or decline). Pure and unit-tested alongside
+    ``_accept_capture_is_exhausted``; no engine involved.
+    """
+    return rec["gate_select"]["context"] != _CTX_ACTIVATE
+
+
 def probe_triggered_ability(target_id: int, cards: dict[int, dict], *, decline: bool = False,
                             me: int = 0, max_steps: int = 400, main_menus: int = 2,
                             search_ceiling: int | None = None,
@@ -907,16 +931,22 @@ def probe_triggered_ability(target_id: int, cards: dict[int, dict], *, decline: 
     separately, False means it rides the option it was played by.
 
     ``search_ceiling`` names the trigger's OWN search bound (see
-    ``_accept_capture_is_exhausted``) so an accept-mode capture that came up short from deck
-    exhaustion — not the card's own shape — retries on a fresh shuffle, up to ``drive_attempts``
-    times, instead of returning a board-dependent record. A decline-mode capture is never
-    exhausted this way: declining always skips the search, so an empty ``effect_selects`` there is
-    the CORRECT answer, and this check is skipped for it.
+    ``_accept_capture_is_exhausted``) so an accept-mode capture that came up short from a PARTIAL
+    deck shortage — not the card's own shape — retries on a fresh shuffle, up to
+    ``drive_attempts`` times, instead of returning a board-dependent record. A decline-mode capture
+    is never exhausted THIS way: declining always skips the search, so an empty
+    ``effect_selects`` there is the CORRECT answer, and this half of the check is skipped for it.
+
+    A TOTAL deck shortage (``deckCount == 0``) is a further step: the trigger's own gate is never
+    posed at all (``_gate_was_skipped``), which breaks the shape BOTH modes' assertions expect, so
+    this half of the check applies to accept and decline alike.
     """
     for _ in range(max(1, drive_attempts)):
         rec = _drive_to_trigger(target_id, cards, decline=decline, me=me, max_steps=max_steps,
                                 main_menus=main_menus)
-        if rec is not None and (decline or not _accept_capture_is_exhausted(rec, search_ceiling)):
+        if rec is None or _gate_was_skipped(rec):
+            continue
+        if decline or not _accept_capture_is_exhausted(rec, search_ceiling):
             return rec
     return None                             # every attempt missed setup or came up exhausted
 
