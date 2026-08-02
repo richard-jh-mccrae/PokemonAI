@@ -338,7 +338,13 @@ deliberate list; gates green; flips → wave 2.
   Two findings the sweep surfaced rather than caused, both pre-existing on `main` at `ce28431`:
   **Issue #294** — `cheapest_removal` is blind to the `pitch` term, so two RULED ladder-win cases
   shed the wrong card in shipped play (kept as strict-xfail TARGETs so the deletion of the shadow
-  that showed it does not bury it); and the leaf-profile test was crediting the deny slot for
+  that showed it does not bury it). **CLOSED 2026-08-02, ADR-0106**: the ranking key gained a
+  DEADNESS leg above residual worth — deadness RANKS a discard, it does not price one, because for a
+  dead card `P(met | keep) == P(met | pitch) == 0` and a signed credit would have to invent its
+  magnitude. Both TARGETs now grade as ordinary tests; both gates byte-identical to the pre-change
+  tree, so the issue's own "this moves every forced discard, it needs a wave ruling" did not survive
+  measurement — zero corpus frames moved and no ruling was owed. And the leaf-profile test was
+  crediting the deny slot for
   `_recur_shadow`'s model reads, so `DENY_SLOT_PROFILE` turns out to be unexercised by that file's
   corpus.
 
