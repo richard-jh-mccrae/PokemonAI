@@ -69,9 +69,41 @@ Send a single message with two `Agent` tool calls. Use the `general-purpose` sub
 
 - The diff command and commit list.
 - The path or fetched contents of the spec.
-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
+- **The LOAD-BEARING CLAIM, named** (see below).
+- **Whether the spec was self-filed** (see below).
+- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong; (d) any factual claim in the spec itself that your own verification does not support. Quote the spec line for each finding. Under 400 words."
 
 If the spec is missing, skip the Spec sub-agent and note this in the final report.
+
+#### Name the load-bearing claim — required
+
+Most changes rest on **one** factual claim about the codebase: *these two call sites are the only
+ones*, *no rung fires at this context*, *the sibling modules still have ladders under them*. Identify
+it before spawning, state it in the Spec prompt, and say plainly what rides on it:
+
+> "The table asserting each sibling flag falls back to a surviving rung ladder is the entire argument
+> for deleting rather than restoring. **If it is wrong, the decision is wrong.** Verify each row at
+> source — open the files, do not just check they exist."
+
+A brief without this sentence gets a scope-coverage review, which passes changes whose *premise* is
+false. With it, Issue #319's review opened `baseline_promote.py` and found `"EMPTY since ADR-0100.
+All seven promote rungs are DELETED"` — the claim was fabricated from file existence alone, and it
+had already reached both the issue body and a shipped docstring.
+
+If you genuinely cannot name one, say so in the prompt — that is itself informative, and usually
+means the change is mechanical.
+
+#### Flag a self-filed spec — required
+
+When the issue/PRD was written by the same session that wrote the code, **say so and tell the
+reviewer to distrust it more, not less**:
+
+> "It was filed by this same session immediately before the build, so treat it with EXTRA suspicion
+> rather than less: an issue written by the implementer can quietly narrow scope or assert evidence
+> it never gathered. Your job includes checking whether the issue's own claims are TRUE."
+
+A self-filed spec cannot catch the author's own misreading — it inherits it. This is the one case
+where the Spec axis must grade the spec as well as the diff, which is what clause (d) is for.
 
 ### 5. Aggregate
 

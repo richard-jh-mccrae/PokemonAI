@@ -83,6 +83,26 @@ GitHub issues on `richard-jh-mccrae/PokemonAI`, driven via the GitHub **MCP tool
 `grill → spec → build` pipeline (`status:1-grilling` → `2-spec` → `3-build` → `4-done`); `/to-spec`
 and `/implement` advance it automatically. See `docs/agents/issue-tracker.md`.
 
+**A SELF-FILED issue is not a spec — it is the implementer's own reading, and it inherits the
+implementer's mistakes.** When the same session files an issue and then builds it (the `/implement`
+chip-spawn path), the usual protection — a spec written by someone who read the code independently —
+is absent, so the issue can assert evidence nobody gathered and no later step will notice. Two rules
+follow, both cheap:
+
+- **`/code-review`'s Spec axis MUST be told the spec is self-filed**, and told to distrust it *more*,
+  not less; its report gains a clause for *claims in the spec that verification does not support*.
+  The brief must also NAME the one factual claim the decision rests on and say what rides on it. See
+  `.claude/skills/code-review/SKILL.md` §4.
+- **A negative result needs a positive control.** Before writing "X appears nowhere" or "nothing
+  fires at Y" into an issue, run the same instrument against a case that MUST match; if it stays
+  quiet, the instrument is broken, not the codebase. **File existence is never evidence of file
+  content** — if the claim is about what is *in* a module, quote the module.
+
+Both come from Issue #319, where a self-filed issue's decisive table ("every sibling flag falls back
+to a surviving rung ladder") was derived from `ls` alone. `baseline_promote.py` reads *"EMPTY since
+ADR-0100. All seven promote rungs are DELETED."* The false claim reached the issue body and a shipped
+docstring; only the Spec axis — briefed with both rules above — caught it.
+
 ### Domain docs
 
 Multi-context: `CONTEXT-MAP.md` indexes per-context `CONTEXT.md` files; all ADRs live in one
