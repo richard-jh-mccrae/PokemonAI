@@ -456,7 +456,10 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach. The mirror of `survival`, and the reason the two must not "
-                    "both read a clock — `turns_to_ko_me` is THEIR clock on MY bodies.",
+                    "both read a clock — `turns_to_ko_me` is THEIR clock on MY bodies. Reach is "
+                    "`best_reachable_damage_vs` — the DAMAGE MODEL against the body actually in "
+                    "front of me (Weakness, Resistance, prevention, my live boosts), under the "
+                    "incumbent's Attach-Budget affordability filter (Issue #281).",
         blind_to=(
             "bench-reachable Knock Outs (snipe / spread riders) — reachability here is my Active's "
             "best reachable damage against a body's remaining HP, which only ever reaches their "
@@ -492,8 +495,9 @@ REGISTRY: tuple[TermFamily, ...] = (
             "standing record and turns red the day it lands.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
             "STEP: `_reachable_target_values` returns nothing at all unless my Active's best "
-            "reachable damage already meets the target's remaining HP, so a Mega Lucario chipped "
-            "from 330 to 120 scores the same as one at full HP. This family is `survival`'s mirror "
+            "reachable damage AGAINST THAT DEFENDER already meets its remaining HP, so a Mega "
+            "Lucario chipped from 330 to 120 scores the same as one at full HP. Issue #281 made "
+            "the step's height honest; it is still a step. This family is `survival`'s mirror "
             "in name and NOT in form — survival grades continuously by a clock "
             "(`halve(turns_to_ko_me - 1)`), threat is on/off — and the asymmetry is exactly what "
             "the wave-3 ruling on `83116501|0|decision|60` objects to: *\"Our Starmie cannot KO the "
@@ -766,10 +770,26 @@ def _reachable_target_values(model: "StateModel") -> tuple:
     """Their bodies as `threat` reads them: `needs.opponent_target_value` over the Knock Outs I can
     actually reach THIS turn.
 
-    Reachability is `best_reachable_damage` (my Active, under its full Attach Budget) against the
+    Reachability is `best_reachable_damage_vs` (my Active, under its full Attach Budget) against the
     target's remaining HP — the shipped affordability oracle, not a second opinion about it. Only
     their ACTIVE is reachable by damage at all; a benched body needs a snipe rider, which is an
     attack's property and belongs to `attack_ev` (see `threat`'s `blind_to`).
+
+    **Against THIS defender, not in the abstract** (Issue #281). The read used to be the
+    opponent-INDEPENDENT `best_reachable_damage` — the biggest *printed* number my Active could
+    afford — and a printed number is wrong in both directions at once. It under-claimed every
+    Weakness Knock Out (`mega_starmie`'s doctrine is *lead Jetting Blow when the Active is
+    Water-weak with ≤240 HP*: printed 120, doubled 240, and the gate said unreachable), and it
+    over-claimed every prevented one (`docs/matchups/crustle.md` Seam 1 — *a pure-ex deck cannot
+    damage an active Crustle at all*, while the printed gate priced the Knock Out as pressure). The
+    sibling applies Weakness/Resistance, the defender's prevention Ability and my live damage
+    boosts, at the oracle's default ``bound="exact"`` — an offensive gate is neither the Lethal
+    Solver's guarantee (``"min"``) nor a worst case (``"max"``). The incumbent is untouched, because
+    it is `attach_value`'s counterfactual leg and that equation is corpus-ruled (ADR-0069 §2).
+
+    ``attacker="mine"`` on the context is not boilerplate — the Damage Formula's variables are named
+    relative to the attacker, so `survival`'s context and this one are different dicts and one
+    cannot answer both.
 
     ``survival_shift=0`` is the fail-closed answer to a missing supplier, named in `blind_to` rather
     than hidden: the shift is a Δ of `turns_to_ko_me` under REMOVAL of the body and the model exposes
@@ -778,7 +798,9 @@ def _reachable_target_values(model: "StateModel") -> tuple:
     target = model.theirs.active
     if target is None or not target.hp_remaining:
         return ()
-    if model.mine.best_reachable_damage(model.mine.active) < target.hp_remaining:
+    reach = model.mine.best_reachable_damage_vs(model.mine.active, target,
+                                                context=model.damage_context(attacker="mine"))
+    if reach < target.hp_remaining:
         return ()
     race = model.prize_race
     phase = _needs.phase_scale(race_ahead=None,

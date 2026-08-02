@@ -117,6 +117,13 @@ gap on a 1-of tech card is noise; a gap on a wincon line is a blocker.
 
 ### F1 — `threat`'s reachability gate is weakness-blind, and blind in **both directions**  ·  BLOCKER
 
+> **BUILT — Issue #281, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). `CombatMath.best_reachable_damage_vs`
+> is the sibling, `MySide.best_reachable_damage_vs` the accessor, and `_reachable_target_values`
+> reads it against their actual Active at `bound="exact"` with `damage_context(attacker="mine")`.
+> The incumbent `best_reachable_damage` is byte-for-byte untouched, which is what keeps
+> `attach_value` (ADR-0069 §2) where its corpus rulings put it.
+
 **Unread dimension.** Damage as the defender actually takes it. `threat`'s gate is
 `model.mine.best_reachable_damage(active) >= target.hp_remaining`, and `best_reachable_damage` is
 documented as *"the biggest **PRINTED** damage … **Opponent-independent**"* (`combat.py:1136-1143`).

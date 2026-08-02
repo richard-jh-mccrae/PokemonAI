@@ -1176,6 +1176,44 @@ class MySide(_SideBase):
                 raw, budget=self.attach_budget(body, manual_spent=manual_spent))
         return self._memoized(key, _make)
 
+    def best_reachable_damage_vs(self, body: BodyView | None, defender: BodyView | None, *,
+                                 context: dict | None = None) -> float:
+        """Biggest damage ``body`` can reach this turn AGAINST ``defender`` — the sibling of
+        :meth:`best_reachable_damage` that asks the damage model instead of the printed number, so
+        Weakness, Resistance, a prevention Ability and a live damage boost all reach the answer
+        (Issue #281, POC-T3.5).
+
+        The two are NOT interchangeable and the incumbent is not the poorer one. `attach_value`'s
+        counterfactual wants the opponent-independent printed read by construction (ADR-0069 §2);
+        an offensive reachability GATE — *can I actually take this Knock Out* — wants this one. The
+        printed read said yes to a Knock Out a Crustle prevents outright and no to the Weakness
+        Knock Out `mega_starmie`'s whole doctrine is built on, so the gap was live in both
+        directions.
+
+        ``context`` is the Damage Formula's scaler context for the direction being priced —
+        :meth:`StateModel.damage_context` at ``attacker="mine"``, since the attacker here is MINE.
+        Omitting it is sound but weak: a scaling attack's variable contributes 0
+        (`strategy/damage.py`), which under-reads my own damage rather than inventing it.
+
+        Memoized by VALUE on the components the incumbent keys on and that vary here — card, area,
+        attached Energy — plus the two that are new: the DEFENDER and the context. The incumbent's
+        ``extra_energy_ids`` and ``manual_spent`` legs are deliberately NOT carried: both exist for
+        `attach_value`'s counterfactual PAIR (the same body with and without an option's provision,
+        at the same residual capacity), a comparison this read is not part of. A keyword no caller
+        passes is a surface that can only drift, so the Budget here is always the body's own and
+        residual capacity is constant rather than keyed.
+
+        The defender is canonicalised rather than keyed by ``id()`` for :meth:`_Lazily._key`'s
+        reason: a counterfactual caller may hand this a temporary body, and a freed temporary's
+        address is free to be reallocated."""
+        if body is None:
+            return 0.0
+        target = defender.body if defender is not None else None
+        key = ("best_reachable_damage_vs", body.card_id, body.is_active, body.energy_key,
+               self._key(target), self._key(context))
+        return self._memoized(key, lambda: self._combat.best_reachable_damage_vs(
+            body.body, target, budget=self.attach_budget(body), context=context))
+
     def readiness_p(self, body: BodyView | None, attack_id=None, *, enabler_budget=None,
                     copies: int = 0, pool: int = 0, draws: int = 0, weighted: bool = True) -> float:
         """P(``body`` is ready to use the attack this turn) — the EV variant, and the ONLY place an

@@ -264,6 +264,58 @@ STATE_VALUE_PROFILE = frozenset({
     "theirs.active.hp_remaining",
     "theirs.reachable_incoming",
     "theirs.turns_to_ko_me",
+
+    # ── POC-T3.5 / Issue #281: `threat`'s reachability gate asks the DAMAGE MODEL ──────────────
+    # The gate used to read `mine.best_reachable_damage` — the biggest PRINTED number, which is
+    # opponent-independent and therefore wrong in both directions (it missed every Weakness Knock
+    # Out and claimed every prevented one). It now reads the sibling against their actual Active,
+    # which drags in the Damage Formula's scaler context and, with it, the `damage_facts` gatherer
+    # on BOTH sides — that is the whole of the growth below.
+    #
+    # **Measured before re-pinning**, as this pin's own note demands. On the 40-frame corrections
+    # corpus, against a `state_value` whose fresh-model median on those (much richer) boards is
+    # ~6.7 ms: `damage_context(attacker="mine")` costs **111 us median / 149 us p95 on a FRESH
+    # model** and is memoized per direction for the model's lifetime, so every later reader — Issue
+    # #280's survival direction included — pays a dict lookup. The damage read itself is not new
+    # cost: it is the same per-attack loop under the same Budget filter, one closed-form call
+    # (`predicted_damage`) where there used to be one field read (`attack_damage`).
+    "mine.best_reachable_damage_vs",
+    "model.damage_context",
+    # the gatherer, and the per-side countables it walks (`_SideBase.damage_facts`). Both sides,
+    # because the Formula's variables are `atk_`/`def_`-relative and one direction needs both.
+    "mine.damage_facts",
+    "theirs.damage_facts",
+    "mine.active.damage_counters",
+    "mine.active.is_ex",
+    "mine.active.tool_ids",
+    "mine.bench.damage_counters",
+    "mine.bench.is_ex",
+    "mine.bench.is_stage2",
+    "mine.damage_boosts",
+    "mine.discard_energy_total",
+    "mine.discard_ids",
+    "mine.prizes_taken",
+    # The `theirs.bench.*` half of the SAME gatherer. `damage_facts` is one un-overridden method on
+    # `_SideBase` — it walks `bodies` and `bench` for `counters_in_play`, `bench_stage2`,
+    # `ex_in_play` and `bench_names` — so these are read on any frame where their Bench is not
+    # empty. They are DECLARED rather than measured: the engine-driven frame this ceiling is
+    # asserted against happens to reach the leaf with an empty opponent Bench. Safe to declare on a
+    # `<=` bound (it is a ceiling, not an equality), and the alternative is a latent failure that
+    # arrives the first time the drive benches an opposing body.
+    "theirs.bench.damage_counters",
+    "theirs.bench.is_ex",
+    "theirs.bench.is_stage2",
+    "theirs.bench.stat",
+    "theirs.active.damage_counters",
+    "theirs.active.energy_count",
+    "theirs.active.energy_key",
+    "theirs.active.is_ex",
+    "theirs.active.stat",
+    "theirs.active.tool_ids",
+    "theirs.bench_count",
+    "theirs.damage_boosts",
+    "theirs.discard_energy_total",
+    "theirs.prizes_taken",
 })
 
 LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE

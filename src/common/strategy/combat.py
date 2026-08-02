@@ -1242,6 +1242,40 @@ class CombatMath:
         return float(max((self.attack_damage(aid) for aid in (stat.attacks or ())
                           if self.reachable_attach(my_body, aid, budget=budget)), default=0))
 
+    def best_reachable_damage_vs(self, my_body: dict | None, defender: dict | None, *,
+                                 budget: Budget, context: dict | None = None) -> float:
+        """Biggest damage ``my_body`` can reach this turn AGAINST ``defender`` — the same
+        Budget-affordability filter as :meth:`best_reachable_damage`, read through the damage
+        oracle instead of the printed number, so Weakness / Resistance / prevention / boosts apply
+        (Issue #281, POC-T3.5).
+
+        A SIBLING, not a replacement, and the split is load-bearing rather than tidy. The incumbent
+        is the counterfactual leg of the attach marginal (ADR-0069 §2) and is deliberately
+        opponent-INDEPENDENT — *"the overkill cap, not this read, owns 'a bigger attack buys
+        nothing'"* — so teaching it about the defender would move `attach_value`, which is
+        corpus-ruled. Two questions, two methods.
+
+        Everything except the damage read is the incumbent's, deliberately: `reachable_attach`
+        under the same Attach ``budget`` stays the ONE opinion about affordability this family
+        holds. (:meth:`can_ko_affordable` also scans through :meth:`predicted_damage` and was
+        considered for the same job — it asks affordability of the *attached* Energy, a strictly
+        different and weaker question than the Budget, and a family holding two opinions about
+        affordability is what the sole-supplier ruling forbids.)
+
+        ``bound`` is the oracle's default ``"exact"`` and is not a parameter. An OFFENSIVE
+        reachability read is neither a lethal guarantee nor a worst case — the two readings that
+        own ``"min"`` and ``"max"`` (`Lethal reads "min", Incoming "max"`, :meth:`predicted_damage`)
+        — so there is one right answer here and no caller to give a choice to.
+
+        Fail-CLOSED at 0.0, like the incumbent: no ``CardStat``, no Budget, no claim."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        return float(max((self.predicted_damage((my_body or {}).get("id"), aid, defender,
+                                                context=context)
+                          for aid in (stat.attacks or ())
+                          if self.reachable_attach(my_body, aid, budget=budget)), default=0))
+
     def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
                     enabler_budget: Budget | None = None,
                     copies: int = 0, pool: int = 0, draws: int = 0, p_by_type=None) -> float:

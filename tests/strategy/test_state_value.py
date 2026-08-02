@@ -23,8 +23,22 @@ Pilot and no engine boot. Card facts VERIFIED at source (`data/EN_Card_Data.csv`
     Aura Jab ``{F}`` 130 / Mega Brave ``{F}{F}`` 270.
   * Dragapult ex (121) Stage 2 HP 320, {N} — Jet Headbutt ``●`` 70 / Phantom Dive ``{R}{P}`` 200.
   * Munkidori (112) Basic HP 70, {D}.
-  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and {F} is added here as 6.
+  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and {F} is added here as 6 ({W} as 3).
   * Prize values: Mega ex 3, ex 2, else 1 (`docs/rules.md` §6).
+
+Issue #281 adds four more, every field read off `data/EN_Card_Data.csv` (the numbers are Card IDs):
+  * Mega Starmie ex (1031) Stage 1 *Mega Pokémon ex*, evolvesFrom **Staryu**, HP 330, {W},
+    Weakness {L} — Jetting Blow ``{W}`` 120 (+50 to one Benched) / Nebula Beam ``●●●`` 210,
+    whose text is *"isn't affected by Weakness or Resistance, or by any effects on your opponent's
+    Active"* → `ignoresWeakness` + `ignoresResistance` + `ignoresEffects`.
+  * Gouging Fire ex (46) Basic *Pokémon ex*, HP 230, {R}, **Weakness {W}** — Heat Blast ``{R}●``
+    60 / Blaze Blitz ``{R}{R}●`` 260. The under-claim defender: Jetting Blow's printed 120 misses,
+    its doubled 240 does not.
+  * Crustle (345, DRI) Stage 1, HP 150, {G}, Weakness {R}, Ability *Mysterious Rock Inn*: *"Prevent
+    all damage done to this Pokémon by attacks from your opponent's Pokémon {ex}"* →
+    `preventsDamageFrom="ex"`. The over-claim defender.
+  * Larry's Braviary (1008) Stage 1, HP 130, {C}, Weakness {L}, **Resistance {F}** — the −30
+    defender (`docs/rules.md` §5: a uniform flat −30 in this set).
 """
 from __future__ import annotations
 
@@ -40,10 +54,14 @@ from common.strategy.combat import CombatMath
 
 # ── the fixture board ─────────────────────────────────────────────────────────────────────────────
 
-COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
+COLORLESS, GRASS, FIRE, WATER = 0, 1, 2, 3
+LIGHTNING, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 4, 5, 6, 7, 9
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
+MEGA_STARMIE, GOUGING_FIRE, CRUSTLE, BRAVIARY = 1031, 46, 345, 1008
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
-E_R, E_P, E_F, E_D = 2, 5, 6, 7
+JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
+HEAT_BLAST, BLAZE_BLITZ = 946, 947
+E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
@@ -57,6 +75,24 @@ _STATS = {
                        evolvesFrom="Riolu", maxDamage=270, maxDamageCost=2, minAttackCost=1,
                        minCostDamage=130,
                        attacks=(AURA_JAB, MEGA_BRAVE), cardType=0),
+    # ── Issue #281's damage-model cast: an attacker whose damage MOVES with the defender ──────
+    MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
+                           energyType=WATER, weakness=LIGHTNING, evolvesFrom="Staryu",
+                           maxDamage=210, maxDamageCost=3, minAttackCost=1, minCostDamage=120,
+                           benchSnipeDamage=50, attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
+    GOUGING_FIRE: CardStat(GOUGING_FIRE, name="Gouging Fire ex", hp=230, ex=True,
+                           energyType=FIRE, weakness=WATER, maxDamage=260, maxDamageCost=3,
+                           minAttackCost=2, minCostDamage=60,
+                           attacks=(HEAT_BLAST, BLAZE_BLITZ), cardType=0),
+    CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, energyType=GRASS, weakness=FIRE,
+                      evolvesFrom="Dwebble", preventsDamageFrom="ex", maxDamage=120,
+                      maxDamageCost=3, minAttackCost=3, minCostDamage=120,
+                      attacks=(SUPERB_SCISSORS,), cardType=0),
+    BRAVIARY: CardStat(BRAVIARY, name="Larry's Braviary", hp=130, energyType=COLORLESS,
+                       weakness=LIGHTNING, resistance=FIGHTING, evolvesFrom="Larry's Rufflet",
+                       maxDamage=50, maxDamageCost=2, minAttackCost=2, minCostDamage=50,
+                       attacks=(CLUTCH,), cardType=0),
+    E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
@@ -67,6 +103,16 @@ _ATTACKS = {
     PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC)),
     AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
     MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    JETTING_BLOW: AttackStat(JETTING_BLOW, damage=120, cost=1, energyTypes=(WATER,), benchSnipe=50),
+    NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3,
+                            energyTypes=(COLORLESS, COLORLESS, COLORLESS),
+                            ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
+    SUPERB_SCISSORS: AttackStat(SUPERB_SCISSORS, damage=120, cost=3,
+                                energyTypes=(GRASS, COLORLESS, COLORLESS), ignoresEffects=True),
+    CLUTCH: AttackStat(CLUTCH, damage=50, cost=2, energyTypes=(COLORLESS, COLORLESS)),
+    HEAT_BLAST: AttackStat(HEAT_BLAST, damage=60, cost=2, energyTypes=(FIRE, COLORLESS)),
+    BLAZE_BLITZ: AttackStat(BLAZE_BLITZ, damage=260, cost=3,
+                            energyTypes=(FIRE, FIRE, COLORLESS)),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 
@@ -75,7 +121,8 @@ DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 #: outright ("the Pilot supplies ``roles``") and `CardStat` carries no such field — so a fixture that
 #: tried to put them on the stat would be testing an API that does not exist.
 _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condition_base"],
-               MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"]}
+               MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"],
+               MEGA_STARMIE: ROLE_TIER["win_condition"]}
 
 
 def _combat():
@@ -114,6 +161,16 @@ def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_pr
         _player(active=their_active or _poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
                 prize=their_prizes),
         energy_attached=energy_attached)
+
+
+def _starmie_board(their_active, *, my_energies=(E_W,)):
+    """MY Mega Starmie ex Active against a chosen defender, with the turn's Energy already spent so
+    the Attach Budget adds nothing — the board is exactly what is attached, and reachability is
+    therefore a fact about the fixture rather than about the deck's colours."""
+    return _model(
+        _player(active=_poke(MEGA_STARMIE, hp=330, energies=list(my_energies)), prize=4),
+        _player(active=their_active, prize=4),
+        energy_attached=True)
 
 
 # ── the coverage map — T0's headline rule, executable ─────────────────────────────────────────────
@@ -650,6 +707,110 @@ def test_a_reachable_knockout_on_their_active_raises_threat_but_never_by_a_prize
     assert exposed["threat"] <= sv._THREAT_CAP < 1.0
 
 
+# ── `threat`'s reachability gate asks the DAMAGE MODEL, not the printed number (Issue #281) ───────
+#
+# The gate is a STEP, so a wrong reading of it is not a mis-scaling — it is the difference between
+# the family answering and the family returning `()`. It was wrong in BOTH directions at once,
+# because the printed number knows nothing about who is being hit.
+
+
+def _threat_of(model) -> float:
+    working: dict = {}
+    sv.state_value(model, working=working)
+    return working["threat"]
+
+
+def _reach(model):
+    """``(incumbent printed read, new damage-model read)`` for MY Active against THEIR Active."""
+    mine, theirs = model.mine.active, model.theirs.active
+    return (model.mine.best_reachable_damage(mine),
+            model.mine.best_reachable_damage_vs(mine, theirs,
+                                                context=model.damage_context(attacker="mine")))
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_a_weakness_knockout_the_printed_number_calls_unreachable_now_prices():
+    """The UNDER-claim, and `mega_starmie`'s own doctrine: *lead Jetting Blow when the Active is
+    Water-weak with <= 240 HP*. Jetting Blow prints 120 and Gouging Fire ex has 230 HP, so the
+    printed gate says "cannot reach" — while the rules say Weakness doubles it to 240 and the
+    Knock Out is there (`docs/rules.md` §5; S&V prints x2, not +N).
+
+    TWO controls, because the gate must be shown to still say NO:
+
+    * ``out_of_reach`` — **the same card**, chipped to 250 rather than 230. One fact differs
+      (remaining HP), and 240 does not reach it. This is the honest one-fact control.
+    * ``not_weak`` — a different defender at the same 230 HP that is not {W}-weak. More than the
+      Weakness type differs between the two cards, so this one is a sanity check on the direction
+      rather than a controlled comparison, and is labelled as such."""
+    weak = _starmie_board(_poke(GOUGING_FIRE, hp=230, serial=9))
+    out_of_reach = _starmie_board(_poke(GOUGING_FIRE, hp=250, serial=9))
+    not_weak = _starmie_board(_poke(DRAGAPULT, hp=230, serial=9))
+
+    printed, modelled = _reach(weak)
+    assert printed == 120, "the INCUMBENT must still read the printed number — `attach_value` rests on it"
+    assert modelled == 240, "Weakness is x2 on the defender's type (`docs/rules.md` §5)"
+
+    assert _threat_of(weak) > 0.0, "a reachable Knock Out that only Weakness makes reachable"
+    assert _threat_of(out_of_reach) == 0.0, "240 doubled damage does not reach 250 HP"
+    assert _threat_of(not_weak) == 0.0, "120 printed, no Weakness, 230 HP — genuinely out of reach"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_a_knockout_the_defender_PREVENTS_no_longer_prices_as_pressure():
+    """The OVER-claim, from `docs/matchups/crustle.md` Seam 1: *a pure-ex deck cannot damage an
+    active Crustle at all*. Mega Lucario ex is a Pokémon {ex} (`docs/rulebook.txt` L337 — a Mega
+    Evolution Pokémon ex IS an {ex}), Crustle's *Mysterious Rock Inn* prevents all damage from
+    attacks by opponent {ex}, and Mega Brave carries no ignore flag. Printed 270 against 150 HP
+    reads as pressure; the real damage is 0.
+
+    Nebula Beam is the standing proof that this is a per-ATTACK fact and not a per-card one — it
+    *"isn't affected by ... any effects on your opponent's Active"* and lands its 210 through the
+    same wall — so it is asserted here rather than left to the oracle's own tests."""
+    board = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
+                           their_active=_poke(CRUSTLE, hp=150, serial=9))
+    printed, modelled = _reach(board)
+    assert printed == 270, "the INCUMBENT still reads Mega Brave's printed damage"
+    assert modelled == 0.0, "every attack Mega Lucario ex can reach is prevented outright"
+    assert _threat_of(board) == 0.0
+
+    pierces = _starmie_board(_poke(CRUSTLE, hp=150, serial=9), my_energies=(E_W, E_W, E_W))
+    assert _reach(pierces)[1] == 210, "Nebula Beam ignores effects on the Active — it lands"
+    assert _threat_of(pierces) > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_resistance_takes_its_flat_30_off_the_reachability_read():
+    """Resistance is a uniform flat −30 in this set (`docs/rules.md` §5, project-verified over 47
+    cards), and it is enough on its own to turn an exact-lethal into a miss: Aura Jab prints 130
+    into Larry's Braviary's 130 HP, and Braviary resists {F}."""
+    board = _lucario_board(my_energies=[E_F], energy_attached=True,
+                           their_active=_poke(BRAVIARY, hp=130, serial=9))
+    printed, modelled = _reach(board)
+    assert printed == 130, "Aura Jab's printed damage — the incumbent's answer, unchanged"
+    assert modelled == 100, "130 − 30 Resistance"
+    assert _threat_of(board) == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_the_new_read_keeps_the_incumbents_BUDGET_affordability_filter():
+    """The sibling swaps the damage read and NOTHING else — the affordability filter is the
+    incumbent's, unchanged. With one {W} attached and the turn's attach already spent, the
+    three-Energy Nebula Beam is not reachable and may not enter EITHER read; fund it and it enters
+    both.
+
+    This is why `can_ko_affordable` was NOT composed for the gate — it asks affordability of the
+    *attached* Energy, while this family's reachability has always been the Attach BUDGET. Two
+    opinions about affordability inside one family is what the sole-supplier ruling forbids."""
+    starved = _starmie_board(_poke(CRUSTLE, hp=150, serial=9), my_energies=(E_W,))
+    printed, modelled = _reach(starved)
+    assert printed == 120, "only Jetting Blow is reachable on one Energy"
+    assert modelled == 0.0, "and Jetting Blow's Active damage is prevented — its bench rider is a "\
+                            "separate path and belongs to `attack_ev`"
+
+    funded = _starmie_board(_poke(CRUSTLE, hp=150, serial=9), my_energies=(E_W, E_W, E_W))
+    assert _reach(funded)[0] == 210, "three Energy reaches Nebula Beam, so the printed max moves"
+
+
 @pytest.mark.req("REQ-STATEVALUE-0009")
 @pytest.mark.xfail(strict=True, reason="OPEN DEFECT, diagnosed and parked — see the test body and "
                                        "`threat`'s `blind_to` entry 'SATURATION INTO ONE BIT'")
@@ -790,6 +951,53 @@ def test_on_real_frames_one_more_energy_never_lowers_readiness(corpus_models):
         assert after >= before - 1e-9, f"{key}: an extra Energy LOWERED readiness"
         strict += after > before + 1e-9
     assert strict, "no corpus frame moved at all — the class would pass on a constant term"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0010")
+def test_on_real_frames_the_incumbent_printed_read_still_returns_a_PRINTED_number(corpus_models):
+    """Issue #281's *incumbent untouched* guard, and the reason it is stated on the corpus rather
+    than on a fixture: `best_reachable_damage` is the counterfactual leg of the attach marginal
+    (ADR-0069 §2) and `attach_value` is corpus-RULED, so the claim that matters is about the boards
+    the rulings were made on.
+
+    Two properties rather than a re-implementation of the read (which would be a tautological join
+    — ADR-0088), and BOTH halves of the incumbent's contract are covered:
+
+    * the DAMAGE read — the value must be exactly the biggest number the attacks `reachable_attach`
+      admits actually PRINT. A Weakness-doubled, Resistance-reduced or prevention-zeroed value is
+      not, so the incumbent quietly acquiring the damage model fails here;
+    * the AFFORDABILITY filter — the expected value is built from ``MySide.reachable_attach``, the
+      model's own shipped accessor for that question, so a filter that silently widened (or
+      narrowed to the cheapest attack) fails too. Composed from a different public accessor rather
+      than a private re-derivation, which is what keeps it a check and not a copy.
+
+    The last assertion is the positive control the negative claim needs (CLAUDE.md): on the same
+    frames the NEW sibling must diverge from the incumbent somewhere. If it never did, everything
+    above would be passing because nothing changed at all."""
+    diverged, compared = 0, 0
+    for key, pilot, obs in corpus_models:
+        my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
+        model = pilot._leaf_state_model(obs, my_index)
+        mine, theirs = model.mine.active, model.theirs.active
+        if mine is None or mine.stat is None:
+            continue
+        expected = max((float(pilot.combat.attack_damage(aid))
+                        for aid in (mine.stat.attacks or ())
+                        if model.mine.reachable_attach(mine, aid)), default=0.0)
+        incumbent = float(model.mine.best_reachable_damage(mine))
+        assert incumbent == expected, (
+            f"{key}: `best_reachable_damage` returned {incumbent}, not the printed maximum "
+            f"{expected} over the attacks `reachable_attach` admits — the incumbent moved, and "
+            f"`attach_value`'s corpus rulings rest on it not moving")
+        if theirs is None or not theirs.hp_remaining:
+            continue
+        compared += 1
+        modelled = float(model.mine.best_reachable_damage_vs(
+            mine, theirs, context=model.damage_context(attacker="mine")))
+        diverged += abs(modelled - incumbent) > 1e-9
+    assert compared, "no corpus frame offered both Actives — the class would pass vacuously"
+    assert diverged, ("positive control FAILED: the damage-model read never once differed from the "
+                      "printed read, so the instrument is not measuring what this issue changed")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
