@@ -10,6 +10,13 @@ frame. Without this file the gate's red state has no name attached to it, which 
 This is a **record, not an instrument**. Nothing reads it. `data/leaf_lab/baseline.json` is still the
 gate's reference and is still untouched.
 
+**It has a second consumer, by the developer's intent (2026-08-02):** the rationales are being
+written as *ideal turn sequences* so these corrections can be checked against the **Turn Planner**
+(Issue #263, POC-T4) once it exists. That makes the sequences an acceptance corpus, not commentary —
+so they are reproduced **verbatim** below, typos and all, rather than paraphrased into the verdict
+table. A sequence rewritten in my words is a sequence T4 would be graded against having already been
+interpreted once.
+
 ## Verdict vocabulary
 
 | verdict | what the developer said | what it changes |
@@ -53,9 +60,74 @@ gate's reference and is still untouched.
 | `82227388\|0\|decision\|50` | REVERT-worthy † | **REVERT** | as 43: doomed, so heal, then sequence before attaching Ignition Energy and attacking with Nebula Beam |
 | `82228017\|0\|decision\|16` | CONFORM | **REVERT** | Cinderace's Turbo Flare gives 3 Energy to Benched Pokémon, so lay down a bench at any cost while it is empty before attacking — Buddy-Buddy Poffin first |
 
+### Batch 4 (2026-08-02)
+
+| frame | packet rec | verdict | developer's line |
+|---|---|---|---|
+| `82228017\|0\|decision\|4` | CONFORM (low conf.) | **REVERT** | the leaf's Hero's Cape is a card with no value to the game right now that is better kept as Ultra Ball fodder — play Buddy-Buddy Poffin, attach to Cinderace, attack Turbo Flare |
+| `82229122\|0\|decision\|17` | CONFORM | **REVERT** | too eager to attack: the turn could have filled the Bench with Buddy-Buddy Poffin AND attached Energy AND evolved Staryu to the main attacker |
+
 † one of the 15 the developer deferred to Issue #278 S13
 ([comment](https://github.com/richard-jh-mccrae/PokemonAI/issues/262#issuecomment-5153527951)); the
 per-frame verdict supersedes that deferral.
+
+## Ideal turn sequences — VERBATIM (the Issue #263 / T4 acceptance corpus)
+
+Reproduced exactly as the developer wrote them, including typos and abbreviations. Do not tidy
+these: the whole point is that T4's turn plan is checked against the human's own words rather than
+against someone's reading of them. Quoted blocks are the developer quoting the Correction's own
+recorded rationale.
+
+- `81785223|0|decision|32` — "The hand has pretty much all of our supporters, so PokeGear is actually
+  not the play. its evolve staryu->mega starmie, play Hilda to fetch energy, attach energy to active
+  starmie. attack jetting blow, snipe Wellspring Mask Ogerpon ex"
+  ⚠️ **the snipe target is invalid** — Wellspring Mask Ogerpon ex is a Tera Pokémon ex and takes no
+  attack damage while Benched. The developer caught this themselves; the rest of the sequence stands.
+- `81785223|0|decision|44` — "exact same as above."
+- `81904064|0|decision|44` — "my pick, play lillies. to retreat is absurd. opponents active has no
+  energy, we have three from ignition energy. Attack with Nebula Beam"
+- `81904064|0|decision|59` — "My pick, play Salvatore, evolve benched Staryu, attack with jetting
+  blow KOing opponent."
+- `81904451|0|decision|24` — "My pick, Hilda first to fetch Starmie, evolve if able.. then attack
+  with Turbo Flare, give 3 energy to Starmie"
+- `81904451|0|decision|37` — "My rationale correct. Hilda to fetch starmie, evolve the staryu with 5
+  energy. retreat/promote that Starmie. attack jetting blow and snipe something."
+- `81904451|0|decision|50` — "same as above."
+- `81904451|0|decision|53` — "same as above, but now we have a Mega Signal"
+- `81905522|0|decision|28` — "evolve active staryu, play lillies, attach KOing active, snipe Riolu"
+- `81905522|0|decision|64` — "This one is more interesting. first attach energy to staryu. The
+  opponents Mega Lucario is out of OHKO range, but we can gust up Hariyama with no energy and 2
+  retreat cost. Attack Hariyama with JETTING BLOW, to snipe Lucario. Now Lucario has 190 HP, KO range
+  of Nebula Beam."
+- `81906131|1|decision|25` — "My ruling stands. and vital that buddy buiddy poffin played first
+  before attacking with Turbo Flare"
+- `81906755|1|decision|93` — "My ruling stands, attach the energy to the active starmie prior to
+  attacking. Also play Salvatore to evolve one of the benched staryus. Attack and snipe the Raging
+  Bolt ex."
+- `82225138|0|decision|82` — "my pick. play buddy-buddy, the pokegear, redecide on new info if its a
+  good supporter like Hilda (fetch energy to attach to Staryu) or Salvatore to evolve Staryu. Then
+  attack with Nebula Beam"
+- `82225643|1|decision|57` — "my pick, read correction's rationale: *'item cards should be used if
+  they can be helpful prior to attacking. in this case, we have no mainline attacker available to
+  replace our active, thus we should utlra ball to find a staryu thus that we can evolve it next
+  turn. also, hero's capre should be used to give our main line aactive attacker more health.'*"
+- `82227388|0|decision|43` — "My pick. Our active is doomed, but we have healing. Use Wallys
+  Compassion, attach Ignition Eneergy, attack Nebula Beam"
+- `82227388|0|decision|50` — "pretty much same as above. we are doomed, so heal. then sequence before
+  attaching ignition energy and attacking with nebula beam."
+- `82228017|0|decision|16` — "My pick. see rationale: *'Cinderace's attack give 3 energy to benched
+  pokemon, therefor we should lay down a bench and at any cost when its empty before attacking. thus
+  we should have payed buddy buddy poffin first.'*"
+- `82228017|0|decision|4` — "This is about wasting a card that has no value to our game at the moment
+  which could otherwise perhaps be used as Ultra Ball fodder. I would play Buddy buddy, attach energy
+  to Cinderace, attack Turbo Flare"
+- `82229122|0|decision|17` — "as correction rationale says: *'Too eager to attack. could have filled
+  up bench with buddy-buddy poffin AND attached energy AND evolved Staryu to main attacker.'*"
+
+**`82225138|0|decision|82` is worth T4's attention specifically.** *"play buddy-buddy, the pokegear,
+redecide on new info"* is not an ordering preference — it asks the planner to **re-plan mid-turn on
+information the earlier action revealed**. That is [ADR-0095](../../docs/adr/0095-information-precedes-commitment.md)'s
+subject by name, and a turn plan fixed at the start of the turn cannot express it.
 
 ## Card facts, verified at source
 
@@ -75,6 +147,10 @@ went into committed ledger reasons:
   category *Ancient*, not Tera).
 - **Hariyama** is retreat **3**, not 2 as the `81905522|64` rationale said. The discrepancy cuts in
   the line's favour, so the reasoning holds.
+- **Hero's Cape** is a Pokémon Tool: *"+100 HP"*. **Ultra Ball** is an Item usable *"only if you
+  discard 2 other cards from your hand"* — so a card with no present use genuinely is fodder for it,
+  which is the `82228017|4` rationale exactly. **Buddy-Buddy Poffin** searches out up to 2 Basic
+  Pokémon with **70 HP or less**; Staryu is 70 HP, so it is eligible.
 
 ## Open discrepancies (flagged, not resolved)
 
@@ -88,7 +164,7 @@ went into committed ledger reasons:
 
 ## The pattern these verdicts are making
 
-17 frames ruled, **zero CONFORM**. The packet recommended CONFORM on 10 of them and every one was
+19 frames ruled, **zero CONFORM**. The packet recommended CONFORM on 12 of them and every one was
 overturned, so the packet's read was wrong and should not be trusted for the remainder.
 
 Two things recur:
@@ -106,4 +182,10 @@ Two things recur:
 Both point at one gap: the leaf cannot represent **sequencing within a turn**, so it prices a
 develop-then-attack line and an attack-now line as the same board and lets `survival` break the tie
 toward passivity. That is a T3 finding, not the Issue #278 artifact the deferral assumed — but it is
-recorded here as an observation over 17 frames, not yet a diagnosis.
+recorded here as an observation over 19 frames, not yet a diagnosis.
+
+A third recurrence, from batch 4: **the ledger's stated reason and the developer's stated reason do
+not describe the same decision.** `82228017|4` is filed as *"Resolved by dont-tutor-the-held-wincon:
+Mega Signal is a wincon-only tutor…"*, while the developer's ruling is about not wasting Hero's Cape
+that Ultra Ball could eat. Both may be true of the same board, but a `covered` entry that answers a
+different question than the one asked is not evidence the frame is handled. Recorded, not acted on.
