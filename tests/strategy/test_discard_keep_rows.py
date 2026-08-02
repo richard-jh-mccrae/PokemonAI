@@ -12,7 +12,7 @@ it (both deleted by the same item). That is strictly stronger, and it immediatel
 **two of the re-pointed cases did not pass**, because the old assertion was grading `eq_pick`, a
 number nobody had acted on since `needs_keep_value` shipped ON. They were held as strict-xfail
 TARGETs owned by Issue #294; ADR-TEMP-294 closed that gap by giving `needs.cheapest_removal`'s
-ranking key a DEADNESS leg above residual worth, and both now grade as ordinary pins in the two
+ranking key a DEADNESS leg above residual worth, and both are now asserted outright inside the two
 tests that price their rows.
 """
 import pytest
@@ -83,7 +83,7 @@ def test_the_pitch_term_separates_dead_weight_from_a_live_spare_among_zero_keep(
     by = _by_cid(_rows(pilot, obs))
     assert by[FILLER]["keep"] == 0.0 and by[CINDERACE]["keep"] == 0.0   # keep cannot separate them
     assert by[CINDERACE].get("dead_opener") is True
-    assert by[CINDERACE]["dead"] > by[FILLER]["dead"]                   # deadness discriminates…
+    assert by[CINDERACE]["deadness"] > by[FILLER]["deadness"]           # deadness discriminates…
     assert pilot.explain(obs).chosen == [1]                             # …and the DECIDER acts on it
                                                                         # (ADR-TEMP-294 — the exact
                                                                         # tie used to fall to the
@@ -102,10 +102,10 @@ def test_a_spent_burst_is_fodder_only_once_the_active_is_fully_powered():
     powered, obs_p = _setup([FILLER, IGNITION], minc=1, powered=True)
     rp = _by_cid(_rows(powered, obs_p))
     assert rp[IGNITION]["keep"] == 0.0 and rp[IGNITION]["spent_burst"] is True    # spent -> fodder
-    assert rp[IGNITION]["dead"] > rp[FILLER]["dead"]
-    # …and the DECIDER acts on it (ADR-TEMP-294). This is the case residual worth alone gets BACKWARDS:
-    # the spent burst still carries catalog worth 30 against the filler's 0, so a worth-first
-    # tie-break sheds the live spare and keeps the corpse. Deadness ranks above it for that reason.
+    assert rp[IGNITION]["deadness"] > rp[FILLER]["deadness"]
+    # …and the DECIDER acts on it (ADR-TEMP-294). This is the case residual worth alone gets
+    # BACKWARDS: the spent burst still carries catalog worth 30 against the filler's 0, so a
+    # worth-first tie-break sheds the live spare and keeps the corpse. Deadness ranks above it.
     assert powered.explain(obs_p).chosen == [1]
 
 
@@ -146,13 +146,19 @@ def test_the_full_working_prices_every_band_of_the_hand():
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_a_discard_source_accel_energy_zeroes_its_keep():
+def test_a_discard_source_accel_energy_zeroes_its_keep_but_is_not_DEAD():
     """The `fuel` bit: an Energy the deck's own accel pulls back OUT of the discard is not lost by
-    being discarded, so its keep floor drops to 0."""
+    being discarded, so its keep floor drops to 0.
+
+    It is cheap to pitch and it is NOT dead weight, which is why the two terms split (ADR-TEMP-294):
+    its ROLE has not expired, and `needs.pitch_gain` already prices the pitch in the removal SCORE.
+    Ranking on it as well double-prices it and sheds an Energy that is the only funder of an attack
+    (`83966336|0|decision|27`)."""
     pilot, obs = _setup([MEGA, WATER], minc=1)
     pilot._discard_fuel_cache = frozenset({2})              # Water is a discard-source accel target
     row = _by_cid(_rows(pilot, obs))[WATER]
     assert row["fuel"] is True and row["keep"] == 0.0
+    assert row["pitch"] == 1 and row["deadness"] == 0
 
 
 # The two strict-xfail TARGETs that stood here are GONE because the gap they named is closed
@@ -166,15 +172,17 @@ def test_a_discard_source_accel_energy_zeroes_its_keep():
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_a_fuel_energy_is_pitchable_but_not_DEAD():
-    """The counts split (ADR-TEMP-294): `pitch` carries the zone sign, `dead` does not. A Basic Energy
-    the deck's own accel recovers is cheap to pitch — but its ROLE has not expired, and
-    `needs.pitch_gain` already prices the pitch in the removal SCORE. Counting it a second time in
-    the ranking sheds an Energy that is the only funder of an attack (`83966336|0|decision|27`)."""
-    pilot, obs = _setup([MEGA, WATER], minc=1)
-    pilot._discard_fuel_cache = frozenset({2})              # Water is a discard-source accel target
-    row = _by_cid(_rows(pilot, obs))[WATER]
-    assert row["fuel"] is True and row["pitch"] == 1 and row["dead"] == 0
+def test_deadness_is_one_bit_however_many_ways_a_card_is_expired():
+    """`deadness` is CATEGORICAL where `pitch` is a count (ADR-TEMP-294). Nothing has ruled that a
+    card expired two ways is *deader* than one expired a single way, and an order asserted from
+    ignorance is what ADR-0091 decision 2 rejects — so the ranking leg reads one bit. Salvatore is
+    both a `redundant_tutor` (the wincon is in hand) and a hand DUPLICATE, and the Mega in hand makes
+    a second tutor genuinely dead; its `pitch` count still records every reason."""
+    pilot, obs = _setup([MEGA, SALVATORE, SALVATORE], minc=1)
+    row = _by_cid(_rows(pilot, obs))[SALVATORE]
+    assert row["redundant_tutor"] is True
+    assert row["deadness"] == 1 and row["pitch"] >= 1
+    assert pilot.explain(obs).chosen != [0]                 # never the Mega
 
 
 @pytest.mark.req("REQ-NEEDS-0005")

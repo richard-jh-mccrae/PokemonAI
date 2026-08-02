@@ -76,16 +76,25 @@ changes frequency class and breaks the branches that rested on the old shape.
 
 **The lexicographic form carries a property a credit cannot promise.** The leg is consulted only
 where `removal_score` ties, so no amount of deadness can make a removal look cheaper than one that
-genuinely costs more. `test_deadness_is_ordering_only_and_never_beats_a_real_cost` pins it. That
+genuinely costs more, which `test_deadness_is_ordering_only_and_never_beats_a_real_cost`
+asserts directly. That
 matters because `dead_opener` fires on the `opener` tag unconditionally — faithfully mirroring the
 retired rung's own `when=`, which was equally unconditional — so a card that is both a spent opener
 and a live engine keeps whatever keep value the assignment gives it, and only the tie moves.
 
-**This is not v1's sort restored.** What item 2h deleted was `_discard_equation_rows`' second return
-value: a `(keep asc, pitch desc, worth asc, index)` ranking living BESIDE `needs.cheapest_removal` as
-a second definition of "cheapest to lose." The objection was two definitions, not the ordering. v1's
-`worth asc` leg already lives inside `cheapest_removal` as the sanctioned `tiebreak` parameter; this
-puts the last leg in the same one place, which is the opposite of re-creating the drift.
+**Scope item 3, answered precisely.** The issue asks that this be *"settled against ADR-0065's
+keep-value doctrine rather than by restoring v1's sort, which is the thing being deleted."* Stated
+honestly: the doctrine above **re-derives v1's ordering**, leg for leg — `(cost asc, deadness desc,
+worth asc, index)` against v1's `(keep asc, pitch desc, worth asc, index)`. Claiming otherwise would
+be spin, and the Spec axis of this change's review called an earlier draft of this paragraph exactly
+that.
+
+What makes it an answer rather than a restoration is WHERE it lives and WHY. What item 2h deleted was
+`_discard_equation_rows`' second return value: that ranking living BESIDE `needs.cheapest_removal` as
+a second definition of "cheapest to lose." The objection was two definitions, not the ordering — and
+v1's `worth asc` leg already lives inside `cheapest_removal` as the sanctioned `tiebreak` parameter.
+This puts the last leg in the same one place, derived from ADR-0065's own algebra rather than copied
+because v1 had it. That v1 arrived at the same order by fitting is corroboration, not the argument.
 
 ### Why deadness sits ABOVE residual worth
 
@@ -93,13 +102,22 @@ Because residual worth reads the catalog tier a corpse still carries — the spe
 above. The worth leg keeps deciding wherever nothing is dead, which is the `83967840-54` ruling
 (`test_cheapest_removal_ties_break_by_residual_worth`, unmoved).
 
-## Decision 2 — the row carries TWO counts, and `fuel` is in only one of them
+## Decision 2 — the ranking leg is a BIT, and `fuel` is not in it
 
-`_apply_pitch_terms` now writes `dead` (the five expired-role bits: `dead_opener`,
-`redundant_tutor`, `stranded`, `fodder`, `spent_burst`) alongside `pitch` (`dead` + the `fuel` zone
-sign). `dead` ranks the discard; `pitch` keeps its two existing jobs — gating LATENT worth
-(`_resolve_needs` withholds a general slot from a pitch-flagged row) and the shed predictor's junk
-band.
+`_apply_pitch_terms` now writes `deadness` — a categorical `0/1` over the five expired-role bits
+(`dead_opener`, `redundant_tutor`, `stranded`, `fodder`, `spent_burst`) — alongside the unchanged
+`pitch` COUNT, which adds the `fuel` zone sign. `deadness` ranks the discard; `pitch` keeps its two
+existing jobs, gating LATENT worth (`_resolve_needs` withholds a general slot from a pitch-flagged
+row) and the shed predictor's junk band. Both of those read it as `> 0`, so no consumer of `pitch`
+sees any change at all.
+
+**A bit, not a count, and that follows from decision 1 rather than being a separate call.** Summing
+the five bits would say a card expired two ways is *deader* than one expired a single way — a
+magnitude claim, and no ruling anywhere makes it. An order asserted from ignorance is precisely the
+design ADR-0091 decision 2 rejects, and reintroducing one inside a decision whose whole argument is
+"deadness is categorical" would hollow the argument out. The first draft summed them; the Spec axis
+of this change's review caught it. Summing across a removal SET is a different and sound claim —
+shedding two dead cards beats shedding one — and that is what the key does.
 
 **This was found by building it, not by reasoning about it, and it is the trap in this issue.** The
 first cut passed the whole `pitch` count as the deadness leg, on the argument that fuel is harmless
@@ -115,8 +133,9 @@ Discrimination Gate   FAIL   REGRESSED 83966336|0|decision|27   OK -> MISS   ran
 ```
 
 Fuel is not deadness. It is a discard that FILLS a slot, and `needs.pitch_gain` already prices it in
-the score; counting it again in the ranking double-prices it. `test_a_fuel_card_that_also_funds_the_attack_is_not_dead_weight`
-pins both halves — the tie, and the pick each count produces.
+the score; ranking on it as well double-prices it.
+`test_a_fuel_card_that_also_funds_the_attack_is_not_dead_weight` asserts both halves — the tie, and
+the pick each spelling produces.
 
 ## Measured at the build (2026-08-02)
 
@@ -149,12 +168,31 @@ that population is the Decision Gate's context-8 slice, quoted above.
   `chosen == [1]` on exactly the two boards the two row-pricing tests above already build, so folding
   them up removes a ruling stated twice. The deletion is recorded in a comment at the site, because a
   deleted xfail and a deleted ruling look the same in a diff.
-* `cheapest_removal` gains one optional parameter and both of its production callers pass it —
-  `_needs_v2` (the decider) and `doctrine_fetch._shed_signals` (the shed predictor). The predictor
-  must take it or it stops predicting what the decider does, which is the contract ADR-0103
-  Amendment A extracted `needs.removal_score` to keep. `removal_score` itself is **untouched**, so
-  the predictor's junk / live / key bands read the same numbers they did yesterday; only which set it
-  prices can move.
+* `cheapest_removal` gains one optional parameter, and **the two legs are spelled once** —
+  `Pilot._removal_ranking_legs`, a fourth seam in ADR-0103 Amendment A's series and extracted for the
+  same reason as the other three: two callers need the same answer, not merely the same idea of one.
+  The decider (`_needs_v2`) and the shed predictor (`doctrine_fetch._shed_signals`) both splat it. A
+  predictor ranking by a different key than the decider stops predicting it, which is the drift
+  Amendment A closed one leg further down; written twice, a third leg would reach one site and not
+  the other, which is how `Pilot._order_key` came to exist. `removal_score` itself is **untouched**,
+  so the junk / live / key bands read the same numbers they did yesterday — only which set they price
+  can move.
+* **The predictor is where this actually bites, so it is where the new behavioural test went.**
+  Instrumented over the committed corpus, 59 `cheapest_removal` calls carry rows, 12 have non-zero
+  deadness, and 5 return a different shed set with the leg on — *all five from `_shed_signals`, none
+  from `_needs_v2`*. That seam had no test at all (`grep -rn "_shed_signals" tests/` returned
+  nothing), so the predictor's junk-band verdict could have drifted unasserted. Found by the Spec
+  axis of this change's review; covered by
+  `test_the_shed_predictor_ranks_by_DEADNESS_like_the_decider_it_predicts`, on the
+  `83454549-36` spent-burst shape, where worth-first sheds `{duplicate, singleton}` and silences
+  `costly-fetch-sheds-junk` while deadness-first sheds `{burst, duplicate}` and fires it.
+* **Declined, and recorded rather than left as a silent judgement:** `cheapest_removal` now takes
+  seven parameters, four of which (`slots`, `eligibility`, `resupply`, `intrinsics`) also travel
+  together into `removal_score` at both call sites — a Data Clump wanting to be a `RemovalProblem`
+  type. Five of the seven predate this change and the type would re-signature `keep_v2`,
+  `set_keep_v2`, `assignment_value` and six test call sites, which is a different job from Issue #294
+  and would bury this one's diff. `_removal_ranking_legs` already removes the clump from the two
+  call sites that grew.
 * Runtime is unchanged in order: the key is built from two sums over an already-enumerated subset,
   inside the same `C(n, picks)` loop.
 * **Not addressed, and stated rather than folded in silently:** `Pilot.needs_keep_value` is read

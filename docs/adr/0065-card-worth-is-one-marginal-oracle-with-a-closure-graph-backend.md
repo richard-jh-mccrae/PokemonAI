@@ -377,11 +377,13 @@ comparator) and ADR-0032 (Effect-Clause tier).
   `(removal_score, −Σ deadness, Σ residual_worth, indices)`. Deadness RANKS, it does not PRICE: for
   a dead card `P(met | keep) == P(met | pitch) == 0`, and this ADR's own `keep_cost = Worth × Odds ×
   Gates` is a product of clamped non-negative factors — so the "a dead card's keep is negative"
-  reading would have to invent its magnitude, which is the rung-fitting ADR-0092 deletes. The row
-  now carries `dead` (five expired-role bits, ranks) beside `pitch` (`dead` + the `fuel` zone sign,
-  gates latent worth and the junk band); passing `pitch` to the ranking double-prices fuel and shed
-  an attack's only funder on `83966336|0|decision|27`. Both gates byte-identical to the pre-change
-  tree; zero corpus frames moved.
+  reading would have to invent its magnitude, which is the rung-fitting ADR-0092 deletes. The row now
+  carries `deadness` (a categorical bit over the five expired-role facts, which RANKS) beside the
+  unchanged `pitch` COUNT (`+ fuel`, which gates latent worth and the junk band); ranking on `pitch`
+  double-prices fuel and shed an attack's only funder on `83966336|0|decision|27`. Both legs are
+  spelled once, in `Pilot._removal_ranking_legs`, because the discard decider and the fetch
+  doctrine's shed predictor must rank identically. Both gates byte-identical to the pre-change tree;
+  zero corpus frames moved.
 
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,

@@ -565,6 +565,47 @@ def test_costly_fetch_sheds_junk_boosts_ultra_ball_to_the_free_dig_band():
     assert pilot.decide(obs) == [0]
 
 
+BURST, NEUT_SINGLE, POWERED_ATK = 17, 662, 900
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_the_shed_predictor_ranks_by_DEADNESS_like_the_decider_it_predicts():
+    """The predictor and the discard DECIDER share one ranking (ADR-TEMP-294, `Pilot.
+    _removal_ranking_legs`), and this is the shape where that bites — three shed candidates, all
+    priced 0 by the assignment, so nothing but the ranking legs can separate them:
+
+      * a SPENT burst — `discard_eot` with the Active already fully powered, so it self-discards at
+        end of turn anyway (`83454549-36`). Dead, and carrying catalog worth 30;
+      * a hand copy of a BENCHED Pokémon — replaceable, worth 0;
+      * a NEUTRAL singleton — worth 0, and a genuine card we would still have.
+
+    Residual worth alone gets it backwards: worth-first preserves the corpse (30) and sheds
+    `{duplicate, singleton}`, which is not a junk shed, so `costly-fetch-sheds-junk` goes silent and
+    the dig loses its free-dig band. Deadness ranks above residual worth, so the predictor sheds
+    `{burst, duplicate}` — every card dead or replaceable — and the band fires.
+
+    The junk band is what makes the miss OBSERVABLE: without a test at this seam the predictor could
+    drift off the decider silently, which is the drift ADR-0103 Amendment A re-pointed it to close."""
+    pilot = _netting_pilot(
+        deck=[WINC, JUNKMON], extra_funcs={BURST: ["discard_eot"]},
+        extra_stats={BURST: CardStat(BURST, name="Ignition Energy", cardType=6, energyType=0),
+                     NEUT_SINGLE: CardStat(NEUT_SINGLE, hp=60),
+                     POWERED_ATK: CardStat(POWERED_ATK, hp=200, maxDamageCost=1)})
+    obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
+                      current=state(active=poke(POWERED_ATK, energy=1),
+                                    bench=[poke(JUNKMON), poke(STARYU)],
+                                    hand=[ULTRA, BURST, JUNKMON, NEUT_SINGLE]))
+    board = pilot._board(obs, obs["select"])
+    rows = pilot._as_discard_rows(pilot._needs_hand_rows(obs, board, exclude_cid=ULTRA), obs, board)
+    burst = next(r for r in rows if r["cid"] == BURST)
+    assert burst["spent_burst"] is True and burst["deadness"] == 1 and burst["worth"] == 30.0
+    junk, live, key = pilot._shed_signals(obs, obs["select"]["option"][0],
+                                          list(pilot.functions.tags(ULTRA)), board, None)
+    assert (junk, live, key) == (True, False, False)
+    assert "costly-fetch-sheds-junk" in _fired(pilot.explain(obs).options[0])
+    assert pilot.decide(obs) == [0]
+
+
 ENGINE_SUP = 661        # a draw Supporter — live at a forced discard (keep-engine floor)
 
 

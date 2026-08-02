@@ -341,7 +341,7 @@ deliberate list; gates green; flips → wave 2.
   that showed it does not bury it). **CLOSED 2026-08-02, ADR-TEMP-294**: the ranking key gained a
   DEADNESS leg above residual worth — deadness RANKS a discard, it does not price one, because for a
   dead card `P(met | keep) == P(met | pitch) == 0` and a signed credit would have to invent its
-  magnitude. Both TARGETs now grade as ordinary pins; both gates byte-identical to the pre-change
+  magnitude. Both TARGETs now grade as ordinary tests; both gates byte-identical to the pre-change
   tree, so the issue's own "this moves every forced discard, it needs a wave ruling" did not survive
   measurement — zero corpus frames moved and no ruling was owed. And the leaf-profile test was
   crediting the deny slot for

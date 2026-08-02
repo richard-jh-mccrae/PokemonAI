@@ -514,8 +514,7 @@ class FetchMixin:
         resupply = [0.0] * len(slots)            # a forced discard has no redraw window (as `_needs_v2`)
         intrinsics = [0.0] * len(rows)           # no v1 post-gate hedge exists over the HAND rows
         shed = needs.cheapest_removal(slots, elig, resupply, intrinsics, 2,
-                                      deadness=[r.get("dead", 0) for r in rows],
-                                      tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
+                                      **self._removal_ranking_legs(rows))
         cost = needs.removal_score(slots, elig, resupply, intrinsics, shed)
         junk = cost <= 0.0 and all(rows[i].get("pitch", 0) > 0 or rows[i].get("dup_hand")
                                    or rows[i].get("in_play") for i in shed)

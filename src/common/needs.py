@@ -547,14 +547,15 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
     both are ordering-only: neither can make a removal look cheaper than one that genuinely costs
     less, which is the property that lets a CATEGORICAL fact rank without being handed a magnitude.
 
-    ``deadness`` (per-card, ADR-TEMP-294): the pitch term's DEADNESS count — a card whose role has
-    EXPIRED (a spent `opener`, a burst whose Active is already powered, a tutor whose target is in
-    hand, a stranded evolution, declared fodder) is actively best gone. Keep-cost cannot express
-    that: `keep_cost = Worth × Odds × Gates` is a product of non-negative factors, and for a dead
-    card `P(met | keep) = P(met | pitch) = 0` — so the equation's honest answer is exactly the 0 a
+    ``deadness`` (per-card, ADR-TEMP-294): a CATEGORICAL 0/1 — a card whose role has EXPIRED (a
+    spent `opener`, a burst whose Active is already powered, a tutor whose target is in hand, a
+    stranded evolution, declared fodder) is actively best gone. Keep-cost cannot express that:
+    `keep_cost = Worth × Odds × Gates` is a product of non-negative factors, and for a dead card
+    `P(met | keep) = P(met | pitch) = 0` — so the equation's honest answer is exactly the 0 a
     worthless live spare also prices. "Shed the dead one" is therefore a preference ORDER over cards
     the equation prices EQUAL, and it rides the key rather than inventing a term, which is the same
-    shape as ADR-0103 one layer up (an exact tie stopped being resolved by menu position).
+    shape as ADR-0103 one layer up (an exact tie stopped being resolved by menu position). Summing
+    it across the SET is a different and sound claim: shedding two dead cards beats shedding one.
 
     ``tiebreak`` (per-card, below deadness): among still-equal removals the set with the lower
     Σ tiebreak sheds first — the resolver passes residual worth (worth × deploy), so a worth-10
