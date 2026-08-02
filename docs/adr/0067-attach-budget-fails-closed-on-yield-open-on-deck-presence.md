@@ -256,15 +256,16 @@ Attribution is branch-vs-BARE-main, each gate run twice on the same rebased tree
 
 Neither baseline is re-captured and nothing joins the Held-out Ledger — there is nothing to rule.
 
-**Not converted, and owned: the retreat-discard cost.** `Pilot._retreat_cost_legs` /
-`_retreat_discard_choice` make the same mistake one layer over — they choose which Energy a retreat
-sheds by walking `energies` and then price the shed with `_role_value(eid)`, a CARD-worth lookup on
-a unit code, so ADR-0069 §5c's one-shot premium reads an attached Ignition as worth nothing and a
-Rock Fighting as Basic {F}. It is NOT fixed here, because unlike the affordability family it is not
-a mis-read to correct but a MODEL to choose: a retreat discards Energy CARDS while its cost is paid
-in UNITS, so one Ignition pays three retreat and the greedy per-unit search has no card to charge.
-That is a scoring change with its own design question, so it was held out of the affordability fix
-rather than folded in. **Since converted** — see ADR-0100's 2026-08-02 amendment, which settles the
-question from recorded native traces (the engine asks per CARD and carries each card's unit yield,
-so a card is indivisible and overpay is real) and rebuilds the shed as an exact search over the
-legal card sets.
+**The retreat-discard cost was the fourth site, and it is now converted** (ADR-0100's 2026-08-02
+amendment). `Pilot._retreat_cost_legs` / `_retreat_discard_choice` made the same mistake one layer
+over: they chose which Energy a retreat shed by walking `energies`, then priced the shed with
+`_role_value(eid)` — a CARD-worth lookup on a unit code — so ADR-0069 §5c's one-shot premium read an
+attached Ignition as worth nothing and a Rock Fighting as Basic {F}.
+
+It was deliberately held OUT of this amendment's fix, because unlike the affordability family it was
+not a mis-read to correct but a MODEL to choose: a retreat discards Energy CARDS while its cost is
+paid in UNITS, so one Ignition pays three retreat and a per-unit search has no card to charge. That
+made it a second scoring change with its own question. Recorded native traces then settled the
+question rather than a preference deciding it — the engine asks per CARD and carries each card's
+unit yield, so a card is indivisible and overpay is real — and the shed is now an exact search over
+the legal card sets. Read that amendment, not this paragraph, for the ruling.

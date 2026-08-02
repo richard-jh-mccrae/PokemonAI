@@ -84,9 +84,12 @@ def body_energy_card_ids(body) -> tuple:
     recorded native traces: `v2_ms_mirror_5001` frames 128-129, a body holding Basic {W} + Ignition
     posing ``count=1`` and ``count=3``).
 
-    The index is meaningful: it is the ``energyIndex`` such a select refers to."""
-    return tuple(cid for cid in (card_id(e) for e in ((body or {}).get("energyCards") or ()))
-                 if cid is not None)
+    **Positional, never compacted**: entry ``k`` is the card a ``DISCARD_ENERGY`` option's
+    ``energyIndex == k`` names, so an unreadable entry yields ``None`` in place rather than being
+    dropped. Dropping it would silently shift every later index — and a caller that then applied a
+    mask built over this tuple to the raw ``energyCards`` list would shed the wrong cards, which is
+    the same class of latent, data-shaped bug this module exists to end."""
+    return tuple(card_id(e) for e in ((body or {}).get("energyCards") or ()))
 
 
 def body_unit_codes(body) -> tuple:

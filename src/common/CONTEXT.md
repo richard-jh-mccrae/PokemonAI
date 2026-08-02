@@ -772,8 +772,11 @@ PROVIDE — while `energyCards` is `list[Card]` — the **Energy Cards** themsel
 Units, so every count- and colour-shaped read takes `energies` (`BodyView.energy_count`,
 `energy_key`, `attached_types`, and the `DISCARD_ENERGY` option's *type*). Card IDENTITY is only ever
 on `energyCards`, so every *decklist − visible* read takes that (`deck_tracker`,
-`MySide.visible_counts`, `Pilot._visible_card_counts` — one walk, `common/board_cards.py`) and so
-does the `DISCARD_ENERGY` option's `energyIndex`. **They are not interchangeable and they are not
+`MySide.visible_counts`, `Pilot._visible_card_counts` — one walk, `common/board_cards.py`), and so
+does anything that must name the card that LEFT: the `DISCARD_ENERGY` option's `energyIndex`, and
+the retreat shed it drives (`Pilot._retreat_discard_choice` over `board_cards.body_energy_card_ids`,
+ADR-0100's 2026-08-02 amendment — the engine poses one option per Energy CARD carrying that card's
+unit yield, so a card is indivisible and a retreat can overpay). **They are not interchangeable and they are not
 even the same length**: Ignition Energy is card 17 and provides `{C}{C}{C}` → `energies == [0,0,0]`,
 `energyCards == [17]`. The two coincide only for the eight Basic Energies, whose card ids 1-8 equal
 `EnergyType` 1-8 — a coincidence in the data that has now bitten twice (Issue #279, Issue #297).

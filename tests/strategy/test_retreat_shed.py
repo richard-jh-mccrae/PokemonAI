@@ -2,7 +2,7 @@
 
 `_retreat_discard_choice` used to walk a body's ``energies`` one entry at a time. That field is
 ``list[EnergyType]`` — the UNITS the attached cards provide (`cg/api.py` `Pokemon`) — while a
-retreat discards CARDS. The engine settles the shape and this file pins it:
+retreat discards CARDS. The engine settles the shape and this file tests it:
 `_pose_retreat_energy` poses one `DISCARD_ENERGY` option **per attached Energy card**, carrying that
 card's yield as ``count``, then removes that one card and subtracts its units from what remains.
 

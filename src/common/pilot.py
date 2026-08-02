@@ -17,6 +17,7 @@ from dataclasses import dataclass, field, replace
 from common import deck_odds
 from common.board_cards import (body_card_ids,        # the ONE walk over a body's attached CARDS
                                 body_energy_card_ids)  # just the Energy stack, for the shed
+from common.gate_library import is_evolution   # the house 'has a previous stage' predicate
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
                                           promote_value)
@@ -48,7 +49,8 @@ from common.snipe_relevance import K as _SNIPE_RELEVANCE_K  # noqa: E402
 #                                             below is the SAME number by construction rather than a
 #                                             copy that could drift when a new set re-derives it
 from common.strategy.combat import (Budget, CURRENT_FORMS_ONLY,  # noqa: E402  (re-used
-                                    _EFFICIENCY, HARVEST_UNAVOIDABLE, UNCHARGED)  # by the tactical scorers)
+                                    _EFFICIENCY, HARVEST_UNAVOIDABLE, UNCHARGED,  # by the
+                                    unit_colours)                                 # tactical scorers)
 from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
@@ -2701,27 +2703,26 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         we cannot read — so the caller makes NO card-level claim rather than a guessed one
         (fail-CLOSED, ADR-0067). That reconciliation is what makes this safe to build a legality
         rule on top of."""
-        cards = body_energy_card_ids(ma)
-        units_total = len(ma.get("energies") or ())
-        if not cards or not (self.stats and self.functions):
+        cards = body_energy_card_ids(ma)          # POSITIONAL: index k is a `DISCARD_ENERGY`'s
+        units_total = len(ma.get("energies") or ())   # `energyIndex` k, so None means "slot k
+        if not cards or not (self.stats and self.functions):   # is unreadable", never "skip it"
             return None
-        stat = self.stats.get(ma.get("id"))
-        evolution = getattr(stat, "evolvesFrom", None) is not None
+        evolution = is_evolution(self.stats.get(ma.get("id")))
         yields = []
         for cid in cards:
-            est = self.stats.get(cid)
+            est = self.stats.get(cid) if cid is not None else None
             if est is None:
-                return None
-            n = 1 if est.is_basic_energy else self.functions.energy_provision(cid,
-                                                                             evolution=evolution)
-            if n <= 0:
+                return None                       # unreadable slot -> the indices below would shift
+            units = 1 if est.is_basic_energy else self.functions.energy_provision(
+                cid, evolution=evolution)
+            if units <= 0:
                 return None                       # untagged Special -> no attribution, no claim
-            yields.append((cid, n))
-        if sum(n for _, n in yields) != units_total:
+            yields.append((cid, units))
+        if sum(units for _, units in yields) != units_total:
             return None                           # does not reconcile with what the engine reported
         return tuple(yields)
 
-    def _retreat_discard_choice(self, ma: dict, n: int) -> tuple:
+    def _retreat_discard_choice(self, ma: dict, cost: int) -> tuple:
         """``(ma as it stands after a retreat discards ``n`` Energy, the CARD ids it discarded)`` —
         the cheapest legal shed (ADR-0100 §8).
 
@@ -2755,7 +2756,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Falls back to the old per-unit walk when :meth:`_attached_energy_yields` cannot reconcile
         the two halves — with NO card ids returned, so the resource premium makes no claim it cannot
         support."""
-        cost = max(0, int(n))
+        cost = max(0, int(cost))
         yields = self._attached_energy_yields(ma)
         if yields is None or len(yields) > self._SHED_EXACT_MAX_CARDS:
             return self._retreat_shed_greedy(ma, cost), ()
@@ -2788,16 +2789,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (`_build_standing` -> `matched_slots`, `energy_count`) is a multiset read, so dropping the
         right NUMBER of entries of the right colours is the whole requirement. Colours are matched
         where they can be, so a shed Basic {F} takes an {F} entry and not somebody else's."""
-        from common.strategy.combat import unit_colours
         units = list(ma.get("energies") or ())
-        kept_cards, dropped = [], []
-        for i, (cid, n) in enumerate(yields):
-            (dropped if mask & (1 << i) else kept_cards).append((cid, n))
-        for cid, n in dropped:
-            colours = unit_colours(getattr(self.stats.get(cid), "energyType", None) or 0)
-            for _ in range(n):
+        for i, (cid, provided) in enumerate(yields):
+            if not mask & (1 << i):
+                continue
+            # No `or 0` on the colour: an unresolvable card is WILD, and COLORLESS is a specific
+            # answer meaning "pays colourless slots only" (`src/common/CONTEXT.md`, Energy Unit /
+            # Energy Card). Conflating them here would make an unknown card preferentially eat a
+            # colourless unit — a small lie in exactly the vocabulary this change exists to fix.
+            colours = unit_colours(getattr(self.stats.get(cid), "energyType", None))
+            for _ in range(provided):
                 match = next((j for j, u in enumerate(units) if u in colours), None)
-                units.pop(match if match is not None else 0)
+                units.pop(match if match is not None else 0)   # wild / no match -> any unit
         cards = list(ma.get("energyCards") or ())
         survivors = [c for i, c in enumerate(cards) if not (mask & (1 << i))]
         return dict(ma, energies=units, energyCards=survivors)
@@ -2809,7 +2812,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         It is not a correct model of the engine's choice — it can shed part of an indivisible card —
         but on an unreadable board the alternative is no answer at all, and this at least prices the
         right NUMBER of units leaving. It sheds the unit whose removal costs the least Build
-        Standing first, which is off-type waste before matched slots."""
+        Standing first, which is off-type waste before matched slots.
+
+        ⚠️ The body it returns is **UNIT-VALID ONLY**: ``energies`` shrinks while ``energyCards`` is
+        left whole, because the whole reason we are here is that we cannot say WHICH card left. That
+        is the very desync this change exists to end, so it is confined to this path and its caller
+        returns no card ids — the only consumer is :meth:`_build_standing`, which reads units."""
         energies = list(ma.get("energies") or [])
         for _ in range(min(max(0, int(n)), len(energies))):
             keep = max(range(len(energies)),
