@@ -97,6 +97,15 @@ Issue #275), **2 `engine_fit`** (274 and 371, transcribed from Issue #224's pres
 | REQ-PROV-0006 | Table and sidecar are emitted in one pass; a regenerate over an empty measurement set reproduces both byte-for-byte. |
 | REQ-PROV-0007 | The generator may retract what it authored (a fit that no longer holds is dropped); never what a human ruled (`--prune` opts in). |
 
+**A measured coin bound is board-scoped** (REQ-AUDIT-0014, ADR-0083 Amendment A). `--sweep` leaves
+several vanilla `coin="max"` records — one per board — so the fork pairs are grouped by the
+controlled state they were measured on. One board, or several that agree, emits the bound
+(corroboration, per ADR-0083 §3's flat-axis argument); boards that disagree emit nothing, because the
+bound is then a function of the board (879 *"flip a coin for each {D} Pokémon you have in play"*) and
+the table has no form that says so. A bound also never ships beside a **fitted** scaler: the bound
+REPLACES the base term and the scaling term is added on top, so the pair would double-count the
+scaling contribution — an over-prediction, the class `ci_audit_gate.py` fails on.
+
 The sidecar is documentation wearing a `.json` extension — the runtime loads only
 `attack_overrides.json` — so `tools/submit/package.py` excludes it from the Kaggle bundle.
 

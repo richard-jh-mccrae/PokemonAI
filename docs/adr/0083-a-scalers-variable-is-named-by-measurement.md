@@ -197,3 +197,55 @@ printed-only read exactly, pinned in both directions.
   ladder is the only valid gain signal and a flag nobody flips is a dead feature — and with the flat
   boost still live behind the OFF branch, the double-count stays open in the code rather than being
   resolved by it.
+
+## Amendment A — a measured BOUND is board-scoped too, and it cannot coexist with a fitted scaler (2026-08-02, Issue #224 follow-up)
+
+Decision 2 says a fit may only claim a variable the harness CONTROLS and RECORDS. It was written
+about `scaleVar`. The same defect was live one field over, in the coin bound, and nothing said so.
+
+`_coin_bounds` collapsed fork records with `{r["coin"]: r}` — a dict keyed on `"min"`/`"max"` alone,
+over every vanilla record for the attack. But `merge_records` keys a measurement on its sweep point,
+so an attack audited with `--sweep` legitimately holds SEVERAL `coin="max"` records on the vanilla
+panel, one per board, and for a board-sensitive attack they legitimately differ. The shipped
+`damageMin`/`damageMax` was therefore whichever record the dict iteration landed on.
+
+That is 274 again, one field over: variation attributed to the one variable the code recorded (the
+coin) while another it did not control (the board) had also moved. It was found by building the
+provenance sidecar (ADR-0108), which recorded the full fork set and made the collapse legible; it
+was deliberately left unfixed there, because that change was ruled value-preserving.
+
+**The bound is a property of one board, and ships only when the boards agree.** Fork pairs are
+grouped by the controlled state they were measured on — a `min` and its `max` always share it, since
+`_coin_fork` walks both outcomes of one forked position. Then:
+
+| boards yielding a pair | emitted |
+|---|---|
+| one | that bound |
+| several, all agreeing | that bound — corroboration, per §3's flat-axis argument |
+| several, disagreeing | none — gap ledger |
+| one board, two different answers | none — a measurement that does not reproduce is not a fact |
+
+Corroboration is kept rather than refused, and that is the one place this departs from the
+conservative default. Several boards agreeing is exactly the evidence §3 already treats as
+load-bearing for a FLAT axis: the variable was moved and provably does not shift the answer.
+Refusing there would discard the strongest thing the harness can produce. Disagreement is the
+opposite case and gets the opposite answer — the pool holds the shape (879 *"Flip a coin for each
+{D} Pokémon you have in play"*, 1256 *"Flip a coin for each Energy attached to this Pokémon"*), and
+the override table has no form that says "this bound is a function of the board".
+
+**And a measured bound may not ship beside a fitted scaler.** `compute_active_damage` sets
+`dmg = damageMin/damageMax` — the bound REPLACES the base term — and only then adds
+`scalePerUnit × count`. A bound measured on a board where the scaler contributes already contains
+that contribution, so shipping both adds it twice: an **over-prediction**, the single class
+`ci_audit_gate.py` exists to fail. The scaler survives, being base-relative and sound; the bound is
+dropped and the attack falls back to the text parser's, which is read off the printed sentence and
+is base-relative too. Recovering the base as `dealt − scalePerUnit × count` was rejected — it
+compounds one inference on another, and this generator's discipline is that an ambiguity emits
+silence. Measured: **0 of the 117 shipped entries** carry both, so this is a soundness guard rather
+than a fix — and it is one `--sweep` run away from being reachable.
+
+**Nothing shipped changes.** All 99 `damageMin`/`damageMax` entries are classified `unaudited` in
+`attack_overrides.provenance.json`, their measurements no longer exist, and ADR-0108's merge rule
+preserves an entry no measurement speaks to. The end-to-end regenerate test reproduces both stores
+byte-for-byte, so this is a ruling made BEFORE the recapture it governs rather than after — which is
+the whole reason to make it now.
