@@ -520,7 +520,12 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("assignment_coverage", "bench_slot_price"),
         composition="Per-body payoff x readiness odds x role relevance, composed from the existing "
                     "Attach-Budget / readiness-odds / Needs machinery rather than a second opinion "
-                    "about any of them.",
+                    "about any of them. The payoff is `StateModel.payoff` — the best attack the "
+                    "body can pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` "
+                    "roll-up (ADR-0109). That makes `body_payoff` depend on MY Bench CONTENTS for a "
+                    "bench-gated attack, which is not a second claim on `bench_slot_price`: "
+                    "`development` prices how many slots are left, this prices what one attack can "
+                    "land, and the two never read the same number.",
         blind_to=(
             "who is ACTIVE — `readiness_p` is per body and area-aware through the Attach Budget, "
             "but nothing here prices the Active SLOT itself, so a retreat that puts the right body "
@@ -801,28 +806,34 @@ def _reachable_target_values(model: "StateModel") -> tuple:
 def _ready_bodies(model: "StateModel") -> tuple:
     """MY bodies as `readiness` reads them.
 
-    * ``payoff`` — the body's PRINTED line payoff (`CardStat.maxDamage`) in prizes. The body's own
-      form, deliberately: what a FORWARD form would achieve is evolution topology and belongs to
-      `development`, and reading the forward closure here would price one fact in two families.
+    * ``payoff`` — the body's line payoff in prizes, as `StateModel.payoff` reads it: the best
+      attack this body can actually pay off with **on this board**, not the printed
+      `CardStat.maxDamage` roll-up (Issue #287, ADR-0109). A printed number cannot carry a board
+      condition, so Solrock's Cosmic Beam — *"70 … if you don't have Lunatone on your Bench, this
+      attack does nothing"* — used to price 70 on a Bench that would never pay it, and benching or
+      losing the Lunatone moved this term by exactly 0. The body's OWN form, deliberately: what a
+      FORWARD form would achieve is evolution topology and belongs to `development`, and reading the
+      forward closure here would price one fact in two families.
     * ``readiness_odds`` — `readiness_p` asked about the body's PAYOFF attack, not about "any
       attack". The distinction is load-bearing and not pedantry: pairing a max-damage payoff with
       the any-attack (famine) probability saturates the term for every real attacker, and a
       saturated term has zero derivative, so the attach that completes the payoff cost would price
-      at 0 delta and never be explored. See `BodyView.payoff_attack`.
+      at 0 delta and never be explored. The attack id comes from the SAME `Payoff` record as the
+      damage, which is what keeps the pair honest once a gated maximum falls back to a lesser attack.
     * ``role_relevance`` — `role_value` normalised by `DEPLOY_WORTH_SCALE`, which is exactly
       `deploy_value._relevance`'s dimensionless ratio. Composed rather than re-derived so a role
       re-tier moves both instruments together."""
     out = []
     seen: set = set()
     for b in model.mine.bodies:
-        stat = b.stat
-        if stat is None:
+        if b.stat is None:
             continue                       # unknown card: make no claim (the oracle's own direction)
-        payoff = float(getattr(stat, "maxDamage", 0) or 0) / currency.PRIZE_DAMAGE_RATE
+        paying = model.mine.payoff(b)
+        payoff = paying.damage / currency.PRIZE_DAMAGE_RATE
         if payoff <= 0.0:
-            continue
+            continue                       # nothing this body can land: a condition it cannot meet
         out.append(ReadyBody(payoff=payoff,
-                             readiness_odds=_readiness_odds(model, b),
+                             readiness_odds=_readiness_odds(model, b, paying.attack_id),
                              role_relevance=_body_relevance(model, b.card_id, seen)))
     return tuple(out)
 
@@ -855,9 +866,15 @@ def _saturation(model: "StateModel", card_id, seen: set) -> float:
     return 1.0
 
 
-def _readiness_odds(model: "StateModel", body) -> float:
+def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     """P(this body gets to its payoff attack) — `readiness_p` OR the forward clock, whichever is
     better, and the `or` is the part that matters.
+
+    ``attack_id`` is the attack the payoff was PRICED from (`Payoff.attack_id`), passed in rather
+    than re-derived so the two legs cannot name different attacks. They can now differ: a body whose
+    biggest attack is gated by an unmet board condition falls back to its best paying attack, and
+    asking these odds about the dead one would price a real payoff at a probability that belongs to
+    nothing.
 
     `readiness_p` is a THIS-TURN probability and fails closed at 0.0, which is the right answer to
     the question it asks and the wrong shape for a positional term: once the turn's one manual attach
@@ -871,7 +888,7 @@ def _readiness_odds(model: "StateModel", body) -> float:
     1.0, next turn 0.5, unknown 0.0 (fail closed, no claim). Taking the MAX rather than adding keeps
     the result a probability and keeps it monotone in both inputs: attaching Energy can only shorten
     the clock or raise the odds, so it can only raise this."""
-    now = model.mine.readiness_p(body, body.payoff_attack)
+    now = model.mine.readiness_p(body, attack_id)
     arm = model.mine.turns_to_afford(body)
     forward = 0.0 if arm is None else halve(arm)
     return max(0.0, min(1.0, max(now, forward)))

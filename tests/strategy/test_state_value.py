@@ -40,10 +40,19 @@ from common.strategy.combat import CombatMath
 
 # ── the fixture board ─────────────────────────────────────────────────────────────────────────────
 
-COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
+COLORLESS, GRASS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 5, 6, 7, 9
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
 E_R, E_P, E_F, E_D = 2, 5, 6, 7
+#: The bench-GATED pair, and the ONE the shipped decks actually expose (Issue #287). Verified at
+#: source: Solrock (676) Basic HP 110 {F}, weak {G}, retreat 1 — Cosmic Beam ``{F}`` 70, *"If you
+#: don't have Lunatone on your Bench, this attack does nothing. This attack's damage isn't affected
+#: by Weakness or Resistance."* — its only attack. Lunatone (675) Basic HP 110 {F}, weak {G},
+#: retreat 1 — Ability Lunar Cycle, and Power Gem ``{F}{F}`` 50. `mega_lucario` runs 3x Solrock and
+#: 2x Lunatone, and they are each other's enablers: Lunar Cycle needs Solrock in play, Cosmic Beam
+#: needs Lunatone on the Bench.
+SOLROCK, LUNATONE = 676, 675
+COSMIC_BEAM, POWER_GEM = 9676, 9675
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
@@ -57,6 +66,12 @@ _STATS = {
                        evolvesFrom="Riolu", maxDamage=270, maxDamageCost=2, minAttackCost=1,
                        minCostDamage=130,
                        attacks=(AURA_JAB, MEGA_BRAVE), cardType=0),
+    SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, energyType=FIGHTING, weakness=GRASS,
+                      minAttackCost=1, maxDamage=70, maxDamageCost=1, minCostDamage=70,
+                      attacks=(COSMIC_BEAM,), cardType=0),
+    LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING, weakness=GRASS,
+                       minAttackCost=2, maxDamage=50, maxDamageCost=2, minCostDamage=50,
+                       attacks=(POWER_GEM,), cardType=0),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
@@ -67,15 +82,23 @@ _ATTACKS = {
     PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC)),
     AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
     MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, energyTypes=(FIGHTING,),
+                            requiresBench=("Lunatone",), ignoresWeakness=True,
+                            ignoresResistance=True),
+    POWER_GEM: AttackStat(POWER_GEM, damage=50, cost=2, energyTypes=(FIGHTING, FIGHTING)),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
+#: `mega_lucario`'s single-prize core beside the Mega line — the deck the Solrock cases score
+#: against, so the deck-fetch leg of `readiness_p` sees the Energy the pair actually runs.
+LUNAR_DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [SOLROCK] * 3 + [LUNATONE] * 2
 
 #: The deck's DECLARED Roles as Worth (`card_worth.ROLE_TIER`), supplied through the model's
 #: `role_worth=` resolver. Roles are declaration, not card data — `card_worth.role_value` says so
 #: outright ("the Pilot supplies ``roles``") and `CardStat` carries no such field — so a fixture that
 #: tried to put them on the stat would be testing an API that does not exist.
 _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condition_base"],
-               MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"]}
+               MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"],
+               SOLROCK: ROLE_TIER["secondary_attacker"], LUNATONE: ROLE_TIER["engine"]}
 
 
 def _combat():
@@ -96,12 +119,12 @@ def _player(*, active=None, bench=(), hand=(), discard=(), prize=4, deck_count=2
             "confused": False}
 
 
-def _model(me, opp, *, energy_attached=False, turn=5, needs=None):
+def _model(me, opp, *, energy_attached=False, turn=5, needs=None, deck=None):
     obs = {"current": {"players": [me, opp], "yourIndex": 0, "turn": turn,
                        "energyAttached": energy_attached, "supporterPlayed": False,
                        "stadium": []}, "logs": []}
-    return StateModel.build(obs, combat=_combat(), deck=DECK, needs=needs,
-                            role_worth=_ROLE_WORTH.get)
+    return StateModel.build(obs, combat=_combat(), deck=DECK if deck is None else deck,
+                            needs=needs, role_worth=_ROLE_WORTH.get)
 
 
 def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_prizes=4,
@@ -809,3 +832,83 @@ def test_on_real_frames_healing_my_active_never_lowers_survival(corpus_models):
         assert after >= before - 1e-9, f"{key}: a full heal LOWERED survival"
         strict += after > before + 1e-9
     assert strict, "no corpus frame moved at all — the class would pass on a constant term"
+
+
+# ── a companion-GATED payoff (Issue #287) ─────────────────────────────────────────────────────────
+#
+# `readiness` prices *what this body achieves once it is online*. Read off `CardStat.maxDamage` that
+# number is PRINTED, and a printed number cannot carry a board condition — so a Solrock with no
+# Lunatone benched scored exactly the Solrock that had one, and losing the Lunatone moved nothing.
+#
+# The repair is composition, not vocabulary: `AttackStat.requiresBench` already parses Cosmic Beam's
+# own sentence and `strategy/damage.py` already zeroes the attack when the partner is absent, so the
+# term asks the damage oracle (through `StateModel.payoff`) instead of forming a second opinion.
+
+
+def _lunar_board(*, bench=(), solrock_energies=(E_F,), energy_attached=False):
+    """MY Solrock Active against THEIR Dragapult ex, with a caller-chosen Bench — the one fact the
+    gated payoff turns on. One {F} is already down, so Cosmic Beam's ``{F}`` cost is PAID and the
+    only thing standing between this body and its 70 is the Bench."""
+    return _model(
+        _player(active=_poke(SOLROCK, hp=110, energies=solrock_energies),
+                bench=list(bench), prize=4),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+        energy_attached=energy_attached, deck=LUNAR_DECK)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_a_companion_gated_attacker_is_not_ready_without_its_companion():
+    """The symptom, asserted at the term. Cosmic Beam is Solrock's ONLY attack, so with no Lunatone
+    on the Bench this body achieves nothing — and `readiness` must say so rather than price the
+    printed 70 it will never deal."""
+    bare, paired = {}, {}
+    sv.state_value(_lunar_board(bench=[_poke(RIOLU, hp=80, serial=2)]), working=bare)
+    sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=paired)
+    assert paired["readiness"] > bare["readiness"], "the gate never fired: printed damage priced"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_benching_the_companion_is_what_raises_readiness():
+    """The play the old reading could not see. Dropping Lunatone onto an EMPTY Bench is exactly the
+    develop that arms the attacker, and under 1-ply differencing a play no term reads prices at 0
+    delta — which at ordering time means never explored, not merely undervalued."""
+    empty, benched = {}, {}
+    sv.state_value(_lunar_board(bench=[]), working=empty)
+    sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=benched)
+    assert benched["readiness"] > empty["readiness"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_losing_the_companion_lowers_readiness():
+    """The mirror, and the half that makes the term a defence: their Boss's Orders on my Lunatone —
+    or a Knock Out that removes it — has to cost me something, or the agent will trade the enabler
+    away for free."""
+    with_luna, without = {}, {}
+    sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=with_luna)
+    sv.state_value(_lunar_board(bench=[]), working=without)
+    assert without["readiness"] < with_luna["readiness"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_an_UNGATED_board_is_byte_identical():
+    """The regression half, stated as strictly as it can be: a board holding no conditional attack
+    must score the same float it scored before the gate existed. The gate is a new REASON to price
+    0, never a new number on a card that has no condition."""
+    assert sv.state_value(_lucario_board(my_energies=[E_F, E_F])) == pytest.approx(
+        sv.state_value(_lucario_board(my_energies=[E_F, E_F])), abs=0.0)
+    working = {}
+    sv.state_value(_lucario_board(my_energies=[E_F, E_F]), working=working)
+    # Mega Brave 270 printed, and 270 is what the payoff read returns for a body with no condition.
+    model = _lucario_board(my_energies=[E_F, E_F])
+    assert model.mine.payoff(model.mine.active).damage == 270.0
+    assert working["readiness"] > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_the_gated_bodys_odds_are_asked_about_the_attack_that_actually_pays():
+    """Payoff and odds must name the SAME attack. Pairing one attack's damage with another's
+    probability is the saturation defect the payoff read was split out to avoid, and the gate makes
+    it reachable for the first time: a body whose max-damage attack is dead still has the lesser
+    one, and its cost is what the odds leg owes an answer about."""
+    model = _lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)])
+    assert model.mine.payoff(model.mine.active).attack_id == COSMIC_BEAM

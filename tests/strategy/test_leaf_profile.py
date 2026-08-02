@@ -231,9 +231,23 @@ KO_LINE_PROFILE = frozenset({
 #: because the model is now doing the work that used to happen beside it.
 #:
 #: Every row below is a read some family in the registry is on record as making:
-#:   * `mine.active.attacks` / `.payoff_attack` — `readiness` asks `readiness_p` about the body's
-#:     PAYOFF attack rather than about "any attack"; pairing a max-damage payoff with the famine
-#:     probability saturates the term and prunes the attach that completes it.
+#:   * `mine.payoff` / `mine.bench_names` — `readiness` prices the best attack a body can actually
+#:     pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` roll-up (Issue #287,
+#:     ADR-0109), and it asks `readiness_p` about THAT attack rather than about "any attack";
+#:     pairing a max-damage payoff with the famine probability saturates the term and prunes the
+#:     attach that completes it. `bench_names` is the bench-partner condition's input, and it
+#:     REPLACED an inline comprehension inside `damage_facts` rather than adding a walk.
+#:
+#:     Re-pinned with a measurement, as this pin's own rule demands (60 corpus frames, this box):
+#:
+#:         `state_value` on a FRESH model   before 8.37 ms median / 17.28 ms p95
+#:                                           after 8.14 ms median / 13.79 ms p95
+#:         the `payoff` read alone, per body   1.80 us first call / 1.40 us memoized
+#:
+#:     ~2.7 bodies to a board, so the added work is ~5 us against a fresh-model evaluation
+#:     dominated three orders of magnitude over by the model's own lazy derivations. The two rows
+#:     that left (`mine.active.payoff_attack`, `mine.bench.payoff_attack`) were the printed-only
+#:     body-scoped twin this read replaces; it could not see the Bench, which is the whole bug.
 #:   * `mine.*.prize_value` + `theirs.turns_to_ko_me` — `survival`, both areas, Bench-Harvest-aware.
 #:   * `theirs.active.hp_remaining` — `threat`'s reachability filter (can I actually reach this KO).
 #:   * `mine.forward_index` / `forward_payoff` — `development`'s evolution topology, over MY decklist.
@@ -248,17 +262,17 @@ STATE_VALUE_PROFILE = frozenset({
     "model.state_value",
     "mine.active.attacks",
     "mine.active.hp_remaining",
-    "mine.active.payoff_attack",
     "mine.active.prize_value",
     "mine.bench.attacks",
     "mine.bench.hp_remaining",
-    "mine.bench.payoff_attack",
     "mine.bench.prize_value",
     "mine.bench.stat",
+    "mine.bench_names",
     "mine.forward_index",
     "mine.forward_payoff",
     "mine.mine_turns_to_afford",
     "mine.needs",
+    "mine.payoff",
     "mine.readiness_p",
     "mine.role_worth",
     "theirs.active.hp_remaining",
