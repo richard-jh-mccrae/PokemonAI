@@ -2894,7 +2894,15 @@ class PlannerMixin:
         agent decks ran Rare Candy or a Basic→Stage-1→Stage-2 line. **`grimmsnarl_ex` runs both** — 1 Rare
         Candy and Marnie's Impidimp → Morgrem → Grimmsnarl ex — so the branch is live for that deck, and the
         same pair is what forces the Rare Candy escape in `common.playability` (ADR-0104 decision 3). The
-        other three decks are still inert. None when no composite reaches a KO."""
+        other three decks are still inert.
+
+        **Measured on that deck 2026-08-02** and now pinned there (`tests/agents/test_grimmsnarl_ex_triggers
+        .py`), because "armed ON in the PROFILE, live on a shipped deck, covered only by a synthetic
+        four-card pool" is not a state to leave alone. It composes correctly: the Candy skips Morgrem, the
+        Attach Budget pays the {D}{D}, and Mean Kick's 180 takes the KO — with every refusal clause (turn 1,
+        `appearThisTurn`, Stage-2 not in hand, no reachable KO) holding on the same board. One trap is worth
+        carrying forward: a stand-down for want of ENERGY looks exactly like a broken branch from outside,
+        and the first probe of this code was misread that way. None when no composite reaches a KO."""
         if board.turn <= 1:
             return None                                   # Rare Candy is illegal on your first turn
         if not self.stats:
