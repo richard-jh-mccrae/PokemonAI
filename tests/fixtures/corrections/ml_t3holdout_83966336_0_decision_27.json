@@ -1,0 +1,379 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": false,
+      "firstPlayer": 0,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 80,
+              "id": 677,
+              "maxHp": 80,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 23,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 21,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 22,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 675,
+              "maxHp": 110,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 18,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 42,
+          "discard": [
+            {
+              "id": 1152,
+              "playerIndex": 0,
+              "serial": 47
+            },
+            {
+              "id": 1142,
+              "playerIndex": 0,
+              "serial": 43
+            },
+            {
+              "id": 1142,
+              "playerIndex": 0,
+              "serial": 40
+            },
+            {
+              "id": 1141,
+              "playerIndex": 0,
+              "serial": 39
+            },
+            {
+              "id": 1141,
+              "playerIndex": 0,
+              "serial": 38
+            }
+          ],
+          "hand": [
+            {
+              "id": 1219,
+              "playerIndex": 0,
+              "serial": 55
+            },
+            {
+              "id": 1227,
+              "playerIndex": 0,
+              "serial": 57
+            },
+            {
+              "id": 1141,
+              "playerIndex": 0,
+              "serial": 36
+            }
+          ],
+          "handCount": 3,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 80,
+              "id": 677,
+              "maxHp": 80,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 84,
+              "tools": [
+                {
+                  "id": 1174,
+                  "playerIndex": 1,
+                  "serial": 109
+                }
+              ]
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 81,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 80,
+              "tools": []
+            },
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 110,
+              "id": 676,
+              "maxHp": 110,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 82,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 43,
+          "discard": [
+            {
+              "id": 1142,
+              "playerIndex": 1,
+              "serial": 100
+            },
+            {
+              "id": 1152,
+              "playerIndex": 1,
+              "serial": 104
+            },
+            {
+              "id": 1219,
+              "playerIndex": 1,
+              "serial": 115
+            }
+          ],
+          "hand": null,
+          "handCount": 3,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 3,
+      "turnActionCount": 1,
+      "yourIndex": 0
+    },
+    "logs": [
+      {
+        "playerIndex": 0,
+        "type": 3
+      },
+      {
+        "playerIndex": 1,
+        "type": 2
+      },
+      {
+        "playerIndex": 1,
+        "type": 5
+      },
+      {
+        "cardId": 1142,
+        "playerIndex": 1,
+        "serial": 100,
+        "type": 10
+      },
+      {
+        "cardId": 676,
+        "fromArea": 1,
+        "playerIndex": 1,
+        "serial": 80,
+        "toArea": 2,
+        "type": 6
+      },
+      {
+        "playerIndex": 1,
+        "type": 0
+      },
+      {
+        "cardId": 1152,
+        "playerIndex": 1,
+        "serial": 104,
+        "type": 10
+      },
+      {
+        "cardId": 676,
+        "fromArea": 1,
+        "playerIndex": 1,
+        "serial": 82,
+        "toArea": 2,
+        "type": 6
+      },
+      {
+        "playerIndex": 1,
+        "type": 0
+      },
+      {
+        "cardId": 676,
+        "playerIndex": 1,
+        "serial": 80,
+        "type": 10
+      },
+      {
+        "cardId": 676,
+        "playerIndex": 1,
+        "serial": 82,
+        "type": 10
+      },
+      {
+        "cardId": 1219,
+        "playerIndex": 1,
+        "serial": 115,
+        "type": 10
+      },
+      {
+        "cardId": 1227,
+        "fromArea": 1,
+        "playerIndex": 1,
+        "serial": 117,
+        "toArea": 2,
+        "type": 6
+      },
+      {
+        "playerIndex": 1,
+        "type": 0
+      },
+      {
+        "cardId": 1174,
+        "cardIdTarget": 677,
+        "playerIndex": 1,
+        "serial": 109,
+        "serialTarget": 84,
+        "type": 11
+      },
+      {
+        "playerIndex": 1,
+        "type": 3
+      },
+      {
+        "playerIndex": 0,
+        "type": 2
+      },
+      {
+        "cardId": 1141,
+        "playerIndex": 0,
+        "serial": 36,
+        "type": 4
+      }
+    ],
+    "remainingOverageTime": 598.737161,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 0,
+          "type": 7
+        },
+        {
+          "index": 1,
+          "type": 7
+        },
+        {
+          "index": 2,
+          "type": 7
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    },
+    "step": 28
+  },
+  "chosen": [
+    0
+  ],
+  "correct": [
+    0
+  ],
+  "chosen_label": "Play Team Rocket's Petrel",
+  "correct_label": "Play Team Rocket's Petrel",
+  "note": "POC-T3 held-out (Issue #262 wave 3). mega_lucario / slow_setup. Ruling unchanged; scope moved to #263.",
+  "frame_key": "83966336|0|decision|27",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ],
+      "owner": "#263",
+      "ruled": "2026-08-02",
+      "why": "`development` credits the body a card play lands while NOTHING on the leaf path charges for the card leaving hand: `hand` reads a structural 0.0000 there, because the sim's end observation is opponent-perspective and `leaf_hand_value` is disarmed in production. Measured by `tools/train/family_diag.py`; diagnosed on Issue #331. Developer-ruled 2026-08-02 (comment on #331): leave the omission rather than arm the stale-per-branch capture or build a new substrate snapshot — Issue #263's composer scores REAL end-of-turn boards, where `hand` is expected to be live without any change here. The ruling STANDS; re-measure once #263 lands and re-open #331 if `hand` is still blind there."
+    }
+  }
+}

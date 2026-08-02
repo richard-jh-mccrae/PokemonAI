@@ -576,3 +576,45 @@ magnitude against a `threat` that cannot yet see a multi-turn KO plan. Moving ei
 satisfy ten ruled frames would be fitting the equation to the corpus by hand, which is what the
 post-POC learning phases (Issues #146-#148) exist to do with a held-out set. The diagnosis is the
 deliverable; the retune is not.
+
+## The wave CLOSES: all 65 gating frames held out onto their measured owner (2026-08-02)
+
+**Developer-ruled 2026-08-02.** Every remaining gating flip is held out — the verdict on each is
+UNCHANGED (the recorded label stands, the leaf is wrong), and what moves is the SCOPE: which issue
+owns fixing the leaf. `gates.held_out_owner` is explicit that this is reversible with no ceremony —
+*"Deleting `owner` is what returns a frame to gating"* — so this is a routing decision, not an
+absolution.
+
+| owner | frames | the measured cause |
+|---|---|---|
+| Issue #263 (T4) | 21 | within-turn ORDERING — no board valuation can separate "develop then attack" from "attack now"; they differ in order, not end state |
+| Issue #330 | 22 | `survival`, uncapped and unopposed |
+| Issue #331 | 15 | `development` credits a card play nothing charges for |
+| Issue #332 | 6 | `readiness` funds a doomed Active over the successor; plus the sub-floor frames |
+| Issue #329 | 1 | `threat` saturated into one bit |
+
+Each frame's owner is the family `tools/train/family_diag.py` attributes its flip to, not a
+category label — the attribution is in `data/leaf_lab/t3-term-diagnosis.md` and reproducible.
+
+### Why this is the PLANNED sequence rather than a workaround
+
+Issue #278 (POC-T3.5) is **"Blocked by #262 — T3 must merge first"**, and its whole purpose is to
+remediate term-sufficiency findings in the terms T3 ships. Holding these frames onto that track's
+children and onto T4 is what the plan already says happens; the alternative — blocking T3 until its
+own successors' work is done — inverts the dependency the ADR fixed.
+
+Two things this ruling does NOT do, stated because a held-out ledger that quietly did either would
+be worthless:
+
+- **It re-captures no baseline.** `data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json`
+  are untouched. A baseline is a ruling record and auto-recapture is how the old Decision Gate died
+  (ADR-0094 / `guarded_capture`).
+- **It reverses no verdict.** Every wave-3 REVERT stands. A held-out frame still reads MISS; it is
+  reported and not gated, which is the distinction the Discrimination Gate readout prints.
+
+### What must be true when the owners land
+
+Each of the five issues carries its frame list, and each must re-measure: a held-out frame that is
+FIXED should be returned to gating (delete its `owner`) rather than left excused, or the ledger
+becomes the wallpaper its own doctrine warns about. Issue #291 (T3.5 closeout) is the natural place
+to check the whole set.

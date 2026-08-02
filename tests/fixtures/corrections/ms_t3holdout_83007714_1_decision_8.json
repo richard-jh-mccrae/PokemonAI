@@ -1,0 +1,209 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": true,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 160,
+              "id": 666,
+              "maxHp": 160,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 18,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 0,
+              "preEvolution": [],
+              "serial": 20,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 47,
+          "discard": [],
+          "hand": null,
+          "handCount": 5,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": true,
+              "energies": [],
+              "energyCards": [],
+              "hp": 160,
+              "id": 666,
+              "maxHp": 160,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 77,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": true,
+              "energies": [
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 65
+                }
+              ],
+              "hp": 70,
+              "id": 1030,
+              "maxHp": 70,
+              "playerIndex": 1,
+              "preEvolution": [],
+              "serial": 81,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 45,
+          "discard": [
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 104
+            }
+          ],
+          "hand": [
+            {
+              "id": 1121,
+              "playerIndex": 1,
+              "serial": 96
+            },
+            {
+              "id": 1229,
+              "playerIndex": 1,
+              "serial": 120
+            },
+            {
+              "id": 17,
+              "playerIndex": 1,
+              "serial": 73
+            },
+            {
+              "id": 1227,
+              "playerIndex": 1,
+              "serial": 117
+            },
+            {
+              "id": 1031,
+              "playerIndex": 1,
+              "serial": 84
+            }
+          ],
+          "handCount": 5,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 1,
+      "turnActionCount": 4,
+      "yourIndex": 1
+    },
+    "logs": [
+      {
+        "cardId": 3,
+        "cardIdTarget": 1030,
+        "playerIndex": 1,
+        "serial": 65,
+        "serialTarget": 81,
+        "type": 11
+      }
+    ],
+    "remainingOverageTime": 599.346342,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 0,
+          "type": 7
+        },
+        {
+          "type": 12
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    }
+  },
+  "chosen": [
+    0
+  ],
+  "correct": [
+    2
+  ],
+  "chosen_label": "Play Ultra Ball",
+  "correct_label": "End turn",
+  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / wasted_resource. Ruling unchanged; scope moved to #330.",
+  "frame_key": "83007714|1|decision|8",
+  "claims": {
+    "decision": {
+      "correct": [
+        2
+      ],
+      "owner": "#330",
+      "ruled": "2026-08-02",
+      "why": "`survival` is prize-denominated and UNCAPPED (`ko-score-band` binds only positional terms), while the terms opposing it are `threat` at <=0.1 saturated and `attack_ev` which has no production caller at all — the rollout leaf is end-board only. So retreat-or-pass outbids attacking, and on two frames outbids a banked prize. Measured by `tools/train/family_diag.py`. The ruling STANDS; Issue #330 owns it."
+    }
+  }
+}

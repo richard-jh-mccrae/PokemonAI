@@ -1,0 +1,266 @@
+{
+  "obs": {
+    "current": {
+      "energyAttached": true,
+      "firstPlayer": 1,
+      "looking": null,
+      "players": [
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                1,
+                1,
+                1,
+                1
+              ],
+              "energyCards": [
+                {
+                  "id": 1,
+                  "playerIndex": 0,
+                  "serial": 6
+                },
+                {
+                  "id": 18,
+                  "playerIndex": 0,
+                  "serial": 22
+                },
+                {
+                  "id": 1,
+                  "playerIndex": 0,
+                  "serial": 11
+                },
+                {
+                  "id": 1,
+                  "playerIndex": 0,
+                  "serial": 8
+                }
+              ],
+              "hp": 170,
+              "id": 345,
+              "maxHp": 170,
+              "playerIndex": 0,
+              "preEvolution": [
+                {
+                  "id": 344,
+                  "playerIndex": 0,
+                  "serial": 26
+                }
+              ],
+              "serial": 33,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 41,
+          "discard": [
+            {
+              "id": 1235,
+              "playerIndex": 0,
+              "serial": 56
+            }
+          ],
+          "hand": null,
+          "handCount": 6,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        },
+        {
+          "active": [
+            {
+              "appearThisTurn": false,
+              "energies": [
+                3,
+                3
+              ],
+              "energyCards": [
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 68
+                },
+                {
+                  "id": 3,
+                  "playerIndex": 1,
+                  "serial": 65
+                }
+              ],
+              "hp": 210,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 1,
+                  "serial": 80
+                }
+              ],
+              "serial": 83,
+              "tools": []
+            }
+          ],
+          "asleep": false,
+          "bench": [
+            {
+              "appearThisTurn": false,
+              "energies": [],
+              "energyCards": [],
+              "hp": 330,
+              "id": 1031,
+              "maxHp": 330,
+              "playerIndex": 1,
+              "preEvolution": [
+                {
+                  "id": 1030,
+                  "playerIndex": 1,
+                  "serial": 82
+                }
+              ],
+              "serial": 84,
+              "tools": []
+            }
+          ],
+          "benchMax": 5,
+          "burned": false,
+          "confused": false,
+          "deckCount": 40,
+          "discard": [
+            {
+              "id": 1086,
+              "playerIndex": 1,
+              "serial": 87
+            },
+            {
+              "id": 1145,
+              "playerIndex": 1,
+              "serial": 102
+            },
+            {
+              "id": 1120,
+              "playerIndex": 1,
+              "serial": 95
+            },
+            {
+              "id": 17,
+              "playerIndex": 1,
+              "serial": 75
+            },
+            {
+              "id": 1122,
+              "playerIndex": 1,
+              "serial": 99
+            },
+            {
+              "id": 1229,
+              "playerIndex": 1,
+              "serial": 120
+            }
+          ],
+          "hand": [
+            {
+              "id": 666,
+              "playerIndex": 1,
+              "serial": 79
+            },
+            {
+              "id": 1229,
+              "playerIndex": 1,
+              "serial": 122
+            }
+          ],
+          "handCount": 2,
+          "paralyzed": false,
+          "poisoned": false,
+          "prize": [
+            null,
+            null,
+            null,
+            null,
+            null,
+            null
+          ]
+        }
+      ],
+      "result": -1,
+      "retreated": false,
+      "stadium": [],
+      "stadiumPlayed": false,
+      "supporterPlayed": false,
+      "turn": 7,
+      "turnActionCount": 2,
+      "yourIndex": 1
+    },
+    "logs": [
+      {
+        "cardId": 3,
+        "cardIdTarget": 1031,
+        "playerIndex": 1,
+        "serial": 65,
+        "serialTarget": 83,
+        "type": 11
+      }
+    ],
+    "remainingOverageTime": 598.9323479999999,
+    "select": {
+      "context": 0,
+      "contextCard": null,
+      "deck": null,
+      "effect": null,
+      "maxCount": 1,
+      "minCount": 1,
+      "option": [
+        {
+          "index": 1,
+          "type": 7
+        },
+        {
+          "attackId": 1487,
+          "type": 13
+        },
+        {
+          "type": 12
+        },
+        {
+          "type": 14
+        }
+      ],
+      "remainDamageCounter": 0,
+      "remainEnergyCost": 0,
+      "type": 0
+    }
+  },
+  "chosen": [
+    0
+  ],
+  "correct": [
+    3
+  ],
+  "chosen_label": "Play Wally's Compassion",
+  "correct_label": "End turn",
+  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / sequencing_error. Ruling unchanged; scope moved to #263.",
+  "frame_key": "83054602|1|decision|32",
+  "claims": {
+    "decision": {
+      "correct": [
+        3
+      ],
+      "owner": "#263",
+      "ruled": "2026-08-02",
+      "why": "WITHIN-TURN ORDERING, which a board valuation structurally cannot express: 'develop now, attack later this turn' and 'attack now' differ in ORDER, not in end state, so no term of `state_value` can separate them and the leaf prices them the same board. The agent still plays the ruled option on every one of these — only the leaf's ranking weakened. The ruling STANDS; Issue #263's sequence composer owns it."
+    }
+  }
+}
