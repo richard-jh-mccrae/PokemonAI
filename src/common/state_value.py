@@ -160,11 +160,36 @@ if TYPE_CHECKING:                      # the seam, expressed without importing t
 #:
 #: **AUTHORED at 1/120 prizes per Worth point** — i.e. 0.8333 damage per Worth point once multiplied
 #: back through `PRIZE_DAMAGE_RATE`. ADR-0097 decision 1 requires that number to be stated against
-#: the three incumbents rather than dropped in beside them:
+#: the incumbents rather than dropped in beside them. The catalogue has grown to FOUR since that
+#: decision was written (POC-T2 items 2f and 2g landed two of them), so all four are stated:
 #:
-#:     deploy    DEPLOY_BAND / DEPLOY_WORTH_SCALE = 25/30   0.833 dmg/worth   <- ANCHOR
-#:     trainer   TAG_TIER["gust"] 10.0 vs _DENIAL_ITEM_COST 10   1.0          agrees within 20%
-#:     energy    ENERGY_TIER 8.0 vs ENERGY_RECOVER 160/3         6.67         DISAGREES ~8x
+#:     worth <-> damage
+#:     deploy    DEPLOY_BAND / DEPLOY_WORTH_SCALE = 25/30      0.833 dmg/worth   <- ANCHOR
+#:     trainer   currency.ITEM_HOLD_WORTH_RATE                 1.0               agrees within 20%
+#:     energy    ENERGY_TIER 8.0 vs ENERGY_RECOVER 160/3        6.67             DISAGREES ~8x
+#:
+#:     prize <-> worth  (the SAME pair this constant crosses — directly comparable, no bridge)
+#:     gust      currency.GUST_TARGET_WORTH_RATE   2.564 worth/prize    vs THIS 120  DISAGREES ~47x
+#:
+#: The trainer row used to read `_DENIAL_ITEM_COST 10` against `TAG_TIER["gust"] 10.0`. That constant
+#: is DELETED (Issue #261 item 2f): the ~1.0 it implied is now the explicit, seam-scoped
+#: `currency.ITEM_HOLD_WORTH_RATE`. Same number, strictly better evidenced — and it composes with
+#: `PRIZE_DAMAGE_RATE` into a second same-pair reading, 100 worth per prize, which this constant's
+#: 120 sits inside 20% of.
+#:
+#: ⚠️ **The gust row is the one `currency.py` asks this constant to SETTLE, and it settles by
+#: REFERENT rather than by moving either number.** `GUST_TARGET_WORTH_RATE` converts a
+#: prize-equivalent INTO Worth so an opponent-target slot can be ranked inside a Worth-denominated DP
+#: against other slots; this constant converts a HELD CARD's Worth into prizes so spending it can be
+#: priced against a board. Same pair, opposite directions, different referents — the resolution the
+#: energy outlier below already got. The reductio settles which is which: at the gust seam's rate a
+#: held `ROLE_TIER["win_condition"]` would price at **11.7 prizes**, nearly twice the six that END
+#: the match, whereas here it is 0.25. So the ~47x is not a constant awaiting a split; it is evidence
+#: that Worth is an ORDINAL priority scale INSIDE an assignment rather than a quantity globally
+#: exchangeable with prizes — which is `currency.py`'s own reading of it ("that scale's whole range
+#: is 0-30 by construction ... Pricing the hand ON ITS OWN SCALE is what the DP is for"). Averaging
+#: the two would break both seams at once and would manufacture exactly the general Worth Damage Rate
+#: ADR-0080 ran a gate to establish does not exist.
 #:
 #: The deploy rate is the anchor for two reasons, both stated rather than assumed. It is the only
 #: one `currency.py` *labels* a worth↔damage rate ("Stated plainly rather than buried … It IS a
@@ -1037,10 +1062,11 @@ def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
     generalises (Issue #261 item 2f, discharging old Issue #212). This family is where that price
     stops being a seam-scoped constant: under differencing the card leaves `hand` and arrives in
     `readiness`/`development`, so the hold is the Worth this term loses — and
-    :data:`POC_WORTH_PRIZE_RATE` is what `currency.ITEM_HOLD_WORTH_RATE` reconciles against.
-    ⚠️ **They do not reconcile yet:** `ITEM_HOLD_WORTH_RATE / currency.PRIZE_DAMAGE_RATE`
-    is `1.0 / 100.0`, against this module's authored `1/120` — a 20% gap, recorded at
-    :data:`POC_WORTH_PRIZE_RATE` rather than silently split.
+    :data:`POC_WORTH_PRIZE_RATE` is what `currency.ITEM_HOLD_WORTH_RATE` reconciles against, and
+    they AGREE: composed through `PRIZE_DAMAGE_RATE` it reads 100 Worth per prize against this
+    module's 120, inside the 20% an authored scaffold can honestly claim. The disagreement worth
+    knowing about is a different one — `currency.GUST_TARGET_WORTH_RATE`, on the same scale pair and
+    ~47x away — and it is settled by referent at :data:`POC_WORTH_PRIZE_RATE`, not by splitting.
 
     The three legs are `needs.assignment_split`'s two halves plus the resolver's latent remainder,
     so they are already disjoint by construction — `coverage` is what the HELD cards cover,

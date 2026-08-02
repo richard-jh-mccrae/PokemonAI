@@ -212,6 +212,45 @@ def test_the_worth_scaffold_is_reconciled_against_its_anchor_not_pinned_as_a_lit
 
 
 @pytest.mark.req("REQ-STATEVALUE-0002")
+def test_the_worth_scaffold_SETTLES_the_gust_seams_disagreement_by_REFERENT_not_by_averaging():
+    """`currency.py` names this constant as the one that must settle the ~39x prize↔worth
+    disagreement ADR-0107 recorded. It settles it by showing the two rates answer DIFFERENT
+    questions — neither moves.
+
+    `GUST_TARGET_WORTH_RATE` converts a prize-equivalent INTO Worth so an opponent-target slot can be
+    ranked inside a Worth-denominated DP against other slots. `POC_WORTH_PRIZE_RATE` converts a HELD
+    CARD's Worth into prizes so spending it can be priced against a board. Same scale pair, opposite
+    directions, different referents — the resolution the energy outlier already got.
+
+    The reductio is the assertion that matters: adopt the gust seam's rate for the hand and a held
+    win-condition prices at **more than the entire game**. That is not a constant needing a split, it
+    is evidence that Worth is an ORDINAL priority scale inside the assignment rather than a quantity
+    globally exchangeable with prizes — which is `currency.py`'s own reading ("that scale's whole
+    range is 0–30 by construction … Pricing the hand ON ITS OWN SCALE is what the DP is for").
+
+    Guards the tempting fix: averaging the two into one "general" rate would silently break both
+    seams at once, and would manufacture the general Worth Damage Rate ADR-0080 ran a gate to
+    establish does not exist."""
+    from common.card_worth import ROLE_TIER
+
+    mine_worth_per_prize = 1.0 / sv.POC_WORTH_PRIZE_RATE
+    gust_worth_per_prize = currency.GUST_TARGET_WORTH_RATE
+    assert mine_worth_per_prize / gust_worth_per_prize > 40.0, (
+        "the disagreement is real and RECORDED — if it ever closes, say so deliberately")
+
+    # My rate sits with the composed shipped legs (PRIZE_DAMAGE_RATE / ITEM_HOLD_WORTH_RATE = 100
+    # worth per prize) — within 20%, the precision an authored POC scaffold can honestly claim.
+    composed = currency.PRIZE_DAMAGE_RATE / currency.ITEM_HOLD_WORTH_RATE
+    assert abs(mine_worth_per_prize - composed) / composed <= 0.20
+
+    # The reductio. A held wincon is a quarter of a prize on this scaffold; on the gust seam's rate
+    # it would be worth nearly twice the six prizes that END the match (`docs/rulebook.txt` L57).
+    wincon = ROLE_TIER["win_condition"]
+    assert wincon * sv.POC_WORTH_PRIZE_RATE == pytest.approx(0.25)
+    assert wincon / gust_worth_per_prize > 6.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0002")
 def test_the_worth_scaffold_never_migrates_into_currency():
     """`common/currency.py`'s contract is "DERIVED and never tuned"; this constant is the opposite,
     and ADR-0080's underivability measurement stands as the historical record of what was true.

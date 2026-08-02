@@ -172,6 +172,69 @@ The default verdict is REVERT; the developer names only the CONFORMs.
 `sequencing_error` is half the corpus of flips on its own. That is the corpus's own label, assigned
 long before this track existed, and it names the same gap the rationales keep describing.
 
+## Triage of the 45 — which actually need the developer, and which do not
+
+Asked after the sheet was regenerated: *"cant you read the rationale from the 45 frames and decide if
+they really need additional context?"* Yes, and the split that survives is a **textual** one, not a
+strategy judgement:
+
+> **Does the recorded rationale address the action the leaf actually chose?**
+
+That question is worth trusting because it is checkable. My strategy judgement on these frames is
+not: the wave-3 packet recommended CONFORM on 15 and the developer overturned 14, so any triage
+resting on *"I think the leaf's move is fine"* has a measured 1-in-15 hit rate and should not be
+spending anyone's attention. What follows claims only that a rationale is SILENT, never that a
+verdict is CONFORM.
+
+**28 of 45 need nothing.** The rationale names the action the leaf took and condemns it
+(`84071010|64` *"avoid attaching energy to lunatone"* → the leaf attaches to Lunatone;
+`83967841|17` *"just save the ultra ball"* → the leaf plays Ultra Ball; `83037962|48`
+*"placed second energy on active doomed mega starmie"* → the leaf does exactly that), or it
+prescribes a first action that is not the leaf's. Those are REVERT by the developer's own words and
+the default already covers them.
+
+**17 need a look**, because the rationale condemns something the leaf did not do — most often it
+condemns a shuffle or a spend and the leaf **retreats**, which the rationale never mentions:
+
+| frame | the rationale condemns | the leaf actually picked |
+|---|---|---|
+| `82866415\|0\|decision\|43` | shuffling before attaching the Cape | **attaches the Cape**, to the benched Staryu |
+| `82867148\|0\|decision\|62` | retreating Cinderace into a Staryu | Buddy-Buddy Poffin |
+| `85163634\|1\|decision\|17` | fetching the Starmie a turn too early | Lillie's Determination |
+| `83007714\|1\|decision\|8` | playing Ultra Ball at all | Retreat |
+| `83054602\|1\|decision\|32` | attach-then-Wally's Compassion | Retreat |
+| `83457493\|1\|decision\|33` | recycling Cinderace with Night Stretcher | Buddy-Buddy Poffin |
+| `85046350\|0\|decision\|21` | powering up the Dunsparce line | Ultra Ball |
+| `82525101\|1\|decision\|69` | attaching to a body that does not need it | attaches to a **different** Mega Starmie |
+| `82750161\|1\|decision\|60` | Harlequin against an 11-card hand | Buddy-Buddy Poffin |
+| `82752604\|0\|decision\|16` | shuffling with two Staryu benched | Retreat |
+| `83037962\|0\|decision\|49` | the shuffle gamble giving back a Starmie | Retreat |
+| `83038055\|0\|decision\|51` | shuffling back a strong hand | Retreat |
+| `83053965\|1\|decision\|6` | first-turn Ignition Energy on the play | Retreat |
+| `83456015\|0\|decision\|38` | gusting their 1-prize pre-evolution | Buddy-Buddy Poffin |
+| `83966968\|0\|decision\|45` | — hedged: *"i think harlequin would have done well"* | Retreat |
+| `86089638\|0\|decision\|18` | not powering the main line | Ultra Ball (which could fetch it) |
+| `86090164\|1\|turn\|2` | — **no rationale recorded at all** | attaches to Dunsparce, not Dreepy |
+
+`82866415|0|decision|43` is the strongest CONFORM candidate in the set, and it is worth reading
+beside `82866415|0|decision|48` — the same episode, five frames later, where the developer writes
+*"here it should be attached to the benched Staryu with a single energy as to protect it from Jetting
+Blow."* That is what the leaf did on f43. The two rulings may simply disagree about the Cape's
+target.
+
+### Two findings from the read-through that are not verdicts
+
+1. **`83053965|1|decision|6`'s rule claim is TRUE and hard**, verified at source rather than taken:
+   Ignition Energy is a Special Energy that *"discard[s] it at the end of your turn"*
+   (`data/EN_Card_Data.csv`), and the player going first **cannot attack on turn 1**
+   (`docs/rules.md:72`, `docs/rulebook.txt` L152). So playing it turn-1-on-the-play burns the card
+   for exactly zero — not a preference, a consequence of two rules. It is a **sound-rule candidate**
+   (a legality-shaped constraint no weight should be able to outbid), which is a different kind of
+   object from a wave verdict and is recorded here rather than smuggled into one.
+2. **`82866415|0|decision|48` reports a defect, not a preference** — *"There is a clear bug with our
+   ACE-SPEC Hero's Cape."* Left unruled and unexplained here; it wants its own investigation rather
+   than a CONFORM/REVERT.
+
 ## Ideal turn sequences — VERBATIM (the Issue #263 / T4 acceptance corpus)
 
 Reproduced exactly as the developer wrote them, including typos and abbreviations. Do not tidy
