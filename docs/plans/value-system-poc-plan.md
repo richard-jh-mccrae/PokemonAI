@@ -286,7 +286,7 @@ deliberate list; gates green; flips → wave 2.
   (`86089120|0|decision|14`): the user ruled the two tied attaches genuinely equal in value on a bare
   Dreepy, so the correction's `correct` names one of an indistinguishable-by-value pair — recorded as
   a **`transposition`** (ADR-0088), the first since ADR-0091 retired the last one. Both gates PASS.
-- **Free-Item hold (old Issue #212): DONE 2026-08-02 (ADR-TEMP-261, item 2f).** `_DENIAL_ITEM_COST`
+- **Free-Item hold (old Issue #212): DONE 2026-08-02 (ADR-0105, item 2f).** `_DENIAL_ITEM_COST`
   is DELETED and generalized into the keep machinery as
   `max(needs.keep_v2(card), hold_value.ITEM_HOLD_FLOOR) × currency.ITEM_HOLD_WORTH_RATE` —
   `Pilot._item_hold_price` off the same `_resolve_needs` the refresh SHED and the discard decider

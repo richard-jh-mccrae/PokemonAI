@@ -1,4 +1,4 @@
-# ADR-TEMP-261 — A free Item's HOLD price is the keep machinery, FLOORED; and the free band splits on information
+# ADR-0105 — A free Item's HOLD price is the keep machinery, FLOORED; and the free band splits on information
 
 **Status:** Accepted; **BUILT** 2026-08-02. Build = **Issue #261 (POC-T2) item 2f**, discharging old
 Issue #212.
