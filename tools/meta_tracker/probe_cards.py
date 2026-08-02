@@ -18,7 +18,7 @@ _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyT
 _OPT_PLAY = 7    # OptionType.PLAY — `index` = hand position (see cg/api.py)
 _OPT_EVOLVE = 9  # OptionType.EVOLVE — `area`+`index` locate the evolution card in hand
 _OPT_ABILITY = 10  # OptionType.ABILITY — `area`+`index` locate the Pokémon whose Ability fires
-_TRIGGER_SUPPORTERS = 2  # distinct Supporter lines in a triggered-Ability probe deck (see below)
+_TRIGGER_SUPPORTERS = 4  # distinct Supporter lines in a triggered-Ability probe deck (see below)
 
 
 def _first(cards: dict[int, dict], pred) -> int | None:
@@ -190,13 +190,22 @@ def build_trigger_deck(chain: list[int], fill_energy: int,
     """A 60-card deck for the TRIGGERED-Ability probe: the target's whole evolution line,
     ``_TRIGGER_SUPPORTERS`` distinct Supporters at 4 copies each, and basic Energy to fill.
 
-    The Supporters are not fodder, and there is more than one of them on purpose. A
-    Supporter-fetching trigger (Meowth ex's Last-Ditch Catch) is **skipped entirely** by the engine
-    when the deck holds no target, so a single 4-copy line makes the captured shape depend on
-    whether the shuffle happened to put all four in hand — measured at ~1 run in 12. Two lines put
-    exhaustion out of reach, so the recorded sequence is the card's shape rather than the draw's.
-    The Energy fill plays the same role for an attach trigger (Marnie's Grimmsnarl ex's Punk Up
-    searches the deck for Basic {D}).
+    The Supporters are not fodder, and there are several of them on purpose. A Supporter-fetching
+    trigger (Meowth ex's Last-Ditch Catch) is **skipped entirely** by the engine when the deck holds
+    no target, so the captured shape depends on whether the draw stripped the deck of them — one
+    4-copy line measured ~1 run in 12.
+
+    **Two lines was not enough**, and the reason is the mulligan, which the first fix did not
+    account for: this deck's only Basic Pokemon is the target line itself, 4 cards in 60, so a hand
+    misses on ~60% of deals — for BOTH players — and every opponent mulligan deals ME another card.
+    That fat tail occasionally strips 8 Supporters into a huge opening hand. Measured at 1 failure
+    in 20 local repeats and caught by CI's determinism backstop on repeat 3 of 15.
+
+    Four lines (16 copies) puts exhaustion out of reach of that tail. It is a bound, not a proof,
+    which is why `probe_triggered_ability._accept_is_measurable` now REFUSES to record a whiff as a
+    measurement — the deck makes it rare, the guard makes it non-silent, and only the pair of them
+    stops the fixture encoding the draw. The Energy fill plays the same role for an attach trigger
+    (Marnie's Grimmsnarl ex's Punk Up searches the deck for Basic {D}).
     """
     deck: list[int] = []
     for cid in chain:
