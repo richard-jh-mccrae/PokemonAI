@@ -16,7 +16,8 @@ from typing import NamedTuple
 
 from common.fetch_closure import (FETCH_DEADNESS_TARGETS as _FETCH_DEADNESS_TARGETS,
                                   FETCH_POKEMON_TARGETS as _FETCH_POKEMON_TARGETS)
-from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _CARD, _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
+from common.strategy.context import (_ATTACH_TO, _BENCH_MAX, _BENCH_PLACEMENT_CONTEXTS, _CARD,
+                                      _DISCARD, _ENGINE_TAGS, _OPENER_TAG,
                                       _PLAY, _SETUP_BENCH, _SUPPORTER, _THIN_BENCH, _TO_ACTIVE, _TO_BENCH,
                                       _TO_HAND, _WINCON_ROLES)
 from common.strategy.strategy import Hypothesis
@@ -574,7 +575,7 @@ class FetchMixin:
         equation, only one-sided endorsement rungs, so 0 means "no rung spoke" rather than "free" —
         and a card taken into hand is not free (it thins the deck and must then be held). Those
         stay declined, which is also the `<= 0` bar every ruled fetch frame was captured under."""
-        bench_ctx = select.get("context") in (_TO_BENCH, _SETUP_BENCH)
+        bench_ctx = select.get("context") in _BENCH_PLACEMENT_CONTEXTS
         if bench_ctx:
             # The Bench holds FIVE (`docs/rulebook.txt` L75, L122) — a game rule, so it bounds the
             # pick as a filter rather than through a price. The marginal is 0 for a body that cannot
@@ -582,8 +583,8 @@ class FetchMixin:
             # bar declines only BELOW zero, so without this bound the greedy would keep grabbing past
             # a full Bench. `min_count` still wins if the engine somehow asks for more, because
             # refusing a mandatory pick is the one failure worse than an over-grab.
-            max_count = max(int(min_count), min(int(max_count),
-                                                _BENCH_MAX - int(getattr(board, "my_bench", 0) or 0)))
+            max_count = max(int(min_count),
+                            min(int(max_count), _BENCH_MAX - int(board.my_bench or 0)))
         remaining = set(range(len(options)))
         cur = traces
         chosen: list[int] = []

@@ -644,6 +644,39 @@ class CombatMath:
                 optimal.extend(opts)                 # tied attacks widen the allocation choice
         return frozenset(idx[i] for i in self._read_optima(optimal, reading))
 
+    def bench_harvest_clock(self, my_bench, opp_bodies, *, charged: dict | None = None,
+                            max_t: int = 8, key_ids=frozenset(),
+                            reading: str = HARVEST_POSSIBLE,
+                            opp_active: dict | None = None) -> dict:
+        """``{bench index: first turn it falls in the harvest}`` for the WHOLE Bench in one solve —
+        absent means it survives ``max_t``.
+
+        The shared rider budget is a property of the BENCH, not of one body, so asking per body
+        re-derives the same payload table and re-runs the same subset search once per member.
+        :meth:`turns_to_ko_me`'s bench leg used to do exactly that, and it cost +36% on every Board
+        build once the Prize Path started asking for every benched body (Issue #261 item 2d, measured
+        on the Leaf-Profile pin). That leg now reads this, so there is still ONE derivation.
+
+        Counting, per candidate attack, how many of turns 1..t it is affordable for: they commit to a
+        bench line and use it whenever they can, and counters PERSIST, so ``k`` turns of one attack is
+        ``k`` indivisible snipes plus ``k`` spreads of divisible budget."""
+        bench = list(my_bench)
+        if not bench:
+            return {}
+        horizon = max(1, int(max_t))
+        first: dict = {}
+        seen: dict = {}
+        for t in range(1, horizon + 1):
+            for pair in self._bench_payload_pairs(opp_bodies, t, charged=charged,
+                                                  opp_active=opp_active):
+                seen[pair] = seen.get(pair, 0) + 1
+            payloads = [([s] * k if s else [], p * k) for (s, p), k in seen.items()]
+            for i in self.bench_harvest(bench, payloads, reading=reading, key_ids=key_ids):
+                first.setdefault(i, t)
+            if len(first) == len(bench):
+                break                                 # every body accounted for — no later turn adds
+        return first
+
     def spread_ko_prizes(self, opp_bench, spread: int) -> int:
         """Max total prizes from distributing a ``spread`` (Phantom Dive's ``benchSpread``) across
         the opponent's Bench to KNOCK OUT benched Pokémon — the ``best_ko_subset`` knapsack
@@ -1576,18 +1609,10 @@ class CombatMath:
                 me = next(i for i, b in enumerate(bench) if b is my_body)
             except StopIteration:                     # not in the snapshot — read it alone
                 bench, me = [my_body], 0
-            # Count, per candidate attack, how many of turns 1..t it is affordable for — they commit
-            # to a bench line and use it whenever they can, and counters PERSIST, so `k` turns of one
-            # attack is `k` indivisible snipes plus `k` spreads of divisible budget.
-            seen: dict = {}
-            for t in range(1, horizon + 1):
-                for pair in self._bench_payload_pairs(opp_bodies, t, charged=charged,
-                                                      opp_active=opp_active):
-                    seen[pair] = seen.get(pair, 0) + 1
-                payloads = [([s] * k if s else [], p * k) for (s, p), k in seen.items()]
-                if me in self.bench_harvest(bench, payloads, reading=reading, key_ids=key_ids):
-                    return t
-            return horizon + 1
+            clock = self.bench_harvest_clock(bench, opp_bodies, charged=charged, max_t=horizon,
+                                             key_ids=key_ids, reading=reading,
+                                             opp_active=opp_active)
+            return clock.get(me, horizon + 1)
         dealt = 0
         for t in range(1, horizon + 1):
             dealt += self.incoming(my_body, opp_bodies, t, charged=charged, context=context,

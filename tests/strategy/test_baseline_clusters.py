@@ -42,8 +42,8 @@ CLUSTERS = {
     "snipe": (SNIPE_HYPOTHESES, {
         "place-counter-to-convert", "move-counters-off-the-damaged", "move-max-counters"}),
     # The BENCH cluster no longer EXISTS (Issue #261 item 2d) — deliberately gone rather than empty,
-    # so its absence from this table is the characterization guard. The deploy-decider swap (#197,
-    # ADR-0086) deleted six of its seven rungs into `common.deploy_value` (`dont-bench-multiprize` is
+    # so its absence from this table is the characterization guard. The deploy-decider swap
+    # (Issue #197, ADR-0086) deleted six of its seven rungs into `common.deploy_value` (`dont-bench-multiprize` is
     # the exposure leg, `dont-bench-onto-their-path` the Prize-Path delta,
     # `develop-the-accel-recipient` the accel unlock, the three develop/prefer rungs the assignment
     # relevance), and ADR-0096 decision 2 deleted the seventh: `keep-a-bench` (+60) guarded nothing

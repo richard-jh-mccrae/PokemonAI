@@ -62,6 +62,13 @@ _COIN_HEAD = 46   # COIN_HEAD — "Do you want to choose heads?" (only under man
 # take-fewer (not static top-N) so a satisfied need isn't double-grabbed (ADR-0023). Others stay top-N.
 _GRAB_CONTEXTS = frozenset({_TO_HAND, _TO_BENCH, _SETUP_BENCH})
 
+# The selects that place a body on MY Bench DIRECTLY — a CARD-target option, not a `_PLAY`. Named
+# because three sites have to agree on the set (the Deploy Marginal's entry points, the exposure
+# leg's "does this land a body on my side", and the greedy grab's bench branch), and a tuple spelled
+# out at each of them agrees only by inspection. `_MAIN` is NOT a member: a body reaches the Bench
+# there through a `_PLAY` option, which is the option TYPE's question rather than the context's.
+_BENCH_PLACEMENT_CONTEXTS = frozenset({_TO_BENCH, _SETUP_BENCH})
+
 # ── AreaType (cg/api.py) ──
 _HAND = 2     # AreaType.HAND
 _DECK = 1     # AreaType.DECK — search candidate; ids revealed in select's `deck` list
@@ -148,7 +155,7 @@ __all__ = [
     "_ENERGY", "_DISCARD_ENERGY",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
-    "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS",
+    "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_MOVE_CARD",
     "KO_SCORE", "ENERGY_RECOVER", "_METAL",
     "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",

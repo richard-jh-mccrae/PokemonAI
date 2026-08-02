@@ -4952,6 +4952,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     # ── the DEPLOY decider (ADR-0086, Issue #197) ────────────────────────────────────────────────
 
+    def _is_body_card(self, cid) -> bool:
+        """``cid`` is a Pokémon — a card that costs a BENCH slot, which is the only capacity the
+        deploy path bounds. A Trainer covering a draw need takes no slot, so it is not a supplier
+        here however much the assignment values it."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        return bool(st is not None and getattr(st, "is_pokemon", False))
+
     def _deploy_offered_ids(self, obs: dict, select: dict) -> list:
         """The card ids a `_TO_BENCH` select actually OFFERS, one per option — the Poffin-class
         fetch's revealed candidates (ADR-0086 decision 6's third entry point).
@@ -4968,13 +4975,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         closed and their rows are eligible for nothing — while `my_bench` has risen, which is what
         actually tightens the capacity. Filtering them out would need the acquired set threaded
         through the trace path for no change in the answer."""
-        out = []
-        for opt in (select.get("option") or []):
-            cid = self._option_card_id(obs, select, opt)
-            st = self.stats.get(cid) if (self.stats and cid is not None) else None
-            if st is not None and getattr(st, "is_pokemon", False):
-                out.append(cid)
-        return out
+        return [cid for opt in (select.get("option") or [])
+                if self._is_body_card(cid := self._option_card_id(obs, select, opt))]
 
     def _deploy_supplier_rows(self, obs: dict, board: Board, *, offered=()):
         """``(ready_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by
@@ -5008,11 +5010,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             unseen.subtract(self._visible_card_counts(me))
             counts = {cid: n for cid, n in unseen.items() if n > 0}
 
-        def _is_body(cid) -> bool:
-            st = self.stats.get(cid) if (self.stats and cid is not None) else None
-            return bool(st is not None and getattr(st, "is_pokemon", False))
-
-        offered = [cid for cid in offered if cid is not None and _is_body(cid)]
+        offered = [cid for cid in offered if self._is_body_card(cid)]
         if offered:
             counts = dict(counts)
             for cid in offered:
@@ -5023,7 +5021,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ready_rows = []
         for c in (me.get("hand") or []):
             cid = (c or {}).get("id")
-            if cid is not None and _is_body(cid):
+            if self._is_body_card(cid):
                 ready_rows.append({"i": len(ready_rows), "cid": cid, "zone": "hand",
                                    "worth": round(self._role_value(cid), 1),
                                    "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
@@ -5032,7 +5030,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                "worth": round(self._role_value(cid), 1),
                                "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
         deck_rows = []
-        for cid in sorted(c for c in counts if _is_body(c)):
+        for cid in sorted(c for c in counts if self._is_body_card(c)):
             deck_rows.append({"i": len(ready_rows) + len(deck_rows), "cid": cid, "zone": "deck",
                               "worth": round(self._role_value(cid), 1),
                               "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
@@ -5129,14 +5127,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not getattr(self, "deploy_value", False):
             return None
         ctx = select.get("context")
-        if ctx not in (_MAIN, _SETUP_BENCH, _TO_BENCH):
+        if ctx != _MAIN and ctx not in _BENCH_PLACEMENT_CONTEXTS:
             return None
         if ctx == _MAIN and option.get("type") != _PLAY:
             return None
         cid = self._option_card_id(obs, select, option)
-        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if stat is None or not getattr(stat, "is_pokemon", False):
+        if not self._is_body_card(cid):
             return None
+        stat = self.stats.get(cid)
 
         from common import needs
         from common.deploy_value import DeployInputs, deploy_value

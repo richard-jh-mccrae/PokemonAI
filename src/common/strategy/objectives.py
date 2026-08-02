@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 
 from common.grading import HORIZON as _HORIZON
-from common.strategy.context import _PLAY, _SETUP_BENCH, _TO_BENCH
+from common.strategy.context import _BENCH_PLACEMENT_CONTEXTS, _PLAY
 
 _RACE_HORIZON = 8        # give up beyond this many turns — no wall math on an unbounded grind
 _RACE_LATER_CHIP = 0.9   # later-turn chip is slightly less certain than chip banked THIS turn
@@ -196,14 +196,13 @@ def _reaches_my_bench(select, option) -> bool:
     """This option puts a Pokémon onto MY Bench — the question the exposure leg is really asking.
 
     Three engine shapes say it (ADR-0086 decision 6's three entry points): a `PLAY` from hand at the
-    main menu, the pregame `_SETUP_BENCH` placement, and a `_TO_BENCH` fetch. The last two carry a
-    CARD-target option, not a `PLAY`, which is why gating on the option TYPE alone made the exposure
-    leg silently zero at the entry point Issue #261 item 2d wired up.
+    main menu, and the two `_BENCH_PLACEMENT_CONTEXTS` — the pregame placement and a `_TO_BENCH`
+    fetch — which carry a CARD-target option rather than a `PLAY`. Gating on the option TYPE alone is
+    why the exposure leg read silently zero at the entry point Issue #261 item 2d wired up.
 
     The caller still checks that the card is a Pokémon with HP; this answers only "does taking it
     land a body on my side of the board"."""
-    ctx = (select or {}).get("context")
-    if ctx in (_TO_BENCH, _SETUP_BENCH):
+    if (select or {}).get("context") in _BENCH_PLACEMENT_CONTEXTS:
         return True
     return option.get("type") == _PLAY
 
@@ -417,36 +416,30 @@ class ObjectivesMixin:
                 return 0
         return _PATH_BENCH_EXTRA
 
-    def _their_harvest_turns(self, my_bench: list, body: dict) -> float | None:
-        """Their fewest turns to fell MY BENCHED ``body`` **with riders alone**, or None when the
-        Bench Harvest cannot reach it inside the horizon.
+    def _their_harvest_clock(self, my_bench: list) -> dict:
+        """``{bench index: first turn it falls to their RIDERS}`` over MY whole Bench — the
+        shared-budget answer, solved ONCE for the Bench.
 
-        ADR-0086 decision 5's *reachability sharpening*, and the reason it is not a refinement of the
-        existing read but a SECOND ROUTE: `_their_turns_to_ko` measures printed damage, which lands
-        on the Active — so it can only describe a benched body being dragged up and hit, which is why
-        the Prize Path charges it `_PATH_BENCH_EXTRA`. Riders (snipes and spreads) reach the Bench
-        directly, pay no promotion, and — because attacking ENDS their turn — come out of ONE shared
-        per-turn budget, so no per-body read can express them (ADR-0071). Their cheapest route to a
-        benched body of mine is therefore the MIN of the two, and this is the leg that was missing.
+        Per-body was the obvious spelling and it cost +36% on every Board build: the rider budget is
+        a property of the Bench, so asking body-by-body re-derives the same payload table and re-runs
+        the same subset search once per member. Measured on the Leaf-Profile pin, which is exactly
+        the instrument that exists to catch a read like this before it merges.
 
-        `HARVEST_POSSIBLE` (the oracle's default) is the right declaration here: this is a THREAT
-        read, and ADR-0071 decision 3 is explicit that such a read "must not call a body safe just
-        because they could kill a different one". The rescue-side consumers declare UNAVOIDABLE for
-        the mirror-image reason.
+        `HARVEST_POSSIBLE` (the oracle's default) is the right declaration: this is a THREAT read,
+        and ADR-0071 decision 3 is explicit that such a read "must not call a body safe just because
+        they could kill a different one". The rescue-side consumers declare UNAVOIDABLE for the
+        mirror-image reason.
 
-        Routed through the SNAPSHOT rather than `CombatMath` — T1's acceptance criterion, and it is
-        what makes the per-option cost bearable: the memo is keyed by the bench snapshot, so the real
-        Bench is solved once per decision however many deploy options are priced against it. No
-        snapshot means NO CLAIM (None), never a model-free second clock."""
+        Routed through the SNAPSHOT rather than `CombatMath` — T1's acceptance criterion — and the
+        memo is keyed by the bench snapshot, so the real Bench is solved once per decision however
+        many deploy options are priced against a hypothetical one. No snapshot means NO CLAIM (an
+        empty clock), never a model-free second reading."""
         model = getattr(self, "_state_model", None)
         if model is None or not my_bench:
-            return None
-        t = model.theirs.turns_to_ko_me(
-            body, my_benched=True, my_bench=list(my_bench),
-            key_ids=self._harvest_key_ids(), context=self._opp_attack_context,
-            opp_active=model.theirs.active_raw,
-            switch_enabler=self._opp_switch_enabler())
-        return float(t) if t is not None and t < _HORIZON else None
+            return {}
+        return model.theirs.bench_harvest_clock(
+            list(my_bench), key_ids=self._harvest_key_ids(),
+            opp_active=model.theirs.active_raw)
 
     def _their_path_items(self, opp: dict, ma: dict | None, my_bench: list,
                           read=None, gamma: float = 0.0) -> list:
@@ -455,21 +448,32 @@ class ObjectivesMixin:
         ONE derivation for both consumers (`_path_signals`' live read and `_bench_path_delta`'s
         hypothetical), because `_bench_path_delta` differences its own answer against
         `board.their_path_turns`: two spellings of "how fast do they fell my bodies" would make that
-        subtraction meaningless the moment they drifted.
+        subtraction meaningless the moment they drifted. That is also why ``read``/``gamma`` are
+        parameters rather than defaults the hypothetical quietly skips — the γ-gated Read overlay can
+        shorten the live answer, so a hypothetical computed without it would subtract two different
+        questions and read a gift where there is none.
 
         The Active is reached by printed damage. A BENCHED body is reached the sooner of two ways —
         promoted and hit (`+_PATH_BENCH_EXTRA`), or harvested where it stands
-        (:meth:`_their_harvest_turns`) — and a body neither route reaches is simply absent, which is
-        how an unreachable body keeps a route uncompletable."""
+        (:meth:`_their_harvest_clock`) — and a body neither route reaches is simply absent, which is
+        how an unreachable body keeps a route uncompletable.
+
+        `_their_turns_to_ko` measures PRINTED damage, which lands on the Active, so on its own it can
+        only ever describe the promote route; riders reach the Bench directly, pay no promotion, and
+        come out of ONE shared per-turn budget (ADR-0071). That is ADR-0086 decision 5's sharpening,
+        and it is a second ROUTE rather than a better reading of the first — deleting the promote
+        route would re-import the gust-then-knock-out blind spot decision 5 rejected a harvest-only
+        exposure for."""
+        bench = [b for b in (my_bench or []) if b]
+        harvest = self._their_harvest_clock(bench)
         items = []
-        for body, extra in ([(ma, 0)] if ma else []) + [(b, _PATH_BENCH_EXTRA)
-                                                        for b in (my_bench or []) if b]:
+        rows = ([(ma, 0, None)] if ma else []) + [(b, _PATH_BENCH_EXTRA, i)
+                                                  for i, b in enumerate(bench)]
+        for body, extra, index in rows:
             t = self._their_turns_to_ko(opp, body, read, gamma)
             t = None if t is None else t + extra
-            if extra:
-                harvest = self._their_harvest_turns(my_bench, body)
-                if harvest is not None:
-                    t = harvest if t is None else min(t, harvest)
+            if index is not None and index in harvest:
+                t = float(harvest[index]) if t is None else min(t, float(harvest[index]))
             if t is not None:
                 items.append((id(body), self._prize_value(body), t, body.get("id")))
         return items
@@ -678,7 +682,7 @@ class ObjectivesMixin:
         cid = self._option_card_id(obs, select, option)
         hypo = {"id": cid, "hp": getattr(stat, "hp", 0), "energies": []}
         bench_after = [b for b in (me.get("bench") or []) if b] + [hypo]
-        after = self._their_path_items(opp, ma, bench_after)
+        after = self._their_path_items(opp, ma, bench_after, board.read, board.posture_confidence)
         if not any(k == id(hypo) for k, _pv, _t, _cid in after):
             return 0.0                       # they cannot reach it at all — benching gifts nothing
         _keys, new_turns = prize_paths([(k, pv, t) for k, pv, t, _cid in after],

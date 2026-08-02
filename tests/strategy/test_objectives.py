@@ -422,7 +422,8 @@ def test_a_benched_body_is_reached_by_the_bench_harvest_not_only_by_being_promot
     `_their_turns_to_ko` measures PRINTED damage, which lands on the Active — so the Prize Path could
     only ever describe a benched body of mine being dragged up and hit, and charged
     `_PATH_BENCH_EXTRA` for the promotion. Riders reach the Bench directly and come out of ONE shared
-    per-turn budget (ADR-0071), which no per-body read can express.
+    per-turn budget (ADR-0071), which no per-body read can express — which is also why the clock is
+    solved for the whole Bench at once rather than per body.
 
     Fezandipiti ex is the clean case, verified at source (`data/EN_Card_Data.csv` 140): Cruel Arrow's
     ONLY damage is 100 to one of the opponent's Pokémon — printed damage is n/a, so the promote route
@@ -438,7 +439,7 @@ def test_a_benched_body_is_reached_by_the_bench_harvest_not_only_by_being_promot
     obs, select = _obs(me, opp), {"context": 0, "option": []}
     pilot._board(obs, select)                                 # builds the snapshot the clock reads
     assert pilot._their_turns_to_ko(opp, bench[0]) is None    # printed damage reaches nothing
-    assert pilot._their_harvest_turns(bench, bench[0]) == 1.0  # ...the rider reaches it this turn
+    assert pilot._their_harvest_clock(bench) == {0: 1}        # ...the rider reaches it this turn
     items = pilot._their_path_items(opp, me["active"][0], bench)
     assert [(pv, t) for _k, pv, t, _cid in items] == [(2, 1.0)]   # on their path, no promote surcharge
 

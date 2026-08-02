@@ -949,9 +949,27 @@ subtraction meaningless the moment they drifted. `HARVEST_POSSIBLE` is the decla
 decision 3 — this is a THREAT read, and such a read "must not call a body safe just because they
 could kill a different one".
 
+Sharing the derivation exposed a **pre-existing asymmetry** in that subtraction, fixed here: the
+hypothetical read the their-side without the γ-gated Read overlay while `board.their_path_turns` was
+computed WITH it, so on a confidently-read opponent the two sides answered different questions and
+the delta could report a gift that was not one. `read`/`gamma` are now parameters both callers pass.
+
+This widens the sharpening beyond the deploy seam — `their_path_turns`, `race_ahead` and the derived
+phase all read the harvest route now. That is load-bearing rather than incidental (it is the very
+quantity the exposure leg differences against), and both gates measure it: one leaf frame IMPROVED,
+nothing regressed.
+
 Routed through the **StateModel** (`model.theirs.turns_to_ko_me`), not `CombatMath` — T1's acceptance
 criterion, and it is what makes the per-option cost bearable, since the memo is keyed by the bench
 snapshot and the real Bench is solved once per decision however many deploy options are priced.
+
+**A MIN, where decision 5 wrote "rather than" — stated because it is a departure from the wording.**
+The promote route is not a worse reading of the same fact; it is a different way they collect the
+body, and it is the only one that describes the gust-then-knock-out case decision 5 itself names as
+the reason a harvest-only exposure was rejected. Deleting it would re-import exactly that blind spot.
+Consequently this ADR's standing **OPEN** item on `_PATH_BENCH_EXTRA = 1` — whether the Prize Path's
+promotion surcharge is stale against ADR-0071 decision 6 — is UNANSWERED and stays open: the harvest
+route bypasses the surcharge rather than correcting it, so the two questions are independent.
 
 **The sibling accessor this ADR listed under "Costs accepted" is NOT built, deliberately.** The line
 read: *"`bench_harvest` returns only the index frozenset, so the objective's prize total
@@ -971,13 +989,14 @@ full Bench read 20.0 rather than 0.0. Latent while only `_PLAY` was wired — th
 an illegal placement, so capacity 0 never arrived — and reachable from `_TO_BENCH`, where the
 greedy multi-pick's capacity is OUR hypothetical after an earlier pick rather than the engine's menu.
 A full Bench has no counterfactual: `V(X deployed)` is not a state the board can reach, so the
-marginal is exactly 0. This is #136 directive 11's prediction landing again — arming a seam exposes
+marginal is exactly 0. This is Issue #136 directive 11's prediction landing again — arming a seam exposes
 what the seam was never asked.
 
 ### Measured (2026-08-02)
 
 ```
-Decision Gate        PASS   250/346 agree, unchanged; 0 unruled, 2 held out (#262, #272)
+Decision Gate        PASS   250/346 agree, unchanged; 0 unruled, 2 held out
+                     (owners Issue #262, Issue #272)
 Discrimination Gate  PASS   182/248 -> 183/248; IMPROVED 86090164|1|turn|6 MISS -> OK; 0 unruled
 hot path             13.2 / 12.1 /  9.8 ms per decision on 83661652-40 / -44 / 85709280-51
                      against 14.7 / 13.4 / 12.1 ms before — the harvest route did NOT cost time
