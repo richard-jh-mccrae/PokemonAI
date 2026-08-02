@@ -701,15 +701,26 @@ class MySide(_SideBase):
         self._deck = tuple(deck or ())
         self._deck_empty = frozenset(deck_empty or ())
         self._own_prizes = own_prizes
-        #: ``{card id: copies still in my deck}`` from the deck TRACKER, exact, or None while the
-        #: prizes are unresolved. Threaded in beside ``deck`` / ``own_prizes`` / ``deck_empty``
-        #: rather than derived from :attr:`unseen_counts`, and the reason is a divergence that
-        #: predates this model: the tracker's visible-card walk counts a body's attached Energy
-        #: CARDS (``energyCards``) while :attr:`visible_counts` counts the UNITS those cards provide
-        #: (``energies``). The two agree on a Basic Energy and need not in general, and reconciling
-        #: them moves :attr:`deck_energy_types` — hence the Attach Budget, hence scoring — which
-        #: POC-T3.5's substrate Issue #279 may not do. **Owed:** one walk, ruled, then this
-        #: argument retires in favour of :attr:`unseen_counts`.
+        #: ``{card id: copies still in my deck}`` from the deck TRACKER (``deck_tracker``'s
+        #: ``OwnCardModel``: anchored on the first search, exact for the rest of the match), or None
+        #: while the prizes are unresolved.
+        #:
+        #: **Threaded rather than derived from** :attr:`unseen_counts` **because that field is
+        #: currently WRONG**, not because the two are different readings of one fact. The tracker
+        #: and its Pilot-side consumer both walk a body's ``energyCards`` — the attached Energy
+        #: CARDS. :meth:`_count_in_play` walks ``energies``, which `cg/api.py` L345 declares as
+        #: ``list[EnergyType]``: **type codes, not card ids.** It survives only on the coincidence
+        #: that Basic Energy card ids 1-8 equal EnergyType 1-8 (the trap ``pilot_helpers.poke``
+        #: documents in as many words — *"the coincidence fails on the very next Energy a test
+        #: reaches for — Ignition Energy is card id 17"*). On Special Energy it does fail: an
+        #: attached Ignition renders ``[0, 0, 0]`` and leaves card 17 counted as still in the deck;
+        #: an attached Rock Fighting Energy renders ``[6]`` and decrements **Basic {F} Energy**
+        #: instead of itself. Measured on the committed corpus: **19 of 934 bodies** disagree.
+        #:
+        #: That corrupts :attr:`unseen_counts` -> :attr:`deck_energy_types` -> the Attach Budget, so
+        #: fixing it MOVES SCORING and cannot land in a substrate issue whose acceptance is
+        #: byte-identical gates (Issue #279). **Owed with an owner: Issue #297** — fix the walk,
+        #: rule the gate flips, then this argument retires in favour of :attr:`unseen_counts`.
         self._deck_known = deck_known
         self.energy_attached = bool(energy_attached)
         self.supporter_played = bool(supporter_played)
