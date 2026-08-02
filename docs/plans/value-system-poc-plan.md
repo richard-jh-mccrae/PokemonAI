@@ -305,7 +305,9 @@ deliberate list; gates green; flips → wave 2.
   the agree rate RISES (249/345 → 251/345). Discrimination Gate is RED on two frames
   (`85045840|0|decision|10`, `|12`) → wave 2: the shipped decision on both is unchanged and already
   matches the human, but the re-pointed bands decline the Ultra Ball inside the sim's continuation,
-  so the human's line develops less on the simmed end board. Not self-ruled and not tuned around.
+  so the human's line develops less on the simmed end board. Not self-ruled and not tuned around —
+  **user-ruled ACCEPT 2026-08-02**, both frames recorded `fixed` (non-voiding) and the leaf baseline
+  re-captured against the ruling. Both gates PASS.
   Two findings the sweep surfaced rather than caused, both pre-existing on `main` at `ce28431`:
   **Issue #294** — `cheapest_removal` is blind to the `pitch` term, so two RULED ladder-win cases
   shed the wrong card in shipped play (kept as strict-xfail TARGETs so the deletion of the shadow

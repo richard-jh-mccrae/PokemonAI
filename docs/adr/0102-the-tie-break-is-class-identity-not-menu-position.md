@@ -172,11 +172,17 @@ agreement, not buying it. Discrimination Gate **RED on two frames**, `85045840|0
   forces its first step and cannot decline anything.
 * The decline is consonant with the human's own rationale on that very frame — *"save boss's orders
   for a time when it is actually valuable."*
-* The candidate fix, if the ruling goes the other way, is named and NOT applied here: the `live` band
-  is mapped to `cost > 0`, where v1's was *"a keep FLOOR fires"* — a card the doctrine actively
-  protects, not any card with any worth. That is a category difference in the translation, but every
-  replacement bar is a number, and picking one against two frames is the rung-fitting ADR-0092
-  exists to delete. It goes to the wave-2 packet, not into this commit.
+* The candidate fix, had the ruling gone the other way, was named and deliberately NOT applied: the
+  `live` band is mapped to `cost > 0`, where v1's was *"a keep FLOOR fires"* — a card the doctrine
+  actively protects, not any card with any worth. That is a category difference in the translation,
+  but every replacement bar is a number, and picking one against two frames is the rung-fitting
+  ADR-0092 exists to delete. It went to the wave-2 packet instead of into the commit.
+
+**RULED: ACCEPT (user, 2026-08-02)** — *"the decline agrees with that frame's own rationale."* Both
+frames carry a non-voiding `fixed` ruling in `data/corrections/reviewed.json` (the correction STANDS
+and keeps gating; what was accepted is the leaf ranking), and `data/leaf_lab/baseline.json` is
+re-captured against it at `f47a3ef` through `guarded_capture` — which would have refused the write
+had either frame been unruled (ADR-0094). Both gates PASS.
 
 **What the deletion proved.** Every `_DISCARD` ladder case committed as a corpus ruling —
 `test_discard_selection.py`'s four, `test_fetch_doctrine.py`'s three, and the burst-Energy blunder pin

@@ -159,13 +159,24 @@ PROMOTE_DECIDER_PROFILE = frozenset({
 #:   * `theirs.discard_recur_fuel` — the clock's own input since Issue #204; a refueler reloads
 #:     outside the attach quota, so the bare quota does not merely under-state its clock, it is wrong.
 #:
-#: ⚠️ **UNEXERCISED by this file's corpus, as of Issue #261 item 2h.** Both fields were being read on
-#: every frame here — but by `_recur_shadow`, which ran on every decision and which that item
-#: deleted. With it gone, neither field is touched by ANY frame in `_frames()` or `_attach_frames()`,
-#: which means this test was crediting the deny slot for a shadow's reads and no frame in the corpus
-#: actually fires the deny slot's deadline grade. Kept defined, and kept in `LEAF_PROFILE` (the cost
-#: claim about the consumer is unchanged and still true where it fires), but no longer asserted as
-#: ADDED by the attach test, because asserting a read no frame makes is how a test goes vacuous.
+#: ⚠️ **UNEXERCISED by this file's corpus, as of Issue #261 item 2h — the CONSUMER is live, the
+#: corpus just never reaches it.** Measured 2026-08-02: `_frames()` carries SelectContexts
+#: `{0, 2, 7, 22}` and `_attach_frames()` only `{0}` — **no `_DISCARD` select among them** — and
+#: `_resolve_needs` runs once per pass emitting only `line` / `fund_attack` / `general` slots. A deny
+#: slot never opens here, so the deadline grade is never reached, so neither field is read.
+#:
+#: Both fields WERE being read on every frame in this file until item 2h — by `_recur_shadow`, which
+#: ran on every decision and which that item deleted. So this test was crediting the deny slot for a
+#: diagnostic's reads. Nothing about the deny clock changed: `_resolve_needs` still emits
+#: `needs.deny_slot(..., turns_to_ready=_opp_turns_to_ready(p))`, that delegates to
+#: `TheirSide.turns_to_afford`, and that consumes `discard_recur_fuel` on its `fuelled` leg
+#: (Issue #204). `deny_relevance` ships ON.
+#:
+#: Kept defined, and kept in `LEAF_PROFILE` — the cost claim about the consumer is unchanged and
+#: still true where it fires — but no longer asserted as ADDED by the attach test, because asserting
+#: a read no frame in the corpus makes is how a test goes vacuous. Restoring it to the pinned set is
+#: a matter of giving this file a frame with a forced discard and a held denier, not of re-wiring
+#: anything.
 DENY_SLOT_PROFILE = frozenset({
     "theirs.discard_recur_fuel",
     "theirs.turns_to_afford",
