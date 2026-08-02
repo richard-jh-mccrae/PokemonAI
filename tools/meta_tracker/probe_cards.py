@@ -192,11 +192,18 @@ def build_trigger_deck(chain: list[int], fill_energy: int,
 
     The Supporters are not fodder, and there is more than one of them on purpose. A
     Supporter-fetching trigger (Meowth ex's Last-Ditch Catch) is **skipped entirely** by the engine
-    when the deck holds no target, so a single 4-copy line makes the captured shape depend on
-    whether the shuffle happened to put all four in hand — measured at ~1 run in 12. Two lines put
-    exhaustion out of reach, so the recorded sequence is the card's shape rather than the draw's.
+    when the deck holds no target, so a single 4-copy line made the captured shape depend on
+    whether the shuffle happened to put all four in hand — measured at ~1 run in 12 with one line.
     The Energy fill plays the same role for an attach trigger (Marnie's Grimmsnarl ex's Punk Up
     searches the deck for Basic {D}).
+
+    Two lines narrow the window, but do not close it: 6 face-down prize cards draw from the same
+    pool and are invisible to this deck-builder, and nothing here bounds how long the drive runs
+    before the target enters play, so a deep enough game can still exhaust it — measured at ~1 run
+    in 60 overall, rising to ~1 in 2 once the drive's own deck count falls under 10
+    (`_accept_capture_is_exhausted`). `probe_triggered_ability`'s ``search_ceiling`` retry is what
+    actually closes the window; a larger `_TRIGGER_SUPPORTERS` narrows the SAME exhaustion window
+    without bounding it, since draw depth is itself unbounded.
     """
     deck: list[int] = []
     for cid in chain:
@@ -833,9 +840,55 @@ def _capture_trigger(battle_select, obs, opt: int, taken: str, me: int, *,
                                    any(_OPT_ABILITY in s["option_types"] for s in effect_selects)}
 
 
+#: How many fresh-shuffle attempts a search-based trigger gets before giving up (see
+#: ``_accept_capture_is_exhausted``) — measured, not guessed, per this repo's own discipline
+#: against unmeasured constants. Single-attempt exhaustion is rare (500 raw, single-attempt
+#: captures per subject: Punk Up 4/500 = 0.8%, Last-Ditch Catch 2/500 = 0.4%), so P(every attempt
+#: in a row exhausts) falls to ~4e-9 / ~2.6e-10 at 4 attempts — already six-plus orders of
+#: magnitude past "never observed in any run of this suite". 3 attempts would already clear
+#: 5e-7 / 6e-8; 4 buys another order of magnitude at negligible extra cost (a full multi-turn
+#: drive, not a cheap re-deal — unlike `audit_attacks.py`'s SETUP_DEALS budget, whose retry is
+#: near-free because it aborts before playing a turn) and is the value actually verified end to
+#: end: 0/300 full captures and 15/15 of CI's own 15-repeat backstop invocation, locally.
+_TRIGGER_DRIVE_ATTEMPTS = 4
+
+
+def _accept_capture_is_exhausted(rec: dict, search_ceiling: int | None) -> bool:
+    """True when an ACCEPT capture's search-effect came up short of its own printed ceiling —
+    a shuffle-dependent deck shortage, not a fact about the card.
+
+    Pure and unit-tested (`tests/meta_tracker/test_probe_triggered_ability_exhaustion.py` — not
+    `test_probe_cards.py`, which already names `tests/cards/test_probe_cards.py` and pytest
+    requires a unique basename per module without an `__init__.py` package); no engine involved.
+
+    ``search_ceiling``:
+      * ``None`` — the trigger finds exactly ONE thing (Last-Ditch Catch: *"Search your deck for
+        a Supporter card"*). The engine poses no select at all when the deck holds none, so
+        exhaustion reads as an EMPTY ``effect_selects``.
+      * an ``int`` — the trigger finds *up to N* (Punk Up: *"search... for up to 5 Basic {D}
+        Energy cards"*). The select is always posed, but its own ``max_count`` is capped at
+        however many the deck can still supply — exhaustion reads as ``max_count < N``.
+
+    Both are the SAME underlying event: this probe's decks carry a bounded pool
+    (``_TRIGGER_SUPPORTERS`` distinct lines) for a trigger to search, 6 face-down prize cards draw
+    from that pool and are invisible to this harness, and nothing bounds how many turns pass
+    before the target enters play — so a long enough drive can draw the pool down to nothing
+    before the trigger ever fires. Measured (Issue #322 follow-up): when the drive's own
+    ``deckCount`` falls under 10 at play time, the search comes up short roughly HALF the time,
+    against ~0.2% when it is 30+. That is CI's ~1-in-2-runs flake on this file, reproduced and
+    explained rather than argued: a fixture pinned to "the search found something" is asserting a
+    fact about a board this harness did not reliably reconstruct.
+    """
+    es = rec["effect_selects"]
+    if search_ceiling is None:
+        return not es
+    return not es or es[0]["max_count"] < search_ceiling
+
+
 def probe_triggered_ability(target_id: int, cards: dict[int, dict], *, decline: bool = False,
-                            me: int = 0, max_steps: int = 400,
-                            main_menus: int = 2) -> dict | None:
+                            me: int = 0, max_steps: int = 400, main_menus: int = 2,
+                            search_ceiling: int | None = None,
+                            drive_attempts: int = _TRIGGER_DRIVE_ATTEMPTS) -> dict | None:
     """Drive a game until ``target_id`` enters play by the option its TRIGGERED Ability rides, then
     capture the select sequence that option raises. Record or None.
 
@@ -852,7 +905,25 @@ def probe_triggered_ability(target_id: int, cards: dict[int, dict], *, decline: 
 
     The returned ``ability_option_seen`` is the answer bit: True means the engine posed the Ability
     separately, False means it rides the option it was played by.
+
+    ``search_ceiling`` names the trigger's OWN search bound (see
+    ``_accept_capture_is_exhausted``) so an accept-mode capture that came up short from deck
+    exhaustion — not the card's own shape — retries on a fresh shuffle, up to ``drive_attempts``
+    times, instead of returning a board-dependent record. A decline-mode capture is never
+    exhausted this way: declining always skips the search, so an empty ``effect_selects`` there is
+    the CORRECT answer, and this check is skipped for it.
     """
+    for _ in range(max(1, drive_attempts)):
+        rec = _drive_to_trigger(target_id, cards, decline=decline, me=me, max_steps=max_steps,
+                                main_menus=main_menus)
+        if rec is not None and (decline or not _accept_capture_is_exhausted(rec, search_ceiling)):
+            return rec
+    return None                             # every attempt missed setup or came up exhausted
+
+
+def _drive_to_trigger(target_id: int, cards: dict[int, dict], *, decline: bool, me: int,
+                      max_steps: int, main_menus: int) -> dict | None:
+    """One shuffle's worth of ``probe_triggered_ability`` — see that function for the contract."""
     chain = evolution_chain(target_id, _evolution_data())
     etype = _card_energy_type().get(target_id, 0)
     battle_start, battle_select, battle_finish = _engine()
