@@ -43,7 +43,7 @@ from .card_text import (  # noqa: F401
 from .forward_index import _ForwardIndex, _build_forward_index, _name_index  # noqa: F401
 
 # CardType enum codes (cg.api.CardType) mirrored as literals so the records stay lib-free.
-_ITEM, _TOOL, _SUPPORTER, _BASIC_ENERGY, _SPECIAL_ENERGY = 1, 2, 3, 5, 6
+_ITEM, _TOOL, _SUPPORTER, _STADIUM, _BASIC_ENERGY, _SPECIAL_ENERGY = 1, 2, 3, 4, 5, 6
 
 
 @dataclass
@@ -179,6 +179,13 @@ class CardStat:
     @property
     def is_supporter(self) -> bool:
         return self.cardType == _SUPPORTER
+
+    @property
+    def is_stadium(self) -> bool:
+        """A Stadium card. The last `CardType` with no predicate of its own — added for the FETCH
+        clause target class `stadium` (Secret Box, Colress's Tenacity), so the closure asks the
+        question through `CardStat` like every other class rather than re-spelling the enum code."""
+        return self.cardType == _STADIUM
 
     @property
     def is_basic_energy(self) -> bool:

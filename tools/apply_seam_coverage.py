@@ -317,7 +317,12 @@ def _clauses_for(clauses: list[dict], where: str) -> list[dict]:
 
     Routed by the clause's own ``trigger``: `on_evolve` / `on_bench_play` ride the evolve and deploy
     options, `on_attack` belongs to a TERMINAL attack and is no site's, and an untriggered clause on
-    a Pokemon is its activated Ability's."""
+    a Pokemon is its activated Ability's.
+
+    `on_attach` (Issue #301, Telepath Psychic Energy) needs no branch and deliberately has none: the
+    only cards that can carry it are Special Energy, whose sole site IS the `_ATTACH` this function
+    is asked for under ``where="activated"``. Giving it a branch would mean inventing a fourth home
+    for a trigger that already lands on the one option it can ride."""
     def home(c: dict) -> str:
         trigger = c.get("trigger")
         if trigger == "on_evolve":

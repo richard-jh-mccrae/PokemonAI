@@ -16,19 +16,19 @@ python tools/apply_seam_coverage.py
 ## Verdict in one paragraph
 
 The apply-seam's *structure* is sound and its *content* is thin. Counted over sites the composer
-will actually visit, **69.1 % are MODELLED, 2.4 % ENGINE-RESOLVED, 28.5 % REFUSED** — but almost all
+will actually visit, **75.4 % are MODELLED, 2.4 % ENGINE-RESOLVED, 22.2 % REFUSED** — but almost all
 of that MODELLED mass is structural (a vanilla Basic's deploy, a Basic Energy attach, a Tool attach),
 which was never at risk. Restricted to sites that carry a **card effect**, the picture inverts:
-**24.7 % MODELLED, 5.9 % ENGINE-RESOLVED (an upper bound — see Method), 69.4 % REFUSED**, and
-*nearly half* of the modelled slice is modelled only in part. Weighted the way a deck author would ask it — of the 60 cards I shuffle, how
-many will the seam price correctly when I draw one? — **19.0 % of our copies land on a REFUSED card
-and a further 15.7 % on a card whose clauses cover only part of what it does; against the
-meta-weighted opposing deck it is 34.6 % REFUSED.** The single largest cause is not opponent choice
-(6 sites) and not the accepted opponent-hidden unknown (3): it is a **clause-vocabulary gap**, 91 of
-the 118 refusals. That gap splits again, and both halves are vocabulary work rather than structural
-loss: **49 sites carry no RNG or hidden-zone marker at all** — precisely the shape §3b calls
+**40.0 % MODELLED, 5.9 % ENGINE-RESOLVED (an upper bound — see Method), 54.1 % REFUSED**, and
+*nearly a third* of the modelled slice is modelled only in part. Weighted the way a deck author would ask it — of the 60 cards I shuffle, how
+many will the seam price correctly when I draw one? — **17.0 % of our copies land on a REFUSED card
+and a further 12.3 % on a card whose clauses cover only part of what it does; against the
+meta-weighted opposing deck it is 24.6 % REFUSED.** The single largest cause is not opponent choice
+(6 sites) and not the accepted opponent-hidden unknown (3): it is a **clause-vocabulary gap**, 65 of
+the 92 refusals. That gap splits again, and both halves are vocabulary work rather than structural
+loss: **46 sites carry no RNG or hidden-zone marker at all** — precisely the shape §3b calls
 ENGINE-RESOLVED, refused only because `KIND_COVERAGE` gives `_PLAY` / `_ATTACH` / `_EVOLVE` no engine
-route — and the other **42 are shuffle- or deck-reading**, which §3b calls structurally refused *on
+route — and the other **19 are shuffle- or deck-reading**, which §3b calls structurally refused *on
 the engine route* but which a closed-form transition prices as an `Expectation` over `deck_odds`,
 since deck order is the one zone the registry declares HIDDEN. Only the 18 nondeterministic
 `_ABILITY` refusals are structural in the sense §3b means. The bridge §3b built is pointed at the one kind (`_ABILITY`) whose live instances
@@ -106,25 +106,25 @@ Pool: **385 distinct cards** — 5 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 5 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 286 | 69.1% | 255 | 85.0% | 41.5 |
+| **modelled** | 312 | 75.4% | 261 | 87.0% | 47.5 |
 | **engine-resolved** | 10 | 2.4% | 6 | 2.0% | 0.2 |
-| **refused** | 118 | 28.5% | 57 | 19.0% | 20.8 |
+| **refused** | 92 | 22.2% | 51 | 17.0% | 14.8 |
 
 MODELLED splits — and the seam's own table cannot tell the two apart:
 
 | class | sites | % sites |
 |---|---|---|
-| **modelled-full** | 267 | 64.5% |
-| **modelled-partial** | 19 | 4.6% |
+| **modelled-full** | 291 | 70.3% |
+| **modelled-partial** | 21 | 5.1% |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 5 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 238 | 61.8% | 190 | 63.3% | 31.7 | 52.8% |
+| **modelled-full** | 262 | 68.1% | 206 | 68.7% | 39.2 | 65.3% |
 | **engine-resolved** | 10 | 2.6% | 6 | 2.0% | 0.2 | 0.3% |
-| **modelled-partial** | 19 | 4.9% | 47 | 15.7% | 7.4 | 12.4% |
-| **refused** | 118 | 30.6% | 57 | 19.0% | 20.8 | 34.6% |
+| **modelled-partial** | 21 | 5.5% | 37 | 12.3% | 5.9 | 9.9% |
+| **refused** | 92 | 23.9% | 51 | 17.0% | 14.8 | 24.6% |
 
 ### Headline — effect-bearing sites only
 
@@ -132,23 +132,22 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 42 | 24.7% |
+| **modelled** | 68 | 40.0% |
 | **engine-resolved** | 10 | 5.9% |
-| **refused** | 118 | 69.4% |
+| **refused** | 92 | 54.1% |
 
 | MODELLED split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 23 | 13.5% |
-| **modelled-partial** | 19 | 11.2% |
+| **modelled-full** | 47 | 27.6% |
+| **modelled-partial** | 21 | 12.4% |
 
 ### REFUSED, grouped by cause and ranked by exposure
 
-#### clause-vocabulary gap — 91 sites, 44 copies across our 5 decks
+#### clause-vocabulary gap — 65 sites, 38 copies across our 5 decks
 
 | id | card | site | our copies | meta copies | effect family | deterministic-shaped | note |
 |---|---|---|---|---|---|---|---|
 | 1182 | Boss’s Orders | play | 9 | 2.10 | gust — pull a benched opponent body Active | yes |  |
-| 19 | Telepath Psychic Energy | attach | 4 | 1.71 | fetch / search / recover |  |  |
 | 1141 | Premium Power Pro | play | 4 | 0.88 | transient damage grant (this turn) | yes |  |
 | 1188 | Ciphermaniac’s Codebreaking | play | 4 | 0.00 | fetch / search / recover |  |  |
 | 1259 | Spikemuth Gym | play | 4 | 0.00 | hand disruption — their hand |  |  |
@@ -157,74 +156,52 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 | 1123 | Switch | play | 2 | 0.55 | switch my own Active | yes |  |
 | 1252 | Gravity Mountain | play | 2 | 0.46 | Stadium static board modifier | yes |  |
 | 674 | Hariyama | evolve | 2 | 0.41 | gust — pull a benched opponent body Active | yes |  |
-| 1092 | Secret Box | play | 2 | 0.06 | fetch / search / recover |  |  |
 | 1260 | Risky Ruins | play | 2 | 0.02 | damage counters placed or moved | yes |  |
 | 1079 | Rare Candy | play | 1 | 1.08 | evolution shortcut (Rare Candy) | yes |  |
 | 1211 | Black Belt’s Training | play | 1 | 0.04 | transient damage grant (this turn) | yes |  |
 | 11 | Mist Energy | attach | 0 | 1.02 | Special Energy static provision + rider | yes |  |
-| 1231 | Dawn | play | 0 | 0.90 | fetch / search / recover |  |  |
 | 1081 | Enhanced Hammer | play | 0 | 0.89 | energy denial — remove Energy from their body | yes |  |
-| 1102 | Dusk Ball | play | 0 | 0.87 | fetch / search / recover |  |  |
 | 742 | Kadabra | evolve | 0 | 0.86 | draw |  |  |
 | 743 | Alakazam | evolve | 0 | 0.86 | draw |  |  |
 | 1255 | Postwick | play | 0 | 0.80 | Stadium static board modifier | yes |  |
-| 1115 | Hop’s Bag | play | 0 | 0.66 | fetch / search / recover |  |  |
-| 1210 | Brock’s Scouting | play | 0 | 0.46 | fetch / search / recover |  |  |
-| 1194 | Colress’s Tenacity | play | 0 | 0.31 | fetch / search / recover |  |  |
 | 1235 | Waitress | play | 0 | 0.29 | energy attach / acceleration |  |  |
-| 1134 | Team Rocket's Transceiver | play | 0 | 0.28 | fetch / search / recover |  |  |
 | 1264 | Battle Cage | play | 0 | 0.26 | damage counters placed or moved | yes |  |
 | 1129 | Sacred Ash | play | 0 | 0.24 | recover discard -> DECK (not to hand) |  |  |
 | 18 | Grow Grass Energy | attach | 0 | 0.23 | Special Energy static provision + rider | yes |  |
-| 1184 | Lana’s Aid | play | 0 | 0.22 | fetch / search / recover | yes |  |
 | 13 | Enriching Energy | attach | 0 | 0.21 | draw |  |  |
 | 14 | Spiky Energy | attach | 0 | 0.19 | damage counters placed or moved | yes |  |
 | 12 | Legacy Energy | attach | 0 | 0.17 | prize manipulation |  |  |
 | 1256 | Team Rocket's Watchtower | play | 0 | 0.15 | Stadium static board modifier | yes |  |
-| 1233 | Canari | play | 0 | 0.12 | fetch / search / recover |  |  |
-| 1094 | Bug Catching Set | play | 0 | 0.10 | fetch / search / recover |  |  |
 | 1244 | Full Metal Lab | play | 0 | 0.10 | Stadium static board modifier | yes |  |
 | 1254 | Levincia | play | 0 | 0.09 | hand disruption — their hand | yes |  |
-| 1185 | Explorer’s Guidance | play | 0 | 0.07 | fetch / search / recover |  |  |
-| 1205 | Cyrano | play | 0 | 0.07 | fetch / search / recover |  |  |
 | 15 | Team Rocket's Energy | attach | 0 | 0.06 | Special Energy static provision + rider | yes |  |
-| 1220 | Team Rocket's Proton | play | 0 | 0.06 | fetch / search / recover |  |  |
 | 1245 | Festival Grounds | play | 0 | 0.06 | Stadium static board modifier | yes |  |
-| 1215 | Ethan's Adventure | play | 0 | 0.06 | fetch / search / recover |  |  |
 | 1217 | Team Rocket's Archer | play | 0 | 0.05 | hand disruption — their hand |  |  |
 | 1257 | Team Rocket's Factory | play | 0 | 0.04 | hand disruption — their hand |  |  |
 | 20 | Rock Fighting Energy | attach | 0 | 0.04 | Special Energy static provision + rider | yes |  |
 | 16 | Prism Energy | attach | 0 | 0.04 | Special Energy static provision + rider | yes |  |
-| 1238 | Tarragon | play | 0 | 0.03 | fetch / search / recover | yes |  |
 | 1261 | Forest of Vitality | play | 0 | 0.02 | Stadium static board modifier | yes |  |
 | 1247 | Neutralization Zone | play | 0 | 0.02 | Stadium static board modifier | yes |  |
 | 1218 | Team Rocket's Giovanni | play | 0 | 0.02 | gust — pull a benched opponent body Active | yes |  |
-| 1077 | Roto-Stick | play | 0 | 0.02 | fetch / search / recover |  |  |
 | 1124 | Pokémon Catcher | play | 0 | 0.01 | gust — pull a benched opponent body Active |  |  |
 | 135 | Bloodmoon Ursaluna | deploy | 0 | 0.01 | energy attach / acceleration | yes |  |
-| 1127 | Tera Orb | play | 0 | 0.01 | fetch / search / recover |  |  |
 | 1137 | Tool Scrapper | play | 0 | 0.01 | tool / special-energy removal | yes |  |
 | 1116 | Energy Switch | play | 0 | 0.01 | energy moved between my bodies | yes |  |
 | 1191 | Kieran | play | 0 | 0.01 | transient damage grant (this turn) | yes |  |
 | 1204 | Lisia’s Appeal | play | 0 | 0.01 | gust — pull a benched opponent body Active | yes |  |
 | 1114 | Redeemable Ticket | play | 0 | 0.01 | prize manipulation |  |  |
-| 1193 | Hassel | play | 0 | 0.00 | fetch / search / recover |  |  |
 | 1250 | Area Zero Underdepths | play | 0 | 0.00 | Stadium static board modifier | yes |  |
 | 1267 | Lumiose City | play | 0 | 0.00 | Stadium static board modifier |  |  |
-| 1109 | Miracle Headset | play | 0 | 0.00 | fetch / search / recover | yes |  |
 | 310 | Hop’s Dubwool | evolve | 0 | 0.00 | gust — pull a benched opponent body Active | yes |  |
 | 1088 | Prime Catcher | play | 0 | 0.00 | gust — pull a benched opponent body Active | yes |  |
-| 1206 | Larry’s Skill | play | 0 | 0.00 | fetch / search / recover |  |  |
 | 1246 | Jamming Tower | play | 0 | 0.00 | Stadium static board modifier | yes |  |
 | 1201 | Briar | play | 0 | 0.00 | prize manipulation |  |  |
 | 1266 | Nighttime Mine | play | 0 | 0.00 | Stadium static board modifier | yes |  |
-| 1125 | Master Ball | play | 0 | 0.00 | fetch / search / recover |  |  |
 | 1089 | Reboot Pod | play | 0 | 0.00 | energy attach / acceleration | yes |  |
 | 75 | Iron Leaves ex | deploy | 0 | 0.00 | energy moved between my bodies | yes |  |
 | 1249 | Grand Tree | play | 0 | 0.00 | Stadium static board modifier |  |  |
 | 1228 | Acerola's Mischief | play | 0 | 0.00 | prize manipulation |  |  |
 | 1209 | Ruffian | play | 0 | 0.00 | tool / special-energy removal | yes |  |
-| 1101 | Call Bell | play | 0 | 0.00 | fetch / search / recover |  |  |
 | 1139 | Energy Recycler | play | 0 | 0.00 | recover discard -> DECK (not to hand) |  |  |
 | 1251 | Lively Stadium | play | 0 | 0.00 | Stadium static board modifier | yes |  |
 | 10 | Neo Upper Energy | attach | 0 | 0.00 | Special Energy static provision + rider | yes |  |
@@ -235,9 +212,6 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 | 1107 | Scramble Switch | play | 0 | 0.00 | energy moved between my bodies | yes |  |
 | 1144 | Strange Timepiece | play | 0 | 0.00 | devolve | yes |  |
 | 1262 | Surfing Beach | play | 0 | 0.00 | Stadium static board modifier | yes |  |
-| 1132 | Team Rocket's Great Ball | play | 0 | 0.00 | fetch / search / recover |  |  |
-| 1082 | Hyper Aroma | play | 0 | 0.00 | fetch / search / recover |  |  |
-| 1126 | Precious Trolley | play | 0 | 0.00 | fetch / search / recover |  |  |
 
 #### opponent choice — 6 sites, 1 copies across our 5 decks
 
@@ -288,9 +262,9 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 | effect family | clause vocabulary | sites | our copies | meta copies |
 |---|---|---|---|---|
 | gust — pull a benched opponent body Active | **NEW** | 7 | 11 | 2.55 |
-| fetch / search / recover | existing | 28 | 10 | 6.00 |
 | hand disruption — their hand | **NEW** | 5 | 8 | 0.18 |
 | transient damage grant (this turn) | **NEW** | 3 | 5 | 0.93 |
+| fetch / search / recover | existing | 2 | 4 | 0.00 |
 | Special Energy static provision + rider | **NEW** | 7 | 3 | 1.39 |
 | Stadium static board modifier | **NEW** | 14 | 2 | 1.62 |
 | switch my own Active | **NEW** | 1 | 2 | 0.55 |
@@ -310,10 +284,10 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 
 | gap shape | sites | our copies | meta copies | what it needs |
 |---|---|---|---|---|
-| deterministic-shaped (no RNG / hidden-zone marker) | 49 | 26 | 9.8 | would be ENGINE-RESOLVED if a MODELLED kind had an engine route — AMBIGUOUS #1 |
-| RNG-shaped (shuffle / deck read / coin) | 42 | 18 | 8.5 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
+| deterministic-shaped (no RNG / hidden-zone marker) | 46 | 26 | 9.6 | would be ENGINE-RESOLVED if a MODELLED kind had an engine route — AMBIGUOUS #1 |
+| RNG-shaped (shuffle / deck read / coin) | 19 | 12 | 2.7 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
 
-**57 of 91** gap sites need vocabulary that does not exist yet; 34 need only a compendium entry in an existing kind.
+**57 of 65** gap sites need vocabulary that does not exist yet; 8 need only a compendium entry in an existing kind.
 
 ### Win-plan critical path
 
@@ -322,7 +296,6 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | id | card | site | class | named by | our copies |
 |---|---|---|---|---|---|
 | 1227 | Lillie's Determination | play | modelled-partial | dragapult_ex, mega_lucario, mega_starmie | 20 |
-| 1086 | Buddy-Buddy Poffin | play | modelled-partial | dragapult_ex, mega_starmie | 10 |
 | 1182 | Boss’s Orders | play | refused | dragapult_ex, mega_lucario, mega_starmie | 9 |
 | 1120 | Crushing Hammer | play | modelled-partial | dragapult_ex, mega_starmie | 8 |
 | 112 | Munkidori | ability: Adrena-Brain | engine-resolved | dragapult_ex | 6 |
@@ -359,25 +332,27 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 
 ### MODELLED-PARTIAL — clause sets that cover only part of the card
 
-19 sites, 47 copies across our 5 decks. §3b resolves each to MODELLED, so the uncovered leg differences to **0**.
+21 sites, 37 copies across our 5 decks. §3b resolves each to MODELLED, so the uncovered leg differences to **0**.
 
 | id | card | our copies | meta copies | what the clauses miss |
 |---|---|---|---|---|
 | 1227 | Lillie's Determination | 20 | 3.09 | clause draws a flat 8, the card's maximum; the base is 6, and 8 needs exactly 6 Prizes left. Shuffling your hand in is unmodelled |
-| 1086 | Buddy-Buddy Poffin | 10 | 2.49 | no `amount`: the card fetches UP TO 2 Basics, the clause reads as one |
 | 1120 | Crushing Hammer | 8 | 0.54 | the flip is carried and `discard_opp_energy` now declares its write-set, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition |
 | 1213 | Judge | 3 | 0.06 | clause draws 4 for me; the card is symmetric — the OPPONENT's hand is shuffled away and redrawn to 4, which is the entire reason to play it |
 | 1080 | Unfair Stamp | 2 | 0.11 | clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled |
 | 1223 | Harlequin | 2 | 0.09 | clause draws a flat 5; the card is a COIN FLIP between 5/3 and 3/5, and shuffles both hands away |
 | 1239 | Naveen | 2 | 0.00 | clause draws a flat 3; the card draws UP TO a 5-card hand after an optional pre-discard of any size |
 | 1192 | Carmine | 0 | 0.90 | clause draws 5; DISCARD YOUR HAND — the card's whole cost — is unmodelled |
+| 1115 | Hop’s Bag | 0 | 0.66 | the Hop's NAME family is recorded and UNDECIDED — no build-time family index exists, so the clause deliberately reaches nothing rather than over-claiming every Basic |
+| 1134 | Team Rocket's Transceiver | 0 | 0.28 | the "Team Rocket" NAME restriction is recorded and UNDECIDED — and it is a SUBSTRING test, not the owner prefix the other three families use, which is itself why one oracle cannot be assumed |
 | 1216 | Team Rocket's Ariana | 0 | 0.06 | clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team Rocket board |
-| 1118 | Energy Retrieval | 0 | 0.03 | no `amount`: the card recovers UP TO 2 Basic Energy, the clause reads as one |
-| 1110 | Max Rod | 0 | 0.03 | no `amount`: the card recovers UP TO 5 in any combination, the clause reads as one |
+| 1220 | Team Rocket's Proton | 0 | 0.06 | the Team Rocket's NAME family is recorded and UNDECIDED, so the clause deliberately reaches nothing; the go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry |
+| 1215 | Ethan's Adventure | 0 | 0.06 | the Basic {R} Energy leg is exact; the Ethan's NAME family on the Pokemon leg is recorded and UNDECIDED, so that leg deliberately reaches nothing |
 | 1187 | Morty’s Conviction | 0 | 0.01 | clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and costs a hand discard — neither is carried |
 | 1242 | Community Center | 0 | 0.01 | clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried |
 | 1208 | Iris’s Fighting Spirit | 0 | 0.00 | clause draws a flat 4; the card draws UP TO A 6-CARD HAND and costs a discard |
 | 1199 | Lacey | 0 | 0.00 | clause draws a flat 8, the card's maximum; the base is 4, the 8 needs the opponent at 3-or-fewer Prizes, and shuffling your hand in is unmodelled |
+| 1206 | Larry’s Skill | 0 | 0.00 | all three search legs (a Pokemon, a Supporter, a Basic Energy) are carried; DISCARD YOUR HAND — the card's whole cost — is unmodelled |
 | 1200 | Kofu | 0 | 0.00 | clause draws 4; putting 2 cards from hand on the bottom — the cost, and the gate on being able to pay it — is unmodelled |
 | 1181 | Billy & O'Nare | 0 | 0.00 | clause draws a flat 4; the card draws 2 and only draws 2 more at 10+ cards in hand, so the clause OVER-states on every normal board |
 | 1237 | Lucian | 0 | 0.00 | clause draws a flat 6; the card is a per-player COIN FLIP between 6 and 3 and puts both hands on the bottom of their decks |
@@ -416,11 +391,11 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 | deck | modelled-full | modelled-partial | engine-resolved | refused | % at-risk (partial+refused) |
 |---|---|---|---|---|---|
-| dragapult_ex | 33 | 14 | 2 | 11 | 41.7% |
-| grimmsnarl_ex | 38 | 8 | 4 | 10 | 30.0% |
+| dragapult_ex | 37 | 10 | 2 | 11 | 35.0% |
+| grimmsnarl_ex | 41 | 6 | 4 | 9 | 25.0% |
 | mega_lucario | 39 | 7 | 0 | 14 | 35.0% |
-| mega_starmie | 45 | 14 | 0 | 1 | 25.0% |
-| slowking | 35 | 4 | 0 | 21 | 41.7% |
+| mega_starmie | 49 | 10 | 0 | 1 | 18.3% |
+| slowking | 40 | 4 | 0 | 16 | 33.3% |
 
 ### Clause write-set health (`snapshot_coverage`)
 
@@ -431,11 +406,11 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 | clause kind/rider in pool | sites using it | has a write-set |
 |---|---|---|
+| fetch | 57 | yes |
 | draw | 20 | yes |
-| fetch | 18 | yes |
 | heal | 5 | yes |
 | accel | 4 | yes |
-| energy_provide | 1 | yes |
+| energy_provide | 2 | yes |
 | discard_eot | 1 | yes |
 | shuffle_self_in | 1 | yes |
 | other_to_bottom | 1 | yes |
@@ -443,6 +418,7 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | discard_basic_f_energy | 1 | yes |
 | shuffle_both_hands | 1 | yes |
 | coin | 1 | declared EMPTY |
+| discard_remainder | 1 | yes |
 | bounce_energy_to_hand | 1 | yes |
 
 <!-- END GENERATED -->
@@ -454,17 +430,39 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 The issue names six differenced families. Three are well served, three are structurally hampered on
 day one.
 
-**fetch — well served in SHAPE, under-populated in DATA.** `fetch` is the pool's second-most-used clause kind
-(18 sites, behind `draw`'s 20) and its vocabulary already carries target / zone / hp_max / no_rule_box /
-energy_type / dest, which is enough for every fetch card measured. But 28 further sites are refused
-*fetch-family* cards with no compendium entry at all — Master Ball, Precious Trolley, Hyper Aroma,
-Dusk Ball, Cyrano, Brock's Scouting, Team Rocket's Great Ball and 21 more. That is the cheapest fix
-in this report: they need a compendium ENTRY, not a clause kind. Three existing fetch clauses
-(Buddy-Buddy Poffin, Max Rod, Energy Retrieval) also carry **no `amount`**, so a card that recovers
-up to 5 prices as if it recovered one.
+**fetch — well served in SHAPE, and now POPULATED (Issue #301).** `fetch` is the pool's most-used
+clause kind by a distance (**57 sites**, ahead of `draw`'s 20) and its vocabulary already carried
+target / zone / hp_max / no_rule_box / energy_type / dest. When this report was first written, 28
+further sites were refused *fetch-family* cards with no compendium entry at all — Master Ball,
+Precious Trolley, Hyper Aroma, Dusk Ball, Cyrano, Brock's Scouting, Team Rocket's Great Ball and 21
+more — which made it the cheapest fix in the report: they needed a compendium ENTRY, not a clause
+kind. **Issue #301 authored 26 of them** (plus the missing `amount` on Buddy-Buddy Poffin, Max Rod,
+Energy Retrieval and Energy Search Pro, each of which had priced a multi-card effect as one card),
+widening the target vocabulary with `stage1` / `stage2` / `tera` / `pokemon_ex` / `item` / `tool` /
+`stadium` / `any` and adding `amount` (`"all"` for an unbounded fetch), `choice` (whose amounts are
+alternatives, never a sum), `dig_from`, `name_family`, the `discard_remainder` rider and the
+`on_attach` trigger.
+
+The family row is down from **28 sites / 10 of our copies / 6.00 meta copies to 2 sites / 4 copies /
+0.00 meta**, and both survivors are ruled rather than pending:
+
+* **Ciphermaniac's Codebreaking** (4 copies, `slowking`) puts the searched cards **on top of the
+  deck**, not into the hand. `dest` has no such value and `deck_odds` has no notion of a known top,
+  so it stays REFUSED and is cross-posted to **Issue #289** (T3.5/11, *known top-of-deck: DECISION
+  REQUIRED*), which owns that concept.
+* **Noctowl's** *Jewel Seeker* is an on-evolve Ability, not a Trainer — outside this family's batch,
+  0 copies and 0.00 meta.
+
+Four authored cards are **MODELLED-PARTIAL by ruling**, not by omission: Hop's Bag, Team Rocket's
+Transceiver, Team Rocket's Proton and Ethan's Adventure each restrict their search to a card-NAME
+family the closure records but cannot **decide**. Issue #306 shipped `card_text.name_in_family` (a
+normalised prefix test over a *known* name); what is still missing is a build-time index over the
+pool keyed by family, so `fetch_closure` refuses such a clause for reach rather than reading Hop's
+Bag as fetching *any* Basic. Larry's Skill is partial for the reason Carmine already is: *"Discard
+your hand"* is the card's whole cost and no clause field carries it.
 
 **draw — the worst-served family, and the one the ordering amendment was written for.** 20 sites use
-the `draw` clause, and **14 of the 19 MODELLED-PARTIAL sites are draw Supporters** whose clause is a
+the `draw` clause, and **14 of the 21 MODELLED-PARTIAL sites are draw Supporters** whose clause is a
 flat count where the card is conditional. *Lillie's Determination* — 20 copies across our decks,
 named by all three authored doctrines — carries `draw: 8`, which is its maximum; its base is 6 and
 the 8 needs exactly 6 Prizes remaining. *Surfer* carries `draw: 1` for a card that switches the
@@ -553,7 +551,7 @@ gust it must do by expansion, at full width, with no local ordering signal.
 `ENGINE_ROUTE_KINDS`, and the gate on it is *provably deterministic*. In the 372-frame corpus every
 live `_ABILITY` option (17 of them) is Drakloak's Recon Directive or Lunatone's Lunar Cycle — both
 deck-reading draw engines, both fail-closed REFUSED. So the bridge resolves **zero** live options
-today. Meanwhile 49 refused sites on MODELLED kinds carry no RNG marker at all and would qualify if
+today. Meanwhile 46 refused sites on MODELLED kinds carry no RNG marker at all and would qualify if
 the route existed for them. The bridge's value is entirely on the wrong side of the table.
 
 **2. Four cards are clause-complete and unreachable.** Drakloak, Lunatone, Dudunsparce and
@@ -562,17 +560,17 @@ only when `coverage(kind)` is MODELLED, and `_ABILITY` is `ENGINE_RESOLVED`, so 
 already paid for is unreachable — the option routes to the engine, and the engine refuses it for
 nondeterminism. This is not a coverage gap; it is a routing one.
 
-**3. A PARTIAL clause set is worse than none.** 19 sites, **47 copies across our five decks**,
+**3. A PARTIAL clause set is worse than none.** 21 sites, **37 copies across our five decks**,
 resolve to MODELLED with clauses that cover part of the card. §3b has no PARTIAL fate, so T4 will
 model what the clauses say and the omitted leg differences to exactly 0 — which under 1-ply ordering
 does not read as *undervalued*, it reads as *never explored*. That is the §3c failure the coverage
 registry was built to prevent, arriving through the compendium instead of through the snapshot.
-`mega_starmie` is the extreme case: only 1 refused copy in 60, but 14 partial ones.
+`mega_starmie` is the extreme case: only 1 refused copy in 60, but 10 partial ones.
 
 > **Remediated by Issue #300** (mechanism, not exposure): a clause set now DECLARES whether it is
 > complete — `card_effects.json`'s `_covers` — and `snapshot_coverage.clauses_cover()` turns a
 > `partial` verdict into the fail-closed tri-state `apply_option.fate` refuses on, so a partial set
-> can no longer price as a complete one. The 19 sites are still partial; what changed is that they
+> can no longer price as a complete one. The 21 sites are still partial; what changed is that they
 > are now declared, audited (`partial_clause_cards()`, asserted shrink-only) and unable to be silent.
 > Closing them one family at a time is Issue #301, Issue #302, Issue #303 and Issue #304.
 
@@ -603,10 +601,10 @@ Issue #263.
 
 1. **May a MODELLED kind fall back to the engine per-option?** §3b's prose says ENGINE-RESOLVED
    applies when *"the clause vocabulary has a gap, BUT the effect is provably deterministic"* — which
-   describes 49 refused `_PLAY` / `_ATTACH` / `_EVOLVE` sites exactly. The built `KIND_COVERAGE`
+   describes 46 refused `_PLAY` / `_ATTACH` / `_EVOLVE` sites exactly. The built `KIND_COVERAGE`
    routes only `_ABILITY` to the engine, and `apply_option.refuse(..., scope=OPTION_SCOPE)`'s
    docstring says a `_PLAY` of an uncovered card refuses. Is the kind table the whole gate by design,
-   or should a per-option engine route exist inside a MODELLED kind? The answer moves 49 sites and 26
+   or should a per-option engine route exist inside a MODELLED kind? The answer moves 46 sites and 26
    of our copies.
 2. **Should `fate()` prefer MODELLED when the option's own clauses are complete?** Today a complete
    clause set cannot rescue an option whose KIND is routed to the engine (finding 2 above). Is the
@@ -637,13 +635,16 @@ Issue #263.
 
 ## Recommended follow-ups, ranked by exposure per unit of work
 
-1. **Populate the fetch family** — 28 sites, 10 of our copies, 6.00 meta copies, and it needs no new
-   clause kind. Add `amount` to the three existing fetch clauses that lack it while there.
-2. **Rule AMBIGUOUS #1** — one decision moves 49 sites out of REFUSED, and it is the difference
+1. ~~**Populate the fetch family**~~ — **DONE (Issue #301).** Was 28 sites, 10 of our copies, 6.00
+   meta copies, and it needed no new clause kind. 26 cards authored, the four missing `amount`s
+   fixed, the row now 2 sites / 4 copies / 0.00 meta — both survivors ruled (Ciphermaniac's
+   Codebreaking cross-posted to Issue #289; Noctowl outside the family). *fetch* above carries the
+   detail.
+2. **Rule AMBIGUOUS #1** — one decision moves 46 sites out of REFUSED, and it is the difference
    between a composer that can order a gust and one that must expand every one.
 3. **Mint a `gust` clause kind** — highest single-family exposure (11 of our copies), named by all
    three authored doctrines, and the family the differencing system exists to price.
-4. **Fix the 14 partial draw clauses** — 29 copies of silently-wrong numbers (47 counts all 19
+4. **Fix the 14 partial draw clauses** — 29 copies of silently-wrong numbers (37 counts all 21
    partial sites), and the family the
    1-ply ordering amendment was written to rescue.
 5. ~~**Rule AMBIGUOUS #3 by measurement**~~ — **DONE (Issue #305).** Two probes through the live

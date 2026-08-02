@@ -5,6 +5,10 @@
 "covers": "full",
 "reason": "provision + evolution provision + the end-of-turn discard rider all carried"
 },
+"19": {
+"covers": "full",
+"reason": "the static {P} provision AND the on-attach fetch of up to 2 Basic {P} Pokemon onto the Bench; BOTH type gates are carried — `energy_type` on what is fetched, `target_type` on the {P} recipient the attach must be made to"
+},
 "66": {
 "covers": "full",
 "reason": "draw 3 + `shuffle_self_in`; the self-shuffle IS the rest of the card"
@@ -37,13 +41,29 @@
 "covers": "full",
 "reason": "fetch a Supporter from deck on bench-play — the whole Ability"
 },
+"1077": {
+"covers": "full",
+"reason": "a top-4 dig taking any number of Supporters (`dig: 4`, `amount: all`); shuffling the rest back is the dig's own convention"
+},
 "1080": {
 "covers": "partial",
 "reason": "clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled"
 },
+"1082": {
+"covers": "full",
+"reason": "fetch up to 3 Stage 1 Pokemon from deck"
+},
 "1086": {
-"covers": "partial",
-"reason": "no `amount`: the card fetches UP TO 2 Basics, the clause reads as one"
+"covers": "full",
+"reason": "fetch up to 2 Basics with 70 HP or less straight onto the Bench"
+},
+"1092": {
+"covers": "full",
+"reason": "all four search legs (Item, Pokemon Tool, Supporter, Stadium) + the `discard_3` cost"
+},
+"1094": {
+"covers": "full",
+"reason": "a top-7 dig for up to 2 in any combination of {G} Pokemon and Basic {G} Energy — both legs, sharing the one cap (`choice`)"
 },
 "1096": {
 "covers": "full",
@@ -54,28 +74,44 @@
 "reason": "both discard-fetch legs (Pokemon, Basic Energy) carried"
 },
 "1100": {
-"covers": "partial",
-"reason": "no `amount` and no `distinct_types`: the card fetches ANY NUMBER of Basic Energy of different types, the clause reads as one"
+"covers": "full",
+"reason": "any number of Basic Energy of DIFFERENT types (`amount: all` + `distinct_types`)"
+},
+"1101": {
+"covers": "full",
+"reason": "fetch a Supporter from deck, gated on the going-second first turn"
+},
+"1102": {
+"covers": "full",
+"reason": "a BOTTOM-7 dig for a Pokemon (`dig: 7`, `dig_from: bottom`)"
 },
 "1105": {
 "covers": "full",
 "reason": "heal 60, active {N} only"
 },
+"1109": {
+"covers": "full",
+"reason": "recover up to 2 Supporters from the discard"
+},
 "1110": {
-"covers": "partial",
-"reason": "no `amount`: the card recovers UP TO 5 in any combination, the clause reads as one"
+"covers": "full",
+"reason": "up to 5 in any combination of Pokemon and Basic Energy from the discard — both legs, sharing the one cap (`choice`)"
 },
 "1112": {
 "covers": "full",
 "reason": "heal 60 + the `discard_own_energy` rider"
+},
+"1115": {
+"covers": "partial",
+"reason": "the Hop's NAME family is recorded and UNDECIDED — no build-time family index exists, so the clause deliberately reaches nothing rather than over-claiming every Basic"
 },
 "1117": {
 "covers": "full",
 "reason": "heal 30"
 },
 "1118": {
-"covers": "partial",
-"reason": "no `amount`: the card recovers UP TO 2 Basic Energy, the clause reads as one"
+"covers": "full",
+"reason": "recover up to 2 Basic Energy from the discard"
 },
 "1119": {
 "covers": "full",
@@ -93,9 +129,29 @@
 "covers": "full",
 "reason": "fetch a Supporter with `dig: 7`"
 },
+"1125": {
+"covers": "full",
+"reason": "fetch a Pokemon from deck"
+},
+"1126": {
+"covers": "full",
+"reason": "fetch any number of Basics straight onto the Bench (`amount: all`)"
+},
+"1127": {
+"covers": "full",
+"reason": "fetch a Tera Pokemon from deck"
+},
 "1130": {
 "covers": "full",
 "reason": "both heal modes (Arven's Pokemon 100, Active 30) carried"
+},
+"1132": {
+"covers": "full",
+"reason": "fetch a Trainer card from deck"
+},
+"1134": {
+"covers": "partial",
+"reason": "the \"Team Rocket\" NAME restriction is recorded and UNDECIDED — and it is a SUBSTRING test, not the owner prefix the other three families use, which is itself why one oracle cannot be assumed"
 },
 "1142": {
 "covers": "full",
@@ -125,6 +181,14 @@
 "covers": "partial",
 "reason": "clause draws a flat 4; the card draws 2 and only draws 2 more at 10+ cards in hand, so the clause OVER-states on every normal board"
 },
+"1184": {
+"covers": "full",
+"reason": "up to 3 in any combination of no-Rule-Box Pokemon and Basic Energy from the discard — both legs, sharing the one cap (`choice`)"
+},
+"1185": {
+"covers": "full",
+"reason": "a top-6 dig taking 2, and `discard_remainder` — discarding the other 4 IS the rest of the card"
+},
 "1187": {
 "covers": "partial",
 "reason": "clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and costs a hand discard — neither is carried"
@@ -140,6 +204,14 @@
 "1192": {
 "covers": "partial",
 "reason": "clause draws 5; DISCARD YOUR HAND — the card's whole cost — is unmodelled"
+},
+"1193": {
+"covers": "full",
+"reason": "a top-8 dig taking up to 3, gated on one of my Pokemon having been Knocked Out during the opponent's last turn"
+},
+"1194": {
+"covers": "full",
+"reason": "both search legs (a Stadium and an Energy) carried"
 },
 "1198": {
 "covers": "full",
@@ -157,6 +229,14 @@
 "covers": "partial",
 "reason": "clause draws 1; the card SWITCHES the Active and then draws up to a 5-card hand. The switch is the reason the card is played"
 },
+"1205": {
+"covers": "full",
+"reason": "fetch up to 3 Pokemon {ex} from deck"
+},
+"1206": {
+"covers": "partial",
+"reason": "all three search legs (a Pokemon, a Supporter, a Basic Energy) are carried; DISCARD YOUR HAND — the card's whole cost — is unmodelled"
+},
 "1207": {
 "covers": "partial",
 "reason": "clause draws 4; the end-of-turn discard-your-hand-at-5-or-more is unmodelled (no `discard_eot` rider)"
@@ -164,6 +244,10 @@
 "1208": {
 "covers": "partial",
 "reason": "clause draws a flat 4; the card draws UP TO A 6-CARD HAND and costs a discard"
+},
+"1210": {
+"covers": "full",
+"reason": "both modes (up to 2 Basics OR 1 Evolution) as `choice` clauses, so the two caps are alternatives rather than a sum"
 },
 "1212": {
 "covers": "full",
@@ -177,6 +261,10 @@
 "covers": "partial",
 "reason": "clause draws a flat 4, the card's maximum; the base is 2 and the extra 2 needs the opponent at 3 or fewer Prizes"
 },
+"1215": {
+"covers": "partial",
+"reason": "the Basic {R} Energy leg is exact; the Ethan's NAME family on the Pokemon leg is recorded and UNDECIDED, so that leg deliberately reaches nothing"
+},
 "1216": {
 "covers": "partial",
 "reason": "clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team Rocket board"
@@ -184,6 +272,10 @@
 "1219": {
 "covers": "full",
 "reason": "fetch a Trainer from deck"
+},
+"1220": {
+"covers": "partial",
+"reason": "the Team Rocket's NAME family is recorded and UNDECIDED, so the clause deliberately reaches nothing; the go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry"
 },
 "1222": {
 "covers": "partial",
@@ -209,6 +301,14 @@
 "covers": "full",
 "reason": "heal all on a Mega ex + the `bounce_energy_to_hand` rider"
 },
+"1231": {
+"covers": "full",
+"reason": "all three search legs (a Basic, a Stage 1 and a Stage 2) carried; they ADD, so no `choice`"
+},
+"1233": {
+"covers": "full",
+"reason": "up to 4 {L} Pokemon + the `discard_1` cost the card is gated on"
+},
 "1236": {
 "covers": "full",
 "reason": "draw 3, and that is the whole card"
@@ -216,6 +316,10 @@
 "1237": {
 "covers": "partial",
 "reason": "clause draws a flat 6; the card is a per-player COIN FLIP between 6 and 3 and puts both hands on the bottom of their decks"
+},
+"1238": {
+"covers": "full",
+"reason": "up to 4 in any combination of {F} Pokemon and Basic {F} Energy from the discard — both legs, sharing the one cap (`choice`)"
 },
 "1239": {
 "covers": "partial",
@@ -241,6 +345,23 @@
 "amount_on_evolution": 3,
 "type": "colorless",
 "rider": "discard_eot"
+}
+],
+"19": [
+{
+"kind": "energy_provide",
+"amount": 1,
+"type": "psychic"
+},
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"amount": 2,
+"energy_type": 5,
+"target_type": 5,
+"dest": "bench",
+"trigger": "on_attach"
 }
 ],
 "66": [
@@ -314,6 +435,15 @@
 "trigger": "on_bench_play"
 }
 ],
+"1077": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"dig": 4,
+"amount": "all"
+}
+],
 "1080": [
 {
 "kind": "draw",
@@ -322,13 +452,68 @@
 "rider": "shuffle_both_hands"
 }
 ],
+"1082": [
+{
+"kind": "fetch",
+"target": "stage1",
+"zone": "deck",
+"amount": 3
+}
+],
 "1086": [
 {
 "kind": "fetch",
 "target": "basic_pokemon",
 "zone": "deck",
 "hp_max": 70,
+"amount": 2,
 "dest": "bench"
+}
+],
+"1092": [
+{
+"kind": "fetch",
+"target": "item",
+"zone": "deck",
+"cost": "discard_3"
+},
+{
+"kind": "fetch",
+"target": "stadium",
+"zone": "deck",
+"cost": "discard_3"
+},
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"cost": "discard_3"
+},
+{
+"kind": "fetch",
+"target": "tool",
+"zone": "deck",
+"cost": "discard_3"
+}
+],
+"1094": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck",
+"dig": 7,
+"amount": 2,
+"energy_type": 1,
+"choice": true
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"dig": 7,
+"amount": 2,
+"energy_type": 1,
+"choice": true
 }
 ],
 "1096": [
@@ -353,7 +538,26 @@
 {
 "kind": "fetch",
 "target": "basic_energy",
-"zone": "deck"
+"zone": "deck",
+"amount": "all",
+"distinct_types": true
+}
+],
+"1101": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"condition": "going_second_first_turn"
+}
+],
+"1102": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"dig": 7,
+"dig_from": "bottom"
 }
 ],
 "1105": [
@@ -363,16 +567,28 @@
 "restriction": "active_dragon_only"
 }
 ],
+"1109": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "discard",
+"amount": 2
+}
+],
 "1110": [
 {
 "kind": "fetch",
 "target": "basic_energy",
-"zone": "discard"
+"zone": "discard",
+"amount": 5,
+"choice": true
 },
 {
 "kind": "fetch",
 "target": "pokemon",
-"zone": "discard"
+"zone": "discard",
+"amount": 5,
+"choice": true
 }
 ],
 "1112": [
@@ -380,6 +596,16 @@
 "kind": "heal",
 "amount": 60,
 "rider": "discard_own_energy"
+}
+],
+"1115": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"amount": 2,
+"dest": "bench",
+"name_family": "Hop's"
 }
 ],
 "1117": [
@@ -392,7 +618,8 @@
 {
 "kind": "fetch",
 "target": "basic_energy",
-"zone": "discard"
+"zone": "discard",
+"amount": 2
 }
 ],
 "1119": [
@@ -425,6 +652,29 @@
 "dig": 7
 }
 ],
+"1125": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck"
+}
+],
+"1126": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"amount": "all",
+"dest": "bench"
+}
+],
+"1127": [
+{
+"kind": "fetch",
+"target": "tera",
+"zone": "deck"
+}
+],
 "1130": [
 {
 "kind": "heal",
@@ -435,6 +685,21 @@
 "kind": "heal",
 "amount": 30,
 "restriction": "active_only"
+}
+],
+"1132": [
+{
+"kind": "fetch",
+"target": "trainer",
+"zone": "deck"
+}
+],
+"1134": [
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck",
+"name_family": "Team Rocket"
 }
 ],
 "1142": [
@@ -498,6 +763,33 @@
 "amount": 4
 }
 ],
+"1184": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard",
+"amount": 3,
+"choice": true
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "discard",
+"amount": 3,
+"no_rule_box": true,
+"choice": true
+}
+],
+"1185": [
+{
+"kind": "fetch",
+"target": "any",
+"zone": "deck",
+"dig": 6,
+"amount": 2,
+"rider": "discard_remainder"
+}
+],
 "1187": [
 {
 "kind": "draw",
@@ -524,6 +816,28 @@
 {
 "kind": "draw",
 "amount": 5
+}
+],
+"1193": [
+{
+"kind": "fetch",
+"target": "any",
+"zone": "deck",
+"dig": 8,
+"amount": 3,
+"condition": "pokemon_ko_last_turn"
+}
+],
+"1194": [
+{
+"kind": "fetch",
+"target": "energy",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "stadium",
+"zone": "deck"
 }
 ],
 "1198": [
@@ -555,6 +869,31 @@
 "amount": 1
 }
 ],
+"1205": [
+{
+"kind": "fetch",
+"target": "pokemon_ex",
+"zone": "deck",
+"amount": 3
+}
+],
+"1206": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "supporter",
+"zone": "deck"
+}
+],
 "1207": [
 {
 "kind": "draw",
@@ -565,6 +904,22 @@
 {
 "kind": "draw",
 "amount": 4
+}
+],
+"1210": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"amount": 2,
+"choice": true
+},
+{
+"kind": "fetch",
+"target": "evolution",
+"zone": "deck",
+"amount": 1,
+"choice": true
 }
 ],
 "1212": [
@@ -586,6 +941,24 @@
 "amount": 4
 }
 ],
+"1215": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "deck",
+"amount": 3,
+"energy_type": 2,
+"choice": true
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"amount": 3,
+"name_family": "Ethan's",
+"choice": true
+}
+],
 "1216": [
 {
 "kind": "draw",
@@ -597,6 +970,15 @@
 "kind": "fetch",
 "target": "trainer",
 "zone": "deck"
+}
+],
+"1220": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck",
+"amount": 3,
+"name_family": "Team Rocket's"
 }
 ],
 "1222": [
@@ -643,6 +1025,33 @@
 "rider": "bounce_energy_to_hand"
 }
 ],
+"1231": [
+{
+"kind": "fetch",
+"target": "basic_pokemon",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "stage1",
+"zone": "deck"
+},
+{
+"kind": "fetch",
+"target": "stage2",
+"zone": "deck"
+}
+],
+"1233": [
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "deck",
+"amount": 4,
+"energy_type": 4,
+"cost": "discard_1"
+}
+],
 "1236": [
 {
 "kind": "draw",
@@ -653,6 +1062,24 @@
 {
 "kind": "draw",
 "amount": 6
+}
+],
+"1238": [
+{
+"kind": "fetch",
+"target": "basic_energy",
+"zone": "discard",
+"amount": 4,
+"energy_type": 6,
+"choice": true
+},
+{
+"kind": "fetch",
+"target": "pokemon",
+"zone": "discard",
+"amount": 4,
+"energy_type": 6,
+"choice": true
 }
 ],
 "1239": [

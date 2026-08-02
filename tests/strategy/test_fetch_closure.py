@@ -70,6 +70,194 @@ def test_trigger_and_dig_clauses_are_never_closure_edges():
                 assert fetch_closure.fetch_target_matches(cl, ml.stats.get(1182)) is False
 
 
+# ── the widened target vocabulary (Issue #301) ────────────────────────────────────────────────────
+# Asserted against hand-built `CardStat` rows rather than a shipped deck, deliberately: these are
+# claims about the PREDICATE, and this module's whole charter is to be Pilot-independent. The
+# real-deck parity walks above already pin that the predicate and the Pilot agree.
+
+def _stat(**kw):
+    from common.scouting.provider import CardStat
+    return CardStat(cardId=kw.pop("cardId", 1), **kw)
+
+
+#: One row per class the new targets name. `cardType` 0 = Pokémon, 1 Item, 2 Tool, 3 Supporter,
+#: 4 Stadium, 5 Basic Energy (`cg.api.CardType`).
+_ROWS = {
+    "basic":     _stat(cardId=10, hp=70, stage="basic", cardType=0),
+    "stage1":    _stat(cardId=11, hp=120, stage="stage1", evolvesFrom="Scraggy", cardType=0),
+    "stage2":    _stat(cardId=12, hp=180, stage="stage2", stage2=True, evolvesFrom="Drakloak",
+                       cardType=0),
+    "tera":      _stat(cardId=13, hp=230, stage="basic", tera=True, cardType=0),
+    "ex":        _stat(cardId=14, hp=230, stage="basic", ex=True, cardType=0),
+    "item":      _stat(cardId=15, cardType=1),
+    "tool":      _stat(cardId=16, cardType=2),
+    "supporter": _stat(cardId=17, cardType=3),
+    "stadium":   _stat(cardId=18, cardType=4),
+    "energy":    _stat(cardId=19, cardType=5, energyType=6),
+}
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+@pytest.mark.parametrize("target,hits", [
+    ("stage1", {"stage1"}),
+    ("stage2", {"stage2"}),
+    ("tera", {"tera"}),
+    ("pokemon_ex", {"ex"}),
+    ("item", {"item"}),
+    ("tool", {"tool"}),
+    ("stadium", {"stadium"}),
+])
+def test_the_widened_target_classes_each_match_exactly_their_class(target, hits):
+    """Issue #301's seven new REACH-eligible target classes, one row per class of the pool. Each is
+    a class the compendium now names (Hyper Aroma `stage1`, Dawn `stage2`, Tera Orb `tera`, Cyrano
+    `pokemon_ex`, Secret Box `item`/`tool`/`stadium`) and each must match ITS class and nothing else
+    — a target that over-matches fabricates a closure out, which is the one direction this module
+    forbids. The eighth, `any`, is deadness-only and has its own test below."""
+    from common import fetch_closure
+    got = {name for name, stat in _ROWS.items()
+           if fetch_closure.fetch_target_matches({"target": target}, stat)}
+    assert got == hits
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_deadness_only_classes_resolve_for_deadness_and_refuse_for_reach():
+    """`FETCH_DEADNESS_ONLY_TARGETS` — the two classes that answer *"is anything left to find?"* and
+    never *"can this get me X?"*. `supporter` is ADR-0073's gate; `any` names no class at all, and
+    reach's endorsement set is made of classes. Gated in the PREDICATE, not left to the doctrine's
+    target filter, so neither guarantee rests on one caller remembering to apply it.
+
+    `any` matching EVERY row under deadness is the point: a class-less dig is dead only on an empty
+    zone, which is the true (and useless-in-practice) answer rather than a fabricated one."""
+    from common import fetch_closure as fc
+    assert fc.FETCH_DEADNESS_ONLY_TARGETS == {"supporter", "any"}
+    assert fc.FETCH_DEADNESS_ONLY_TARGETS <= fc.FETCH_DEADNESS_TARGETS
+    assert not (fc.FETCH_DEADNESS_ONLY_TARGETS & fc.FETCH_POKEMON_TARGETS)
+    for target in sorted(fc.FETCH_DEADNESS_ONLY_TARGETS):
+        reach = {n for n, s in _ROWS.items() if fc.fetch_target_matches({"target": target}, s)}
+        assert reach == set(), f"{target} resolved for REACH"
+    assert {n for n, s in _ROWS.items()
+            if fc.fetch_target_matches({"target": "any"}, s, deadness=True)} == set(_ROWS)
+    assert {n for n, s in _ROWS.items()
+            if fc.fetch_target_matches({"target": "supporter"}, s, deadness=True)} == {"supporter"}
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_a_conditioned_fetch_is_never_a_reach_edge():
+    """A board GATE (Call Bell's going-second-turn-1, Hassel's post-KO) makes the search conditional,
+    exactly as `dig` and `trigger` do: the closure's model is an UNCONDITIONAL whole-deck search, so
+    counting a gated one as an out over-claims. Deadness asks the opposite question — *is anything
+    left to find?* — and a gate cannot put cards back in the deck, so it is admissible there."""
+    from common import fetch_closure
+    clause = {"target": "pokemon", "condition": "going_second_first_turn"}
+    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"]) is False
+    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"], deadness=True) is True
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_a_name_family_fetch_reaches_nothing_until_a_family_oracle_exists():
+    """The `name_family` ruling (Issue #301, cross-posted from Issue #306), as the fail-CLOSED guard
+    it has to be. Hop's Bag searches for a Basic **Hop's** Pokémon; the compendium records that
+    restriction, and no build-time family index exists for the closure to decide membership against.
+    Ignoring the field would let the clause read as *any* Basic — a fabricated out on every Basic in
+    the deck. So reach REFUSES the clause outright; deadness ignores the restriction, which only
+    widens the "is anything left?" set and can therefore suppress a claim, never invent one."""
+    from common import fetch_closure
+    clause = {"target": "basic_pokemon", "name_family": "Hop's"}
+    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"]) is False
+    assert fetch_closure.fetch_target_matches(clause, _ROWS["basic"], deadness=True) is True
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_pokemon_side_predicates_apply_to_every_pokemon_class():
+    """`no_rule_box`, `hp_max` and `no_ability` are properties of the TARGET BODY, not of the class
+    that names it, so they hold for every Pokémon class rather than only for the two that happened to
+    carry them first. One predicate, applied uniformly — a `mega`/`stage1`/`tera` clause that grew an
+    HP ceiling would otherwise silently ignore it."""
+    from common import fetch_closure as fc
+    ex_stage2 = _stat(cardId=20, hp=340, stage="stage2", stage2=True, ex=True,
+                      evolvesFrom="Dreepy", hasAbility=True, cardType=0)
+    assert fc.fetch_target_matches({"target": "stage2"}, ex_stage2) is True
+    assert fc.fetch_target_matches({"target": "stage2", "no_rule_box": True}, ex_stage2) is False
+    assert fc.fetch_target_matches({"target": "stage2", "hp_max": 200}, ex_stage2) is False
+    assert fc.fetch_target_matches({"target": "stage2", "no_ability": True}, ex_stage2) is False
+    assert fc.fetch_target_matches({"target": "pokemon_ex", "hp_max": 200}, ex_stage2) is False
+    assert fc.fetch_target_matches({"target": "evolution", "hp_max": 400}, ex_stage2) is True
+
+
+def _compendium_fetch_clauses():
+    """``{card id: [its fetch clauses]}`` off the COMMITTED compendium. One loader for every
+    compendium-wide assertion below — a second `json.loads` walk beside it is the drift ADR-0087
+    charges for, in miniature."""
+    import json
+    from common import snapshot_coverage
+    payload = json.loads((REPO / "src" / "common" / "card_effects.json").read_text(encoding="utf-8"))
+    return {cid: [cl for cl in clauses if cl.get("kind") == "fetch"]
+            for cid, clauses in snapshot_coverage.clause_lists(payload).items()}
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_every_fetch_target_in_the_committed_compendium_is_in_the_deadness_scope():
+    """The coverage gate widened from the shipped decks to the WHOLE compendium. The deck-scoped gate
+    below cannot see a card in no deck of ours — and Issue #301 authored 26 of those at once, so a
+    target class typo'd or a class added without a scope entry would sail past it. A clause outside
+    the scope is a card that can never be read as dead, however empty the deck is of what it hunts."""
+    from common import fetch_closure
+    uncovered = sorted({
+        (cid, cl.get("target"))
+        for cid, clauses in _compendium_fetch_clauses().items() for cl in clauses
+        if cl.get("zone") == "deck"
+        and cl.get("target") not in fetch_closure.FETCH_DEADNESS_TARGETS})
+    assert not uncovered, f"deck-zone fetch targets outside the deadness scope: {uncovered}"
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_choice_convention_is_structurally_coherent_in_the_compendium():
+    """`choice` (Issue #301) says a clause is ONE ALTERNATIVE of a single choice, so the card's cap
+    across its `choice` clauses is the MAX of their amounts and NEVER the sum — Max Rod takes 5 cards
+    total, not 5 Pokémon *and* 5 Energy. That is the whole reason the field exists: Dawn's three legs
+    genuinely ADD (a Basic AND a Stage 1 AND a Stage 2), so a reader cannot tell the two shapes apart
+    from the amounts alone.
+
+    The convention is only readable if a card is consistent about it, which is what this asserts: a
+    `choice` clause never sits alone, and a card never mixes `choice` legs with additive ones. A
+    card that did would make "is this card's cap a max or a sum?" unanswerable."""
+    for cid, clauses in _compendium_fetch_clauses().items():
+        marked = [cl for cl in clauses if cl.get("choice")]
+        if not marked:
+            continue
+        assert len(clauses) > 1, f"card {cid}: a lone `choice` clause has nothing to be an alternative to"
+        assert len(marked) == len(clauses), (
+            f"card {cid}: mixes `choice` legs with additive ones, so its cap is neither a max nor a sum")
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_every_amount_is_a_positive_int_or_the_all_sentinel():
+    """`amount` ABSENT means ONE — that is what keeps the three missing-`amount` fixes bug-fixes
+    rather than turning an absent field ambiguous — and `"all"` is the ONE sentinel for an unbounded
+    *"any number of"* fetch (Precious Trolley, Roto-Stick, Energy Search Pro). Anything else is a
+    typo that would read as a silent 0 or a string comparison somewhere downstream."""
+    for cid, clauses in _compendium_fetch_clauses().items():
+        for cl in clauses:
+            if "amount" not in cl:
+                continue
+            amount = cl["amount"]
+            assert amount == "all" or (isinstance(amount, int) and amount > 0), (cid, amount)
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_dig_from_only_qualifies_a_dig_and_only_names_an_end_of_the_deck():
+    """`dig_from` (Issue #301, Dusk Ball's BOTTOM 7) qualifies WHICH END a `dig` looks at, so it is
+    meaningless without one and its vocabulary is closed at two values. A `dig_from` on a whole-deck
+    search, or a third spelling of an end, is a typo that would read as a silent no-op — the
+    compendium is authored by hand, so the shape has to be asserted rather than trusted."""
+    for cid, clauses in _compendium_fetch_clauses().items():
+        for cl in clauses:
+            if "dig_from" not in cl:
+                continue
+            assert cl["dig_from"] in ("top", "bottom"), (cid, cl["dig_from"])
+            assert cl.get("dig"), f"card {cid}: `dig_from` without a `dig` qualifies nothing"
+
+
 @pytest.mark.req("REQ-WORTH-0002")
 def test_reaccess_outs_pure_function_matches_the_pilot():
     """`fetch_closure.reaccess_outs(cid, counts, stat_of, clauses_of)` == the Pilot's
@@ -169,7 +357,8 @@ def test_deadness_flag_is_a_no_op_on_a_plain_clause():
     ml = _shipped_pilot("mega_lucario")
     for cid in set(ml.deck):
         st = ml.stats.get(cid)
-        for target in sorted(fetch_closure.FETCH_DEADNESS_TARGETS - {"supporter"}):
+        for target in sorted(fetch_closure.FETCH_DEADNESS_TARGETS
+                             - fetch_closure.FETCH_DEADNESS_ONLY_TARGETS):
             clause = {"target": target}
             assert (fetch_closure.fetch_target_matches(clause, st)
                     == fetch_closure.fetch_target_matches(clause, st, deadness=True)), (cid, target)
@@ -178,9 +367,15 @@ def test_deadness_flag_is_a_no_op_on_a_plain_clause():
 @pytest.mark.req("REQ-WORTH-0002")
 def test_the_supporter_branch_is_deadness_only_so_reach_is_provably_unchanged():
     """ADR-0073 promises REACH is unchanged. The ``supporter`` class had no branch at all before, so
-    deadness needed one — but reading it for REACH too would make a future PLAIN Supporter search a
-    closure edge and move the out-count. Today that would be inert (both carriers are `dig`/`trigger`
-    clauses), and resting the guarantee on which cards happen to exist is what this pins against."""
+    deadness needed one — but reading it for REACH too would make a PLAIN Supporter search a closure
+    edge and move the out-count.
+
+    That used to be inert (both carriers were `dig`/`trigger` clauses) and this test existed so the
+    guarantee would not rest on which cards happen to exist. **Issue #301 made it load-bearing**:
+    Secret Box, Larry's Skill and Team Rocket's Transceiver all carry plain ``target: supporter``
+    deck searches now, and Secret Box is 2 copies across our decks. The gate stays — un-gating it is
+    the deliberate, measured change ADR-0073 names, and the omission under-counts outs, which is the
+    safe direction."""
     from common import fetch_closure
     supporter = _shipped_pilot("mega_starmie").stats.get(1225)      # Hilda, a Supporter
     assert getattr(supporter, "is_supporter", False) is True

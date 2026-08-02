@@ -2187,8 +2187,15 @@ class PlannerMixin:
         ``counts``) or a recycle (``zone: discard``, a matching Basic type in the visible discard). The
         predicate lives in the card representation, NOT a card-text parse: Fighting Gong's ``{F}`` lock
         is its ``energy_type: 6`` clause, which the generic ``tutor_energy`` tag can't express. () for a
-        card with no fetch clause. Errs by under-counting only (an endorser)."""
+        card with no fetch clause. Errs by under-counting only (an endorser).
+
+        A clause that is not an unconditional, decidable search (`fetch_closure.
+        fetch_is_unconditional` — Bug Catching Set's top-7 dig, a board-gated or name-family clause)
+        is skipped: this leg asserts the slot CAN be filled, so a probable find would be a fabricated
+        endorsement. One shared predicate with the closure, never a re-spelled guard."""
+        from common.fetch_closure import fetch_is_unconditional
         return any(cl.get("kind") == "fetch" and cl.get("target") == "basic_energy"
+                   and fetch_is_unconditional(cl)
                    and self._slot_basic_in_zone(want, cl.get("energy_type"), cl.get("zone"),
                                                 counts, discard_basic_types)
                    for cl in (self.effects.clauses(cid) if self.effects else ()))
@@ -2202,12 +2209,20 @@ class PlannerMixin:
         Energy ignored, Basics-only matching, under-count); an UNconditional ``accel`` (Crispin
         attaches directly — bypasses nothing here, the manual attach is unspent anyway; a conditioned
         accel like Rosa's fails closed); the ``trainer`` fetch 2-hop (Petrel → an energy-fetch ITEM
-        still in deck whose own target is reachable — spec-verified legal in one turn)."""
+        still in deck whose own target is reachable — spec-verified legal in one turn).
+
+        Both fetch shapes are gated on `fetch_closure.fetch_is_unconditional`, the same predicate the
+        closure's reach reading uses: a dig, a board gate or an undecidable name family is not the
+        deterministic search this leg's claim rests on. The ``accel`` shape has always failed closed
+        on a `condition` for the same reason, and now says so through the shared vocabulary."""
+        from common.fetch_closure import fetch_is_unconditional
         st = self.stats.get(tid) if self.stats else None
         if st is None or not st.is_supporter:
             return False
         for cl in (self.effects.clauses(tid) if self.effects else ()):
             kind = cl.get("kind")
+            if kind == "fetch" and not fetch_is_unconditional(cl):
+                continue
             if (kind == "fetch" and cl.get("zone") == "deck"
                     and cl.get("target") in ("basic_energy", "energy")):
                 if self._slot_basic_in_zone(want, cl.get("energy_type"), "deck",
@@ -2306,14 +2321,19 @@ class PlannerMixin:
         """WP5 (Supporter branch): True iff Supporter ``tid`` can deliver the evolution ``eid`` —
         a deck fetch reaching it (Hilda's `evolution` clause; Salvatore's rush-evolve puts it
         straight ONTO the body) or the Petrel 2-hop (→ an Item Pokémon-tutor still in deck that
-        reaches it). Live only post-Item-refresh (the caller gates on the Supporter slot)."""
+        reaches it). Live only post-Item-refresh (the caller gates on the Supporter slot).
+
+        The 2-hop's FIRST leg is gated on `fetch_closure.fetch_is_unconditional` like every other
+        reach-side reader; the second is `_fetch_reaches_pokemon`, which asks the closure and so
+        carries the same gate already."""
+        from common.fetch_closure import fetch_is_unconditional
         st = self.stats.get(tid) if self.stats else None
         if st is None or not st.is_supporter:
             return False
         if self._fetch_reaches_pokemon(eid, tid, counts):
             return True
         return any(cl.get("kind") == "fetch" and cl.get("zone") == "deck"
-                   and cl.get("target") == "trainer"
+                   and cl.get("target") == "trainer" and fetch_is_unconditional(cl)
                    and any(n > 0 and (ist := self.stats.get(t)) is not None and ist.is_item
                            and self._fetch_reaches_pokemon(eid, t, counts)
                            for t, n in counts.items())

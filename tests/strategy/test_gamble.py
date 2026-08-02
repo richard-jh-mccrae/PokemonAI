@@ -178,7 +178,10 @@ def test_fetch_predicates_live_in_the_card_representation_not_text():
     """Round-11 ruling: the tutor/recycle predicate the gamble closure needs must live in the card
     REPRESENTATION (`card_effects.json` FETCH clauses), so no card text is parsed at runtime or build
     time. Pin the load-bearing predicates against source: Fighting Gong is {F}-locked (energy_type 6)
-    with an energy AND a Pokémon branch; the recyclers are discard-zone; Poké Pad is no-Rule-Box."""
+    with an energy AND a Pokémon branch; the recyclers are discard-zone; Poké Pad is no-Rule-Box.
+
+    Energy Retrieval's row carries ``amount: 2`` since Issue #301 — the card recovers UP TO 2 and the
+    clause used to read as one, which is a fix to the DATA, not to the predicate this test pins."""
     from common.effects import CardEffects
     eff = CardEffects.load()
     gong = eff.clauses(1142)
@@ -186,7 +189,8 @@ def test_fetch_predicates_live_in_the_card_representation_not_text():
     assert {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "energy_type": 6} in gong
     # the plain any-Basic searchers, the discard recyclers, and the no-Rule-Box / mega Pokémon tutors
     assert {"kind": "fetch", "target": "basic_energy", "zone": "deck"} in eff.clauses(1119)
-    assert {"kind": "fetch", "target": "basic_energy", "zone": "discard"} in eff.clauses(1118)
+    assert ({"kind": "fetch", "target": "basic_energy", "zone": "discard", "amount": 2}
+            in eff.clauses(1118))
     assert {"kind": "fetch", "target": "basic_energy", "zone": "discard"} in eff.clauses(1097)
     assert eff.clauses(1152)[0].get("no_rule_box") is True           # Poké Pad
     assert eff.clauses(1145)[0].get("target") == "mega"              # Mega Signal
