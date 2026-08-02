@@ -6,12 +6,11 @@ the fuel would actually change the affordability verdict. `recur_fuel_relax` (OF
 quantifies it instead — the CHARGED relax read is computed against the body's REAL fuel-augmented
 Energy, so a line whose fuel still can't bridge the affordability gap is told apart from one where it
 does, recovering a legitimate relax the coarse guard was blocking. OFF is byte-identical to today
-(`tests/strategy/test_threat_shadow.py`, `test_opponent_choice_reads.py` already pin the unarmed
+(`tests/strategy/test_doomed_incoming.py`, `test_opponent_choice_reads.py` already pin the unarmed
 shape); this file pins the armed refinement itself.
 """
 from __future__ import annotations
 
-import types
 
 from common.cards import CardFunctions
 from common.pilot import Pilot
@@ -78,23 +77,3 @@ def test_on_still_stays_doomed_when_the_fuel_actually_bridges_the_gap():
     a REAL threat, exactly the ADR-0064 hidden-burst lesson this whole mechanism exists to protect."""
     pilot, ma, oa, opp = _setup(recur_fuel_relax=True, fuel_energy_count=3)
     assert pilot._active_doomed(ma, oa, opp) is True
-
-
-def test_threat_shadow_decided_bit_tracks_the_same_refinement():
-    """`_threat_shadow`'s diagnostic `decided`/`doom_charged` fields must not drift from the live
-    decider: OFF, `decided` is False whenever fuel is possible (today's shape); ON, `decided` tracks
-    whether the quantified charged read actually ran."""
-    state = {"players": [
-        {"active": [{"id": MY_ID, "hp": 150, "energies": []}]},
-        {"active": [{"id": REFUEL, "hp": 100, "energies": []}],
-         "discard": [{"id": BASIC_F}]},
-    ], "yourIndex": 0}
-    obs = {"current": state}
-    pilot, _ma, _oa, _opp = _setup(recur_fuel_relax=False, fuel_energy_count=1)
-    board_off = types.SimpleNamespace(active_doomed=True)
-    sh_off = pilot._threat_shadow(obs, board_off)
-    assert sh_off is not None and sh_off["decided"] is False
-    pilot_on, _ma, _oa, _opp = _setup(recur_fuel_relax=True, fuel_energy_count=1)
-    board_on = types.SimpleNamespace(active_doomed=False)
-    sh_on = pilot_on._threat_shadow(obs, board_on)
-    assert sh_on is not None and sh_on["decided"] is True

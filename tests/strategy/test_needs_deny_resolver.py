@@ -28,7 +28,7 @@ Two fixture consequences, named rather than discovered:
     clock legs are differences of `turns_to_ko_me`). A board with an empty Active spot returns NO
     rows at all, where the old opponent-only oracle happily priced one.
 
-Synthetic boards mirror `test_discard_shadow._setup`; the captured-board case replays a REAL
+Synthetic boards mirror `test_discard_keep_rows._setup`; the captured-board case replays a REAL
 recorded correction through the real shipped pilot (`test_gust_round0_corpus` pattern — fresh
 pilot per replay, the statefulness lesson).
 """
@@ -69,7 +69,7 @@ def _deny_value(setback_damage: float, turns: int) -> float:
 
 def _setup(hand_ids, *, opp_active=None, opp_bench=(), minc=1):
     """A forced Discard over ``hand_ids`` against a visible opponent board — the
-    `test_discard_shadow` fixture shape plus the opponent side the deny leg reads. The Riolu →
+    `test_discard_keep_rows` fixture shape plus the opponent side the deny leg reads. The Riolu →
     Mega Lucario ex forward line (single hop — rulebook Appendix 1) carries real attack records so
     the deny read prices strips: Riolu Accelerating Stab {F}=30; Mega Lucario ex Aura Jab {F}=130 /
     Mega Brave {F}{F}=270 (verified, data/EN_Card_Data.csv).
@@ -114,7 +114,7 @@ def _energized(cid: int, hp: int, n: int = 1) -> dict:
 
 def _deny_slots(pilot, obs, board=None):
     board = board if board is not None else pilot._board(obs)
-    rows, _ = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
+    rows = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
     slots, elig = pilot._resolve_needs(obs, board, rows)
     return rows, slots, elig, [(j, s) for j, s in enumerate(slots) if s.kind == "deny"]
 
@@ -243,11 +243,8 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     pilot = mod._build_pilot(rec.agent)[0]                # fresh shipped pilot (stateful lesson)
-    dec = pilot.explain(rec.obs)
-    s = dec.discard_shadow
-    assert s is not None and s["agree_v2"] is True           # the decided pick is unmoved
     board = pilot._board(rec.obs)
-    rows, _ = pilot._discard_equation_rows(rec.obs, rec.obs["select"], board,
+    rows = pilot._discard_equation_rows(rec.obs, rec.obs["select"], board,
                                            rec.obs["select"]["option"])
     slots, _elig = pilot._resolve_needs(rec.obs, board, rows)
     gust_target = [x for x in slots if x.kind == "gust_target"]
@@ -258,5 +255,10 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     assert len(gust_target) == 1
     assert gust_target[0].value == pytest.approx(1.0)
     assert gust_target[0].value < 4.5                        # ...and so below the card's own floor
-    boss = next(r for r in s["eq"] if r["cid"] == BOSS)
-    assert boss["keep_v2"] == pytest.approx(4.5)             # its general floor — the strip is below it
+    # `keep_v2` used to be read off `Decision.discard_shadow`, deleted with the other three by
+    # Issue #261 item 2h. The number was never the shadow's — it is the decider's own keep, so it is
+    # read from the assignment that decides.
+    keeps, _pick = pilot._needs_v2(rec.obs, board, rows, rec.obs["select"]["maxCount"])
+    boss = next(k for r, k in zip(rows, keeps) if r["cid"] == BOSS)
+    assert boss == pytest.approx(4.5)                        # its general floor — the strip is below it
+    assert pilot.explain(rec.obs).chosen == _pick            # ...and the DECIDED pick is unmoved

@@ -57,33 +57,3 @@ def test_fuel_zero_without_tag_or_fuel_or_wrong_type():
 def test_fuel_blind_fails_open():
     stats = DictCardStatProvider({MLUC: CardStat(MLUC, name="Mega Lucario ex", energyType=FIGHTING)})
     assert CombatMath(stats, functions=None).discard_recur_fuel({"id": MLUC}, {FIGHTING: 3}) == 0
-
-
-# REQ-RECUR-0004 — the Pilot emits the recur SHADOW (fuel + clock delta) and DECIDES NOTHING.
-def test_recur_shadow_emits_the_fuel_delta_and_respects_the_midsim_guard():
-    import types
-    from train.tune import _build_pilot
-    p = _build_pilot("mega_lucario")[0]
-    p._planning = False
-    # The {F} sits in their REAL discard: POC-T1 gave the shadow one source for that zone (the
-    # snapshot), rather than a sparse guard off the Board field and a fuel read off a second walk.
-    obs = {"current": {"yourIndex": 0, "players": [
-        {"active": [{"id": 999999, "hp": 200, "energies": []}]},           # my Active
-        {"active": [{"id": MLUC, "hp": 340, "energies": []}], "bench": [],
-         "discard": [{"id": F_ENERGY_CARD}] * 3},                          # opp refueler (678)
-    ]}}
-    board = types.SimpleNamespace(opp_discard_energy={FIGHTING: 3})
-    p._snapshot(obs)                  # the shadow reads both clocks off the snapshot (POC-T1)
-    sh = p._recur_shadow(obs, board)
-    assert sh is not None and sh["bodies"]
-    row = sh["bodies"][0]
-    assert row["id"] == MLUC and row["fuel"] == 3
-    assert row["ttr_fuel"] <= row["ttr_plain"]        # fuel accelerates the clock (never slower)
-    # mid-sim → sparse (no shadow work in rollouts)
-    p._planning = True
-    assert p._recur_shadow(obs, board) is None
-    # no opponent discard fuel → sparse
-    p._planning = False
-    p._snapshot({"current": {"yourIndex": 0, "players": [obs["current"]["players"][0],
-                                                         {"active": [], "bench": [], "discard": []}]}})
-    assert p._recur_shadow(obs, types.SimpleNamespace(opp_discard_energy={})) is None

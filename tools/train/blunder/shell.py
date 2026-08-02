@@ -460,30 +460,6 @@ function show(n){
         (ev?`<div class="alt">per-option pricing:</div>`+ev:'')+`</details>`;
     }
   }
-  if(f.live&&f.live.discard_shadow){
-    // The discard keep-cost SHADOW (shadow-equations ruling): the card-worth oracle computed at the
-    // real discard pick, DECIDING NOTHING — the tuned ladder chose. A DISAGREES row is the telemetry
-    // gold: either an oracle gap (a premise the gate library lacks) or a latent ladder bug.
-    const S=f.live.discard_shadow;
-    const rows=(S.eq||[]).map(r=>
-      `<div>· opt ${r.i} (cid ${r.cid}): worth ${r.worth}`+
-      `${r.deploy!==undefined?` &times; deploy ${r.deploy}`:''}`+
-      `${r.dup_hand?' · dup-in-hand':''}${r.in_play?' · copy-in-play':''}`+
-      `${r.recycler?` · recycler-held ${r.recycler}`:''}`+
-      `${r.recycler_deck?` · recyclers-in-deck ${r.recycler_deck}`:''}`+
-      `${r.fuel?' · <b>FUEL</b>':''}${r.closing?' · <b>DEPLOY-NOW</b>':''}`+
-      `${r.engine_supporter?' · engine-supporter':''}`+
-      ` &rarr; keep <b>${r.keep}</b>`+
-      // the pitch-preference side (Finding 3): why this card is BEST GONE — breaks zero-keep ties
-      `${r.pitch?` · pitch ${r.pitch}`:''}`+
-      `${r.dead_opener?' [dead-opener]':''}${r.redundant_tutor?' [redundant-tutor]':''}`+
-      `${r.stranded?' [stranded]':''}${r.fodder?' [fodder]':''}${r.spent_burst?' [spent-burst]':''}</div>`).join('');
-    const verb=S.decided?`<b>DECIDED</b> (kill-switch on)`:(S.agree?`<b>agrees</b>`:`<b>DISAGREES</b>`);
-    h+=`<details class="live"><summary>&#9878;&#65039; discard equation: ${verb}`+
-      ` — ${S.decided?'pitched':'ladder pitched'} [${(S.picks||[]).join(', ')}]`+
-      `${S.decided?'':`, equation would pitch [${(S.eq_pick||[]).join(', ')}]`}</summary>`+
-      `<div class="alt">keep_cost per candidate (the oracle pitches the cheapest):</div>`+rows+`</details>`;
-  }
   $('now').innerHTML=h;
   const sel=$('correct'); sel.innerHTML=''; f.options.forEach(op=>sel.add(new Option(op.label,op.pos)));
   FORM.forEach(id=>$(id).disabled=!f.taggable);

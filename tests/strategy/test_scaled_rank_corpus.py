@@ -1,6 +1,7 @@
 """Seam 4 (Issue #213): the scaled threat rank on REAL corpus frames, through a real Pilot.
 
-`threat_sweep.py --rank` reported 0 decided-pick flips over 331 frames. That was the ADR-0072
+`threat_sweep.py --rank` reported 0 decided-pick flips over 331 frames (the probe is gone with the
+shadows it read, Issue #261 item 2h; this names a measurement's provenance). That was the ADR-0072
 Decision Gate and it proves the swap is SAFE — but zero flips proves nothing about the fix
 *firing*, and a rank change that never fires is indistinguishable from a rank change that isn't
 wired. These tests close that gap from the other side: on frames the corpus really contains, the

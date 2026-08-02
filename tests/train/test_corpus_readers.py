@@ -119,27 +119,22 @@ def test_the_two_gates_and_the_viewer_go_through_the_corpus_reader():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_probe_dispositions_landed():
-    """ADR-0089's disposition table, as an assertion. Five probes were DELETED (four one-shot
-    rulings plus the vacuous gate) and five ROUTED; a probe reappearing under either name means a
-    ruling was reverted without one being recorded."""
+    """ADR-0089's disposition table, as an assertion. A probe reappearing under a deleted name means
+    a ruling was reverted without one being recorded.
+
+    ADR-0089 decision: **a RULING's script dies with its answer.** Issue #243 retired four one-shot
+    rulings plus a vacuous gate; Issue #261 item 2h retired three more, and for the same reason one
+    layer up — `threat_sweep`, `needs_sweep` and `doom_audit` read nothing but the four shadows that
+    item deleted, so each one's whole contract went with its subject. `threat_sweep`'s own vacuous
+    `--slots` mode was already gone by #243; the rest of the file went with the shadows."""
     probes = REPO / "tools" / "train" / "probes"
     for gone in ("deploy_decider_sweep", "deny_gate1", "deny_gate217", "deploy_anchor_sweep"):
         assert not (probes / f"{gone}.py").exists(), f"{gone} was deleted by Issue #243"
+    for gone in ("needs_sweep", "threat_sweep", "doom_audit"):
+        assert not (probes / f"{gone}.py").exists(), f"{gone} was deleted by Issue #261 item 2h"
     for kept in ("attach_decider_sweep", "evolve_decider_sweep", "promote_retreat_decider_sweep",
-                 "needs_sweep", "threat_sweep", "snipe_decider_sweep"):
+                 "snipe_decider_sweep"):
         assert (probes / f"{kept}.py").exists(), kept
-
-
-@pytest.mark.req("REQ-GATE-0009")
-def test_threat_sweep_no_longer_offers_the_vacuous_modes():
-    """`--slots` compared the shipped PROFILE against `_forced(gust_target_slots=True)` while the
-    PROFILE has shipped that flag ON since 2026-07-27 — same-vs-same, 0 flips BY CONSTRUCTION. Its
-    sibling `sweep_rank` forced both sides and its docstring said why, so the mistake sat next to its
-    own correction. `--rank` was answered (ADR-0083) and is covered by `test_scaled_rank_corpus.py`.
-    Asserted here because a re-added mode reads as new coverage rather than as a returning defect."""
-    text = (REPO / "tools" / "train" / "probes" / "threat_sweep.py").read_text(encoding="utf-8")
-    assert "def sweep_slots" not in text and "def sweep_rank" not in text
-    assert '"--slots"' not in text and '"--rank"' not in text
 
 
 @pytest.mark.req("REQ-GATE-0009")

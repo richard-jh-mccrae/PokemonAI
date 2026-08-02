@@ -90,29 +90,7 @@ def test_turns_to_ko_me_and_the_survival_shift():
     assert c.turns_to_ko_me(MY_BODY, [_b(A)]) - base == 0
 
 
-# ---- the shadow (Pilot emit) -----------------------------------------------------------------
-def test_opponent_target_shadow_ranks_bodies_and_decides_nothing():
-    from train.tune import _build_pilot
-    p = _build_pilot("mega_lucario")[0]
-    p._planning = False
-    obs = {"current": {"yourIndex": 0, "players": [
-        {"active": [{"id": 999999, "hp": 100, "energies": []}]},
-        {"active": [{"id": 678, "hp": 340, "energies": []}],
-         "bench": [{"id": 677, "hp": 70, "energies": []}]},
-    ]}}
-    board = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3)
-    p._snapshot(obs)                  # the per-decision StateModel the rows now read (POC-T1)
-    sh = p._opponent_target_shadow(obs, board)
-    assert sh is not None and sh["bodies"]
-    assert 0.0 <= sh["phase"] <= 1.0
-    for row in sh["bodies"]:
-        assert {"id", "prize", "survival_shift", "value"} <= set(row)
-    # mid-sim → sparse (no shadow work in rollouts)
-    p._planning = True
-    assert p._opponent_target_shadow(obs, board) is None
-
-
-def test_the_live_rows_run_mid_sim_while_only_the_SHADOW_stands_down():
+def test_the_live_rows_run_mid_sim():
     """ADR-0093 decision 3 — where the `_planning` guard belongs.
 
     `_opponent_target_rows` is the LIVE per-body computation that both the deny fire rung and the
@@ -123,9 +101,10 @@ def test_the_live_rows_run_mid_sim_while_only_the_SHADOW_stands_down():
     mid-sim where the incumbent returned -5.00 / +22.50 / +74.50.
 
     The guard was a COST decision, not a correctness one — nothing in the rows starts a nested
-    engine search. It now sits on `_opponent_target_shadow`, which is the caller that actually wants
-    no shadow work in rollouts, and this test pins BOTH halves so the two cannot drift back
-    together."""
+    engine search, so it moved onto `_opponent_target_shadow`, the caller that actually wanted no
+    shadow work in rollouts. Issue #261 item 2h then deleted that shadow, and with it the last
+    caller the guard was protecting — so what survives is the half that was always the point: the
+    live rows value each body identically inside the rollout and outside it."""
     from train.tune import _build_pilot
     p = _build_pilot("mega_lucario")[0]
     obs = {"current": {"yourIndex": 0, "players": [
@@ -145,8 +124,3 @@ def test_the_live_rows_run_mid_sim_while_only_the_SHADOW_stands_down():
     assert mid is not None, "the LIVE rows must survive the rollout"
     assert [r["value"] for r in mid[1]] == [r["value"] for r in root[1]], (
         "and must value each body identically inside the rollout and outside it")
-
-    # the DIAGNOSTIC still stands down — the guard moved, it was not deleted
-    p._opponent_target_cache = None
-    assert p._opponent_target_shadow(obs, board) is None, (
-        "no shadow work in rollouts — the guard belongs on the shadow, not on the live rows")

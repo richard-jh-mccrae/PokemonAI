@@ -67,11 +67,12 @@ needs-assignment (ADR-0065) · refresh-swing v1 SHED (ADR-0060) · energy-deny m
 **DARK (built, OFF):** `deny_relevance` + `deny_strip_delta` (Issue #228 debt, two flips
 recorded) · `leaf_hand_value` · `value_model` (parked; post-POC Issue #147 replaces it).
 
-**SHADOW (computes, decides nothing — all die in this build):** `_discard_shadow`,
-~~`_refresh_shed_shadow`~~ (DEAD 2026-08-01, ADR-0101 — item 2b promoted its subject),
-`_threat_shadow`, `_recur_shadow`, `_opponent_target_shadow`,
-~~`hand_size_relief` (reporting-only)~~ (DEAD 2026-08-02, ADR-0102 — item 2c promoted its subject
-into `score`, so the field and its `hs_relief` telemetry key went with the flats they reported past).
+**SHADOW (computes, decides nothing — all die in this build):**
+~~`_discard_shadow`~~ ~~`_refresh_shed_shadow`~~ ~~`_threat_shadow`~~ ~~`_recur_shadow`~~
+~~`_opponent_target_shadow`~~ ~~`hand_size_relief`~~ — **ALL DEAD.** `_refresh_shed_shadow`
+2026-08-01 (ADR-0101, item 2b promoted its subject); `hand_size_relief` 2026-08-02 (item 2c promoted
+its subject into `score`, so the field and its `hs_relief` telemetry key went with the flats they
+reported past); the other four 2026-08-02 (item 2h).
 
 **UNCONSUMED (dead surface):** StateModel TheirSide clock family (every live consumer bypasses
 to CombatMath with `charged`/`forward_ids`/harvest kwargs `build()` never receives) · sharing
@@ -286,9 +287,21 @@ deliberate list; gates green; flips → wave 2.
   Dreepy, so the correction's `correct` names one of an indistinguishable-by-value pair — recorded as
   a **`transposition`** (ADR-0088), the first since ADR-0091 retired the last one. Both gates PASS.
 - **Free-Item hold (old Issue #212):** generalize `_DENIAL_ITEM_COST` into the keep machinery.
-- **Shadow deletion:** `_discard_shadow`, `_threat_shadow`, `_recur_shadow`,
-  `_opponent_target_shadow` and the v1 discard fallback (`discard_keep_value` path) deleted as
-  their consumers confirm; telemetry keys retired.
+- **Shadow deletion: DONE 2026-08-02 (item 2h), except the `_DISCARD` ladder.** All four shadows,
+  their `Decision` fields and telemetry keys, the v1 discard fallback (`discard_keep_value` flag +
+  `_discard_equation_pick`) and `_discard_equation_rows`' now-unread v1 ranking are deleted, along
+  with the three probes whose entire contract was reading them (`threat_sweep`, `needs_sweep`,
+  `doom_audit` — ADR-0089: a RULING's script dies with its answer) and the blunder shell's
+  discard-shadow dropdown. Gates green, suite green, zero decision movement.
+  **The tuned `_DISCARD` ladder is NOT deleted** — it is also the scoring basis of `_pitch_value_of`
+  / `_shed_signals`, i.e. of three live cost-netting fetch rungs, which the item's spec does not
+  address. Open question, escape-hatch budgeted.
+  Two findings the sweep surfaced rather than caused, both pre-existing on `main` at `ce28431`:
+  **Issue #294** — `cheapest_removal` is blind to the `pitch` term, so two RULED ladder-win cases
+  shed the wrong card in shipped play (kept as strict-xfail TARGETs so the deletion of the shadow
+  that showed it does not bury it); and the leaf-profile pin was crediting the deny slot for
+  `_recur_shadow`'s model reads, so `DENY_SLOT_PROFILE` turns out to be unexercised by that file's
+  corpus.
 
 Acceptance: PROFILE has zero OFF value flags (except `value_model`, deleted-or-inert pending
 post-POC Issue #147); zero shadow emitters; gates green; flips → wave 2.

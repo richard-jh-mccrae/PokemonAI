@@ -263,7 +263,7 @@ def _deny_slots(pilot, obs):
     """The emitted `deny` Slots — seam 2, read directly rather than through a DP assignment that
     could mask a regression. Mirrors `test_needs_deny_resolver._deny_slots`."""
     board = pilot._board(obs, obs["select"])
-    rows, _ = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
+    rows = pilot._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
     slots, _elig = pilot._resolve_needs(obs, board, rows)
     return [s for s in slots if s.kind == "deny"]
 
@@ -316,7 +316,7 @@ def test_a_body_we_knock_out_this_turn_opens_no_keep_slot():
     p = _pilot("mega_lucario")
     obs = _discard_obs(opp_active=_body(MEGA_LUCARIO, [FIGHTING, FIGHTING]))
     board = p._board(obs, obs["select"])
-    rows, _ = p._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
+    rows = p._discard_equation_rows(obs, obs["select"], board, obs["select"]["option"])
     board.active_can_ko = True
     board.deny_relevance_rows = ()                      # force the re-resolve to see the new flag
     p._opponent_target_cache = None

@@ -1,7 +1,8 @@
 """Snipe Relevance sweep — the per-leg DIAGNOSTIC for Issue #188 (ADR-0085). **Not a gate.**
 
 Replays every committed `DAMAGE(15)` correction through a FRESH shipped Pilot per frame (the
-`needs_sweep` / `threat_sweep` discipline — stateful pilots, one per frame) and reports, per frame,
+the `needs_sweep` / `threat_sweep` discipline — stateful pilots, one per frame; both probes are
+gone with the shadows they read (Issue #261 item 2h), the discipline is not) and reports, per frame,
 what the shipped agent picks, whether that satisfies the corpus ruling, and — under `--legs` — the
 `snipe_relevance` term breakdown that produced it. The breakdown is the reason this file still
 exists: it is the diagnosis `decider_lab.py` deliberately does not duplicate.
