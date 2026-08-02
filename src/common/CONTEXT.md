@@ -443,13 +443,18 @@ seam this composes), combat module (bare)
 
 **Card-Worth Oracle** (ADR-0065):
 The ONE closed-form home for card keep/shed valuation — every equation is `value = Worth × Odds`.
-Five modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority):
+Six modules, five glossary terms ([0065-glossary](../../docs/adr/0065-glossary.md), the authority
+for the five; the sixth, **Playability**, is ADR-0104's and has no glossary term of its own):
 **Worth** ([card_worth.py](card_worth.py) — the one tuned role/tag tier currency; no opinion about
 probability), **Odds** ([deck_odds.py](deck_odds.py) — pure deck math: the draw-window
 hypergeometrics plus the Deck-Content Odds estimate above; no opinion about value), **Gates**
 ([gate_library.py](gate_library.py) — WHEN a card's Worth is live: the `deploy_odds` deadline
 factor, the closing-edge spike, the quota window; all four legs built — evolution, fetcher,
-pressure, quota), **Closure** ([fetch_closure.py](fetch_closure.py) — WHAT can
+pressure, quota. Since ADR-0104 it prices the evolution leg's answer and no longer derives it),
+**Playability** ([playability.py](playability.py) — CAN a held card ever reach the board: BACKWARD
+line topology, the `evolvesFrom` chain walked against play / hand / the sound unseen-deck read, with
+the Rare Candy escape and fail-open epistemics. The one oracle behind both the `deploy_odds`
+evolution leg and `pilot._resolve_needs`' eligibility gate, Issue #288), **Closure** ([fetch_closure.py](fetch_closure.py) — WHAT can
 reach what: the tutor/search graph over the card representation, never a text parse), and **Needs**
 ([needs.py](needs.py) — WHAT the position requires: deadline-tagged slots + the exact-assignment
 marginal `keep_v2`; the keep-value v2 successor under which each Gate re-derives as "a slot with a

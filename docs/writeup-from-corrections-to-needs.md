@@ -200,6 +200,7 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
 | `src/common/needs.py` | the slot vocabulary, exact assignment, soundness nets |
 | `src/common/pilot.py` (`_resolve_needs`, `_needs_v2`, `_refresh_shed_keepcost`) | the board→slots resolver + its two deciders |
 | `src/common/{card_worth,deck_odds,gate_library,fetch_closure}.py` | the v1 oracle (Worth · Odds · Gates · Closure) |
+| `src/common/playability.py` | BACKWARD line topology (ADR-0104): can a held card ever be played? The gate on eligibility, and the `deploy` gate's own answer |
 | `docs/adr/0065-glossary.md` | the five-term ubiquitous language |
 | `docs/plans/keep-value-needs-assignment-grill-spec.md` | the grill, rulings, WP build log with all measurements |
 | `docs/plans/keep-value-v2-session-handoff.md` | live state + open threads for the next session |

@@ -8,9 +8,11 @@ already model the second bracket term as the closure re-access odds; this module
 equation, never a new if/else rung (the currency-zone rule).
 
 Stage 1 is the **evolution gate**: an evolution card realises its role only by being played onto a
-base. If that base is provably gone (not in play, hand, or the deck), the card is dead — its keep-value
+base. If nothing it can be put onto can reach the board, the card is dead — its keep-value
 collapses, so a refresh / gamble sheds it freely to dig, instead of hoarding it (ep83966336 f44, the
-retired ``hold-wincon-dont-shuffle`` ``wincon_in_hand_undeployable`` stand-down, now graded).
+retired ``hold-wincon-dont-shuffle`` ``wincon_in_hand_undeployable`` stand-down, now graded). WHETHER
+it can is `common.playability`'s question (ADR-0104), resolved by the caller and passed in as one
+boolean; this module only prices the answer.
 
 The **fetcher gate** (`fetch_deploy_odds`) is the searcher/recycler leg (scope doc stage 3, pulled
 forward 2026-07-19 by the duplicate-copy reconciliation — acceptance pin ep83457493 f31): a fetch
@@ -40,18 +42,23 @@ def is_evolution(stat) -> bool:
     return bool(stat is not None and getattr(stat, "evolvesFrom", None))
 
 
-def deploy_odds(stat, *, base_in_play: bool = False, base_in_hand: bool = False,
-                base_reachable_in_deck: bool = False) -> float:
+def deploy_odds(stat, *, playable: bool = True) -> float:
     """P(the card's ROLE can be realised by its deadline) — the deadline factor of ``keep_cost``.
 
-    1.0 for a non-evolution (its role is realised by being held) or a DEPLOYABLE evolution — its base
-    is on board, in hand, or still reachable in the deck (any one suffices). 0.0 for a provably
-    UNDEPLOYABLE evolution — the base is gone from every retrievable zone, so the card cannot realise
-    its role at all (a dead card). Errs toward 1.0 (keep) — a caller unsure of base presence passes
-    ``base_reachable_in_deck=True`` and nothing is discounted."""
+    1.0 for a non-evolution (its role is realised by being held) or a PLAYABLE evolution. 0.0 for a
+    provably UNPLAYABLE one — nothing it could be put onto can reach the board, so the card cannot
+    realise its role at all (a dead card). Errs toward 1.0 (keep) — an unsure caller passes
+    ``playable=True`` and nothing is discounted.
+
+    ``playable`` used to be three zone booleans OR-ed together here (base in play / in hand /
+    reachable in deck). Issue #288 moved that question whole into `common.playability`, because the
+    OR was only the shallowest correct version of it: the real question walks the ``evolvesFrom``
+    CHAIN and knows the Rare Candy escape, and a second, shallower answer living here would have
+    disagreed with the eligibility gate about the very same card. This module keeps what it is for —
+    the arithmetic of a gate — and none of the graph reasoning."""
     if not is_evolution(stat):
         return 1.0
-    return 1.0 if (base_in_play or base_in_hand or base_reachable_in_deck) else 0.0
+    return 1.0 if playable else 0.0
 
 
 def fetch_deploy_odds(*, targets_exhausted: bool = False) -> float:

@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
+from common import playability
 from common.option_equivalence import class_representatives, fan_out, option_equivalence
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
                                      _COIN_HEAD, _END, _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY,
@@ -103,9 +104,13 @@ _PLANNER_DECKOUT_W = 5.0       # BUILD 2 (`opp_resource_reads`): a sub-prize nud
                                # (deck count is public); the finer prized-last-copy read is probabilistic
                                # (opp hand hidden) and deliberately NOT used. Sub-prize — never a reorder.
 _PLANNER_DECKOUT_TURNS = 3     # "near deck-out" horizon: fire only when they exhaust within this many turns
-_RARE_CANDY_ID = 1079         # BUILD 1 (`enabler_item_composer`): Rare Candy (Item, SVI 191) — the Basic→
-                              # Stage-2 evolve SKIP. Matched by id (no Function Tag): behaviorally unique,
-                              # single card, no other consumer. Card text verified at EN_Card_Data.csv id 1079.
+#
+# Rare Candy (Item, SVI 191) — the Basic→Stage-2 evolve SKIP — is matched by its `rare_candy` Function Tag
+# (`common.playability.RARE_CANDY_TAG`), so there is no constant here any more. There WAS one, a bare
+# `_RARE_CANDY_ID = 1079` justified as "behaviorally unique, single card, no other consumer". Issue #288's
+# playability gate is the second consumer and asks about a card in HAND OR DECK, which no option-id
+# comparison answers — so the justification expired and ADR-0006's rule applies. Card text verified at
+# data/EN_Card_Data.csv id 1079.
 # ═══ WP1/WP5 — Stage-1 fetch CLOSURE for the Gamble Rung (hypergeometric-fetch-closure spec) ═══════
 # The tutor/recycle PREDICATES a drawn card needs to enable a one-short KO (type-lock, source zone,
 # target class) live in the card REPRESENTATION — `card_effects.json` FETCH clauses (ADR-0032),
@@ -2108,12 +2113,19 @@ class PlannerMixin:
         """The deadline gate (`common.gate_library`, ADR-0065): P(card ``cid``'s role is realisable
         by its deadline). Two card classes are gated today; everything else stays 1.0.
 
-        **Evolution gate (Stage 1):** 1.0 for a deployable evolution — a bare base (matched by
-        ``evolvesFrom`` name) is on board, in hand, or still among the deck ``counts``; 0.0 for a
-        provably-undeployable one, its base gone from every retrievable zone. Errs toward 1.0
-        (keep): pre-anchor ``counts`` is the unseen deck, so a base still in the decklist keeps its
-        evolution live — the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega
-        Lucario ex with every Riolu evolved/gone).
+        **Evolution gate (Stage 1):** 1.0 for a playable evolution, 0.0 for a provably-unplayable
+        one — nothing it can be put onto can reach the board. Errs toward 1.0 (keep): pre-anchor
+        ``counts`` is the unseen deck, so a base still in the decklist keeps its evolution live —
+        the gate bites only a genuinely dead card (ml ep83966336 f44: a Mega Lucario ex with every
+        Riolu evolved/gone).
+
+        That question is `common.playability`'s (ADR-0104), not this method's, and Issue #288 is why:
+        the version inlined here compared ONE ``evolvesFrom`` name against the three zones, which
+        gets two cases wrong. It called a Metagross live because a Metang sat in hand with every
+        Beldum gone (the chain), and it called `grimmsnarl_ex`'s win condition DEAD whenever its
+        Stage 1 was gone even with a Rare Candy in hand (the escape — card text at
+        data/EN_Card_Data.csv id 1079). The eligibility gate in `pilot._resolve_needs` asks the same
+        question, so the two must answer off one oracle or silently disagree about the same card.
 
         **Fetcher gate (searcher/recycler leg — acceptance pin ep83457493 f31):** a fetch TRAINER
         whose every target is provably dead — its deck whiff-set exhausted (`_fetch_deadness_set` ⊆
@@ -2130,20 +2142,8 @@ class PlannerMixin:
         from common import gate_library
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
         if gate_library.is_evolution(st):
-            base = getattr(st, "evolvesFrom", None)
-
-            def _named(ids) -> bool:
-                return any((s := self.stats.get(i)) is not None and getattr(s, "name", None) == base
-                           for i in (ids or ()))
-
-            base_reach = any(n > 0 and (s := self.stats.get(t)) is not None
-                             and getattr(s, "name", None) == base
-                             for t, n in (counts or {}).items())
-            return gate_library.deploy_odds(
-                st,
-                base_in_play=_named(getattr(board, "in_play_ids", None)),
-                base_in_hand=_named(getattr(board, "hand_ids", None)),
-                base_reachable_in_deck=base_reach)
+            return gate_library.deploy_odds(st, playable=playability.playable_from_hand(
+                cid, stats=self.stats, zones=self._playability_zones(board, counts)))
         if st is not None and not st.is_pokemon and not st.is_energy:
             tags = self.functions.tags(cid) if self.functions else ()
             if ({"rush_evolve", "tutor_mega"} & set(tags)) and getattr(board, "wincon_in_hand", False):
@@ -2862,13 +2862,18 @@ class PlannerMixin:
         return max(0.0, min(1.0, weighted / raw))
 
     def _is_rare_candy(self, obs, select, option) -> bool:
-        """BUILD 1 helper: this PLAY option is Rare Candy (card id ``_RARE_CANDY_ID`` = 1079). Matched by
-        ID rather than a Function Tag: Rare Candy is behaviorally unique (a Basic→Stage-2 evolve SKIP that
-        needs the Stage-2 already in hand — NOT a tutor), no other card shares the behavior, and no other
-        consumer needs the tag, so an id constant is the cleaner, self-contained signal than minting a
-        one-card `rare_candy` tag in card_functions.json. (Verified card text at data/EN_Card_Data.csv
-        id 1079.)"""
-        return self._option_card_id(obs, select, option) == _RARE_CANDY_ID
+        """BUILD 1 helper: this PLAY option is Rare Candy — a Basic→Stage-2 evolve SKIP that needs the
+        Stage-2 already in hand (NOT a tutor). Verified card text at data/EN_Card_Data.csv id 1079.
+
+        Matched by the `rare_candy` Function Tag (ADR-0006), not by a private id constant. The old
+        constant's justification was explicitly *"no other consumer needs the tag"*; Issue #288's
+        playability gate needs exactly this fact about a card sitting in HAND OR DECK — a question no
+        option-id comparison can answer — so the two would have had to agree by hand. False without a
+        tag table, which is this branch's shipped fail direction (the composer is DEFAULT OFF and only
+        ever ADDS a line)."""
+        cid = self._option_card_id(obs, select, option)
+        return bool(self.functions and cid is not None
+                    and playability.RARE_CANDY_TAG in set(self.functions.tags(cid)))
 
     def _rare_candy_ko_candidate(self, obs, select, board, option, opp, opp_player,
                                  retreat_on_menu: bool):
@@ -2885,9 +2890,11 @@ class PlannerMixin:
         Unlike the item tutor, Rare Candy is NOT a tutor — the Stage-2 must ALREADY be in hand
         (``board.hand_ids``), so no ``deck_definitely_has`` whiff-check is needed (in-hand is certain).
 
-        HONEST NOTE: NONE of the 3 current agent decks (mega_lucario, dragapult_ex, mega_starmie) run Rare
-        Candy or a Basic→Stage-1→Stage-2 line — this branch is INERT for them. It is forward-looking
-        generality, exercised only by tests today. None when no composite reaches a KO."""
+        HONEST NOTE (updated 2026-08-02, Issue #288): this was recorded as INERT because none of the then-3
+        agent decks ran Rare Candy or a Basic→Stage-1→Stage-2 line. **`grimmsnarl_ex` runs both** — 1 Rare
+        Candy and Marnie's Impidimp → Morgrem → Grimmsnarl ex — so the branch is live for that deck, and the
+        same pair is what forces the Rare Candy escape in `common.playability` (ADR-0104 decision 3). The
+        other three decks are still inert. None when no composite reaches a KO."""
         if board.turn <= 1:
             return None                                   # Rare Candy is illegal on your first turn
         if not self.stats:

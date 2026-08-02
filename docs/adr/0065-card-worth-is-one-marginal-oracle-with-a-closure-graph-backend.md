@@ -391,6 +391,13 @@ already converged; its residue rides with the gate library.
   `common/gate_library.py` owns the odds; `planner._deploy_odds` resolves base presence (the evolution
   gate: a bare base by `evolvesFrom` name in play / hand / the deck counts). An undeployable evolution
   (base gone from every zone) collapses to `deploy_odds = 0` → shed freely; everything else stays 1.0.
+  **Amended 2026-08-02 by [ADR-0104](0104-a-hand-card-that-can-never-be-played-covers-no-slot.md)
+  (Issue #288):** the parenthesis above is no longer how the evolution gate resolves. That one-hop
+  comparison is superseded by `common.playability`'s backward CHAIN walk with the Rare Candy escape,
+  and `gate_library.deploy_odds` now takes the resolved `playable` boolean rather than three zone
+  booleans. The equation, the factor's meaning and its fail-open direction are unchanged — only where
+  the answer comes from, and it moved because `pilot._resolve_needs`' new eligibility gate asks the
+  same question and two answers would have disagreed about the same card.
   Wired on the two converged keep-value sites (gamble keep-floor, refresh SHED). This restores the
   retired `hold-wincon-dont-shuffle` `wincon_in_hand_undeployable` stand-down, gradedly, in the one
   equation — **as a PARAMETER, not a new rung** (the discipline the whole ADR protects). It is a
