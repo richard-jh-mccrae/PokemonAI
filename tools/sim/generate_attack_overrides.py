@@ -99,6 +99,13 @@ EVIDENCE_KEYS = tuple(name for name, _ in _EVIDENCE_FIELDS)
 #: Everything the harness CONTROLS — the row minus the one thing it measures. Two rows agreeing here
 #: and disagreeing on `dealt` are a contradiction, not a duplicate.
 CONTROLLED_KEYS = EVIDENCE_KEYS[:-1]
+_READ = dict(_EVIDENCE_FIELDS)
+#: Which sweep PLAN produced a row — a provenance label, not board state. Two plans routinely land
+#: on the same board (the panel point and the `atk_bench` step-1 point both pin the benches at 1).
+_LABEL_KEYS = ("sweep", "step")
+#: The physical board a measurement was taken on: the controlled state with the labels removed, and
+#: with `coin` removed because the two fork outcomes ARE the same board.
+BOARD_KEYS = tuple(k for k in CONTROLLED_KEYS if k not in (*_LABEL_KEYS, "coin"))
 
 
 def _fit_linear(points: list[tuple[int, int]]) -> tuple[int, int] | None:
@@ -179,13 +186,19 @@ def _plain_panel(recs: list[dict]) -> list[dict]:
 
 
 def _fork_board(r: dict) -> tuple:
-    """The controlled state a fork was measured on — everything the row records except the coin.
+    """The physical BOARD a fork was measured on.
+
+    Deliberately excludes `sweep`/`step`. Those are provenance LABELS — which plan produced the row
+    — not state, and two plans routinely land on the same board: the panel point pins both benches
+    at ``_BENCH_REF = 1`` and the `atk_bench` step-1 sweep point pins them at 1 as well. Keying on
+    the label would file those as two boards and let a disagreement between them read as ordinary
+    board sensitivity, when it is the same board answering twice.
 
     A `min` and its `max` come from ONE forked position (``_coin_fork`` walks both outcomes of one
-    pre-attack observation, and ``measure_attack`` stamps them from one ``common`` dict), so a pair
-    always shares this tuple exactly. Two different sweep points never do.
+    pre-attack observation, and ``measure_attack`` stamps all three records from one ``common``
+    dict), so a pair always shares this tuple exactly.
     """
-    return tuple(read(r) for name, read in _EVIDENCE_FIELDS if name not in ("coin", "dealt"))
+    return tuple(_READ[k](r) for k in BOARD_KEYS)
 
 
 def _coin_bounds(recs: list[dict], st) -> tuple[dict, list[dict]]:
@@ -302,24 +315,34 @@ def _apply_rules(recs: list[dict], st) -> tuple[dict, list[dict]]:
     Called out one by one rather than looped, because the rules are not independent — the bound and
     the scaler INTERACT, and a loop cannot say so.
 
-    **A measured bound and a fitted scaler are mutually exclusive.** `damage.py` computes
-    ``dmg = damageMin/damageMax`` — the bound REPLACES the base term — and then adds
-    ``scalePerUnit x count`` on top. A bound measured on a board where the scaler contributes
-    already contains that contribution, so shipping both adds it twice: an OVER-prediction, which is
-    the one class `ci_audit_gate.py` exists to fail (damage the closed form promises that the engine
-    will not deal -> phantom KO). The scaler survives because it is base-relative and sound; the
-    bound is dropped, and the attack falls back to the text parser's bounds, which are read off the
-    printed sentence and are base-relative too. Recovering the base as
-    ``dealt - scalePerUnit x count`` was rejected: it compounds one inference on another, and this
-    generator's whole discipline is that an ambiguity emits silence.
+    **A measured bound may not ship for an attack that HAS a scaler, whoever named it.**
+    ``common/strategy/damage.py``'s `compute_active_damage` sets ``dmg = damageMin/damageMax`` — the
+    bound REPLACES the base term — and only then adds ``scalePerUnit x count``. A bound measured on
+    a board where the scaler contributes already contains that contribution, so shipping both adds
+    it twice: an OVER-prediction, the one class `ci_audit_gate.py` exists to fail (damage the closed
+    form promises that the engine will not deal -> phantom KO).
 
-    No shipped attack has both today (measured: 0 of 117), so this is a soundness guard rather than
-    a fix — but it is one `audit_attacks.py --sweep` run away from being reachable.
+    The test is the EFFECTIVE scaler — ``st.scaleVar`` (the parser's) or this run's fit — because
+    the oracle adds the scaling term whenever `scaleVar` is set and does not care where it came
+    from. Testing only the fit was the first version of this guard and it missed the commoner case
+    by construction: `_scaler` returns nothing when the parser already named the variable, so a
+    parser-named scaler plus a fork pair sailed straight through. Measured on a probe: a printed-60
+    `atk_hand`/20 attack with a fork pair measured at hand 6 shipped ``damageMax 100`` and the
+    oracle then read 160 at hand 3.
+
+    The scaler survives because it is base-relative and sound; the bound is dropped, and the attack
+    keeps the text parser's bounds, which are read off the printed sentence and are base-relative
+    too. Recovering the base as ``dealt - scalePerUnit x count`` was rejected: it compounds one
+    inference on another, and this generator's discipline is that an ambiguity emits silence.
+
+    A refused bound leaves NO trace in the provenance sidecar, deliberately: that file's contract is
+    that evidence justifies what SHIPPED, and a refused bound did not. The gap ledger
+    (`diff_attack_audit.py`) is where a measurement that established nothing belongs.
     """
     bound, bound_ev = _coin_bounds(recs, st)
     fixed, fixed_ev = _fixed_damage(recs, st)
     scaler, scaler_ev = _scaler(recs, st)
-    if bound and scaler:
+    if bound and (scaler or st.scaleVar):
         bound, bound_ev = {}, []
     return {**bound, **fixed, **scaler}, [*bound_ev, *fixed_ev, *scaler_ev]
 

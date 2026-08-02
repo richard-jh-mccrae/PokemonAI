@@ -99,12 +99,18 @@ Issue #275), **2 `engine_fit`** (274 and 371, transcribed from Issue #224's pres
 
 **A measured coin bound is board-scoped** (REQ-AUDIT-0014, ADR-0083 Amendment A). `--sweep` leaves
 several vanilla `coin="max"` records — one per board — so the fork pairs are grouped by the
-controlled state they were measured on. One board, or several that agree, emits the bound
-(corroboration, per ADR-0083 §3's flat-axis argument); boards that disagree emit nothing, because the
-bound is then a function of the board (879 *"flip a coin for each {D} Pokémon you have in play"*) and
-the table has no form that says so. A bound also never ships beside a **fitted** scaler: the bound
-REPLACES the base term and the scaling term is added on top, so the pair would double-count the
-scaling contribution — an over-prediction, the class `ci_audit_gate.py` fails on.
+**physical** board they were measured on (`sweep`/`step` excluded: they are provenance labels, and
+the panel point and the `atk_bench` step-1 point are the same board). One board, or several that
+agree, emits the bound (corroboration, per ADR-0083 §3's flat-axis argument); boards that disagree
+emit nothing, because the bound is then a function of the board (879 *"flip a coin for each {D}
+Pokémon you have in play"*) and the table has no form that says so; and one board answering twice
+emits nothing, because a measurement that does not reproduce is not a fact.
+
+A bound also never ships for an attack that **has** a scaler — parser-named or fitted. The bound
+REPLACES the base term and the scaling term is added on top, so the pair double-counts the scaling
+contribution: an over-prediction, the class `ci_audit_gate.py` fails on. A refused bound leaves no
+trace in the provenance sidecar by design — that file records what shipped; a measurement that
+established nothing belongs on `diff_attack_audit.py`'s gap ledger.
 
 The sidecar is documentation wearing a `.json` extension — the runtime loads only
 `attack_overrides.json` — so `tools/submit/package.py` excludes it from the Kaggle bundle.

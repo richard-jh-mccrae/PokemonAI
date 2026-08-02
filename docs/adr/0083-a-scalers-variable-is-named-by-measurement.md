@@ -225,6 +225,13 @@ grouped by the controlled state they were measured on — a `min` and its `max` 
 | several, disagreeing | none — gap ledger |
 | one board, two different answers | none — a measurement that does not reproduce is not a fact |
 
+The board is the **physical** controlled state; `sweep`/`step` are excluded because they are
+provenance labels, not state, and two plans land on the same board by design — the panel point pins
+both benches at `_BENCH_REF = 1` and so does the `atk_bench` step-1 sweep point. Keying on the label
+would file those as two boards and let one board's self-contradiction read as ordinary board
+sensitivity. It also makes the last row REACHABLE: `merge_records` keys on the sweep point, so both
+of those records survive the merge and land in one group.
+
 Corroboration is kept rather than refused, and that is the one place this departs from the
 conservative default. Several boards agreeing is exactly the evidence §3 already treats as
 load-bearing for a FLAT axis: the variable was moved and provably does not shift the answer.
@@ -233,16 +240,39 @@ opposite case and gets the opposite answer — the pool holds the shape (879 *"F
 {D} Pokémon you have in play"*, 1256 *"Flip a coin for each Energy attached to this Pokémon"*), and
 the override table has no form that says "this bound is a function of the board".
 
-**And a measured bound may not ship beside a fitted scaler.** `compute_active_damage` sets
-`dmg = damageMin/damageMax` — the bound REPLACES the base term — and only then adds
-`scalePerUnit × count`. A bound measured on a board where the scaler contributes already contains
-that contribution, so shipping both adds it twice: an **over-prediction**, the single class
-`ci_audit_gate.py` exists to fail. The scaler survives, being base-relative and sound; the bound is
-dropped and the attack falls back to the text parser's, which is read off the printed sentence and
-is base-relative too. Recovering the base as `dealt − scalePerUnit × count` was rejected — it
-compounds one inference on another, and this generator's discipline is that an ambiguity emits
-silence. Measured: **0 of the 117 shipped entries** carry both, so this is a soundness guard rather
-than a fix — and it is one `--sweep` run away from being reachable.
+That is also the honest objection to the alternative of taking the bound from the un-swept panel
+point alone. It is not *arbitrary* — the reference board is a perfectly determinate choice, and the
+review was right to say so. It is **silently board-conditional**: it names one board's number as the
+attack's own, unconditionally, with nothing in the table marking it as measured at bench 1. Refusing
+says the same thing out loud. Where the boards agree, that alternative and this rule emit the same
+bound; where they disagree it ships and this rule does not, and that single row is the whole
+difference between them.
+
+**And a measured bound may not ship for an attack that HAS a scaler — whoever named it.**
+`compute_active_damage` sets `dmg = damageMin/damageMax` — the bound REPLACES the base term — and
+only then adds `scalePerUnit × count`. A bound measured on a board where the scaler contributes
+already contains that contribution, so shipping both adds it twice: an **over-prediction**, the
+single class `ci_audit_gate.py` exists to fail.
+
+The test is the **effective** scaler — `st.scaleVar` or this run's fit — because the oracle adds the
+scaling term whenever the field is set and does not care where it came from. Testing only the FIT
+was the first version of this rule and `/code-review` refuted it: `_scaler` returns nothing when the
+parser has already named the variable, so a parser-named scaler plus a fork pair sailed straight
+through — the commoner case, missed by construction. Probed: a printed-60 `atk_hand`/20 attack with
+a fork pair measured at hand 6 shipped `damageMax 100`, and the oracle then read **160** at hand 3.
+
+The scaler survives, being base-relative and sound; the bound is dropped and the attack keeps the
+text parser's, which is read off the printed sentence and is base-relative too. Recovering the base
+as `dealt − scalePerUnit × count` was rejected — it compounds one inference on another, and this
+generator's discipline is that an ambiguity emits silence. Measured: **0 of the 117 shipped
+entries** carry both, so this is a soundness guard rather than a fix — and it is one `--sweep` run
+away from being reachable.
+
+*Accepted cost, stated plainly:* a refused bound leaves **no trace in the provenance sidecar**. That
+file's contract (ADR-0108 §2) is that evidence justifies what SHIPPED, and a refused bound did not;
+a measurement that established nothing belongs on the gap ledger, which is `diff_attack_audit.py`'s
+job. The alternative — recording fork rows on an entry whose fields they do not justify — would make
+the sidecar's central promise conditional.
 
 **Nothing shipped changes.** All 99 `damageMin`/`damageMax` entries are classified `unaudited` in
 `attack_overrides.provenance.json`, their measurements no longer exist, and ADR-0108's merge rule
