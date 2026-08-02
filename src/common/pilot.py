@@ -1263,7 +1263,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
-                 develop_rollout=False, needs_keep_value=False,
+                 develop_rollout=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
@@ -1383,15 +1383,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # Needs the sim to plumb my end-of-turn hand into
                                                         # the (opponent-perspective) end obs. Gated on the
                                                         # leaf-lab bench (SOLE-top / distinct-values / Gate 0).
-        self.needs_keep_value = needs_keep_value        # ADR-0065 WP-N4 kill-switch (default OFF): the
-                                                        # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`,
-                                                        # `eq2_pick`) decides the forced discard in place of
-                                                        # v1 — the per-family swap for the cleared discard
-                                                        # family (agree_v2 12/12 + the duplicate-pair flip).
-                                                        # It STANDS ALONE since Issue #261 item 2h — seam-D
-                                                        # v1 and the `_DISCARD` ladder beneath it are both
-                                                        # deleted, so OFF is DEGRADED MODE, not a rollback:
-                                                        # the discard falls to the ordinary scored order.
+        # `needs_keep_value` DELETED (Issue #319): the keep-value v2 needs-assignment decides the
+        # forced discard UNCONDITIONALLY. The flag was read nowhere after Issue #261 item 2h made
+        # `_discard_needs_pick`'s call site unconditional, and it is the one decider flag that could
+        # not be restored: every sibling lever (`attach_value` -> `baseline_energy`, `evolve_value`
+        # -> `baseline_evolution`, `promote_retreat_value` -> `baseline_promote`/`_retreat`,
+        # `snipe_relevance` -> `baseline_snipe`) reverts to a surviving rung ladder, and there is no
+        # `baseline_discard` — item 2h deleted seam-D v1 AND the `_DISCARD` ladder, and no rung
+        # anywhere fires at `_DISCARD`. A switch whose ON state both gates grade and whose OFF state
+        # nothing grades is worse than no switch.
         self.promote_retreat_value = promote_retreat_value   # the PROMOTE/RETREAT DECIDER's emergency
                                                         # lever (ADR-0100, shipped ON): the Sub-lethal
                                                         # Residual, one evaluator across the body pick, the
@@ -3886,13 +3886,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return self._discard_fuel_cache
 
     def _discard_needs_pick(self, obs: dict, select: dict, board: Board, options: list, picks: int):
-        """The DECIDER under the `needs_keep_value` kill-switch (ADR-0065 WP-N4, the per-family swap):
-        the forced-discard pick IS the keep-value v2 needs-assignment's cheapest removal (`_needs_v2`
-        → `eq2_pick`, `needs.cheapest_removal` over the resolved slots, hedged at v1's post-gate
-        keep), replacing v1's per-card gate composition with the global assignment. Same rows as
-        v1's ranking (`_discard_equation_rows` — the deploy gates + fuel/burst flags v2 consumes);
-        None when nothing is priceable, and since Issue #261 item 2h there is nothing under it to
-        fall through TO — the caller's ordinary scored order takes the pick."""
+        """**The** forced-discard DECIDER, unconditionally (ADR-0065 WP-N4, the per-family swap):
+        the pick IS the keep-value v2 needs-assignment's cheapest removal (`_needs_v2` → `eq2_pick`,
+        `needs.cheapest_removal` over the resolved slots, hedged at v1's post-gate keep), replacing
+        v1's per-card gate composition with the global assignment. Same rows as v1's ranking
+        (`_discard_equation_rows` — the deploy gates + fuel/burst flags v2 consumes); None when
+        nothing is priceable, and since Issue #261 item 2h there is nothing under it to fall through
+        TO — the caller's ordinary scored order takes the pick.
+
+        There is no kill-switch, and that is a decision rather than an omission (Issue #319). This
+        read "the DECIDER under the `needs_keep_value` kill-switch" while that flag was assigned and
+        never read; the flag is deleted rather than rewired because it is the one decider lever with
+        nothing to revert TO — every sibling falls back to a surviving rung ladder, no
+        `baseline_discard` exists, and no rung anywhere fires at `_DISCARD`."""
         rows = self._discard_equation_rows(obs, select, board, options)
         if not rows:
             return None
@@ -4064,11 +4070,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         raw-tier floor would undo the gate knowledge), and a firing floor telemeters a missing
         slot. Returns ``(keep_v2 per row, eq2_pick as OPTION indices)``.
 
-        **This DECIDES** (`needs_keep_value`, armed ON 2026-07-20 by ADR-0065 WP-N4): the forced
-        discard's pick IS `eq2_pick` — see `_discard_needs_pick`, the consumer. The line here read
-        "SHADOW-ONLY (Round 6): nothing here decides" for eleven days after the swap; corrected by
-        POC-T1 (Issue #260). A stale "decides nothing" is worse than no note at all — it is the
-        sentence a reader trusts when judging whether a change here is safe.
+        **This DECIDES**, unflagged (swapped in 2026-07-20 by ADR-0065 WP-N4): the forced discard's
+        pick IS `eq2_pick` — see `_discard_needs_pick`, the consumer. This line has now been wrong in
+        both directions, which is why it says so. It read "SHADOW-ONLY (Round 6): nothing here
+        decides" for eleven days after the swap (corrected by POC-T1, Issue #260), then named
+        `needs_keep_value` as the arming flag for the twelve days after Issue #261 item 2h stopped
+        reading that flag at all (corrected by Issue #319, which deleted it). A stale claim about
+        what gates this is worse than no note — it is the sentence a reader trusts when judging
+        whether a change here is safe.
 
         v0 resolver scope (the discard bench's needs — the rest joins in WP-N4):
           * LINE slots per held card class at its line-role tier × the v1 deploy gate (dead

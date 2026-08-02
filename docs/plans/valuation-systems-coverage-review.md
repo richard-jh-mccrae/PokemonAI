@@ -24,7 +24,7 @@ threads) and `turn-planner-snipe-and-gust-scenarios.md` (the two planner scenari
 
 | Variant | Status | Where | Notes |
 |---|---|---|---|
-| **Forced discard** | ✅ LIVE, new engine decides | `needs_keep_value` ON; `_needs_v2` | 12/12 vs the correction corpus; duplicates/fuel/successor all priced. The most mature site. |
+| **Forced discard** | ✅ LIVE, new engine decides | `_needs_v2`, unflagged (Issue #319 deleted the `needs_keep_value` switch — nothing left to revert to) | 12/12 vs the correction corpus; duplicates/fuel/successor all priced. The most mature site. |
 | **Shuffle-refresh** (Judge/Harlequin/Lillie's) | ✅ covered, OLD brain decides | `_refresh_swing_tactical` (v1); v2 shadow | v2 sign-disagrees on 11/83 after the WP-N8 rulings. The swap is unblocked but not benched-clear (bar: flips ≈ 0). |
 | **Gusting — which target** | ✅ covered | `doctrine_gust._gust_target_tactical` | KO-gated, prize + sunk-energy + snipe-synergy ranked; ADR-0066 ruled ceiling. |
 | **Gusting — whether (tempo trade)** | ⚠️ partial | same | "CAN'T-KO → don't gust" is gated (f31). The can-KO-but-bad-trade case (their full-health attacker promotes back) has NO corpus anchor — see the planner-scenarios handoff §B. |

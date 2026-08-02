@@ -16,12 +16,16 @@ Authority docs (read in this order):
 
 | flag | state | meaning |
 |---|---|---|
-| `needs_keep_value` | **ON** | keep-value v2 (`_needs_v2` → `needs.cheapest_removal`) DECIDES the forced discard. Acceptance: agree_v2 **12/12** on the discard corpus; the duplicate-wincon pair flips without a new gate. |
+| ~~`needs_keep_value`~~ | **DELETED** (Issue #319) | keep-value v2 (`_needs_v2` → `needs.cheapest_removal`) decides the forced discard UNFLAGGED. The flag was read nowhere once Issue #261 item 2h made the call site unconditional, and it was the one decider lever with nothing to revert TO. Acceptance at the swap was agree_v2 **12/12**. |
 | `discard_keep_value` | ON | v1 equation — now the FALLBACK decider + the **gamble** keep-value spine. (The REFRESH half left it 2026-08-01, ADR-0101: `_refresh_shed_keepcost` is `set_keep_v2`.) |
 | `leaf_hand_value` | **OFF** | the readiness-leaf hand fold (N5b→N5d). Measured to a WASH (see §Closed). Do NOT arm without new leaf terms (below). |
 
-Precedence at a forced discard: `needs_keep_value` > `discard_keep_value` > the `_DISCARD` ladder.
-Each is a kill-switch; OFF falls through.
+⚠️ **The precedence chain below is GONE** — recorded as it stood 2026-07-20. Item 2h deleted
+`discard_keep_value` and the `_DISCARD` ladder; Issue #319 deleted `needs_keep_value`. There is one
+discard decider and no fallback under it.
+
+~~Precedence at a forced discard: `needs_keep_value` > `discard_keep_value` > the `_DISCARD` ladder.
+Each is a kill-switch; OFF falls through.~~
 
 ## The architecture in one paragraph
 

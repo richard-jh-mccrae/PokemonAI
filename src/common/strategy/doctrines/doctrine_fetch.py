@@ -472,8 +472,9 @@ class FetchMixin:
         Priced by the equation that will take it (Issue #261 item 2h). Until then this scored the
         hand at a virtual `_DISCARD` Context against the tuned `_DISCARD` ladder, and the whole point
         of doing so was stated in its own docstring — *"scoring with the SAME rungs the real discard
-        select uses keeps prediction and pick agreeing."* That stopped being true the day
-        `needs_keep_value` shipped ON and the ladder stopped deciding, and it would have become
+        select uses keeps prediction and pick agreeing."* That stopped being true the day the
+        keep-value v2 assignment took the discard select (2026-07-20) and the ladder stopped
+        deciding, and it would have become
         vacuous the day the ladder was deleted: every score would be 0.0, all three bits permanently
         False, and the three rungs reading them silent forever (the Issue #238 shape). So the
         predictor moves onto the DECIDER's own machinery — the whole-hand v2 rows

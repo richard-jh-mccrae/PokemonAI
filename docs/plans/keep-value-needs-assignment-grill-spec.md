@@ -6,7 +6,8 @@ ruling the design is SETTLED → construction proceeds shadow-first; the live v1
 the discard corpus) keeps deciding meanwhile. Build order at the bottom. **WP-N1/N2 BUILT
 2026-07-19; WP-N3 BUILT 2026-07-20; WP-N4 discard swap BUILT 2026-07-20; WP-N4b refresh MAGNITUDE
 shadow BUILT 2026-07-20; WP-N5 general-worth slots BUILT 2026-07-20** (see §Build order) — v2 now
-DECIDES the forced discard (`Pilot.needs_keep_value`, PROFILE armed ON), corpus-safe (12/12) and the
+DECIDES the forced discard (unflagged since Issue #319; it was `Pilot.needs_keep_value`, PROFILE
+armed ON, at this build), corpus-safe (12/12) and the
 duplicate-pair naivety flipped without a new gate; the refresh shadow proved v2 not-yet-ready there
 and WP-N5's general-worth slot more than halved its unsafe under-pricing (46→19). The readiness-leaf
 fold (WP-N5b) is blocked on hand-visibility plumbing; the gamble/refresh swaps remain staged; the
