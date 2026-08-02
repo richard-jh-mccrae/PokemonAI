@@ -213,7 +213,17 @@ AFTER    Decision Gate        FAIL   1 unruled REGRESSION, 2 held out, 1 voided
          Discrimination Gate  PASS   0 unruled, the SAME 2 held out (#262 x2), 0 voided
                               agree 180/247 -> 179/247   (3 picks moved)
                               IMPROVED 82225643|1|decision|12  MISS -> OK
+
+         Suite                4504 passed, 5 skipped, 4 xfailed, 1 xpassed
 ```
+
+⚠️ **Two earlier suite runs reported one failure and BOTH are void; do not cite them.** They were
+launched while `pilot.py` was still being edited, and `test_snipe_relevance_consumer.py`'s
+`inspect.getsource(Pilot._snipe_relevance_terms)` reads the file by LINE NUMBER — so it returned the
+body of a different method and asserted against it. Re-run on an untouched tree it passes, as does
+the file in isolation. Recorded rather than dropped because the failure looks like a real
+`context=`-plumbing regression and the next person to edit `pilot.py` mid-suite will see it again;
+it is the same measurement-artefact species as ADR-0093's void gauntlet run.
 
 `_DENIAL_ITEM_COST`'s deletion moves **nothing**: every deny fixture in the suite prices identically,
 by decision 1's construction. All movement is decision 4's, which is exactly the attribution
