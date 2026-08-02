@@ -19,7 +19,7 @@ Two scalers, both verified at `data/EN_Card_Data.csv`:
 
 Every board below sits at six prizes each with no race read, so `needs.phase_scale` is its 0.3 base
 and ONE turn of survival is `0.3 x 0.5 prize x 100 damage/prize` = **15 damage**. That is the whole
-arithmetic: the pinned numbers are turns-of-survival x 15.
+arithmetic: every number asserted below is turns-of-survival x 15.
 
 It REPLACES the three flat rungs (`play-harlequin-vs-hand-size` +25, `disrupt-when-unfavored` +18,
 `strip-the-stacked-engine-hand` +22), which are deleted — the last two tests here are the ones that
@@ -163,7 +163,7 @@ def test_zero_when_the_knock_out_lands_either_way(pilot):
 # ── the promotion itself ─────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-DISRUPT-0002")
 def test_the_relief_now_DRIVES_and_arrives_inside_the_tactical_sum(pilot):
-    """The inertness pin, re-pointed rather than deleted (the grill spec's re-baseline surface says
+    """The inertness test, re-pointed rather than deleted (the grill spec's re-baseline surface says
     it must survive promotion's rewiring). `score == Σ fired weights + tactical` still holds — that
     invariant is about the option trace's shape, not about this term — and the relief is now INSIDE
     `tactical` instead of sitting beside the score on a reporting field.

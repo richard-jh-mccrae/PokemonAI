@@ -250,7 +250,7 @@ deliberate list; gates green; flips → wave 2.
   (+18), `strip-the-stacked-engine-hand` (+22), the reporting-only field/telemetry and the two Board
   signals left unconsumed are all deleted. Lever A returns as `phase_scale`, not a second
   `_DENIAL_UNFAVORED` (ADR-0078 decision 6). Gates: Decision PASS / 0 unruled; Discrimination 2
-  `OK → MISS` **held out onto #262** — both caused by the +25's deletion alone, neither a decision
+  `OK → MISS` **held out onto Issue #262** — both caused by the +25's deletion alone, neither a decision
   move (the agent still plays the human's option on both).
 - **Deploy finish (old Issues #237/#232):** price the `_TO_BENCH` entry point, `bench_harvest`
   sharpening, and resolve the spare-body cliff inside the marginal.

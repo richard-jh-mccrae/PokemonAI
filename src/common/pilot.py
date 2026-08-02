@@ -560,9 +560,10 @@ class Board:
                                           # all-unaffordable set is NO threat. `play-energy-denial` stand-down:
                                           # don't strip a body that can't actually hurt us (dragapult f6)
     # `opp_has_hand_size_attacker` DELETED (ADR-0102, Issue #261 item 2c) with the two rungs that were
-    # its only readers. The fact it carried is not lost — it is read where it is USED, off the
-    # `handSizeDamage` scaler the damage oracle multiplies by (`_opp_hand_size_scaler`), rather than
-    # off the `hand_size_attacker` Function Tag, which was a second reading of one fact.
+    # its only readers. Nothing re-asks the question: `_hand_size_relief_tactical` puts the hand
+    # counts into the Damage Formula's own `atk_hand` / `def_hand` context keys and lets the survival
+    # clock answer. The retired boolean read the `hand_size_attacker` Function Tag, which was a second
+    # reading of a fact the damage oracle already holds as a scaler (ADR-0102 decision 5).
     opp_hand_size: int = 0                # opponent's current hand size (`handCount`) — the resource
                                           # STACK a hand-disruption Supporter strips; the refresh swing
                                           # oracle's opponent leg (ADR-0060). Sound off handCount.
@@ -3585,14 +3586,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         the two reads are equal and the term is 0, which is the same answer a guard would give and
         cannot fall out of step with the scaler table.
 
-        **No Lever-A multiplier rides on top.** ADR-0026's unfavored booster (`_DENIAL_UNFAVORED`, the
-        surviving half of the deleted `disrupt-when-unfavored` +18) and `needs.phase_scale` say the
-        same thing from different inputs, and ADR-0078 decision 6 ruled that a path carrying BOTH
-        multiplies one read by itself. Deny keeps the Read-gated scaler only because it reads
-        `phase_scale` on no surface (ADR-0080 decision 3); this term reads `phase_scale` directly, so
-        the posture half returns here as the DERIVED, [0,1]-bounded scaler — which is the same
-        substitution ADR-0078 chose at match scale, and strictly the better instrument (board-derived,
-        no coverage gate, cannot run away).
+        **No Lever-A multiplier rides on top, and none is smuggled in either.** Stated precisely,
+        because the loose version of this sentence is wrong: the Read-gated half of the deleted
+        `disrupt-when-unfavored` (+18) is **not** re-expressed here — this term reads neither
+        `favorability` nor `matchup_coverage`, so nothing "returns". It is SUBSTITUTED. ADR-0078
+        decision 6 ruled that `_DENIAL_UNFAVORED` and `needs.phase_scale` say the same thing from
+        different inputs, so a path carrying both multiplies one race read by itself, and named
+        `phase_scale` the derived successor. Deny kept the Read-gated scaler only because it reads
+        `phase_scale` on no surface (ADR-0080 decision 3, which says so in as many words); this term
+        reads it directly, as its survival currency's own scaler — so the discipline the +18's
+        posture half was owed ("posture SCALES the oracle, it is never re-added as a flat") is
+        honoured by a scaler that was going to be here anyway, and is strictly the better instrument:
+        board-derived, [0,1]-bounded, live without matchup coverage.
 
         **Fail direction.** Neither hand's size beyond the redraw count is knowable, so both clocks
         read hands that are CONSTANT over the horizon: the honest deterministic quantity, never a
@@ -9014,8 +9019,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     # doctrine_gust.GustMixin; `_board` calls them as `self.…`.)
     # `_opp_has_hand_size_attacker` DELETED (ADR-0102, Issue #261 item 2c) with the `Board` field and
     # the two rungs it gated. It asked the `hand_size_attacker` Function Tag whether a line scales off
-    # the hand; `_opp_hand_size_scaler` asks the `handSizeDamage` scaler the Damage Formula actually
-    # multiplies by, which is the reading its consumer's clock cannot disagree with.
+    # the hand, and NOTHING replaces it: a card-fact reader in front of the survival clock would be a
+    # second enumeration of the Damage Formula's scaler families, free to drift from the oracle it
+    # guards. `_hand_size_relief_tactical` asks the clock instead (ADR-0102 decision 5).
     def _opp_has_energy_in_play(self, opp: dict | None) -> bool:
         """True if any of the opponent's Pokémon (Active or Bench) carries Energy — a target an
         energy-denial Item (Function Tag `energy_denial`, e.g. Crushing Hammer) can strip. The

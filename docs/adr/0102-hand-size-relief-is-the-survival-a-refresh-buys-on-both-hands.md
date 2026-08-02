@@ -95,17 +95,26 @@ express: against a Froslass, holding ten cards is 500 incoming, and **Judge (red
 survival play while Lillie's at exactly six prizes (redraw 8) is not** — off the two cards' own
 printed draw counts.
 
-### 3. Lever A returns as `phase_scale`, NOT as a second multiplier
+### 3. Lever A's Read-gated half is SUBSTITUTED by `phase_scale` — it does not "return"
 
-`disrupt-when-unfavored`'s posture half survives as a MULTIPLIER and never as a flat — the ADR-0062
-discipline, which the grill restated. It returns as `needs.phase_scale` rather than
-`_DENIAL_UNFAVORED`, because **ADR-0078 decision 6** ruled that both say *"when the race is going
-badly this is worth more"* and a path carrying both multiplies one race read by itself. ADR-0080
-decision 3 withdrew that retirement for deny on the stated grounds that *"under this ADR deny reads
-`phase_scale` on no surface, so the substitution justifying it no longer exists"* — a condition that
-is false here: this term reads `phase_scale` directly, as its survival currency's own scaler. So the
-substitution ADR-0078 chose is taken, and it is the better instrument on its own terms: board-derived
-rather than Read-gated, bounded [0, 1] rather than unbounded, and live without matchup coverage.
+Said precisely, because the loose version is false and this ADR is the record: **the term reads
+neither `favorability` nor `matchup_coverage`.** Nothing of `disrupt-when-unfavored`'s Read-gated
+half is re-expressed inside it. The grill's fold list asked for the posture half to come back as a
+*"`_DENIAL_UNFAVORED`-style multiplier inside the term"*; what actually ships is a different scaler
+that would have been in the equation regardless.
+
+That is the right answer rather than a shortfall, and **ADR-0078 decision 6** is why: it ruled that
+`_DENIAL_UNFAVORED` and `needs.phase_scale` say the same thing — *"when the race is going badly this
+is worth more"* — from different inputs, so a path carrying both multiplies one race read by itself,
+and it named `phase_scale` the derived successor. ADR-0080 decision 3 withdrew that retirement **for
+deny**, on the explicit condition that *"under this ADR deny reads `phase_scale` on no surface, so
+the substitution justifying it no longer exists"*. That condition is false here: this term reads
+`phase_scale` directly, as its survival currency's own scaler. So the discipline the +18 was owed —
+posture scales, never re-adds as a flat — is satisfied, by the better instrument on its own terms:
+board-derived rather than Read-gated, bounded [0, 1] rather than unbounded, and live without matchup
+coverage. What is genuinely LOST is the Read's opinion as an independent input to this decision. That
+is recorded rather than papered over, and `dont-gift-a-refresh-when-favored` is now Lever A's last
+rung-shaped consumer.
 
 ### 4. The energy policy is `UNCHARGED`, the doom policy — named, not inherited
 
@@ -157,10 +166,27 @@ floor at its own call site, where the reason for it is legible — removing an o
 raise my clock, so a negative reading there is a bench-harvest redirect artefact. The hand-size
 counterfactual has no such guarantee, and the sign IS the term.
 
-**Magnitude.** One turn of survival is `phase × 0.5` prize; at the 0.3 phase base that is **15
-damage**, rising toward the `_SURVIVAL_CAP` 90 as the race sharpens. The rungs it replaces summed to
-at most +43, so the swap starts in the same band early and outgrows it exactly where the grill said
-it should — when the Knock Out is close.
+**Magnitude, and the +76 question it has to answer.** One turn of survival is `phase × 0.5` prize; at
+the 0.3 phase base that is **15 damage**, rising toward `_SURVIVAL_CAP` × `PRIZE_DAMAGE_RATE` = **90**
+as the race sharpens. The rungs it replaces summed to at most +43, so the swap starts in the same band
+early and outgrows it exactly where the grill said it should — when the Knock Out is close.
+
+That ceiling deserves confronting rather than mentioning, because the same grill doc says endorser
+inflation *"governs everything here"* and names **+76** as the blowout: ADR-0060's per-card credit for
+DRAWN cards, which reached 76 and went straight through `hold-wincon-dont-shuffle` (−25). 90 > 76, and
+`82226759-64` prices at exactly 90 — saturated.
+
+The difference is that 90 is a **bound**, and 76 was a number nothing bounded. `_SURVIVAL_CAP` = 0.9
+is sub-prize BY CONSTRUCTION: the survival leg was built so it *"breaks ties among prize outcomes but
+never overrides a real prize difference"*, and 90 is that promise expressed in damage at the derived
+rate. The +76 had no such ceiling and was not derived from one — it was a per-card credit that simply
+kept adding. So the guard the grill demands is present here as arithmetic rather than as vigilance:
+this term cannot outbid a prize, cannot approach `KO_SCORE`, and cannot grow with the board.
+
+Saturating on f64 is the cap working, not a runaway. That frame is the corpus extreme — the opponent
+holds **21** cards in front of an Alakazam, and the human's own note is *"opponents deck requires a
+large hand to deal heavy damage, therefore play harlequin to reduce their handsize"*. A term that did
+NOT max out there would be the one worth worrying about.
 
 **A recorded residual, not hidden.** Against a hand-size deck this term and the swing's GIFT leg both
 price a refill: the swing charges `_REFRESH_OPPONENT_HAND_GIFT` = 8 per card handed back, and the

@@ -281,7 +281,7 @@ projection.
   card fact through the `hand_size_attacker` LABEL and now carry the `handSizeDamage` scaler the
   clock actually reads.
 - New pins: `test_grab_refresh_draw.py` (item 1, 86088989-29); `test_hand_size_relief.py` (the
-  Design-B signal — the inertness pin `score == Σ fired + tactical` MUST survive promotion's
+  Design-B signal — the inertness test `score == Σ fired + tactical` MUST survive promotion's
   rewiring, re-pointed not deleted when the signal enters `score`. **It did:** the invariant is about
   the trace's shape, not about this term, and the relief now arrives inside `tactical`).
 - Routed residuals (recorded, not disruptor work): 86091435-96 → attach doctrine (off-type attach
