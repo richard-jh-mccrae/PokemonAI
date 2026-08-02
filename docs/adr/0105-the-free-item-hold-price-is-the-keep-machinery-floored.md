@@ -219,6 +219,12 @@ AFTER    Decision Gate        FAIL   1 unruled REGRESSION, 2 held out, 1 voided
          Suite                4504 passed, 5 skipped, 4 xfailed, 1 xpassed
 ```
 
+**Re-stated against the REBASED base** (onto `eef2e5f`, main +9), because a measurement that
+describes a tree nobody merges is not a measurement: suite **4540** passed / 5 skipped / 4
+xfailed / 1 xpassed (main's own commits added 36 tests), and BOTH gates re-run with **0 picks
+moved** against the pre-rebase capture — so the baseline was RE-STAMPED (`git_rev` only) rather
+than re-captured, which is the whole reason to re-measure before re-stamping.
+
 ⚠️ **Two earlier suite runs reported one failure and BOTH are void; do not cite them.** They were
 launched while `pilot.py` was still being edited, and `test_snipe_relevance_consumer.py`'s
 `inspect.getsource(Pilot._snipe_relevance_terms)` reads the file by LINE NUMBER — so it returned the

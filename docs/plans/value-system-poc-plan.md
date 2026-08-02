@@ -311,7 +311,7 @@ deliberate list; gates green; flips → wave 2.
   evidence and **USER-RULED ACCEPT 2026-08-02** (`fixed`, non-voiding — the boundary orders the dig
   ahead of the Hammer across two actions of one turn, which is what the adjacent f11 ruling asks for,
   and f12's own `correct` was adjudicating Hammer-vs-ATTACK). Baseline re-captured at the ruling
-  commit; **both gates PASS**, agree 251/345, suite 4504. The leaf baseline is deliberately not
+  commit; **both gates PASS**, agree 251/345, suite 4540 (re-stated against the rebased base; both gates re-run with 0 picks moved, so the baseline was re-stamped rather than re-captured). The leaf baseline is deliberately not
   re-captured (it passes), and what the Decision re-capture absorbed beyond its own ruling is named
   in `docs/ci.md`'s provenance table.
 - **Shadow deletion: DONE 2026-08-02 (item 2h), except the `_DISCARD` ladder.** All four shadows,
