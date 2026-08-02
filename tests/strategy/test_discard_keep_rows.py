@@ -9,10 +9,11 @@ So each case is re-pointed one layer down and one layer out: the columns are rea
 directly, and every "the equation would pick X" assertion becomes "the DECIDER picks X" — read off
 `dec.chosen`, through the shipped `needs_keep_value` path, with no v1 ranking and no ladder beneath
 it (both deleted by the same item). That is strictly stronger, and it immediately earned its keep:
-**two of the re-pointed cases do not pass**, because the old assertion was grading `eq_pick`, a
-number nobody has acted on since `needs_keep_value` shipped ON. Measured on `main` at `ce28431`,
-before item 2h touched anything — the shipped decider already sheds the wrong card on both. They are
-kept as strict-xfail TARGETs at the bottom of this file, owned by Issue #294.
+**two of the re-pointed cases did not pass**, because the old assertion was grading `eq_pick`, a
+number nobody had acted on since `needs_keep_value` shipped ON. They were held as strict-xfail
+TARGETs owned by Issue #294; ADR-TEMP-294 closed that gap by giving `needs.cheapest_removal`'s
+ranking key a DEADNESS leg above residual worth, and both now grade as ordinary pins in the two
+tests that price their rows.
 """
 import pytest
 
@@ -82,10 +83,11 @@ def test_the_pitch_term_separates_dead_weight_from_a_live_spare_among_zero_keep(
     by = _by_cid(_rows(pilot, obs))
     assert by[FILLER]["keep"] == 0.0 and by[CINDERACE]["keep"] == 0.0   # keep cannot separate them
     assert by[CINDERACE].get("dead_opener") is True
-    assert by[CINDERACE]["pitch"] > by[FILLER]["pitch"]                 # deadness discriminates…
-    assert pilot.explain(obs).chosen == [0]                             # …and the DECIDER does not
-                                                                        # act on it — see the TARGET
-                                                                        # below (Issue #294)
+    assert by[CINDERACE]["dead"] > by[FILLER]["dead"]                   # deadness discriminates…
+    assert pilot.explain(obs).chosen == [1]                             # …and the DECIDER acts on it
+                                                                        # (ADR-TEMP-294 — the exact
+                                                                        # tie used to fall to the
+                                                                        # menu index and take [0])
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
@@ -100,8 +102,11 @@ def test_a_spent_burst_is_fodder_only_once_the_active_is_fully_powered():
     powered, obs_p = _setup([FILLER, IGNITION], minc=1, powered=True)
     rp = _by_cid(_rows(powered, obs_p))
     assert rp[IGNITION]["keep"] == 0.0 and rp[IGNITION]["spent_burst"] is True    # spent -> fodder
-    assert rp[IGNITION]["pitch"] > rp[FILLER]["pitch"]
-    assert powered.explain(obs_p).chosen == [0]           # …and again the DECIDER does not act on it
+    assert rp[IGNITION]["dead"] > rp[FILLER]["dead"]
+    # …and the DECIDER acts on it (ADR-TEMP-294). This is the case residual worth alone gets BACKWARDS:
+    # the spent burst still carries catalog worth 30 against the filler's 0, so a worth-first
+    # tie-break sheds the live spare and keeps the corpse. Deadness ranks above it for that reason.
+    assert powered.explain(obs_p).chosen == [1]
 
 
 @pytest.mark.req("REQ-NEEDS-0007")
@@ -150,30 +155,26 @@ def test_a_discard_source_accel_energy_zeroes_its_keep():
     assert row["fuel"] is True and row["keep"] == 0.0
 
 
-# ── TARGETS: the two ladder-win rulings the SHIPPED decider does not honour (Issue #294) ─────────
-# Strict xfail, not deletion. Both cases were RULED (`83454549-36`, and the seam-D grill's Finding-3
-# dead-opener case) and both are decided the wrong way in shipped play TODAY — measured on `main` at
-# ce28431, before item 2h touched anything: `needs_keep_value` ON picks [0] where v1 and the ladder
-# both pick [1]. `cheapest_removal` is indifferent among equal-keep cards, so the deadness the rows
-# price never reaches the assignment.
-#
-# Item 2h is what makes this worth pinning: it deletes the shadow's `eq_pick` and the v1/ladder
-# fallback, i.e. the last two places the gap was visible. A ruling whose only witness is deleted is
-# the Issue #238 failure — 13 Corrections closed as "covered" by rungs a deletion pass had removed.
-# Strict, so the day the assignment learns deadness these go RED rather than quietly green.
+# The two strict-xfail TARGETs that stood here are GONE because the gap they named is closed
+# (ADR-TEMP-294, Issue #294): `cheapest_removal`'s ranking key gained a deadness leg above residual
+# worth, so the assignment acts on the deadness the rows have always priced. Their assertions were
+# `chosen == [1]` on exactly the two boards the first two tests above already build, so folding them
+# up is what removes the duplication rather than leaving one ruling stated twice — each of those
+# tests now grades its ruled case end to end, rows AND decision (`83454549-36` for the spent burst,
+# the seam-D grill's Finding 3 for the dead opener). Recorded rather than silently dropped, because
+# a deleted xfail and a deleted ruling look the same in a diff.
 
-@pytest.mark.xfail(strict=True, reason="Issue #294: cheapest_removal is blind to the pitch term")
+
 @pytest.mark.req("REQ-NEEDS-0007")
-def test_TARGET_the_decider_sheds_the_dead_opener_over_the_live_spare():
-    pilot, obs = _setup([FILLER, CINDERACE], minc=1)
-    assert pilot.explain(obs).chosen == [1]
-
-
-@pytest.mark.xfail(strict=True, reason="Issue #294: cheapest_removal is blind to the pitch term")
-@pytest.mark.req("REQ-NEEDS-0007")
-def test_TARGET_the_decider_sheds_the_spent_burst_over_the_live_spare():
-    pilot, obs = _setup([FILLER, IGNITION], minc=1, powered=True)
-    assert pilot.explain(obs).chosen == [1]
+def test_a_fuel_energy_is_pitchable_but_not_DEAD():
+    """The counts split (ADR-TEMP-294): `pitch` carries the zone sign, `dead` does not. A Basic Energy
+    the deck's own accel recovers is cheap to pitch — but its ROLE has not expired, and
+    `needs.pitch_gain` already prices the pitch in the removal SCORE. Counting it a second time in
+    the ranking sheds an Energy that is the only funder of an attack (`83966336|0|decision|27`)."""
+    pilot, obs = _setup([MEGA, WATER], minc=1)
+    pilot._discard_fuel_cache = frozenset({2})              # Water is a discard-source accel target
+    row = _by_cid(_rows(pilot, obs))[WATER]
+    assert row["fuel"] is True and row["pitch"] == 1 and row["dead"] == 0
 
 
 @pytest.mark.req("REQ-NEEDS-0005")

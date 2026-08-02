@@ -205,6 +205,14 @@ per-family swap under the corpus gates; the acceptance list below is the contrac
    * `needs.cheapest_removal` gained a **residual-worth tiebreak** (worth × deploy): among
      equal-marginal removals the lower residual worth sheds first — v1's worth tie-break
      re-derived (83967840-54), and the deploy-dead Cinderace sheds before a live spare.
+     ⚠️ **The second half of that sentence was never true in shipped play, and is now true by a
+     different mechanism** (ADR-TEMP-294, Issue #294). `deploy` knows about dead evolutions, dead
+     fetchers and need-met tutors, and about none of the five expired-role facts
+     `_apply_pitch_terms` derives — so a spent `opener` kept a `deploy` of 1.0 and the Cinderace
+     case fell through to the menu index, while a spent burst's residual worth (catalog tier 30)
+     out-ranked a live spare's 0 and the corpse was KEPT. The tie-break's *placement* was right and
+     its *signal* was wrong: `cheapest_removal`'s key now carries a DEADNESS leg above residual
+     worth. Both gates unmoved; the 83967840-54 ruling this bullet is really about is unaffected.
    Post-adjudication sweep: **agree_v2 12/12** against the live decider over every replayable
    discard correction — every human `correct` the decider satisfies, v2 satisfies. Suite green
    (3133); needs + shadow suites 27.

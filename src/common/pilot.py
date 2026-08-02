@@ -4013,6 +4013,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (wincon in hand → the tutor's target is had), a stranded evolution (payoff with no base), the
         declared `discard_fodder`, `fuel` (zone sign), and the SPENT burst. ``pitch`` is the COUNT.
 
+        TWO counts, and the split is load-bearing (ADR-TEMP-294). ``dead`` is DEADNESS only — the
+        five expired-role bits — and is what RANKS a discard among cards the assignment prices equal
+        (`needs.cheapest_removal`'s deadness leg). ``pitch`` adds the `fuel` zone sign and is what
+        gates LATENT worth (`_resolve_needs` withholds a general slot from a pitch-flagged row) and
+        the shed predictor's junk band. Fuel is deliberately absent from ``dead``: a matching Energy
+        is not EXPIRED, it is a discard that FILLS a slot, and `needs.pitch_gain` already prices that
+        in the removal SCORE. Counting it a second time in the ranking double-prices it — measured on
+        `83966336|0|decision|27`, where the fuel Energy was also the only card covering the
+        `fund_attack` slot, so its pitch gain and its keep loss cancelled to a tie and the second
+        count then shed the attack's only funder (Discrimination Gate OK -> MISS, rank 1 -> 3).
+
         Shared by both row builders (Issue #261 item 2h): `_discard_equation_rows` over a discard
         menu, and `_needs_hand_rows` over the whole hand, which needs it since the fetch doctrine's
         shed predictor moved onto the v2 machinery — a card is dead weight or it is not, and two
@@ -4033,8 +4044,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             row["fodder"] = True
         if spent_burst:
             row["spent_burst"] = True
-        row["pitch"] = (int(fuel) + int(dead_opener) + int(redundant_tutor) + int(stranded)
-                        + int(fodder) + int(spent_burst))
+        row["dead"] = (int(dead_opener) + int(redundant_tutor) + int(stranded)
+                       + int(fodder) + int(spent_burst))
+        row["pitch"] = int(fuel) + row["dead"]
 
     def _needs_v2(self, obs: dict, board: Board, rows: list, picks: int):
         """WP-N3 (keep-value v2, `keep-value-needs-assignment-grill-spec.md`): the Pilot-side needs
@@ -4073,13 +4085,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Deferred, documented: probabilistic slot RESUPPLY at THIS site (0.0 here — a forced
         discard has no redraw window; errs toward keep. The REFRESH site's resupply is LIVE —
         `_refresh_slot_resupply` over the refresh draw window), non-Active fund bodies, and
-        non-option hand cards as fixed coverage (a real forced discard offers the whole hand)."""
+        non-option hand cards as fixed coverage (a real forced discard offers the whole hand).
+
+        The pick's ranking key carries two ORDERING legs below the score (ADR-TEMP-294): the rows'
+        ``dead`` count, then residual worth (`worth × deploy`). Both only discriminate where the
+        assignment prices removals EQUAL, which for a forced discard is the common case — that is
+        what the pitch term exists to rank and what a keep FLOOR can never express."""
         from common import needs
         slots, elig = self._resolve_needs(obs, board, rows)
         resupply = [0.0] * len(slots)
         keeps = [round(needs.keep_v2(slots, elig, resupply, k), 1) for k in range(len(rows))]
         pick = needs.cheapest_removal(
             slots, elig, resupply, [r["keep"] for r in rows], picks,
+            deadness=[r.get("dead", 0) for r in rows],
             tiebreak=[r["worth"] * r.get("deploy", 1.0) for r in rows])
         return keeps, sorted(rows[k]["i"] for k in pick)
 
