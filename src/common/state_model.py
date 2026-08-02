@@ -1221,6 +1221,15 @@ class MySide(_SideBase):
     # first player's turn-1 attack ban, which is the f70 blunder class one door over. Two names for
     # one premise, differing silently in what they check, is exactly what the composed read exists to
     # prevent; `active_famine` is the premise.
+
+    @lazy
+    def needs(self):
+        """The position's Needs slots (deadline-tagged, ADR-0065's glossary) as resolved by the
+        caller, or None when not supplied. The model does not own the Needs engine; it holds the
+        resolution so several equations read one assignment instead of each re-running the DP."""
+        resolver = self._needs
+        return resolver() if callable(resolver) else resolver
+
     # -- evolution topology (the forward closure over MY decklist) ------------------------------
     @lazy
     def forward_index(self) -> dict:
