@@ -6,7 +6,52 @@ disable-model-invocation: true
 
 Implement the work described by the user in the spec or tickets.
 
-Stay hands-off: the spec is the source of truth, so resolve ambiguity from it, the codebase,
+## Step 0 — verify the premise BEFORE writing any code
+
+**Do this first, every time. It takes minutes and it is the only step that can save the whole build.**
+
+A spec is a snapshot of a belief. Two things can be wrong with it by the time you build, and they
+fail for different reasons:
+
+- **It was never true.** The feature already existed when the issue was filed and nobody looked.
+  Real example: a spec to add *"energy count + type requirements"* labelling, when both were already
+  shipped fields on `AttackStat` — `cost` and `energyTypes` (`src/common/scouting/provider.py`,
+  ADR-0032). The filing agent searched for the name it had invented, found nothing, and read that as
+  confirmation.
+- **It stopped being true.** `main` moved between filing and building. ADR-0093 opens with *"Every
+  measurement in Issue #228's body is stale"* — four claims did not survive re-measurement, one was
+  flatly false, and one outcome the issue *recorded no possibility of* actually occurred. Issue
+  #294's scope item 2 demanded a wave ruling because a fix "moves every forced discard in the
+  corpus"; it moved **zero**.
+
+So, before any edit:
+
+1. **Restate the spec's central factual claim in one sentence** — the thing that must be true for
+   this work to be worth doing. Usually of the form *X does not exist*, *only these N call sites do
+   Y*, *nothing handles Z*.
+2. **Verify it against `HEAD`.** If the issue carries a `## Prior art` section
+   (`docs/agents/issue-tracker.md` requires one for any gap claim), rerun those queries — they are
+   written to be rerunnable. If it does not, run them yourself: **search by behaviour or data, never
+   by the spec's proposed feature name**, and check `docs/adr/README.md`, `CONTEXT-MAP.md` and
+   `docs/adr/0065-glossary.md` before grepping. A grep for an invented label returns nothing whether
+   or not the capability exists.
+3. **A negative result needs a positive control.** Before accepting "it isn't there", point the same
+   query at something that MUST match. If that stays quiet, your instrument is broken, not the
+   codebase — and **file existence is never evidence of file content**: if the claim is about what is
+   *inside* a module, open it and quote it.
+4. **Report the outcome in one line before proceeding**, then act on it:
+   - *holds* → build;
+   - *already built* → **stop**, say what it is and where, and propose closing the issue rather than
+     building it;
+   - *refuted or materially stale* → **stop and say so**, with the measurement. Do not quietly
+     rescope around it. On Issue #294 this retired a wave ruling that was never owed.
+
+This duplicates the filing-time check on purpose. Either can be skipped, and they catch different
+things: filing-time catches *already built*, build-time also catches *decayed since*.
+
+Stay hands-off: the spec is the source of truth **for decisions** — what was agreed, why, which
+option won. It is **not** authoritative about facts of the codebase; the tree is, and step 0 is where
+they get reconciled. Resolve ambiguity from it, the codebase,
 `CONTEXT.md`/ADRs, and the source-of-truth docs (`docs/rules.md`, `src/cg/api.py`, card data) rather
 than interrupting. But when a decision genuinely isn't settled by any of those and would change what
 gets built, **ask** — don't guess and build the wrong thing.

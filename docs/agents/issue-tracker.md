@@ -10,6 +10,60 @@ Issues and PRDs for this repo live as **GitHub issues** on `richard-jh-mccrae/Po
 > Every tool below takes `owner: "richard-jh-mccrae"`, `repo: "PokemonAI"`. Load a tool's schema
 > with ToolSearch (`select:mcp__github__issue_write`, …) before first use in a session.
 
+## ⚠️ Before filing: an issue that asserts a GAP must carry its PRIOR ART
+
+**The most expensive issue in this repo is one that proposes building something that already
+exists.** It has happened repeatedly. The worked example: a spec was written to add *"energy count +
+type requirements"* labelling. Both were already shipped fields on `AttackStat`
+(`src/common/scouting/provider.py`, ADR-0032):
+
+```python
+cost: int = 0            # energy count (efficiency tiebreaks, affordability)
+energyTypes: tuple = ()  # the cost's per-slot Energy TYPE codes (EnergyType enum…)
+```
+
+**Why searching failed to prevent it, and why "search harder" is not the fix.** The agent searched
+for the name it had just invented — *energy requirement*, *energy cost labelling* — and found
+nothing. It exists under `cost` + `energyTypes`. **An absence of the name you invented is
+indistinguishable from an absence of the capability**, so the search *confirmed* the false belief
+instead of refuting it. Searching harder for the wrong string returns the same nothing.
+
+So every issue whose premise is *"X does not exist"* carries this section, and it is not optional:
+
+```markdown
+## Prior art
+Searched: <the queries you actually ran>, plus the ADR index / CONTEXT-MAP / glossary
+Nearest existing: <symbol, file, owning ADR>   ← name something, or you have not searched
+Insufficient because: <specific reason>        ← or: "it isn't — closing this instead"
+```
+
+Three rules make it work:
+
+1. **Search by BEHAVIOUR or DATA, never by your proposed feature name.** Ask "where would the
+   capability live" (the call site, the select context, the dataclass, the oracle), not "is my label
+   present."
+2. **Consult the four registries first — they are cheaper than any grep and they are authoritative.**
+   `docs/adr/README.md` is a number → file → **status** map of everything built;
+   [`CONTEXT-MAP.md`](../../CONTEXT-MAP.md) indexes the per-context `CONTEXT.md` files;
+   `docs/adr/0065-glossary.md` is the ubiquitous language. All three would have returned ADR-0032 /
+   `AttackStat` in seconds. Whichever agent memory is loaded is a fourth.
+3. **"Nearest existing" is mandatory and load-bearing.** If you cannot name the closest thing that
+   already exists, you have not searched — you have failed to find, which is a different result. The
+   line also forces behaviour-search: you cannot name a nearest neighbour you never looked for.
+
+This makes the absence claim **falsifiable** — a reviewer reruns the queries — instead of an
+assertion nothing downstream can check. `/implement` re-verifies it at build time as an independent
+second check (`.claude/skills/implement/SKILL.md` step 0); the two exist because either can be
+skipped or wrong, and they fail for different reasons.
+
+Applies to **every** creation path: `issue_write`, `gh issue create`, `/qa`, `/to-tickets`,
+`/wayfinder` child tickets, and the background-task chips (`spawn_task`) — a chip is an issue body
+with a shorter life, and a future session builds from its text with nothing in between.
+
+A **self-filed** issue — same session files it and then builds it — additionally gets flagged as
+self-filed to `/code-review`'s Spec axis, which is told to distrust it *more*, not less. It inherits
+the implementer's misreading and cannot catch it.
+
 ## Conventions
 
 - **Create an issue** → `issue_write` with `method: "create"` (`title`, `body`, `labels`, `assignees`).
