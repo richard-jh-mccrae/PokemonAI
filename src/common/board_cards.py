@@ -74,6 +74,21 @@ def body_card_ids(body):
             yield cid
 
 
+def body_energy_card_ids(body) -> tuple:
+    """Just the ENERGY cards attached to a body, as card ids, in attach order.
+
+    :func:`body_card_ids` merges all three stacks because its question is *"what is out of the
+    deck"*. This one keeps the Energy stack separate, for the reads that must pair a card with what
+    it PROVIDES — the retreat discard is the live case, since the engine's `DISCARD_ENERGY` select
+    poses one option per Energy CARD carrying that card's unit yield as ``count`` (verified on
+    recorded native traces: `v2_ms_mirror_5001` frames 128-129, a body holding Basic {W} + Ignition
+    posing ``count=1`` and ``count=3``).
+
+    The index is meaningful: it is the ``energyIndex`` such a select refers to."""
+    return tuple(cid for cid in (card_id(e) for e in ((body or {}).get("energyCards") or ()))
+                 if cid is not None)
+
+
 def body_unit_codes(body) -> tuple:
     """The OTHER half: a body's ``energies`` as a tuple of ``EnergyType`` codes — the Energy UNITS
     its attached cards provide.

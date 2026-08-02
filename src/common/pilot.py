@@ -15,7 +15,8 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
-from common.board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
+from common.board_cards import (body_card_ids,        # the ONE walk over a body's attached CARDS
+                                body_energy_card_ids)  # just the Energy stack, for the shed
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
                                           promote_value)
@@ -2676,15 +2677,139 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return sum(self.functions.dig_depth(b.get("id")) for b in bodies
                    if b.get("id") is not None and self._ability_on_menu(obs, b.get("id")))
 
-    def _retreat_discard_choice(self, ma: dict, n: int) -> dict:
-        """``ma`` as it stands after a retreat discards ``n`` Energy — the GREEDY cheapest-to-lose
-        typed choice (ADR-0100 §8).
+    #: Attached Energy CARDS above which the exact retreat-shed search degrades to the greedy one.
+    #: 2**12 = 4096 subsets, and the search runs ONCE per menu. Measured rather than guessed: over
+    #: the whole committed corrections corpus my Active never carries more than **6** Energy cards
+    #: (distribution 0:113, 1:150, 2:44, 3:38, 4:6, 6:8 frames), so the cap is ~2x the worst board
+    #: the agent has ever actually stood on and the greedy leg is unreachable in practice. It exists
+    #: so a pathological board degrades instead of hanging the grader.
+    _SHED_EXACT_MAX_CARDS = 12
+
+    def _attached_energy_yields(self, ma: dict) -> tuple | None:
+        """``((card id, units it provides), …)`` for the Energy attached to ``ma``, or None when the
+        attribution does not reconcile.
+
+        The obs gives the two halves SEPARATELY and unlinked — ``energyCards`` (the cards) and
+        ``energies`` (the flat list of units they provide) — so the pairing has to be reconstructed
+        from card knowledge: a Basic Energy is one unit of its own colour, a Special Energy provides
+        whatever its ``provides:N`` / ``provides_evo:N`` Function Tag prints (ADR-0067's 2026-07-27
+        amendment; `CardFunctions.energy_provision`, and the ``evolution`` reading applies because
+        Ignition provides ``{C}{C}{C}`` only on an Evolution).
+
+        **Checked, not trusted**: the per-card yields must sum to ``len(energies)``, which the engine
+        already told us. None on any mismatch — an untagged Special, an unknown card, a body shape
+        we cannot read — so the caller makes NO card-level claim rather than a guessed one
+        (fail-CLOSED, ADR-0067). That reconciliation is what makes this safe to build a legality
+        rule on top of."""
+        cards = body_energy_card_ids(ma)
+        units_total = len(ma.get("energies") or ())
+        if not cards or not (self.stats and self.functions):
+            return None
+        stat = self.stats.get(ma.get("id"))
+        evolution = getattr(stat, "evolvesFrom", None) is not None
+        yields = []
+        for cid in cards:
+            est = self.stats.get(cid)
+            if est is None:
+                return None
+            n = 1 if est.is_basic_energy else self.functions.energy_provision(cid,
+                                                                             evolution=evolution)
+            if n <= 0:
+                return None                       # untagged Special -> no attribution, no claim
+            yields.append((cid, n))
+        if sum(n for _, n in yields) != units_total:
+            return None                           # does not reconcile with what the engine reported
+        return tuple(yields)
+
+    def _retreat_discard_choice(self, ma: dict, n: int) -> tuple:
+        """``(ma as it stands after a retreat discards ``n`` Energy, the CARD ids it discarded)`` —
+        the cheapest legal shed (ADR-0100 §8).
 
         A Retreat Cost slot is COLOURLESS (`docs/rules.md` §89, rulebook.txt L142: "discard 1 Energy
-        for each ⟨C⟩"), so which Energy goes is genuinely ours to pick — and the engine poses a
-        `DISCARD_ENERGY` select over EVERY attached Energy to ask (verified in
-        `cgpy/turn.py:_pose_retreat_energy`). Competent play, not optimism: it sheds the unit whose
-        removal costs the least Build Standing first, which is off-type waste before matched slots."""
+        for each ⟨C⟩"), so which Energy goes is genuinely ours to pick. **The engine asks per CARD,
+        not per unit**, and that is the whole shape of this search: `_pose_retreat_energy` poses one
+        option per attached Energy CARD carrying that card's yield as ``count``, then removes that
+        one card and subtracts its units from what remains (`cgpy/turn.py`, and verified on recorded
+        NATIVE traces — `v2_ms_mirror_5001` frame 128 offers ``count=1`` for a Basic {W} beside
+        ``count=3`` for an Ignition; 3339 `DISCARD_ENERGY` frames across the parity store).
+
+        Two consequences this used to get wrong by walking ``energies`` a unit at a time:
+
+        * **A card is indivisible.** "Shed 2 of an Ignition's 3 units" is a board state the engine
+          cannot produce, and the old per-unit search proposed it freely.
+        * **Overpay is real, and sometimes forced.** Frame 129 of the same trace offers ONLY the
+          Ignition against a remaining cost of 1: retreating there costs three units, not one. The
+          per-unit search priced it at one and could not see the other two leave.
+
+        **Legality.** A shed set ``S`` is reachable iff ``sum(S) >= cost`` AND ``sum(S) - max(S) <
+        cost`` — every card but the last must be chosen while the remaining cost is still positive,
+        because the engine stops posing the moment it reaches zero. So three single-unit Energy
+        cannot pay a cost of 2, however much we might prefer to dump them.
+
+        Exact over the legal sets rather than greedy, because greedy-over-cards is not merely
+        approximate here, it is wrong in the shape the pool actually produces: on a body holding
+        one 1-unit and one 3-unit Energy against a cost of 3, dropping the cheapest first sheds the
+        single AND then the Ignition, where shedding the Ignition alone is legal and strictly
+        better. :data:`_SHED_EXACT_MAX_CARDS` bounds it; beyond that it degrades to the greedy leg.
+
+        Falls back to the old per-unit walk when :meth:`_attached_energy_yields` cannot reconcile
+        the two halves — with NO card ids returned, so the resource premium makes no claim it cannot
+        support."""
+        cost = max(0, int(n))
+        yields = self._attached_energy_yields(ma)
+        if yields is None or len(yields) > self._SHED_EXACT_MAX_CARDS:
+            return self._retreat_shed_greedy(ma, cost), ()
+        if cost <= 0:
+            return dict(ma), ()
+
+        best = None
+        for mask in range(1, 1 << len(yields)):
+            picked = [yields[i] for i in range(len(yields)) if mask & (1 << i)]
+            total = sum(u for _, u in picked)
+            if total < cost or total - max(u for _, u in picked) >= cost:
+                continue                          # unreachable: see **Legality** above
+            after = self._body_without_energy_cards(ma, mask, yields)
+            key = (self._build_standing(after),
+                   -sum(max(0.0, self._role_value(cid) - ENERGY_TIER) for cid, _ in picked),
+                   -total)
+            if best is None or key > best[0]:
+                best = (key, after, tuple(cid for cid, _ in picked))
+        if best is None:                          # cost exceeds everything attached — all of it goes
+            return (self._body_without_energy_cards(ma, (1 << len(yields)) - 1, yields),
+                    tuple(cid for cid, _ in yields))
+        return best[1], best[2]
+
+    def _body_without_energy_cards(self, ma: dict, mask: int, yields) -> dict:
+        """``ma`` with the Energy cards named by ``mask`` gone — BOTH halves kept consistent, the
+        cards off ``energyCards`` and the units they provided off ``energies``.
+
+        Units are removed by COUNT rather than by value: ``energies`` is a flat list with no marker
+        saying which card contributed which entry, and every downstream read of it
+        (`_build_standing` -> `matched_slots`, `energy_count`) is a multiset read, so dropping the
+        right NUMBER of entries of the right colours is the whole requirement. Colours are matched
+        where they can be, so a shed Basic {F} takes an {F} entry and not somebody else's."""
+        from common.strategy.combat import unit_colours
+        units = list(ma.get("energies") or ())
+        kept_cards, dropped = [], []
+        for i, (cid, n) in enumerate(yields):
+            (dropped if mask & (1 << i) else kept_cards).append((cid, n))
+        for cid, n in dropped:
+            colours = unit_colours(getattr(self.stats.get(cid), "energyType", None) or 0)
+            for _ in range(n):
+                match = next((j for j, u in enumerate(units) if u in colours), None)
+                units.pop(match if match is not None else 0)
+        cards = list(ma.get("energyCards") or ())
+        survivors = [c for i, c in enumerate(cards) if not (mask & (1 << i))]
+        return dict(ma, energies=units, energyCards=survivors)
+
+    def _retreat_shed_greedy(self, ma: dict, n: int) -> dict:
+        """The pre-Issue #297 per-UNIT shed, kept ONLY as the fallback for a body whose card/unit
+        attribution does not reconcile (see :meth:`_attached_energy_yields`).
+
+        It is not a correct model of the engine's choice — it can shed part of an indivisible card —
+        but on an unreadable board the alternative is no answer at all, and this at least prices the
+        right NUMBER of units leaving. It sheds the unit whose removal costs the least Build
+        Standing first, which is off-type waste before matched slots."""
         energies = list(ma.get("energies") or [])
         for _ in range(min(max(0, int(n)), len(energies))):
             keep = max(range(len(energies)),
@@ -2710,15 +2835,18 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return {}
         if card_worth > 0.0:                          # a Switch Item pays a card, never a build
             return {"card_worth": float(card_worth)}
-        after = self._retreat_discard_choice(ma, self._effective_retreat_cost(obs, ma))
-        discarded = list(ma.get("energies") or [])
-        for eid in (after.get("energies") or []):     # the multiset difference — what actually goes
-            if eid in discarded:
-                discarded.remove(eid)
+        after, discarded = self._retreat_discard_choice(ma, self._effective_retreat_cost(obs, ma))
         # ADR-0069 §5c's resource premium: charged on worth ABOVE a reusable Basic, so a plain Basic
         # pays nothing and only a one-shot is nudged. Sub-band — it orders equals.
+        #
+        # `discarded` is CARD ids, which is what `_role_value` has always needed. It used to be the
+        # multiset difference of `energies` — EnergyType codes fed to a card-worth lookup, so the
+        # one-shot this premium exists to charge for read as nothing (an Ignition renders `[0,0,0]`
+        # and card 0 does not exist) or as the wrong card (a Rock Fighting renders `[6]`, the id of
+        # Basic {F} Energy). Issue #297's misread, one layer over. Empty when the shed could not be
+        # attributed to cards, so no premium is claimed without one.
         premium = _ATTACH_RESOURCE_TIEBREAK * sum(
-            max(0.0, self._role_value(eid) - ENERGY_TIER) for eid in discarded)
+            max(0.0, self._role_value(cid) - ENERGY_TIER) for cid in discarded)
         return {"build_before": self._build_standing(ma),
                 "build_after": self._build_standing(after), "resource_premium": premium}
 

@@ -263,7 +263,8 @@ a unit code, so ADR-0069 §5c's one-shot premium reads an attached Ignition as w
 Rock Fighting as Basic {F}. It is NOT fixed here, because unlike the affordability family it is not
 a mis-read to correct but a MODEL to choose: a retreat discards Energy CARDS while its cost is paid
 in UNITS, so one Ignition pays three retreat and the greedy per-unit search has no card to charge.
-That is a scoring change with its own design question, so it is recorded here **owed and unowned**
-rather than folded in — the next reader of this amendment should not infer from "one accessor" that
-every consumer of `energies` was converted. Two were not: `_retreat_discard_choice` (which Energy
-goes) and `_retreat_cost_legs` (what it cost).
+That is a scoring change with its own design question, so it was held out of the affordability fix
+rather than folded in. **Since converted** — see ADR-0100's 2026-08-02 amendment, which settles the
+question from recorded native traces (the engine asks per CARD and carries each card's unit yield,
+so a card is indivisible and overpay is real) and rebuilds the shed as an exact search over the
+legal card sets.

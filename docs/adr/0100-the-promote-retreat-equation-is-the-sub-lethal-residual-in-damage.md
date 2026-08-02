@@ -431,3 +431,62 @@ Gates re-run at the derived rate: Decision Gate PASS ×3 (promote/retreat 15 FIX
 attach 22 FIX / 0 REGRESSION, evolve 4 FIX / 0 REGRESSION), Discrimination Gate **PASS with zero
 unruled** — the `OK → MISS` the fuel fix alone had opened is gone, `leaf_correct` 191 → 192,
 `leaf_correct_strict` 35 → 36, average top-tie unchanged.
+
+
+## Amendment (2026-08-02 — Issue #297 follow-up): the shed is chosen over CARDS, and it can overpay
+
+§8 prices what leaving the Active Spot costs as *the build the retreat's discard destroys*, and
+`_retreat_discard_choice` answered it by walking the body's `energies` one entry at a time, dropping
+the unit whose removal cost the least Build Standing. Two things are wrong with that, and the engine
+settles both — this is not a modelling preference.
+
+**A retreat discards CARDS; the cost is paid in UNITS.** `_pose_retreat_energy` poses one
+`DISCARD_ENERGY` option per attached Energy **card**, carrying that card's unit yield as `count`,
+then removes that one card and subtracts its units from what remains (`cgpy/turn.py`). Verified on
+recorded NATIVE traces rather than the reimplementation —
+`tests/fixtures/parity/v2_ms_mirror_5001.trace.json.gz`, and 3339 `DISCARD_ENERGY` frames across the
+parity store:
+
+    frame 128  remainEnergyCost=2   energies [3,0,0,0] (4 units)   energyCards [3,17] (2 cards)
+               energyIndex=0 count=1     <- Basic {W} Energy
+               energyIndex=1 count=3     <- Ignition Energy
+    frame 129  remainEnergyCost=1   energies [0,0,0]   (3 units)   energyCards [17]   (1 card)
+               energyIndex=0 count=3     <- pay 1, shed 3
+
+So: a card is **indivisible** (the old search freely proposed shedding 2 of an Ignition's 3 units, a
+board the engine cannot produce), and **overpay is real and sometimes forced** (frame 129's only
+option pays 3 against a remaining cost of 1 — a retreat that costs three units, priced at one).
+
+**Ruled: exact, over the legal card sets.** A shed set `S` is reachable iff `sum(S) >= cost` **and**
+`sum(S) - max(S) < cost` — every card but the last is chosen while the remaining cost is still
+positive, because the engine stops posing the moment it reaches zero. Three single-unit Energy
+therefore cannot pay a cost of 2. The search maximises Build Standing over that set, tie-broken by
+the resource premium and then by units shed.
+
+Exact rather than greedy-over-cards, because greedy is not merely approximate here — it is wrong in
+the shape the pool actually produces. On frame 128's board against a cost of 3, cheapest-first sheds
+the Basic {W} and then still needs the Ignition, losing everything; shedding the Ignition alone is
+legal and strictly better. Bounded by `_SHED_EXACT_MAX_CARDS = 12` (2**12 subsets, computed once per
+menu) with the old per-unit walk as the degradation; measured rather than guessed, my Active never
+carries more than **6** Energy cards anywhere in the committed corpus.
+
+**The card/unit pairing is reconstructed, and CHECKED.** The observation gives the two halves
+unlinked, so `_attached_energy_yields` pairs them from card knowledge — a Basic Energy is one unit,
+a Special provides its `provides:N` / `provides_evo:N` Function Tag (ADR-0067's 2026-07-27
+amendment) — and then requires the yields to sum to `len(energies)`, which the engine already told
+us. Any mismatch returns None and the caller falls back with NO card ids, so the premium claims
+nothing it cannot support (fail-CLOSED). On the committed corpus the attribution resolves on **178
+of 178** frames where a retreat has a real cost; the fallback never fires, which is what
+`test_attach_budget_coverage.py` already guarantees for a shipped deck's Special Energy.
+
+**ADR-0069 §5c's resource premium finally reads a card.** It was `_role_value(eid)` over `energies`
+entries — EnergyType codes fed to a CARD-worth lookup, Issue #297's misread one layer over — so the
+one-shot the premium exists to charge for priced at nothing (an Ignition renders `[0,0,0]`, and card
+0 does not exist) or as the wrong card (a Rock Fighting renders `[6]`, the id of Basic {F} Energy).
+
+**Measured.** 178 corpus frames price a real retreat cost; the shed's answer **changes on 14** of
+them. The sharpest is `82752045|1|decision|115` — units `[3,0,0,0]`, cards `[3,17]`, cost 2 — where
+the old walk kept two colourless units and threw the Basic {W} the payoff needs, and the new one
+sheds the Ignition alone and keeps the {W}. Both ADR-0072 gates are **byte-identical** to the base
+(0 picks moved, 0 leaf flips): the change runs, changes 14 answers, and moves no gate frame's
+decision or ranking — so there is nothing to rule and neither baseline is touched.
