@@ -3,16 +3,6 @@
   "_reviewed_builds": {
     "mega_starmie_20260625_bde590c": "fully reviewed 2026-06-28 — all 36 corrections processed: 7 set-asides listed below + 25 satisfied by shipped rules + 4 tactical skips (tuner-handled); 0 open. No other build has been reviewed yet."
   },
-  "81904451-37": {
-    "disposition": "refuted",
-    "reason": "forgoes a KO (tactical ~1000) — over-eager; a positional rule must never override a Knock Out",
-    "round": "2026-06-27"
-  },
-  "81904451-53": {
-    "disposition": "refuted",
-    "reason": "forgoes a KO — over-eager",
-    "round": "2026-06-27"
-  },
   "81904451-58": {
     "disposition": "refuted",
     "reason": "forgoes a KO — over-eager",
@@ -134,9 +124,9 @@
     "round": "2026-06-29"
   },
   "81785223-32": {
-    "disposition": "covered",
-    "reason": "attack-last defers the Attack; real Pilot evolves the wincon first (evolve-into-wincon), Pokegear-dig endorsed (dig-before-commit) - same turn, first dev differs",
-    "round": "2026-06-28-realpilot"
+    "disposition": "refuted",
+    "reason": "Wave-3 ruling (Issue #262): Pokegear is NOT the play - the hand already holds nearly every Supporter. The line is evolve Staryu->Mega Starmie ex, Hilda to fetch Energy, attach to the active Starmie, attack Jetting Blow sniping Wellspring Mask Ogerpon ex. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling.",
+    "round": "2026-08-02-wave3"
   },
   "81785223-38": {
     "disposition": "covered",
@@ -144,9 +134,9 @@
     "round": "2026-06-28-realpilot"
   },
   "81785223-44": {
-    "disposition": "covered",
-    "reason": "attack-last develops first via a benched evolve even with a KO on the menu (KO preserved, taken after); Pokegear-dig endorsed",
-    "round": "2026-06-28-realpilot"
+    "disposition": "refuted",
+    "reason": "Wave-3 ruling (Issue #262): same board and same call as 81785223-32 - Pokegear is not the play, the evolve-into-wincon line is. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling.",
+    "round": "2026-08-02-wave3"
   },
   "81903490-27": {
     "disposition": "covered",
