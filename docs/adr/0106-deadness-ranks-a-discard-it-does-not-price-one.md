@@ -139,7 +139,8 @@ the pick each spelling produces.
 
 ## Measured at the build (2026-08-02)
 
-Both gates are **byte-identical to the clean tree**, before and after:
+Both gates are **byte-identical to the clean tree**, before and after. At the build, against base
+`85e57a9`:
 
 ```
 Decision Gate         PASS   372 frames vs a8da62d   agree 249/345 -> 251/345
@@ -147,8 +148,30 @@ Decision Gate         PASS   372 frames vs a8da62d   agree 249/345 -> 251/345
                              context 8 (DISCARD)  10/11 agree   (unchanged)
 Discrimination Gate   PASS   268 frames vs d8ef7a0   agree 180/247 -> 178/247
                              0 unruled, 2 held out (both owner=#262)   (unchanged)
-suite                 4419 green
+suite                 4405 passed, 3 skipped, 2 xfailed, 1 xpassed
 ```
+
+**Re-measured after the `/open-pr` rebase onto `8226a43`**, because main moved underneath this branch
+(ADR-0104 and ADR-0105 landed, and the Decision Gate's baseline was re-captured with them) and a
+number that describes a tree which is not what ships is worth nothing:
+
+```
+Decision Gate         PASS   agree 251/345 -> 251/345   0 picks moved, 0 held out, 0 voided
+                             context 8 (DISCARD)  10/11 agree
+Discrimination Gate   PASS   agree 180/247 -> 179/247   3 picks moved, 0 unruled
+                             IMPROVED  82225643|1|decision|12   MISS -> OK
+                             REGRESSED 82226759|1|decision|29   OK -> MISS   owner=#262
+                             REGRESSED 82522726|1|decision|7    OK -> MISS   owner=#262
+```
+
+**All three of those are the BASE's, not this branch's**, and that is measured rather than assumed:
+re-running the Discrimination Gate with `src/` checked out at `origin/main` and everything else from
+this branch reproduces the same three frames, the same directions and the same `179/247`. The two
+regressions are already held out under Issue #262; the improvement arrived with main. This branch's
+own contribution to both gates remains exactly zero.
+
+The re-measure follows ADR-0093 decision 5's staged-attribution idea, applied to a rebase rather than
+to a two-part change: run the base alone first, and whatever it accounts for is not yours to rule on.
 
 **Issue #294's own scope item 2 does not survive measurement.** It states that a fix *"moves every
 forced discard in the corpus, so it needs its own measurement and a wave ruling."* It moves **zero**
