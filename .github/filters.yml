@@ -112,8 +112,15 @@ strategy:
   - 'tests/strategy/**'
   # The POC-A2 coverage census (Issue #269) is a tools/ script whose ONLY tests live in
   # tests/strategy (it measures common/apply_option + common/snapshot_coverage), so it is named
-  # here rather than left to the `any` fail-safe.
+  # here rather than left to the `any` fail-safe. Its INPUTS are named too, and deliberately:
+  # `test_every_clause_bearing_pool_card_has_a_ruling` is the census's rot-guard, and it trips on
+  # a deck gaining a card that carries Effect Clauses — but `agents` maps only to tests/agents, so
+  # without these lines the guard would never run on the change that breaks it. The report itself
+  # is listed because a test asserts its generated markers, and `docs` alone plans NOTHING.
   - 'tools/apply_seam_coverage.py'
+  - 'src/agents/*/deck.csv'
+  - 'src/agents/*/STRATEGY.md'
+  - 'docs/plans/apply-seam-coverage.md'
 value:
   - 'tests/value/**'
 tuner:

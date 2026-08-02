@@ -19,15 +19,19 @@ The apply-seam's *structure* is sound and its *content* is thin. Counted over si
 will actually visit, **69.1 % are MODELLED, 2.4 % ENGINE-RESOLVED, 28.5 % REFUSED** — but almost all
 of that MODELLED mass is structural (a vanilla Basic's deploy, a Basic Energy attach, a Tool attach),
 which was never at risk. Restricted to sites that carry a **card effect**, the picture inverts:
-**24.7 % MODELLED, 5.9 % ENGINE-RESOLVED, 69.4 % REFUSED**, and *nearly half* of the modelled slice
-is modelled only in part. Weighted the way a deck author would ask it — of the 60 cards I shuffle, how
+**24.7 % MODELLED, 5.9 % ENGINE-RESOLVED (an upper bound — see Method), 69.4 % REFUSED**, and
+*nearly half* of the modelled slice is modelled only in part. Weighted the way a deck author would ask it — of the 60 cards I shuffle, how
 many will the seam price correctly when I draw one? — **19.0 % of our copies land on a REFUSED card
 and a further 15.7 % on a card whose clauses cover only part of what it does; against the
 meta-weighted opposing deck it is 34.6 % REFUSED.** The single largest cause is not opponent choice
-and not the shuffle: it is a **clause-vocabulary gap**, 91 of the 118 refusals, and **49 of those 91
-sites carry no RNG or hidden-zone marker at all** — they are precisely the shape §3b calls
-ENGINE-RESOLVED, and they refuse only because `KIND_COVERAGE` gives `_PLAY` / `_ATTACH` / `_EVOLVE`
-no engine route. The bridge §3b built is pointed at the one kind (`_ABILITY`) whose live instances
+(6 sites) and not the accepted opponent-hidden unknown (3): it is a **clause-vocabulary gap**, 91 of
+the 118 refusals. That gap splits again, and both halves are vocabulary work rather than structural
+loss: **49 sites carry no RNG or hidden-zone marker at all** — precisely the shape §3b calls
+ENGINE-RESOLVED, refused only because `KIND_COVERAGE` gives `_PLAY` / `_ATTACH` / `_EVOLVE` no engine
+route — and the other **42 are shuffle- or deck-reading**, which §3b calls structurally refused *on
+the engine route* but which a closed-form transition prices as an `Expectation` over `deck_odds`,
+since deck order is the one zone the registry declares HIDDEN. Only the 18 nondeterministic
+`_ABILITY` refusals are structural in the sense §3b means. The bridge §3b built is pointed at the one kind (`_ABILITY`) whose live instances
 are all shuffle-riding draw engines, so it resolves **zero** of the 17 Ability options in the
 372-frame corpus.
 
@@ -51,11 +55,16 @@ Sources are all at-source per CLAUDE.md; nothing here is recalled.
   **and** an `_ABILITY`, and its attack is a turn-ender with no successor state at all. A site is one
   (card, option kind, effect) triple the composer's 1-ply ordering will visit. Attacks and passive
   Abilities are counted and then excluded — they are not apply-seam sites.
-* **The fate gate is applied as built**, not as hoped: `coverage()` first, then, for the engine
-  route, depth / `deterministic` / `search_api` exactly as `apply_option.fate` orders them.
-  Determinism is decided **fail-closed** from the printed text (ADR-0067's yield convention): any
-  shuffle, deck read, coin, reveal, prize or opponent-judgement marker means *not proved*. Absence of
-  a marker is **not** a proof — it makes a site an ENGINE-RESOLVED *candidate*, and the tables say so.
+* **The fate gate is `coverage()` as built, plus the per-option judgement T4 still owes.** The
+  census reads `apply_option.coverage(kind)` directly, then decides the per-OPTION half that
+  `apply_option.refuse(..., scope=OPTION_SCOPE)` documents but T0 cannot yet compute. It does **not**
+  call `apply_option.fate`, and that matters: `fate` also demands `deterministic=True` and a live
+  `search_api`, and **nothing produces either today**, so a literal call returns REFUSED for every
+  engine-route option. **ENGINE-RESOLVED in this report therefore means *eligible and
+  candidate-deterministic*, an upper bound**, and every table that carries it says so. Determinism is
+  judged **fail-closed** from the printed text (ADR-0067's yield convention): any shuffle, deck read,
+  coin, reveal, prize or opponent-judgement marker means *not proved*, and absence of a marker is
+  **not** a proof.
 * **Exposure** is reported twice: raw copies across our five decks, and copies in the *meta-weighted*
   opposing deck (each archetype's representative build weighted by the artifact's own recency-decayed
   prior, renormalised). An unweighted sum over 122 archetypes would let a hundred one-off brews
@@ -66,6 +75,21 @@ Sources are all at-source per CLAUDE.md; nothing here is recalled.
   to run if a card is missing an entry, because defaulting either way would fabricate the report's
   most important column.
 
+### Scope note — what this landed beyond the report
+
+Issue #269 says *"Read-only: no `src/` edits"* and *"Suite untouched"*. `src/` is untouched. Three
+things were added anyway, and they are named here rather than buried so the trade is visible:
+
+* `tools/apply_seam_coverage.py` — the census, committed rather than run once and thrown away. A
+  report whose numbers cannot be regenerated stops being a measurement the first time the compendium
+  grows.
+* `tests/strategy/test_apply_seam_coverage.py` — the census's own rot-guard. Its load-bearing test
+  is that a card gaining Effect Clauses with no hand-ruled coverage judgement **fails** rather than
+  defaulting to FULL and silently inflating this report. This adds to the suite; it changes nothing
+  in it.
+* `.github/filters.yml` + `docs/ci.md` — routing, so the guard above actually runs on the changes
+  that trip it (a deck edit, and the report's own `.md`), instead of being skipped by exactly those.
+
 <!-- BEGIN GENERATED: tools/apply_seam_coverage.py -->
 
 <!-- GENERATED by tools/apply_seam_coverage.py — do not hand-edit this section. -->
@@ -73,6 +97,8 @@ Sources are all at-source per CLAUDE.md; nothing here is recalled.
 Pool: **385 distinct cards** — 5 shipped agent decks (`src/agents/*/deck.csv`) plus 122 scouting archetypes' representative builds. **414 apply-seam sites**; 326 attacks are TERMINAL and 41 Abilities are passive, so neither is a site.
 
 ### Headline — every site
+
+**`engine-resolved` here means *eligible and candidate-deterministic*, not a fate a live call would return.** `apply_option.fate` refuses unless the caller passes BOTH `deterministic=True` (a per-option proof nothing produces yet) and a `search_api`, so under the merged seam as invoked today these refuse too. They are broken out because the work that would promote them is a determinism PROOF, not a clause kind — a different backlog from the refusals below.
 
 | fate | sites | % sites | copies in our 5 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
@@ -276,7 +302,12 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 | Stadium removal | **NEW** | 1 | 0 | 0.00 |
 | devolve | **NEW** | 1 | 0 | 0.00 |
 
-**49 of 91** gap sites carry no RNG / hidden-zone marker at all — they are exactly the shape §3b describes as ENGINE-RESOLVED, and they refuse only because `KIND_COVERAGE` routes `_PLAY` / `_ATTACH` / `_EVOLVE` to no engine at all (26 copies across our 5 decks, 9.8 meta copies). See the report's AMBIGUOUS #1.
+**The gap splits again on RNG, and the split matters because the two have different fixes.** §3b names shuffle-riding as a structural refusal — but that argument is about the ENGINE route (no deal-seed, so a sim is one sample). On a MODELLED kind a shuffle is not a refusal at all: deck ORDER is `snapshot_coverage`'s one HIDDEN zone, priced as a distribution by `deck_odds`, and §3 already says a search-reveal returns an `Expectation`. So an RNG-shaped card on a MODELLED kind is still a VOCABULARY gap — it just costs an Expectation node rather than a scalar transition.
+
+| gap shape | sites | our copies | meta copies | what it needs |
+|---|---|---|---|---|
+| deterministic-shaped (no RNG / hidden-zone marker) | 49 | 26 | 9.8 | would be ENGINE-RESOLVED if a MODELLED kind had an engine route — AMBIGUOUS #1 |
+| RNG-shaped (shuffle / deck read / coin) | 42 | 18 | 8.5 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
 
 **57 of 91** gap sites need vocabulary that does not exist yet; 34 need only a compendium entry in an existing kind.
 
@@ -371,13 +402,15 @@ A Tool attach is structurally MODELLED: it writes `attached_tools`, which is hom
 
 ### Per-deck exposure
 
+Per CARD (each card counted once, at its WORST site), so every row totals the deck's 60.
+
 | deck | modelled-full | modelled-partial | engine-resolved | refused | % at-risk (partial+refused) |
 |---|---|---|---|---|---|
-| dragapult_ex | 41 | 14 | 2 | 11 | 36.8% |
-| grimmsnarl_ex | 42 | 8 | 4 | 10 | 28.1% |
-| mega_lucario | 41 | 7 | 0 | 14 | 33.9% |
+| dragapult_ex | 33 | 14 | 2 | 11 | 41.7% |
+| grimmsnarl_ex | 38 | 8 | 4 | 10 | 30.0% |
+| mega_lucario | 39 | 7 | 0 | 14 | 35.0% |
 | mega_starmie | 45 | 14 | 0 | 1 | 25.0% |
-| slowking | 39 | 4 | 0 | 21 | 39.1% |
+| slowking | 35 | 4 | 0 | 21 | 41.7% |
 
 ### Clause write-set health (`snapshot_coverage`)
 
@@ -411,8 +444,8 @@ A Tool attach is structurally MODELLED: it writes `attached_tools`, which is hom
 The issue names six differenced families. Three are well served, three are structurally hampered on
 day one.
 
-**fetch — well served in SHAPE, under-populated in DATA.** `fetch` is the most-used clause kind in
-the pool (18 sites) and its vocabulary already carries target / zone / hp_max / no_rule_box /
+**fetch — well served in SHAPE, under-populated in DATA.** `fetch` is the pool's second-most-used clause kind
+(18 sites, behind `draw`'s 20) and its vocabulary already carries target / zone / hp_max / no_rule_box /
 energy_type / dest, which is enough for every fetch card measured. But 28 further sites are refused
 *fetch-family* cards with no compendium entry at all — Master Ball, Precious Trolley, Hyper Aroma,
 Dusk Ball, Cyrano, Brock's Scouting, Team Rocket's Great Ball and 21 more. That is the cheapest fix
@@ -534,7 +567,8 @@ Issue #263.
    between a composer that can order a gust and one that must expand every one.
 3. **Mint a `gust` clause kind** — highest single-family exposure (11 of our copies), named by all
    three authored doctrines, and the family the differencing system exists to price.
-4. **Fix the 14 partial draw clauses** — 47 copies of silently-wrong numbers, and the family the
+4. **Fix the 14 partial draw clauses** — 29 copies of silently-wrong numbers (47 counts all 19
+   partial sites), and the family the
    1-ply ordering amendment was written to rescue.
 5. **Rule AMBIGUOUS #3 by measurement**, not argument: a single probe of a triggered-Ability evolve
    through the live engine settles where 12 sites belong.

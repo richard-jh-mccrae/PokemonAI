@@ -161,8 +161,6 @@ _FAMILIES: tuple[tuple[str, bool, object], ...] = (
      re.compile(r"switch your active pok.mon|switch it with your active pok.mon", re.I)),
     ("devolve", False, re.compile(r"\bdevolve\b", re.I)),
     ("prize manipulation", False, re.compile(r"prize card", re.I)),
-    ("Stadium static board modifier", False, re.compile(r"^__stadium__$")),
-    ("Special Energy static provision + rider", False, re.compile(r"^__special_energy__$")),
     ("hand disruption — their hand", False,
      re.compile(r"(their|opponent.s) hand", re.I)),
     ("energy attach / acceleration", True,
@@ -428,8 +426,6 @@ def family(site: "Site") -> tuple[str, bool]:
     no family reads as *Stadium static board modifier* — which is the truthful answer, and a
     new-vocabulary one — instead of vanishing into "other"."""
     for name, expressible, pattern in _FAMILIES:
-        if pattern.pattern.startswith("^__"):
-            continue
         if pattern.search(site.text or ""):
             return name, expressible
     if site.category == "stadium":
@@ -439,7 +435,28 @@ def family(site: "Site") -> tuple[str, bool]:
     return "unclassified", False
 
 
-def resolve(site: Site) -> Site:  # noqa: C901
+def refusal_cause(text: str, *, rng_refuses: bool) -> str:
+    """The cause a refusal on ``text`` should carry, or ``""`` when nothing in it refuses.
+
+    One cascade, called from both refusal branches of :func:`resolve`, so the two can never drift on
+    what counts as opponent choice. ``rng_refuses`` is the one real difference between them: the
+    ENGINE-RESOLVED gate is a determinism PROOF and any RNG marker defeats it, while a closed-form
+    transition on a MODELLED kind prices the shuffle as a `deck_odds` distribution and is untroubled
+    by it.
+
+    Order is a precedence: opponent JUDGEMENT outranks opponent HIDDEN state (a card that reads
+    their hand *and* lets them choose is refused for the choice, the harder unknown), and both
+    outrank mere RNG."""
+    if _hits(text, _OPPONENT_CHOICE):
+        return OPP_CHOICE
+    if _hits(text, _OPPONENT_HIDDEN):
+        return OPP_HIDDEN
+    if rng_refuses and _hits(text, _RNG_OR_HIDDEN):
+        return NONDET
+    return ""
+
+
+def resolve(site: Site) -> Site:
     """Resolve one site to a §3b fate plus a reported class and, when refused, a cause.
 
     Mirrors `apply_option.fate` exactly where that function decides, and extends it only where the
@@ -452,15 +469,11 @@ def resolve(site: Site) -> Site:  # noqa: C901
         # Only `_ABILITY` lands here. The gate is a PROOF of determinism, so anything touching RNG,
         # a hidden zone or the opponent's judgement refuses fail-closed — and note that a complete
         # clause set does NOT rescue it: `fate()` never returns MODELLED for a kind the table routes
-        # to the engine.
-        if _hits(site.text, _OPPONENT_CHOICE):
-            site.fate, site.cause = seam.REFUSED, OPP_CHOICE
-        elif _hits(site.text, _OPPONENT_HIDDEN):
-            site.fate, site.cause = seam.REFUSED, OPP_HIDDEN
-        elif _hits(site.text, _RNG_OR_HIDDEN):
-            site.fate, site.cause = seam.REFUSED, NONDET
-        else:
-            site.fate = seam.ENGINE_RESOLVED
+        # to the engine. RNG counts against it here and only here: on a MODELLED kind a shuffle is
+        # priced as a distribution by `deck_odds`, but the engine route's gate is a determinism
+        # PROOF, so the same text refuses.
+        site.cause = refusal_cause(site.text, rng_refuses=True)
+        site.fate = seam.REFUSED if site.cause else seam.ENGINE_RESOLVED
         if site.fate == seam.REFUSED and site.clauses and _clause_judgement(site.card_id):
             site.note = ("clause-complete but UNREACHABLE: `_ABILITY` is routed to the engine, and "
                          "the engine route refuses this")
@@ -484,14 +497,11 @@ def resolve(site: Site) -> Site:  # noqa: C901
         site.report_class, site.note = judged
         return site
 
-    # No clause covers this site's effect: a per-option refusal inside a MODELLED kind.
+    # No clause covers this site's effect: a per-option refusal inside a MODELLED kind. RNG does
+    # NOT count against it — a closed-form transition prices a shuffle as a distribution — so the
+    # residue is a vocabulary gap.
     site.fate, site.report_class = seam.REFUSED, seam.REFUSED
-    if _hits(site.text, _OPPONENT_CHOICE):
-        site.cause = OPP_CHOICE
-    elif _hits(site.text, _OPPONENT_HIDDEN):
-        site.cause = OPP_HIDDEN
-    else:
-        site.cause = GAP
+    site.cause = refusal_cause(site.text, rng_refuses=False) or GAP
     return site
 
 
@@ -629,11 +639,27 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     L: list[str] = []
     add = L.append
 
-    effectful = [s for s in sites if s.has_effect or s.report_class != FULL]
+    # Name and predicate agree, and the invariant that used to be an `or` clause is asserted
+    # instead: a site with no card effect is structural, and structural is MODELLED-FULL by
+    # construction. If that ever stops holding, the headline must be re-derived, not quietly widened.
+    effect_bearing = [s for s in sites if s.has_effect]
+    stray = [s for s in sites if not s.has_effect and s.report_class != FULL]
+    if stray:
+        raise AssertionError(
+            "effect-free sites that are not MODELLED-FULL: %s — the 'effect-bearing only' headline "
+            "would silently omit them" % sorted({(s.card_id, s.report_class) for s in stray}))
     by_fate = collections.Counter(s.fate for s in sites)
     by_class = collections.Counter(s.report_class for s in sites)
-    eff_fate = collections.Counter(s.fate for s in effectful)
-    eff_class = collections.Counter(s.report_class for s in effectful)
+    eff_fate = collections.Counter(s.fate for s in effect_bearing)
+    eff_class = collections.Counter(s.report_class for s in effect_bearing)
+
+    # Each card's WORST site — the per-CARD view several sections below need, computed once.
+    worst_rank = {seam.REFUSED: 0, PARTIAL: 1, seam.ENGINE_RESOLVED: 2, FULL: 3}
+    worst: dict[int, str] = {}
+    for s in sites:
+        cur = worst.get(s.card_id)
+        if cur is None or worst_rank[s.report_class] < worst_rank[cur]:
+            worst[s.card_id] = s.report_class
 
     def wsum(pred, weight) -> float:
         return sum(weight.get(s.card_id, 0) for s in sites if pred(s))
@@ -648,6 +674,13 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add("")
 
     add("### Headline — every site")
+    add("")
+    add("**`engine-resolved` here means *eligible and candidate-deterministic*, not a fate a live "
+        "call would return.** `apply_option.fate` refuses unless the caller passes BOTH "
+        "`deterministic=True` (a per-option proof nothing produces yet) and a `search_api`, so under "
+        "the merged seam as invoked today these refuse too. They are broken out because the work "
+        "that would promote them is a determinism PROOF, not a clause kind — a different backlog "
+        "from the refusals below.")
     add("")
     rows = []
     for fate in (seam.MODELLED, seam.ENGINE_RESOLVED, seam.REFUSED):
@@ -670,12 +703,6 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         "deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam "
         "price correctly when I draw them?* — so that answer takes each card's WORST site:")
     add("")
-    worst_rank = {seam.REFUSED: 0, PARTIAL: 1, seam.ENGINE_RESOLVED: 2, FULL: 3}
-    worst: dict[int, str] = {}
-    for s in sites:
-        cur = worst.get(s.card_id)
-        if cur is None or worst_rank[s.report_class] < worst_rank[cur]:
-            worst[s.card_id] = s.report_class
     rows = []
     for cls in (FULL, seam.ENGINE_RESOLVED, PARTIAL, seam.REFUSED):
         n_cards = sum(1 for c in worst.values() if c == cls)
@@ -697,10 +724,10 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     rows = []
     for fate in (seam.MODELLED, seam.ENGINE_RESOLVED, seam.REFUSED):
         n = eff_fate.get(fate, 0)
-        rows.append([f"**{fate}**", n, _pct(n, len(effectful))])
+        rows.append([f"**{fate}**", n, _pct(n, len(effect_bearing))])
     add(_table(rows, ["fate", "sites", "% effect-bearing sites"]))
     add("")
-    add(_table([[f"**{c}**", eff_class.get(c, 0), _pct(eff_class.get(c, 0), len(effectful))]
+    add(_table([[f"**{c}**", eff_class.get(c, 0), _pct(eff_class.get(c, 0), len(effect_bearing))]
                 for c in (FULL, PARTIAL)], ["MODELLED split", "sites", "% effect-bearing sites"]))
     add("")
 
@@ -744,12 +771,26 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add(_table(rows, ["effect family", "clause vocabulary", "sites", "our copies", "meta copies"]))
     add("")
     det = [s for s in gap if not _hits(s.text, _RNG_OR_HIDDEN)]
-    add(f"**{len(det)} of {len(gap)}** gap sites carry no RNG / hidden-zone marker at all — they "
-        f"are exactly the shape §3b describes as ENGINE-RESOLVED, and they refuse only because "
-        f"`KIND_COVERAGE` routes `_PLAY` / `_ATTACH` / `_EVOLVE` to no engine at all "
-        f"({sum(ours.get(s.card_id, 0) for s in det)} copies across our 5 decks, "
-        f"{sum(meta.get(s.card_id, 0.0) for s in det):.1f} meta copies). See the report's "
-        "AMBIGUOUS #1.")
+    rng = [s for s in gap if _hits(s.text, _RNG_OR_HIDDEN)]
+    add("**The gap splits again on RNG, and the split matters because the two have different "
+        "fixes.** §3b names shuffle-riding as a structural refusal — but that argument is about "
+        "the ENGINE route (no deal-seed, so a sim is one sample). On a MODELLED kind a shuffle is "
+        "not a refusal at all: deck ORDER is `snapshot_coverage`'s one HIDDEN zone, priced as a "
+        "distribution by `deck_odds`, and §3 already says a search-reveal returns an `Expectation`. "
+        "So an RNG-shaped card on a MODELLED kind is still a VOCABULARY gap — it just costs an "
+        "Expectation node rather than a scalar transition.")
+    add("")
+    add(_table([
+        ["deterministic-shaped (no RNG / hidden-zone marker)", len(det),
+         sum(ours.get(s.card_id, 0) for s in det),
+         f"{sum(meta.get(s.card_id, 0.0) for s in det):.1f}",
+         "would be ENGINE-RESOLVED if a MODELLED kind had an engine route — AMBIGUOUS #1"],
+        ["RNG-shaped (shuffle / deck read / coin)", len(rng),
+         sum(ours.get(s.card_id, 0) for s in rng),
+         f"{sum(meta.get(s.card_id, 0.0) for s in rng):.1f}",
+         "needs an `Expectation`-returning clause, NOT an engine call — and is structurally "
+         "refused ONLY on the engine route"],
+    ], ["gap shape", "sites", "our copies", "meta copies", "what it needs"]))
     add("")
     n_new = sum(v[0] for v in fam.values() if not v[3])
     add(f"**{n_new} of {len(gap)}** gap sites need vocabulary that does not exist yet; "
@@ -817,12 +858,13 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
 
     add("### Per-deck exposure")
     add("")
+    add("Per CARD (each card counted once, at its WORST site), so every row totals the deck's 60.")
+    add("")
     rows = []
     for agent, counter in sorted(decks.items()):
         per = collections.Counter()
-        for s in sites:
-            if s.card_id in counter:
-                per[s.report_class] += counter[s.card_id]
+        for cid, n in counter.items():
+            per[worst[cid]] += n
         tot = sum(per.values()) or 1
         rows.append([agent, per.get(FULL, 0), per.get(PARTIAL, 0),
                      per.get(seam.ENGINE_RESOLVED, 0), per.get(seam.REFUSED, 0),
