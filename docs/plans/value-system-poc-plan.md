@@ -305,9 +305,15 @@ deliberate list; gates green; flips → wave 2.
   Function Tag with untagged defaulting to committing. **ADR-0095's falsifiable prediction held** —
   `82225643|1|decision|11` now takes the human's Pokégear while the Hammer stays ENDORSED (an ordering,
   not a suppression, exactly as the ruling asks). Gates: Discrimination PASS (0 unruled, held-outs
-  unchanged), Decision **1 unruled REGRESSION → wave 2** (`82225643|1|decision|12`, the next frame of
-  the same turn — the same frame the Discrimination Gate reports `MISS → OK`, so the valuation agrees
-  with its ruling and the SEQUENCER is what re-orders; not self-ruled).
+  unchanged); Decision surfaced **1 REGRESSION** — `82225643|1|decision|12`, the next frame of the
+  same turn, and the same frame the Discrimination Gate reports `MISS → OK`, so the valuation agrees
+  with its ruling and only the SEQUENCER re-orders. Not self-ruled: put to the user with its
+  evidence and **USER-RULED ACCEPT 2026-08-02** (`fixed`, non-voiding — the boundary orders the dig
+  ahead of the Hammer across two actions of one turn, which is what the adjacent f11 ruling asks for,
+  and f12's own `correct` was adjudicating Hammer-vs-ATTACK). Baseline re-captured at the ruling
+  commit; **both gates PASS**, agree 251/345, suite 4504. The leaf baseline is deliberately not
+  re-captured (it passes), and what the Decision re-capture absorbed beyond its own ruling is named
+  in `docs/ci.md`'s provenance table.
 - **Shadow deletion: DONE 2026-08-02 (item 2h), except the `_DISCARD` ladder.** All four shadows,
   their `Decision` fields and telemetry keys, the v1 discard fallback (`discard_keep_value` flag +
   `_discard_equation_pick`) and `_discard_equation_rows`' now-unread v1 ranking are deleted, along

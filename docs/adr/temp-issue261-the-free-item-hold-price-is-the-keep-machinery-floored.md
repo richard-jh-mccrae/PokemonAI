@@ -208,6 +208,8 @@ BEFORE   Decision Gate        PASS   0 unruled, 2 held out (#262, #272), 1 voide
 
 AFTER    Decision Gate        FAIL   1 unruled REGRESSION, 2 held out, 1 voided
                               agree 249/345 -> 251/345   (11 picks moved)
+                              -> RULED `fixed`, baseline re-captured at the ruling commit
+                              -> PASS   0 unruled, 0 picks moved, agree 251/345
                               FIX (5): 82225643|1|decision|11 [3] -> [0]  (human [0])   <- ADR-0095's prediction
                                        + the four the baseline already fixed
          Discrimination Gate  PASS   0 unruled, the SAME 2 held out (#262 x2), 0 voided
@@ -229,7 +231,7 @@ it is the same measurement-artefact species as ADR-0093's void gauntlet run.
 by decision 1's construction. All movement is decision 4's, which is exactly the attribution
 decision 1's floor was chosen to preserve.
 
-### The one unruled REGRESSION goes to WAVE 2, un-self-ruled
+### The one REGRESSION — put to the user, and RULED `fixed` (2026-08-02)
 
 ```
 REGRESSED 82225643|1|decision|12   [1] -> [0]   (human [1])
@@ -255,10 +257,33 @@ is now the TOP-ranked option by leaf value, where before it was not. So the valu
 f12 ruling, and it is the SEQUENCER that takes the dig first, which is precisely what a tier is for
 (it overrides score by construction; a boundary expressible as a score would not have needed one).
 
-**That reading is NOT applied.** It is the user's to make, and self-ruling a frame whose two adjacent
-rulings appear to adjudicate different comparisons is exactly the move ADR-0072 decision 5 and
-ADR-0092's wave process exist to prevent. Recorded here with its evidence; the gate stays RED until
-it is ruled.
+**That reading was NOT applied.** It was put to the user with its evidence and the three dispositions
+available (accept / hold out onto a named owner / reject the boundary on this shape), because
+self-ruling a frame whose two adjacent rulings adjudicate different comparisons is exactly the move
+ADR-0072 decision 5 and ADR-0092's wave process exist to prevent.
+
+> **USER-RULED ACCEPT, 2026-08-02.** Recorded in `data/corrections/reviewed.json` as `fixed` —
+> **non-voiding**, so the ruling keeps grading — and `data/decider_lab/baseline.json` re-captured at
+> the ruling commit. Decision Gate: **PASS**, 0 unruled, 0 picks moved, agree **251/345**.
+
+**A June note in the ledger had already reached the same reading, and the tool overwrote it.** The
+frame carried a `covered` disposition from 2026-06-29 whose text says, unprompted: *"Single-frame
+retest reports fixed=False (chosen [6]Attack->[0]) ONLY because dig-before-commit ties
+play-energy-denial at +20 and the tie-break picks the dig first; the Hammer is tier-0 endorsed …
+so attack-last plays the Hammer before the attack this turn — the human's intent."* Six weeks before
+ADR-0095 existed, that is this ADR's argument, reached from the opposite direction. It is preserved
+verbatim inside the new entry rather than lost, with its two expired details corrected
+(`play-energy-denial` was retired by ADR-0062, and what it calls a TIE broken by menu position is now
+ordered on a board fact). `review_correction.py` replaces an entry in place, so preserving a
+superseded ruling is the author's job — worth knowing before the next one is overwritten silently.
+
+**The leaf baseline is deliberately NOT re-captured.** That gate PASSES, and re-capturing a passing
+gate's baseline absorbs movement nobody ruled — including this build's three leaf picks and the two
+frames still held out to Issue #262. What the Decision-Gate re-capture *did* absorb beyond its own
+ruling is named in `docs/ci.md`'s provenance table rather than left for the `HELD OUT` block to
+swallow: `83117367|0|decision|34` (owner Issue #262) and `83661649|0|decision|30` (owner Issue #272)
+now sit in the baseline as their current picks. Both owners stand and both fixtures keep their
+`owner` field, so deleting it still returns each to gating — against this file, not the pre-2f one.
 
 ## Consequences
 
