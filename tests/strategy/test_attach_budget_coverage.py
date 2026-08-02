@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from common import snapshot_coverage
 from common.strategy.combat import _ACCEL_TAGS
 
 _ROOT = Path(__file__).resolve().parents[2]
@@ -63,7 +64,9 @@ def _tags() -> dict:
 
 def _clauses() -> dict:
     raw = json.loads((_ROOT / "src" / "common" / "card_effects.json").read_text(encoding="utf-8"))
-    return {int(k): v for k, v in raw.items()}
+    # Through the shared parse, not a local `int(k)` comprehension: the compendium carries a reserved
+    # non-numeric key (`_covers`), and a reader that does its own key walk is the one that trips on it.
+    return snapshot_coverage.clause_lists(raw)
 
 
 def _special_energy_ids() -> set:

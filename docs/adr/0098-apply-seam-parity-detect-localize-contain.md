@@ -264,8 +264,15 @@ writable zone with its snapshot home, or one of two explicit statuses:
   field, and it is the same fact that makes shuffle-riding effects REFUSED above.
 
 The **audit test** walks the committed Effect Clause vocabulary (`card_effects.json`, ADR-0032) and
-fails on a kind or rider with no declared write-set — the requirement that a new clause fail rather
-than silently price 0. The strong invariant is `clauses_writing_unhomed()`: **no clause the
+fails on a kind, rider or `effect` with no declared write-set — the requirement that a new clause
+fail rather than silently price 0. (`effect` joined that walk in Issue #300; before it, the walk
+covered kinds and riders only, so Crushing Hammer's `{"kind": "coin", "effect":
+"discard_opp_energy"}` passed green while the write it performs had no declared home. The walk now
+lives in `snapshot_coverage.clause_vocabulary()` rather than in the test, because a walker on the
+checking side is one nobody updates when the schema grows.) The same issue added the per-card
+`_covers` verdict: a clause set that covers only PART of its printed card is declared as such, and
+`snapshot_coverage.clauses_cover()` turns that into the fail-closed tri-state `fate()` refuses on,
+so a partial set cannot price as a complete one. The strong invariant is `clauses_writing_unhomed()`: **no clause the
 compendium already knows may write to an owed zone**, which is what keeps the owed list a schedule
 rather than a live correctness hole. It is empty.
 

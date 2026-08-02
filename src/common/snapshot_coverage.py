@@ -23,9 +23,24 @@ This module is the enumeration, as data:
     prices it. Recorded so a later reader does not "fix" it by inventing a field.
 
 * :data:`CLAUSE_WRITES` — the Effect Clause vocabulary (`card_effects.json`, ADR-0032) mapped to the
-  zones each clause writes. The audit test walks the committed compendium and fails on a clause kind
-  or rider with **no declared write-set**, which is the "a new clause kind must fail rather than
-  silently price 0" requirement made executable.
+  zones each clause writes. The audit test walks the committed compendium and fails on a clause
+  ``kind``, ``rider`` **or** ``effect`` with **no declared write-set**, which is the "a new clause
+  kind must fail rather than silently price 0" requirement made executable.
+
+  ``effect`` was the third of those and it was unaudited until Issue #300: :func:`clause_vocabulary`
+  walked kinds and riders only, so Crushing Hammer's
+  ``{"kind": "coin", "effect": "discard_opp_energy"}`` passed the audit green while the write it
+  actually performs — the opponent's attached Energy, and their discard — had no declared home at
+  all. The walk lives in THIS module rather than in the test for exactly that reason: a vocabulary
+  the audit forgets to visit is an audit that passes by not looking.
+
+* :data:`COVERS_FULL` / :data:`COVERS_PARTIAL` — whether a card's clause SET covers its whole printed
+  effect. A **partial** set is worse than none: §3b has no PARTIAL fate, so the seam models what the
+  clauses say and the omitted leg differences to exactly 0 — the silent-zero failure this module
+  exists to prevent, arriving through the compendium instead of through the snapshot. The verdict is
+  authored per card (`tools/meta_tracker/effect_overrides.json` → `card_effects.json`, both under
+  :data:`COVERS_KEY`) and :func:`clauses_cover` turns it into the tri-state `apply_option.fate`
+  consumes, so a partial set REFUSES rather than pricing three quarters of a card.
 
 The strongest assertion this enables is :func:`clauses_writing_unhomed`: **no clause the compendium
 knows may write to an `owed` zone.** It is empty today, and it is what keeps the owed list from
@@ -36,8 +51,9 @@ footprint cannot name a zone the coverage registry has never heard of.
 """
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Any, Sequence
 
 #: A public snapshot read represents this zone.
 HOMED = "homed"
@@ -87,8 +103,12 @@ WRITABLE: tuple[Zone, ...] = (
     Zone("stadium", "the Stadium in play", HOMED, home="stadium"),
     Zone("bodies_in_play", "who is Active and who is Benched, both sides", HOMED,
          home="mine.active,mine.bench,theirs.active,theirs.bench"),
-    Zone("attached_energy", "Energy attached to a body", HOMED,
-         home="mine.active.energy_count,mine.active.attached_types"),
+    # BOTH sides. Energy denial (`discard_opp_energy`) writes the OPPONENT's attachments, so a
+    # my-side-only home would declare a write the snapshot could not actually show — the same silent
+    # zero one level down. `TheirSide` shares `_SideBase.active`, so the read genuinely exists.
+    Zone("attached_energy", "Energy attached to a body, either side", HOMED,
+         home="mine.active.energy_count,mine.active.attached_types,"
+              "theirs.active.energy_count,theirs.active.attached_types"),
     Zone("damage_counters", "damage on a body — heal writes it, attacks write it", HOMED,
          home="mine.active.hp_remaining"),
     Zone("allowance_energy_attached", "the one-Energy-per-turn allowance, spent or not", HOMED,
@@ -126,13 +146,18 @@ WRITABLE: tuple[Zone, ...] = (
 BY_ID = {z.id: z for z in WRITABLE}
 
 #: The Effect Clause vocabulary (`card_effects.json`, ADR-0032) -> the zones each clause WRITES.
-#: Keys are the committed `kind` and `rider` values. The audit test walks the compendium and fails on
-#: any kind or rider absent here — that is the "a new clause kind fails rather than silently pricing
-#: 0" requirement, executable.
+#: Keys are the committed `kind`, `rider` **and** `effect` values — all three, because all three are
+#: vocabulary a card can be written in. The audit test walks the compendium (:func:`clause_vocabulary`)
+#: and fails on any of them absent here: that is the "a new clause kind fails rather than silently
+#: pricing 0" requirement, executable.
 CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # kinds
     "accel": frozenset({"attached_energy", "my_discard_contents", "my_deck_count", "deck_odds"}),
-    "coin": frozenset(),                     # writes nothing: it is an RNG READ. See COIN below.
+    # The FLIP writes nothing — it is an RNG READ, which is why `coin` is in NONDETERMINISTIC_CLAUSES
+    # rather than carrying zones. What the flip GATES is a separate vocabulary: the clause's `effect`
+    # value, declared below. Reading this entry as "a coin clause writes nothing" is the Issue #300
+    # defect — Crushing Hammer's whole point is the write its `effect` names.
+    "coin": frozenset(),
     "draw": frozenset({"my_hand_ids", "my_deck_count", "deck_odds"}),
     "energy_provide": frozenset({"attached_energy", "allowance_energy_attached"}),
     # Issue #204: a `discard_energy_recur` line reloading Basic Energy from its OWN discard pile
@@ -150,6 +175,10 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "shuffle_both_hands": frozenset({"my_hand_ids", "their_hand_size", "my_deck_count",
                                      "their_deck_count", "deck_odds", "deck_order"}),
     "shuffle_self_in": frozenset({"bodies_in_play", "my_deck_count", "deck_odds", "deck_order"}),
+    # effects — the leg a `coin` (or any other gate) RESOLVES INTO. `discard_opp_energy` is the only
+    # value in the committed compendium and in `effect_overrides.json` today (swept 2026-08-02);
+    # a second one lands in `undeclared_clauses()` rather than passing green.
+    "discard_opp_energy": frozenset({"attached_energy", "their_discard_contents"}),
 }
 
 #: Clauses that consult RNG. **Never eligible for the ENGINE-RESOLVED route** — the gate there is
@@ -164,6 +193,127 @@ NONDETERMINISTIC_CLAUSES: frozenset[str] = frozenset({
 #: #263 must never fold one of these into a commutative block, whatever its read/write footprint
 #: says: reordering around a reveal changes what the later choices are.
 REVEALING_CLAUSES: frozenset[str] = frozenset({"draw", "fetch"})
+
+#: The clause keys that are VOCABULARY — a value drawn from a closed set that must have a declared
+#: write-set — as opposed to a parameter (`amount`, `dig`, `hp_max`) or a gate (`restriction`,
+#: `condition`). :func:`clause_vocabulary` walks exactly these, and `CLAUSE_WRITES` keys exactly
+#: these. One list, so "which keys does the audit walk?" has a single answer rather than one per
+#: reader — the drift that let `effect` go unaudited from the day it was authored.
+VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect")
+
+# ── the compendium's audited shape ────────────────────────────────────────────────────────────────
+# `card_effects.json` is `{cardId: [clauses]}` plus ONE reserved non-numeric key, mirroring the
+# `_note` convention `effect_overrides.json` already uses. The parse lives here rather than in each
+# reader so a reader cannot quietly disagree about what the file contains.
+
+#: The reserved key carrying the per-card clause-set completeness verdicts.
+COVERS_KEY = "_covers"
+
+#: The clause set covers the card's WHOLE printed effect.
+COVERS_FULL = "full"
+#: The clause set covers only PART of it. The rest differences to 0 — which under 1-ply ordering
+#: reads as *never explore this*, not as *undervalued*.
+COVERS_PARTIAL = "partial"
+
+COVERS_VERDICTS = frozenset({COVERS_FULL, COVERS_PARTIAL})
+
+#: Card ids whose clause set was PARTIAL when the verdicts were first authored (Issue #300, ported
+#: from the Issue #269 census's hand-ruled table). **The audit asserts this set only ever SHRINKS**,
+#: for the same reason `footprints_writing_unhomed()` is asserted empty: an owed list that can grow
+#: silently is not a schedule. A card leaving it is clause work landing; a card ARRIVING in it is
+#: either new exposure that owes a ruling, or a verdict quietly downgraded — both want a human.
+PARTIAL_CLAUSE_BASELINE: frozenset[int] = frozenset({
+    1080, 1086, 1100, 1110, 1118, 1120, 1153, 1181, 1187, 1192, 1199, 1200, 1203, 1207, 1208,
+    1213, 1214, 1216, 1222, 1223, 1227, 1237, 1239, 1242,
+})
+
+
+def clause_lists(payload: Mapping) -> dict[int, list[dict]]:
+    """``{card id: [clauses]}`` from a raw compendium payload — the numeric entries only.
+
+    Reserved keys (:data:`COVERS_KEY`, any `_note`) are skipped rather than `int()`-ed, which is what
+    a hand-rolled ``{int(k): v for k, v in raw.items()}`` in each reader would do to them."""
+    return {int(k): list(v) for k, v in (payload or {}).items()
+            if str(k).lstrip("-").isdigit()}
+
+
+def covers_table(payload: Mapping) -> dict[int, dict]:
+    """``{card id: {"covers": ..., "reason": ...}}`` from a raw compendium payload.
+
+    Empty when the payload carries no verdicts at all — a compendium built before Issue #300 degrades
+    to "unknown everywhere", which :func:`clauses_cover` maps to `None` and the seam fails closed on,
+    rather than to a fabricated "full"."""
+    block = (payload or {}).get(COVERS_KEY) or {}
+    return {int(k): dict(v) for k, v in block.items()
+            if str(k).lstrip("-").isdigit() and isinstance(v, Mapping)}
+
+
+def clause_vocabulary(payload: Mapping) -> list[str]:
+    """Every vocabulary value the committed compendium actually uses, sorted.
+
+    Walks :data:`VOCABULARY_KEYS` over every clause — ``kind``, ``rider`` and ``effect`` — and accepts
+    a list-valued rider as well as a string one. Read off the artifact rather than from a hand-kept
+    list, because a hand-kept list is precisely what a new clause value would not be added to."""
+    vocab: set[str] = set()
+    for clauses in clause_lists(payload).values():
+        for clause in clauses:
+            for key in VOCABULARY_KEYS:
+                value: Any = clause.get(key)
+                if isinstance(value, str) and value:
+                    vocab.add(value)
+                elif isinstance(value, (list, tuple)):
+                    vocab.update(v for v in value if isinstance(v, str) and v)
+    return sorted(vocab)
+
+
+def clauses_cover(covers: str | None) -> bool | None:
+    """A `covers` verdict as the tri-state `apply_option.fate`'s ``clauses_cover`` argument takes:
+    ``"full"`` → `True`, ``"partial"`` → `False`, anything else (absent, unknown) → `None`.
+
+    Tri-state rather than boolean, and `None` rather than `False`, for the reason ``deterministic``
+    is: *not yet ruled* and *ruled incomplete* are different facts, and the seam is entitled to
+    report them differently even though both fail closed."""
+    if covers == COVERS_FULL:
+        return True
+    if covers == COVERS_PARTIAL:
+        return False
+    return None
+
+
+def partial_clause_cards(payload: Mapping) -> dict[int, str]:
+    """``{card id: reason}`` for every card whose clause set is declared PARTIAL. The owed list.
+
+    The reason is the authored one — the leg the clauses miss, quoted card by card — so this doubles
+    as the work item rather than pointing at one."""
+    return {cid: str(entry.get("reason", "")).strip()
+            for cid, entry in sorted(covers_table(payload).items())
+            if entry.get("covers") == COVERS_PARTIAL}
+
+
+def covers_problems(payload: Mapping) -> list[str]:
+    """Every way the `covers` block fails its own discipline. Empty is the contract.
+
+    A list rather than a raise, like :func:`validate`: an author fixing the compendium wants every
+    complaint at once. The first check is the one that matters — a clause-bearing card with NO
+    verdict is exactly the silent "assume it is complete" this field replaces."""
+    problems: list[str] = []
+    clauses, covers = clause_lists(payload), covers_table(payload)
+    for cid in sorted(clauses):
+        if cid not in covers:
+            problems.append(f"card {cid}: has Effect Clauses but no {COVERS_KEY} verdict — absent "
+                            f"reads as UNKNOWN, and an unknown clause set cannot be told from a "
+                            f"complete one")
+    for cid, entry in sorted(covers.items()):
+        verdict = entry.get("covers")
+        if verdict not in COVERS_VERDICTS:
+            problems.append(f"card {cid}: covers {verdict!r} is not one of {sorted(COVERS_VERDICTS)}")
+        if not str(entry.get("reason", "")).strip():
+            problems.append(f"card {cid}: every verdict MUST quote what the clauses do (or do not) "
+                            f"carry — an unreasoned verdict cannot be re-checked against the card")
+        if cid not in clauses:
+            problems.append(f"card {cid}: has a {COVERS_KEY} verdict but no Effect Clauses — there "
+                            f"is no clause set for it to be a verdict about")
+    return problems
 
 
 def validate(zones: Sequence[Zone] = WRITABLE) -> list[str]:
@@ -207,8 +357,12 @@ def unhomed() -> dict:
 
 
 def undeclared_clauses(kinds: Sequence[str]) -> list[str]:
-    """Clause kinds/riders with no declared write-set. **This is the §3c audit's teeth**: a new
-    clause kind lands here rather than silently writing to nothing and pricing its option at 0."""
+    """Clause vocabulary with no declared write-set. **This is the §3c audit's teeth**: a new clause
+    value lands here rather than silently writing to nothing and pricing its option at 0.
+
+    Takes the values, not the compendium, so it can be bitten by a fabricated one; pair it with
+    :func:`clause_vocabulary` to walk the real artifact. That walk covers all three of
+    :data:`VOCABULARY_KEYS` — until Issue #300 it covered two, and `effect` was the third."""
     return sorted(k for k in set(kinds) if k not in CLAUSE_WRITES)
 
 
@@ -233,6 +387,9 @@ def clauses_writing_unhomed() -> dict:
 
 __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
-    "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "validate", "homes", "unhomed",
+    "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS",
+    "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",
+    "clause_lists", "covers_table", "clause_vocabulary", "clauses_cover", "partial_clause_cards",
+    "covers_problems", "validate", "homes", "unhomed",
     "undeclared_clauses", "unknown_zones", "clauses_writing_unhomed",
 )

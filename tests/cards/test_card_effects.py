@@ -322,3 +322,96 @@ def test_loader_fails_safe_to_empty_when_file_absent(tmp_path):
     from common.effects import CardEffects
     fx = CardEffects.load(tmp_path / "nope.json")
     assert fx.clauses(1112) == ()
+
+
+# --- clause-set completeness: `_covers` (REQ-EFFECT-0018, Issue #300) ----------------
+
+def _covers_round_trip(tmp_path, overrides: dict):
+    """Run the real override -> build -> `card_effects.json` path over a two-card pool.
+
+    The builder is the thing under test, not a re-implementation of it: `covers` is a hand ruling
+    that must survive the same accumulate/re-stamp machinery the clauses do, and the way a data field
+    dies is by being added to the authored file and dropped somewhere in the pipe."""
+    import importlib.util
+    from pathlib import Path
+    ovr = tmp_path / "effect_overrides.json"
+    ovr.write_bytes(json.dumps(overrides).encode("utf-8"))
+    out = tmp_path / "card_effects.json"
+    spec = importlib.util.spec_from_file_location(
+        "build_card_effects", Path(__file__).resolve().parents[2] / "tools" / "build_card_effects.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    table = mod.apply_overrides({}, mod._load_overrides(ovr))
+    payload = {"_covers": mod._load_covers(ovr)}
+    payload.update({str(cid): cls for cid, cls in sorted(table.items())})
+    out.write_bytes(json.dumps(payload).encode("utf-8"))
+    return out
+
+
+@pytest.mark.req("REQ-EFFECT-0018")
+def test_covers_survives_the_override_to_build_to_compendium_round_trip(tmp_path):
+    """The verdict is authored beside the clauses and must arrive in the shipped artifact intact —
+    verdict AND reason, because a verdict nobody can re-check against the printed card is a bare
+    assertion."""
+    from common.effects import CardEffects
+    out = _covers_round_trip(tmp_path, {
+        "_note": "fixture",
+        "1112": [{"kind": "heal", "amount": 60, "rider": "discard_own_energy"}],
+        "1203": [{"kind": "draw", "amount": 1}],
+        "_covers": {
+            "_note": "fixture",
+            "1112": {"covers": "full", "reason": "heal 60 + the discard rider"},
+            "1203": {"covers": "partial", "reason": "the card SWITCHES the Active first"},
+        },
+    })
+    fx = CardEffects.load(out)
+    assert fx.covers(1112) == "full" and fx.covers(1203) == "partial"
+    assert "SWITCHES" in json.loads(out.read_text(encoding="utf-8"))["_covers"]["1203"]["reason"]
+    # And an unruled card is UNKNOWN, not assumed complete.
+    assert fx.covers(9999) is None
+
+
+@pytest.mark.req("REQ-EFFECT-0018")
+def test_a_partial_clause_set_fails_closed_at_the_seams_tri_state(tmp_path):
+    """What the round-trip is *for*: `clauses_cover` is the argument `apply_option.fate` takes, and a
+    partial set must answer `False` (refuse) rather than `True` (model three quarters of the card and
+    price the rest at exactly 0)."""
+    from common.effects import CardEffects
+    fx = CardEffects.load(_covers_round_trip(tmp_path, {
+        "1112": [{"kind": "heal", "amount": 60}],
+        "1203": [{"kind": "draw", "amount": 1}],
+        "_covers": {"1112": {"covers": "full", "reason": "r"},
+                    "1203": {"covers": "partial", "reason": "r"}},
+    }))
+    assert fx.clauses_cover(1112) is True
+    assert fx.clauses_cover(1203) is False
+    assert fx.clauses_cover(9999) is None
+
+
+@pytest.mark.req("REQ-EFFECT-0018")
+def test_the_covers_block_is_not_mistaken_for_a_cards_clauses(tmp_path):
+    """`card_effects.json` is `{cardId: [clauses]}` plus one reserved key. The loader must skip it —
+    treating the verdict block as a 59th card's clause list would be a silent corruption of the
+    representation every fetch/heal/accel consumer reads."""
+    from common.effects import CardEffects
+    out = _covers_round_trip(tmp_path, {
+        "1112": [{"kind": "heal", "amount": 60}],
+        "_covers": {"1112": {"covers": "full", "reason": "r"}},
+    })
+    fx = CardEffects.load(out)
+    assert fx.clauses(1112) == ({"kind": "heal", "amount": 60},)
+    assert "_covers" in json.loads(out.read_text(encoding="utf-8"))
+    assert fx.clauses(0) == ()
+
+
+@pytest.mark.req("REQ-EFFECT-0018")
+def test_the_shipped_compendium_rules_every_clause_bearing_card(tmp_path):
+    """The artifact itself, not a fixture. Every card with clauses carries a verdict, and the two
+    named holes Issue #300 was opened for are the ones asserted: Surfer's switch and Crushing
+    Hammer's coin both declare PARTIAL rather than passing as complete."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.covers(1203) == "partial" and eff.clauses_cover(1203) is False   # Surfer
+    assert eff.covers(1120) == "partial" and eff.clauses_cover(1120) is False   # Crushing Hammer
+    assert eff.covers(1121) == "full" and eff.clauses_cover(1121) is True       # Ultra Ball

@@ -37,14 +37,19 @@ Sites are derived structurally, never from a card's name:
 * Our decks: `src/agents/*/deck.csv`. The opponent pool: the scouting artifact's per-archetype
   `representative_build`, weighted by the artifact's own meta `priors`.
 
-## The one judgement call this file makes, and why it is data
+## The one judgement call in this report, and why it does not live here
 
 Whether a card's Effect Clauses cover its **whole** printed effect is not mechanically decidable —
 `Surfer` carries a `draw` clause and the printed card also switches the Active, and no parser reads
-that. :data:`CLAUSE_JUDGEMENT` is therefore a hand-ruled table, one entry per clause-bearing card,
-each quoting the leg the clauses miss. It is the report's highest-value column: a PARTIAL clause set
-is **worse than none**, because §3b resolves it to MODELLED and the omitted leg then prices at
-exactly 0 — the §3c failure, silently.
+that. It is a hand ruling, one per clause-bearing card, each quoting the leg the clauses miss, and it
+is the report's highest-value column: a PARTIAL clause set is **worse than none**, because §3b
+resolves it to MODELLED and the omitted leg then prices at exactly 0 — the §3c failure, silently.
+
+The ruling was a table in THIS file until Issue #300 moved it into the compendium
+(`card_effects.json`'s `_covers` block, authored in `effect_overrides.json`), where the apply seam
+itself reads it. This module now reads the same store: **the census is a report, the compendium is
+the truth**, and a report carrying its own private copy of the fact it reports on is the second
+loader ADR-0087 charges for — it would drift, and both sides of the diff would share the drift.
 
 Usage:
     python tools/apply_seam_coverage.py [--out PATH] [--json PATH]
@@ -186,82 +191,24 @@ _ACTIVATED = tuple(re.compile(p, re.I) for p in (
 _ON_PLAY = re.compile(r"when you play this Pok.mon from your hand", re.I)
 _ON_EVOLVE = re.compile(r"from your hand to evolve", re.I)
 
-# ── the hand-ruled clause-coverage table ──────────────────────────────────────────────────────────
-#: ``{card id: (FULL | PARTIAL, what the clauses miss)}`` — read off the printed effect text beside
-#: the committed clauses, card by card. Every clause-bearing card in the pool has an entry;
-#: :func:`validate` fails the run if one is missing rather than defaulting, because defaulting either
-#: way would fabricate the report's most important column.
-CLAUSE_JUDGEMENT: dict[int, tuple[str, str]] = {
-    17: (FULL, "provision + evolution provision + the end-of-turn discard rider all carried"),
-    66: (FULL, "draw 3 + `shuffle_self_in`; the self-shuffle IS the rest of the card"),
-    120: (FULL, "`draw amount 1 window 2` + `other_to_bottom` is the whole dig"),
-    140: (FULL, "draw 3 under `pokemon_ko_last_turn`; the once-per-turn cap is a condition, not a leg"),
-    190: (FULL, "energy_recur 2 x {M} from discard on evolve — the whole Ability"),
-    648: (FULL, "accel 5 x Basic {D} from deck on evolve — the whole Ability"),
-    675: (FULL, "draw 3 + the discard-a-Basic-{F} cost + the Solrock condition"),
-    678: (FULL, "attack rider (`on_attack`); not an apply-seam site at all — attacks are TERMINAL"),
-    1071: (FULL, "fetch a Supporter from deck on bench-play — the whole Ability"),
-    1080: (PARTIAL, "clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled"),
-    1086: (PARTIAL, "no `amount`: the card fetches UP TO 2 Basics, the clause reads as one"),
-    1097: (FULL, "both discard-fetch legs (Pokemon, Basic Energy) carried"),
-    1110: (PARTIAL, "no `amount`: the card recovers UP TO 5 in any combination, the clause reads as one"),
-    1118: (PARTIAL, "no `amount`: the card recovers UP TO 2 Basic Energy, the clause reads as one"),
-    1119: (FULL, "fetch a Basic Energy from deck"),
-    1120: (PARTIAL, "the coin is carried; the EFFECT it gates (`discard_opp_energy`) has NO declared "
-                    "write-set in `snapshot_coverage.CLAUSE_WRITES` — see the report's clause-write "
-                    "finding"),
-    1121: (FULL, "fetch a Pokemon from deck + the `discard_2` cost"),
-    1122: (FULL, "fetch a Supporter with `dig: 7`"),
-    1142: (FULL, "both {F} legs (Basic Energy, Basic Pokemon) carried"),
-    1145: (FULL, "fetch a Mega Evolution Pokemon ex from deck"),
-    1146: (FULL, "accel 1 Basic {P} from discard to a Benched {P}"),
-    1147: (FULL, "heal 80, active-only, gated on 3+ Energy"),
-    1152: (FULL, "fetch a no-Rule-Box Pokemon from deck"),
-    1181: (PARTIAL, "clause draws a flat 4; the card draws 2 and only draws 2 more at 10+ cards in "
-                    "hand, so the clause OVER-states on every normal board"),
-    1187: (PARTIAL, "clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and "
-                    "costs a hand discard — neither is carried"),
-    1189: (FULL, "fetch an ability-less evolution from deck straight onto a body (`dest: in_play`)"),
-    1190: (FULL, "heal all, gated on 30-or-less remaining HP"),
-    1192: (PARTIAL, "clause draws 5; DISCARD YOUR HAND — the card's whole cost — is unmodelled"),
-    1198: (FULL, "accel 1 from deck + `to_hand: 1` + `distinct_types`"),
-    1199: (PARTIAL, "clause draws a flat 8, the card's maximum; the base is 4, the 8 needs the "
-                    "opponent at 3-or-fewer Prizes, and shuffling your hand in is unmodelled"),
-    1200: (PARTIAL, "clause draws 4; putting 2 cards from hand on the bottom — the cost, and the "
-                    "gate on being able to pay it — is unmodelled"),
-    1203: (PARTIAL, "clause draws 1; the card SWITCHES the Active and then draws up to a 5-card "
-                    "hand. The switch is the reason the card is played"),
-    1208: (PARTIAL, "clause draws a flat 4; the card draws UP TO A 6-CARD HAND and costs a discard"),
-    1212: (FULL, "heal 70, active-only"),
-    1213: (PARTIAL, "clause draws 4 for me; the card is symmetric — the OPPONENT's hand is shuffled "
-                    "away and redrawn to 4, which is the entire reason to play it"),
-    1216: (PARTIAL, "clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team "
-                    "Rocket board"),
-    1219: (FULL, "fetch a Trainer from deck"),
-    1223: (PARTIAL, "clause draws a flat 5; the card is a COIN FLIP between 5/3 and 3/5, and shuffles "
-                    "both hands away"),
-    1224: (FULL, "draw 3, and that is the whole card"),
-    1225: (FULL, "both fetch legs (an Evolution and an Energy) carried"),
-    1227: (PARTIAL, "clause draws a flat 8, the card's maximum; the base is 6, and 8 needs exactly 6 "
-                    "Prizes left. Shuffling your hand in is unmodelled"),
-    1229: (FULL, "heal all on a Mega ex + the `bounce_energy_to_hand` rider"),
-    1236: (FULL, "draw 3, and that is the whole card"),
-    1237: (PARTIAL, "clause draws a flat 6; the card is a per-player COIN FLIP between 6 and 3 and "
-                    "puts both hands on the bottom of their decks"),
-    1239: (PARTIAL, "clause draws a flat 3; the card draws UP TO a 5-card hand after an optional "
-                    "pre-discard of any size"),
-    1240: (FULL, "accel 2 Basic Energy from discard onto a Stage 2, gated on the Prize condition"),
-    1242: (PARTIAL, "clause heals 10 gated on a Supporter played; the card heals EACH of that "
-                    "player's Pokemon and works for BOTH players, neither of which is carried"),
-    # Clause-bearing cards outside the measured pool keep entries so a pool change cannot silently
-    # drop a judgement.
-    98: (FULL, "each player draws a card"),
-    1177: (FULL, "flat heal on the holder"),
-}
 
+# ── the clause-coverage ruling, read from the compendium ──────────────────────────────────────────
 
-def _clause_judgement(card_id: int) -> tuple[str, str] | None:
-    return CLAUSE_JUDGEMENT.get(int(card_id))
+def _covers_class(entry) -> tuple[str, str] | None:
+    """One card's compendium verdict as ``(report class, what the clauses carry or miss)``.
+
+    `None` when the card carries no verdict at all — which :func:`validate` refuses to run on rather
+    than defaulting either way, because defaulting would fabricate the report's most important
+    column. The verdict itself lives in `card_effects.json`; see this module's header for why it is
+    not duplicated here."""
+    if not entry:
+        return None
+    verdict = entry.get("covers")
+    if verdict == snapshot_coverage.COVERS_FULL:
+        return FULL, str(entry.get("reason", "")).strip()
+    if verdict == snapshot_coverage.COVERS_PARTIAL:
+        return PARTIAL, str(entry.get("reason", "")).strip()
+    return None
 
 
 # ── loading ───────────────────────────────────────────────────────────────────────────────────────
@@ -271,7 +218,13 @@ def load_cards(path: Path = CARDS_JSON) -> dict[int, dict]:
 
 
 def load_effects(path: Path = EFFECTS_JSON) -> dict[int, list[dict]]:
-    return {int(k): list(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+    return snapshot_coverage.clause_lists(json.loads(path.read_text(encoding="utf-8")))
+
+
+def load_covers(path: Path = EFFECTS_JSON) -> dict[int, dict]:
+    """``{card id: {covers, reason}}`` — the compendium's completeness verdicts, the report's
+    MODELLED split. Same file as :func:`load_effects`, one store."""
+    return snapshot_coverage.covers_table(json.loads(path.read_text(encoding="utf-8")))
 
 
 def load_our_decks(agents_dir: Path = AGENTS_DIR) -> dict[str, collections.Counter]:
@@ -456,12 +409,15 @@ def refusal_cause(text: str, *, rng_refuses: bool) -> str:
     return ""
 
 
-def resolve(site: Site) -> Site:
+def resolve(site: Site, covers: dict[int, dict]) -> Site:
     """Resolve one site to a §3b fate plus a reported class and, when refused, a cause.
 
     Mirrors `apply_option.fate` exactly where that function decides, and extends it only where the
     seam explicitly defers to T4 — the per-OPTION effect inside a MODELLED kind, which
     `apply_option.refuse(..., scope=OPTION_SCOPE)` documents but does not (and at T0 cannot) decide.
+
+    ``covers`` is the compendium's own verdict block (:func:`load_covers`) — passed in rather than
+    read here, so this stays pure and the report cannot consult a different store than the seam.
     """
     how = seam.coverage(site.kind)
 
@@ -474,7 +430,7 @@ def resolve(site: Site) -> Site:
         # PROOF, so the same text refuses.
         site.cause = refusal_cause(site.text, rng_refuses=True)
         site.fate = seam.REFUSED if site.cause else seam.ENGINE_RESOLVED
-        if site.fate == seam.REFUSED and site.clauses and _clause_judgement(site.card_id):
+        if site.fate == seam.REFUSED and site.clauses and _covers_class(covers.get(site.card_id)):
             site.note = ("clause-complete but UNREACHABLE: `_ABILITY` is routed to the engine, and "
                          "the engine route refuses this")
         site.report_class = site.fate
@@ -491,7 +447,7 @@ def resolve(site: Site) -> Site:
         site.note = "structural: the transition is the same shape for every card of the kind"
         return site
 
-    judged = _clause_judgement(site.card_id) if site.clauses else None
+    judged = _covers_class(covers.get(site.card_id)) if site.clauses else None
     if judged:
         site.fate = seam.MODELLED
         site.report_class, site.note = judged
@@ -569,16 +525,18 @@ def meta_copies(builds: dict[str, collections.Counter], priors: dict[str, float]
 
 # ── report assembly ───────────────────────────────────────────────────────────────────────────────
 
-def validate(pool: set[int], cards: dict[int, dict], effects: dict[int, list[dict]]) -> list[str]:
+def validate(pool: set[int], cards: dict[int, dict], effects: dict[int, list[dict]],
+             covers: dict[int, dict]) -> list[str]:
     """Every way this census is not entitled to run. Empty is the contract."""
     problems = []
     for cid in sorted(pool):
         if cid not in cards:
             problems.append(f"card {cid} is in a deck but not in cards.json")
-        elif cid in effects and _clause_judgement(cid) is None:
+        elif cid in effects and _covers_class(covers.get(cid)) is None:
             problems.append(f"card {cid} ({cards[cid]['name']}) has Effect Clauses but no "
-                            f"CLAUSE_JUDGEMENT entry — defaulting would fabricate the report's "
-                            f"most important column")
+                            f"`{snapshot_coverage.COVERS_KEY}` verdict in card_effects.json — "
+                            f"defaulting would fabricate the report's most important column. "
+                            f"Author it in tools/meta_tracker/effect_overrides.json")
     for kind in sorted(seam.KIND_COVERAGE):
         if seam.KIND_COVERAGE[kind] not in (seam.MODELLED, seam.ENGINE_RESOLVED, seam.TERMINAL,
                                             seam.REFUSED):
@@ -586,14 +544,14 @@ def validate(pool: set[int], cards: dict[int, dict], effects: dict[int, list[dic
     return problems
 
 
-def census(pool: set[int], cards, effects) -> tuple[list[Site], dict]:
+def census(pool: set[int], cards, effects, covers) -> tuple[list[Site], dict]:
     sites: list[Site] = []
     aside = collections.Counter()
     for cid in sorted(pool):
         card = cards[cid]
         card_sites, extra = sites_for(cid, card, effects.get(cid, []))
         for s in card_sites:
-            resolve(s)
+            resolve(s, covers)
             s.family, s.expressible = family(s)
             sites.append(s)
         aside.update(extra)
@@ -900,18 +858,18 @@ def main(argv=None) -> int:
     ap.add_argument("--json", type=Path, default=None)
     args = ap.parse_args(argv)
 
-    cards, effects = load_cards(), load_effects()
+    cards, effects, covers = load_cards(), load_effects(), load_covers()
     decks = load_our_decks()
     builds, priors = load_opponent_builds()
     pool = set().union(*[set(c) for c in decks.values()], *[set(c) for c in builds.values()])
 
-    problems = validate(pool, cards, effects)
+    problems = validate(pool, cards, effects, covers)
     if problems:
         for p in problems:
             print(f"PROBLEM: {p}", file=sys.stderr)
         return 1
 
-    sites, aside = census(pool, cards, effects)
+    sites, aside = census(pool, cards, effects, covers)
     ours = our_copies(decks)
     meta = meta_copies(builds, priors)
     report = build_report(sites, aside, ours, meta, decks, len(builds),

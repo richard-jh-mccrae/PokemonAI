@@ -80,6 +80,12 @@ Requirements (tests: tests/test_card_effects.py, tests/test_card_effects_engine.
      snapshot / offered-target / healed-serial extraction, chip-attacker and
      sturdy-body picks, legal deck build.
  17. REQ-EFFECT-0017 engine smoke: Wally's Compassion observes mega_only live.
+ 18. REQ-EFFECT-0018 per-card clause-set COMPLETENESS (`_covers`, Issue #300) survives the
+     override -> build -> `card_effects.json` round trip, is never read as a card's clauses, and
+     reaches the apply seam as the fail-closed tri-state (`CardEffects.clauses_cover`). Deliberately
+     NOT this module's: a completeness verdict is a hand ruling ABOUT a clause set, so it is never
+     classified, merged or accumulated — it rides verbatim from `effect_overrides.json` through
+     `tools/build_card_effects.py`. Listed here because this is where the requirement index lives.
 """
 from __future__ import annotations
 

@@ -35,20 +35,8 @@ from common import state_model as sm
 _EFFECTS = Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json"
 
 
-def _clause_vocabulary() -> set[str]:
-    """Every `kind` and `rider` value in the committed compendium. Read from the artifact, not from a
-    hand-kept list — a hand-kept list is exactly what a new clause would not be added to."""
-    vocab: set[str] = set()
-    for clauses in json.loads(_EFFECTS.read_text(encoding="utf-8")).values():
-        for c in clauses:
-            if c.get("kind"):
-                vocab.add(c["kind"])
-            rider = c.get("rider")
-            if isinstance(rider, str):
-                vocab.add(rider)
-            elif isinstance(rider, (list, tuple)):
-                vocab.update(r for r in rider if isinstance(r, str))
-    return vocab
+def _compendium() -> dict:
+    return json.loads(_EFFECTS.read_text(encoding="utf-8"))
 
 
 def _resolve(path: str) -> bool:
@@ -104,15 +92,42 @@ def test_a_hidden_zone_must_say_what_prices_it_instead():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
-def test_every_clause_kind_and_rider_in_the_compendium_declares_what_it_writes():
-    """**The §3c audit test.** A new clause kind with no declared write-set lands here rather than
+def test_every_clause_kind_rider_and_effect_in_the_compendium_declares_what_it_writes():
+    """**The §3c audit test.** A new clause value with no declared write-set lands here rather than
     silently writing to nothing — which, under differencing, prices its option at exactly 0 and
     prunes it forever."""
-    vocab = _clause_vocabulary()
+    vocab = sc.clause_vocabulary(_compendium())
     assert vocab, "read no clause vocabulary at all — the audit would pass vacuously"
-    assert sc.undeclared_clauses(sorted(vocab)) == [], (
-        "clause kind(s)/rider(s) in card_effects.json with no entry in CLAUSE_WRITES. Declare what "
-        "each one writes, in `snapshot_coverage.WRITABLE` vocabulary.")
+    assert sc.undeclared_clauses(vocab) == [], (
+        "clause kind(s)/rider(s)/effect(s) in card_effects.json with no entry in CLAUSE_WRITES. "
+        "Declare what each one writes, in `snapshot_coverage.WRITABLE` vocabulary.")
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_audit_walks_all_three_vocabularies_including_effect():
+    """**The Issue #300 hole, as a test.** The walk used to cover `kind` and `rider` only, so
+    Crushing Hammer's `{"kind": "coin", "effect": "discard_opp_energy"}` passed green while the write
+    it performs — the opponent's Energy, and their discard — had no declared home at all.
+
+    Asserted two ways, because either alone would rot: that the key list IS all three, and that the
+    value actually in the compendium comes back out of the walk. A walk that names `effect` but never
+    meets one would be an audit passing by absence."""
+    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect")
+    assert "discard_opp_energy" in sc.clause_vocabulary(_compendium())
+    assert sc.CLAUSE_WRITES["discard_opp_energy"] == {"attached_energy", "their_discard_contents"}
+    # And the flip itself still writes nothing — `coin` is an RNG READ, which is the half of that
+    # comment that was always true.
+    assert sc.CLAUSE_WRITES["coin"] == frozenset()
+    assert "coin" in sc.NONDETERMINISTIC_CLAUSES
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_an_effect_value_nobody_declared_is_caught_by_the_walk():
+    """The bite for the third vocabulary specifically: it is not enough that `effect` is *listed*, the
+    walk has to surface an undeclared one."""
+    fabricated = {"1": [{"kind": "coin", "effect": "an_effect_that_does_not_exist"}]}
+    assert sc.undeclared_clauses(sc.clause_vocabulary(fabricated)) == \
+        ["an_effect_that_does_not_exist"]
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
@@ -198,3 +213,81 @@ def test_no_transition_writes_to_a_zone_the_snapshot_cannot_represent():
     a new clause names a zone the snapshot cannot hold, this is where it surfaces."""
     assert ao.footprints_writing_unhomed() == {}
     assert sc.clauses_writing_unhomed() == {}
+
+
+# ── clause-set completeness: a PARTIAL set must not price as a complete one (Issue #300) ───────────
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0004")
+def test_every_clause_bearing_card_declares_whether_its_clause_set_is_COMPLETE():
+    """**The teeth for the compendium half.** A card with clauses and no verdict reads as *unknown*,
+    and an unknown clause set is indistinguishable from a complete one at the seam — which is exactly
+    the "model three quarters of the card and price the rest at 0" failure §3c forbids one level up.
+
+    `covers_problems` also refuses an unreasoned verdict: the reason quotes the leg the clauses carry
+    or miss, and without it the ruling cannot be re-checked against the printed card."""
+    assert sc.covers_problems(_compendium()) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0004")
+def test_the_completeness_audit_bites():
+    """Green means nothing unless it can go red — one fabricated payload per way to be wrong."""
+    assert any(f"no {sc.COVERS_KEY} verdict" in p
+               for p in sc.covers_problems({"1": [{"kind": "draw", "amount": 1}]}))
+    unreasoned = {"1": [{"kind": "draw"}], sc.COVERS_KEY: {"1": {"covers": "full"}}}
+    assert any("MUST quote" in p for p in sc.covers_problems(unreasoned))
+    bogus = {"1": [{"kind": "draw"}], sc.COVERS_KEY: {"1": {"covers": "mostly", "reason": "x"}}}
+    assert any("is not one of" in p for p in sc.covers_problems(bogus))
+    orphan = {sc.COVERS_KEY: {"1": {"covers": "full", "reason": "x"}}}
+    assert any("no Effect Clauses" in p for p in sc.covers_problems(orphan))
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0004")
+def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
+    """The owed list, generated off the artifact rather than re-derived. *Surfer* is the worked
+    example the census led with: it carries `draw 1`, and the printed card SWITCHES the Active first
+    — the reason it is played at all."""
+    partial = sc.partial_clause_cards(_compendium())
+    assert partial, "no card is declared partial — the audit would be reporting on nothing"
+    assert 1203 in partial and "switch" in partial[1203].lower()
+    assert all(reason.strip() for reason in partial.values())
+    # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.
+    clauses = sc.clause_lists(_compendium())
+    assert all(cid in clauses for cid in partial)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0004")
+def test_the_partial_list_only_ever_SHRINKS():
+    """Same shape and same reason as `footprints_writing_unhomed()` being pinned empty: an owed list
+    that can grow silently is not a schedule. A card LEAVING the baseline is clause work landing — no
+    failure. A card ARRIVING is either new exposure that owes a ruling or a verdict quietly
+    downgraded, and both want a human before they land."""
+    grown = set(sc.partial_clause_cards(_compendium())) - sc.PARTIAL_CLAUSE_BASELINE
+    assert grown == set(), (
+        f"card(s) {sorted(grown)} became PARTIAL after the baseline was ruled. Either close the "
+        f"clause gap, or rule the addition and extend `PARTIAL_CLAUSE_BASELINE` deliberately.")
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0004")
+def test_a_partial_verdict_fails_CLOSED_and_stays_distinguishable_from_an_unruled_one():
+    """The seam-facing half: the tri-state `apply_option.fate` takes for ``clauses_cover``.
+
+    `False` and `None` both refuse, and they are still different facts — *ruled incomplete* is a
+    measured gap with an owner, *unruled* is a card nobody has looked at. Collapsing them would make
+    the owed list unreadable, which is the same reason `deterministic` is tri-state."""
+    assert sc.clauses_cover(sc.COVERS_FULL) is True
+    assert sc.clauses_cover(sc.COVERS_PARTIAL) is False
+    assert sc.clauses_cover(None) is None
+    assert sc.clauses_cover("anything else") is None
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0004")
+def test_the_reserved_covers_key_is_never_read_as_a_clause_list():
+    """`card_effects.json` is `{cardId: [clauses]}` plus one reserved key. Every reader goes through
+    the shared parse for exactly this reason — a hand-rolled `int(k)` walk would either crash on it or
+    quietly treat the verdict block as a 59th card's clauses."""
+    payload = _compendium()
+    assert sc.COVERS_KEY in payload
+    assert sc.COVERS_KEY not in {str(cid) for cid in sc.clause_lists(payload)}
+    assert set(sc.clause_lists(payload)) == set(sc.covers_table(payload)), (
+        "the clause lists and the verdicts must cover exactly the same cards")

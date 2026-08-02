@@ -222,6 +222,22 @@ can trigger. Shipped as `card_effects.json` beside the tag table.
 _Avoid_: Function Tag (boolean, coarse — a Clause is parametric), card text (the free-text source;
 a Clause is the measured, structured fact), effect (unqualified — say which tier)
 
+**Clause-Set Completeness** (`covers`):
+The per-CARD verdict on whether that card's whole list of **Effect Clauses** carries its whole
+printed effect — `full` or `partial` — each verdict quoting the leg the clauses carry or miss. A
+property of the SET, never of one clause: *Surfer* carries `draw 1` and the printed card switches
+your Active first, so no single clause is wrong and the set is still incomplete. It is a hand
+ruling, not a measurement (no parser reads "and then switch"), authored in
+`tools/meta_tracker/effect_overrides.json` under `_covers` and re-stamped verbatim into
+`card_effects.json`. Read two ways: `snapshot_coverage.partial_clause_cards()` reports the owed list
+(asserted **shrink-only**), and `CardEffects.clauses_cover()` hands the apply seam the fail-closed
+tri-state — `partial` and *unruled* both REFUSE, because §3b has no PARTIAL fate and a set that
+models three quarters of a card prices the last quarter at exactly 0, which under 1-ply ordering
+reads as *never explore this* (Issue #300).
+_Avoid_: coverage (the seam's option-kind table, `apply_option.KIND_COVERAGE` — a different
+question), complete (bare — `Footprint.complete` is the read/write-set's own flag), partial fate
+(there is none: PARTIAL is a report class and a refusal, never a fourth fate)
+
 **Transient Effect**:
 A one-turn effect an ATTACK grants — "during your (opponent's) next turn …": a damage shield
 (takes-less / prevent-all), a self-lock (can't attack / can't reuse the same attack), a next-turn
