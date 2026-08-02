@@ -8,16 +8,6 @@
     "reason": "forgoes a KO — over-eager",
     "round": "2026-06-27"
   },
-  "81905522-64": {
-    "disposition": "refuted",
-    "reason": "forgoes a 209-damage attack — over-eager",
-    "round": "2026-06-27"
-  },
-  "81906755-93": {
-    "disposition": "refuted",
-    "reason": "forgoes a KO (tactical ~1000) — over-eager",
-    "round": "2026-06-27"
-  },
   "81906131-25": {
     "disposition": "covered",
     "reason": "degenerate record (chosen == correct); the intent is already handled by dont-waste-discard-energy",
@@ -125,7 +115,7 @@
   },
   "81785223-32": {
     "disposition": "refuted",
-    "reason": "Wave-3 ruling (Issue #262): Pokegear is NOT the play - the hand already holds nearly every Supporter. The line is evolve Staryu->Mega Starmie ex, Hilda to fetch Energy, attach to the active Starmie, attack Jetting Blow sniping Wellspring Mask Ogerpon ex. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling.",
+    "reason": "Wave-3 ruling (Issue #262): Pokegear is NOT the play - the hand already holds nearly every Supporter. The line is evolve Staryu->Mega Starmie ex, Hilda to fetch Energy, attach to the active Starmie, attack Jetting Blow. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling. [corrected 2026-08-02: the rationale first named a benched Wellspring Mask Ogerpon ex as the Jetting Blow snipe target - it is a Tera Pokemon ex and takes NO attack damage while Benched (rulebook Appendix 6), so the snipe target is left unnamed. The verdict is unaffected.]",
     "round": "2026-08-02-wave3"
   },
   "81785223-38": {
@@ -135,7 +125,7 @@
   },
   "81785223-44": {
     "disposition": "refuted",
-    "reason": "Wave-3 ruling (Issue #262): same board and same call as 81785223-32 - Pokegear is not the play, the evolve-into-wincon line is. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling.",
+    "reason": "Wave-3 ruling (Issue #262): same board and same call as 81785223-32 - Pokegear is not the play, the evolve-into-wincon line is. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling. [same snipe-target correction as 81785223-32.]",
     "round": "2026-08-02-wave3"
   },
   "81903490-27": {
