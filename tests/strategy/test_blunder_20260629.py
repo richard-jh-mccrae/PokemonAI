@@ -241,8 +241,12 @@ def _denial_pilot(**kw):
 @pytest.mark.req("REQ-GEN-0031")
 def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
     """RACE: the Active win-con can attack for 120 (tactical 119.9), but a Crushing Hammer strip is
-    free — `_finish_turn_last` sequences the Item (tier 0) ahead of the turn-ending attack (tier 4),
-    so the agent disrupts AND still attacks the same turn (the ep82525101 fr92/fr102 shape).
+    free — `_finish_turn_last` sequences the Item (the free band) ahead of the turn-ending attack
+    (the last tier), so the agent disrupts AND still attacks the same turn (the ep82525101 fr92/fr102
+    shape). Since Issue #261 item 2f the Hammer rides the free band's COMMITTING half (ADR-0095
+    decision 1's boundary), which is still strictly ahead of every commitment and every ender — the
+    claim under test is unaffected, and there is no informative dig on this menu to sit in front of
+    it.
 
     Opponent Energy dropped 2 -> 1 (ADR-0062). Their only attack is Aura Jab at cost {F}: on 2 Energy
     the second one is SURPLUS, so discarding it leaves them still able to Aura Jab for 130 and the
@@ -254,7 +258,7 @@ def test_play_energy_denial_sequences_the_strip_before_a_higher_value_attack():
     Since Issue #228 armed Deny Relevance that strip must also be TYPED to be seen: the lone Energy
     is a Basic {F} (card id 6, registered in `_denial_pilot`'s Provider) paying Aura Jab's {F} slot,
     so relevance reads 130/350 and the Item prices +55. An untyped body would read 0 and the Hammer
-    would price at exactly `-_DENIAL_ITEM_COST`, testing sequencing on an empty claim."""
+    would price at exactly minus the free-Item hold price, testing sequencing on an empty claim."""
     pilot = _denial_pilot()
     play_crush = opt(PLAY, area=HAND, index=0)            # Crushing Hammer in hand[0]
     attack = attack_opt(11)                               # Jetting Blow, 120

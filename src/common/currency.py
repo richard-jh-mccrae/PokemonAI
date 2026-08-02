@@ -48,8 +48,13 @@ PRIZE_DAMAGE_RATE = 100.0
 # `PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`. It cannot be read off the shipped constants, because two
 # pairs price the SAME object on both scales and disagree by ~6.7x:
 #
-#     keeping a gust/denial Trainer   TAG_TIER["gust"] 10.0   vs  _DENIAL_ITEM_COST 10     =>  ~1
+#     keeping a gust/denial Trainer   TAG_TIER["gust"] 10.0   vs  ITEM_HOLD_WORTH_RATE 1.0 =>  ~1
 #     one Energy                      ENERGY_TIER      8.0    vs  ENERGY_RECOVER   160/3   =>  ~6.7
+#
+# The first row used to read `_DENIAL_ITEM_COST 10`. That constant is DELETED (Issue #261 item 2f):
+# the ~1.0 it implied is no longer buried inside a deny-scoped magic number, it is the explicit,
+# seam-scoped `ITEM_HOLD_WORTH_RATE` at the foot of this module. The catalogue entry is unchanged in
+# value and strictly better evidenced — a rate you can read is a rate a reviewer can dispute.
 #
 # The gap was ~9x until Issue #172 DERIVED `ENERGY_RECOVER` from the card set (75 -> 160/3). That it
 # moved without closing is the point: deriving one leg honestly did not reveal a hidden worth rate,
@@ -139,6 +144,44 @@ def deploy_relevance_to_damage(relevance: float) -> float:
     `DEPLOY_WORTH_SCALE`), never a raw worth value — handing this a worth magnitude would be
     exactly the scale-boundary crossing ADR-0078 decision 2 forbids."""
     return float(relevance) * DEPLOY_BAND
+
+
+# ── The ITEM-HOLD band — the second SEAM-SCOPED rate, and the oldest one (Issue #261 item 2f) ─────
+#
+# **Stated plainly rather than buried, exactly as the deploy band is: `ITEM_HOLD_WORTH_RATE` has
+# units of damage-per-worth-point. It IS a worth<->damage rate, scoped to one seam.** It is the
+# FIRST entry in the catalogue two blocks up (trainer ~1.0), which until now existed only as the
+# ratio between two constants that never met in an expression — `TAG_TIER["gust"] 10.0` on the worth
+# side and `_DENIAL_ITEM_COST 10` on the damage side.
+#
+# Deleting that constant in favour of a general hold price (`common/hold_value.py`) forces the
+# crossing into the open, and the honest thing to do with it is name it rather than let a
+# `x 1.0`-shaped nothing hide in the arithmetic. Nothing about the agent's behaviour changes: the
+# rate the incumbent asserted is the rate that ships.
+#
+# RECONCILIATION DEBT, on the same terms as the deploy band's: if a general Worth Damage Rate is
+# ever derived, this must be checked against it, and a disagreement is evidence about ONE of the two
+# rather than automatically about this one. `state_value.POC_WORTH_PRIZE_RATE` (ADR-0097) is the
+# candidate; its authoring note already owes a reconciliation against this catalogue.
+
+#: Damage per card-worth point AT THE ITEM-HOLD SEAM — what one Worth point of a card you are about
+#: to spend is worth against a damage-denominated score.
+#:
+#: **A PRESERVATION CHOICE, never a derivation** (`DEPLOY_BAND`'s discipline, applied verbatim). It
+#: is pinned at the ratio `_DENIAL_ITEM_COST 10 / TAG_TIER["gust"] 10.0` already asserted, so the
+#: generalisation starts behaviour-preserving on the four committed deny anchors and the Decision
+#: Gate can then rule any flip. Issue #212 put re-deriving the deny keep price explicitly out of
+#: scope; this is that scope note honoured in arithmetic.
+ITEM_HOLD_WORTH_RATE = 1.0
+
+
+def item_hold_to_damage(keep_worth: float) -> float:
+    """Convert a card-worth HOLD price into the damage/tactical scale at the seam-scoped rate.
+
+    The ONE place `common.hold_value`'s Worth-denominated price enters a `score` the damage-scale
+    rungs also write to. Callers hand a WORTH value (a `needs` assignment marginal floored by
+    `hold_value.ITEM_HOLD_FLOOR`), never a prize-equivalent — that is `prize_to_damage`."""
+    return float(keep_worth) * ITEM_HOLD_WORTH_RATE
 
 
 def prize_to_damage(prize_equivalents: float) -> float:

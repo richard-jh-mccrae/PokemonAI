@@ -65,17 +65,25 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     a derivation, not ahead of it. **It survived Issue #199** — ADR-0080 ran the anchor gate, found
     the corpus's one candidate priced 0.000 on both instruments (so the rate divided out), and ruled
     the rate MOOT for deny rather than deriving it. The guard therefore stays, permanently rather
-    than pending, and ADR-0086's seam-scoped `DEPLOY_BAND` below is explicitly NOT this constant."""
+    than pending, and ADR-0086's seam-scoped `DEPLOY_BAND` below is explicitly NOT this constant —
+    nor is Issue #261 item 2f's seam-scoped `ITEM_HOLD_WORTH_RATE`, which is the trainer row of this
+    very catalogue made explicit. That row USED to read `_DENIAL_ITEM_COST / TAG_TIER["gust"]`: a
+    ratio between two constants that never met in an expression, which is precisely why nothing
+    stopped it drifting. Reading it off the shipped rate instead is strictly stronger — the number
+    this test guards is now the number the agent actually multiplies by."""
     assert not hasattr(currency, "WORTH_DAMAGE_RATE")
     assert not hasattr(currency, "prize_to_worth")
 
     from common.card_worth import ENERGY_TIER, TAG_TIER
+    from common.hold_value import ITEM_HOLD_FLOOR
     from common.strategy.context import ENERGY_RECOVER
-    from common.pilot import _DENIAL_ITEM_COST
     # The ~9x disagreement, asserted so it cannot drift silently before #199 rules it.
-    trainer_rate = _DENIAL_ITEM_COST / TAG_TIER["gust"]
+    trainer_rate = currency.ITEM_HOLD_WORTH_RATE
     energy_rate = ENERGY_RECOVER / ENERGY_TIER
     assert trainer_rate == pytest.approx(1.0)
+    assert ITEM_HOLD_FLOOR == pytest.approx(TAG_TIER["gust"]), (
+        "the finiteness floor is the disruption-Trainer band, which is WHY the seam's rate is 1.0 — "
+        "if the two part company the catalogue row above stops describing anything")
     assert energy_rate == pytest.approx(160 / 3 / 8)      # ADR-0078 (#172): the derived rate
     assert energy_rate / trainer_rate > 6          # same two scales, two answers — no single rate
 

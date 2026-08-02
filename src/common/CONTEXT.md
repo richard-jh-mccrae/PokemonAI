@@ -880,8 +880,11 @@ The MISSING third leg of the currency triangle, and the one ADR-0100 deliberatel
 `TAG_TIER` 10–30 — what the Needs DP sums) to the damage scale the tactical rungs and the Prize Damage
 Rate already share. Named and specified by ADR-0078 (#187 grill, 2026-07-28); **not yet derived, and
 deliberately not guessed.** Two shipped constant-pairs price the same object on both scales and
-disagree by ~9× — keeping a gust/denial Trainer is `TAG_TIER["gust"]` 10.0 vs `_DENIAL_ITEM_COST` 10
-(⇒ ~1 dmg/worth-pt), one Energy is `ENERGY_TIER` 8.0 vs `ENERGY_RECOVER` 75 (⇒ ~9.4) — so the rate
+disagree by ~9× — keeping a gust/denial Trainer is `TAG_TIER["gust"]` 10.0 vs `ITEM_HOLD_WORTH_RATE`
+1.0 (⇒ ~1 dmg/worth-pt; that row read `_DENIAL_ITEM_COST` 10 until Issue #261 item 2f deleted the
+constant and made its implied rate an explicit, seam-scoped one beside `DEPLOY_BAND` — same value,
+now readable and therefore disputable), one Energy is `ENERGY_TIER` 8.0 vs `ENERGY_RECOVER` 75
+(⇒ ~9.4) — so the rate
 cannot be read off existing constants and needs a corpus anchor, which does not exist yet (every
 committed deny fixture is a play/hold frame, none a DISCARD select). Until that anchor is captured and
 adjudicated, no value for this rate is legitimate: ADR-0065 forbids the fudge, and ADR-0100's own
@@ -928,8 +931,9 @@ spends a finite Item on a threat that has not arrived (measured — ms f21/f29 f
 Hammer the human ruled against). The Brief sharpener likewise applies to the rank/keep side only
 (`_DENIAL_BENCH` did too, until Issue #228 deleted it with the rest of the ADR-0062 magnitude path —
 its QUESTION, whether a benched body can reach the Active position at all, survives as ADR-0071's
-promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above `_DENIAL_ITEM_COST`, which
-is an override, not a boost (the f17 ruling).
+promotion GATE on the fire rung); on the fire side a multiplier can lift a hold above the **free-Item
+hold price** (`common/hold_value.py`, Issue #261 item 2f — the generalisation of the deleted
+`_DENIAL_ITEM_COST`), which is an override, not a boost (the f17 ruling).
 _Avoid_: denial oracle / `opp_denial_best` (ADR-0062's DAMAGE magnitude — relevance replaces it),
 strip Δ as deny's VALUE (the retired prize-equivalent read; its `_DENY_CHARGED` policy survives as the
 typed-unlock leg, its two-term form does not — Issue #217 revives `strip_shift` itself in ONE narrow

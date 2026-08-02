@@ -196,7 +196,8 @@ WHITELIST: tuple[SoundRule, ...] = (
         id="firing-equation-constants",
         entry="authored constants inside firing equations (ROLE_TIER / TAG_TIER, readiness-leaf "
               "values, planner sub-prize constants, confidence seeds, the refresh swing's "
-              "opponent-side STRIP / GIFT / FRESH per-card prices)",
+              "opponent-side STRIP / GIFT / FRESH per-card prices, the free-Item hold floor "
+              "`hold_value.ITEM_HOLD_FLOOR` and its seam rate `currency.ITEM_HOLD_WORTH_RATE`)",
         type=AUTHORED_SCAFFOLD,
         fact="magnitudes inside equations that already fire correctly",
         reason="Tolerated for the POC: these sit INSIDE equations whose shape is right, so they "
@@ -211,7 +212,15 @@ WHITELIST: tuple[SoundRule, ...] = (
                        "`role_value` 0 today, and the missing 59% is exactly their attackers and "
                        "wincons, so a derived GIFT would be biased in ADR-0060's CRITICAL direction. "
                        "They retire when gusting-keepcost-design.md §2's shared opponent role sheet "
-                       "exists, not before.",
+                       "exists, not before. A SECOND member joined 2026-08-02 (Issue #261 item 2f) "
+                       "and it is a net REDUCTION, not an addition: `_DENIAL_ITEM_COST = 10` was an "
+                       "authored constant hard-gated to one card class, and `hold_value.ITEM_HOLD_FLOOR` "
+                       "is the same number generalised onto the Needs assignment as a FLOOR, with the "
+                       "~1.0 worth<->damage rate it silently implied now named as "
+                       "`currency.ITEM_HOLD_WORTH_RATE` beside `DEPLOY_BAND`. Both carry the deploy "
+                       "band's reconciliation debt: if a general Worth Damage Rate is derived (the "
+                       "`poc-worth-prize-rate` entry is the candidate), they are checked against it, "
+                       "and a disagreement is evidence about ONE of the two.",
     ),
     SoundRule(
         id="poc-worth-prize-rate",

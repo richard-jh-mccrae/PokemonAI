@@ -138,11 +138,18 @@ def test_the_fire_factor_is_the_normalizer_so_it_prices_in_damage_units():
 
     So the identity is pinned on a board that exercises it: their Active is a Mega Lucario ex sitting
     on exactly the `{F}{F}` Mega Brave (270) needs, so the strip puts that nuke out of reach and the
-    rung must pay `coin x W x 270 - keep price` = 125.00. `K x relevance` reproduces 270 only if K IS
+    rung must pay `coin x W x 270 - hold price` = 125.00. `K x relevance` reproduces 270 only if K IS
     the normalizer — at any other value the by-hand figure and the rung part company, which is
-    exactly what this test is for. Card facts verified at data/EN_Card_Data.csv (MEG 77)."""
+    exactly what this test is for. Card facts verified at data/EN_Card_Data.csv (MEG 77).
+
+    **The hold price is `hold_value.ITEM_HOLD_FLOOR` since Issue #261 item 2f**, not the deleted
+    `_DENIAL_ITEM_COST`. Using the floor is not a rename dressed up as a check: the rung now calls
+    `_item_hold_price`, which returns `max(keep_v2, floor)`, so this equality ALSO asserts that a
+    role-less Hammer's Needs marginal does not exceed the floor on this board — the property that
+    makes the generalisation behaviour-preserving for deny."""
     from common.deny_relevance import MAX_ATTACK_DAMAGE
-    from common.pilot import _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.hold_value import ITEM_HOLD_FLOOR
+    from common.pilot import _DENIAL_PLAY_W, _DENY_RELEVANCE_K
     from common.strategy.denial import coin_odds
 
     class _Ctx:
@@ -152,7 +159,7 @@ def test_the_fire_factor_is_the_normalizer_so_it_prices_in_damage_units():
         "K must BE the normalizer, not a copy of its current value")
     MEGA_BRAVE = 270                               # Mega Lucario ex, {F}{F} — the attack denied
     by_hand = coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K \
-        * (MEGA_BRAVE / MAX_ATTACK_DAMAGE) - _DENIAL_ITEM_COST
+        * (MEGA_BRAVE / MAX_ATTACK_DAMAGE) - ITEM_HOLD_FLOOR
     assert by_hand == pytest.approx(125.0), (
         f"the documented arithmetic must price this board at +125.00 (got {by_hand})")
 
@@ -358,7 +365,8 @@ def test_the_fire_rung_prices_only_what_they_can_afford_right_now():
       * **gate SHUT** (the real anchor's **Terapagos ex** Active — Basic, retreat cost **2**, verified
         in `EN_Card_Data.csv` — holding no Energy, so it cannot retreat) tests the corpus ruling: the
         Hammer is HELD."""
-    from common.pilot import _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.hold_value import ITEM_HOLD_FLOOR
+    from common.pilot import _DENIAL_PLAY_W, _DENY_RELEVANCE_K
     from common.strategy.denial import coin_odds
 
     # ── gate OPEN: the fire rung reads AFFORDABLE, not banked (finding A, by arithmetic) ──
@@ -371,7 +379,7 @@ def test_the_fire_rung_prices_only_what_they_can_afford_right_now():
         f"{row['relevance_fire']}) — if they were equal the gate would be untested")
     p._unfavored = lambda _b: False
     priced = coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K
-    assert _scores(p, obs)[0] == pytest.approx(priced * row["relevance_fire"] - _DENIAL_ITEM_COST), (
+    assert _scores(p, obs)[0] == pytest.approx(priced * row["relevance_fire"] - ITEM_HOLD_FLOOR), (
         "the fire rung must price the AFFORDABLE reading")
     assert priced * row["relevance"] > priced * row["relevance_fire"], (
         "and the banked reading would have priced strictly higher — that gap IS finding A")
@@ -422,7 +430,7 @@ def test_a_body_exactly_paying_a_colourless_cost_is_relevant_but_one_short_is_no
 def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
     """**Finding C.** ADR-0080 decision 2 makes a matched Brief a multiplier on the derived *rank*.
     Applied to the FIRE reading as well it becomes an override, because that reading is compared
-    against `_DENIAL_ITEM_COST`: measured, the 1.25x boost turns f21's -1.25 into +0.94 and plays the
+    against the hold price: measured, the 1.25x boost turns f21's -1.25 into +0.94 and plays the
     Hammer the human ruled against, on a board where the only thing that changed is that the body
     happens to be Brief-named.
 
@@ -451,7 +459,8 @@ def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
     assert row["relevance_fire"] == pytest.approx(70 / 350.0), (
         "the fire reading must be the unboosted affordable setback (Jet Headbutt 70 / 350)")
 
-    from common.pilot import _BRIEF_THREAT_BOOST, _DENIAL_ITEM_COST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
+    from common.hold_value import ITEM_HOLD_FLOOR
+    from common.pilot import _BRIEF_THREAT_BOOST, _DENIAL_PLAY_W, _DENY_RELEVANCE_K
     from common.strategy.denial import coin_odds
 
     assert board.deny_relevance_best > 0, (
@@ -460,7 +469,7 @@ def test_a_brief_sharpens_the_rank_but_never_the_decision_to_spend_the_card():
     assert _BRIEF_THREAT_BOOST > 1.0, "the sharpener must actually be a boost, or nothing is at risk"
     p._unfavored = lambda _b: False
     raw = (coin_odds(HAMMER) * _DENIAL_PLAY_W * _DENY_RELEVANCE_K * row["relevance_fire"]
-           - _DENIAL_ITEM_COST)
+           - ITEM_HOLD_FLOOR)
     assert _scores(p, obs)[0] == pytest.approx(raw), (
         f"the fire rung must price the RAW affordable reading even though this body is Brief-named — "
         f"a {_BRIEF_THREAT_BOOST}x boost here would show up as a different number, and lifting a hold "
@@ -738,7 +747,7 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
     (The asymmetry itself — that a bad strip prices 0 where ADR-0062's reasoning implies it should
     price negative — was knowingly left open and handed forward by ADR-0084 decision 8. **Issue #228
     CLOSED it** (ADR-0093 decision 4): the whiff short-circuit is gone, so a shut gate now prices
-    `odds x weight x 0 - _DENIAL_ITEM_COST` = **-10.0**. It had to close, because `0.0` did not
+    `odds x weight x 0 - hold price` = **-10.0**. It had to close, because `0.0` did not
     actually decline — `_finish_turn_last` promotes on `score > 0`, so the Hammer landed in the last
     tier TIED with End and stable score order played it by option index.)
 
@@ -761,9 +770,14 @@ def test_a_held_hammer_scores_at_or_below_zero_whichever_branch_it_takes():
         hammer = [i for i, o in enumerate(select["option"])
                   if p._option_card_id(obs, select, o) == HAMMER]
         assert hammer, f"{fixture} must actually offer a Hammer, or it tests nothing"
-        from common.pilot import _DENIAL_ITEM_COST
-        assert all(ex.options[i].score == pytest.approx(-_DENIAL_ITEM_COST) for i in hammer), (
-            f"{fixture}: a shut gate must take the whiff branch and still PAY THE KEEP PRICE — this "
+        from common.hold_value import ITEM_HOLD_FLOOR
+        # Issue #261 item 2f: the price is now `_item_hold_price` = `max(keep_v2, floor)`, and on
+        # these two REAL fixtures the floor binds — a role-less Hammer's only Needs slot is the very
+        # `deny` slot the shut gate has just zeroed, so the assignment leg is 0 here. That is exactly
+        # why the floor exists rather than being decoration: without it the whiff would price 0.0
+        # again, which is the defect ADR-0093 decision 4 closed.
+        assert all(ex.options[i].score == pytest.approx(-ITEM_HOLD_FLOOR) for i in hammer), (
+            f"{fixture}: a shut gate must take the whiff branch and still PAY THE HOLD PRICE — this "
             f"fixes WHICH branch, so the assertion below is known to be testing the zero-relevance "
             f"case; got {[ex.options[i].score for i in hammer]}")
         assert not set(ex.chosen) & set(hammer), (
