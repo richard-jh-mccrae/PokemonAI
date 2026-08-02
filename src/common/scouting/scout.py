@@ -6,6 +6,7 @@ never raises — on any internal error it returns a safe, low-confidence Read.
 """
 from __future__ import annotations
 
+from ..board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
 from .read import EvoPath, Intel, Read
 from .scorer import posterior
 
@@ -74,12 +75,13 @@ class Scout:
                 self._evidence.add(log["cardId"])
 
     def _add_pokemon(self, p) -> None:
-        if not p:
-            return
-        self._add_card(p)
-        for group in ("energyCards", "tools", "preEvolution"):
-            for c in (p.get(group) or []):
-                self._add_card(c)
+        """Every CARD a board Pokémon accounts for is revealed evidence — the body itself plus the
+        Energy cards, Tools and pre-evolutions it carries. One walk, shared with the deck tracker
+        and the two visible-count readers (`common.board_cards`, Issue #297): a body's ``energies``
+        is deliberately not among them, being the Energy UNITS those cards provide rather than the
+        cards."""
+        for cid in body_card_ids(p):
+            self._evidence.add(cid)
 
     def _add_card(self, c) -> None:
         if c and c.get("id"):

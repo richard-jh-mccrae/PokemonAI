@@ -15,6 +15,7 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
+from common.board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
                                           promote_value)
@@ -51,13 +52,6 @@ from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,
                                      own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
 from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 energy denial)
-
-#: "derive this from the observation" — the DEFAULT sentinel for a `_snapshot` argument whose own
-#: vocabulary already spends None on a meaning. `deck_known=None` is the deck tracker's answer for
-#: *"the prizes are not resolved, so I claim nothing"*, a real value a caller may legitimately pass,
-#: so "unset" needs a distinct marker or the two collapse and an honest no-claim silently re-derives
-#: (POC-T3.5, Issue #279). Deliberately NOT in the scoring-weight table below — it is not a weight.
-_DERIVE = object()
 
 # A shuffle-refresh moves cards in four directions and they are NOT worth the same per card. Pricing
 # them symmetrically is what broke the guard family on the first cut: a per-card credit for cards I
@@ -6321,13 +6315,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         prizes = obs.get("own_prizes")             # exact prize multiset from deck-tracker, or None
         if prizes:                                 # keys are card ids: coerce str->int so a
             prizes = {int(k): v for k, v in prizes.items()}    # JSON-captured obs matches the deck
+        # `own_prizes` is the ONE anchor MySide needs for the exact deck facts the hidden
+        # deck-discard scalers read (only MY deck can be exact): the model derives the pair itself
+        # from it (`MySide._deck_facts`, Issue #297), where the tracker's answer used to be threaded
+        # in beside it. `damage_context` reads the pair off the ATTACKER alone and drops the
+        # defender's, so the derivation is wasted work on the defending side — but it is one lazy
+        # Counter walk behind `damage_facts`, and paying it is what removes the second supplier.
         mine = MySide(me, combat=self.combat, deck=self.deck, own_prizes=prizes,
-                      turn_boosts=self._turn_boosts.boosts_for(yi),
-                      # exact deck facts for hidden deck-discard scalers (only MY deck can be
-                      # exact — tracker-anchored): the oracle turns them into a pigeonhole floor /
-                      # hypergeometric EV. Resolved only when I am the attacker, because the pair is
-                      # read for the attacker alone and the walk is not free.
-                      deck_known=self._deck_known_counts(me, prizes) if attacker_is_me else None)
+                      turn_boosts=self._turn_boosts.boosts_for(yi))
         theirs = TheirSide(opp, combat=self.combat,
                            turn_boosts=self._turn_boosts.boosts_for(1 - yi))
         atk, dfn = (mine, theirs) if attacker_is_me else (theirs, mine)
@@ -7066,7 +7061,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         return CarriedState.of(phase_prev=getattr(self, "_phase_prev", None),
                                my_path_prev=getattr(self, "_my_path_prev", None))
 
-    def _snapshot(self, obs: dict, *, my_index=None, deck_empty=None, deck_known=_DERIVE,
+    def _snapshot(self, obs: dict, *, my_index=None, deck_empty=None,
                   read=None, brief=None, matchup_plan=None, gamma: float = 0.0,
                   favorability: float = 0.5, matchup_coverage: float = 0.0,
                   carried=None) -> StateModel:
@@ -7086,32 +7081,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `_incoming_budget` — None on an unrecognized opponent, which is the worst-case ceiling per
         ADR-0064 Decision 1.
 
-        `deck_known` is the deck tracker's anchored `{card id: copies left in my deck}` and defaults
-        to :data:`_DERIVE`, meaning *"work it out from this obs"* — a real sentinel rather than None,
-        because None is the tracker's own answer for *"the prizes are not resolved, claim nothing"*
-        and the two must stay distinguishable. `_board` passes the resolution it already computed;
-        every other caller gets the same one derived here. Threaded because the model's Damage
-        Formula context reads it (POC-T3.5, Issue #279) and the model cannot derive it — see
-        `MySide._deck_known`.
+        A `deck_known` argument used to ride here too, carrying the tracker's anchored `{card id:
+        copies left in my deck}` because the model's Damage Formula context reads it (POC-T3.5,
+        Issue #279) and the model could not derive it. Issue #297 fixed the read it distrusted
+        (`MySide.visible_counts`), so the model now derives the pair from the `own_prizes` anchor the
+        observation already carries, and the sentinel that kept "derive it" distinguishable from the
+        tracker's own "claim nothing" None went with it.
         """
         state = obs.get("current") or {}
         mi = state.get("yourIndex", 0) if my_index is None else my_index
-        if deck_empty is None or deck_known is _DERIVE:
+        if deck_empty is None:
             players = state.get("players") or []
             me = players[mi] if 0 <= mi < len(players) and players[mi] else {}
             raw_prizes = obs.get("own_prizes")
             prizes = {int(k): v for k, v in raw_prizes.items()} if raw_prizes else raw_prizes
-            if deck_empty is None:
-                # `or None` collapses an EMPTY multiset, which is what this fallback has always
-                # done for `deck_empty` — preserved verbatim rather than unified with the line
-                # below, because changing it would move the sound emptiness oracle and this issue
-                # may not move scoring. `_board` and `_damage_context` both keep `{}` as itself.
-                deck_empty = self._deck_empty_ids(me, prizes or None)
-            if deck_known is _DERIVE:
-                deck_known = self._deck_known_counts(me, prizes)
+            # `or None` collapses an EMPTY multiset, which is what this fallback has always done for
+            # `deck_empty`. `_board` and `_damage_context` both keep `{}` as itself.
+            deck_empty = self._deck_empty_ids(me, prizes or None)
         self._state_model = model = StateModel.build(
             obs, combat=self.combat, my_index=mi, deck=self.deck, deck_empty=deck_empty,
-            deck_known=deck_known,
             # THEIR half, fully threaded — the Read overlay (ADR-0026/0027/0047/0051) …
             read=read, brief=brief, matchup_plan=matchup_plan, posture_confidence=gamma,
             favorability=favorability, matchup_coverage=matchup_coverage, opponent=self.opponent,
@@ -7188,7 +7176,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # it is meant to replace, which is exactly why every live consumer bypassed it. Nothing between
         # the old build site and here reads `self._state_model`, so the move is behaviour-neutral; the
         # threading below is what closes the gap.
-        model = self._snapshot(obs, my_index=yi, deck_empty=deck_empty, deck_known=deck_known,
+        model = self._snapshot(obs, my_index=yi, deck_empty=deck_empty,
                                read=read, brief=brief,
                                matchup_plan=matchup_plan, gamma=gamma, favorability=fav,
                                matchup_coverage=cov, carried=carried)
@@ -9457,17 +9445,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     @staticmethod
     def _count_in_play(poke: dict | None, counts: Counter) -> None:
         """Add a board Pokémon and everything attached to / stacked under it (its own id, attached
-        Energy cards and Tools, and the `preEvolution` cards beneath it) to `counts` — all are out
-        of the deck."""
-        if not poke:
-            return
-        if poke.get("id") is not None:
-            counts[poke["id"]] += 1
-        for group in ("energyCards", "tools", "preEvolution"):
-            for c in (poke.get(group) or []):
-                cid = c.get("id") if isinstance(c, dict) else c
-                if cid is not None:
-                    counts[cid] += 1
+        Energy CARDS and Tools, and the `preEvolution` cards beneath it) to `counts` — all are out
+        of the deck. One walk, shared with the deck tracker and `MySide.visible_counts`
+        (`common.board_cards`, Issue #297)."""
+        for cid in body_card_ids(poke):
+            counts[cid] += 1
 
     def _opens_from_hand(self, cid: int | None) -> bool:
         """This card's own Ability puts it into the Active Spot straight from hand — the `opener`

@@ -765,6 +765,26 @@ body, Incoming counts only true bench-snipe (the body is assumed to stay benched
 _Avoid_: Threat (the objective attacker description from the Read; Incoming is the math *against my
 specific body*), active_doomed (a boolean derived from Incoming, not the magnitude)
 
+**Energy Unit** / **Energy Card**:
+Two different facts about the same attachment, and the engine gives a body a separate field for each
+(`cg/api.py` `Pokemon`): `energies` is `list[EnergyType]` — the **Energy Units** the attached cards
+PROVIDE — while `energyCards` is `list[Card]` — the **Energy Cards** themselves. A cost is paid in
+Units, so every count- and colour-shaped read takes `energies` (`BodyView.energy_count`,
+`energy_key`, `attached_types`, and the `DISCARD_ENERGY` option's *type*). Card IDENTITY is only ever
+on `energyCards`, so every *decklist − visible* read takes that (`deck_tracker`,
+`MySide.visible_counts`, `Pilot._visible_card_counts` — one walk, `common/board_cards.py`) and so
+does the `DISCARD_ENERGY` option's `energyIndex`. **They are not interchangeable and they are not
+even the same length**: Ignition Energy is card 17 and provides `{C}{C}{C}` → `energies == [0,0,0]`,
+`energyCards == [17]`. The two coincide only for the eight Basic Energies, whose card ids 1-8 equal
+`EnergyType` 1-8 — a coincidence in the data that has now bitten twice (Issue #279, Issue #297).
+A Unit's *colour* is its code, read directly (`combat.unit_colours`), never a card-table lookup:
+`COLORLESS` is a specific answer meaning **pays colourless slots only**, not a blank — only
+`RAINBOW` ("Every Types") and a code this build's enum does not know are WILD (ADR-0067's 2026-08-02
+amendment).
+_Avoid_: "energy" unqualified for either (say Unit or Card), "attached energy count" for the typed
+histogram (that is `attached_types`; the count is `energy_count`), "untyped Energy" for a colourless
+one (it has a type; the type is COLORLESS)
+
 **Attach Budget**:
 The turn's FULL self-side Energy-attach capacity toward one of my bodies: the manual attach (iff
 still unspent) plus the attach effect of every PLAYABLE accel/tutor card in my hand at its full

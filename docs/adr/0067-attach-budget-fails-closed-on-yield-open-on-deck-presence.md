@@ -184,3 +184,55 @@ unknown `CardStat` makes no claim and returns False. `active_famine` must NOT si
 turns "I cannot tell" into "PROVABLE famine" and fires the +105 stall this ADR exists to prevent. The
 unreadable body is therefore checked BEFORE the oracle is asked, and only the rule leg
 (`attack_blocked`) may claim a famine without reading a stat.
+
+
+## Amendment (2026-08-02 — Issue #297): the attached leg reads UNITS, and colourless is not wild
+
+The amendment above closed with *"coloured exactly as `_attached_units` colours the same card once
+attached."* It was not. `_attached_units` — and `attached_type_counts` and `attack_type_payable`
+with it — resolved an attached Energy's colour by feeding each entry of the engine's
+`Pokemon.energies` to the Stat Provider **as a card id**. `energies` is `list[EnergyType]`
+(`src/cg/api.py`): the Energy UNITS the attached cards provide. The cards are `energyCards`.
+
+That returned the right colour for codes 1-8, because the eight Basic Energy card ids are
+numerically equal to their `EnergyType` codes — a coincidence in the shipped data, and the same one
+that corrupted `MySide.visible_counts` (the other half of Issue #297). It mis-answered every other
+code, and one of those is live on a shipped deck:
+
+* **`COLORLESS = 0`.** There is no card 0, so the lookup returned `None`, and `None` is this
+  family's *"unresolvable — treat as WILD, fail-open"* marker. An attached Ignition Energy renders
+  `[0, 0, 0]`, so it handed a typed line **three units able to pay any colour**. The very card this
+  ADR's previous amendment is about was priced `{0}` in hand and wild once attached — the two
+  readings the amendment says agree, disagreeing.
+* **`RAINBOW = 10`** (Legacy Energy, card 12) and **`DRAGON`/`TEAM_ROCKET`** resolved to Special
+  Energy cards whose own `energyType` is 0, so they counted as neither typed nor wild — nothing.
+
+**Ruled: the attached leg reads the unit codes directly.** One accessor
+(`CombatMath.attached_unit_codes`) and one mapping (`combat.unit_colours`), so the three consumers
+cannot disagree about what is on a body:
+
+| unit code | pays | note |
+|---|---|---|
+| `GRASS`..`DRAGON` (1-9) | its own colour | was already right, by coincidence |
+| `COLORLESS` (0) | colourless slots ONLY | **was wild** |
+| `RAINBOW` (10) | any colour — genuinely wild | "Every Types" |
+| `TEAM_ROCKET` (11) | `{PSYCHIC, DARKNESS}` | forward contract; no pool card provides it |
+| anything else | wild (fail-OPEN) | a later set's enum member this build predates |
+
+The fail-open direction is unchanged for everything genuinely unknown; what changed is that
+COLORLESS stopped being counted as unknown. `attack_type_payable`'s coarse count arithmetic cannot
+express "either of two", so a multi-colour unit joins its `wild_units` there — the exact per-slot
+assignment stays in `reachable_attach` over `_attached_units`, which keeps the full colour set.
+
+**Direction, stated because it cuts both ways.** On MY side this REMOVES an over-credit — a
+colourless unit could price an unpayable line as armed, which is the phantom-lethal error class. On
+the opponent-threat leg it makes a survival read *less* pessimistic, which is normally the one
+direction `incoming` may not move; it is admitted here only because the unit's colour is a FACT the
+engine states, not an uncertainty being resolved optimistically.
+
+**Measured, on the committed corrections corpus:** 32 of 2288 board bodies change their typed
+reading — 25 mine, 7 theirs; 31 of 372 frames touched; by unit code, 83 `COLORLESS` units and 1
+`RAINBOW`. Both ADR-0072 gates PASS with **zero unruled flips**: the Decision Gate is byte-identical
+(0 picks moved), and the Discrimination Gate moves one frame's ranking in the expected direction
+(`81903490|0|decision|49` `correct=[1]`: MISS rank 10/13 -> 7/13, the human's option rising as
+unpayable competitors are suppressed) plus three top-tie counts, none of which gate.

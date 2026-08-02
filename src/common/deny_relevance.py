@@ -82,9 +82,12 @@ scores 0.086 against the ``{P}``'s 0.171 and so CONTRADICTS the ruling outright.
     Fezandipiti (970, a coin-flip damage prevention — NOT Fezandipiti **ex** 140, whose Flip the
     Script needs no Energy) are the other two out-of-pool cases.
   * **Rainbow-class Special Energy** (Legacy 12, and Neo Upper 10 / Prism 16 under their conditions)
-    *"provides every type of Energy"*, but `CardStat.energyType` reports it untyped, so it scores 0
-    on the typed leg. This matches how the shipped `combat.attached_type_counts` already treats it —
-    deliberately consistent rather than a second, divergent reading of the same fact.
+    *"provides every type of Energy"*, so it names no ONE colour and scores 0 on the typed leg. That
+    still matches `combat.attached_type_counts`, which since Issue #297 reaches the same answer by a
+    different road: it reads the `RAINBOW` UNIT code off the body and declines to attribute it to a
+    colour, rather than reading a card's `energyType`. Deliberately consistent rather than a second,
+    divergent reading of the same fact — and note the two disagree about the *mechanism*, so a
+    future fix here should re-check that function rather than assume it still agrees.
 """
 from __future__ import annotations
 

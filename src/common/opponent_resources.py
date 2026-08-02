@@ -20,15 +20,7 @@ from collections import Counter
 from math import ceil
 
 from . import deck_odds
-
-_STACKS = ("energyCards", "tools", "preEvolution")   # cards attached to / stacked under a board Pokémon
-
-
-def _card_id(entry) -> int | None:
-    """The card id of a zone entry (a dict ``{'id': ...}`` or a bare int), or None."""
-    if isinstance(entry, dict):
-        return entry.get("id")
-    return entry if isinstance(entry, int) else None
+from .board_cards import body_card_ids, card_id as _card_id
 
 
 def opp_visible_counts(opp: dict) -> Counter:
@@ -47,15 +39,8 @@ def opp_visible_counts(opp: dict) -> Counter:
                 c[cid] += 1
         for zone in ("active", "bench"):
             for poke in (opp.get(zone) or []):
-                if not poke:
-                    continue
-                if poke.get("id") is not None:
-                    c[poke["id"]] += 1
-                for group in _STACKS:
-                    for e in (poke.get(group) or []):
-                        cid = _card_id(e)
-                        if cid is not None:
-                            c[cid] += 1
+                for cid in body_card_ids(poke):        # the ONE walk (common.board_cards)
+                    c[cid] += 1
         for p in (opp.get("prize") or []):
             cid = _card_id(p)          # face-up prize carries an id; face-down is None
             if cid is not None:
