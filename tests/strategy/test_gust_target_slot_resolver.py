@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-from common import needs
+from common import currency, needs
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -122,6 +122,32 @@ def test_on_opens_no_gust_target_slot_with_no_gust_supplier_held():
                         gust_target_slots=True)
     _rows, _slots_, _elig, denys, gusts = _slots(pilot, obs)
     assert denys == [] and gusts == []
+
+
+@pytest.mark.req("REQ-NEEDS-0011")
+def test_the_emitted_slot_is_worth_denominated_not_prize_denominated():
+    """Issue #313 item 2g — ADR-0076 Amendment E's currency debt, paid at the emission seam.
+
+    The row's `value` is PRIZE-equivalents; every other slot in the same summed assignment is
+    CARD-WORTH points. The emission crosses at `currency.target_value_to_worth`, which divides the
+    marginal by its own derived ceiling (3.9) and multiplies the disruption band — so the slot is
+    `band x fraction∈[0,1]`, the identical shape the armed `deny` slot has (ADR-0080 decision 3),
+    and the two members of the opponent-target slot family are finally commensurable.
+
+    Asserted against the conversion of the row the emission actually read, not against a literal:
+    the claim is that the crossing HAPPENS, and a literal would re-pin the marginal's arithmetic in
+    a file that is about routing."""
+    pilot, obs = _setup([BOSS], opp_bench=[_banked(RIOLU, 70)],
+                        gust_target_slots=True)
+    board = pilot._board(obs)
+    row = next(r for r in pilot._deny_rows(obs, board) if r["area"] == "bench")
+    _rows, _slots_, _elig, _denys, gusts = _slots(pilot, obs)
+
+    assert len(gusts) == 1
+    _j, slot = gusts[0]
+    assert slot.value == pytest.approx(currency.target_value_to_worth(row["value"]))
+    assert slot.value != pytest.approx(row["value"])      # the raw prize-equivalent is NOT emitted
+    assert slot.value <= currency.GUST_TARGET_BAND        # ...and the band is a real ceiling
 
 
 @pytest.mark.req("REQ-NEEDS-0012")

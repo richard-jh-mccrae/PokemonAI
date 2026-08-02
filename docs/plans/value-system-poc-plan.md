@@ -241,10 +241,20 @@ deliberate list; gates green; flips → wave 2.
   flips; DELETE the ADR-0062 magnitude-oracle OFF path and the flag fallbacks; resolve
   Issue #217's deadline question inside the armed instrument (derived clock or ruled-keep, its
   two pre-registered gates decide).
-- **Gust repoint (old Issue #189):** gust whether-to-play leaves the 5-rung band — the play is
-  priced by the T4 differencing once available; T2 does the *target/keep* side cleanup on the
-  shared marginal and stages the rung deletion behind T4's landing (single-commit swap, no
-  shadow).
+- **Gust repoint (old Issue #189): target side DONE 2026-08-02 (ADR-TEMP-313, carved into
+  Issue #313 when this tracker closed).** Gust whether-to-play leaves the 5-rung band — the play is
+  priced by the T4 differencing once available, and those rungs are UNTOUCHED here (their deletion is
+  T4's, Issue #263; the swap IS the deletion). What landed is the *target/keep* side: ADR-0076
+  Amendment E's currency debt, which ADR-0080 decision 4 re-inherited. The `gust_target` slot fed a
+  PRIZE-denominated marginal (1.0–3.9) straight into the worth-summing DP; measured, that put it under
+  the same card's own 4.5 `general` slot on **every** board, so the assignment chose the instrument
+  **0 of 228 times** — Amendment E's "0 decision flips" was inertness, not agreement. It now crosses at
+  `currency.target_value_to_worth`: the marginal over its own derived ceiling (`MAX_PRIZE_VALUE` 3 +
+  `_SURVIVAL_CAP` 0.9 = 3.9) times `TAG_TIER["gust"]` — a `band × fraction∈[0,1]` shape identical to
+  the armed `deny` slot's, needing **no** general prize↔worth rate (the `currency.py` guard test still
+  passes). 29/228 slots now clear the floor. Both gates PASS with ZERO movement, so no wave-2 flips.
+  The ~39× disagreement against the composed shipped legs (`PRIZE_DAMAGE_RATE` ÷
+  `ITEM_HOLD_WORTH_RATE` ⇒ ~100 worth/prize) is RECORDED for `POC_WORTH_PRIZE_RATE` to settle.
 - **Refresh v2 swap (old Issues #220/#222): DONE 2026-08-01 (ADR-0101).** `set_keep_v2` SHED
   replaces v1 Σ keep-cost as the decider; `_refresh_shed_shadow` DELETED (with its telemetry key,
   `needs_sweep`'s refresh half, and the newly-dead `_refresh_cycle_adaptive`). STRIP/GIFT grading
@@ -424,7 +434,7 @@ table uses this same label.
 | `doom-ceiling-fail-direction` | worst-case doom ceiling as survival fail-direction | `structural` | fail-direction policy (a *policy parameter* after T1's fold) | — |
 | `declaration-rungs` | opening/mulligan declaration rungs | `structural` | deck-declared, not tuned | — |
 | `lethal-solver-preemption` | Lethal-Solver preemption above the planner | `structural` | sound win detection outranks every heuristic | — |
-| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds, the refresh swing's STRIP/GIFT/FRESH, the free-Item hold floor `hold_value.ITEM_HOLD_FLOOR` + its seam rate `currency.ITEM_HOLD_WORTH_RATE`) | `authored-scaffold` | tolerated for POC | post-POC learning phases — plus one named prerequisite: STRIP/GIFT retire on `gusting-keepcost-design.md` §2's shared opponent role sheet (ADR-0101). The hold floor/rate joined 2026-08-02 as a net REDUCTION (item 2f: the deleted `_DENIAL_ITEM_COST` was the same number hard-gated to one card class) and carry `DEPLOY_BAND`'s reconciliation debt against `poc-worth-prize-rate` |
+| `firing-equation-constants` | authored constants inside firing equations (ROLE_TIER/TAG_TIER, readiness-leaf values, planner sub-prize constants, confidence seeds, the refresh swing's STRIP/GIFT/FRESH, the free-Item hold floor `hold_value.ITEM_HOLD_FLOOR` + its seam rate `currency.ITEM_HOLD_WORTH_RATE`, the gust-target seam's `currency.GUST_TARGET_BAND`) | `authored-scaffold` | tolerated for POC | post-POC learning phases — plus one named prerequisite: STRIP/GIFT retire on `gusting-keepcost-design.md` §2's shared opponent role sheet (ADR-0101). The hold floor/rate joined 2026-08-02 as a net REDUCTION (item 2f: the deleted `_DENIAL_ITEM_COST` was the same number hard-gated to one card class) and carry `DEPLOY_BAND`'s reconciliation debt against `poc-worth-prize-rate`. The gust-target band joined 2026-08-02 (item 2g, ADR-TEMP-313) adding **no new number** — it IS `TAG_TIER["gust"]`, read at import as the ceiling of a ratio whose divisor is derived — but its reconciliation is the sharpest of the three: the composed shipped legs say ~100 worth/prize against its ~2.56, a ~39x disagreement recorded rather than smoothed |
 | `poc-worth-prize-rate` | `POC_WORTH_PRIZE_RATE` (T3-local) | `authored-scaffold` | reconciled against trainer ≈1.0 / energy ≈6.7 / deploy ≈0.83 (ADR-0097) | post-POC fit against ruled spend-vs-hold frames converges |
 | `apply-seam-coverage-floors` | apply-seam per-option-kind coverage floors | `authored-scaffold` | ADR-0098 d3 | post-POC review as the seam table grows |
 | `attach-value-composed` | `attach_value` (ADR-0069) | `composed-into-the-leaf` | the marginal value of attaching an Energy → composes into **readiness** | — (role change, not retirement) |

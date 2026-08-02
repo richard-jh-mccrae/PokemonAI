@@ -70,7 +70,14 @@ def test_the_worth_leg_stays_absent_until_its_anchor_is_captured():
     very catalogue made explicit. That row USED to read `_DENIAL_ITEM_COST / TAG_TIER["gust"]`: a
     ratio between two constants that never met in an expression, which is precisely why nothing
     stopped it drifting. Reading it off the shipped rate instead is strictly stronger — the number
-    this test guards is now the number the agent actually multiplies by."""
+    this test guards is now the number the agent actually multiplies by.
+
+    **`prize_to_worth` stays absent too, and Issue #313 item 2g did NOT add it** — that name would be
+    the GENERAL prize↔worth rate, which composes through the missing leg above
+    (`PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE`) and so cannot exist while that leg does not.
+    `target_value_to_worth` is a different animal and is guarded on its own terms below: it divides
+    the opponent-target marginal by that marginal's OWN derived ceiling first, so what crosses is a
+    dimensionless [0, 1] fraction of a Worth band, exactly as the deploy legs do."""
     assert not hasattr(currency, "WORTH_DAMAGE_RATE")
     assert not hasattr(currency, "prize_to_worth")
 
@@ -123,3 +130,99 @@ def test_the_deploy_band_is_present_pinned_and_labelled_as_a_preservation_choice
     assert "preservation" in src.lower()
     assert "never a derivation" in src.lower() or "not a derivation" in src.lower()
     assert "reconcil" in src.lower()          # the debt, should a general rate ever land
+
+
+@pytest.mark.req("REQ-CURRENCY-0005")
+def test_the_target_ceiling_is_the_card_sets_own_prize_ceiling():
+    """Issue #313 item 2g: the gust-target ratio's yardstick is DERIVED, so a reviewer can recompute
+    it — and it is recomputed HERE from the card set, not pinned.
+
+    Two spellings of one fact are pinned together in one place, which is the net ADR-0087 asks for
+    when a shared import is not reachable: `common.scouting` must not depend on `common.strategy`, so
+    `CardStat.prize_value` cannot read `strategy.context.MAX_PRIZE_VALUE`. This test walks the Rule
+    column of `data/EN_Card_Data.csv`, resolves each body through `CardStat.prize_value` — the OTHER
+    reader, called rather than restated — and asserts the constant is that population's actual
+    maximum. A future set introducing a fourth Rule fails the vocabulary assertion rather than
+    silently topping out below its own ceiling."""
+    import csv as _csv
+
+    from common import needs
+    from common.scouting.provider import CardStat
+    from common.strategy.context import MAX_PRIZE_VALUE
+
+    bodies = {}                             # by Card ID, as the Prize-Damage-Rate recomputation is
+    with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
+        for row in _csv.DictReader(f):
+            if (row.get("HP") or "").strip().isdigit() and int(row["HP"]) > 0:
+                bodies[row["Card ID"]] = (row.get("Rule") or "n/a").strip()
+    rules = set(bodies.values())
+    # The whole Rule vocabulary this set uses — anything else and the mapping below is incomplete.
+    assert rules == {"n/a", "Pokémon ex", "Mega Pokémon ex"}
+    assert len(bodies) == 1061                             # the same population as the rate above
+
+    # Each Rule resolved through the OTHER reader, so the two cannot disagree about the ceiling.
+    got = {rule: CardStat(0, ex=(rule != "n/a"), megaEx=(rule == "Mega Pokémon ex")).prize_value
+           for rule in rules}
+    assert got == {"n/a": 1, "Pokémon ex": 2, "Mega Pokémon ex": 3}
+    assert max(got.values()) == MAX_PRIZE_VALUE == 3
+
+    # ...and the ceiling is that maximum plus the survival term's own cap — the bound ADR-0076
+    # Amendment E quotes ("max ~3.9") when it names the denomination debt this item pays down.
+    assert needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
+    assert needs.TARGET_VALUE_CEILING == MAX_PRIZE_VALUE + needs._SURVIVAL_CAP
+
+
+@pytest.mark.req("REQ-CURRENCY-0006")
+def test_the_gust_target_band_is_the_disruption_tier_and_the_rate_falls_out_of_it():
+    """Issue #313 item 2g / ADR-0080 decision 4 — the prize↔worth seam, on `DEPLOY_BAND`'s terms.
+
+    The catalogue's FOURTH row, and the first on the prize↔worth pair. Three things are pinned, the
+    same three the deploy band's sibling test pins:
+
+    * the SCALE is the marginal's own derived ceiling, not a fresh divisor (asserted above);
+    * the BAND is the shipped disruption tier — so the crossing introduces NO new number, and the
+      incumbent it preserves (a gust card's pre-ADR-0076 `deny` slot at `TAG_TIER["gust"] / 2**t`)
+      is reproduced rather than replaced;
+    * the module says so in prose, so the row cannot be mistaken for a derivation.
+    """
+    from common.card_worth import TAG_TIER
+
+    assert currency.GUST_TARGET_BAND == TAG_TIER["gust"] == pytest.approx(10.0)
+    assert currency.GUST_TARGET_WORTH_RATE == pytest.approx(10.0 / 3.9)
+
+    # A full-ceiling target is worth exactly the band; nothing can exceed it, including a value the
+    # bound does not cover (the clamp is what keeps the band a band).
+    assert currency.target_value_to_worth(3.9) == pytest.approx(10.0)
+    assert currency.target_value_to_worth(99.0) == pytest.approx(10.0)
+    assert currency.target_value_to_worth(0.0) == 0.0
+    # The modal corpus target — a 1-prize body bought no survival turns — lands on the incumbent
+    # routing's own median (2.500 over 228 measured slots), which is what makes the band a
+    # PRESERVATION choice with evidence rather than an assertion.
+    assert currency.target_value_to_worth(1.0) == pytest.approx(2.564, abs=0.001)
+
+    src = inspect.getsource(currency)
+    assert "prize<->worth rate, scoped to one seam" in src
+
+
+@pytest.mark.req("REQ-CURRENCY-0006")
+def test_the_gust_target_slot_can_finally_outrank_the_cards_own_latent_worth():
+    """The defect the denomination fixes, stated as the property that was FALSE before it.
+
+    A held Boss's Orders opens two slots it is eligible for: its own `gust_target` slot, and the
+    `general` latent-worth slot every worth-carrying card gets at `TAG_TIER["gust"] x
+    _GENERAL_WORTH_W` = **4.5**. Fed a raw prize-equivalent the gust slot topped out at 3.9 — BELOW
+    that floor on every board there is — so the assignment never once chose the instrument ADR-0076
+    built, and its "0 decision flips" measured inertness rather than agreement.
+
+    Asserted as the inequality rather than against a frame, because the claim is structural: it must
+    hold for every board with a target worth more than the modal one, not for a fixture. The floor is
+    IMPORTED rather than spelled `0.45` here, so a re-weight moves this test with it instead of
+    leaving it asserting against a number the agent no longer uses."""
+    from common import needs
+    from common.card_worth import TAG_TIER
+    from common.pilot import _GENERAL_WORTH_W
+
+    general_floor = TAG_TIER["gust"] * _GENERAL_WORTH_W                 # == 4.5
+    assert currency.target_value_to_worth(needs.TARGET_VALUE_CEILING) > general_floor  # ceiling wins
+    assert currency.target_value_to_worth(2.0) > general_floor          # ...as does a 2-prize body
+    assert needs.TARGET_VALUE_CEILING < general_floor  # ...and the RAW prize-equivalent never could

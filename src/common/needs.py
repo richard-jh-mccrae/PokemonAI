@@ -27,7 +27,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from common.card_worth import ROLE_TIER, ENERGY_TIER
-from common.strategy.context import PRIZE_CARDS   # the rules' own constant, one home (leaf module)
+from common.strategy.context import (MAX_PRIZE_VALUE,   # the rules' own constants, one home (leaf
+                                     PRIZE_CARDS)       # module)
 
 #: Every slot kind the vocabulary knows. The coverage lint rejects a SUPPLIES entry naming
 #: anything outside this set; adding a kind here without a supplier or a deriving gate is inert.
@@ -253,6 +254,20 @@ _SURVIVAL_PER_TURN = 0.5    # prize-equivalents per turn-of-survival bought, bef
 _SURVIVAL_CAP = 0.9         # the survival term stays < 1 Prize: it breaks ties among prize outcomes,
                             # never overrides a real prize difference (the sub-prize-tie-break rule).
 
+#: The CEILING of :func:`opponent_target_value` — the largest prize-equivalent any one body's removal
+#: can price at. **Derived, not chosen**: the marginal is `prize_advance + survival_value(...)`, its
+#: first term is bounded by the card set's own largest prize value (`MAX_PRIZE_VALUE` = 3, a Mega ex)
+#: and its second by `_SURVIVAL_CAP` (0.9) by construction, so the sum is **3.9** — exactly the number
+#: ADR-0076 Amendment E quotes when it names the denomination debt (*"max ~3.9 for a 3-prize body with
+#: 8 survival turns bought"*).
+#:
+#: Public because it is the YARDSTICK that lets a prize-denominated marginal be read as a
+#: dimensionless [0, 1] fraction and so meet a Worth-denominated consumer without a general
+#: prize↔worth rate: `currency.target_value_to_worth` (Issue #313 item 2g) is that consumer, and it
+#: divides by this. It lives HERE rather than in `currency` because it is a fact about this module's
+#: own equation — move the equation's bounds and the yardstick must move with them, in one place.
+TARGET_VALUE_CEILING = float(MAX_PRIZE_VALUE) + _SURVIVAL_CAP
+
 
 def phase_scale(*, race_ahead: float | None, opp_prizes_remaining: int) -> float:
     """The KO-race-margin PHASE SCALER (ruling 5, docs/plans/opponent-value-equation-unification.md):
@@ -313,14 +328,24 @@ def opponent_target_value(*, prize_advance: float, survival_shift: int, phase: f
 
 def gust_target_slot(key: str, *, value: float) -> Slot:
     """The held gust-effect Trainer card (Guzma/Boss's-Orders-class) as a KEEP-priced slot (ADR-0076,
-    generalizing `deny_slot` to a second instrument): unlike deny, this instrument's value is the
-    real per-body ``opponent_target_value`` (prize_advance + phase-scaled survival_shift), not the
-    flat disruption card-tier — a gust card doesn't strip Energy, so pricing it through the `deny`
-    kind's oracle-value/timing-grade shape never matched what it actually does. No timing grade of
-    its own (unlike `deny_slot`'s turns-to-ready halving): the two-term marginal is already the
-    per-body "if used now" value, and no ruling has named a distinct gust deadline-discount — adding
-    one here would be an un-derived guess. Deadline 0 (this-turn, un-bankable, mirroring
-    `deploy_now_slot`'s closing-edge convention for a value with no re-access window of its own)."""
+    generalizing `deny_slot` to a second instrument): unlike deny, this instrument is GRADED by the
+    real per-body ``opponent_target_value`` (prize_advance + phase-scaled survival_shift) rather than
+    firing at a flat disruption card-tier — a gust card doesn't strip Energy, so pricing it through
+    the `deny` kind's oracle-value/timing-grade shape never matched what it actually does. No timing
+    grade of its own (unlike `deny_slot`'s turns-to-ready halving): the two-term marginal is already
+    the per-body "if used now" value, and no ruling has named a distinct gust deadline-discount —
+    adding one here would be an un-derived guess. Deadline 0 (this-turn, un-bankable, mirroring
+    `deploy_now_slot`'s closing-edge convention for a value with no re-access window of its own).
+
+    ⚠️ **``value`` is WORTH-denominated, and the caller does the conversion**
+    (`currency.target_value_to_worth`, Issue #313 item 2g) — exactly as `deploy_marginal`'s
+    Worth-denominated result is divided by `currency.DEPLOY_WORTH_SCALE` at ITS call site, and for the
+    same reason: this module is `card_worth`'s and `strategy.context`'s dependant, never `currency`'s,
+    so the crossing cannot live here without inverting that arrow. Handing this function a raw
+    prize-equivalent is the defect ADR-0076 Amendment E recorded and ADR-0080 decision 4 re-inherited
+    — the slot then sums against wincon 30 / `deny` 10 / Energy 8 at a value that tops out at 3.9, and
+    measured over the corpus it never once won the assignment, not even against the SAME card's own
+    `general` slot at 4.5."""
     return Slot("gust_target", float(value), 0, key)
 
 

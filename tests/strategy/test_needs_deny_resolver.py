@@ -40,7 +40,7 @@ from pathlib import Path
 
 import pytest
 
-from common import needs
+from common import currency, needs
 from common.card_worth import TAG_TIER
 from common.cards import CardFunctions
 from common.pilot import _DENIAL_FORWARD, _DENY_RELEVANCE_K, Pilot
@@ -232,7 +232,15 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     DECIDED pick stays unmoved (the discard corpus stays 12/12; `keep_v2` is unchanged at 4.5,
     its general floor). Under the pre-ruling damage-denominated value the same board priced the
     strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
-    original ruling retired, and the ADR-0076 migration does not reopen."""
+    original ruling retired, and the ADR-0076 migration does not reopen.
+
+    **The slot is WORTH-denominated as of Issue #313 item 2g**, so the number below is the band
+    fraction (`10.0 x 1.0/3.9`) rather than the raw prize-equivalent it used to be. What the frame
+    pins is unchanged and is the reason it was chosen: on THIS board the only gustable body is a
+    1-prize Dreepy whose removal buys no survival turns — the MODAL corpus target — so it still
+    prices under the card's own general floor and still moves nothing. The denomination fix lifts
+    the slot where the target is worth more, not everywhere, and this frame is the "not everywhere"
+    half held down in a test."""
     # THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The inline raw walk
     # this replaced `pytest.skip`ped when the frame was absent — a skip on a test that names a
     # literal frame it asserts real behaviour about is a green nobody can notice, so the helper
@@ -251,9 +259,11 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     # EXACT, so the marginal's formula is pinned rather than merely bounded (the original assertion
     # here pinned deny's `10 / 2^t` grade the same way; a loose inequality would let the value drift
     # anywhere below the floor unnoticed). Their bench holds one gustable body: a 1-prize Dreepy
-    # whose removal buys 0 survival turns, so `prize_advance 1 + phase x 0` = exactly 1.0.
+    # whose removal buys 0 survival turns, so `prize_advance 1 + phase x 0` = exactly 1.0 —
+    # denominated into Worth by `currency.target_value_to_worth` at the band fraction 1.0/3.9.
     assert len(gust_target) == 1
-    assert gust_target[0].value == pytest.approx(1.0)
+    assert gust_target[0].value == pytest.approx(currency.target_value_to_worth(1.0))
+    assert gust_target[0].value == pytest.approx(2.564, abs=0.001)
     assert gust_target[0].value < 4.5                        # ...and so below the card's own floor
     # `keep_v2` used to be read off `Decision.discard_shadow`, deleted with the other three by
     # Issue #261 item 2h. The number was never the shadow's — it is the decider's own keep, so it is
