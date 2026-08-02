@@ -106,6 +106,14 @@ jobs:
         if: failure() && steps.gate.outcome == 'failure'
         run: |
           echo "::error::main is RED on the ADR-0072 Discrimination Gate: at least one frame flipped OK -> MISS and is not held out. This is attributable to the merge that triggered this run. Next step is a RULING, not a re-capture: read reports/leaf-gate-main.txt (uploaded as an artifact), decide per frame whether the new ranking is wrong (fix it) or right (hold it out via the fixture's frame_key + Decision-Claim owner, ADR-0072 decision 4). Re-capturing the baseline to clear this would erase the evidence."
+          # The one exception, and the report NAMES it so this does not have to be guessed at: a frame
+          # under the report's `STALE BASELINE` heading flipped because the human RE-RULED it, not
+          # because the build moved (ADR-TEMP-230). There the reference genuinely cannot speak and a
+          # re-capture is the right act — but taken at a commit carrying the ruling and NOT the change
+          # under test, never at HEAD, which would bake that change into its own reference.
+          if grep -q "STALE BASELINE" reports/leaf-gate-main.txt; then
+            echo "::warning::Some of the frames above are under STALE BASELINE: their RULING moved, so the OK -> MISS is the reference moving rather than the build. They still gate, deliberately. Re-capture at a commit carrying the ruling but NOT the change under test, then re-run — see docs/ci.md 'Where to re-capture FROM'."
+          fi
 
       - name: Upload gate report
         if: ${{ !cancelled() }}

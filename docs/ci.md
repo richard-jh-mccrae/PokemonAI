@@ -201,8 +201,44 @@ The gate report uploads as the `leaf-gate-main` artifact.
 `CORPUS SHIFTED` means the two captures are no longer comparable — the run emits a `::warning::` so
 the re-capture gets owned rather than passing unseen.
 
+**A red caused by a RE-RULING says so.** `correct_is_top` is frozen into each capture and computed
+under that capture's own `correct`, so when the human re-rules a frame the diff grades its two
+halves under two different oracles and reports `REGRESSED ... OK → MISS` about a build that did not
+move. Those flips are printed under their own `⚠️ STALE BASELINE` heading (ADR-TEMP-230). The shape,
+against the case that motivated the rule — `84071010|0|decision|15`, whose ruling moved to `[0]` and
+which the committed baseline has since absorbed, so this is a reconstruction, not a live red:
+
+```
+  ⚠️ STALE BASELINE (1) — the baseline predates a re-ruling on these frames. Their OK -> MISS
+  below is the REFERENCE moving, not the build; they still gate:
+    84071010|0|decision|15  correct [1] -> [0]   rank 1 -> 2
+    -> re-capture at a commit carrying the ruling but NOT the change under test, then re-run.
+```
+
+**They still gate.** The section labels the red, it does not excuse it — every frame it names is
+also listed as `REGRESSED` in the gate block that follows it. A gate getting quieter as a side effect is the
+one direction a gate must never move (ADR-0085 Amendment I), and excusing these would give a real
+regression somewhere to hide behind a same-commit re-ruling. The redness was always right — the
+gate's reference is stale, so it cannot speak; only the *explanation* was wrong.
+
 Measured 91 s over 267 frames (2026-07-28); main was verified green at `7d2a656` before this landed,
 so it was not born red.
+
+### Where to re-capture FROM
+
+**A commit that carries the ruling change but none of the code change under test.** This applies to
+both baselines and it is the rule the `⚠️ STALE BASELINE` line above names.
+
+Capturing at `HEAD` after a code change bakes that change into its own reference, and the gate can
+then never say anything about it — it will compare the change against itself and pass forever, which
+is precisely how the old Decision Gate died (`gates.decider_lab_diff`). The ruling-gated `capture`
+guard above does **not** catch this: it asks whether every fail-direction frame carries a *ruling*,
+not whether the tree carries the *change*. So the capture point stays a human decision, and it is
+written here rather than left tribal — it cost ADR-TEMP-230's own author one wrong answer first.
+
+The two operations this leaves are both cheap and both already exist: `restamp` when only the
+recorded revision is stale, and a ruling (`owner` on the fixture's Decision Claim) when the flip is
+real and owned. Re-capture is the last resort, not the first.
 
 ### Baseline provenance
 

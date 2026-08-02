@@ -335,7 +335,10 @@ def leaf_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
 
     ``voided`` frames are still compared and still reported — only the gate verdict and the
     **Agree Delta** exclude them. A voided frame silently vanishing from the diff would be the
-    shrinking-gated-set failure ``added``/``removed`` exist to prevent."""
+    shrinking-gated-set failure ``added``/``removed`` exist to prevent.
+
+    ``stale_baseline`` PARTITIONS ``ok_to_miss`` rather than shrinking it: the flips whose ruling
+    also moved. See that key's comment below."""
     b = rows_by_key(before, keep=_scorable)
     a = rows_by_key(after, keep=_scorable)
     shared = b.keys() & a.keys()
@@ -346,12 +349,23 @@ def leaf_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
             ok_to_miss.append({"key": k, "before": b[k], "after": a[k]})
         elif now and not was:
             miss_to_ok.append({"key": k, "before": b[k], "after": a[k]})
+    # SAME row filter as `compared` above, so the two numbers in one report describe one
+    # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
+    moves = ruling_moves(before, after, keep=_scorable)
+    moved_keys = {m["key"] for m in moves}
     return {"ok_to_miss": ok_to_miss, "miss_to_ok": miss_to_ok,
             "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
             "compared": len(shared),
-            # SAME row filter as `compared` above, so the two numbers in one report describe one
-            # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
-            "ruling_moves": ruling_moves(before, after, keep=_scorable),
+            "ruling_moves": moves,
+            # A PARTITION of `ok_to_miss`, holding its own entry objects — not a filtered copy and
+            # not a subtraction from it. `correct_is_top` is frozen into each capture and computed
+            # under THAT capture's `correct`, so when a ruling moves this diff grades its two halves
+            # under two oracles and reports `REGRESSED ... OK -> MISS` about a build that did not
+            # move. The redness is right (a stale reference cannot speak) and the LABEL is what was
+            # wrong. Excusing them instead was rejected: a gate getting quieter as a side effect is
+            # the one direction a gate must never move, and it would let a real regression hide
+            # behind a same-commit re-ruling (ADR-TEMP-230 decisions 1-2).
+            "stale_baseline": [f for f in ok_to_miss if f["key"] in moved_keys],
             "agree_delta": agree_delta(
                 before, after, keep=_scorable, voided=voided,
                 # The Leaf Lab's ruling is `correct_is_top`; an unscorable row is already filtered out
@@ -369,7 +383,12 @@ def discrimination_gate_verdict(diff: dict, *, held_out: dict, voided=()) -> boo
     ``voided`` frames do not block either (ADR-0088 decision 4): their ruling can no longer say
     the agent is wrong. Passed alongside ``held_out`` rather than folded into it because the two are
     different acts — one holds a STANDING ruling out of this gate's scope, the other says the ruling
-    itself cannot grade — and the readout names them separately."""
+    itself cannot grade — and the readout names them separately.
+
+    ``stale_baseline`` is deliberately NOT a third excuse (ADR-TEMP-230 decision 1). It reads
+    ``ok_to_miss`` whole, so a re-ruled frame gates exactly as it did before that key existed: the
+    partition is a LABEL on the readout, and this verdict cannot be made quieter by adding one.
+    A same-commit re-ruling would otherwise become a place for a real regression to hide."""
     excused = set(held_out) | set(voided or ())
     return all(f["key"] in excused for f in diff.get("ok_to_miss") or [])
 
@@ -714,7 +733,14 @@ def guarded_capture(out, fresh, *, index, diff_fn, fail_keys_fn, write) -> int:
 
     ``diff_fn(outgoing, fresh)`` and ``fail_keys_fn(diff)`` are the two genuinely per-lab pieces;
     ``write()`` performs the actual artifact write once the guard passes. A first capture (no
-    outgoing artifact) writes freely — there is no prior ruling record to protect."""
+    outgoing artifact) writes freely — there is no prior ruling record to protect.
+
+    **WHERE to capture from is not this guard's business, and it matters just as much.** A capture
+    taken at ``HEAD`` bakes the change under test into its own reference, so the gate can never speak
+    about that change again — the ruling-gated guard would pass such a capture without complaint. The
+    rule is `CAPTURE_POINT`: *"re-capture at a commit carrying the ruling but NOT the change under
+    test."* Written down in `docs/ci.md` §"Where to re-capture FROM" (ADR-TEMP-230 decision 4)
+    because it was tribal knowledge, and cost this rule's own author one wrong answer first."""
     from pathlib import Path
     import json as _json
     out = Path(out)
@@ -1289,6 +1315,47 @@ def print_ruling_moves(moves) -> None:
     print(f"\n  ⚠️ RULING MOVED ({len(moves)}) — the human re-ruled these frames; reported, never gating:")
     for m in moves:
         print(f"    {m['key']}  correct {m['before']} -> {m['after']}")
+
+
+#: The one actionable sentence a **Stale Baseline** frame is owed. Capturing at ``HEAD`` would bake
+#: the change under test into its own reference — the trap that makes this class of red incapable of
+#: correcting itself, and the reason ADR-TEMP-230 decision 3 rejected "a re-ruling must re-capture in
+#: the same change".
+#:
+#: **This is the one copy any CODE reads** — `print_stale_baseline` interpolates it, and a test locks
+#: the printed wording to it. The rule is also *restated in prose* three times for readers who never
+#: reach this module: `guarded_capture`'s docstring, `docs/ci.md` §"Where to re-capture FROM", and
+#: `leaf-gate-main.yml`'s `::warning::`. Those are deliberate duplication at a documentation boundary,
+#: not consumers — a workflow cannot import a Python constant. If the rule changes, all four move.
+CAPTURE_POINT = ("re-capture at a commit carrying the ruling but NOT the change under test, "
+                 "then re-run")
+
+
+def print_stale_baseline(entries) -> None:
+    """The **Stale Baseline** section — the ``ok_to_miss`` flips whose ruling ALSO moved.
+
+    Always visible when non-empty, like ``HELD OUT`` and ``VOIDED``, and for the same reason: a
+    reader who stops at the ``REGRESSED`` lines must not miss the fact that changes what those lines
+    mean. Unlike those two, this section **excuses nothing** — every frame it names is also printed
+    as gating, because the diff's own `stale_baseline` holds `ok_to_miss`'s entry objects.
+
+    What it fixes is the SENTENCE, not the redness. `leaf_lab_diff` compares `correct_is_top`, frozen
+    into each capture under that capture's own ``correct``; when the human re-rules a frame the two
+    halves are graded under two oracles, and ``REGRESSED ... OK -> MISS`` becomes a false statement
+    about a build that did not move. The gate is right to be red — its reference is stale, so it
+    cannot speak — and was wrong about why.
+
+    A shared printer beside `print_ruling_moves` for that function's reason: one wording, so two
+    readouts cannot describe one fact differently."""
+    if not entries:
+        return
+    print(f"\n  ⚠️ STALE BASELINE ({len(entries)}) — the baseline predates a re-ruling on these "
+          f"frames. Their OK -> MISS below is the REFERENCE moving, not the build; they still gate:")
+    for f in entries:
+        b, a = f.get("before") or {}, f.get("after") or {}
+        print(f"    {f['key']}  correct {b.get('correct')} -> {a.get('correct')}"
+              f"   rank {b.get('correct_rank')} -> {a.get('correct_rank')}")
+    print(f"    -> {CAPTURE_POINT}.")
 
 
 def decider_lab_diff(before: dict, after: dict, *, voided=(), equiv=None) -> dict:

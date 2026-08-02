@@ -218,6 +218,22 @@ reports the *ruling about* a frame moving.
 _Avoid_: re-rule (the human act — this is the instrument's report of it), label change (a
 **Correction**'s `correct` is the ruling, not a label), corpus drift (that is `added`/`removed`)
 
+**Stale Baseline**:
+An `ok_to_miss` flip whose frame is ALSO a **Ruling Move** — `leaf_lab_diff`'s `stale_baseline`
+partition (**ADR-TEMP-230**, Issue #230). `correct_is_top` is frozen into each capture under *that
+capture's own* `correct`, so a re-ruling makes the **Discrimination Gate** grade its two halves under
+two oracles and print `REGRESSED … OK → MISS` about a build that did not move. It **names the red, it
+does not excuse it**: the entries are `ok_to_miss`'s own objects, `discrimination_gate_verdict` never
+consults the key, and a gate that gets quieter as a side effect is the one direction a gate must
+never move (ADR-0085 Amendment I). The redness was always right — a stale reference cannot speak —
+and only the explanation was wrong, so the fix is a **label plus a capture point**
+(`gates.CAPTURE_POINT`), not an exemption. Deliberately Discrimination-Gate-only: `decider_lab_diff`
+resolves `correct` from the AFTER capture and grades both sides through it, so it never runs two
+oracles and has nothing to relabel (ADR-TEMP-230 decision 5).
+_Avoid_: excused / exempt / held out (it gates exactly as before — those words name real exemptions,
+**Held-out Ledger** and **Voided Ruling**), false red (the red is true; the *reason* was false),
+stale corpus (that is `added`/`removed`)
+
 **Ruling Index**:
 The ONE query that spans every store a ruling can live in — `gates.ruling_index()`, `{Frame Key:
 Ruling}` (**ADR-0088**, Issue #239). Built on `keyed_corrections`, so the `review_key` ↔ **Frame
