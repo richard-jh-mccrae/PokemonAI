@@ -135,15 +135,16 @@ reading, and ADR-0081's `_route_only_at_setup` is where the Set-Up route is mode
 
 ## Consequences
 
-* **Measured 2026-08-02** — suite **4452 passed / 0 failed**; **both gates PASS with zero unruled
-  flips**, and neither
-  baseline re-captured (ADR-0094):
+* **Measured 2026-08-02**, re-stated against the rebased base (`main` at the Issue #306 merge, which
+  moved `_deploy_supplier_rows` out from under this branch) — suite **4513 passed / 0 failed**;
+  **both gates PASS with zero unruled flips**, and neither baseline re-captured (ADR-0094):
   * **Decision Gate** — 372 frames, `agree 250/346 → 250/346`, 4 picks moved. Two are **FIX**
     (`83038055|0|decision|40` `[5] → [0]`, `83665798|1|decision|39` `[3] → [4]` — both now the
     human's option); the other two are the held-out pair already owned by Issue #262 / Issue #272. **No new
     REGRESSION.**
-  * **Discrimination Gate** — 268 frames, gated on 266, `agree 182/248 → 180/248`; the 2 moved
-    frames are the pair held out onto Issue #262 before this branch existed. **No new `OK → MISS`.**
+  * **Discrimination Gate** — 268 frames, gated on 266; the only `OK → MISS` frames are the pair
+    held out onto Issue #262 before this branch existed, and on the rebased base one frame goes the
+    other way — `86090164|1|turn|6`, **IMPROVED** `MISS → OK`. **No new `OK → MISS`.**
   * So this sub-issue moves scoring, as Issue #278 predicted, and the move is **two frames toward
     the human and nothing away** — nothing needing a wave-3 verdict.
 * A hand of provably-dead evolutions now prices at its **general** worth only — actually at nothing,
