@@ -497,7 +497,16 @@ def test_every_authored_agent_declares_a_win_condition_line():
 def test_the_exempt_agents_are_exactly_the_pre_doctrine_ones():
     """The exemption is asserted EXPLICITLY (ADR-0079 amendment A), so adding an agent cannot
     silently opt out of the invariant above — a new deck either gains a STRATEGY.md and a declaration
-    or it fails here. `grimmsnarl_ex` (strategy.py but no doctrine) and `slowking` (a decklist only)
-    are the two known pre-doctrine decks; both are /deck-genie's job, and /deck-align's
-    "≥2 startable bodies, no starter_priority" check is what surfaces them."""
-    assert _exempt_agents() == ["grimmsnarl_ex", "slowking"]
+    or it fails here. `grimmsnarl_ex` (strategy.py but no doctrine), `hydrapple` (a decklist only,
+    PR #337) and `slowking` (a decklist only) are the known pre-doctrine decks; all are
+    /deck-genie's job, and /deck-align's "≥2 startable bodies, no starter_priority" check is what
+    surfaces them.
+
+    **`hydrapple` was DECLARED here, not skipped past** (2026-08-03). PR #337 added
+    `src/agents/hydrapple/` as `deck.csv` + `deck.txt` with no doctrine, and this assertion went red
+    on `main` — the gate firing exactly as designed. The two honest resolutions are to author the
+    doctrine or to record the deck as pre-doctrine; this is the second, and it is deliberately a
+    DATA change rather than a skip. A skip would retire the invariant for every deck added after
+    hydrapple, which is the silent opt-out ADR-0079 amendment A exists to make impossible — a
+    strictly larger concession than the one actually needed. Authoring the doctrine remains owed."""
+    assert _exempt_agents() == ["grimmsnarl_ex", "hydrapple", "slowking"]

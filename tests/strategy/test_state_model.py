@@ -29,13 +29,20 @@ from common.state_model import (CarriedState, CountTriple, MySide, StateModel, T
 from common.strategy.combat import CombatMath
 
 # EnergyType codes (cg.api.EnergyType)
-COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
+COLORLESS, GRASS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 5, 6, 7, 9
 
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 JET_HEADBUTT, PHANTOM_DIVE = 9121, 9122
 AURA_JAB, MEGA_BRAVE = 982, 983
 CRISPIN = 1198
 E_R, E_P, E_D = 2, 5, 7
+# The two bench-GATED attackers in the whole card set (`parse_attack_bench_requirement` over
+# `data/EN_Card_Data.csv` finds exactly these two), so the payoff gate is tested on both shapes:
+# a single named partner and an "and" list that needs BOTH.
+SOLROCK, LUNATONE = 676, 675
+MESPRIT, UXIE, AZELF = 216, 215, 217
+COSMIC_BEAM, POWER_GEM = 9676, 9675
+FULL_HEART, GUARDIAN_BURST = 9216, 9217
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
@@ -49,6 +56,17 @@ _STATS = {
                        evolvesFrom="Riolu", maxDamage=270, minAttackCost=1, minCostDamage=130,
                        attacks=(AURA_JAB, MEGA_BRAVE), cardType=0),
     CRISPIN: CardStat(CRISPIN, name="Crispin", cardType=3),
+    SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, energyType=FIGHTING, weakness=GRASS,
+                      minAttackCost=1, maxDamage=70, maxDamageCost=1, minCostDamage=70,
+                      attacks=(COSMIC_BEAM,), cardType=0),
+    LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING, weakness=GRASS,
+                       minAttackCost=2, maxDamage=50, maxDamageCost=2, minCostDamage=50,
+                       attacks=(POWER_GEM,), cardType=0),
+    MESPRIT: CardStat(MESPRIT, name="Mesprit", hp=70, energyType=PSYCHIC, weakness=DARKNESS,
+                      minAttackCost=1, maxDamage=160, maxDamageCost=2, minCostDamage=0,
+                      attacks=(FULL_HEART, GUARDIAN_BURST), cardType=0),
+    UXIE: CardStat(UXIE, name="Uxie", hp=70, energyType=PSYCHIC, weakness=DARKNESS, cardType=0),
+    AZELF: CardStat(AZELF, name="Azelf", hp=70, energyType=PSYCHIC, weakness=DARKNESS, cardType=0),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
@@ -58,6 +76,14 @@ _ATTACKS = {
     PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC)),
     AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
     MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, energyTypes=(FIGHTING,),
+                            requiresBench=("Lunatone",), ignoresWeakness=True,
+                            ignoresResistance=True),
+    POWER_GEM: AttackStat(POWER_GEM, damage=50, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    FULL_HEART: AttackStat(FULL_HEART, damage=0, cost=1, energyTypes=(COLORLESS,)),
+    GUARDIAN_BURST: AttackStat(GUARDIAN_BURST, damage=160, cost=2,
+                               energyTypes=(PSYCHIC, PSYCHIC),
+                               requiresBench=("Uxie", "Azelf")),
 }
 _TAGS = {CRISPIN: ["energy_accel", "search", "tutor_energy"]}
 _CLAUSES = {CRISPIN: [{"kind": "accel", "amount": 1, "source": "deck", "target": "any_pokemon",
@@ -786,3 +812,128 @@ def test_a_body_less_side_makes_no_famine_claim_rather_than_crashing():
     "True on unknown stats ... only on a PROVABLE famine", ep83457493 f20)."""
     m = _model(_player(prize=4), _player(active=_poke(RIOLU, hp=80, serial=3), prize=6))
     assert m.mine.active_famine is False
+
+
+# ── the payoff a body can actually reach — the bench-partner gate (Issue #287) ─────────────────
+#
+# Card facts VERIFIED at source (`data/EN_Card_Data.csv`), and the SET was walked rather than
+# recalled: `parse_attack_bench_requirement` over every row finds exactly TWO gated attacks.
+#   * Solrock (676) Basic HP 110 {F}, weak {G} — Cosmic Beam {F} 70: "If you don't have Lunatone
+#     on your Bench, this attack does nothing. This attack's damage isn't affected by Weakness or
+#     Resistance." Its ONLY attack. 3x in the shipped `mega_lucario` deck, beside 2x Lunatone.
+#   * Mesprit (216) Basic HP 70 {P}, weak {D} — Full Heart `●` (no damage) and Guardian Burst
+#     {P}{P} 160: "If you don't have Uxie and Azelf on your Bench, this attack does nothing."
+#     Pool-only (no shipped deck runs it), and carried here for the shape Solrock cannot test:
+#     an "and" list needing BOTH partners, on a body with a SECOND, ungated attack.
+#   * Lunatone (675) Basic HP 110 {F} — Power Gem {F}{F} 50. Uxie (215) / Azelf (217) Basic HP 70.
+
+
+def test_a_bench_gated_payoff_is_zero_without_its_partner():
+    """`CardStat.maxDamage` is 70 for Solrock whether or not Lunatone is benched — it is the
+    PRINTED roll-up and no printed number can carry a board condition. The payoff read asks the
+    damage oracle instead, which already owns the gate (`strategy/damage.py`'s `requiresBench`
+    leg), so the same body prices at 0 on a bench that cannot pay it."""
+    m = _model(_player(active=_poke(SOLROCK, hp=110, energies=[]),
+                       bench=[_poke(RIOLU, hp=80, serial=2)], prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.active.stat.maxDamage == 70, "fixture drift: the PRINTED roll-up is the bug"
+    assert m.mine.attack_payoff(m.mine.active).damage == 0.0
+
+
+def test_benching_the_partner_restores_the_gated_payoff():
+    """The other half, and the one that makes the term MOVE: benching Lunatone is what turns
+    Cosmic Beam back into 70 damage, so the play that enables the attacker is now visible to any
+    consumer that differences this read."""
+    m = _model(_player(active=_poke(SOLROCK, hp=110),
+                       bench=[_poke(LUNATONE, hp=110, serial=2)], prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.attack_payoff(m.mine.active) == (COSMIC_BEAM, 70.0)
+
+
+def test_the_partner_must_be_BENCHED_not_merely_in_play():
+    """Card text is "on your Bench" (`data/EN_Card_Data.csv` 676), so a Lunatone in the ACTIVE
+    spot does not satisfy it. The oracle reads `atk_bench_names`, which is the Bench and only the
+    Bench — the distinction a "Lunatone in play" reading would silently lose."""
+    m = _model(_player(active=_poke(LUNATONE, hp=110),
+                       bench=[_poke(SOLROCK, hp=110, serial=2)], prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.attack_payoff(m.mine.bench[0]).damage == 0.0
+
+
+def test_an_AND_list_needs_every_named_partner():
+    """Guardian Burst names two partners. One of them is not most of the way there — it is
+    nothing, and a gate that credited the 160 on a partial bench would price a phantom."""
+    def _mesprit_with(*bench):
+        return _model(_player(active=_poke(MESPRIT, hp=70),
+                              bench=[_poke(c, hp=70, serial=i + 2) for i, c in enumerate(bench)],
+                              prize=4),
+                      _player(active=_pult(serial=9), prize=6))
+    half = _mesprit_with(UXIE)
+    assert half.mine.attack_payoff(half.mine.active).damage == 0.0
+    both = _mesprit_with(UXIE, AZELF)
+    assert both.mine.attack_payoff(both.mine.active) == (GUARDIAN_BURST, 160.0)
+
+
+def test_a_gated_maximum_falls_back_to_the_best_UNGATED_attack():
+    """Zeroing the BODY is the wrong repair: Mesprit still has Full Heart when Guardian Burst is
+    dead, so the payoff read must return the best attack that actually pays — attack id included,
+    because the odds leg is asked about THAT attack and a payoff paired with another attack's
+    probability is the saturation defect `payoff` exists to avoid."""
+    m = _model(_player(active=_poke(MESPRIT, hp=70), bench=[_poke(UXIE, hp=70, serial=2)],
+                       prize=4),
+               _player(active=_pult(serial=9), prize=6))
+    assert m.mine.attack_payoff(m.mine.active).attack_id == FULL_HEART
+
+
+def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
+    """The regression half: every card without a board condition must price where it always did.
+    Mega Lucario ex's Mega Brave is 270 printed and 270 here, and the payoff attack is the
+    max-damage one — matchup-free, so no Weakness/Resistance from the defender leaks in."""
+    m = _model(_player(active=_poke(MEGA_LUC, hp=340), bench=[], prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.attack_payoff(m.mine.active) == (MEGA_BRAVE, 270.0)
+    assert m.mine.attack_payoff(m.mine.active).damage == float(m.mine.active.stat.maxDamage)
+
+
+def test_the_payoff_of_an_unreadable_CARD_makes_no_claim():
+    """Fail-closed, the model's standing direction for an unresolvable card: no attack id and no
+    damage, rather than a zero that a consumer could mistake for a priced body."""
+    m = _model(_player(active=_poke(9999, hp=80), prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.attack_payoff(m.mine.active) == (None, 0.0)      # card 9999 has no CardStat
+    assert m.mine.attack_payoff(None) == (None, 0.0)
+
+
+def test_an_UNRESOLVABLE_attack_table_degrades_to_the_card_level_roll_up():
+    """A partial provider must not silently zero a real attacker. This fixture's Riolu carries
+    `maxDamage` 30 with an EMPTY attack tuple — the shape a partially-known table produces — and the
+    read then answers with the card-level roll-up under a null attack id, exactly as
+    `CombatMath.predicted_max_damage` falls back and exactly the pair the retired `payoff_attack`
+    gave. The gate is a new REASON to price 0, never a new way to reach one; and an attack whose
+    record is missing is an attack whose condition is unreadable, so no gate is being waived."""
+    m = _model(_player(active=_poke(RIOLU, hp=80), prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.active.stat.maxDamage == 30 and not m.mine.active.stat.attacks
+    assert m.mine.attack_payoff(m.mine.active) == (None, 30.0)
+
+
+def test_both_sides_can_be_asked_for_a_payoff():
+    """The gate is a fact about the ATTACKER's own bench, whichever seat that is. Their Solrock is
+    as dead without their Lunatone as mine is — `threat` reads the same accessor, so the question
+    lives on the side base rather than on my half of it."""
+    m = _model(_player(active=_pult(), prize=4),
+               _player(active=_poke(SOLROCK, hp=110, serial=3),
+                       bench=[_poke(LUNATONE, hp=110, serial=4)], prize=6))
+    assert m.theirs.attack_payoff(m.theirs.active) == (COSMIC_BEAM, 70.0)
+
+
+def test_bench_names_is_the_bench_and_only_the_bench():
+    """The single home for the fact the gate reads. It was inlined in `damage_facts`; the payoff
+    read needs the same list, and two comprehensions over `self.bench` is exactly the drift the
+    ONE-context ruling (Issue #279) exists to prevent."""
+    m = _model(_player(active=_poke(SOLROCK, hp=110),
+                       bench=[_poke(LUNATONE, hp=110, serial=2), _poke(RIOLU, hp=80, serial=3)],
+                       prize=4),
+               _player(active=_pult(serial=9), prize=6))
+    assert m.mine.bench_names == ("Lunatone", "Riolu")
+    assert m.mine.damage_facts.bench_names == m.mine.bench_names

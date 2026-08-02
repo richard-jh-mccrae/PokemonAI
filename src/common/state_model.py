@@ -71,6 +71,7 @@ from common.deck_odds import p_contains          # the Probability Leg's one imp
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
 from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
+from common.strategy.damage_context import bench_gate_context   # ...and its matchup-free slice
 from common.strategy.damage_context import damage_context as _assemble_damage_context
 
 #: Sentinel for "use the policy threaded at :meth:`StateModel.build`". A clock consumer that wants a
@@ -309,6 +310,29 @@ class ForwardPayoff(NamedTuple):
     reachable: bool
 
 
+class AttackPayoff(NamedTuple):
+    """What a body can actually pay off with on THIS board — :meth:`_SideBase.attack_payoff`'s
+    answer.
+
+    ``Attack``-prefixed on purpose: "payoff" is already spoken for one abstraction up, where
+    `src/common/CONTEXT.md` uses it for the **Line** payoff — the evolved end-card a development
+    line is aimed at (and coins *Stranded Payoff* for the case where it cannot be reached). This is
+    the much smaller per-ATTACK quantity, and a bare `Payoff` would quietly overload the term.
+
+    NAMED for the reason its siblings are, and with the id and the damage in ONE record rather than
+    two accessors for a sharper reason than transposition: the two are only sound TOGETHER. The
+    caller prices ``damage`` and then asks the odds machinery about ``attack_id``, and a consumer
+    free to fetch one without the other is free to pair a max-damage payoff with a cheaper attack's
+    probability — which saturates the term it feeds and prunes the very attach that would complete
+    the payoff. Keeping them in one return makes the mismatch unspellable."""
+
+    #: The attack whose damage this is. ``None`` when no attack record resolves.
+    attack_id: int | None
+    #: That attack's damage on this board, matchup-free — printed, with the attack's own board
+    #: conditions applied (a bench-partner condition unmet reads 0). Never negative.
+    damage: float
+
+
 class BodyView(_Lazily):
     """One Pokémon in play, with its typed Energy and its attacks' typed cost shapes.
 
@@ -409,33 +433,11 @@ class BodyView(_Lazily):
     # `CombatMath._attack_slots`. A body VIEW of a fact that does not depend on the body is a second
     # place to look for it, which is the cost the model exists to remove rather than to add.
 
-    @lazy
-    def payoff_attack(self):
-        """The attack id carrying this body's biggest printed damage — its `CardStat.maxDamage`
-        attack. ``None`` when no attack resolves.
-
-        Exists because "is this body ready?" is ambiguous and the two readings disagree in exactly
-        the case that matters. `readiness_p(body)` with no ``attack_id`` asks the FAMINE question —
-        is ANY attack reachable — which is 1.0 for a Mega Lucario ex holding one {F} because Aura Jab
-        costs {F}. But the payoff being priced is Mega Brave's 270, which costs {F}{F}. Pairing a
-        max-damage payoff with an any-attack probability makes the whole term saturate, and a
-        saturated term has zero derivative: the second Energy would price at 0 and never be attached.
-
-        Reads `stat.attacks` directly rather than through a `BodyView.attacks` pass-through, which
-        POC-T1 deleted for having none: this is a body-DEPENDENT question (which of THIS body's
-        attacks pays best), so it earns a view where a bare re-export of card knowledge did not.
-
-        Ties resolve to the FIRST attack in the card's own order — deterministic, because two attacks
-        at equal printed damage are equal payoffs and the tie-break must not depend on dict order."""
-        stat = self.stat
-        best, best_damage = None, -1.0
-        for aid in (getattr(stat, "attacks", None) or ()) if stat is not None else ():
-            astat = self._combat.attack_stat(aid)
-            damage = float(getattr(astat, "damage", 0) or 0) if astat is not None else 0.0
-            if damage > best_damage:
-                best, best_damage = aid, damage
-        return best
-
+    # No `payoff_attack` here, and its absence is the point (Issue #287). "Which attack pays best"
+    # cannot be answered from the body alone: Cosmic Beam's damage depends on who is on the attacker's
+    # BENCH, which a view of one body cannot see. The question therefore lives one level up, on
+    # :meth:`_SideBase.payoff`, and it lives there ONCE — a body-scoped printed-only twin beside it
+    # would be a second answer to one question, free to disagree in exactly the case that matters.
 
     @lazy
     def prize_value(self) -> int:
@@ -524,6 +526,19 @@ class _SideBase(_Lazily):
         return tuple(b.body for b in self.bodies)
 
     @lazy
+    def bench_names(self) -> tuple:
+        """The BENCHED bodies' card names, in bench order — ``""`` for a body whose card does not
+        resolve, so the tuple stays positional rather than silently shortening.
+
+        The Bench and only the Bench, which is the whole content of the fact: a bench-partner
+        condition is printed as *"if you have Lunatone on your Bench"* (`data/EN_Card_Data.csv` 676),
+        and a Lunatone in the Active spot does not satisfy it. Read by the damage oracle's
+        ``requiresBench`` leg through ``atk_bench_names`` and by :meth:`payoff`; it lives here, once,
+        because two hand-rolled walks of one fact are free to drift — the ruling
+        :func:`~common.strategy.damage_context.damage_context` was extracted under (Issue #279)."""
+        return tuple((b.stat.name if b.stat is not None else "") for b in self.bench)
+
+    @lazy
     def bench_raws(self) -> tuple:
         """The BENCHED bodies' raw engine dicts — the Bench Harvest's input (ADR-0071 decision 7).
 
@@ -531,6 +546,75 @@ class _SideBase(_Lazily):
         express it; the snapshot owns the list because it is lazy and pure (ADR-0068), which is what
         stops the bench shifting under a memoized clock."""
         return tuple(b.body for b in self.bench)
+
+    def attack_payoff(self, body) -> AttackPayoff:
+        """The best attack ``body`` can actually pay off with **on this board**, and its damage —
+        the conditional counterpart of ``CardStat.maxDamage`` (Issue #287, ADR-0109).
+
+        ``maxDamage`` is the PRINTED roll-up over a card's attacks, and a printed number cannot
+        carry a board condition. Solrock's Cosmic Beam is *"70 … If you don't have Lunatone on your
+        Bench, this attack does nothing"*, so its roll-up reads 70 on a Bench that will never pay it
+        — and a term differencing that number cannot see the Lunatone arrive or leave.
+
+        So this asks the damage oracle instead of forming a second opinion: ``requiresBench`` is
+        already parsed off the attack's own sentence
+        (:func:`~common.scouting.card_text.parse_attack_bench_requirement`) and
+        :func:`~common.strategy.damage.compute_active_damage` already returns 0 for an unmet
+        partner. The oracle is called **matchup-free** — no defender, so no Weakness/Resistance and
+        no defender-side prevention enters, exactly as the printed roll-up it replaces carried none.
+        Whose exposure to whom is `state_value`'s `threat`/`survival` question, and pricing it here
+        as well would be the double-counting the registry exists to forbid.
+
+        ``bound="exact"``, deliberately: the ``"max"`` bound keeps a conditional attack's ceiling
+        because Incoming is a worst case and the opponent may bench the partner before attacking.
+        This read is about MY (or their) board as it stands, where the Bench is what it is.
+
+        The ATTACK ID travels with the damage because the two must name the same attack. A body
+        whose biggest attack is gated still has its lesser one — so the fallback is *the best attack
+        that pays*, not zero — and the odds leg (`readiness_p`) is asked about the attack whose cost
+        actually has to be met. Pairing one attack's payoff with another's probability is the
+        saturation defect that pruning story turns on.
+
+        **When NOT ONE of the body's attacks resolves**, this degrades to the card-level
+        ``CardStat.maxDamage`` roll-up under a null attack id — `CombatMath.predicted_max_damage`'s
+        own per-attack-else-card-level rule, and the same pair the retired `payoff_attack` produced
+        in that case. A partial provider is the only way there (`_build_cache` derives `maxDamage`
+        from the attack table, so real data cannot have a roll-up without attacks), and it must not
+        silently zero a real attacker: this read is a REASON to price 0, never a new way to. An
+        unresolvable attack is also an attack whose condition is unreadable, so there is no gate to
+        apply and nothing is being waived. ``AttackPayoff(None, 0.0)`` only for a body whose CARD
+        does not resolve at all — fail-closed, the model's standing direction.
+
+        Ties resolve to the FIRST attack in the card's own order, deterministic for the same reason
+        every other tie-break in this module is.
+
+        Lives on the side base rather than on :class:`BodyView` because the gate reads THIS side's
+        Bench, which a body cannot see; and on the base rather than on :class:`MySide` because the
+        condition is a fact about the attacker's own bench whichever seat that is — their Solrock is
+        as dead without their Lunatone as mine is.
+
+        Memoized by VALUE (card, the gating bench), like every other parameterised read here."""
+        view = self.view_of(body)
+        stat = view.stat if view is not None else None
+        if stat is None:
+            return AttackPayoff(None, 0.0)
+        key = ("attack_payoff", stat.cardId, self.bench_names)
+
+        def _make() -> AttackPayoff:
+            context = bench_gate_context(self.bench_names)
+            best, best_damage = None, -1.0
+            for aid in (getattr(stat, "attacks", None) or ()):
+                if self._combat.attack_stat(aid) is None:
+                    continue               # unknown attack: make no claim about it either way
+                damage = float(self._combat.predicted_damage(stat.cardId, aid, None,
+                                                             bound="exact", context=context))
+                if damage > best_damage:
+                    best, best_damage = aid, damage
+            if best is None:               # nothing resolved: the card-level roll-up, unconditioned
+                return AttackPayoff(None, float(getattr(stat, "maxDamage", 0) or 0))
+            return AttackPayoff(best, max(0.0, best_damage))
+
+        return self._memoized(key, _make)
 
     def view_of(self, body) -> "BodyView | None":
         """The :class:`BodyView` for ``body`` — the RAW-engine-dict adapter (POC-T1, Issue #260).
@@ -732,7 +816,7 @@ class _SideBase(_Lazily):
             ex_in_play=sum(1 for b in self.bodies if b.is_ex),
             discard_energy_total=self.discard_energy_total,
             discard_basic_by_type=self.discard_energy_counts,
-            bench_names=tuple((b.stat.name if b.stat is not None else "") for b in self.bench),
+            bench_names=self.bench_names,
             damage_boosts=self.damage_boosts,
             deck_count=deck_count, deck_basic_by_type=deck_by_type)
 
