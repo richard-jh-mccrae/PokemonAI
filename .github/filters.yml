@@ -22,6 +22,7 @@ full:
   - 'tests/pilot_helpers.py'
   - 'tests/scouting_helpers.py'
   - 'tests/lethal_helpers.py'
+  - 'tests/seam_census_helpers.py'
   # Fixtures + committed data trigger the full suite EXCEPT the cgpy-only ones, which route
   # to the self-contained `parity` filter below (negation = "match all but these").
   - 'tests/fixtures/**'
@@ -121,6 +122,12 @@ strategy:
   - 'src/agents/*/deck.csv'
   - 'src/agents/*/STRATEGY.md'
   - 'docs/plans/apply-seam-coverage.md'
+  # Issue #305's triggered-Ability measurement lives in tests/strategy but is DRIVEN by the probe
+  # harness under tools/meta_tracker, which `meta` maps to tests/meta_tracker only. Without these
+  # two lines an edit to the probe would never run the one test that re-drives it against the live
+  # engine — the same reasoning as the census's inputs above.
+  - 'tools/meta_tracker/probe_triggered_ability.py'
+  - 'tools/meta_tracker/probe_cards.py'
 value:
   - 'tests/value/**'
 tuner:

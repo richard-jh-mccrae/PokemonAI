@@ -242,6 +242,7 @@ jobs:
                         tests/sim/test_transients_engine.py
                         tests/strategy/test_lethal_engine.py
                         tests/strategy/test_planner_engine.py
+                        tests/strategy/test_triggered_ability_shape.py
                         tests/cards/test_card_effects_engine.py"
           for i in $(seq 1 15); do
             python -m pytest $ENGINE_TESTS -q -p no:cacheprovider --tb=line \

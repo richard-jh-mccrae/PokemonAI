@@ -292,7 +292,17 @@ def _ability_mode(text: str) -> str:
 
     Order matters: Noctowl's Jewel Seeker opens *"Once during your turn, when you play this Pokemon
     from your hand to evolve…"*, and it is the on-evolve trigger that decides where the effect lands,
-    not the once-per-turn cap."""
+    not the once-per-turn cap.
+
+    That a rider RIDES is measured, not assumed (**Issue #305**, the report's AMBIGUOUS #3). The
+    engine resolves a triggered Ability inside the `_PLAY` / `_EVOLVE` that played the card — a
+    `SelectType.YES_NO` / `SelectContext.ACTIVATE` gate naming the card in `contextCard`, then the
+    effect's own selects, then MAIN — and poses **no** `OptionType.ABILITY` at any point, including
+    on later menus after the gate was DECLINED. Evidence:
+    `tests/fixtures/triggered_ability_selects.json` (captured by
+    `tools/meta_tracker/probe_triggered_ability.py`), re-driven against the live engine every run by
+    `tests/strategy/test_triggered_ability_shape.py`. So these sites stay `_PLAY` / `_EVOLVE` and are
+    NOT engine-route eligible under the current kind table."""
     if _ON_EVOLVE.search(text):
         return "on_evolve"
     if _ON_PLAY.search(text):
