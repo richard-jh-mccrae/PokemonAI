@@ -271,3 +271,122 @@ one, and it remains the shadow's whole reason to exist.
 one-directional (incumbent-doomed-only)**. The same 15 the pre-change sweep reported on a corpus
 that has since grown from 274 frames to 319 — the retirement moved the doom agreement by exactly
 nothing, which is what "this divergence was never real" predicts.
+
+## Amendment B — the loss rung is the TERMINAL-LOSS family, not the bench-empty rung (2026-08-02, Issue #283)
+
+Decision 3 named its trigger *"my bench empty + budgeted Incoming ≥ my Active's HP"* and called the
+result a predicted **game loss**. The second half of that name was always the general claim; the
+first half was one instance of it. `docs/rules.md` §7 lists three win conditions, and Decision 3
+guarded only **case 2** (*no Pokémon in play to replace a KO'd Active*). **Case 1** — *you win when
+you take your last prize card* — is reachable by the same next-turn Knock Out the same clock already
+budgets, and nothing priced it.
+
+### The gap, and why it is this term's
+
+*"They are at 3 prizes and my Active is a 3-prize Mega"* is a **loss**. *"They are at 6 prizes and my
+Active is a 3-prize Mega"* is an **exposure**. The value stack scored them identically, because the
+fact is the PRODUCT of a body's prize yield and their remaining count and `state_value`'s
+double-counting rule splits those across two families that may not combine: `survival` prices
+`prize_at_risk × halve(turns_to_ko_me − 1)` and names `my_prizes_remaining` in its `does_not_read`;
+`prize_race` prices the counts and names `prize_at_risk` in its. `registry_gaps()` reported nothing —
+the fact was *claimed*, just by families structurally unable to form it. This is the double-counting
+rule producing a blind spot rather than preventing double-counting, and the remedy is not to relax
+the rule: it is to put the fact where a game-ending fact already belongs. `_predicted_loss` is the
+one term licensed to price outside the positional band, charging `LOSS_PRIZES`, which POC-T3 DERIVED
+to exceed the largest sum every other family can express.
+
+**This is not a disjointness breach, and the distinction is load-bearing.** Case 1 consults their
+prize count as a **win-condition TEST**, never as race value. What `does_not_read` protects is the
+RACE — lead and proximity — and `prize_race` keeps sole ownership of it. Both families say so in
+their `composition`, and `prize_race`'s points back so the reader arriving from that side lands on
+the argument too.
+
+**The registry fact stays `predicted_loss`, already in `survival.reads`.** What enters the scalar is
+the terminal verdict; their count is an input to that verdict the way `turns_to_ko_me`'s own inputs
+are, and no family declares those either. Adding a second fact string for the count so the read
+would show up in the tuples was considered and rejected: `sound_rules.SCHEDULED_PAIRS` records the
+same temptation and the same answer — *"distinguishing them by tacking '(the CombatMath-gated
+reading)' onto one would make the coverage map read as two separate facts, and the double-guard
+detector would pass VACUOUSLY"*. So `double_counted()` and `registry_gaps()` stay empty on their
+merits and the read is documented in prose, which is the only place a nuance the vocabulary cannot
+express can honestly live. **It is deliberately NOT in `blind_to`** — that field's contract is
+dimensions owned by NOBODY, `blind_spots()` feeds it to Issue #263's composer as the
+uncovered-dimension checklist, and putting a covered fact there would corrupt a machine-read list to
+make a documentation point. Only the MARGIN below the test goes there, because that genuinely is a
+zero nobody prices.
+
+### What changed
+
+- `state_value._predicted_loss` returns True on **either** case, sharing one clock read and this
+  ADR's `evo_min_energy=1` bounded-pessimism guard **verbatim**. Dropping the guard for the new case
+  would fire the term on boards the incumbent leaves alone — a behaviour change disguised as a port.
+- Case 1 spans **both my areas**, because §7 case 1 is about a BODY and not about the Active Spot: a
+  chipped multi-prize body on the Bench under a live snipe rider ends the game just as finally. The
+  area is declared to the clock (`my_benched=`), which confines a benched body's reachability to the
+  snipe/spread riders and honours Tera bench-immunity (`docs/rules.md` §11) instead of crediting
+  printed damage that cannot land there.
+
+  **The cost of that reach, measured and stated rather than left to be found.** Case 2 is gated on a
+  VISIBLE fact (my Bench is empty) before it consults the clock; case 1's gate is a prize comparison,
+  so on a board where their count is low it consults the clock for every body I own. Under the
+  ceiling energy policy — ADR-0064's own `doom-ceiling-fail-direction`, whitelisted STRUCTURAL — an
+  attack is credited once it is payable under `attached + 1`, so an opponent Active carrying **no
+  Energy at all** can still stamp a chipped multi-prize benched body as lethal. That is the same
+  pessimism the incumbent already applies to the Active, applied to one more body; it is not a new
+  fail direction, but it is a WIDER one, and if a wave ruling ever finds it firing on boards a human
+  would play through, this paragraph is where to start rather than the case-1 test.
+- The count comes from `model.prize_race.opp_prizes_remaining`, so an ABSENT `prize` zone reads 0
+  and 0 is falsy — the fail direction, not an accident. A hand-built board that carries no zone
+  makes no claim, and a board on which they have already taken their last prize has no next turn to
+  predict. No new accessor: the model already owns the read.
+- A second whitelist entry, `prize-lethality` (`common/sound_rules.py`, rendered in
+  `docs/plans/value-system-poc-plan.md` §6). A DIFFERENT board fact guarded by the same term, so it
+  is its own typed row rather than a reworded one, and `undeclared_double_guarding()` stays empty
+  because no other DECIDER guards it.
+
+### The magnitude is BINARY (ruled, Issue #283)
+
+A body whose loss hands them 2 of the 3 prizes they need is worse than the flat exposure `survival`
+prices, but it is **not** a loss. A graded form is sharper and riskier; the honest POC answer is the
+test that matches the win condition, and the graded form is recorded as a post-POC question — in
+`survival`'s `blind_to`, so Issue #263's composer sees the margin as a named zero rather than an
+accidental one. The term's `bool` return makes the ruling structural rather than conventional, and
+`REQ-LOSSRUNG-0001` carries a test on the 2-against-3 case so a later graded form is a deliberate
+change rather than a drift.
+
+### Prior art, recorded rather than re-derived
+
+`promote_retreat_value.PromoteBody.fatal()` (ADR-0100 §7a) already prices this fact at the
+**promote/retreat** site — `KO_SCORE if prizes >= opp_prizes_remaining >= 2`, gated on a clock of 1,
+standing down on a Knock-Out trade. That is `mega_lucario`'s CRITICAL prize-trade doctrine already
+covered where the body PICK is made. This amendment closes the other half: the **board scalar**,
+which scores every candidate end board and which had no reading of the fact at all. The whitelist
+keeps them apart by role — `promote-retreat-value-composed` is typed `composed-into-the-leaf` (math,
+not a guard), so `facts_guarded()` does not pair them.
+
+**The `>= 2` floor does NOT transfer, and the divergence is deliberate.** `fatal()` fires only when
+`prizes >= opp_prizes_remaining >= 2`; case 1 here has no floor. The floor is right there and wrong
+here because the two sites rank different things. `fatal()` ranks **sibling bodies** at one promote
+decision: at 1 prize remaining every body of mine is fatal, so the term is constant across the
+candidates and orders nothing — carrying it would add a `KO_SCORE` magnitude that changes no pick.
+`state_value` ranks **candidate boards**: at 1 prize remaining a board that leaves my Active doomed
+charges `LOSS_PRIZES` and one that does not (I healed above the Incoming, retreated, or Knocked out
+their only attacker) charges nothing, so the term discriminates exactly where it matters most.
+Suppressing it at 1 would blind the scalar on the last turn of the game. This is Decision 3's own
+*"no paralysis"* property — *"uniform doom across candidates cancels in the ranking; the rung only
+moves picks where lines differ in exposure"* — read one level up: uniform across BODIES is not
+uniform across BOARDS.
+
+### Where this landed, and where it did not
+
+`PlannerMixin._predicted_loss` (`strategy/planner.py`) is the INCUMBENT rung and is **untouched**.
+POC-T3 (Issue #262) replaced `_engine_leaf_value`'s hand-composed leaf with `state_value`, which
+left that method with no production caller; `_engine_leaf_value`'s own docstring names it in the
+list T4 (Issue #263) deletes with the rollout. Extending a method nothing calls would have priced
+this fact nowhere and added a second spelling for T4 to reconcile. Issue #283's body predates T3's
+merge and reads as though the two were one function — they were, until 2026-08-02.
+
+### Deferred, unchanged
+
+**Loss-rung v2** (a Bench of guaranteed-dead bodies as a doom equivalent of bench-empty) is still
+open: this amendment adds a second CASE, not a second reading of case 2's bench fact.
