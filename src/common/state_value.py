@@ -520,7 +520,7 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("assignment_coverage", "bench_slot_price"),
         composition="Per-body payoff x readiness odds x role relevance, composed from the existing "
                     "Attach-Budget / readiness-odds / Needs machinery rather than a second opinion "
-                    "about any of them. The payoff is `StateModel.payoff` — the best attack the "
+                    "about any of them. The payoff is `StateModel.attack_payoff` — the best attack the "
                     "body can pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` "
                     "roll-up (ADR-0109). That makes `body_payoff` depend on MY Bench CONTENTS for a "
                     "bench-gated attack, which is not a second claim on `bench_slot_price`: "
@@ -532,6 +532,22 @@ REGISTRY: tuple[TermFamily, ...] = (
             "in front moves this family only through the Budget. `promote_retreat_value` is the "
             "instrument and composes into `survival`; the retreat allowance itself is an OWED "
             "snapshot zone (T1).",
+            "a board condition that is NOT a bench-partner condition — ADR-0109 routed the payoff "
+            "through the damage oracle, which reads the one condition family the card-text parser "
+            "extracts (`AttackStat.requiresBench`). Walking the whole set for *\"this attack does "
+            "nothing\"* finds 24 attacks: 10 are coin flips (the `damageMin`/`damageMax` family, a "
+            "different question), 2 are bench-partner gates and are now priced, and the remaining "
+            "**12 are unread** — no Stadium in play (Fan Rotom 174), a Bench-count floor (Victini "
+            "490), an exact hand size (Medicham 884), hand parity with the opponent (Iron Boulder "
+            "971), a defender predicate (Sawk 602 vs {ex}, Camerupt 857 vs Burned, Basculin 577 vs "
+            "an undamaged Active), their prize count (Hop's Cramorant 311), and a pay-from-hand "
+            "discard (Decidueye 129, Lurantis 398, Ceruledge 797). Each still prices its PRINTED "
+            "damage. **Exposure across the five shipped decks is 0** — the deck-csv walk finds only "
+            "Solrock 676 — which is why Issue #278's *\"add only what the four decks need\"* leaves "
+            "them here rather than in the build. This is the address, not a verdict: a deck change "
+            "that adds one of the 12 makes it a live over-price, and the fix is another parser in "
+            "`scouting/card_text.py` plus a context key, never a hand-enumerated condition "
+            "vocabulary (ADR-0109's rejected option).",
             "Ability readiness — the incumbent leaf scored attack and Ability CO-EQUALLY "
             "(`planner._ability_readiness`, `_READINESS_ABILITY_VALUE`). Nothing in the model "
             "supplies an Ability payoff, so an evolve whose whole point is switching an engine "
@@ -806,7 +822,7 @@ def _reachable_target_values(model: "StateModel") -> tuple:
 def _ready_bodies(model: "StateModel") -> tuple:
     """MY bodies as `readiness` reads them.
 
-    * ``payoff`` — the body's line payoff in prizes, as `StateModel.payoff` reads it: the best
+    * ``payoff`` — the body's line payoff in prizes, as `StateModel.attack_payoff` reads it: the best
       attack this body can actually pay off with **on this board**, not the printed
       `CardStat.maxDamage` roll-up (Issue #287, ADR-0109). A printed number cannot carry a board
       condition, so Solrock's Cosmic Beam — *"70 … if you don't have Lunatone on your Bench, this
@@ -818,7 +834,7 @@ def _ready_bodies(model: "StateModel") -> tuple:
       attack". The distinction is load-bearing and not pedantry: pairing a max-damage payoff with
       the any-attack (famine) probability saturates the term for every real attacker, and a
       saturated term has zero derivative, so the attach that completes the payoff cost would price
-      at 0 delta and never be explored. The attack id comes from the SAME `Payoff` record as the
+      at 0 delta and never be explored. The attack id comes from the SAME `AttackPayoff` record as the
       damage, which is what keeps the pair honest once a gated maximum falls back to a lesser attack.
     * ``role_relevance`` — `role_value` normalised by `DEPLOY_WORTH_SCALE`, which is exactly
       `deploy_value._relevance`'s dimensionless ratio. Composed rather than re-derived so a role
@@ -828,7 +844,7 @@ def _ready_bodies(model: "StateModel") -> tuple:
     for b in model.mine.bodies:
         if b.stat is None:
             continue                       # unknown card: make no claim (the oracle's own direction)
-        paying = model.mine.payoff(b)
+        paying = model.mine.attack_payoff(b)
         payoff = paying.damage / currency.PRIZE_DAMAGE_RATE
         if payoff <= 0.0:
             continue                       # nothing this body can land: a condition it cannot meet

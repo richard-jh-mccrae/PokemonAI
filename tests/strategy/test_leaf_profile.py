@@ -231,7 +231,7 @@ KO_LINE_PROFILE = frozenset({
 #: because the model is now doing the work that used to happen beside it.
 #:
 #: Every row below is a read some family in the registry is on record as making:
-#:   * `mine.payoff` / `mine.bench_names` — `readiness` prices the best attack a body can actually
+#:   * `mine.attack_payoff` / `mine.bench_names` — `readiness` prices the best attack a body can actually
 #:     pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` roll-up (Issue #287,
 #:     ADR-0109), and it asks `readiness_p` about THAT attack rather than about "any attack";
 #:     pairing a max-damage payoff with the famine probability saturates the term and prunes the
@@ -242,7 +242,7 @@ KO_LINE_PROFILE = frozenset({
 #:
 #:         `state_value` on a FRESH model   before 8.37 ms median / 17.28 ms p95
 #:                                           after 8.14 ms median / 13.79 ms p95
-#:         the `payoff` read alone, per body   1.80 us first call / 1.40 us memoized
+#:         the `attack_payoff` read alone, per body   1.80 us first call / 1.40 us memoized
 #:
 #:     ~2.7 bodies to a board, so the added work is ~5 us against a fresh-model evaluation
 #:     dominated three orders of magnitude over by the model's own lazy derivations. The two rows
@@ -272,7 +272,7 @@ STATE_VALUE_PROFILE = frozenset({
     "mine.forward_payoff",
     "mine.mine_turns_to_afford",
     "mine.needs",
-    "mine.payoff",
+    "mine.attack_payoff",
     "mine.readiness_p",
     "mine.role_worth",
     "theirs.active.hp_remaining",

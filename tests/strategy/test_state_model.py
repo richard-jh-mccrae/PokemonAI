@@ -837,7 +837,7 @@ def test_a_bench_gated_payoff_is_zero_without_its_partner():
                        bench=[_poke(RIOLU, hp=80, serial=2)], prize=4),
                _player(active=_pult(serial=3), prize=6))
     assert m.mine.active.stat.maxDamage == 70, "fixture drift: the PRINTED roll-up is the bug"
-    assert m.mine.payoff(m.mine.active).damage == 0.0
+    assert m.mine.attack_payoff(m.mine.active).damage == 0.0
 
 
 def test_benching_the_partner_restores_the_gated_payoff():
@@ -847,7 +847,7 @@ def test_benching_the_partner_restores_the_gated_payoff():
     m = _model(_player(active=_poke(SOLROCK, hp=110),
                        bench=[_poke(LUNATONE, hp=110, serial=2)], prize=4),
                _player(active=_pult(serial=3), prize=6))
-    assert m.mine.payoff(m.mine.active) == (COSMIC_BEAM, 70.0)
+    assert m.mine.attack_payoff(m.mine.active) == (COSMIC_BEAM, 70.0)
 
 
 def test_the_partner_must_be_BENCHED_not_merely_in_play():
@@ -857,7 +857,7 @@ def test_the_partner_must_be_BENCHED_not_merely_in_play():
     m = _model(_player(active=_poke(LUNATONE, hp=110),
                        bench=[_poke(SOLROCK, hp=110, serial=2)], prize=4),
                _player(active=_pult(serial=3), prize=6))
-    assert m.mine.payoff(m.mine.bench[0]).damage == 0.0
+    assert m.mine.attack_payoff(m.mine.bench[0]).damage == 0.0
 
 
 def test_an_AND_list_needs_every_named_partner():
@@ -869,9 +869,9 @@ def test_an_AND_list_needs_every_named_partner():
                               prize=4),
                       _player(active=_pult(serial=9), prize=6))
     half = _mesprit_with(UXIE)
-    assert half.mine.payoff(half.mine.active).damage == 0.0
+    assert half.mine.attack_payoff(half.mine.active).damage == 0.0
     both = _mesprit_with(UXIE, AZELF)
-    assert both.mine.payoff(both.mine.active) == (GUARDIAN_BURST, 160.0)
+    assert both.mine.attack_payoff(both.mine.active) == (GUARDIAN_BURST, 160.0)
 
 
 def test_a_gated_maximum_falls_back_to_the_best_UNGATED_attack():
@@ -882,7 +882,7 @@ def test_a_gated_maximum_falls_back_to_the_best_UNGATED_attack():
     m = _model(_player(active=_poke(MESPRIT, hp=70), bench=[_poke(UXIE, hp=70, serial=2)],
                        prize=4),
                _player(active=_pult(serial=9), prize=6))
-    assert m.mine.payoff(m.mine.active).attack_id == FULL_HEART
+    assert m.mine.attack_payoff(m.mine.active).attack_id == FULL_HEART
 
 
 def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
@@ -891,17 +891,30 @@ def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
     max-damage one — matchup-free, so no Weakness/Resistance from the defender leaks in."""
     m = _model(_player(active=_poke(MEGA_LUC, hp=340), bench=[], prize=4),
                _player(active=_pult(serial=3), prize=6))
-    assert m.mine.payoff(m.mine.active) == (MEGA_BRAVE, 270.0)
-    assert m.mine.payoff(m.mine.active).damage == float(m.mine.active.stat.maxDamage)
+    assert m.mine.attack_payoff(m.mine.active) == (MEGA_BRAVE, 270.0)
+    assert m.mine.attack_payoff(m.mine.active).damage == float(m.mine.active.stat.maxDamage)
 
 
-def test_the_payoff_of_an_unreadable_body_makes_no_claim():
+def test_the_payoff_of_an_unreadable_CARD_makes_no_claim():
     """Fail-closed, the model's standing direction for an unresolvable card: no attack id and no
     damage, rather than a zero that a consumer could mistake for a priced body."""
+    m = _model(_player(active=_poke(9999, hp=80), prize=4),
+               _player(active=_pult(serial=3), prize=6))
+    assert m.mine.attack_payoff(m.mine.active) == (None, 0.0)      # card 9999 has no CardStat
+    assert m.mine.attack_payoff(None) == (None, 0.0)
+
+
+def test_an_UNRESOLVABLE_attack_table_degrades_to_the_card_level_roll_up():
+    """A partial provider must not silently zero a real attacker. This fixture's Riolu carries
+    `maxDamage` 30 with an EMPTY attack tuple — the shape a partially-known table produces — and the
+    read then answers with the card-level roll-up under a null attack id, exactly as
+    `CombatMath.predicted_max_damage` falls back and exactly the pair the retired `payoff_attack`
+    gave. The gate is a new REASON to price 0, never a new way to reach one; and an attack whose
+    record is missing is an attack whose condition is unreadable, so no gate is being waived."""
     m = _model(_player(active=_poke(RIOLU, hp=80), prize=4),
                _player(active=_pult(serial=3), prize=6))
-    assert m.mine.payoff(m.mine.active) == (None, 0.0)      # Riolu's attack table is empty
-    assert m.mine.payoff(None) == (None, 0.0)
+    assert m.mine.active.stat.maxDamage == 30 and not m.mine.active.stat.attacks
+    assert m.mine.attack_payoff(m.mine.active) == (None, 30.0)
 
 
 def test_both_sides_can_be_asked_for_a_payoff():
@@ -911,7 +924,7 @@ def test_both_sides_can_be_asked_for_a_payoff():
     m = _model(_player(active=_pult(), prize=4),
                _player(active=_poke(SOLROCK, hp=110, serial=3),
                        bench=[_poke(LUNATONE, hp=110, serial=4)], prize=6))
-    assert m.theirs.payoff(m.theirs.active) == (COSMIC_BEAM, 70.0)
+    assert m.theirs.attack_payoff(m.theirs.active) == (COSMIC_BEAM, 70.0)
 
 
 def test_bench_names_is_the_bench_and_only_the_bench():

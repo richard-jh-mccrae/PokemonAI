@@ -43,8 +43,8 @@ so the agent had no reason to defend the enabler.
 
 **1. The payoff a term prices is the damage oracle's answer, not the card's printed roll-up.**
 
-`StateModel.payoff(body) -> Payoff(attack_id, damage)` returns the best attack the body can actually
-pay off with **on this board**. It walks the body's own attacks and prices each through the shipped
+`StateModel.attack_payoff(body) -> AttackPayoff(attack_id, damage)` returns the best attack the
+body can actually pay off with **on this board**. It walks the body's own attacks and prices each through the shipped
 `CombatMath.predicted_damage` → `damage.compute_active_damage`, which already owns the gate: the
 `requiresBench` leg returns 0 when a named partner is absent from `atk_bench_names`.
 
@@ -122,13 +122,25 @@ vocabulary was enumerated, because neither is owed.
 * `body_payoff` now depends on MY **Bench contents**. This is not a second claim on
   `development.bench_slot_price`: that prices how many slots remain, this prices what one attack can
   land, and the two never read the same number. Recorded in the family's `composition`.
-* **Cost, measured** (60 corpus frames): the `payoff` read is **1.80 µs** per body on first call and
+* **Cost, measured** (60 corpus frames): the `attack_payoff` read is **1.80 µs** per body on first call and
   **1.40 µs** memoized (~2.7 bodies to a board). `state_value` on a fresh model measured **8.37 ms
   median / 17.28 ms p95 before** and **8.14 ms / 13.79 ms after** — no measurable regression, since a
   fresh evaluation is dominated by the model's own lazy derivations. The leaf-profile tripwire
   (`tests/strategy/test_leaf_profile.py`) is re-pinned with those numbers, as its own rule requires.
 * The read is on `_SideBase`, so `threat` can compose it when Issue #281's lane reaches the same
   question for THEIR bodies. Nothing does yet, and nothing here pretends otherwise.
+* **The residual gap is NAMED, not dissolved.** Retiring the LOUD-on-unknown requirement removes a
+  vocabulary, not a blind spot: the parser's `None` is itself a silent pass. Walking the set for
+  *"this attack does nothing"* finds 24 attacks — 10 coin flips (the `damageMin`/`damageMax` family,
+  a different question), the 2 bench-partner gates now priced, and **12 unread board conditions**
+  (no Stadium — Fan Rotom 174; a Bench-count floor — Victini 490; an exact hand size — Medicham 884;
+  hand parity — Iron Boulder 971; defender predicates — Sawk 602, Camerupt 857, Basculin 577; their
+  prize count — Hop's Cramorant 311; pay-from-hand discards — Decidueye 129, Lurantis 398, Ceruledge
+  797). Each still prices its printed damage. **Exposure across the five shipped decks is 0** (the
+  deck-csv walk finds only Solrock 676), so Issue #278's *"add only what the four decks need"* keeps
+  them out of this build — and `readiness.blind_to` now carries them with their addresses, which is
+  the mechanism Issue #263 reads to tell a genuine zero from an uncovered one. Closing any of them
+  is another parser in `scouting/card_text.py` plus a context key, never the rejected vocabulary.
 * **Both gates PASS** — leaf-lab 0 unruled `OK → MISS`, Decision Gate **0 picks moved**. Neither
   baseline re-captured. A green gate on a change that moves a term is a claim that needs a positive
   control, so one was run rather than assumed: walking every replayable corpus frame, the gate

@@ -71,6 +71,7 @@ from common.deck_odds import p_contains          # the Probability Leg's one imp
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
 from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
+from common.strategy.damage_context import bench_gate_context   # ...and its matchup-free slice
 from common.strategy.damage_context import damage_context as _assemble_damage_context
 
 #: Sentinel for "use the policy threaded at :meth:`StateModel.build`". A clock consumer that wants a
@@ -309,8 +310,14 @@ class ForwardPayoff(NamedTuple):
     reachable: bool
 
 
-class Payoff(NamedTuple):
-    """What a body can actually pay off with on THIS board — :meth:`_SideBase.payoff`'s answer.
+class AttackPayoff(NamedTuple):
+    """What a body can actually pay off with on THIS board — :meth:`_SideBase.attack_payoff`'s
+    answer.
+
+    ``Attack``-prefixed on purpose: "payoff" is already spoken for one abstraction up, where
+    `src/common/CONTEXT.md` uses it for the **Line** payoff — the evolved end-card a development
+    line is aimed at (and coins *Stranded Payoff* for the case where it cannot be reached). This is
+    the much smaller per-ATTACK quantity, and a bare `Payoff` would quietly overload the term.
 
     NAMED for the reason its siblings are, and with the id and the damage in ONE record rather than
     two accessors for a sharper reason than transposition: the two are only sound TOGETHER. The
@@ -320,7 +327,7 @@ class Payoff(NamedTuple):
     the payoff. Keeping them in one return makes the mismatch unspellable."""
 
     #: The attack whose damage this is. ``None`` when no attack record resolves.
-    attack_id: object
+    attack_id: int | None
     #: That attack's damage on this board, matchup-free — printed, with the attack's own board
     #: conditions applied (a bench-partner condition unmet reads 0). Never negative.
     damage: float
@@ -531,7 +538,16 @@ class _SideBase(_Lazily):
         :func:`~common.strategy.damage_context.damage_context` was extracted under (Issue #279)."""
         return tuple((b.stat.name if b.stat is not None else "") for b in self.bench)
 
-    def payoff(self, body) -> Payoff:
+    @lazy
+    def bench_raws(self) -> tuple:
+        """The BENCHED bodies' raw engine dicts — the Bench Harvest's input (ADR-0071 decision 7).
+
+        A shared rider budget is a fact about the whole bench, so a per-body survival read cannot
+        express it; the snapshot owns the list because it is lazy and pure (ADR-0068), which is what
+        stops the bench shifting under a memoized clock."""
+        return tuple(b.body for b in self.bench)
+
+    def attack_payoff(self, body) -> AttackPayoff:
         """The best attack ``body`` can actually pay off with **on this board**, and its damage —
         the conditional counterpart of ``CardStat.maxDamage`` (Issue #287, ADR-0109).
 
@@ -559,9 +575,18 @@ class _SideBase(_Lazily):
         actually has to be met. Pairing one attack's payoff with another's probability is the
         saturation defect that pruning story turns on.
 
-        ``Payoff(None, 0.0)`` when no attack record resolves — fail-closed, the model's standing
-        direction for an unreadable body. Ties resolve to the FIRST attack in the card's own order,
-        deterministic for the same reason every other tie-break in this module is.
+        **When NOT ONE of the body's attacks resolves**, this degrades to the card-level
+        ``CardStat.maxDamage`` roll-up under a null attack id — `CombatMath.predicted_max_damage`'s
+        own per-attack-else-card-level rule, and the same pair the retired `payoff_attack` produced
+        in that case. A partial provider is the only way there (`_build_cache` derives `maxDamage`
+        from the attack table, so real data cannot have a roll-up without attacks), and it must not
+        silently zero a real attacker: this read is a REASON to price 0, never a new way to. An
+        unresolvable attack is also an attack whose condition is unreadable, so there is no gate to
+        apply and nothing is being waived. ``AttackPayoff(None, 0.0)`` only for a body whose CARD
+        does not resolve at all — fail-closed, the model's standing direction.
+
+        Ties resolve to the FIRST attack in the card's own order, deterministic for the same reason
+        every other tie-break in this module is.
 
         Lives on the side base rather than on :class:`BodyView` because the gate reads THIS side's
         Bench, which a body cannot see; and on the base rather than on :class:`MySide` because the
@@ -572,11 +597,11 @@ class _SideBase(_Lazily):
         view = self.view_of(body)
         stat = view.stat if view is not None else None
         if stat is None:
-            return Payoff(None, 0.0)
-        key = ("payoff", stat.cardId, self.bench_names)
+            return AttackPayoff(None, 0.0)
+        key = ("attack_payoff", stat.cardId, self.bench_names)
 
-        def _make() -> Payoff:
-            context = {"atk_bench_names": self.bench_names}
+        def _make() -> AttackPayoff:
+            context = bench_gate_context(self.bench_names)
             best, best_damage = None, -1.0
             for aid in (getattr(stat, "attacks", None) or ()):
                 if self._combat.attack_stat(aid) is None:
@@ -585,18 +610,11 @@ class _SideBase(_Lazily):
                                                              bound="exact", context=context))
                 if damage > best_damage:
                     best, best_damage = aid, damage
-            return Payoff(best, max(0.0, best_damage))
+            if best is None:               # nothing resolved: the card-level roll-up, unconditioned
+                return AttackPayoff(None, float(getattr(stat, "maxDamage", 0) or 0))
+            return AttackPayoff(best, max(0.0, best_damage))
 
         return self._memoized(key, _make)
-
-    @lazy
-    def bench_raws(self) -> tuple:
-        """The BENCHED bodies' raw engine dicts — the Bench Harvest's input (ADR-0071 decision 7).
-
-        A shared rider budget is a fact about the whole bench, so a per-body survival read cannot
-        express it; the snapshot owns the list because it is lazy and pure (ADR-0068), which is what
-        stops the bench shifting under a memoized clock."""
-        return tuple(b.body for b in self.bench)
 
     def view_of(self, body) -> "BodyView | None":
         """The :class:`BodyView` for ``body`` — the RAW-engine-dict adapter (POC-T1, Issue #260).

@@ -90,6 +90,21 @@ class SideFacts:
     deck_basic_by_type: Mapping[int, int] | None = None
 
 
+def bench_gate_context(bench_names: Sequence[str]) -> dict:
+    """The MATCHUP-FREE slice of an attacker's context: just the bench-partner condition's input.
+
+    A body's own payoff — *what can this Pokémon land, whoever is across from it* — reads exactly one
+    key. Building the full :func:`damage_context` for it would be wrong, not merely wasteful: the
+    full dict carries the defender's countables, so the answer would swing on who happens to be
+    Active, which is `state_value`'s `threat`/`survival` question and not this one.
+
+    It lives HERE rather than as an inline literal at the call site for the reason the module's own
+    ruling gives (Issue #279): this is the ONE place a per-side fact becomes an ``atk_`` key, and a
+    second site spelling ``"atk_bench_names"`` by hand is a rename away from silently gating nothing.
+    :meth:`common.state_model._SideBase.payoff` is the caller."""
+    return {"atk_bench_names": tuple(bench_names)}
+
+
 def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
     """The scaler context for ONE direction: ``attacker``'s attack against ``defender``.
 
@@ -155,4 +170,4 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
     return ctx
 
 
-__all__ = ("SideFacts", "damage_context")
+__all__ = ("SideFacts", "bench_gate_context", "damage_context")

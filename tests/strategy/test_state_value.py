@@ -53,6 +53,12 @@ E_R, E_P, E_F, E_D = 2, 5, 6, 7
 #: needs Lunatone on the Bench.
 SOLROCK, LUNATONE = 676, 675
 COSMIC_BEAM, POWER_GEM = 9676, 9675
+#: The conditional-BONUS shape, as opposed to the conditional-ZERO one above — Metagross (276)
+#: Stage 2 HP 170 {P}, `evolvesFrom` Metang: Wrack Down ``{P}`` 60 and Conjoined Beams ``{P}{P}``
+#: **130**, *"If Beldum and Metang are on your Bench, this attack does 150 more damage."* Verified
+#: at source. `slowking` runs 2x and neither partner, so the bonus is unpayable for the whole match.
+METAGROSS = 276
+WRACK_DOWN, CONJOINED_BEAMS = 9276, 9277
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
@@ -72,6 +78,9 @@ _STATS = {
     LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING, weakness=GRASS,
                        minAttackCost=2, maxDamage=50, maxDamageCost=2, minCostDamage=50,
                        attacks=(POWER_GEM,), cardType=0),
+    METAGROSS: CardStat(METAGROSS, name="Metagross", hp=170, stage2=True, evolvesFrom="Metang",
+                        energyType=PSYCHIC, minAttackCost=1, maxDamage=130, maxDamageCost=2,
+                        minCostDamage=60, attacks=(WRACK_DOWN, CONJOINED_BEAMS), cardType=0),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
@@ -86,6 +95,11 @@ _ATTACKS = {
                             requiresBench=("Lunatone",), ignoresWeakness=True,
                             ignoresResistance=True),
     POWER_GEM: AttackStat(POWER_GEM, damage=50, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    WRACK_DOWN: AttackStat(WRACK_DOWN, damage=60, cost=1, energyTypes=(PSYCHIC,)),
+    # `damageMax` 280 is the +150 leg, exactly as the provider carries it: the bonus is REACHABLE
+    # through the oracle's "max" bound and must not be reachable through this read.
+    CONJOINED_BEAMS: AttackStat(CONJOINED_BEAMS, damage=130, cost=2,
+                                energyTypes=(PSYCHIC, PSYCHIC), damageMax=280),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 #: `mega_lucario`'s single-prize core beside the Mega line — the deck the Solrock cases score
@@ -98,7 +112,8 @@ LUNAR_DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [SOLROCK] * 3 + [LUNATON
 #: tried to put them on the stat would be testing an API that does not exist.
 _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condition_base"],
                MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"],
-               SOLROCK: ROLE_TIER["secondary_attacker"], LUNATONE: ROLE_TIER["engine"]}
+               SOLROCK: ROLE_TIER["secondary_attacker"], LUNATONE: ROLE_TIER["engine"],
+               METAGROSS: ROLE_TIER["secondary_attacker"]}
 
 
 def _combat():
@@ -890,18 +905,47 @@ def test_losing_the_companion_lowers_readiness():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
-def test_an_UNGATED_board_is_byte_identical():
-    """The regression half, stated as strictly as it can be: a board holding no conditional attack
-    must score the same float it scored before the gate existed. The gate is a new REASON to price
-    0, never a new number on a card that has no condition."""
-    assert sv.state_value(_lucario_board(my_energies=[E_F, E_F])) == pytest.approx(
-        sv.state_value(_lucario_board(my_energies=[E_F, E_F])), abs=0.0)
+def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
+    """The regression half. The gate is a new REASON to price 0, never a new number on a card that
+    carries no condition — so on every body of a board holding no conditional attack the new read
+    must return `CardStat.maxDamage` exactly, which is the value the retired printed path produced.
+
+    Asserted against `maxDamage` rather than against `state_value` called twice: comparing the
+    scalar to itself would pass on any implementation whatsoever (it is a determinism check, and
+    `test_state_value_is_BIT_IDENTICAL...` already owns that question). `maxDamage` is the number
+    this change replaced, so it is the only honest witness to "nothing moved"."""
+    model = _lucario_board(my_energies=[E_F, E_F],
+                           bench=[_poke(RIOLU, hp=80, energies=[E_F], serial=2),
+                                  _poke(MUNKIDORI, hp=70, serial=3)])
+    priced = 0
+    for body in model.mine.bodies:
+        assert model.mine.attack_payoff(body).damage == float(body.stat.maxDamage), body.stat.name
+        priced += 1
+    assert priced == 3, "the fixture stopped exercising every area"
     working = {}
-    sv.state_value(_lucario_board(my_energies=[E_F, E_F]), working=working)
-    # Mega Brave 270 printed, and 270 is what the payoff read returns for a body with no condition.
-    model = _lucario_board(my_energies=[E_F, E_F])
-    assert model.mine.payoff(model.mine.active).damage == 270.0
+    sv.state_value(model, working=working)
     assert working["readiness"] > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_a_conditional_BONUS_is_not_credited_by_the_payoff_read():
+    """The bound this read takes, pinned — and the other half of Issue #287's refutation.
+
+    Metagross's Conjoined Beams is *"130 … If Beldum and Metang are on your Bench, this attack does
+    150 more damage"* (verified at source, id 276), which the provider carries as ``damage=130`` with
+    ``damageMax=280``. `slowking` runs the card and neither partner, so the +150 can never be paid —
+    and it never was, because `CardStat.maxDamage` is the printed number. That is why the issue's
+    Metagross scope item was retired as already-true.
+
+    Retired is not the same as safe. The bonus IS reachable through this read, on one character: at
+    ``bound="max"`` the oracle returns ``damageMax`` and readiness would price 280 for a body that
+    can land 130. So the exact bound gets a test rather than a comment."""
+    model = _model(_player(active=_poke(METAGROSS, hp=170, energies=[E_P, E_P]), prize=4),
+                   _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
+                   deck=[METAGROSS, E_P, E_P])
+    paying = model.mine.attack_payoff(model.mine.active)
+    assert paying == (CONJOINED_BEAMS, 130.0), "the conditional +150 leaked into the payoff"
+    assert model.mine.active.stat.maxDamage == 130     # it was never in the roll-up either
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
@@ -911,4 +955,4 @@ def test_the_gated_bodys_odds_are_asked_about_the_attack_that_actually_pays():
     it reachable for the first time: a body whose max-damage attack is dead still has the lesser
     one, and its cost is what the odds leg owes an answer about."""
     model = _lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)])
-    assert model.mine.payoff(model.mine.active).attack_id == COSMIC_BEAM
+    assert model.mine.attack_payoff(model.mine.active).attack_id == COSMIC_BEAM
