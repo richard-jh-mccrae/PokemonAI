@@ -230,7 +230,9 @@ assignment, on 12.7% of the boards where it is emitted, and could not before on 
 `keep_v2` minimum rising from 1.900 to 4.500 is the same fact from the card's side — the cheapest a
 held gust card can be shed for is now its own floor rather than under it.
 
-**Suite:** 4540 passed, 5 skipped, 4 xfailed, 1 xpassed.
+**Suite:** **4544** passed, 5 skipped, 4 xfailed, 1 xpassed — main's 4540 plus this build's four new
+tests. The `xpassed` is the pre-existing unruled one ADR-0103 recorded
+(`test_counter_mover_attach.py`, `86091728-19`), unmoved by this build.
 
 Neither baseline is re-captured. Both gates PASS with zero attributable movement, and re-capturing a
 passing gate's baseline absorbs movement nobody ruled — ADR-0105's own reasoning, and the leaf
