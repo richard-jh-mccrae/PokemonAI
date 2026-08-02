@@ -15,10 +15,26 @@ from __future__ import annotations
 import importlib.util
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
 _ROOT = Path(__file__).resolve().parents[1]
 
 _MODULE = None
+
+
+class Census(NamedTuple):
+    """The census and the three sources it measures. Named rather than a bare tuple, so a caller
+    unpacking it in the wrong order fails at the name instead of at the first odd assertion — and so
+    a source ADDED to it (as Issue #300 added `covers`) is a rename, not a silent shift."""
+
+    module: object
+    #: ``{card id: engine card dict}`` — `tools/meta_tracker/cards.json`, the engine's own dump.
+    cards: dict
+    #: ``{card id: [Effect Clause, …]}`` — `src/common/card_effects.json` (ADR-0032).
+    effects: dict
+    #: ``{card id: coverage ruling}`` — Issue #300 moved this out of the script's own table into
+    #: `card_effects.json` beside the clauses, where the apply seam reads it too.
+    covers: dict
 
 
 def census_module():
@@ -35,14 +51,10 @@ def census_module():
     return _MODULE
 
 
-def load_census() -> tuple:
-    """``(module, cards, effects, covers)`` — the census's own sources, loaded the census's own way.
-
-    ``covers`` is Issue #300's per-card clause-coverage ruling, which now lives in
-    `card_effects.json` beside the clauses (where the apply seam reads it too) rather than in the
-    script's own table."""
+def load_census() -> Census:
+    """The census's own sources, loaded the census's own way."""
     mod = census_module()
-    return mod, mod.load_cards(), mod.load_effects(), mod.load_covers()
+    return Census(mod, mod.load_cards(), mod.load_effects(), mod.load_covers())
 
 
 def census_pool(mod) -> set[int]:

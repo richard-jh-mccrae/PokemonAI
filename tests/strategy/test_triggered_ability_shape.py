@@ -37,7 +37,8 @@ if on_cgpy_twin():                                    # the NATIVE engine is the
 from cg.api import OptionType, SelectContext, SelectType          # noqa: E402
 from common.strategy.context import _ABILITY, _EVOLVE, _PLAY      # noqa: E402
 from meta_tracker.cards import load_cards                         # noqa: E402
-from meta_tracker.probe_triggered_ability import MODES, SCHEMA, capture  # noqa: E402
+from meta_tracker.probe_triggered_ability import (                       # noqa: E402
+    MODES, SCHEMA, TRIGGER_OPTION, capture)
 from seam_census_helpers import census_pool, load_census                 # noqa: E402
 
 FIXTURE = FIXTURES / "triggered_ability_selects.json"
@@ -50,6 +51,10 @@ RIDER_SITES = {648: "on_evolve", 674: "on_evolve", 190: "on_evolve", 173: "on_ev
                742: "on_evolve", 743: "on_evolve", 310: "on_evolve",
                1071: "on_play", 75: "on_play", 135: "on_play", 209: "on_play"}
 BELLIBOLT = 269
+
+#: The census's kind for each engine option name — the other half of `TRIGGER_OPTION`'s bridge, so
+#: the `on_evolve -> EVOLVE -> _EVOLVE` correspondence is spelled once per hop and nowhere twice.
+SEAM_KIND = {"EVOLVE": _EVOLVE, "PLAY": _PLAY}
 
 
 @pytest.fixture(scope="module")
@@ -131,7 +136,7 @@ def test_the_option_taken_is_the_one_the_census_credits(live):
     """A Stage 1/2 rider is reached by EVOLVE and a Basic's by PLAY — the two option kinds the
     census files these sites under."""
     for subject in live["subjects"]:
-        want = "EVOLVE" if subject["trigger"] == "on_evolve" else "PLAY"
+        want = TRIGGER_OPTION[subject["trigger"]]
         for mode in MODES:
             assert subject[mode]["option_taken"] == want, (subject["name"], mode)
 
@@ -160,14 +165,18 @@ def test_the_erratum_the_pool_carries_exactly_eleven_rider_sites(seam_census):
     scouting artifact ever adds a twelfth — which is a real event worth a ruling, not a silent one.
     """
     mod, cards, _effects, _covers = seam_census
-    derived = {cid: mode
-               for cid in census_pool(mod)
-               if (cards.get(cid) or {}).get("category") == "pokemon"
-               for mode in [mod._ability_mode(a.get("text") or "")
-                            for a in (cards[cid].get("abilities") or [])]
-               if mode in ("on_play", "on_evolve")}
-    assert derived == RIDER_SITES
-    assert len(derived) == 11
+    # A LIST of (card, trigger), not a dict: a card carrying two rider Abilities would collapse to
+    # one key and quietly under-count — which is the exact failure mode this test exists to catch.
+    riders = [(cid, mode)
+              for cid in census_pool(mod)
+              if (cards.get(cid) or {}).get("category") == "pokemon"
+              for mode in [mod._ability_mode(a.get("text") or "")
+                           for a in (cards[cid].get("abilities") or [])]
+              if mode in ("on_play", "on_evolve")]
+    assert len(riders) == len({cid for cid, _ in riders}), \
+        f"a card carries two rider Abilities: {sorted(riders)}"
+    assert dict(riders) == RIDER_SITES
+    assert len(riders) == 11
 
 
 def test_the_erratum_bellibolt_is_activated_not_a_rider(seam_census):

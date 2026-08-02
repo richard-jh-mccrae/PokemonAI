@@ -303,7 +303,7 @@ def test_find_evolve_option_none_when_evolution_not_in_hand():
 # --- triggered-Ability probe helpers (Issue #305) ---------------------------------
 
 
-@pytest.mark.req("REQ-FUNC-0009")
+@pytest.mark.req("REQ-FUNC-0015")
 def test_build_trigger_deck_stacks_the_line_and_two_supporter_targets():
     """Two DISTINCT Supporter lines, not one: a Supporter-fetching trigger is skipped entirely by
     the engine when the deck holds none, so a single 4-copy line lets the shuffle decide the shape
@@ -316,7 +316,7 @@ def test_build_trigger_deck_stacks_the_line_and_two_supporter_targets():
     assert deck.count(BASIC_ENERGY) == 60 - 16
 
 
-@pytest.mark.req("REQ-FUNC-0009")
+@pytest.mark.req("REQ-FUNC-0015")
 def test_build_trigger_deck_never_double_counts_a_target_already_in_the_line():
     """A Supporter can't be the evolution line, but the guard is the same one that keeps a card
     from exceeding its 4-copy cap — assert it rather than assume the categories stay disjoint."""
@@ -325,7 +325,7 @@ def test_build_trigger_deck_never_double_counts_a_target_already_in_the_line():
     assert deck.count(SUPPORTER_B) == 4 and deck.count(SUPPORTER_C) == 4
 
 
-@pytest.mark.req("REQ-FUNC-0009")
+@pytest.mark.req("REQ-FUNC-0015")
 def test_strip_serials_drops_shuffle_dependent_ids_only():
     """A card's `serial` is its position in a SHUFFLED deck, so it differs run to run while the
     select's shape does not — dropping it is what makes a captured raw select comparable."""
@@ -336,7 +336,7 @@ def test_strip_serials_drops_shuffle_dependent_ids_only():
         "option": [{"type": 1}, {"type": 2}], "deck": [{"id": 7}]}
 
 
-@pytest.mark.req("REQ-FUNC-0009")
+@pytest.mark.req("REQ-FUNC-0015")
 def test_select_shape_keeps_the_kind_and_drops_the_candidate_count():
     """The shape is what KIND of decision a select is. A deck search over 42 remaining cards offers
     a different count every game, so `n_options` and the `deck` payload must not reach a fixture."""
@@ -347,7 +347,7 @@ def test_select_shape_keeps_the_kind_and_drops_the_candidate_count():
                                  "option_types": [3], "context_card_id": None}
 
 
-@pytest.mark.req("REQ-FUNC-0009")
+@pytest.mark.req("REQ-FUNC-0015")
 def test_select_shape_names_the_card_a_gate_belongs_to():
     """`contextCard` is how a consumer knows whose trigger an ACTIVATE gate is."""
     sel = {"type": 9, "context": 43, "minCount": 1, "maxCount": 1,

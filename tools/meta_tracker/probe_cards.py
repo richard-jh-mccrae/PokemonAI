@@ -812,7 +812,7 @@ def _capture_trigger(battle_select, obs, opt: int, taken: str, me: int, *,
             k = min(sel["maxCount"], max(sel["minCount"], 1)) if sel["option"] else 0
             obs = battle_select(list(range(k)))
 
-    sampled = with_ability = 0
+    sampled = n_with_ability = 0
     for _ in range(_TRIGGER_MENU_STEPS):
         if sampled >= main_menus or obs["current"]["result"] >= 0:
             break
@@ -821,15 +821,15 @@ def _capture_trigger(battle_select, obs, opt: int, taken: str, me: int, *,
             obs = _end_turn(battle_select, obs)
         elif sel["context"] == _CTX_MAIN:
             sampled += 1
-            with_ability += any(o.get("type") == _OPT_ABILITY for o in (sel.get("option") or []))
+            n_with_ability += any(o.get("type") == _OPT_ABILITY for o in (sel.get("option") or []))
             obs = _end_turn(battle_select, obs)
         else:
             obs = _advance(battle_select, obs)
 
     return {"option_taken": taken, "gate_select": raw_gate, "effect_selects": effect_selects,
             "returned_to_main": reached_main, "main_menus_sampled": sampled,
-            "main_menus_with_ability_option": with_ability,
-            "ability_option_seen": bool(with_ability) or
+            "main_menus_with_ability_option": n_with_ability,
+            "ability_option_seen": bool(n_with_ability) or
                                    any(_OPT_ABILITY in s["option_types"] for s in effect_selects)}
 
 

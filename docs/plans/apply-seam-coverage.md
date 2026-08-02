@@ -693,6 +693,12 @@ this one does **not** shrink the other's scope. Chien-Pao (discard a Stadium), I
 hidden zone and involve no opponent choice — but they stay REFUSED unless AMBIGUOUS #1 opens an
 engine route inside a MODELLED kind. That decision now carries all 11 sites.
 
+**Consequence for the `gust` clause kind.** Two of the 11 are gusts that ride an evolve — Hariyama's
+Heave-Ho Catcher and Hop's Dubwool's Defiant Horn. Had the answer been *own `_ABILITY` option* they
+would have been engine-route eligible and the new clause kind could have skipped them. It was not, so
+the `gust` vocabulary has to reach a clause that is **triggered by an evolve** and not only one played
+off a Trainer — a shape requirement that follow-up 3 now inherits.
+
 **Erratum.** An earlier draft of AMBIGUOUS #3 and of follow-up 5 said *"12 sites"* and listed **Iono's
 Bellibolt ex** among them. That was wrong: Electric Streamer reads *"As often as you like during your
 turn, you may attach…"*, which is **activated**, and the census classifies it correctly as an

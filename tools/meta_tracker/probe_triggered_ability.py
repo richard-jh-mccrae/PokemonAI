@@ -56,6 +56,11 @@ SUBJECTS: tuple[dict, ...] = (
 #: so a clean decline with no `_ABILITY` option on any later menu rules that out.
 MODES = ("accept", "decline")
 
+#: The option each trigger kind rides — the ONE definition of that correspondence. The census keys
+#: the same fact by `_PLAY` / `_EVOLVE` (`apply_seam_coverage.sites_for`); the test bridges the two
+#: through this map rather than re-spelling the `on_evolve -> EVOLVE` cascade at each site.
+TRIGGER_OPTION = {"on_evolve": "EVOLVE", "on_play": "PLAY"}
+
 
 def capture(cards: dict[int, dict] | None = None) -> dict:
     """Drive every subject in both modes and return the fixture payload.

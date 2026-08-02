@@ -232,7 +232,7 @@ jobs:
       # the real guard (deterministic: a sampled frame fails the day it lands); this is the cheap
       # backstop underneath them, for anything the probe cannot see.
       #
-      # All 35 live-engine tests run in ~4.3 s, so repeating them is close to free. A frame that
+      # All 41 live-engine tests run in ~4.9 s, so repeating them is close to free. A frame that
       # answers differently between repeats is unstable BY DEFINITION — no interpretation needed.
       - name: Determinism backstop (repeat the live-engine tests)
         if: steps.plan.outputs.empty != 'true'
