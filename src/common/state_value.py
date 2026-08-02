@@ -633,6 +633,17 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
             "opponent-choice riders — 'your opponent discards a card' and its relatives have no "
             "opponent model, so their value is 0. The apply-seam REFUSES the same class; the two "
             "refusals are the same gap seen from two sides.",
+            "opponent ACTION-ECONOMY locks — a rider that restricts what the opponent may DO on "
+            "their next turn (an Item lock, an Evolution lock, a named-attack lock) is not a body "
+            "grant, so `transient_grants` (ADR-0033, homed `mine.active.grant` only) does not carry "
+            "it even in principle: its vocabulary is `self_lock`/`same_lock`/`self_bonus`/"
+            "`prevent_all`/`reduction` (`state_model.py`'s `grant` docstring), none of which is "
+            "'opponent can't play card-type X'. Budew's Itchy Pollen (235, `item_lock`, free "
+            "attack, verified at source) is the concrete case — 1 card in 1 deck, but the reason "
+            "`dragapult_ex` sets `preferred_start=\"second\"` (`docs/rules.md` §2: the first player "
+            "cannot attack turn 1) — a 1-of that moved a deck-level parameter. Pricing it needs a "
+            "THEIR-side extension of `transient_grants`, the same OWED-zone class Issue #282 needs "
+            "for damage-boost Trainers; declaring it here is free and honest now (Issue #290).",
         ),
     ),
 )
