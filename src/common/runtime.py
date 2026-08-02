@@ -70,15 +70,6 @@ PROFILE = {
                                     # KO/grind lines when the opponent is near deck-out (SOUND deck-out timing)
     "enabler_item_composer": True,  # BUILD 3 armed-ON 2026-07-14 (ladder-testing): ko_for_prizes composer
                                     # (Item-tutor / Rare-Candy → evolve → energy → KO; min-bound, sub-prize)
-    "needs_keep_value": True,       # ADR-0065 WP-N4 armed-ON 2026-07-20 (dev-window ruling): the
-                                    # keep-value v2 NEEDS-ASSIGNMENT (`_needs_v2`) DECIDES the forced
-                                    # discard in place of v1's per-card gate composition — the global
-                                    # exact-assignment marginal (`eq2_pick`), hedged at v1's post-gate
-                                    # keep so it never prices below the shipped decider. The per-family
-                                    # swap for the cleared discard family: agree_v2 12/12 vs v1 on the
-                                    # replayable discard corpus, and the duplicate-pair set case flips
-                                    # WITHOUT a new gate (v1's naivety, structurally gone). Kill-switch
-                                    # (the develop_rollout precedent); OFF falls back to v1.
     "leaf_hand_value": False,       # ADR-0065 WP-N5b armed-OFF 2026-07-20: the develop-rung LEAF's
                                     # actionable-resource term — readiness consumes the needs module
                                     # (the held-hand slot coverage), the board-state-valuation fold.

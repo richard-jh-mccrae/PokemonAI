@@ -7,10 +7,10 @@ keep-value v2 needs-assignment's input, and the pick v2 makes from it.
 
 So each case is re-pointed one layer down and one layer out: the columns are read off the rows
 directly, and every "the equation would pick X" assertion becomes "the DECIDER picks X" — read off
-`dec.chosen`, through the shipped `needs_keep_value` path, with no v1 ranking and no ladder beneath
+`dec.chosen`, through the shipped keep-value v2 path, with no v1 ranking and no ladder beneath
 it (both deleted by the same item). That is strictly stronger, and it immediately earned its keep:
 **two of the re-pointed cases did not pass**, because the old assertion was grading `eq_pick`, a
-number nobody had acted on since `needs_keep_value` shipped ON. They were held as strict-xfail
+number nobody had acted on since v2 took the select. They were held as strict-xfail
 TARGETs owned by Issue #294; ADR-0106 closed that gap by giving `needs.cheapest_removal`'s
 ranking key a DEADNESS leg above residual worth, and both are now asserted outright inside the two
 tests that price their rows.
@@ -29,9 +29,10 @@ CINDERACE, FILLER, IGNITION, LILLIES, HARLEQUIN = 666, 999, 17, 1227, 1223
 
 
 def _setup(hand_ids, *, minc=2, powered=False):
-    """A forced Discard over ``hand_ids``, through the SHIPPED discard path (`needs_keep_value` ON —
-    v2 stands alone since item 2h). ``powered`` gives my Active its full attack cost (so
-    ``active_fully_powered``)."""
+    """A forced Discard over ``hand_ids``, through the SHIPPED discard path — keep-value v2 decides
+    it unconditionally (it stands alone since Issue #261 item 2h, and Issue #319 deleted the
+    `needs_keep_value` flag that had stopped gating it). ``powered`` gives my Active its full attack
+    cost (so ``active_fully_powered``)."""
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
@@ -52,7 +53,7 @@ def _setup(hand_ids, *, minc=2, powered=False):
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
-                  functions=funcs, needs_keep_value=True)
+                  functions=funcs)
     hand = [{"id": cid} for cid in hand_ids]
     opts = [{"type": 3, "area": 2, "index": i} for i in range(len(hand_ids))]
     active = [{"id": MEGA, "hp": 330, "energies": [0] * 3}] if powered else [None]

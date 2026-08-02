@@ -16,12 +16,16 @@ Authority docs (read in this order):
 
 | flag | state | meaning |
 |---|---|---|
-| `needs_keep_value` | **ON** | keep-value v2 (`_needs_v2` → `needs.cheapest_removal`) DECIDES the forced discard. Acceptance: agree_v2 **12/12** on the discard corpus; the duplicate-wincon pair flips without a new gate. |
+| ~~`needs_keep_value`~~ | **DELETED** (Issue #319) | keep-value v2 (`_needs_v2` → `needs.cheapest_removal`) decides the forced discard UNFLAGGED. The flag was read nowhere once Issue #261 item 2h made the call site unconditional, and it was the one decider lever with nothing to revert TO. Acceptance at the swap was agree_v2 **12/12**. |
 | `discard_keep_value` | ON | v1 equation — now the FALLBACK decider + the **gamble** keep-value spine. (The REFRESH half left it 2026-08-01, ADR-0101: `_refresh_shed_keepcost` is `set_keep_v2`.) |
 | `leaf_hand_value` | **OFF** | the readiness-leaf hand fold (N5b→N5d). Measured to a WASH (see §Closed). Do NOT arm without new leaf terms (below). |
 
-Precedence at a forced discard: `needs_keep_value` > `discard_keep_value` > the `_DISCARD` ladder.
-Each is a kill-switch; OFF falls through.
+⚠️ **The precedence chain below is GONE** — recorded as it stood 2026-07-20. Item 2h deleted
+`discard_keep_value` and the `_DISCARD` ladder; Issue #319 deleted `needs_keep_value`. There is one
+discard decider and no fallback under it.
+
+~~Precedence at a forced discard: `needs_keep_value` > `discard_keep_value` > the `_DISCARD` ladder.
+Each is a kill-switch; OFF falls through.~~
 
 ## The architecture in one paragraph
 
@@ -92,6 +96,9 @@ counterfactual via the sim's `heldCtx` snapshot in `planner._simulate_line`).
    Kaggle-ladder measure (the `develop_rollout` precedent), `needs_keep_value` has zero ladder
    games behind it (armed 2026-07-20, dev window = no submissions ~a week), and folding deletes
    the kill-switch fallback. Stays gated until ladder evidence accrues post-window.
+   ⚠️ **CLOSED by events, not by this item.** Issue #261 item 2h folded the `_DISCARD` rungs out of
+   `doctrine_fetch` outright and Issue #319 deleted the kill-switch, so the thing this item was
+   waiting to be safe enough to do has already happened and the fallback it worried about is gone.
 6. **Hedge retirement** (WP-N4's note): `eq2_pick` floors at v1's post-gate keep. Resupply (1)
    and deny (2) have now LANDED, but the WP-N7 measurement says deny retires ZERO of the 13/68
    floor firings (the residual firers are engine supporters / burst rows / far-out denies — all

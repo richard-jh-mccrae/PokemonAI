@@ -175,7 +175,10 @@ comparator) and ADR-0032 (Effect-Clause tier).
   precedent) makes the v2 needs-assignment (`_needs_v2` → `eq2_pick`, `needs.cheapest_removal` over
   the resolved slots) the forced-discard DECIDER, superseding v1's per-card gate composition;
   precedence `needs_keep_value` > `discard_keep_value` > the ladder, each a kill-switch, OFF falls
-  through. Corpus-safe BY CONSTRUCTION (agree_v2 12/12 → every human `correct` v1 satisfied, v2
+  through. ⚠️ **All three are gone as of Issue #319**: item 2h deleted `discard_keep_value` and the
+  ladder, leaving the flag reverting to nothing and — since the same item made the call site
+  unconditional — read nowhere. The v2 assignment now decides the forced discard unflagged. This
+  paragraph records the 2026-07-20 build, not the current tree. Corpus-safe BY CONSTRUCTION (agree_v2 12/12 → every human `correct` v1 satisfied, v2
   satisfies), and the **duplicate-wincon pair flips WITHOUT a new gate** — the naivety v1 could not
   fix (both copies read keep-0) is structurally gone: each copy's solo marginal is the succession
   slot, the pair's set marginal is full+half. **Gate dissolution, precisely:** the discard DECISION
