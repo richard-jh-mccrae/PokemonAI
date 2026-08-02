@@ -637,12 +637,18 @@ class _SideBase(_Lazily):
         boosts are NOT tracked here — an attached Tool is visible board state, read directly at
         damage-context build"*), and this is that build. Play order first, then Tools, which is the
         order the shipped builder produced — the oracle sums them, so order is not load-bearing, but
-        matching it keeps the two suppliers comparable key-for-key."""
+        matching it keeps the two suppliers comparable key-for-key.
+
+        A Tool whose boost is gated on an owner family (Hop's Choice Band — *"attacks used by the
+        Hop's Pokémon this card is attached to"*, Issue #306) contributes only when the holder is in
+        that family. The gate is the Tool's own `applies_to_holder`, so this site states the
+        condition rather than re-deriving it."""
         out = list(self._turn_boosts)
         active = self.active
         for cid in (active.tool_ids if active is not None else ()):
             stat = self._combat._card_stat(cid)
-            if stat is not None and getattr(stat, "damageBoost", 0):
+            if (stat is not None and getattr(stat, "damageBoost", 0)
+                    and stat.applies_to_holder(active.stat)):
                 out.append((stat.damageBoost, stat.damageBoostType, stat.damageBoostVsEx))
         return tuple(out)
 

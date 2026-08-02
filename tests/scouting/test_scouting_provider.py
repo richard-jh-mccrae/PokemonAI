@@ -171,12 +171,17 @@ def _tool(card_id, name, text, ace_spec=False):
 
 
 @pytest.mark.req("REQ-GEN-0024")
-def test_build_cache_parses_flat_hp_bonus_only_from_unconditional_tool_text():
-    """A +HP Tool's bonus lives ONLY in free skill text — parse the UNCONDITIONAL 'gets +N HP' into a
-    structured ``CardStat.hpBonus``, the primitive the general breakpoint model reads. Restricted
-    variants ('The Cynthia's Pokémon …', 'The {G} Pokémon …') grant the bonus only to a subset, so
-    they parse to 0 — the model must never over-credit HP a target might not get. Source text verified
-    against data/EN_Card_Data.csv."""
+def test_build_cache_parses_flat_hp_bonus_and_carries_an_owner_gate_with_it():
+    """A +HP Tool's bonus lives ONLY in free skill text — parse the 'gets +N HP' sentence into a
+    structured ``CardStat.hpBonus``, the primitive the general breakpoint model reads. Source text
+    verified against data/EN_Card_Data.csv.
+
+    Issue #306 widened this: an OWNER-family variant ("The Cynthia's Pokémon …") reads its amount
+    now, because `docs/rules.md` §9 makes the owner prefix part of the printed name and so an exact
+    test over a holder we already know. It reads its CONDITION with it, in `holderNameFamily`, which
+    is what keeps the +70 from silently becoming an unconditional bonus on every body. Consumer-side
+    behaviour is unchanged for the unrestricted Tools — see tests/scouting/test_tool_holder_facts.py
+    for the gate, its negative cases, and the deploy picker that honours it."""
     cards = [
         _tool(1159, "Hero's Cape", "The Pokémon this card is attached to gets +100 HP.", ace_spec=True),
         _tool(1173, "Cynthia's Power Weight",
@@ -186,8 +191,8 @@ def test_build_cache_parses_flat_hp_bonus_only_from_unconditional_tool_text():
               "Pokémon's remaining HP is 30 or less, it has no Retreat Cost."),
     ]
     cache = _build_cache(cards, [])
-    assert cache[1159].hpBonus == 100    # unconditional +100 — the parseable, general case
-    assert cache[1173].hpBonus == 0      # restricted to 'Cynthia's Pokémon' — not credited
+    assert (cache[1159].hpBonus, cache[1159].holderNameFamily) == (100, None)   # unconditional
+    assert (cache[1173].hpBonus, cache[1173].holderNameFamily) == (70, "Cynthia's")  # gated
     assert cache[1157].hpBonus == 0      # no HP bonus at all (a retreat tool)
 
 

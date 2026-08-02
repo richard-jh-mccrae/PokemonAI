@@ -6,29 +6,127 @@ record types. Shared doctrine: match ONLY the clean UNCONDITIONAL phrasing (whol
 where a rider demands it), so a conditional variant parses to 0/None — under-crediting
 never over-credits a claim the board might not honor. Split out of ``provider.py``
 (ADR-0054); ``provider`` re-exports every name, so the historical import path stays valid.
+
+**Two things the doctrine does not say, both added at Issue #306.** (1) An owner-family
+qualifier in the subject ("the Cynthia's Pokémon this card is attached to") is not a
+condition the parser has to refuse — it is a condition it can CARRY, in
+``CardStat.holderNameFamily``, for the consumer to evaluate against the actual holder; the
+amount and its gate are parsed together and travel together. (2) The doctrine is written
+for BENEFITS, and the safe direction INVERTS for a cost: missing a penalty (Gravity
+Gemstone's ``{C}`` MORE to retreat) makes a board look cheaper than it is, so a
+cost-parser errs by matching MORE readily, not less. Both are called out where they apply.
 """
 from __future__ import annotations
 
 import re
 
 
-# Matches ONLY unconditional Tool phrasing "+N HP" (Hero's Cape); restricted variants ("The
-# Cynthia's Pokémon…") break adjacency, parse to 0. `.` = é, no non-ASCII literal (cross-platform).
-_HP_BONUS_RE = re.compile(r"\bThe Pok.mon this card is attached to gets \+(\d+) HP")
+# ── the owner / name-family holder gate (Issue #306) ──────────────────────────────────────────────
+#
+# Three Tools in the pool restrict their static modifier to a NAMED family of holders: Cynthia's
+# Power Weight ("The Cynthia's Pokémon this card is attached to gets +70 HP"), Hop's Choice Band
+# ("Attacks used by the Hop's Pokémon this card is attached to …") and Lillie's Pearl. Until
+# Issue #306 they broke every subject-adjacent pattern and parsed to 0, which read as *"attaching
+# this Tool is worth nothing"* — a plausible answer, and why it went unnoticed for Hop's Choice
+# Band, the most-played Tool in the tracked meta.
+#
+# The family is EVALUABLE, unlike the board-level predicates `_RETREAT_FREE_GRANT_RES` deliberately
+# refuses: `docs/rules.md` §9 records that the owner prefix IS part of the printed card name
+# ("Iono's Tadbulb" != "Tadbulb"), so *"the Cynthia's Pokémon"* names exactly the cards printed
+# `Cynthia's <species>` — and the HOLDER of a Tool is a body in play whose name we already have.
+# That is a membership oracle over a known name, not a guess about a hidden zone. (N's Castle stays
+# refused below for a different reason: its subject is every "N's Pokémon IN PLAY", both players'
+# — a board sweep, not this card's one holder.)
+#
+# The gate is parsed ONCE per card, by `_parse_tool_holder_family`, and stored once, as
+# `CardStat.holderNameFamily`. The value parsers accept the qualifier in the subject position but
+# never re-read it, so the amount and its gate cannot drift apart the way two parsers for one fact
+# always eventually do (Issue #213).
+#
+# Written with \u escapes, not literal characters, for the reason the `.` = é convention below
+# exists: this file must read identically on either platform under any editor's default encoding.
+_NAME_FAMILY = r"(?:[A-Z][\w.-]+ ){0,3}[A-Z][\w.-]*['" + "\u2019" + r"]s"
+
+#: Every apostrophe the pool prints (U+2019 right single quote, U+02BC modifier letter, U+2018 left
+#: single quote), folded to ASCII. The card records mix them WITHIN one family — `Hop's Phantump`
+#: (878) is ASCII where `Hop's Silicobra` (288) is U+2019 — so a raw prefix comparison would answer
+#: "no" for half the family. Normalise both sides, always.
+_APOSTROPHES = str.maketrans({"\u2019": "'", "\u02bc": "'", "\u2018": "'"})
+
+_HOLDER_FAMILY_RE = re.compile(
+    r"\b[Tt]he (" + _NAME_FAMILY + r") Pok.mon this card is attached to")
+
+
+def normalize_card_name(name: str) -> str:
+    """A card name folded to one apostrophe form and one run of spaces — the comparable key both
+    sides of a name-family test are measured in (see ``_APOSTROPHES``)."""
+    return " ".join((name or "").translate(_APOSTROPHES).split())
+
+
+def name_in_family(name: str | None, family: str | None) -> bool:
+    """Does the card printed ``name`` belong to the owner family ``family``?
+
+    Args:
+        name: the holder's printed card name (``CardStat.name``).
+        family: the owner qualifier a Tool's text restricts itself to ("Cynthia's"), or None.
+
+    Returns:
+        True when ``family`` is None — an ungated modifier reaches every holder — and otherwise
+        only when the name carries the owner prefix, per ``docs/rules.md`` §9 ("Cynthia's" →
+        "Cynthia's Garchomp ex", never "Garchomp"). An unknown name against a real gate is False:
+        fail-CLOSED, so a modifier is never credited to a body we cannot identify.
+
+    Note for Issue #301 (POC-A2.1/2), which met the same owner families in its `fetch` clauses and
+    ruled *"do not invent a substring match on the card name — mark these four `partial`"*: this is
+    not that. A substring test is what would claim `Amulet of Hope` for the `Hop's` family; this is a
+    normalised PREFIX test, and it answers a different question — the holder of a Tool is one body
+    already in play whose name we hold, where #301's four cards ask which cards in a hidden DECK
+    satisfy the family. If #301 later wants the deck-side oracle, this is the string half of it, and
+    what it still needs is a build-time index over `cards.json` keyed by family.
+    """
+    if not family:
+        return True
+    if not name:
+        return False
+    return normalize_card_name(name).startswith(normalize_card_name(family) + " ")
+
+
+def _parse_tool_holder_family(card) -> str | None:
+    """The owner family a Tool restricts its static modifiers to (``CardStat.holderNameFamily``),
+    or None for an unrestricted Tool.
+
+    ONE parse per card, whatever the modifier: Cynthia's Power Weight gates an ``hpBonus``, Hop's
+    Choice Band gates a ``damageBoost`` *and* an ``attackCostReduction``, and one field carries all
+    of them. A Tool that mixed a gated modifier with an ungated one would have both gated — the
+    fail-closed direction (under-credit), and no card in the pool is that shape.
+    """
+    for text in _skill_texts(card):
+        m = _HOLDER_FAMILY_RE.search(text.replace("\n", " "))
+        if m:
+            return m.group(1)
+    return None
+
+
+# Tool "+N HP" (Hero's Cape unrestricted; Cynthia's Power Weight gated on its owner family, whose
+# qualifier `_parse_tool_holder_family` records separately). WHOLE-SENTENCE match: the boost must be
+# the sentence's own subject, so a rider-gated variant ("As long as …, the Pokémon this card is
+# attached to gets +30 HP") never reaches it. `.` = é, no non-ASCII literal (cross-platform).
+_HP_BONUS_RE = re.compile(
+    r"^The (?:" + _NAME_FAMILY + r" )?Pok.mon this card is attached to gets \+(\d+) HP")
 
 
 def _parse_tool_hp_bonus(card) -> int:
     """Flat HP a Pokémon Tool grants its holder, read from the card's skill text — the engine exposes
-    no structured field for it (see ``CardStat.hpBonus``). Matches only the UNCONDITIONAL boost, so a
-    conditionally-restricted +HP Tool parses to 0 (the breakpoint model must not over-credit HP a
-    target might not actually get). 0 when no skill matches / a card has no skills."""
-    for s in (getattr(card, "skills", None) or []):
-        text = getattr(s, "text", None)
-        if text is None and isinstance(s, dict):
-            text = s.get("text")
-        m = _HP_BONUS_RE.search(text or "")
-        if m:
-            return int(m.group(1))
+    no structured field for it (see ``CardStat.hpBonus``). Matches only the UNCONDITIONAL sentence, so
+    a rider-gated +HP Tool still parses to 0 (the breakpoint model must not over-credit HP a target
+    might not actually get); an OWNER-family qualifier is accepted and its condition travels in
+    ``CardStat.holderNameFamily``, which every consumer tests against the candidate holder. 0 when no
+    skill matches / a card has no skills."""
+    for text in _skill_texts(card):
+        for sent in _sentences(text):
+            m = _HP_BONUS_RE.match(sent)
+            if m:
+                return int(m.group(1))
     return 0
 
 
@@ -37,18 +135,47 @@ def _parse_tool_hp_bonus(card) -> int:
 _RETREAT_TOOL_RE = re.compile(
     r"\bThe Retreat Cost of the Pok.mon this card is attached to is ((?:\{C\})+) less")
 
+# Gravity Gemstone (1166) — the pool's only Tool whose retreat effect is a COST rather than a
+# benefit: "As long as the Pokémon this card is attached to is in the Active Spot, the Retreat Cost
+# of both Active Pokémon is {C} more." Recorded as a NEGATIVE `retreatReduction` rather than a
+# second `retreatIncrease` field: ONE quantity deserves one field, and two fields for one quantity is
+# how the sign gets dropped downstream. Every READER OF THIS FIELD was audited for the sign at
+# Issue #306 — the four that subtract it now share `Pilot._attached_retreat_delta` and clamp at 0,
+# the seven that look for an ENABLING Tool test `> 0` and correctly reject a surcharge. That is a
+# narrower claim than "every retreat-cost reader": five sites read the PRINTED `retreatCost` and
+# consult no Tool at all, and are enumerated in tests/scouting/test_retreat_cost_grants.py's KNOWN
+# DIVERGENCE with their fail directions.
+#
+# The holder leg is EXACT despite the Active-Spot rider — a body only ever PAYS a Retreat Cost from
+# the Active Spot, which is precisely when the clause is live. The symmetric leg (the OPPONENT's
+# Active also pays {C} more) is NOT modelled: no per-card field on my Tool can carry a fact about
+# their body.
+#
+# Note the fail-closed direction INVERTS for a cost. The battery's shared doctrine — match only the
+# clean unconditional phrasing, because under-crediting never over-credits — is written for
+# benefits; missing a PENALTY makes a retreat look cheaper than it is, which is the retreat-happy
+# pathology `_effective_retreat_cost` exists to avoid. So this matches the core clause without
+# requiring the Active-Spot rider: over-charging a retreat errs toward not retreating, the safe way.
+_RETREAT_TOOL_MORE_RE = re.compile(
+    r"\bthe Retreat Cost of both Active Pok.mon is ((?:\{C\})+) more")
+
 
 def _parse_tool_retreat_reduction(card) -> int:
     """Energy a Pokémon Tool shaves off its holder's Retreat Cost (``CardStat.retreatReduction``),
     read from the card's skill text — the engine exposes no structured field. Unconditional phrasing
-    only; anything else parses to 0 (under-credit never over-credits a retreat the body can't pay)."""
-    for s in (getattr(card, "skills", None) or []):
-        text = getattr(s, "text", None)
-        if text is None and isinstance(s, dict):
-            text = s.get("text")
-        m = _RETREAT_TOOL_RE.search(text or "")
+    only; anything else parses to 0 (under-credit never over-credits a retreat the body can't pay).
+
+    NEGATIVE for a Tool that makes retreating dearer (Gravity Gemstone −1, i.e. ``{C}`` MORE) — the
+    sign is the whole point, so consumers must not assume this is non-negative. All of them were
+    audited at Issue #306: the three that subtract it clamp with ``max(0, cost)``, and the four that
+    test ``>= need`` / ``> 0`` for an enabling Tool correctly reject a penalty."""
+    for text in _skill_texts(card):
+        m = _RETREAT_TOOL_RE.search(text)
         if m:
             return m.group(1).count("{C}")
+        m = _RETREAT_TOOL_MORE_RE.search(text)
+        if m:
+            return -m.group(1).count("{C}")
     return 0
 
 
@@ -82,13 +209,15 @@ _RETREAT_FREE_GRANT_RES = (
 
 
 def _skill_texts(card):
-    """Every skill text on ``card`` — the shape both retreat-grant parsers walk."""
+    """Every skill text on ``card``, newlines folded to spaces — the shape the card-level parsers
+    walk. Folding matches what every attack-level parser does to its own input (``.replace("\\n",
+    " ")``), so a phrase the engine happened to wrap cannot silently miss its pattern."""
     for s in (getattr(card, "skills", None) or []):
         text = getattr(s, "text", None)
         if text is None and isinstance(s, dict):
             text = s.get("text")
         if text:
-            yield text
+            yield text.replace("\n", " ")
 
 
 def _parse_tool_retreat_free_at_hp(card) -> int:
@@ -530,9 +659,44 @@ _COIN_GUARD_RE = re.compile(r"[Ff]lip .*coin")   # a coin-gated accel is not an 
 _BOOST_TURN_RE = re.compile(
     r"During this turn, attacks used by your (?:\{(\w)\} )?Pok.mon do (\d+) more damage to your "
     r"opponent.s Active Pok.mon( \{ex\})?")
+# The Tool leg accepts BOTH widenings Hop's Choice Band needs (Issue #306): an owner-family
+# qualifier in the subject (recorded by `_parse_tool_holder_family`, never re-read here) and the
+# attack-cost clause that precedes the damage clause in the same sentence — "Attacks used by the
+# Hop's Pokémon this card is attached to cost {C} less AND do 30 more damage …". The cost leg is a
+# second, independent fact; `_parse_tool_attack_cost_reduction` reads it.
 _BOOST_TOOL_RE = re.compile(
-    r"Attacks used by the Pok.mon this card is attached to do (\d+) more damage to your "
+    r"Attacks used by the (?:" + _NAME_FAMILY + r" )?Pok.mon this card is attached to "
+    r"(?:cost (?:\{C\})+ less and )?do (\d+) more damage to your "
     r"opponent.s Active Pok.mon( \{ex\})?")
+
+# The Tool-granted ATTACK-COST discount (`CardStat.attackCostReduction`). Hop's Choice Band is the
+# only card in the pool that grants one and no CardStat field could express it before Issue #306 —
+# justified on its 0.80 meta-weighted copies (the single most-played Tool we face), not on
+# generality. Amount is written as repeated Colorless symbols, so count them, as Air Balloon's is.
+# WHOLE-SENTENCE anchored (`^`), unlike the damage leg above, which shipped unanchored and is left
+# byte-compatible. A new fact gets the stricter guard: a discount that is the sentence's own subject
+# is unconditional, while "Flip a coin. If heads, attacks used by … cost {C} less" is not, and an
+# over-credited discount is what manufactures a phantom affordable attack.
+_ATTACK_COST_TOOL_RE = re.compile(
+    r"^Attacks used by the (?:" + _NAME_FAMILY + r" )?Pok.mon this card is attached to "
+    r"cost ((?:\{C\})+) less")
+
+
+def _parse_tool_attack_cost_reduction(card) -> int:
+    """Energy a Pokémon Tool shaves off its holder's ATTACK costs (``CardStat.attackCostReduction``)
+    — Hop's Choice Band's ``{C}`` → 1; 0 for every other card in the pool.
+
+    Unconditional phrasing only (an owner-family qualifier is allowed and travels in
+    ``CardStat.holderNameFamily``). Under-crediting is the safe direction here in both readings: on
+    MY side an unread discount only means an attack looks less affordable than it is, and on the
+    opponent's it only means their clock reads slower — never that a KO we cannot pay for is
+    claimed."""
+    for text in _skill_texts(card):
+        for sent in _sentences(text):
+            m = _ATTACK_COST_TOOL_RE.match(sent)
+            if m:
+                return m.group(1).count("{C}")
+    return 0
 
 
 def parse_card_damage_boost(card) -> tuple[int, int | None, bool]:

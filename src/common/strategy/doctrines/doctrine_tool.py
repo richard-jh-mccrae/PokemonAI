@@ -113,23 +113,41 @@ class ToolMixin:
             best = max(best, int(self._predicted_max_damage(st, {"id": defender_id})))
         return best
 
+    def _tool_reaches(self, tool_stat, body: dict | None) -> bool:
+        """Would ``tool_stat``'s static bonus actually reach ``body``? (Issue #306.)
+
+        Cynthia's Power Weight grants +70 only to *"the Cynthia's Pokémon this card is attached to"*,
+        so the bonus is a fact about a PAIR, not about the Tool. The gate travels on the Tool
+        (`CardStat.holderNameFamily`) and the whole test is `CardStat.applies_to_holder` — this
+        method only resolves the body to a stat, so there is no second copy of the rule to drift.
+        An unreadable body fails whenever a gate exists (fail-CLOSED) and passes when there is none,
+        so the unrestricted Tools that were the only ones parseable before behave exactly as they
+        did."""
+        bid = (body or {}).get("id")
+        holder = self.stats.get(bid) if (self.stats and bid is not None) else None
+        return bool(tool_stat.applies_to_holder(holder))
+
     def _tool_carrier_candidates(self, obs: dict, me: dict, board, active_incoming: int,
-                                 successor_mode: bool) -> list:
+                                 successor_mode: bool, tool_stat) -> list:
         """The bodies that could carry my held +HP Tool, each as
         (slot=(AreaType, inPlayIndex), hp, incoming_per_turn, is_wincon_related). My Active takes the
         predicted `active_incoming` (the opponent's best affordable attacker, not just their current
         Active). A benched body normally takes only the opponent's bench-snipe (snipe-only — assumed to
         stay benched); but when the Active is doomed at +boost (`successor_mode`), a benched body is the
         next promotion and inherits the FULL predicted incoming. A wincon-related body is the
-        win-condition itself or a Line pre-evolution (the Tool transfers up on evolution)."""
+        win-condition itself or a Line pre-evolution (the Tool transfers up on evolution).
+
+        A body the Tool's owner-family gate excludes is not a candidate at all (`_tool_reaches`) —
+        the boost would be 0 there, so offering it as a carrier would rank a no-op."""
         wincon = self._wincon_set()
         preevo = self._line_preevo_set()
         out = []
-        if next((p for p in (me.get("active") or []) if p), None) is not None:
+        active = next((p for p in (me.get("active") or []) if p), None)
+        if active is not None and self._tool_reaches(tool_stat, active):
             out.append(((_ACTIVE, 0), board.my_active_hp, active_incoming, board.active_is_wincon))
         bench_inc = active_incoming if successor_mode else self._opp_bench_snipe(obs)
         for i, b in enumerate(me.get("bench") or []):
-            if not b:
+            if not b or not self._tool_reaches(tool_stat, b):
                 continue
             bid = b.get("id")
             out.append(((_BENCH, i), b.get("hp", 0), bench_inc, bid in wincon or bid in preevo))
@@ -176,12 +194,16 @@ class ToolMixin:
         active_incoming = self._opp_best_attack_vs(obs, board.my_active_id)    # predict-next-attacker
         successor_mode = bool(board.active_is_wincon and board.my_active_hp > 0   # doomed even at +boost ->
                               and active_incoming >= board.my_active_hp + bonus)  # protect the successor
-        candidates = self._tool_carrier_candidates(obs, me, board, active_incoming, successor_mode)
+        candidates = self._tool_carrier_candidates(obs, me, board, active_incoming, successor_mode,
+                                                   tool_stat=stat)
+        active_is_carrier = bool(candidates and candidates[0][0] == (_ACTIVE, 0))
         slot = self._best_gain_slot(candidates, bonus, wincon=True)        # (1) win-condition body
         if slot is not None:
             return slot
-        if board.active_is_wincon and not successor_mode:                  # (2) proactive default
-            return (_ACTIVE, 0)
+        if board.active_is_wincon and not successor_mode and active_is_carrier:
+            return (_ACTIVE, 0)          # (2) proactive default — but only onto a body the Tool
+                                         #     actually reaches (a family-gated Tool has no Active
+                                         #     candidate at all, and neither has an empty Active Spot)
         return self._best_gain_slot(candidates, bonus, wincon=False,       # (3) a wall, only if it is
                                     require_threat=True)                   # actually in danger (not a safe body)
 
@@ -224,7 +246,12 @@ HYPOTHESES = [
         weight=-15, status="testing"),
     # ── the SECOND Tool class (ml f87/f4): a retreat-cost reducer, which ADR-0028's +HP machinery
     #    never modelled. `_is_hp_tool` rejects it (hpBonus == 0), so `tool_deploy_slot` stays None and
-    #    the picker never speaks — these two say where it goes and when to hold it. ──
+    #    the picker never speaks — these two say where it goes and when to hold it.
+    #    SIGN AUDIT (Issue #306): `retreatReduction` is now SIGNED — Gravity Gemstone parses to −1
+    #    ("{C} more"). All three rungs below test `> 0`, so a surcharge Tool is never treated as an
+    #    enabler: it earns neither the `equip-…-on-the-active` +8 nor the `hold-…-with-no-retreat`
+    #    −12, and it is NOT exempted from `save-tool-for-the-attacker`'s −15, which is right — a Tool
+    #    that makes retreating dearer is exactly the off-role fritter that guard exists to discourage. ──
     Hypothesis(
         id="equip-the-retreat-tool-on-the-active",
         rationale="A retreat-cost Tool (`CardStat.retreatReduction` > 0 — Air Balloon −{C}{C}, Rescue "

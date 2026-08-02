@@ -15,10 +15,14 @@ from dataclasses import dataclass
 # Re-exports (import stability, ADR-0054): tests and tools import the parser battery and
 # the private builders through this module — keep every name bound here.
 from .card_text import (  # noqa: F401
+    _parse_tool_attack_cost_reduction,
+    _parse_tool_holder_family,
     _parse_tool_hp_bonus,
     _parse_retreat_free_grant,
     _parse_tool_retreat_free_at_hp,
     _parse_tool_retreat_reduction,
+    name_in_family,
+    normalize_card_name,
     parse_attack_bench_requirement,
     parse_attack_bench_snipe,
     parse_attack_bench_spread,
@@ -60,6 +64,28 @@ class CardStat:
                                        # {C}{C} -> 2), parsed from skill text. The SECOND Tool class the
                                        # ADR-0028 doctrine never modelled: worthless on a body that will
                                        # never retreat, so it belongs on the Active (ml f87). 0 otherwise.
+                                       # SIGNED (Issue #306): NEGATIVE for a Tool that makes retreating
+                                       # DEARER (Gravity Gemstone "{C} more" -> -1). One quantity, one
+                                       # field — two fields for one quantity is how the sign gets
+                                       # dropped. Consumers must not assume non-negative.
+    attackCostReduction: int = 0       # Energy a Tool shaves off its holder's ATTACK costs (Hop's
+                                       # Choice Band "cost {C} less" -> 1) — the pool's only such
+                                       # grant, and the engine has no field for it at all. Gated by
+                                       # `holderNameFamily` like every other modifier this Tool grants.
+                                       # NO LIVE CONSUMER YET, deliberately (Issue #306): affordability
+                                       # is asked ~20 times as `_attack_cost(aid) <= energy`, all
+                                       # ATTACK-keyed, and a body-keyed discount cannot be threaded
+                                       # through them without a redesign this issue does not carry —
+                                       # nor safely, since a wrong credit manufactures a KO_SCORE-class
+                                       # phantom. It is a T4 `state_value` input (Issue #263), which
+                                       # is what the whole POC-A2.1 track produces; the census report
+                                       # names it as parsed-not-priced so it can't read as covered.
+    holderNameFamily: str | None = None  # the OWNER family the holder must belong to for this Tool's
+                                       # static modifiers (hpBonus / damageBoost / attackCostReduction)
+                                       # to apply — "Cynthia's" (Power Weight), "Hop's" (Choice Band).
+                                       # rules.md §9: the owner prefix IS part of the printed name, so
+                                       # this is an exact membership test over a KNOWN holder, not a
+                                       # guess. None = unconditional. Test it with `applies_to_holder`.
     retreatFreeAtHp: int = 0           # remaining HP at or below which an attached Tool zeroes the
                                        # holder's Retreat Cost outright (Rescue Board: 30) — the
                                        # CONDITIONAL leg the flat read above could not carry
@@ -174,6 +200,16 @@ class CardStat:
     def is_typed_basic_energy(self) -> bool:
         """A Basic Energy with a concrete type — the attach-type family's unit."""
         return self.cardType == _BASIC_ENERGY and self.energyType is not None
+
+    def applies_to_holder(self, holder: "CardStat | None") -> bool:
+        """Do THIS Tool's static modifiers (``hpBonus`` / ``damageBoost`` / ``attackCostReduction``)
+        reach ``holder`` — the body it is (or would be) attached to?
+
+        The one place the owner-family gate is evaluated, so a consumer that reads any gated amount
+        reads its condition through the same test (Issue #306). True for every unrestricted Tool, so
+        an ungated consumer's behaviour is unchanged. An unknown holder against a real gate is
+        False: fail-CLOSED, never credit a body we cannot identify."""
+        return name_in_family(getattr(holder, "name", None), self.holderNameFamily)
 
     def can_pay_cheapest(self, energy: int) -> bool:
         """Attached-Energy count covers the cheapest attack — the fail-CLOSED affordability
@@ -441,6 +477,8 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             hasAbility=bool(int(c.hp) > 0 and getattr(c, "skills", None)),   # Pokémon w/ Ability skill
             hpBonus=_parse_tool_hp_bonus(c),
             retreatReduction=_parse_tool_retreat_reduction(c),
+            attackCostReduction=_parse_tool_attack_cost_reduction(c),
+            holderNameFamily=_parse_tool_holder_family(c),
             retreatFreeAtHp=_parse_tool_retreat_free_at_hp(c),
             retreatFreeGrant=_parse_retreat_free_grant(c),
             stage2=bool(getattr(c, "stage2", False)),
