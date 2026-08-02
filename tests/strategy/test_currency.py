@@ -25,6 +25,46 @@ from common.currency import PRIZE_DAMAGE_RATE, prize_to_damage
 REPO = Path(__file__).resolve().parents[2]
 
 
+#: The `Rule` values `data/EN_Card_Data.csv` uses, and the `CardStat` flags each one means. This is
+#: the ONE place the mapping is spelled: the CSV's Rule text is presentation, `CardStat.ex` /
+#: `.megaEx` are what the engine hands the agent, and nothing in `src/` joins the two (the Provider is
+#: built from engine card data, never from this CSV). The prize NUMBERS are deliberately absent —
+#: every test below resolves them through `CardStat.prize_value`, the shipped reader, rather than
+#: restating `{1, 2, 3}` and then checking a constant against its own restatement.
+_RULE_FLAGS = {"n/a": dict(ex=False, megaEx=False),
+               "Pokémon ex": dict(ex=True, megaEx=False),
+               "Mega Pokémon ex": dict(ex=True, megaEx=True)}
+
+
+def _bodies() -> dict:
+    """``{Card ID: (hp, Rule)}`` for every BODY in the card set — Trainers and Energy report no HP.
+
+    One walk, shared by both recomputations below. It was two near-identical walks (same filter, same
+    `assert len(...) == 1061`) until Issue #313 item 2g added the second; two ideas of what "the
+    population" is, in one file, is the shape ADR-0087 charges for at repo scale."""
+    out = {}
+    with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
+        for row in csv.DictReader(f):
+            hp = int(row["HP"]) if (row.get("HP") or "").strip().isdigit() else 0
+            if hp > 0:
+                out[row["Card ID"]] = (hp, (row.get("Rule") or "n/a").strip())
+    assert len(out) == 1061                    # the population ADR-0100 measured
+    assert set(r for _hp, r in out.values()) == set(_RULE_FLAGS), (
+        "the card set uses a Rule this file does not know — the mapping above is incomplete, and "
+        "every prize figure derived from it is understated")
+    return out
+
+
+def _prize_of(rule: str) -> int:
+    """The prizes a body under ``rule`` yields, through the SHIPPED reader (`CardStat.prize_value`).
+
+    Called rather than restated on purpose: `common.scouting` must not import `common.strategy`, so
+    `strategy.context.MAX_PRIZE_VALUE` and this property are two spellings of one fact and cannot be
+    merged. Routing every test's prize figure through the property is what keeps them from drifting."""
+    from common.scouting.provider import CardStat
+    return CardStat(0, **_RULE_FLAGS[rule]).prize_value
+
+
 @pytest.mark.req("REQ-CURRENCY-0001")
 def test_prize_damage_rate_recomputes_from_the_card_set():
     """ADR-0100 §3 / ADR-0078 decision 2: the Prize Damage Rate is DERIVED, so a reviewer can
@@ -33,15 +73,8 @@ def test_prize_damage_rate_recomputes_from_the_card_set():
     (Mega ex 3, ex 2, else 1).
 
     Pinning the literal instead would make the constant tuned-by-another-name."""
-    prizes = {"n/a": 1, "Pokémon ex": 2, "Mega Pokémon ex": 3}
-    bodies = {}
-    with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
-        for row in csv.DictReader(f):
-            hp = int(row["HP"]) if (row.get("HP") or "").strip().isdigit() else 0
-            if hp > 0:                                    # Trainers / Energy report no HP
-                bodies[row["Card ID"]] = hp / prizes[(row.get("Rule") or "n/a").strip()]
-    assert len(bodies) == 1061                            # the population ADR-0100 measured
-    assert statistics.median(bodies.values()) == PRIZE_DAMAGE_RATE
+    per_prize = [hp / _prize_of(rule) for hp, rule in _bodies().values()]
+    assert statistics.median(per_prize) == PRIZE_DAMAGE_RATE
 
 
 @pytest.mark.req("REQ-CURRENCY-0002")
@@ -137,39 +170,21 @@ def test_the_target_ceiling_is_the_card_sets_own_prize_ceiling():
     """Issue #313 item 2g: the gust-target ratio's yardstick is DERIVED, so a reviewer can recompute
     it — and it is recomputed HERE from the card set, not pinned.
 
-    Two spellings of one fact are pinned together in one place, which is the net ADR-0087 asks for
-    when a shared import is not reachable: `common.scouting` must not depend on `common.strategy`, so
-    `CardStat.prize_value` cannot read `strategy.context.MAX_PRIZE_VALUE`. This test walks the Rule
-    column of `data/EN_Card_Data.csv`, resolves each body through `CardStat.prize_value` — the OTHER
-    reader, called rather than restated — and asserts the constant is that population's actual
-    maximum. A future set introducing a fourth Rule fails the vocabulary assertion rather than
-    silently topping out below its own ceiling."""
-    import csv as _csv
-
+    Two spellings of one fact are pinned together, which is the net ADR-0087 asks for when a shared
+    import is not reachable: `common.scouting` must not depend on `common.strategy`, so
+    `CardStat.prize_value` cannot read `strategy.context.MAX_PRIZE_VALUE`. The maximum here is taken
+    over the real card set and resolved through `CardStat.prize_value` (`_prize_of`) — the OTHER
+    reader, called rather than restated. A future set introducing a fourth Rule fails inside
+    `_bodies()` rather than silently topping out below its own ceiling."""
     from common import needs
-    from common.scouting.provider import CardStat
     from common.strategy.context import MAX_PRIZE_VALUE
 
-    bodies = {}                             # by Card ID, as the Prize-Damage-Rate recomputation is
-    with open(REPO / "data" / "EN_Card_Data.csv", encoding="utf-8") as f:
-        for row in _csv.DictReader(f):
-            if (row.get("HP") or "").strip().isdigit() and int(row["HP"]) > 0:
-                bodies[row["Card ID"]] = (row.get("Rule") or "n/a").strip()
-    rules = set(bodies.values())
-    # The whole Rule vocabulary this set uses — anything else and the mapping below is incomplete.
-    assert rules == {"n/a", "Pokémon ex", "Mega Pokémon ex"}
-    assert len(bodies) == 1061                             # the same population as the rate above
-
-    # Each Rule resolved through the OTHER reader, so the two cannot disagree about the ceiling.
-    got = {rule: CardStat(0, ex=(rule != "n/a"), megaEx=(rule == "Mega Pokémon ex")).prize_value
-           for rule in rules}
-    assert got == {"n/a": 1, "Pokémon ex": 2, "Mega Pokémon ex": 3}
-    assert max(got.values()) == MAX_PRIZE_VALUE == 3
+    assert max(_prize_of(rule) for _hp, rule in _bodies().values()) == MAX_PRIZE_VALUE == 3
 
     # ...and the ceiling is that maximum plus the survival term's own cap — the bound ADR-0076
     # Amendment E quotes ("max ~3.9") when it names the denomination debt this item pays down.
-    assert needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
     assert needs.TARGET_VALUE_CEILING == MAX_PRIZE_VALUE + needs._SURVIVAL_CAP
+    assert needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
 
 
 @pytest.mark.req("REQ-CURRENCY-0006")
@@ -185,44 +200,51 @@ def test_the_gust_target_band_is_the_disruption_tier_and_the_rate_falls_out_of_i
       is reproduced rather than replaced;
     * the module says so in prose, so the row cannot be mistaken for a derivation.
     """
+    from common import needs
     from common.card_worth import TAG_TIER
 
+    ceiling = needs.TARGET_VALUE_CEILING
     assert currency.GUST_TARGET_BAND == TAG_TIER["gust"] == pytest.approx(10.0)
-    assert currency.GUST_TARGET_WORTH_RATE == pytest.approx(10.0 / 3.9)
+    assert currency.GUST_TARGET_WORTH_RATE == pytest.approx(TAG_TIER["gust"] / ceiling)
 
     # A full-ceiling target is worth exactly the band; nothing can exceed it, including a value the
     # bound does not cover (the clamp is what keeps the band a band).
-    assert currency.target_value_to_worth(3.9) == pytest.approx(10.0)
-    assert currency.target_value_to_worth(99.0) == pytest.approx(10.0)
+    assert currency.target_value_to_worth(ceiling) == pytest.approx(currency.GUST_TARGET_BAND)
+    assert currency.target_value_to_worth(99.0) == pytest.approx(currency.GUST_TARGET_BAND)
     assert currency.target_value_to_worth(0.0) == 0.0
-    # The modal corpus target — a 1-prize body bought no survival turns — lands on the incumbent
+    # The modal corpus target — a 1-prize body that bought no survival turns — lands on the incumbent
     # routing's own median (2.500 over 228 measured slots), which is what makes the band a
-    # PRESERVATION choice with evidence rather than an assertion.
-    assert currency.target_value_to_worth(1.0) == pytest.approx(2.564, abs=0.001)
+    # PRESERVATION choice with evidence rather than an assertion. Written as the rate rather than as
+    # `2.564` so the assertion tracks a re-band of the tiers instead of pinning yesterday's quotient.
+    assert currency.target_value_to_worth(1.0) == pytest.approx(currency.GUST_TARGET_WORTH_RATE)
+    assert 2.4 < currency.target_value_to_worth(1.0) < 2.7    # ...and that IS the incumbent's median
 
     src = inspect.getsource(currency)
-    assert "prize<->worth rate, scoped to one seam" in src
+    assert "prize" in src.lower() and "scoped to one seam" in src.lower()
 
 
 @pytest.mark.req("REQ-CURRENCY-0006")
-def test_the_gust_target_slot_can_finally_outrank_the_cards_own_latent_worth():
-    """The defect the denomination fixes, stated as the property that was FALSE before it.
+def test_the_gust_target_slot_can_now_outrank_the_cards_own_latent_worth():
+    """The defect the denomination fixes, stated as the comparison that could not come out right.
 
-    A held Boss's Orders opens two slots it is eligible for: its own `gust_target` slot, and the
-    `general` latent-worth slot every worth-carrying card gets at `TAG_TIER["gust"] x
-    _GENERAL_WORTH_W` = **4.5**. Fed a raw prize-equivalent the gust slot topped out at 3.9 — BELOW
-    that floor on every board there is — so the assignment never once chose the instrument ADR-0076
-    built, and its "0 decision flips" measured inertness rather than agreement.
+    A held Boss's Orders is eligible for two slots: its own `gust_target` slot, and the `general`
+    latent-worth slot at `worth x deploy x _GENERAL_WORTH_W x liq` — **whose CEILING is 4.5**. A card
+    takes at most one slot, so the DP compares them; fed a raw prize-equivalent the gust slot topped
+    out at 3.9 and could not reach that ceiling at all, so it could only ever win where the general
+    slot had already been discounted by `deploy`/`liq` or was absent.
 
-    Asserted as the inequality rather than against a frame, because the claim is structural: it must
-    hold for every board with a target worth more than the modal one, not for a fixture. The floor is
-    IMPORTED rather than spelled `0.45` here, so a re-weight moves this test with it instead of
-    leaving it asserting against a number the agent no longer uses."""
+    ⚠️ **This is a comparison against a CEILING, so it does not by itself prove the slot never won**
+    — 4.5 is not a floor, and the corpus measurement (ADR-TEMP-313: the assignment covered a
+    `gust_target` slot on 1 frame in 80 before, 25 after) is what carries that claim. What is
+    asserted here is the part that IS structural: the reachability of the top of the range.
+
+    The floor is IMPORTED rather than spelled `0.45`, so a re-weight moves this test with it instead
+    of leaving it asserting against a number the agent no longer uses."""
     from common import needs
     from common.card_worth import TAG_TIER
     from common.pilot import _GENERAL_WORTH_W
 
-    general_floor = TAG_TIER["gust"] * _GENERAL_WORTH_W                 # == 4.5
-    assert currency.target_value_to_worth(needs.TARGET_VALUE_CEILING) > general_floor  # ceiling wins
-    assert currency.target_value_to_worth(2.0) > general_floor          # ...as does a 2-prize body
-    assert needs.TARGET_VALUE_CEILING < general_floor  # ...and the RAW prize-equivalent never could
+    general_ceiling = TAG_TIER["gust"] * _GENERAL_WORTH_W               # == 4.5
+    assert currency.target_value_to_worth(needs.TARGET_VALUE_CEILING) > general_ceiling
+    assert currency.target_value_to_worth(2.0) > general_ceiling        # ...as does a 2-prize body
+    assert needs.TARGET_VALUE_CEILING < general_ceiling  # ...and the RAW prize-equivalent never could

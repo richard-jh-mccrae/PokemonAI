@@ -22,8 +22,14 @@ from __future__ import annotations
 from common.card_worth import ROLE_TIER as _ROLE_TIER, TAG_TIER as _TAG_TIER
 # The PRIZE-equivalent yardstick, for the gust-target band. `common.needs` imports `card_worth` and
 # `strategy.context` (both leaves) and never this module, so the arrow runs one way and this cannot
-# cycle either. Re-exported rather than restated so the bound and the equation it bounds — the two
-# halves of ONE fact — cannot drift apart.
+# cycle either. IMPORTED rather than restated so the bound and the equation it bounds — the two
+# halves of ONE fact — cannot drift apart; aliased private because `needs` is its home and this
+# module must not become a second place to read it from.
+#
+# The cost, stated rather than left to be discovered: this module was leaf-only until now, so every
+# importer of `currency` (`hold_value`, `state_value`, `deploy_value`, `promote_retreat_value`,
+# `snipe_relevance`, `sound_rules`) now pulls `needs` transitively. Accepted because the alternative
+# is a second spelling of the ceiling, and `needs` itself imports nothing that could close a loop.
 from common.needs import TARGET_VALUE_CEILING as _TARGET_VALUE_CEILING
 
 #: The **Prize Damage Rate** — damage per prize, bridging prizes ↔ damage.
@@ -220,11 +226,16 @@ def item_hold_to_damage(keep_worth: float) -> float:
 # `deny` 10, Energy 8) — and `needs.py`'s own module docstring says slots are valued "in the ONE
 # currency". ADR-0076 Amendment E recorded that as a debt and called it *"latent, not firing"*;
 # ADR-0080 decision 4 re-inherited it here with Amendment F reversed. Measured over the corpus
-# (2026-08-02, 228 emitted slots on 80 frames) it is worse than latent: the slot's MEDIAN value is
-# 1.000 and its MAX 3.192, while the very card that opens it also opens a `general` slot worth
-# `TAG_TIER["gust"] x _GENERAL_WORTH_W` = **4.5** — so the DP never once assigned a Boss's Orders to
-# its own instrument's slot. The "0 decision flips" that armed the flag was the instrument being
-# INERT, not the instrument agreeing.
+# (2026-08-02, 80 frames emitting 228 slots) it is worse than latent: the slot's MEDIAN value is
+# 1.000, against a `general` slot the very same card opens at up to `TAG_TIER["gust"] x
+# _GENERAL_WORTH_W` = 4.5 — so the assignment COVERED a `gust_target` slot on **1 frame in 80**. The
+# "0 decision flips" that armed the flag was the instrument being all but INERT, not the instrument
+# agreeing. Denominated, the same measurement reads **25 of 80**.
+#
+# (The 1-in-80 is measured, not inferred. `3.9 < 4.5` does NOT prove it: the general slot is
+# `worth x deploy x _GENERAL_WORTH_W x liq`, so 4.5 is its CEILING and it can fall below the gust
+# slot — which is exactly what happens on the one frame. The reading comes from zeroing the
+# gust_target slots and watching V drop.)
 #
 # **Why this is a RATIO and not a rate lookup.** `opponent_target_value` has a natural, derived
 # ceiling — `needs.TARGET_VALUE_CEILING` = `MAX_PRIZE_VALUE` (3) + `_SURVIVAL_CAP` (0.9) = 3.9 — so
@@ -278,12 +289,16 @@ def target_value_to_worth(prize_equivalents: float) -> float:
     assignment. Callers hand a PRIZE-EQUIVALENT (a row's ``value`` off `_opponent_target_rows`), never
     a worth magnitude — that would be a double conversion.
 
-    Clamped at the ceiling rather than trusted to it. The bound holds by construction today
-    (`prize_advance <= MAX_PRIZE_VALUE`, `survival_value` is capped), so the clamp is never reached —
-    it is there because the two bounds live in `needs` and a future set with a 4-prize body would
-    otherwise push a slot silently above the band it is defined to top out at."""
-    ratio = max(0.0, min(1.0, float(prize_equivalents) / _TARGET_VALUE_CEILING))
-    return ratio * GUST_TARGET_BAND
+    Clamped at the ceiling rather than trusted to it. The bound holds for every shipped caller
+    (`_opponent_target_rows` passes `prize_advance = CardStat.prize_value <= MAX_PRIZE_VALUE`, and
+    `survival_value` is capped), so the clamp is never reached — it is there because the two bounds
+    live in `needs` and a future set with a 4-prize body would otherwise push a slot silently above
+    the band it is defined to top out at.
+
+    Written through `GUST_TARGET_WORTH_RATE` rather than re-deriving `ratio x band`, so the constant
+    a reviewer disputes is the constant the arithmetic uses — the `_DENIAL_ITEM_COST` lesson
+    (ADR-0105 decision 3: a rate that never meets an expression is a rate nothing stops drifting)."""
+    return max(0.0, min(float(prize_equivalents), _TARGET_VALUE_CEILING)) * GUST_TARGET_WORTH_RATE
 
 
 def prize_to_damage(prize_equivalents: float) -> float:

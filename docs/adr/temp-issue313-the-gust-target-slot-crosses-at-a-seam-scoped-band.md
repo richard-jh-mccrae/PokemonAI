@@ -1,4 +1,4 @@
-# ADR-TEMP-313 — A prize-denominated marginal enters the Worth DP as a FRACTION of a band, not as a number; and the gust-target instrument had never once decided anything
+# ADR-TEMP-313 — A prize-denominated marginal enters the Worth DP as a FRACTION of a band, not as a number; and the gust-target instrument was binding on one corpus frame in eighty
 
 **Status:** Accepted; **BUILT** 2026-08-02. Build = **Issue #313 item 2g** (the target-side half),
 carved out of Issue #261 (POC-T2) when that tracker closed. Discharges old Issue #189's target/keep
@@ -39,8 +39,8 @@ marginal is denominated in **prize-equivalents** (1.0 – 3.9). Every other slot
 Amendment E recorded that mismatch, judged it *"latent, not firing — 331 corpus frames show 0 decision
 flips because the general-worth floor absorbs the drop"*, and handed it to Issue #189. Amendment F
 then moved it to the shared layer; ADR-0080 decision 4 moved it back, and ADR-0080's Consequences
-predicted the wall it would hit: *"#189 will hit the same underivable-rate wall, and it has no escape
-route of deny's kind — a gust card's value genuinely IS a magnitude."*
+predicted the wall it would hit — Issue #189, it says, *"will hit the same underivable-rate wall, and
+it has no escape route of deny's kind — a gust card's value genuinely IS a magnitude."*
 
 ### Measured before anything was written (2026-08-02, 371 replayable corpus frames)
 
@@ -52,18 +52,39 @@ slot value (prize-equivalents)   min 1.000   median 1.000   mean 1.202   max 3.1
 ```
 
 The card that opens that slot — a Boss's Orders, `TAG_TIER["gust"]` 10.0 — also opens a `general`
-latent-worth slot, at `10.0 × _GENERAL_WORTH_W (0.45)` = **4.5**. A card takes at most one slot, so
-the DP compares the two and takes the larger. **3.9 < 4.5 on every board there is**, so:
+latent-worth slot at `worth × deploy × _GENERAL_WORTH_W × liq`, which tops out at **4.5**. A card
+takes at most one slot, so the DP compares the two and takes the larger. Asking whether the gust slot
+ever WON that comparison is the question that matters, and it is asked directly — zero the
+`gust_target` slots' value, re-run the assignment, and see whether `V` drops:
 
-> **The assignment never once assigned a gust card to its own instrument's slot.** 0 of 228.
+> **The assignment covered a `gust_target` slot on 1 frame in 80** (`86090164|1|turn|10`, `V` drop
+> 1.900). Denominated, the same measurement reads **25 of 80**.
 
 Amendment E's *"0 decision flips"* was not the instrument agreeing with the incumbent. It was the
-instrument being **inert** — armed ON in the shipped PROFILE since 2026-07-27, reachable, computed
-every decision, and structurally unable to decide anything. The measured `keep_v2` for a held gust
-card confirms it: median **4.500** across 83 readings, which is the general floor to three decimals.
+instrument being all but **inert** — armed ON in the shipped PROFILE since 2026-07-27, reachable,
+computed every decision, and reaching the answer once in eighty boards. The `keep_v2` reading agrees:
+median **4.500** across 83 readings, the general slot's ceiling to three decimals, with a single
+outlier at 1.900 — that one frame.
 
-That reframes the item. It is not "a denomination is untidy"; it is "an armed instrument is dead
-code, and the thing keeping it dead is a units error."
+⚠️ **The tempting shortcut here is wrong, and it was caught in review rather than shipped.** An
+earlier draft of this ADR argued the inertness *structurally*: "3.9 < 4.5 on every board there is, so
+it can never win." That does not follow. The general slot is a PRODUCT — `worth × deploy ×
+_GENERAL_WORTH_W × liq`, where `_general_liquidity` can return `_GENERAL_ILLIQUID_FLOOR` (0.15) —
+so 4.5 is its **ceiling, not a floor**, and it can fall below the gust slot. That is precisely what
+happens on `86090164|1|turn|10`. A de-duplicated `general` slot (one per distinct cid) also leaves a
+SECOND copy of a gust card facing no general competitor at all. The claim survives only as the
+measurement above, and it is stated that way everywhere it appears.
+
+That reframes the item. It is not "a denomination is untidy"; it is "an armed instrument is very
+nearly dead code, and the thing keeping it dead is a units error."
+
+**Verified against the POST-ADR-0093 behaviour, as Issue #313's blast-radius note requires.** That
+note warns that the `_planning` guard move restored the `gust_target` emission mid-sim, so 2g must
+measure the new behaviour rather than the pre-PR one. Every reading here was taken on a tree at
+`main` (8226a43), which carries ADR-0093 and item 2f; and the property itself is held down by
+`test_gust_target_slot_resolver.py::test_the_gust_slot_survives_the_rollout_because_the_shared_rows_now_run_mid_sim`,
+which asserts the emitted values are identical inside a rollout and at the root — so the conversion
+lands on both readings or neither, and it passes with the conversion in place.
 
 ### What ADR-0080's measurement leaves available, taken as the starting point
 
@@ -201,7 +222,7 @@ Baselines first, on the unmodified tree, so every number below is a delta and no
 ```
 BEFORE   Decision Gate        PASS   0 unruled, 0 held out, 0 voided
                               agree 251/345, 0 picks moved
-         Discrimination Gate  PASS   0 unruled, 2 held out (#262 x2), 0 voided
+         Discrimination Gate  PASS   0 unruled, 2 held out (both owner=#262), 0 voided
                               agree 180/247 -> 179/247, 3 picks moved, 1 IMPROVED
                               (main's own uncaptured drift — ADR-0105 deliberately left it)
 
@@ -218,17 +239,25 @@ whose outcome turns on it.
 What did move is the price, and it is the point of the item:
 
 ```
-slot value      before  median 1.000  mean 1.202  max 3.192   ABOVE the 4.5 general floor:   0/228
-                after   median 2.564  mean 3.082  max 8.184   ABOVE the 4.5 general floor:  29/228 (12.7%)
+assignment COVERS a gust_target slot     before   1/80 frames     after   25/80 frames
+                                                  (86090164|1|turn|10, V drop 1.900)
+
+slot value      before  median 1.000  mean 1.202  max 3.192      above 4.5:   0/228 slots
+                after   median 2.564  mean 3.082  max 8.184      above 4.5:  29/228 slots
 
 gust keep_v2    before  min 1.900  median 4.500  p75 4.500  mean 5.931
                 after   min 4.500  median 4.500  p75 5.128  mean 6.537
 ```
 
-**0 → 29 of 228** is the whole finding in one line: the slot ADR-0076 built can now win the
-assignment, on 12.7% of the boards where it is emitted, and could not before on any of them. The
-`keep_v2` minimum rising from 1.900 to 4.500 is the same fact from the card's side — the cheapest a
-held gust card can be shed for is now its own floor rather than under it.
+**1 → 25 of 80 frames** is the whole finding in one line: the slot ADR-0076 built now wins the
+assignment on nearly a third of the boards where it is emitted, where before it won on one. The
+`keep_v2` minimum rising from 1.900 to 4.500 is that same single frame from the card's side — its
+cheapest shed is no longer under the card's own latent worth.
+
+The three rows measure different things and are kept apart on purpose: the first is the property that
+matters (did the DP CHOOSE it), the second is the price, the third is what the price does to the
+card. Only the first licenses "the instrument decides"; the "above 4.5" row is a value comparison
+against a ceiling and cannot, which is exactly the inference this ADR's own Context section flags.
 
 **Suite:** **4544** passed, 5 skipped, 4 xfailed, 1 xpassed — main's 4540 plus this build's four new
 tests. The `xpassed` is the pre-existing unruled one ADR-0103 recorded
@@ -242,12 +271,14 @@ baseline's outstanding 3 picks are precisely what it declined to swallow.
 
 - **An armed flag is not a live instrument, and nothing in the process caught it for six days.**
   `gust_target_slots` cleared a paired-A/B gauntlet, a 331-frame sweep and the Discrimination Gate,
-  and all three reported clean *because the code they were measuring never decided anything*. The
-  0-flip sweep in ADR-0076 Amendment D is the same species of vacuous green its own Issue #243
+  and all three reported clean *because the code they were measuring decided one frame in eighty*.
+  The 0-flip sweep in ADR-0076 Amendment D is the same species of vacuous green its own Issue #243
   amendment already found in `threat_sweep --slots`. **Generalised: a flag that arms a new value into
   a MAX-shaped assignment needs one more check than a flag that arms a new term into a sum — "did the
-  assignment ever choose it?" — and no gate in this repo asks that today.** Recorded rather than
-  built: a coverage instrument for the DP is real work and this item did not do it.
+  assignment ever CHOOSE it?" — and no standing instrument in this repo asks that.** The question was
+  asked here with a throwaway probe (zero the kind's slots, re-run `assignment_value`, watch `V`
+  drop), and its answer is this ADR, per ADR-0089 — but a *standing* coverage report for the DP is
+  real work and this item did not do it. Any future slot kind arms blind unless someone builds it.
 - **The blast radius is exactly one call site, and that is a measured fact rather than a hope.** The
   `value` key on an `_opponent_target_rows` row has precisely ONE live reader in `pilot.py` — this
   emission (the deny fire rung reads `relevance_fire`, the hand-size relief reads `survival_value`

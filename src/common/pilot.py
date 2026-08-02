@@ -4324,8 +4324,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # points, so it crosses at the seam-scoped `currency.target_value_to_worth` — the marginal's
         # own derived ceiling (3.9) divided out to a [0,1] fraction of the disruption band, which is
         # the identical `band x fraction` shape the armed `deny` slot above already has. Fed raw it
-        # topped out at 3.9 against a wincon's 30 and lost even to the SAME card's `general` slot at
-        # 4.5, so the instrument this flag arms had never once decided anything.
+        # topped out at 3.9 against a wincon's 30 and usually lost even to the SAME card's `general`
+        # slot (up to 4.5), so the assignment covered a `gust_target` slot on 1 corpus frame in 80 —
+        # measured, not inferred. Denominated: 25 in 80.
         if self.gust_target_slots:
             gusters = _playable_only([k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])])
             if gusters:

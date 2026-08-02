@@ -263,7 +263,6 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     # denominated into Worth by `currency.target_value_to_worth` at the band fraction 1.0/3.9.
     assert len(gust_target) == 1
     assert gust_target[0].value == pytest.approx(currency.target_value_to_worth(1.0))
-    assert gust_target[0].value == pytest.approx(2.564, abs=0.001)
     assert gust_target[0].value < 4.5                        # ...and so below the card's own floor
     # `keep_v2` used to be read off `Decision.discard_shadow`, deleted with the other three by
     # Issue #261 item 2h. The number was never the shadow's — it is the decider's own keep, so it is

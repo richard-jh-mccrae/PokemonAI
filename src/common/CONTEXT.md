@@ -469,8 +469,10 @@ uses; `Pilot.gust_target_slots` shipped ON (`needs.SUPPLIES`'s `gust` tag routes
 INSTEAD of `deny`, never both) after clearing the ADR-0072 mid-build paired-A/B gauntlet tripwire.
 That marginal is prize-denominated and the DP sums card-worth, so since **ADR-TEMP-313 (Issue #313 item
 2g)** the emission crosses at the seam-scoped **Gust-Target Band** (see that term) — until then the
-slot topped out at 3.9 against the same card's own 4.5 `general` slot and never once won the
-assignment, so the flag armed an instrument that had never decided anything.
+slot topped out at 3.9 against the same card's own `general` slot (up to 4.5) and the assignment
+covered one on **1 corpus frame in 80** — measured by zeroing the slots and watching V drop, not
+inferred from `3.9 < 4.5`, which does not hold (the general slot is `worth x deploy x
+_GENERAL_WORTH_W x liq`, so 4.5 is its ceiling). Denominated: 25 in 80.
 Snipe and the ADR-0044 forced-promotion pre-chip stay OUTSIDE the DP entirely (neither is a held
 card competing for a slot) — both read the shared marginal directly; #188 is where either is wired
 in as a live decider. Pure modules,
@@ -936,8 +938,9 @@ needs the rate at all (it became a **Deny Relevance** instrument), so this leg i
 not by backlog. **Gust no longer owes it either, as of Issue #313 item 2g (ADR-TEMP-313).** Its
 `gust_target_slot` did feed a prize-equivalent straight into the worth-summing DP with no conversion —
 and the reading that it was "latent, absorbed by the `TAG_TIER["gust"]` floor" was too kind: measured
-over 228 emitted slots the value's MEDIAN is 1.000 against that floor's 4.5, so the slot never once
-won the assignment and ADR-0076's instrument had never decided anything. It now crosses at
+over 80 frames the value's MEDIAN is 1.000 against a general slot topping out at 4.5, and the
+assignment covered a `gust_target` slot on 1 of those 80 — so ADR-0076's instrument was all but
+inert. It now crosses at
 `currency.target_value_to_worth`, a **Gust-Target Band** ratio needing no general rate — see that
 term.
 _Avoid_: Prize Damage Rate (the prizes↔damage leg — this is the worth leg), Worth (the scale, not the
@@ -956,7 +959,8 @@ consequence is that the two members of the opponent-target slot family are final
 `deny` is `TAG_TIER["gust"] × relevance∈[0,1]`, and `gust_target` now is too. The band is a
 **preservation** choice measured against the routing ADR-0076 replaced (a `deny` slot at
 `TAG_TIER["gust"] / 2**t`): over 228 corpus slots the old routing priced median 2.500 / mean 2.695,
-the new denomination median 2.564 / mean 3.082. It adds no new NUMBER — both ends are constants that
+the new denomination median 2.564 / mean 3.082, and the share of frames whose assignment actually
+COVERS the slot goes 1/80 -> 25/80. It adds no new NUMBER — both ends are constants that
 already shipped — but it does carry `DEPLOY_BAND`'s reconciliation debt, and the sharpest version of
 it: composing the two shipped legs (`PRIZE_DAMAGE_RATE` 100 ÷ `ITEM_HOLD_WORTH_RATE` 1.0) says ~100
 worth per prize, a ~39× disagreement. That is evidence about the WORTH scale (range 0–30 by

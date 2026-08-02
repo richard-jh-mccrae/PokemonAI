@@ -254,12 +254,18 @@ _SURVIVAL_PER_TURN = 0.5    # prize-equivalents per turn-of-survival bought, bef
 _SURVIVAL_CAP = 0.9         # the survival term stays < 1 Prize: it breaks ties among prize outcomes,
                             # never overrides a real prize difference (the sub-prize-tie-break rule).
 
-#: The CEILING of :func:`opponent_target_value` — the largest prize-equivalent any one body's removal
-#: can price at. **Derived, not chosen**: the marginal is `prize_advance + survival_value(...)`, its
-#: first term is bounded by the card set's own largest prize value (`MAX_PRIZE_VALUE` = 3, a Mega ex)
-#: and its second by `_SURVIVAL_CAP` (0.9) by construction, so the sum is **3.9** — exactly the number
-#: ADR-0076 Amendment E quotes when it names the denomination debt (*"max ~3.9 for a 3-prize body with
-#: 8 survival turns bought"*).
+#: The CEILING of :func:`opponent_target_value` **as every shipped caller supplies it** — the largest
+#: prize-equivalent any one body's removal can price at. **Derived, not chosen**: the marginal is
+#: `prize_advance + survival_value(...)`, whose second term `_SURVIVAL_CAP` bounds at 0.9 for ANY
+#: caller, and whose first is a *parameter* — bounded at the card set's largest prize value
+#: (`MAX_PRIZE_VALUE` = 3, a Mega ex) because `pilot._opponent_target_rows`, the only site that builds
+#: these rows, passes `CardStat.prize_value`. So the sum is **3.9** — exactly the number ADR-0076
+#: Amendment E quotes when it names the denomination debt (*"max ~3.9 for a 3-prize body with 8
+#: survival turns bought"*).
+#:
+#: The distinction is not pedantry: this function does not enforce the bound (a caller may hand it any
+#: `prize_advance`), so the consumer clamps rather than trusting — see
+#: `currency.target_value_to_worth`.
 #:
 #: Public because it is the YARDSTICK that lets a prize-denominated marginal be read as a
 #: dimensionless [0, 1] fraction and so meet a Worth-denominated consumer without a general
@@ -344,8 +350,8 @@ def gust_target_slot(key: str, *, value: float) -> Slot:
     so the crossing cannot live here without inverting that arrow. Handing this function a raw
     prize-equivalent is the defect ADR-0076 Amendment E recorded and ADR-0080 decision 4 re-inherited
     — the slot then sums against wincon 30 / `deny` 10 / Energy 8 at a value that tops out at 3.9, and
-    measured over the corpus it never once won the assignment, not even against the SAME card's own
-    `general` slot at 4.5."""
+    measured over the corpus the assignment covered one on a single frame in 80, usually losing even
+    to the SAME card's own `general` slot."""
     return Slot("gust_target", float(value), 0, key)
 
 

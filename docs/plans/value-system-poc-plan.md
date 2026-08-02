@@ -247,12 +247,14 @@ deliberate list; gates green; flips → wave 2.
   T4's, Issue #263; the swap IS the deletion). What landed is the *target/keep* side: ADR-0076
   Amendment E's currency debt, which ADR-0080 decision 4 re-inherited. The `gust_target` slot fed a
   PRIZE-denominated marginal (1.0–3.9) straight into the worth-summing DP; measured, that put it under
-  the same card's own 4.5 `general` slot on **every** board, so the assignment chose the instrument
-  **0 of 228 times** — Amendment E's "0 decision flips" was inertness, not agreement. It now crosses at
+  the same card's own `general` slot (up to 4.5) on all but one board, so the assignment covered the
+  instrument's slot on **1 corpus frame in 80** — Amendment E's "0 decision flips" was near-total
+  inertness, not agreement. It now crosses at
   `currency.target_value_to_worth`: the marginal over its own derived ceiling (`MAX_PRIZE_VALUE` 3 +
   `_SURVIVAL_CAP` 0.9 = 3.9) times `TAG_TIER["gust"]` — a `band × fraction∈[0,1]` shape identical to
   the armed `deny` slot's, needing **no** general prize↔worth rate (the `currency.py` guard test still
-  passes). 29/228 slots now clear the floor. Both gates PASS with ZERO movement, so no wave-2 flips.
+  passes). The assignment now covers it on **25 of those 80** frames. Both gates PASS with ZERO
+  movement, so no wave-2 flips.
   The ~39× disagreement against the composed shipped legs (`PRIZE_DAMAGE_RATE` ÷
   `ITEM_HOLD_WORTH_RATE` ⇒ ~100 worth/prize) is RECORDED for `POC_WORTH_PRIZE_RATE` to settle.
 - **Refresh v2 swap (old Issues #220/#222): DONE 2026-08-01 (ADR-0101).** `set_keep_v2` SHED
