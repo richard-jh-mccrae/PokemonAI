@@ -365,14 +365,25 @@ def test_strip_serials_drops_shuffle_dependent_ids_only():
 
 
 @pytest.mark.req("REQ-FUNC-0015")
-def test_select_shape_keeps_the_kind_and_drops_the_candidate_count():
+def test_select_shape_keeps_the_kind_and_drops_every_draw_dependent_count():
     """The shape is what KIND of decision a select is. A deck search over 42 remaining cards offers
-    a different count every game, so `n_options` and the `deck` payload must not reach a fixture."""
+    a different count every game, so `n_options` and the `deck` payload must not reach a fixture.
+
+    `max_count` goes with them (Issue #326, schema /2). The engine reports
+    `min(what the card allows, what the board can supply)` — Punk Up's *"attach up to 5"* comes back
+    as 5 only while five bodies exist to attach to, measured `{5: 29, 3: 1}` over 30 runs — so a
+    fixture recording it fails on the draw rather than on the engine.
+
+    `min_count` STAYS, and the two are asserted separately so a future edit cannot quietly drop the
+    wrong one: it carries the *"you may"* / required distinction, which is a property of the card."""
     sel = {"type": 1, "context": 22, "minCount": 0, "maxCount": 5,
            "option": [{"type": 3, "index": i} for i in range(34)],
            "deck": [{"id": 7}] * 42, "contextCard": None}
-    assert select_shape(sel) == {"select_type": 1, "context": 22, "min_count": 0, "max_count": 5,
-                                 "option_types": [3], "context_card_id": None}
+    shape = select_shape(sel)
+    assert shape == {"select_type": 1, "context": 22, "min_count": 0,
+                     "option_types": [3], "context_card_id": None}
+    assert "max_count" not in shape          # the draw's number
+    assert shape["min_count"] == 0           # the card's "you may"
 
 
 @pytest.mark.req("REQ-FUNC-0015")

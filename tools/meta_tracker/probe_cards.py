@@ -44,12 +44,25 @@ def select_shape(sel: dict) -> dict:
 
     Deliberately drops ``n_options`` and the ``deck`` payload — a deck search over 42 remaining
     cards offers a different count every game, and a fixture that pinned the count would fail on
-    the shuffle rather than on the engine."""
+    the shuffle rather than on the engine.
+
+    **``max_count`` is dropped for the same reason** (Issue #326, schema ``/2``), and it took a red
+    CI to notice that this function was contradicting its own first sentence. The engine reports
+    ``min(what the card allows, what the board can supply)``: Punk Up says *"attach up to 5 Basic
+    {D}"* and the select comes back ``max_count: 5`` only while there are five bodies to attach to —
+    measured at ``{5: 29, 3: 1}`` over 30 runs on the ORIGINAL deck config, so the fixture pinned a
+    number the draw decides and failed ~3% of the time on the engine agreeing with itself.
+
+    ``min_count`` STAYS: it carries the *"you may"* / required distinction, which is a property of
+    the card. Nothing that answers this fixture's question is lost — *does the effect resolve inside
+    the option it was played by, or pose its own `_ABILITY` option* is settled by the select
+    SEQUENCE, its contexts, ``option_types``, ``context_card_id`` and ``ability_option_seen``, none
+    of which the draw moves. How MANY targets the effect offers is the compendium's jurisdiction
+    (ADR-0032), not this probe's."""
     cc = sel.get("contextCard") or None
     return {"select_type": sel.get("type"),
             "context": sel.get("context"),
             "min_count": sel.get("minCount"),
-            "max_count": sel.get("maxCount"),
             "option_types": sorted({o.get("type") for o in (sel.get("option") or [])}),
             "context_card_id": cc.get("id") if cc else None}
 

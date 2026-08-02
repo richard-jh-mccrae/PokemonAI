@@ -1,5 +1,5 @@
 {
-  "schema": "triggered-ability-selects/1",
+  "schema": "triggered-ability-selects/2",
   "answer": "rider",
   "subjects": [
     {
@@ -39,7 +39,6 @@
             "select_type": 1,
             "context": 22,
             "min_count": 0,
-            "max_count": 5,
             "option_types": [
               3
             ],
@@ -49,7 +48,6 @@
             "select_type": 1,
             "context": 21,
             "min_count": 1,
-            "max_count": 1,
             "option_types": [
               3
             ],
@@ -129,7 +127,6 @@
             "select_type": 1,
             "context": 7,
             "min_count": 0,
-            "max_count": 1,
             "option_types": [
               3
             ],

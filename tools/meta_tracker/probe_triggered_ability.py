@@ -44,7 +44,9 @@ DEFAULT_OUT = _ROOT / "tests" / "fixtures" / "triggered_ability_selects.json"
 
 #: ``triggered-ability-selects/N`` — bumped when the RECORD's shape changes, so a stale fixture
 #: fails on its schema rather than on a confusing field-by-field diff.
-SCHEMA = "triggered-ability-selects/1"
+#: ``/2`` (Issue #326): ``max_count`` left the select shape. It is `min(card allowance, what the
+#: board can supply)`, so the fixture was pinning a number the draw decides — see `select_shape`.
+SCHEMA = "triggered-ability-selects/2"
 
 #: One subject per trigger kind, both from shipped decks so the measurement is about cards we
 #: actually play. Assuming the two triggers behave alike is the same class of assumption this
