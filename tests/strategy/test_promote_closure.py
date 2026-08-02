@@ -59,10 +59,17 @@ def _pilot():
 
 def _board(*, one_short=True):
     """My Active is the spent Opener; the Bench holds the win-condition (one attach short of its
-    payoff, or already armed) and the Digger whose Ability is still unused."""
+    payoff, or already armed) and the Digger whose Ability is still unused.
+
+    The wincon's attached Energy is Basic {W} by CARD, because the payoff costs ``{W}{W}{W}`` and a
+    body's attached colour is now read off the units the engine reports (Issue #297). The old
+    `energy=N` default attaches COLORLESS units, which pay colourless slots only — against a fully
+    typed cost that is a board one short of nothing, and the term under test reads zero for a reason
+    that has nothing to do with what it measures."""
     energy = 2 if one_short else 3
     return state(active=poke(OPENER, energy=1, hp=160),
-                 bench=[poke(WINCON, energy=energy, hp=330), poke(DIGGER, hp=90)],
+                 bench=[poke(WINCON, energy=energy, hp=330, energy_card=WATER_ENERGY),
+                        poke(DIGGER, hp=90)],
                  opp_active=poke(WALL, hp=400), turn=6, prizes=4, opp_prizes=4, deck_count=40)
 
 

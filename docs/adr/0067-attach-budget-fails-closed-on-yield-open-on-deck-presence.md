@@ -184,3 +184,86 @@ unknown `CardStat` makes no claim and returns False. `active_famine` must NOT si
 turns "I cannot tell" into "PROVABLE famine" and fires the +105 stall this ADR exists to prevent. The
 unreadable body is therefore checked BEFORE the oracle is asked, and only the rule leg
 (`attack_blocked`) may claim a famine without reading a stat.
+
+
+## Amendment (2026-08-02 — Issue #297): the attached leg reads UNITS, and colourless is not wild
+
+The amendment above closed with *"coloured exactly as `_attached_units` colours the same card once
+attached."* It was not. `_attached_units` — and `attached_type_counts` and `attack_type_payable`
+with it — resolved an attached Energy's colour by feeding each entry of the engine's
+`Pokemon.energies` to the Stat Provider **as a card id**. `energies` is `list[EnergyType]`
+(`src/cg/api.py`): the Energy UNITS the attached cards provide. The cards are `energyCards`.
+
+That returned the right colour for codes 1-8, because the eight Basic Energy card ids are
+numerically equal to their `EnergyType` codes — a coincidence in the shipped data, and the same one
+that corrupted `MySide.visible_counts` (the other half of Issue #297). It mis-answered every other
+code, and one of those is live on a shipped deck:
+
+* **`COLORLESS = 0`.** There is no card 0, so the lookup returned `None`, and `None` is this
+  family's *"unresolvable — treat as WILD, fail-open"* marker. An attached Ignition Energy renders
+  `[0, 0, 0]`, so it handed a typed line **three units able to pay any colour**. The very card this
+  ADR's previous amendment is about was priced `{0}` in hand and wild once attached — the two
+  readings the amendment says agree, disagreeing.
+* **`DRAGON = 9`**, **`RAINBOW = 10`** and **`TEAM_ROCKET = 11`** resolved to Special Energy cards
+  (Boomerang, Neo Upper, Mist) whose own `energyType` is 0, so they counted as neither typed nor
+  wild — nothing. This is also where the coincidence really stops: at **8**, not 9.
+
+**Ruled: the attached leg reads the unit codes directly.** One accessor
+(`board_cards.body_unit_codes`, exposed as `CombatMath.attached_unit_codes` and as
+`BodyView.energy_key`) and one mapping (`combat.unit_colours`), so the typed-affordability family
+cannot disagree about what is on a body:
+
+| unit code | pays | note |
+|---|---|---|
+| `GRASS`..`DRAGON` (1-9) | its own colour | 1-8 were already right, by coincidence; 9 counted as nothing |
+| `COLORLESS` (0) | colourless slots ONLY | **was wild** |
+| `RAINBOW` (10) | any colour — genuinely wild | "Every Types" |
+| `TEAM_ROCKET` (11) | `{PSYCHIC, DARKNESS}` | Team Rocket's Energy (card 15) is a POOL card, absent from the corpus; whether the engine renders code 11 for it is unverified |
+| anything else | wild (fail-OPEN) | a later set's enum member this build predates |
+
+Per-card provisions above are read off the printed provision column of `data/EN_Card_Data.csv`, NOT
+off `CardStat.energyType` — that field is the card's own colour tag and reads 0 for most Special
+Energy whatever it provides, which is exactly how a first pass of this amendment came to claim no
+pool card provides `TEAM_ROCKET`.
+
+The fail-open direction is unchanged for everything genuinely unknown; what changed is that
+COLORLESS stopped being counted as unknown. `attack_type_payable`'s coarse count arithmetic cannot
+express "either of two", so a multi-colour unit joins its `wild_units` there — the exact per-slot
+assignment stays in `reachable_attach` over `_attached_units`, which keeps the full colour set.
+
+**Direction, stated because it cuts both ways.** On MY side this REMOVES an over-credit — a
+colourless unit could price an unpayable line as armed, which is the phantom-lethal error class. On
+the opponent-threat leg it makes a survival read *less* pessimistic, which is normally the one
+direction `incoming` may not move; it is admitted here only because the unit's colour is a FACT the
+engine states, not an uncertainty being resolved optimistically.
+
+**Measured, on the committed corrections corpus:** 32 of 2288 board bodies change their typed
+reading — 25 mine, 7 theirs; 31 of 372 frames touched; by unit code, 83 `COLORLESS` units and 1
+`RAINBOW`.
+
+Both ADR-0072 gates PASS with **zero unruled flips**, re-measured against the REBASED base
+(`d8ef7a0`) rather than the base the work started on — both baselines were re-captured on `main`
+while this branch was open, so the first measurement pointed at a reference that no longer exists.
+Attribution is branch-vs-BARE-main, each gate run twice on the same rebased tree, because a flip
+`main` already carries must not be charged to this change:
+
+* **Decision Gate — byte-identical to bare main.** 0 picks moved.
+* **Discrimination Gate** — the only branch-attributable movement is one frame's ranking, in the
+  expected direction: `81903490|0|decision|49` `correct=[1]`, MISS rank 10/13 -> 7/13, the human's
+  option rising as unpayable competitors are suppressed. Plus three top-tie counts (+1 each) and
+  `avg top-tie` 2.7 -> 2.8. **No `OK -> MISS` flip**; the two held-out `REGRESSED` rows and the one
+  `IMPROVED` row are on bare main too, so none of them belong here.
+
+Neither baseline is re-captured and nothing joins the Held-out Ledger — there is nothing to rule.
+
+**Not converted, and owned: the retreat-discard cost.** `Pilot._retreat_cost_legs` /
+`_retreat_discard_choice` make the same mistake one layer over — they choose which Energy a retreat
+sheds by walking `energies` and then price the shed with `_role_value(eid)`, a CARD-worth lookup on
+a unit code, so ADR-0069 §5c's one-shot premium reads an attached Ignition as worth nothing and a
+Rock Fighting as Basic {F}. It is NOT fixed here, because unlike the affordability family it is not
+a mis-read to correct but a MODEL to choose: a retreat discards Energy CARDS while its cost is paid
+in UNITS, so one Ignition pays three retreat and the greedy per-unit search has no card to charge.
+That is a scoring change with its own design question, so it is recorded here **owed and unowned**
+rather than folded in — the next reader of this amendment should not infer from "one accessor" that
+every consumer of `energies` was converted. Two were not: `_retreat_discard_choice` (which Energy
+goes) and `_retreat_cost_legs` (what it cost).

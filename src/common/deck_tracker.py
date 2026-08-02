@@ -41,16 +41,10 @@ from __future__ import annotations
 
 from collections import Counter
 
+from common.board_cards import body_card_entries, card_id as _card_id
+
 _HAND, _DISCARD, _ACTIVE, _BENCH = "hand", "discard", "active", "bench"
-_STACKS = ("energyCards", "tools", "preEvolution")   # cards attached to / stacked under a board Pokémon
 _AREA_HAND, _AREA_PRIZE = 2, 6                       # cg.api AreaType.HAND / .PRIZE (log zone codes)
-
-
-def _card_id(entry) -> int | None:
-    """The card id of a zone entry (a dict ``{'id': ...}`` or a bare int), or None."""
-    if isinstance(entry, dict):
-        return entry.get("id")
-    return entry if isinstance(entry, int) else None
 
 
 class OwnCardModel:
@@ -171,8 +165,9 @@ class OwnCardModel:
 
     def _visible(self, me: dict, select: dict) -> Counter:
         """MY cards provably OUTSIDE deck+prizes: hand, discard, every board Pokémon (its id +
-        attached Energy/Tools + the cards stacked under it) AND the card whose effect is resolving
-        (``select.effect`` / ``contextCard``).
+        attached Energy/Tools + the cards stacked under it, through the one shared walk in
+        :mod:`common.board_cards`) AND the card whose effect is resolving (``select.effect`` /
+        ``contextCard``).
 
         The resolving-card rider exists for a card that has left the deck but sits in no zone — a
         played Trainer mid-resolution. That premise is FALSE for an **Ability**, whose context card
@@ -200,12 +195,8 @@ class OwnCardModel:
                 add(entry)
         for zone in (_ACTIVE, _BENCH):
             for poke in (me.get(zone) or []):
-                if not poke:
-                    continue
-                add(poke)
-                for group in _STACKS:
-                    for e in (poke.get(group) or []):
-                        add(e)
+                for entry in body_card_entries(poke):   # the ONE walk (common.board_cards)
+                    add(entry)
         for key in ("effect", "contextCard"):
             entry = select.get(key)
             if _card_id(entry) is None:

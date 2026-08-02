@@ -64,6 +64,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
+from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk / the ONE unit read
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
@@ -369,14 +370,21 @@ class BodyView(_Lazily):
 
     @lazy
     def energy_key(self) -> tuple:
-        """The attached Energy as a HASHABLE tuple of card ids — the value-memo key component for
-        every read that depends on what this body is carrying.
+        """The attached Energy as a HASHABLE tuple of ``EnergyType`` codes — the value-memo key
+        component for every read that depends on what this body is carrying, and the field
+        :attr:`energy_count` measures.
 
-        The engine gives them as bare ids, so the coercion below is a cheap guard rather than a
-        real branch: a memo key must never be the thing that raises, and ``len()``-only readers
-        would not have noticed a wrong shape. One accessor, so no memo re-invents it."""
-        return tuple(e.get("id") if isinstance(e, dict) else e
-                     for e in (self.body.get("energies") or ()))
+        **Units, not cards** (Issue #297 corrected this docstring, which claimed card ids). The
+        engine's ``Pokemon.energies`` is ``list[EnergyType]``: what the attached cards PROVIDE, so
+        one Ignition Energy contributes ``(0, 0, 0)`` and one Rock Fighting Energy contributes
+        ``(6,)``. That is the right key for this job — it is what a cost shape is paid with — and
+        the right length for :attr:`energy_count`; the card identities live on ``energyCards`` and
+        are read by :func:`~common.board_cards.body_card_ids`.
+
+        The read itself is :func:`~common.board_cards.body_unit_codes`, shared with
+        :attr:`~common.strategy.combat.CombatMath.attached_unit_codes` — one accessor, so no memo
+        and no affordability leg re-invents it."""
+        return body_unit_codes(self.body)
 
     # `attacks` and `attack_slots` were DELETED by POC-T1 (Issue #260): zero consumers, and both
     # were pass-throughs to card knowledge that has a home already — `stat.attacks` and
@@ -700,34 +708,22 @@ class MySide(_SideBase):
 
     def __init__(self, player: dict, *, combat, deck=None, deck_empty=frozenset(),
                  own_prizes=None, energy_attached=False, supporter_played=False,
-                 more_prizes_than_opp=False, turn=0, probe=None, turn_boosts=(),
-                 deck_known=None):
+                 more_prizes_than_opp=False, turn=0, probe=None, turn_boosts=()):
         super().__init__(player, combat=combat, probe=probe, prefix="mine",
                          turn_boosts=turn_boosts)
         self._deck = tuple(deck or ())
         self._deck_empty = frozenset(deck_empty or ())
+        #: The deck tracker's exact prize multiset once a deck-revealing search has ANCHORED it, and
+        #: ``None`` while it has not — the regime switch every leg of the Count Triple collapses on,
+        #: and the ONE thing that decides whether this side may state its deck exactly
+        #: (:meth:`_deck_facts`). ``None`` and ``{}`` are different answers: None is *"claim
+        #: nothing"*, ``{}`` is an anchor that says *"no prizes left"*.
+        #:
+        #: A ``deck_known=`` constructor argument used to be threaded alongside it, carrying the
+        #: tracker's ``{card id: copies left in my deck}`` because :attr:`unseen_counts` could not
+        #: be trusted to reproduce it (Issue #279). Issue #297 fixed the field it distrusted — see
+        #: :attr:`visible_counts` — so the threading is gone and the model derives the fact.
         self._own_prizes = own_prizes
-        #: ``{card id: copies still in my deck}`` from the deck TRACKER (``deck_tracker``'s
-        #: ``OwnCardModel``: anchored on the first search, exact for the rest of the match), or None
-        #: while the prizes are unresolved.
-        #:
-        #: **Threaded rather than derived from** :attr:`unseen_counts` **because that field is
-        #: currently WRONG**, not because the two are different readings of one fact. The tracker
-        #: and its Pilot-side consumer both walk a body's ``energyCards`` — the attached Energy
-        #: CARDS. :meth:`_count_in_play` walks ``energies``, which `cg/api.py` L345 declares as
-        #: ``list[EnergyType]``: **type codes, not card ids.** It survives only on the coincidence
-        #: that Basic Energy card ids 1-8 equal EnergyType 1-8 (the trap ``pilot_helpers.poke``
-        #: documents in as many words — *"the coincidence fails on the very next Energy a test
-        #: reaches for — Ignition Energy is card id 17"*). On Special Energy it does fail: an
-        #: attached Ignition renders ``[0, 0, 0]`` and leaves card 17 counted as still in the deck;
-        #: an attached Rock Fighting Energy renders ``[6]`` and decrements **Basic {F} Energy**
-        #: instead of itself. Measured on the committed corpus: **19 of 934 bodies** disagree.
-        #:
-        #: That corrupts :attr:`unseen_counts` -> :attr:`deck_energy_types` -> the Attach Budget, so
-        #: fixing it MOVES SCORING and cannot land in a substrate issue whose acceptance is
-        #: byte-identical gates (Issue #279). **Owed with an owner: Issue #297** — fix the walk,
-        #: rule the gate flips, then this argument retires in favour of :attr:`unseen_counts`.
-        self._deck_known = deck_known
         self.energy_attached = bool(energy_attached)
         self.supporter_played = bool(supporter_played)
         self.more_prizes_than_opp = bool(more_prizes_than_opp)
@@ -779,9 +775,19 @@ class MySide(_SideBase):
     @lazy
     def visible_counts(self) -> Counter:
         """My card copies provably OUTSIDE the deck: hand, discard, every board body (with its
-        attached Energy, Tools and stacked pre-evolutions) and any FACE-UP prize. Face-down prizes
-        and the deck itself stay uncounted — precisely the unknowns that keep the sound oracle
-        sound."""
+        attached Energy CARDS, Tools and stacked pre-evolutions) and any FACE-UP prize. Face-down
+        prizes and the deck itself stay uncounted — precisely the unknowns that keep the sound
+        oracle sound.
+
+        The body walk is :func:`~common.board_cards.body_card_ids` — the SAME one
+        :meth:`~common.deck_tracker.OwnCardModel._visible` and ``Pilot._visible_card_counts`` take,
+        which is the whole point (Issue #297). This used to walk its own key list, and that list led
+        with ``energies`` — the Energy UNITS a body's cards PROVIDE, not the cards. It survived on
+        the coincidence that the eight Basic Energy card ids equal their ``EnergyType`` codes and
+        failed on the ninth Energy in the pool: an attached Ignition (card 17) renders ``[0, 0, 0]``
+        and left card 17 counted as still in my deck, an attached Rock Fighting (card 20) renders
+        ``[6]`` and decremented Basic {F} Energy instead of itself. Both errors reached the Attach
+        Budget through :attr:`unseen_counts`, which is why the fix moved scoring."""
         counts: Counter = Counter()
         for zone in ("hand", "discard"):
             for card in (self.player.get(zone) or []):
@@ -791,19 +797,9 @@ class MySide(_SideBase):
             if prize and prize.get("id") is not None:      # revealed; face-down prizes are None
                 counts[prize["id"]] += 1
         for body in self.body_raws:
-            self._count_in_play(body, counts)
+            for cid in body_card_ids(body):
+                counts[cid] += 1
         return counts
-
-    @staticmethod
-    def _count_in_play(body: dict, counts: Counter) -> None:
-        body = body or {}
-        if body.get("id") is not None:
-            counts[body["id"]] += 1
-        for key in ("energies", "energy", "tools", "preEvolution", "preEvolutions"):
-            for card in (body.get(key) or ()):
-                cid = card.get("id") if isinstance(card, dict) else card
-                if cid is not None:
-                    counts[cid] += 1
 
     @lazy
     def unseen_counts(self) -> dict:
@@ -912,9 +908,14 @@ class MySide(_SideBase):
         :func:`~common.strategy.damage_context.damage_context` for why that distinction is
         load-bearing at the oracle.
 
-        Reads the threaded :attr:`_deck_known`; see its note for why the model does not derive it
-        from :attr:`unseen_counts` yet."""
-        known = self._deck_known
+        DERIVED from :attr:`unseen_counts` (Issue #297), which is exactly *decklist − visible −
+        prizes* once :attr:`_own_prizes` anchors — the same expression the deck tracker's Pilot-side
+        consumer computes, now that :attr:`visible_counts` counts attached Energy by CARD. Absent
+        before the anchor, because an unseen copy that could still be sitting in a face-down prize
+        is not a deck claim."""
+        if self._own_prizes is None:               # not anchored -> no exact deck claim
+            return (None, None)
+        known = self.unseen_counts
         if not known:
             return (None, None)
         by_type: Counter = Counter()
@@ -1481,8 +1482,7 @@ class StateModel(_Lazily):
               read=None, brief=None, matchup_plan=None, posture_confidence=0.0,
               favorability=0.5, matchup_coverage=0.0, opponent=None, forward_ids=None,
               charged=None, carried: CarriedState = CarriedState(), probe=None,
-              their_side: TheirSide | None = None, turn_boosts=None,
-              deck_known=None) -> "StateModel":
+              their_side: TheirSide | None = None, turn_boosts=None) -> "StateModel":
         """The snapshot for one decision point — cheap, because it computes nothing yet.
 
         ``their_side`` accepts an already-built :class:`TheirSide` for REUSE, and the caller is
@@ -1497,9 +1497,10 @@ class StateModel(_Lazily):
         zone once the card reaches the discard — so no snapshot could recover it; None models a
         board with no live boosts, which is what a hand-built obs and a stat-blind build both want.
 
-        ``deck_known`` is the deck tracker's exact ``{card id: copies left in my deck}`` once the
-        prizes are anchored, threaded beside ``deck`` / ``own_prizes`` / ``deck_empty`` for the
-        reason recorded on :attr:`MySide._deck_known`.
+        A ``deck_known`` argument used to ride beside ``deck`` / ``own_prizes`` / ``deck_empty``,
+        carrying the deck tracker's exact ``{card id: copies left in my deck}`` because the model
+        could not reproduce it. Issue #297 fixed the read it distrusted, so ``own_prizes`` is the
+        only anchor the model needs — see :meth:`MySide._deck_facts`.
         """
         state = (obs or {}).get("current") or {}
         players = state.get("players") or []
@@ -1513,7 +1514,7 @@ class StateModel(_Lazily):
                       energy_attached=bool(state.get("energyAttached")),
                       supporter_played=bool(state.get("supporterPlayed")),
                       more_prizes_than_opp=(my_prizes > opp_prizes),
-                      turn=state.get("turn", 0), probe=probe, deck_known=deck_known,
+                      turn=state.get("turn", 0), probe=probe,
                       turn_boosts=() if boosts_for is None else tuple(boosts_for(mi)))
         theirs = their_side if their_side is not None else TheirSide(
             opp, combat=combat, read=read, brief=brief, matchup_plan=matchup_plan,

@@ -52,33 +52,51 @@ def attack_opt(attack_id: int) -> dict:
 
 
 def poke(cid: int, *, energy: int = 0, hp: int = 0, max_hp: int = 0,
-         energy_card: int = 0) -> dict:
-    """A Pokémon on the board with `energy` energies attached.
+         energy_card: int = 0, attached_energy=None) -> dict:
+    """A Pokémon on the board with Energy attached, in the engine's REAL two-field shape.
 
-    `energy_card` is the **card id** of the Energy attached `energy` times — NOT an EnergyType code.
-    `energies` is a list of the attached Energy CARD IDS (`combat.attached_type_counts` and
-    `Pilot._relevance_terms` both resolve each entry through the Stat Provider to get its type), so
-    a test wanting a TYPED body passes the Basic Energy's card id here AND registers that card in
-    its `DictCardStatProvider`. Default 0 is the long-standing unresolvable placeholder: it counts
-    as an Energy UNIT but resolves to no type, which is all a count-only test ever needed, and it
-    leaves every existing caller byte-identical.
+    The engine gives a body TWO Energy fields and they are different facts (`cg/api.py`
+    `Pokemon`)::
 
-    Set it when the test needs a typed read: Deny Relevance (armed since Issue #228) asks *which*
-    Energy is doing the work, matching the body's attached types against the attack's `energyTypes`
-    — where the deleted ADR-0062 magnitude oracle only counted Energy. An untyped body reads
-    relevance 0 there, so a Hammer on it is a whiff whatever else the board shows.
+        energies:    list[EnergyType]   the UNITS the attached cards provide
+        energyCards: list[Card]         the attached CARDS themselves
 
-    Never conflate the two numbers even though Basic Energy makes them coincide (Basic {F} Energy is
-    card id 6 and EnergyType.FIGHTING is 6, per `data/EN_Card_Data.csv` and `cg.api`): the coincidence
-    fails on the very next Energy a test reaches for — Ignition Energy is card id 17.
+    Count-shaped reads take `energies` (`len(...)` is the Energy on the body, and a cost shape is
+    paid in units); identity-shaped reads take `energyCards` (`deck_tracker`, `MySide.visible_counts`
+    and `Pilot._visible_card_counts` all derive *decklist − visible*, and a `DISCARD_ENERGY` option's
+    `energyIndex` indexes the cards). Never conflate them even though Basic Energy makes them
+    coincide (Basic {F} Energy is card id 6 and EnergyType.FIGHTING is 6, per `data/EN_Card_Data.csv`
+    and `cg.api`): the coincidence fails on the very next Energy a test reaches for — **Ignition
+    Energy is card id 17 and renders as `[0, 0, 0]`, three COLORLESS units; Rock Fighting Energy is
+    card id 20 and renders as `[6]`**. Believing the coincidence is exactly the defect Issue #297
+    fixed in `MySide._count_in_play`, and this helper could not express the counter-example.
 
-    `energyCards` mirrors `energies` whenever a real card is named, because a `DISCARD_ENERGY`
-    option's `energyIndex` indexes attached CARDS while `energies` counts the units those cards
-    PROVIDE. It stays EMPTY for the untyped default, so no test gains a phantom card-0 attachment in
-    the stores that walk that stack (`deck_tracker`, `opponent_resources`, `option_equivalence`)."""
-    return {"id": cid, "serial": 0, "energies": [energy_card] * energy,
-            "energyCards": [{"id": energy_card, "serial": 0} for _ in range(energy)]
-                           if energy_card else [],
+    Two ways in, and they build the same shape:
+
+    * `energy` / `energy_card` — the uniform sugar: `energy` copies of one card, each providing ONE
+      unit of its own id. Right for the eight Basic Energies, and for the default `energy_card=0`
+      the units are **COLORLESS** and no card is added (so no test gains a phantom card-0
+      attachment). ⚠️ Colourless is a real, specific answer, not a blank: a colourless unit pays a
+      colourless slot and NOTHING else, so `poke(x, energy=3)` against a `{W}{C}{C}` attack is
+      **unpayable** — it is the board two Mist Energy make, not "3 Energy of unspecified type".
+      A test that means "enough Energy to pay THIS attack" must name the colour: pass the Basic
+      Energy's card id and register that card in the test's `DictCardStatProvider`. (Deny Relevance
+      needs the same, for the same reason — it asks *which* Energy is doing the work, matching the
+      body's attached types against the attack's `energyTypes`.)
+    * `attached_energy` — the general form for anything Special: a sequence of `(card_id, units)`
+      pairs, `units` being the EnergyType codes that ONE copy of that card provides. An Ignition
+      plus a Rock Fighting on one body is `[(17, (0, 0, 0)), (20, (6,))]`. Overrides the sugar.
+      Deliberately not spelled `energy_cards` — one character from `energy_card` and a different
+      shape entirely is a typo the reader cannot see.
+    """
+    if attached_energy is None:
+        attached_energy = [(energy_card, (energy_card,))] * max(0, int(energy))
+    units, cards = [], []
+    for card, provides in attached_energy:
+        units.extend(provides)
+        if card:                       # 0 == the card-less placeholder: a unit with no card
+            cards.append({"id": card, "serial": 0})
+    return {"id": cid, "serial": 0, "energies": units, "energyCards": cards,
             "tools": [], "preEvolution": [], "hp": hp, "maxHp": max_hp}
 
 

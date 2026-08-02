@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from itertools import combinations
 
+from common.board_cards import body_unit_codes   # the ONE read of a body's attached Energy UNITS
 from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
 from common.strategy.damage import compute_active_damage, wr_adjust
@@ -61,6 +62,57 @@ _RECUR_RELOAD_CAP = 3      # the max Basic Energy a `discard_energy_recur` line 
 
 
 DISCARD_SUPPLY = "discard"     # the shared capacity group every discard-drawing effect competes in
+
+#: The colours ONE **Energy Unit** already on a body can pay, keyed by the ``EnergyType`` code the
+#: engine puts in ``Pokemon.energies`` (Issue #297). Empty = WILD, and it means "every colour", never
+#: "unknown"; the unknown case is handled by :func:`unit_colours`'s fallback.
+#:
+#: Listed here are the codes that do NOT simply pay their own colour; ``GRASS``..``DRAGON`` (1-9)
+#: fall through to ``{code}``. Codes from `src/cg/api.py` ``EnergyType``; the per-card provisions
+#: below are from the **printed provision column** of `data/EN_Card_Data.csv` — NOT from
+#: ``CardStat.energyType``, which is the card's own colour tag and is 0 for most Special Energy
+#: whatever it provides (Team Rocket's Energy is the trap: ``energyType`` 0, provision
+#: ``{Team Rocket}{Team Rocket}``).
+#:
+#:   * ``COLORLESS = 0`` — a colourless unit pays a colourless slot and NOTHING else. This is the
+#:     one that used to be wrong: an attached Ignition Energy renders ``[0, 0, 0]``, the old read
+#:     resolved code 0 through the card table (no card 0 -> ``None`` -> wild), and three colourless
+#:     units became three blank cheques that could fund a typed ``{F}{F}`` line. `AttachUnit` and
+#:     `_special_energy_groups` both already SAID ``{0}`` — the same Ignition sitting in HAND was
+#:     priced colourless-only — so the attached leg was the one place contradicting the contract.
+#:     Five pool cards provide ``{C}``: Boomerang 9, Mist 11, Enriching 13, Spiky 14, Ignition 17
+#:     (three units).
+#:   * ``RAINBOW = 10`` ("Every Types") — genuinely wild. Three pool cards print the rainbow-class
+#:     ``{A}``: Neo Upper 10 (``{A}{A}``), Legacy 12, Prism 16. The code appears once in the
+#:     committed corpus, on an opponent body.
+#:   * ``TEAM_ROCKET = 11`` ("PSYCHIC and DARKNESS") — pays either of those two. **Team Rocket's
+#:     Energy (card 15) prints ``{Team Rocket}{Team Rocket}``**, so this is a pool card, not a
+#:     hypothetical; it is simply absent from the committed corpus because no shipped agent deck
+#:     runs it. Which code the engine renders for it is therefore UNVERIFIED here — no board we hold
+#:     carries one — so this entry is what happens IF it renders as 11, stated rather than left as a
+#:     silent hole.
+#:
+#: ``DRAGON = 9`` needs no entry — it pays its own colour like 1-8 — and no pool card provides it.
+#: Worth stating anyway, because it is where the old card-id round-trip's coincidence actually
+#: stopped: at **8**, not 9. Card 9 is Boomerang Energy, whose ``energyType`` is 0, so a DRAGON unit
+#: resolved to neither a colour nor "unresolvable" and counted as nothing at all.
+_UNIT_COLOURS = {
+    0: frozenset({0}),
+    10: frozenset(),
+    11: frozenset({5, 7}),
+}
+
+
+def unit_colours(code) -> frozenset:
+    """The colours ONE attached **Energy Unit** can pay, from its ``EnergyType`` code.
+
+    An unrecognised code — a new set's enum member this build predates — falls back to WILD, which
+    is the same fail-OPEN direction :meth:`CombatMath.attack_type_payable` already applies to
+    anything it cannot pin down. Codes 1-9 pay their own colour; see :data:`_UNIT_COLOURS` for the
+    three that do not."""
+    if code in _UNIT_COLOURS:
+        return _UNIT_COLOURS[code]
+    return frozenset({code}) if isinstance(code, int) and 1 <= code <= 9 else frozenset()
 
 
 @dataclass(frozen=True)
@@ -688,16 +740,35 @@ class CombatMath:
         return sum(items[i][1] for i in self.best_ko_subset(items, spread))
 
     # --- typed affordability ---------------------------------------------------------------
+    #: The **Energy Units** attached to a body, as ``EnergyType`` codes — the engine's
+    #: ``Pokemon.energies``, read as what it is (Issue #297).
+    #:
+    #: Bound here so the typed-affordability family has ONE name for it:
+    #: :meth:`attached_type_counts`, :meth:`attack_type_payable` and :meth:`_attached_units` used to
+    #: be three separate walks that each fed the code to :meth:`_card_stat` **as a card id** — an
+    #: identity round-trip that returned the right colour for codes 1-8 purely because the eight
+    #: Basic Energy card ids equal their type codes, and that mis-answered every other code (0
+    #: became "unresolvable, therefore wild"; 9-11 resolved to a Special Energy card whose own
+    #: ``energyType`` is 0 and counted as nothing).
+    #:
+    #: The implementation lives in :mod:`common.board_cards` beside the CARD walk, because the two
+    #: are one distinction and a body-shape read has one home.
+    attached_unit_codes = staticmethod(body_unit_codes)
+
     def attached_type_counts(self, target: dict) -> dict:
-        """{EnergyType: count} of the SPECIFIC (typed Basic) Energy attached to ``target`` — a
-        special/colourless Energy reports type 0 and pays a colourless slot only, so it isn't
-        counted. Fail-open: an unresolvable id is skipped (undercount only relaxes a suppression)."""
+        """{EnergyType: count} of the SPECIFIC-colour Energy attached to ``target``.
+
+        A unit that names exactly one colour (``GRASS``..``DRAGON``) counts under it. A COLORLESS
+        unit does not — it pays a colourless slot only, which no entry here can express. Neither
+        does a multi-colour unit (``RAINBOW``, ``TEAM_ROCKET``): a histogram cannot say "either", so
+        crediting one of its colours would be a claim the unit does not support. Both are visible to
+        the consumers that need them as the residual ``len(energies) - sum(counts.values())``, and
+        exactly in :meth:`_attached_units`, which prices per-slot rather than per-colour."""
         counts: Counter = Counter()
-        for eid in (target.get("energies") or []):
-            est = self._card_stat(eid)
-            t = getattr(est, "energyType", None) if est else None
-            if t not in (None, 0):
-                counts[t] += 1
+        for code in self.attached_unit_codes(target):
+            colours = unit_colours(code)
+            if len(colours) == 1 and 0 not in colours:
+                counts[next(iter(colours))] += 1
         return counts
 
     def attack_type_payable(self, aid, target: dict | None, *, extra_type=None,
@@ -707,9 +778,19 @@ class CombatMath:
         typed Energy, plus ``extra_units`` of ``extra_type`` when that is a specific type — a
         colourless/special extra (type 0/None, e.g. Ignition's {C}{C}{C}) pays colourless slots
         only — plus ``wild_units`` hypothetical attaches of UNKNOWN type, each able to cover any
-        one specific slot (fail-open: the hand/deck might supply the needed type). An attached
-        Energy whose type can't be resolved counts as wild too. True whenever the attack record
-        doesn't resolve (the count check stays the sole authority — never a false suppression)."""
+        one specific slot (fail-open: the hand/deck might supply the needed type). True whenever the
+        attack record doesn't resolve (the count check stays the sole authority — never a false
+        suppression).
+
+        An attached unit that names no single colour joins ``wild_units`` rather than ``attached``,
+        because this coarse arithmetic has no way to say "either of two" — a ``RAINBOW`` really does
+        pay any one slot, a ``TEAM_ROCKET`` pays one of two, and crediting both as one wild unit is
+        the fail-open direction this method already documents. A ``COLORLESS`` unit is NOT among
+        them (Issue #297): it pays colourless slots only, which this method's ``need`` has already
+        filtered out, so it must contribute nothing here. It used to contribute a wild unit — an
+        attached Ignition Energy handed a typed line three units it cannot legally pay with — for no
+        better reason than that ``_card_stat(0)`` is None. The exact per-slot assignment lives in
+        :meth:`reachable_attach` over :meth:`_attached_units`, which keeps the full colour set."""
         ast = self.attack_stat(aid)
         types = getattr(ast, "energyTypes", ()) if ast else ()
         need = Counter(t for t in types if t not in (0, None))
@@ -719,9 +800,8 @@ class CombatMath:
         if extra_type not in (None, 0) and extra_units > 0:
             attached = attached.copy()
             attached[extra_type] += extra_units
-        unresolved = sum(
-            1 for eid in (target.get("energies") or [])
-            if getattr(self._card_stat(eid), "energyType", None) is None)
+        unresolved = sum(1 for code in self.attached_unit_codes(target)
+                         if len(unit_colours(code)) != 1)
         missing = sum(max(0, n - attached.get(t, 0)) for t, n in need.items())
         return missing <= wild_units + unresolved
 
@@ -1030,14 +1110,17 @@ class CombatMath:
         return False
 
     def _attached_units(self, body: dict | None) -> tuple:
-        """The Energy already ON the body, as Budget units — a typed Basic keeps its colour, a
-        colourless/special one pays colourless slots only, an unresolvable card is wild (fail-open,
-        exactly as :meth:`attack_type_payable` treats it)."""
-        units = []
-        for eid in ((body or {}).get("energies") or ()):
-            etype = getattr(self._card_stat(eid), "energyType", None)
-            units.append(AttachUnit(frozenset() if etype is None else frozenset({etype})))
-        return tuple(units)
+        """The Energy already ON the body, as Budget units — one per **Energy Unit**, carrying the
+        colours that unit can pay (:func:`unit_colours`).
+
+        A typed Basic keeps its colour, a colourless one pays colourless slots only, a RAINBOW or an
+        unrecognised code is wild (fail-open, exactly as :meth:`attack_type_payable` treats it).
+        This is the read `_special_energy_groups` says it mirrors — *"a colourless provision carries
+        ``{0}`` and pays colourless slots only"* — and until Issue #297 it did not: the colour came
+        from feeding an ``EnergyType`` code to the card table, so the one Energy the contract names
+        got ``frozenset()`` (wild) attached and ``{0}`` in hand."""
+        return tuple(AttachUnit(unit_colours(code))
+                     for code in self.attached_unit_codes(body))
 
     def _attack_slots(self, attack_id) -> tuple:
         """An attack's per-slot cost as EnergyType codes; () when no record resolves OR the cost is

@@ -73,8 +73,19 @@ def _combat():
                       effects=CardEffects(_CLAUSES))
 
 
-def _poke(cid, *, hp, energies=(), serial=1, damage=0):
-    return {"id": cid, "hp": hp - damage, "energies": list(energies), "serial": serial}
+def _poke(cid, *, hp, energies=(), attached_energy=None, serial=1, damage=0):
+    """A board body in the engine's REAL two-field Energy shape (`cg/api.py` `Pokemon`):
+    ``energies`` are the ``EnergyType`` UNITS the attached cards provide, ``energyCards`` are the
+    CARDS. `energies=` here stays the Basic-Energy sugar — a list of Basic Energy CARD ids, each
+    providing one unit of its own id, which is right only because card 1-8 == EnergyType 1-8. Any
+    Special Energy must go through `attached_energy=`, a sequence of ``(card_id, units)`` pairs:
+    Ignition Energy is card 17 providing ``(0, 0, 0)``, Rock Fighting is card 20 providing ``(6,)``
+    (Issue #297)."""
+    if attached_energy is None:
+        attached_energy = [(c, (c,)) for c in energies]
+    return {"id": cid, "hp": hp - damage, "serial": serial,
+            "energies": [u for _, units in attached_energy for u in units],
+            "energyCards": [{"id": c, "serial": 0} for c, _ in attached_energy if c]}
 
 
 def _player(*, active=None, bench=(), hand=(), discard=(), prize=4, hand_count=None,
