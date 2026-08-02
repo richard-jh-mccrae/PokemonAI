@@ -367,6 +367,24 @@ comparator) and ADR-0032 (Effect-Clause tier).
   both sites" claim is retired, deliberately: the two sites ask different questions (one card's floor
   vs the hand's joint price) and shared an answer.
 
+- **WP-N10 — the pitch term reaches the assignment that decides (2026-08-02, ADR-0106,
+  Issue #294).** WP-N3's own build note above says the residual-worth tiebreak makes *"the
+  deploy-dead Cinderace shed before a live spare"*; it never did. `deploy` sees dead evolutions,
+  dead fetchers and need-met tutors, and none of the five expired-role facts `_apply_pitch_terms`
+  derives — so the dead-opener case fell to the menu index and the spent burst (`83454549-36`) was
+  KEPT, because residual worth reads the catalog tier a corpse still carries (Ignition 30 vs a live
+  spare's 0). `needs.cheapest_removal`'s key is now
+  `(removal_score, −Σ deadness, Σ residual_worth, indices)`. Deadness RANKS, it does not PRICE: for
+  a dead card `P(met | keep) == P(met | pitch) == 0`, and this ADR's own `keep_cost = Worth × Odds ×
+  Gates` is a product of clamped non-negative factors — so the "a dead card's keep is negative"
+  reading would have to invent its magnitude, which is the rung-fitting ADR-0092 deletes. The row now
+  carries `deadness` (a categorical bit over the five expired-role facts, which RANKS) beside the
+  unchanged `pitch` COUNT (`+ fuel`, which gates latent worth and the junk band); ranking on `pitch`
+  double-prices fuel and shed an attack's only funder on `83966336|0|decision|27`. Both legs are
+  spelled once, in `Pilot._removal_ranking_legs`, because the discard decider and the fetch
+  doctrine's shed predictor must rank identically. Both gates byte-identical to the pre-change tree;
+  zero corpus frames moved.
+
 **Investigated and found already-subsumed — the fetch grab/pitch shadow (2026-07-18).** Unlike the
 gamble's binary veto and the refresh's flat SHED, the discard/pitch valuation is a mature,
 correction-tuned 12-rung ladder (`doctrine_fetch.py` `_DISCARD` rungs) that ALREADY prices roles

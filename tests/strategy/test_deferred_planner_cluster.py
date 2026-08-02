@@ -306,8 +306,11 @@ def test_energy_chain_line_appears_only_with_the_flag_on():
 #
 # Rare Candy (id 1079) is NOT a tutor: the Stage-2 must ALREADY be in hand. Legal line: play Rare Candy →
 # choose an in-play Basic (not appearThisTurn, not turn ≤ 1) → put an in-hand Stage-2 whose chain roots at
-# that Basic onto it, SKIPPING the Stage-1 → attach → KO. NONE of the 3 agent decks run Rare Candy today, so
-# the branch is inert for them — forward-looking generality, exercised only here.
+# that Basic onto it, SKIPPING the Stage-1 → attach → KO.
+#
+# These cover the MECHANISM on a synthetic pool. `grimmsnarl_ex` runs Rare Candy and a real
+# Basic→Stage-1→Stage-2 line, so the branch is no longer forward-looking generality — the real-deck
+# coverage lives in `tests/agents/test_grimmsnarl_ex_triggers.py` (Issue #288 follow-up).
 
 _RC_BASIC, _RC_MID, _RC_TOP, _RC_AID = 210, 211, 212, 9903
 _RARE_CANDY_ID = 1079        # Rare Candy (Item, SVI 191), carried locally now that the planner
@@ -342,7 +345,7 @@ def _rare_candy_call(pilot, *, turn=2, appear_this_turn=False, hand=(_RC_TOP,), 
                                           {"id": 320, "hp": 190}, {}, True)
 
 
-def test_is_rare_candy_matches_by_id():
+def test_is_rare_candy_matches_by_its_function_tag():
     pilot = _rare_candy_pilot()
     obs = make_select([opt(PLAY, index=0)], current=state(hand=[_RARE_CANDY_ID]))
     assert pilot._is_rare_candy(obs, obs["select"], obs["select"]["option"][0]) is True

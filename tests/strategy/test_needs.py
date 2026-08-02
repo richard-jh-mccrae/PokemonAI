@@ -256,6 +256,64 @@ def test_cheapest_removal_ties_break_by_residual_worth():
 
 
 @pytest.mark.req("REQ-NEEDS-0004")
+def test_deadness_ranks_an_exact_tie_the_index_used_to_decide():
+    """ADR-0106 / Issue #294, the seam-D Finding-3 case: a role-less spare and a card whose role has
+    EXPIRED both cover nothing, so both price 0 and both carry residual worth 0. The equation is
+    right to call them equal — `P(met | keep) == P(met | pitch) == 0` for each — so the preference
+    "shed the dead one" rides the ranking key, and the menu index stops deciding."""
+    slots = [needs.Slot("line", 20.0, 99, "s")]
+    elig = [set(), set(), {0}]                          # spare, dead card, the line's own supplier
+    resupply = [0.0]
+    intrinsics = [0.0] * 3
+    assert needs.cheapest_removal(slots, elig, resupply, intrinsics, 1) == [0]   # index fallback
+    picks = needs.cheapest_removal(slots, elig, resupply, intrinsics, 1, deadness=[0, 1, 0])
+    assert picks == [1]
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_deadness_outranks_residual_worth_which_reads_a_corpse_as_valuable():
+    """`83454549-36`: residual worth is a card's CATALOG tier, which a dead card still carries — a
+    spent burst Energy prices 30 against a role-less spare's 0, so worth-first sheds the LIVE spare
+    and keeps the corpse. Deadness therefore sits ABOVE residual worth in the key; the worth leg
+    still decides where nothing is dead (`test_cheapest_removal_ties_break_by_residual_worth`)."""
+    elig = [set(), set()]                               # spare, spent burst — neither covers a slot
+    args = ([], elig, [], [0.0, 0.0], 1)
+    assert needs.cheapest_removal(*args, tiebreak=[0.0, 30.0]) == [0]            # worth alone: WRONG
+    assert needs.cheapest_removal(*args, deadness=[0, 1], tiebreak=[0.0, 30.0]) == [1]
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_deadness_is_ordering_only_and_never_beats_a_real_cost():
+    """The property that lets a CATEGORICAL fact rank without being handed a magnitude: the deadness
+    leg is consulted only where `removal_score` TIES, so no amount of deadness can make a removal
+    look cheaper than one that genuinely costs less. This is what a signed credit inside the score
+    could not promise without a tuned constant — and the constant is what ADR-0092 deletes."""
+    slots = [needs.Slot("line", 20.0, 99, "s")]
+    elig = [{0}, set()]                                 # the dead card is the line's ONLY supplier
+    picks = needs.cheapest_removal(slots, elig, [0.0], [0.0, 0.0], 1, deadness=[9, 0])
+    assert picks == [1]                                 # the 20-point loss still outranks deadness
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
+def test_a_fuel_card_that_also_funds_the_attack_is_not_dead_weight():
+    """`83966336|0|decision|27`, the defect found while building ADR-0106. A fuel Energy that ALSO
+    covers the only `fund_attack` slot nets to a tie — the pitch gain and the keep loss cancel — so
+    whatever ranks that tie decides it. Passing the whole `pitch` count (which carries the fuel zone
+    sign) prices fuel TWICE and sheds the attack's only funder; the deadness leg carries the five
+    expired-role bits only, so the tie falls through to residual worth and the Energy survives."""
+    slots = [needs.fuel_slot("fuel", value=8.0), needs.Slot("fund_attack", 8.0, 0, "unit0")]
+    elig = [{0, 1}, set()]                              # the Energy (fuel AND funder), a role-less spare
+    resupply, intrinsics = [0.0, 0.0], [0.0, 0.0]
+    worth = [8.0, 0.0]                                  # ENERGY_TIER vs a role-less spare
+    assert needs.removal_score(slots, elig, resupply, intrinsics, [0]) == 0.0
+    assert needs.removal_score(slots, elig, resupply, intrinsics, [1]) == 0.0    # a genuine tie
+    assert needs.cheapest_removal(slots, elig, resupply, intrinsics, 1,
+                                  deadness=[0, 0], tiebreak=worth) == [1]
+    assert needs.cheapest_removal(slots, elig, resupply, intrinsics, 1,          # the bug: fuel in
+                                  deadness=[1, 0], tiebreak=worth) == [0]        # the deadness leg
+
+
+@pytest.mark.req("REQ-NEEDS-0004")
 def test_fuel_slots_ride_the_pitch_side_not_the_keep_side():
     """A supplied_by_pitch slot never enters keep coverage; it feeds `pitch_gain` (pitching the
     matching card is progress) and `cheapest_removal` prefers pitching the fuel card among

@@ -562,7 +562,7 @@ def pitch_gain(slots, eligibility, index: int) -> float:
 
 
 def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
-                     tiebreak=None) -> list:
+                     deadness=None, tiebreak=None) -> list:
     """The discard decider's objective (WP-N3/N4 consume this): the ``picks``-subset with the
     lowest removal score, where
 
@@ -573,18 +573,40 @@ def cheapest_removal(slots, eligibility, resupply, intrinsics, picks: int,
     minus what pitching actively gains (fuel). Brute-force over C(n, picks) (n ≤ ~10 ⇒ ≤ ~250
     subsets — trivial).
 
-    ``tiebreak`` (optional, per-card): among EQUAL-score removals the set with the lower Σ tiebreak
-    sheds first — the resolver passes residual worth (worth × deploy), so a worth-10 redundancy is
-    preserved over a worth-8 one and a deploy-dead card sheds before either (the 83967840-54 corpus
-    ruling, v1's worth tie-break re-derived). Final tie → lower indices; returns a sorted list."""
+    The ranking key is ``(score, −Σ deadness, Σ tiebreak, indices)`` — the score first, then two
+    per-card legs that discriminate only where it TIES, then the index. Both legs are optional and
+    both are ordering-only: neither can make a removal look cheaper than one that genuinely costs
+    less, which is the property that lets a CATEGORICAL fact rank without being handed a magnitude.
+
+    ``deadness`` (per-card, ADR-0106): a CATEGORICAL 0/1 — a card whose role has EXPIRED (a
+    spent `opener`, a burst whose Active is already powered, a tutor whose target is in hand, a
+    stranded evolution, declared fodder) is actively best gone. Keep-cost cannot express that:
+    `keep_cost = Worth × Odds × Gates` is a product of non-negative factors, and for a dead card
+    `P(met | keep) = P(met | pitch) = 0` — so the equation's honest answer is exactly the 0 a
+    worthless live spare also prices. "Shed the dead one" is therefore a preference ORDER over cards
+    the equation prices EQUAL, and it rides the key rather than inventing a term, which is the same
+    shape as ADR-0103 one layer up (an exact tie stopped being resolved by menu position). Summing
+    it across the SET is a different and sound claim: shedding two dead cards beats shedding one.
+
+    ``tiebreak`` (per-card, below deadness): among still-equal removals the set with the lower
+    Σ tiebreak sheds first — the resolver passes residual worth (worth × deploy), so a worth-10
+    redundancy is preserved over a worth-8 one (the 83967840-54 corpus ruling, v1's worth tie-break
+    re-derived). It sits BELOW deadness because residual worth reads a card's CATALOG tier, which a
+    dead card still carries: a spent Ignition prices worth 30 against a role-less spare's 0, so
+    worth-first sheds the live spare and keeps the corpse (`83454549-36`, the shipped defect).
+
+    Final tie → lower indices; returns a sorted list."""
     from itertools import combinations
     n = len(eligibility)
     k = max(0, min(int(picks), n))
     tb = list(tiebreak) if tiebreak is not None else [0.0] * n
+    dead = list(deadness) if deadness is not None else [0.0] * n
     best_set, best_key = None, None
     for combo in combinations(range(n), k):
         score = removal_score(slots, eligibility, resupply, intrinsics, combo)
-        key = (score, sum(tb[i] for i in combo if i < len(tb)))
+        key = (score,
+               -sum(dead[i] for i in combo if i < len(dead)),
+               sum(tb[i] for i in combo if i < len(tb)))
         if best_key is None or key < best_key:
             best_set, best_key = combo, key
     return sorted(best_set or ())
