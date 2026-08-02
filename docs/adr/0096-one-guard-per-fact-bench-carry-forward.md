@@ -122,7 +122,7 @@ Issue #231 is closed as **ruled-keep-provisional** on this ADR.
 `keep-a-bench` (+60) is **deleted**, and `baseline_bench.py` with it — that rung was the module's
 only remaining member, so the BENCH cluster is gone rather than left holding an empty tuple. Deletion
 was measured, as decision 2 required: **both gates PASS with the rung removed** (Decision Gate
-250/346, unchanged; Discrimination Gate 182/248 → 183/248), and the unscoped `when()` was probed in
+250/346, unchanged; Discrimination Gate one frame IMPROVED), and the unscoped `when()` was probed in
 the `_SETUP_BENCH` context decision 9 excludes the filter from — no frame moved there either. One
 board fact, two mechanisms remain, on the schedule decision 1 set: `_empty_bench_forced`
 (provisional, dated retirement test) and `_predicted_loss`.

@@ -997,7 +997,9 @@ what the seam was never asked.
 ```
 Decision Gate        PASS   250/346 agree, unchanged; 0 unruled, 2 held out
                      (owners Issue #262, Issue #272)
-Discrimination Gate  PASS   182/248 -> 183/248; IMPROVED 86090164|1|turn|6 MISS -> OK; 0 unruled
+Discrimination Gate  PASS   IMPROVED 86090164|1|turn|6 MISS -> OK; 0 unruled
+                     (agree reads 182 -> 181/248 after the rebase: item 2c's two held-out
+                      frames, owner Issue #262, arrived on main and are not this change)
 hot path             13.2 / 12.1 /  9.8 ms per decision on 83661652-40 / -44 / 85709280-51
                      against 14.7 / 13.4 / 12.1 ms before — the harvest route did NOT cost time
 ```
