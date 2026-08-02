@@ -11,7 +11,43 @@ Every time — not just the first PR for a branch. Fetch and rebase the branch o
 `main`, resolving any conflicts that surface, before pushing. Do not push straight from a stale
 base.
 
-## 2. Finalize any temp-named ADRs
+## 2. Re-check the premise against the rebased base
+
+**You have just fetched the freshest possible view of `main`. Before pushing, confirm the work is
+still needed.** `/implement` step 0 checked the premise when the build STARTED; a long build outruns
+that check, and a branch whose reason has evaporated must not become a PR.
+
+1. **Re-state the issue's central factual claim** — the thing that had to be true for this work to be
+   worth doing.
+2. **Check it against the base you just rebased onto**, not the one you branched from:
+   `git log --oneline <branch-point>..origin/main -- <the files you touched>` , plus
+   `gh pr list --state open` / `--state merged` over the same area. Read the commit MESSAGES: a fix
+   for your bug will say so.
+3. **Act on the answer:**
+   - *holds* → continue to step 3;
+   - *already fixed on `main`* → **close the branch, do not open a PR.** Post the comparison on the
+     issue and close it as superseded rather than completed;
+   - *partially overlapping* → reconcile before pushing, and say in the PR body what you kept, what
+     you dropped, and why. A rebase that merely resolves the text conflict silently re-litigates
+     someone else's merged decision.
+
+**This is a DIFFERENT failure from the one `## Prior art` catches** (`docs/agents/issue-tracker.md`).
+That one is *"it already existed when the issue was filed"* — a filing-time check catches it. This is
+*"it was fixed while you were building"*, which no filing-time check can see because it had not
+happened yet.
+
+**The incident, so the step is not abstract.** Issue #326 (a flaky triggered-Ability probe) was
+filed, built, reviewed and measured over several hours. In that window PR #327 and a follow-up landed
+a fix for the same flake — with a better-measured root cause, two orders of magnitude more evidence,
+and a mechanism that READ the very field the branch deleted. The branch was fully green and would
+have broken `main`. Nothing surfaced it until the rebase threw a text conflict, which is late and is
+luck: had the two changes touched adjacent lines instead of the same ones, it would have merged
+clean. Cost: a full build, plus a PR closed unmerged.
+
+Note the symmetry with step 3's own rule — *"a number claimed by an open PR is taken, even though it
+is not on `main` yet"*. The same is true of a FIX claimed by an open PR. Check both.
+
+## 3. Finalize any temp-named ADRs
 
 `/grill-with-docs` authors new ADRs as `docs/adr/temp-issue<N>-<slug>.md`, tagged `ADR-TEMP-<N>` in
 prose, so they can't collide with another branch's ADR before merge (see that skill and
@@ -50,11 +86,11 @@ and repeat steps 2–8. **A number claimed by an open PR is taken**, even though
 yet and a disk scan will not see it — check the open PRs before settling on a number, and skip past
 anything in flight rather than picking a number you already know will collide.
 
-## 3. Push
+## 4. Push
 
 `git push -u origin <branch-name>`.
 
-## 4. Create or update the PR
+## 5. Create or update the PR
 
 Use `.github/pull_request_template.md` as the body layout:
 
@@ -67,7 +103,7 @@ Use `.github/pull_request_template.md` as the body layout:
 Use the GitHub MCP tools (`mcp__github__create_pull_request`) or `gh pr create`, whichever this
 session has available.
 
-## 5. Auto-subscribe, 5-minute check-in cadence
+## 6. Auto-subscribe, 5-minute check-in cadence
 
 As soon as the PR is opened, call `subscribe_pr_activity` immediately — don't ask first. Use
 `send_later` for the self check-in fallback at a 5-minute cadence instead of the default ~1 hour.
