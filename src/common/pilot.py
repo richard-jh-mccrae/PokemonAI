@@ -3529,9 +3529,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return self._stranded_cache
         from common import playability
         deck_ids = set(self.deck or ())
-        candy = any(playability.RARE_CANDY_TAG in set(self.functions.tags(cid))
-                    for cid in deck_ids) if self.functions else False
-        zones = playability.zones(self.stats, deck_ids=deck_ids, rare_candy_reachable=candy)
+        zones = playability.zones(self.stats, deck_ids=deck_ids,
+                                  rare_candy_reachable=self._rare_candy_reachable(deck_ids))
         self._stranded_cache = frozenset(
             cid for cid in deck_ids
             if (st := self.stats.get(cid)) is not None and st.evolvesFrom
@@ -4024,15 +4023,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         unplayable = self._unplayable_rows(obs, board, rows)
 
         def _emit(slot, members) -> None:
-            live = [m for m in members if m not in unplayable]
-            if not live:
+            suppliers = _playable_only(members)
+            if not suppliers:
                 return                             # a need only its dead cards could fill is no need
             j = len(slots)
             slots.append(slot)
-            for m in live:
+            for m in suppliers:
                 elig[m].add(j)
 
-        def _live(ks) -> list:
+        def _playable_only(ks) -> list:
             """The candidate rows of a leg, minus the unplayable ones. Applied to EVERY leg's
             candidate list rather than only to `_emit`, because two legs read their SLOT VALUE off
             the candidates: `draw_engine`'s band is the engine-BODY tier if any candidate is an
@@ -4094,7 +4093,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     _emit(s, members)
             if cid in getattr(board, "deploy_now_ids", frozenset()):
                 _emit(needs.deploy_now_slot(f"deploy:{cid}", value=self._role_value(cid)), members)
-        tutors = _live([k for k, r in enumerate(rows)
+        tutors = _playable_only([k for k, r in enumerate(rows)
                         if r.get("deploy", 1.0) > 0
                         and ("tutor" in self._roles_of(r["cid"])
                              or ({"rush_evolve", "tutor_mega"} & _tags(r["cid"])))])
@@ -4110,7 +4109,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             and (_ENGINE_KEEP_TAGS & _tags(cid))
                             and "hand_disruption" not in _tags(cid)))
 
-        engines = _live([k for k, r in enumerate(rows) if _engine(r["cid"])])
+        engines = _playable_only([k for k, r in enumerate(rows) if _engine(r["cid"])])
         if engines:
             online = sum(1 for pid in board.in_play_ids if "engine" in self._roles_of(pid))
             # The band reads off the eligible suppliers: an engine BODY need is the engine-role
@@ -4125,7 +4124,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             ast = self.stats.get(active.get("id")) if self.stats else None
             remaining = max(0, (getattr(ast, "maxDamageCost", 0) or 0)
                             - len(active.get("energies") or []))
-            funders = _live([k for k, r in enumerate(rows)
+            funders = _playable_only([k for k, r in enumerate(rows)
                              if getattr(self.stats.get(r["cid"]) if self.stats else None,
                                         "is_basic_energy", False)
                              or "discard_eot" in _tags(r["cid"])])
@@ -4141,7 +4140,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # and is not worth a card to save. NOT the flat clutch_heal tier, NOT the swap's catalog
             # worth. No slot when the active is worthless (`_role_value` 0 → `answer_doom_slot`
             # emits value 0, priced out by the assignment).
-            answers = _live([k for k, r in enumerate(rows)
+            answers = _playable_only([k for k, r in enumerate(rows)
                              if {"clutch_heal", "switch"} & _tags(r["cid"])])
             preserved = self._role_value(active.get("id")) if active is not None else 0.0
             if answers and preserved > 0:
@@ -4173,7 +4172,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         gust_tags = {src for src, kinds in needs.SUPPLIES.items() if "gust_target" in kinds}
         if self.gust_target_slots:
             deny_tags = deny_tags - gust_tags
-        deniers = _live([k for k, r in enumerate(rows) if deny_tags & _tags(r["cid"])])
+        deniers = _playable_only([k for k, r in enumerate(rows) if deny_tags & _tags(r["cid"])])
         deny_tier = TAG_TIER["gust"]
         # ARMED (ADR-0080, Issue #187): the keep price stops being the FLAT disruption tier and becomes
         # `tier x relevance(this body)` — a Hammer is worth keeping in proportion to how much the
@@ -4214,7 +4213,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # opponent's Active is never a legal gust target, so it never opens a slot here (unlike deny,
         # which strips Energy off either area).
         if self.gust_target_slots:
-            gusters = _live([k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])])
+            gusters = _playable_only([k for k, r in enumerate(rows) if gust_tags & _tags(r["cid"])])
             if gusters:
                 # ONE ladder, `_deny_rows` — this used to open-code the cache-or-compute walk, a
                 # second spelling of the same three lines. Issue #228 extracted
@@ -4228,7 +4227,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         _emit(needs.gust_target_slot(
                             f"gust_target:{r['area']}{r['bi']}:{r['id']}", value=r["value"]),
                             gusters)
-        fuels = _live([k for k, r in enumerate(rows) if r.get("fuel")])
+        fuels = _playable_only([k for k, r in enumerate(rows) if r.get("fuel")])
         if fuels:
             _emit(needs.fuel_slot("fuel", value=ENERGY_TIER), fuels)
         # GENERAL-WORTH slots (WP-N5): a held card with role worth that fills no SPECIFIC need still
@@ -4289,14 +4288,34 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         One spelling for what was three identical five-line walks — `_discard_equation_rows`,
         `_needs_hand_rows` and `_deploy_supplier_rows` each carried their own copy, and the
         playability gate (Issue #288) would have made it four. Every deck-availability question in
-        the keep-value family therefore answers off the same counts by construction."""
+        the keep-value family therefore answers off the same counts by construction.
+
+        The pre-anchor fallback is memoised on the identity of ``(me, board)`` so repeat callers get
+        back the SAME dict, not an equal one. That is not micro-optimisation: `_playability_zones`
+        caches on its inputs' identity, and a freshly built counts dict per caller would miss that
+        cache every time — the two row builders and the gate would each rebuild the zone sets over
+        the same board. Strong references, never ``id()`` (a collected object's address is reused)."""
         counts = board.deck_known_counts
         if counts:
             return counts
+        cached = getattr(self, "_unseen_counts_cache", None)
+        if cached is not None and cached[0] is me and cached[1] is board:
+            return cached[2]
         from collections import Counter
         unseen = Counter(self.deck)
         unseen.subtract(self._visible_card_counts(me))
-        return {cid: n for cid, n in unseen.items() if n > 0}
+        counts = {cid: n for cid, n in unseen.items() if n > 0}
+        self._unseen_counts_cache = (me, board, counts)
+        return counts
+
+    def _rare_candy_reachable(self, ids) -> bool | None:
+        """Does any card in ``ids`` carry the `rare_candy` Function Tag? ``None`` when there is no
+        tag table to ask — the tri-state `playability.Zones.rare_candy` documents, and the reason
+        this is a method rather than an inline `any(...)` at each of its two call sites."""
+        if not self.functions:
+            return None
+        from common import playability
+        return any(playability.RARE_CANDY_TAG in set(self.functions.tags(cid)) for cid in ids)
 
     def _playability_zones(self, board: Board, counts: dict):
         """The zone reads `common.playability` walks: what is IN PLAY (the walk grounds out there),
@@ -4305,8 +4324,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Rare Candy is found by its `rare_candy` Function Tag rather than by card id — ADR-0006's
         rule, and the reason `planner._is_rare_candy` now reads the same tag instead of a private
-        constant. With no tag table the escape never fires; that is the only fail-CLOSED step in the
-        chain, and it is contained by `_unplayable_rows` refusing to run at all in that case.
+        constant. With no tag table the read is ``None``, not ``False``: `Zones.rare_candy` is
+        tri-state precisely so a missing table cannot be mistaken for a missing Rare Candy.
 
         Memoised for the decision on the IDENTITY of its two inputs: `_deploy_odds` asks per ROW, so
         a ten-card hand rebuilt these frozensets ten times over the same board. The cache holds
@@ -4319,23 +4338,27 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return cached[2]
         hand_ids = frozenset(getattr(board, "hand_ids", None) or ())
         deck_ids = frozenset(cid for cid, n in (counts or {}).items() if n > 0)
-        candy = any(playability.RARE_CANDY_TAG in set(self.functions.tags(cid))
-                    for cid in (hand_ids | deck_ids)) if self.functions else False
         zones = playability.zones(self.stats, hand_ids=hand_ids, deck_ids=deck_ids,
                                   in_play_ids=getattr(board, "in_play_ids", None) or (),
-                                  rare_candy_reachable=candy)
+                                  rare_candy_reachable=self._rare_candy_reachable(hand_ids | deck_ids))
         self._playability_zone_cache = (board, counts, zones)
         return zones
 
     def _unplayable_rows(self, obs: dict, board: Board, rows: list) -> frozenset:
         """Row indices whose card can NEVER be played (ADR-0103). The `_resolve_needs` gate.
 
-        Fails OPEN as a whole, not just per card: without a stat provider or a Function Tag table
-        there is no evidence, and a gate that strips eligibility on missing evidence would shed live
-        cards — the fail direction the whole keep-value family forbids. Deck-availability comes from
-        the ONE `_unseen_deck_counts` read, so the gate cannot disagree with the `deploy` factor,
-        which resolves the same oracle over the same counts."""
-        if not (self.stats and self.functions) or not rows:
+        Fails OPEN as a whole without a stat provider: with no card facts there is no evidence, and a
+        gate that strips eligibility on missing evidence would shed live cards — the fail direction
+        the whole keep-value family forbids. A missing Function Tag table is NOT such a case and does
+        not disable the gate; the ``evolvesFrom`` question needs no tags, and the one part that does
+        (the Rare Candy escape) fails open by itself through `Zones.rare_candy`'s ``None``. Putting
+        that epistemic in the oracle rather than here is what keeps this gate and
+        `_stranded_evolution_set` — the same oracle's other caller — from failing in opposite
+        directions on the same missing table.
+
+        Deck-availability comes from the ONE `_unseen_deck_counts` read, so the gate cannot disagree
+        with the `deploy` factor, which resolves the same oracle over the same counts."""
+        if not self.stats or not rows:
             return frozenset()
         from common import playability
         counts = self._unseen_deck_counts(self._my_player(obs), board)

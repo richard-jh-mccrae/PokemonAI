@@ -26,7 +26,7 @@ _mod = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_mod)
 STRATEGY = _mod.STRATEGY
 
-STARYU, MEGA_STARMIE, CINDERACE = 1030, 1031, 666
+STARYU, MEGA_STARMIE, CINDERACE, RABOOT = 1030, 1031, 666, 665
 WATER, FIRE, LIGHTNING = 3, 2, 4
 IS_FIRST = 41  # SelectContext.IS_FIRST -- "Would you like to go first?" (cg/api.py)
 
@@ -36,6 +36,10 @@ _STATS = DictCardStatProvider({
     # Stage 2, evolvesFrom Raboot (none in deck -> stranded, dead in hand).
     CINDERACE: CardStat(CINDERACE, energyType=FIRE, weakness=WATER, hp=160,
                         name="Cinderace", evolvesFrom="Raboot"),
+    # Raboot is PRINTED but never on the deck list — which is what strands the Cinderace.
+    # "Stranded" is a claim about the DECK; `common.playability` (ADR-0103) fails OPEN on a previous
+    # stage the pool holds no printing of, because that is unreadable data, not a dead card.
+    RABOOT: CardStat(RABOOT, energyType=FIRE, weakness=WATER, hp=90, name="Raboot"),
 })
 _TAGS = CardFunctions({CINDERACE: ["opener"]})
 

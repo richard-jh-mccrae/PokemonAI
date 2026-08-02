@@ -7,8 +7,11 @@ POC).
 **Applies [ADR-0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)** (the
 deadline gate is a factor of the one equation) and **[ADR-0006](0006-function-tags-single-source-of-structural-facts.md)**
 (a behavioural claim about a card is a Function Tag).
-**Narrows nothing and supersedes nothing** — `gate_library.deploy_odds` keeps its job, it just stops
-answering a question it was never shaped to answer.
+**Amends [ADR-0065](0065-card-worth-is-one-marginal-oracle-with-a-closure-graph-backend.md)** — its
+Stage-1 evolution gate is described there as *"a bare base by `evolvesFrom` name in play / hand / the
+deck counts"*, which this replaces; the equation, the factor's meaning and its fail-open direction are
+untouched, so `gate_library.deploy_odds` keeps its job and only stops answering a question it was
+never shaped to answer. **Supersedes nothing.**
 
 **Context issues:** Issue #288 (this build), Issue #278 (the T3.5 parent track), Issue #262 (T3, whose
 `state_value.hand` term is the second consumer this fix serves in advance), Issue #149 (which
@@ -79,9 +82,16 @@ worse error than the one being fixed, and a direct violation of decision 4.
 card the pool holds no printing of, makes no claim and keeps everything. Only a base **provably**
 absent from all three zones takes anything away, and the deck zone is the sound *"not provably gone"*
 read (`_unseen_deck_counts`), never *"seen"* — a base in the discard with a copy still unseen in deck
-or a face-down prize is still reachable. The gate also fails open **as a whole**: with no stat
-provider or no Function Tag table it does not run at all, because a gate that strips eligibility on
-missing evidence sheds live cards, which is the fail direction the whole keep-value family forbids.
+or a face-down prize is still reachable. The gate also fails open **as a whole** with no stat
+provider: a gate that strips eligibility on missing evidence sheds live cards, which is the fail
+direction the whole keep-value family forbids.
+
+A missing **Function Tag table** is the same failure wearing a different hat, and it is handled in the
+oracle rather than at the call sites. `Zones.rare_candy` is TRI-STATE — `True` reachable, `False`
+provably none, `None` *the caller could not tell* — and `None` keeps the Rare Candy escape open. Read
+as `False` it would let the gate call a Stage 2 dead on the strength of a fact it never checked; held
+at the call site it would let this gate and `_stranded_evolution_set`, the same oracle's other caller,
+fail in **opposite directions** on the same missing table. One epistemic, one place.
 
 **5. One oracle, four callers — `common.playability`.** The question had three answers in the tree and
 was about to have a fourth. They are now one module, and each caller states what it needs:
@@ -105,16 +115,35 @@ answer. The constant is deleted; `rare_candy` is now a curated override
 (`tools/meta_tracker/function_overrides.json`) shipped in `card_functions.json`, and
 `planner._is_rare_candy` reads it, which also makes that method's docstring true again.
 
+### On the two objections this shape invites
+
+**"Issue #288 was supposed to be the isolated one."** Issue #278 names it *"the only issue in it that does
+not touch `state_value.py`, so it cannot conflict with any sibling"*, and that still holds: every
+sibling (Issues #279–#287) edits `state_value.py` and none touches `planner.py`, `gate_library.py` or
+`card_functions.json`. The isolation claim was about the file the track contends over, and this
+change contends over none of it.
+
+**"the `opener` route is a missing escape."** Cinderace (id 666, Stage 2, `evolvesFrom` Raboot)
+carries *Explosiveness* — *"If this Pokémon is in your hand when you are setting up to play, you may
+put it face down in the Active Spot"* (card text verified) — and `mega_starmie` runs 4 with no Raboot
+on the list, yet the oracle calls it unplayable. That verdict is **correct and deliberate**: this
+oracle answers *can it be played from hand*, and Explosiveness is not that route. It reaches only the
+ACTIVE spot, only during Set Up, before any consumer runs — and every site that asks (the mid-match
+keep-value sites; `_deploy_decision`, whose capacity is BENCH capacity) is one a setup-only opener
+genuinely cannot reach. The shipped `dont-fetch-the-setup-only-opener` rung rests on exactly this
+reading, and ADR-0081's `_route_only_at_setup` is where the Set-Up route is modelled. Pinned by test.
+
 ## Consequences
 
-* **Measured 2026-08-02** — suite green; **both gates PASS with zero unruled flips**, and neither
+* **Measured 2026-08-02** — suite **4452 passed / 0 failed**; **both gates PASS with zero unruled
+  flips**, and neither
   baseline re-captured (ADR-0094):
   * **Decision Gate** — 372 frames, `agree 250/346 → 250/346`, 4 picks moved. Two are **FIX**
     (`83038055|0|decision|40` `[5] → [0]`, `83665798|1|decision|39` `[3] → [4]` — both now the
-    human's option); the other two are the held-out pair already owned by #262 / #272. **No new
+    human's option); the other two are the held-out pair already owned by Issue #262 / Issue #272. **No new
     REGRESSION.**
   * **Discrimination Gate** — 268 frames, gated on 266, `agree 182/248 → 180/248`; the 2 moved
-    frames are the pair held out onto #262 before this branch existed. **No new `OK → MISS`.**
+    frames are the pair held out onto Issue #262 before this branch existed. **No new `OK → MISS`.**
   * So this sub-issue moves scoring, as Issue #278 predicted, and the move is **two frames toward
     the human and nothing away** — nothing needing a wave-3 verdict.
 * A hand of provably-dead evolutions now prices at its **general** worth only — actually at nothing,

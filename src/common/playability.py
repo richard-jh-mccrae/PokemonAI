@@ -25,7 +25,21 @@ pattern) and this module owns only the graph walk:
   a card the pool holds no printing of, makes NO claim and keeps everything. Only a base that is
   **provably** absent from all three zones takes anything away. Same direction as
   `gate_library.deploy_odds`, and for the same reason: a missed slot sheds a good card, which is the
-  wrong way to be wrong.
+  wrong way to be wrong. `Zones.rare_candy` carries the same rule for the escape itself: it is
+  TRI-STATE, and ``None`` (no Function Tag table to read) keeps the escape open rather than
+  collapsing to "no Rare Candy". Holding that epistemic HERE rather than at each call site is what
+  stops two callers of one oracle from failing in opposite directions.
+
+**Deliberately NOT an escape: the `opener` route.** Cinderace (id 666, Stage 2, ``evolvesFrom``
+Raboot) carries *Explosiveness* — *"If this Pokémon is in your hand when you are setting up to play,
+you may put it face down in the Active Spot"* (card text verified) — and `mega_starmie` runs 4 with
+no Raboot on the list. It is nonetheless correctly UNPLAYABLE here, because this oracle answers "can
+it be played **from hand**", and Explosiveness is not that route: it reaches only the ACTIVE spot,
+only during Set Up, before any consumer of this module runs. Every site that asks — the discard and
+refresh keep-value sites (mid-match) and `_deploy_decision` (BENCH capacity) — is a place a
+setup-only opener genuinely cannot go. The shipped `dont-fetch-the-setup-only-opener` rung rests on
+exactly this reading (*"in hand it is a dead card"*), and ADR-0081's `_route_only_at_setup` is where
+the Set-Up route is modelled instead.
 
 The deck zone must be the SOUND *"not provably gone"* read (the tracker's exact unseen counts, or
 the decklist minus what is visible) — never *"seen"*. A base sitting in the discard with a copy
@@ -48,23 +62,30 @@ RARE_CANDY_TAG = "rare_candy"
 
 @dataclass(frozen=True)
 class Zones:
-    """Where a card can be found, as card NAMES, plus whether a Rare Candy is reachable.
+    """Where a card can be found, as card NAMES, plus what is known about Rare Candy.
 
     ``in_play`` and ``reachable`` are deliberately separate rather than unioned: a base already IN
     PLAY ends the walk (there is nothing left to assemble under it), while a base merely reachable
     still owes its own playability, which is what makes the chain a chain.
+
+    ``rare_candy`` is TRI-STATE, and the third state is the one that matters. ``True`` = one is
+    reachable, ``False`` = provably none, ``None`` = **the caller could not tell** (no Function Tag
+    table). A missing tag table is missing EVIDENCE, so it must not read as "no Rare Candy" — that
+    would let the gate call a Stage 2 dead on the strength of a fact it never checked. ``None``
+    therefore keeps the escape open for Stage 2s and changes nothing for any other card, which is
+    both fail directions correct at once and, being inside the oracle, identical for every caller.
     """
     in_play: frozenset
     reachable: frozenset            # in hand, or still "not provably gone" from the deck
-    rare_candy: bool = False
+    rare_candy: bool | None = None
 
 
-def zones(stats, *, in_play_ids=(), hand_ids=(), deck_ids=(), rare_candy_reachable=False) -> Zones:
+def zones(stats, *, in_play_ids=(), hand_ids=(), deck_ids=(), rare_candy_reachable=None) -> Zones:
     """Build the `Zones` name-sets from id iterables, resolved through ``stats``.
 
     ``rare_candy_reachable`` is the caller's read of whether a `RARE_CANDY_TAG` card is in hand or
     still unseen in deck — it needs the Function Tag table, which this module deliberately does not
-    take (it stays pure over the stat pool)."""
+    take (it stays pure over the stat pool). Pass ``None`` when there is no table to read."""
     def _names(ids) -> frozenset:
         found = set()
         for i in (ids or ()) if stats is not None else ():
@@ -75,7 +96,7 @@ def zones(stats, *, in_play_ids=(), hand_ids=(), deck_ids=(), rare_candy_reachab
 
     return Zones(in_play=_names(in_play_ids),
                  reachable=_names(hand_ids) | _names(deck_ids),
-                 rare_candy=bool(rare_candy_reachable))
+                 rare_candy=None if rare_candy_reachable is None else bool(rare_candy_reachable))
 
 
 def playable_from_hand(cid, *, stats, zones: Zones) -> bool:
@@ -119,8 +140,10 @@ def _rare_candy_reaches(stat, *, stats, zones: Zones, base_ids) -> bool:
     two hops down. The card says *"Choose 1 of your Basic Pokémon in play"*, and a chain deeper than
     Basic → Stage 1 → Stage 2 would otherwise let this escape fire on a body Rare Candy cannot
     legally target."""
-    if not zones.rare_candy or not getattr(stat, "stage2", False):
+    if zones.rare_candy is False or not getattr(stat, "stage2", False):
         return False
+    if zones.rare_candy is None:
+        return True                   # no tag table to read — no claim about the escape either way
     for s1_id in base_ids:
         s1 = stats.get(s1_id)
         root = getattr(s1, "evolvesFrom", None) if s1 is not None else None
@@ -130,5 +153,7 @@ def _rare_candy_reaches(stat, *, stats, zones: Zones, base_ids) -> bool:
 
 
 def _is_basic(name, stats) -> bool:
-    """Some printing under ``name`` is a Basic Pokémon — it evolves from nothing."""
-    return any(getattr(stats.get(i), "evolvesFrom", None) is None for i in stats.ids_for_name(name))
+    """Some printing under ``name`` is a Basic Pokémon — it evolves from nothing. Truthiness, not
+    ``is None``, so this module and `gate_library.is_evolution` cannot disagree about a card whose
+    ``evolvesFrom`` is an empty string."""
+    return any(not getattr(stats.get(i), "evolvesFrom", None) for i in stats.ids_for_name(name))

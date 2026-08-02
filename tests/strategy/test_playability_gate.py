@@ -63,6 +63,7 @@ def _pool():
 
 
 def _playable(cid, *, in_play=(), hand=(), deck=(), candy=False, stats=None):
+    """``candy`` mirrors `Zones.rare_candy`'s tri-state: True / False / None (no tag table)."""
     stats = stats if stats is not None else _pool()
     return playability.playable_from_hand(
         cid, stats=stats,
@@ -150,11 +151,40 @@ def test_the_shipped_tag_table_marks_exactly_the_rare_candy_card():
     """The tag replaced `planner._RARE_CANDY_ID`, so the two must not silently diverge: card 1079
     carries it and nothing else does. A second tagged card would widen the escape for every deck at
     once, which is the kind of change that should fail a test rather than pass unnoticed."""
-    from common.cards import CardFunctions
     table = CardFunctions.load()
     tagged = {cid for cid in range(1, 2000)
               if playability.RARE_CANDY_TAG in set(table.tags(cid))}
     assert tagged == {RARE_CANDY}
+
+
+@pytest.mark.req("REQ-NEEDS-0017")
+def test_an_unreadable_tag_table_is_not_a_missing_rare_candy():
+    """`Zones.rare_candy` is TRI-STATE. ``False`` means *provably no Rare Candy*; ``None`` means the
+    caller had no Function Tag table to ask. Collapsing the second into the first would let the gate
+    call a Stage 2 dead on the strength of a fact it never checked — and, because the oracle has two
+    callers, would have them fail in opposite directions on the same missing table."""
+    stats = _pool()
+    assert not _playable(METAGROSS, in_play=[BELDUM], candy=False, stats=stats)
+    assert _playable(METAGROSS, in_play=[BELDUM], candy=None, stats=stats)
+    # ...and the tri-state changes nothing for a card the escape could never save.
+    assert not _playable(SLOWKING, candy=None, stats=stats)
+
+
+@pytest.mark.req("REQ-NEEDS-0017")
+def test_a_setup_only_opener_is_still_unplayable_from_hand():
+    """The `opener` route is deliberately NOT an escape. Cinderace (id 666, Stage 2, `evolvesFrom`
+    Raboot) carries Explosiveness — *"If this Pokémon is in your hand when you are setting up to
+    play, you may put it face down in the Active Spot"* (verified at data/EN_Card_Data.csv) — and
+    `mega_starmie` runs 4 with no Raboot on the list.
+
+    That route reaches only the ACTIVE spot, only during Set Up, before any consumer of this oracle
+    runs; every site that asks is one a setup-only opener genuinely cannot reach. So the shipped
+    verdict stands, and the rung built on it (`dont-fetch-the-setup-only-opener`: *"in hand it is a
+    dead card"*) keeps its premise."""
+    pilot = _agent_pilot("mega_starmie")
+    assert 666 in pilot._stranded_evolution_set()
+    rows, _slots, elig = _slots_for(pilot, _obs([666], active=1030))   # 1030 = Staryu
+    assert _covered(rows, elig, 666) == set()
 
 
 @pytest.mark.req("REQ-NEEDS-0017")
@@ -202,7 +232,7 @@ def _agent_pilot(agent: str):
                                                   agent_dir / "strategy.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
+    deck = [int(x) for x in (agent_dir / "deck.csv").read_text(encoding="utf-8").splitlines()[:60] if x.strip()]
     return build_pilot(mod.STRATEGY, deck)
 
 
@@ -213,7 +243,7 @@ def _slowking_pilot(deck_extra=()):
     carries no worth and the defect the audit found cannot be shown at all."""
     from common.runtime import build_pilot
     agent_dir = REPO / "src" / "agents" / "slowking"
-    deck = [int(x) for x in (agent_dir / "deck.csv").read_text().splitlines()[:60] if x.strip()]
+    deck = [int(x) for x in (agent_dir / "deck.csv").read_text(encoding="utf-8").splitlines()[:60] if x.strip()]
     deck = deck[:60 - len(deck_extra)] + list(deck_extra)
     strategy = Strategy(roles={METAGROSS: ["win_condition", "primary_attacker"]})
     return build_pilot(strategy, deck)
@@ -350,5 +380,5 @@ def test_the_stranded_set_honours_rare_candy():
 
     with_candy = Pilot(Strategy(), deck=deck[:-1] + [RARE_CANDY], general_strategy=GENERAL_STRATEGY,
                        stats=stats,
-                       functions=CardFunctions({RARE_CANDY: ["rare_candy"]}))
+                       functions=CardFunctions({RARE_CANDY: [playability.RARE_CANDY_TAG]}))
     assert with_candy._stranded_evolution_set() == frozenset()
