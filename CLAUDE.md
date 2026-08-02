@@ -98,8 +98,14 @@ follow, both cheap:
   quiet, the instrument is broken, not the codebase. **File existence is never evidence of file
   content** — if the claim is about what is *in* a module, quote the module.
 
-Both come from Issue #319, where a self-filed issue's decisive table ("every sibling flag falls back
-to a surviving rung ladder") was derived from `ls` alone. `baseline_promote.py` reads *"EMPTY since
+These are the BUILD-side half of one system, and the filing-side half lives in
+`docs/agents/issue-tracker.md` — a gap claim carries its `## Prior art` when the issue is written,
+`/implement` step 0 re-checks that premise before any code, and `/open-pr` step 2 re-checks it once
+more against the rebased base. Four checks, three moments, one failure they exist for: building
+something that already exists or no longer needs building.
+
+Both rules above come from Issue #319, where a self-filed issue's decisive table ("every sibling flag
+falls back to a surviving rung ladder") was derived from `ls` alone. `baseline_promote.py` reads *"EMPTY since
 ADR-0100. All seven promote rungs are DELETED."* The false claim reached the issue body and a shipped
 docstring; only the Spec axis — briefed with both rules above — caught it.
 
