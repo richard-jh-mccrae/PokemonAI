@@ -3,7 +3,10 @@ Pure derivation rules over measurement records -> `attack_overrides.json` entrie
 construction — only engine-agreed, exactly-fitting facts are emitted, everything else stays on the
 gap ledger for the formula tier / hand review.
 
-Requirements: REQ-AUDIT-0014 (coin-fork pairs on the vanilla panel -> measured damageMin/damageMax),
+Requirements: REQ-AUDIT-0014 (coin-fork pairs on the vanilla panel -> measured damageMin/damageMax,
+BOARD-SCOPED per ADR-0083 Amendment A: one board or several AGREEING boards emit, disagreeing boards
+emit nothing, one board answering twice emits nothing — and a bound never ships for an attack that
+HAS a scaler, parser-named or fitted, because the bound replaces the base term the scaler adds to),
 REQ-AUDIT-0015 (a printed-0 attack dealing one CONSTANT across >=2 modifier scenarios -> a fixed
 `damage` override; any cross-scenario disagreement rejects), REQ-AUDIT-0016 (sweep points fitting
 dealt = base + k x var EXACTLY (integer residuals 0, k>0) -> scaleVar/scalePerUnit; noisy fits
@@ -21,9 +24,9 @@ import pytest
 
 from common.scouting.provider import AttackStat
 from sim.generate_attack_overrides import (METHOD_ENGINE_FIT, METHOD_TEXT_VERIFIED,
-                                           METHOD_UNAUDITED, Derivation, derive_entries,
-                                           derive_overrides, main, measured_attacks,
-                                           merge_provenance)
+                                           METHOD_UNAUDITED, Derivation, _evidence,
+                                           derive_entries, derive_overrides, main,
+                                           measured_attacks, merge_provenance)
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -66,6 +69,103 @@ def test_coin_fork_pair_yields_measured_bounds():
     parsed = {142: AttackStat(attackId=142, damage=40)}          # parser saw no bounds
     out = derive_overrides(recs, parsed)
     assert out[142] == {"damageMin": 0, "damageMax": 40}
+
+
+# --- the bound is BOARD-SCOPED (REQ-AUDIT-0014, ADR-0083 Amendment A) ----------------------
+# `merge_records` keys a measurement on its sweep point, so `--sweep` leaves SEVERAL vanilla
+# `coin="max"` records — one per board. Collapsing them into `{coin: record}` shipped whichever the
+# dict landed on: the 274 defect one field over, attributing variation to the one variable that was
+# recorded while another that was not controlled had also moved.
+
+
+def _fork(aid, lo, hi, *, printed=0, sweep=None, energies=1, hand=6, atk_bench=1, def_bench=1):
+    """A min/max fork pair measured on ONE board — what `_coin_fork` produces from one position."""
+    at = dict(printed=printed, sweep=sweep, energies=energies, hand=hand,
+              atk_bench=atk_bench, def_bench=def_bench)
+    return [_m(aid, "vanilla", lo, coin="min", **at), _m(aid, "vanilla", hi, coin="max", **at)]
+
+
+@pytest.mark.req("REQ-AUDIT-0014")
+def test_boards_that_disagree_on_the_bound_emit_NOTHING():
+    """879 "flip a coin for each {D} Pokémon you have in play" is the shape: the bound is a function
+    of the board, and the override table has no form that says so. Naming one board's number as the
+    attack's own is the arbitrary survivor with a tidier implementation."""
+    parsed = {920: AttackStat(attackId=920, damage=0)}
+    recs = (_fork(920, 0, 60, atk_bench=1, sweep={"var": "atk_bench", "step": 1})
+            + _fork(920, 0, 120, atk_bench=2, sweep={"var": "atk_bench", "step": 2}))
+    assert 920 not in derive_entries(recs, parsed)
+
+
+@pytest.mark.req("REQ-AUDIT-0014")
+def test_boards_that_AGREE_corroborate_the_bound_rather_than_disqualifying_it():
+    """Refusing on "more than one board" would throw away the strongest evidence the harness can
+    produce. Several boards agreeing is ADR-0083 §3's flat-axis argument applied to the bound: the
+    board was varied and provably does not move it."""
+    parsed = {921: AttackStat(attackId=921, damage=40)}
+    recs = (_fork(921, 0, 40, printed=40, sweep={"var": "atk_bench", "step": 1})
+            + _fork(921, 0, 40, printed=40, atk_bench=2, sweep={"var": "atk_bench", "step": 2})
+            + _fork(921, 0, 40, printed=40, hand=9, sweep={"var": "hand", "step": 2}))
+    assert derive_entries(recs, parsed)[921].fields == {"damageMin": 0, "damageMax": 40}
+
+
+@pytest.mark.req("REQ-AUDIT-0014")
+def test_one_board_measured_twice_with_two_answers_is_not_a_fact():
+    """Same physical board, two different `max` values — the measurement does not reproduce, so it
+    establishes nothing.
+
+    REACHABLE through a real measurements file, which is why the board key excludes `sweep`/`step`.
+    Those are labels, and two plans land on the same board by design: the panel point pins both
+    benches at `_BENCH_REF = 1` and so does the `atk_bench` step-1 sweep point. `merge_records` keys
+    on the sweep point, so both survive the merge — and keying the board on the label would file
+    them as two boards, letting one board's self-contradiction read as ordinary board sensitivity.
+    """
+    parsed = {922: AttackStat(attackId=922, damage=0)}
+    recs = _fork(922, 0, 70) + _fork(922, 0, 90, sweep={"var": "atk_bench", "step": 1})
+    assert 922 not in derive_entries(recs, parsed)
+
+
+@pytest.mark.req("REQ-AUDIT-0014")
+def test_the_same_board_reached_by_two_plans_is_ONE_board():
+    """The other half of that rule: agreeing on one board through two plans is not two boards
+    corroborating each other, it is one measurement repeated — and it still emits."""
+    parsed = {925: AttackStat(attackId=925, damage=40)}
+    recs = (_fork(925, 0, 40, printed=40)
+            + _fork(925, 0, 40, printed=40, sweep={"var": "atk_bench", "step": 1}))
+    assert derive_entries(recs, parsed)[925].fields == {"damageMin": 0, "damageMax": 40}
+
+
+@pytest.mark.req("REQ-AUDIT-0014")
+def test_a_measured_bound_never_ships_beside_a_FITTED_scaler():
+    """`compute_active_damage` sets `dmg = damageMin/Max` — the bound REPLACES the base — then adds
+    `scalePerUnit x count` on top. A bound measured where the scaler contributes already holds that
+    contribution, so shipping both adds it twice: an over-prediction, the one class the CI audit gate
+    exists to fail. The scaler survives (base-relative, sound); the bound falls back to the parser's,
+    which is read off the printed sentence and is base-relative too."""
+    parsed = {923: AttackStat(attackId=923, damage=60)}
+    recs = _bench_axis(923, 60, per_atk=20, per_def=20)
+    # a fork pair on the reference board, agreeing with itself — on its own it would ship
+    recs += _fork(923, 0, 100, printed=60)
+    fields = derive_entries(recs, parsed)[923].fields
+    assert fields == {"scaleVar": "both_bench", "scalePerUnit": 20}
+    assert "damageMin" not in fields and "damageMax" not in fields
+    # ...and without the scaler to displace it, the very same fork pair DOES ship
+    plain = {924: AttackStat(attackId=924, damage=60)}
+    assert derive_entries(_fork(924, 0, 100, printed=60), plain)[924].fields == {
+        "damageMin": 0, "damageMax": 100}
+
+
+@pytest.mark.req("REQ-AUDIT-0014")
+def test_a_measured_bound_never_ships_beside_a_PARSER_NAMED_scaler_either():
+    """The commoner case, and the one the first version of this guard missed by construction.
+
+    `_scaler` returns nothing when the parser already named the variable, so testing only the FIT
+    let a parser-named scaler plus a fork pair straight through. The oracle does not care who named
+    `scaleVar` — it adds the scaling term whenever the field is set — so the test has to be the
+    EFFECTIVE scaler. Measured on a probe before this test was written: the entry shipped
+    `damageMax 100` from a fork measured at hand 6, and `compute_active_damage` then read 160 at
+    hand 3."""
+    parsed = {926: AttackStat(attackId=926, damage=60, scaleVar="atk_hand", scalePerUnit=20)}
+    assert 926 not in derive_entries(_fork(926, 0, 100, printed=60), parsed)
 
 
 @pytest.mark.req("REQ-AUDIT-0017")
@@ -275,12 +375,14 @@ def test_two_measurements_that_CONTRADICT_are_both_kept():
     parsed = {909: AttackStat(attackId=909, damage=0)}
     recs = [_m(909, "vanilla", 70), _m(909, "weak", 70), _m(909, "weak", 140)]
     assert 909 not in derive_entries(recs, parsed)
-    # ...but where a rule DOES fire, the disagreeing rows survive into the record
-    recs = [_m(910, "vanilla", 70), _m(910, "weak", 70),
-            _m(910, "vanilla", 0, coin="min"), _m(910, "vanilla", 70, coin="max"),
-            _m(910, "vanilla", 90, coin="max")]              # same identity, different damage
-    entry = derive_entries(recs, {910: AttackStat(attackId=910, damage=0)})[910]
-    assert sorted(r["dealt"] for r in entry.evidence if r["coin"] == "max") == [70, 90]
+    # ...and asserted on the distiller itself, because every rule that COULD hand it a contradicting
+    # pair now rejects that pair upstream. The property still has to hold: the day a rule stops
+    # rejecting, the record must show the disagreement rather than a survivor of it.
+    same = dict(attackId=911, scenario="vanilla", coin=None, sweep=None, attackerBench=1,
+                defenderBench=1, attackerEnergies=1, myHandSize=6)
+    rows = _evidence([{**same, "dealtActive": 70}, {**same, "dealtActive": 140},
+                      {**same, "dealtActive": 70}])
+    assert sorted(r["dealt"] for r in rows) == [70, 140]      # identical collapse, contradicting stay
 
 
 # --- provenance: the merge rule (REQ-PROV-0007) --------------------------------------------

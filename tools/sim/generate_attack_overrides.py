@@ -99,6 +99,13 @@ EVIDENCE_KEYS = tuple(name for name, _ in _EVIDENCE_FIELDS)
 #: Everything the harness CONTROLS — the row minus the one thing it measures. Two rows agreeing here
 #: and disagreeing on `dealt` are a contradiction, not a duplicate.
 CONTROLLED_KEYS = EVIDENCE_KEYS[:-1]
+_READ = dict(_EVIDENCE_FIELDS)
+#: Which sweep PLAN produced a row — a provenance label, not board state. Two plans routinely land
+#: on the same board (the panel point and the `atk_bench` step-1 point both pin the benches at 1).
+_LABEL_KEYS = ("sweep", "step")
+#: The physical board a measurement was taken on: the controlled state with the labels removed, and
+#: with `coin` removed because the two fork outcomes ARE the same board.
+BOARD_KEYS = tuple(k for k in CONTROLLED_KEYS if k not in (*_LABEL_KEYS, "coin"))
 
 
 def _fit_linear(points: list[tuple[int, int]]) -> tuple[int, int] | None:
@@ -178,24 +185,67 @@ def _plain_panel(recs: list[dict]) -> list[dict]:
             and not r.get("coinLogs") and r.get("scenario") in _PANEL]
 
 
+def _fork_board(r: dict) -> tuple:
+    """The physical BOARD a fork was measured on.
+
+    Deliberately excludes `sweep`/`step`. Those are provenance LABELS — which plan produced the row
+    — not state, and two plans routinely land on the same board: the panel point pins both benches
+    at ``_BENCH_REF = 1`` and the `atk_bench` step-1 sweep point pins them at 1 as well. Keying on
+    the label would file those as two boards and let a disagreement between them read as ordinary
+    board sensitivity, when it is the same board answering twice.
+
+    A `min` and its `max` come from ONE forked position (``_coin_fork`` walks both outcomes of one
+    pre-attack observation, and ``measure_attack`` stamps all three records from one ``common``
+    dict), so a pair always shares this tuple exactly.
+    """
+    return tuple(_READ[k](r) for k in BOARD_KEYS)
+
+
 def _coin_bounds(recs: list[dict], st) -> tuple[dict, list[dict]]:
-    """Measured coin bounds from the vanilla-panel fork pair (REQ-AUDIT-0014).
+    """Measured coin bounds from the vanilla-panel fork pairs (REQ-AUDIT-0014, ADR-0083 Amendment A).
 
     Vanilla only: a fork taken on the weak or resist panel has the modifier baked into the dealt
     number, so its bounds are not the attack's own.
+
+    **A bound is BOARD-SCOPED.** `merge_records` keys a measurement on its sweep point, so an attack
+    audited with `--sweep` legitimately holds several `coin="max"` records on the vanilla panel — one
+    per board — and for a board-sensitive attack they legitimately differ. Collapsing them into
+    ``{coin: record}`` kept whichever the dict landed on and shipped it as the attack's own bound:
+    the 274 defect one field over, attributing variation to the one variable it recorded while
+    another it did not control had also moved.
+
+    So the pairs are grouped by board, and a bound ships only when they AGREE:
+
+    * one board measured -> that bound;
+    * several boards, all agreeing -> that bound. Corroboration, not a coincidence to discard: this
+      is ADR-0083 §3's flat-axis argument applied to the bound. Refusing here would throw away the
+      strongest evidence the harness can produce.
+    * several boards disagreeing -> **nothing**. The bound is a function of the board (879 "flip a
+      coin for each {D} Pokémon you have in play", 1256 "for each Energy attached to this Pokémon"),
+      and the override table has no form that says so. Naming one board's number as the attack's is
+      the arbitrary survivor with a tidier implementation. Gap ledger.
+
+    Evidence is every vanilla fork record, so a reader sees the boards the bound was corroborated
+    across rather than only the pair that won.
     """
     on_panel = [r for r in recs if r.get("coin") and r.get("scenario") == "vanilla"]
-    forks = {r["coin"]: r for r in on_panel}
-    if "min" not in forks or "max" not in forks:
-        return {}, []
-    lo, hi = int(forks["min"]["dealtActive"]), int(forks["max"]["dealtActive"])
+    by_board: dict[tuple, dict[str, set]] = {}
+    for r in on_panel:
+        outcomes = by_board.setdefault(_fork_board(r), {})
+        outcomes.setdefault(r["coin"], set()).add(int(r["dealtActive"]))
+    pairs = set()
+    for outcomes in by_board.values():
+        lo_vals, hi_vals = outcomes.get("min"), outcomes.get("max")
+        if not lo_vals or not hi_vals:
+            continue                         # a half-measured board establishes no bound
+        if len(lo_vals) > 1 or len(hi_vals) > 1:
+            return {}, []                    # ONE board, two answers: not reproducible, so not a fact
+        pairs.add((next(iter(lo_vals)), next(iter(hi_vals))))
+    if len(pairs) != 1:
+        return {}, []                        # no complete pair, or the boards disagree
+    lo, hi = pairs.pop()
     if (st.damageMin, st.damageMax) == (lo, hi):
         return {}, []                                    # parser already had it (REQ-AUDIT-0017)
-    # EVERY vanilla fork record is the evidence, not the two this dict happened to keep. Forks from
-    # different sweep points share a `coin` and collapse here, so the bound above is taken from an
-    # arbitrary survivor whenever more than one pair exists. Recording the full set does not change
-    # what is derived — it makes a disagreement visible instead of invisible, which is the entire
-    # point of the sidecar, and `test_no_fit_ships_on_evidence_that_contradicts_itself` fails on one.
     return {"damageMin": lo, "damageMax": hi}, on_panel
 
 
@@ -255,11 +305,46 @@ def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
     return {}, []
 
 
-#: The derivation rules, in the order they apply. Each is ``(records, AttackStat) -> (fields, used)``
-#: — the override delta it establishes, and the measurement records that establish it. Returning the
-#: evidence alongside the value is what makes provenance a BY-PRODUCT of deriving rather than a
-#: second, drift-prone description of it.
-_RULES = (_coin_bounds, _fixed_damage, _scaler)
+def _apply_rules(recs: list[dict], st) -> tuple[dict, list[dict]]:
+    """Every derivation rule against one attack -> ``(delta, records that establish it)``.
+
+    Each rule is ``(records, AttackStat) -> (fields, used)``: the override delta it establishes AND
+    the measurements that establish it. Returning the evidence alongside the value is what makes
+    provenance a BY-PRODUCT of deriving rather than a second, drift-prone description of it.
+
+    Called out one by one rather than looped, because the rules are not independent — the bound and
+    the scaler INTERACT, and a loop cannot say so.
+
+    **A measured bound may not ship for an attack that HAS a scaler, whoever named it.**
+    ``common/strategy/damage.py``'s `compute_active_damage` sets ``dmg = damageMin/damageMax`` — the
+    bound REPLACES the base term — and only then adds ``scalePerUnit x count``. A bound measured on
+    a board where the scaler contributes already contains that contribution, so shipping both adds
+    it twice: an OVER-prediction, the one class `ci_audit_gate.py` exists to fail (damage the closed
+    form promises that the engine will not deal -> phantom KO).
+
+    The test is the EFFECTIVE scaler — ``st.scaleVar`` (the parser's) or this run's fit — because
+    the oracle adds the scaling term whenever `scaleVar` is set and does not care where it came
+    from. Testing only the fit was the first version of this guard and it missed the commoner case
+    by construction: `_scaler` returns nothing when the parser already named the variable, so a
+    parser-named scaler plus a fork pair sailed straight through. Measured on a probe: a printed-60
+    `atk_hand`/20 attack with a fork pair measured at hand 6 shipped ``damageMax 100`` and the
+    oracle then read 160 at hand 3.
+
+    The scaler survives because it is base-relative and sound; the bound is dropped, and the attack
+    keeps the text parser's bounds, which are read off the printed sentence and are base-relative
+    too. Recovering the base as ``dealt - scalePerUnit x count`` was rejected: it compounds one
+    inference on another, and this generator's discipline is that an ambiguity emits silence.
+
+    A refused bound leaves NO trace in the provenance sidecar, deliberately: that file's contract is
+    that evidence justifies what SHIPPED, and a refused bound did not. The gap ledger
+    (`diff_attack_audit.py`) is where a measurement that established nothing belongs.
+    """
+    bound, bound_ev = _coin_bounds(recs, st)
+    fixed, fixed_ev = _fixed_damage(recs, st)
+    scaler, scaler_ev = _scaler(recs, st)
+    if bound and (scaler or st.scaleVar):
+        bound, bound_ev = {}, []
+    return {**bound, **fixed, **scaler}, [*bound_ev, *fixed_ev, *scaler_ev]
 
 
 def _evidence_row(r: dict) -> dict:
@@ -316,12 +401,7 @@ def derive_entries(records: list[dict], parsed: dict,
             continue
         if texts and "use it as this attack" in (texts.get(aid) or ""):
             continue                                     # copy-attack: measurements don't transfer
-        delta: dict = {}
-        used: list[dict] = []
-        for rule in _RULES:
-            fields, evidence = rule(recs, st)
-            delta.update(fields)
-            used += evidence
+        delta, used = _apply_rules(recs, st)
         if delta:
             out[aid] = Derivation(delta, _evidence(used))
     return out

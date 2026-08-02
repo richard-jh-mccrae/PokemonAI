@@ -166,13 +166,16 @@ already required binary-safe writes to committed data; this is the generator hon
   those four are now the only `text_verified` rows in a file that counts them.
 - **The docs figure was wrong and is corrected.** `docs/attack-effects.md` said 119 attacks; the table
   holds 117. A count nobody checks is the same class of rot as an override nobody can check.
-- **A latent defect in `_coin_bounds` is now visible rather than fixed.** It keys its fork pair on
-  `coin` alone, so forks measured at different sweep points overwrite each other and the shipped
-  bound is an arbitrary survivor. Fixing it would change shipped values, which §5 rules out — so this
-  change records **every** vanilla fork record as evidence instead, and a test fails when a shipped
-  fit's own evidence contradicts itself. Vacuous today (all 99 bound entries are `unaudited`, with no
-  evidence), and armed for the recapture that would otherwise ship the survivor quietly. Owned as a
-  follow-up.
+- **A latent defect in `_coin_bounds` was made visible here and ruled next door.** It keyed its fork
+  pair on `coin` alone, so forks measured at different sweep points overwrote each other and the
+  shipped bound was an arbitrary survivor. Fixing it was out of scope for §5's value-preserving
+  ruling, so this change recorded **every** vanilla fork record as evidence instead — which is what
+  made the collapse legible — and a test fails when a shipped fit's own evidence contradicts itself.
+  **Resolved by ADR-0083 Amendment A** (2026-08-02): the bound is board-scoped, ships only when the
+  boards agree, and may never ship beside a fitted scaler (the bound REPLACES the base term, so the
+  pair double-counts the scaling contribution — an over-prediction). That amendment is also
+  value-preserving, for the reason this ADR records: all 99 bound entries are `unaudited`, so no
+  measurement speaks to them and §6's merge rule leaves them alone.
 
 ## Alternatives rejected
 
