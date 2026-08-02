@@ -104,7 +104,8 @@ T0 Spine (serial, ~1 session)
                └──> T4 Turn Planner    (critical path)
                       └──> T5 Purge + integration (joins all lanes)
 
-A1 Term sufficiency audit (parallel AUDIT lane; blocks nothing, read-only)
+A1 Term sufficiency audit      (parallel AUDIT lane; blocks nothing, read-only)
+A2 Apply-seam coverage report  (parallel AUDIT lane; blocks nothing, read-only)
 ```
 
 **A1 — term sufficiency audit** (Issue #268, report: `term-sufficiency-audit.md`). Walks the four
@@ -112,6 +113,15 @@ DECKS rather than the corpus, because the corpus records what the OLD rung-drive
 so a term the new architecture needs and the old agent never exercised leaves no trace in either
 gate. Feeds T3's registry (its `blind_to` lists) and T4's blind-spot checklist. Read-only — it
 produces findings, not code, and the disposition of each finding is decided after it lands.
+
+**A2 — apply-seam coverage report** (Issue #269, report: `apply-seam-coverage.md`, census:
+`tools/apply_seam_coverage.py`). The complement to A1: A1 asks whether `state_value`'s TERMS cover
+what wins games, A2 asks whether the apply-seam can even produce the state those terms would score.
+Resolves every effect site in the real card pool — our five decks plus the scouting artifact's 122
+archetype builds — to one of §3b's three fates, weighted by copy count and by meta prior. Headline:
+**69.4 % of effect-bearing sites REFUSE**, the dominant cause is clause-vocabulary breadth rather
+than the shuffle or opponent choice, and the ENGINE-RESOLVED bridge resolves **zero** of the live
+Ability options in the 372-frame corpus. Feeds T4's planning; findings become issues after it lands.
 
 **T3.5 — A1 remediation** (Issue #278, 13 subtasks). A1's findings, implemented. Inserted into the
 critical path by developer ruling 2026-08-01: **finish T3 → land T3.5 → start T4.** It is on the

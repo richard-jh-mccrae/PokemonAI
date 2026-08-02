@@ -110,6 +110,10 @@ scouting:
   - 'tests/scouting/**'
 strategy:
   - 'tests/strategy/**'
+  # The POC-A2 coverage census (Issue #269) is a tools/ script whose ONLY tests live in
+  # tests/strategy (it measures common/apply_option + common/snapshot_coverage), so it is named
+  # here rather than left to the `any` fail-safe.
+  - 'tools/apply_seam_coverage.py'
 value:
   - 'tests/value/**'
 tuner:
