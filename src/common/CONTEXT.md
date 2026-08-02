@@ -467,7 +467,7 @@ Trainer cards, bench-only per `doctrine_gust.py`) keep-prices against the real p
 `opponent_target_value` / `phase_scale` marginal instead of the flat disruption tier `deny` still
 uses; `Pilot.gust_target_slots` shipped ON (`needs.SUPPLIES`'s `gust` tag routes to `gust_target`
 INSTEAD of `deny`, never both) after clearing the ADR-0072 mid-build paired-A/B gauntlet tripwire.
-That marginal is prize-denominated and the DP sums card-worth, so since **ADR-TEMP-313 (Issue #313 item
+That marginal is prize-denominated and the DP sums card-worth, so since **ADR-0107 (Issue #313 item
 2g)** the emission crosses at the seam-scoped **Gust-Target Band** (see that term) — until then the
 slot topped out at 3.9 against the same card's own `general` slot (up to 4.5) and the assignment
 covered one on **1 corpus frame in 80** — measured by zeroing the slots and watching V drop, not
@@ -935,7 +935,7 @@ under BOTH the ADR-0078 marginal and the incumbent ADR-0062 oracle, so the rate 
 `m × PRIZE_DAMAGE_RATE / WORTH_DAMAGE_RATE` and no Δ policy rescues it; both cards the endorsed ruling
 pitches price `0.0` themselves, so even a nonzero `m` would only assert *worth > 0*. Deny no longer
 needs the rate at all (it became a **Deny Relevance** instrument), so this leg is unbuilt by DESIGN,
-not by backlog. **Gust no longer owes it either, as of Issue #313 item 2g (ADR-TEMP-313).** Its
+not by backlog. **Gust no longer owes it either, as of Issue #313 item 2g (ADR-0107).** Its
 `gust_target_slot` did feed a prize-equivalent straight into the worth-summing DP with no conversion —
 and the reading that it was "latent, absorbed by the `TAG_TIER["gust"]` floor" was too kind: measured
 over 80 frames the value's MEDIAN is 1.000 against a general slot topping out at 4.5, and the
@@ -950,7 +950,7 @@ rate that converts it), calibration (a value chosen to preserve an incumbent is 
 **Gust-Target Band**:
 The prize↔worth crossing at ONE seam — `currency.GUST_TARGET_BAND` (10.0, i.e. `TAG_TIER["gust"]`)
 over `needs.TARGET_VALUE_CEILING` (3.9), giving `GUST_TARGET_WORTH_RATE` ≈ **2.564 worth points per
-prize-equivalent** (ADR-TEMP-313, Issue #313 item 2g; ADR-0080 decision 4 re-inheriting ADR-0076
+prize-equivalent** (ADR-0107, Issue #313 item 2g; ADR-0080 decision 4 re-inheriting ADR-0076
 Amendment E's currency debt). It is what lets the `gust_target` slot's prize-denominated marginal
 enter the Worth-summing Needs DP **without** a general prize↔worth rate: the marginal is divided by
 its own DERIVED ceiling (`MAX_PRIZE_VALUE` 3 + `_SURVIVAL_CAP` 0.9) into a dimensionless [0, 1]

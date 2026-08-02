@@ -234,7 +234,7 @@ def test_the_gust_target_slot_can_now_outrank_the_cards_own_latent_worth():
     slot had already been discounted by `deploy`/`liq` or was absent.
 
     ⚠️ **This is a comparison against a CEILING, so it does not by itself prove the slot never won**
-    — 4.5 is not a floor, and the corpus measurement (ADR-TEMP-313: the assignment covered a
+    — 4.5 is not a floor, and the corpus measurement (ADR-0107: the assignment covered a
     `gust_target` slot on 1 frame in 80 before, 25 after) is what carries that claim. What is
     asserted here is the part that IS structural: the reachability of the top of the range.
 

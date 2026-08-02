@@ -59,7 +59,7 @@ PRIZE_DAMAGE_RATE = 100.0
 # worth<->damage rates do live in this module, both honestly labelled at their own definitions —
 # `DEPLOY_BAND / DEPLOY_WORTH_SCALE` (ADR-0086 amendment C) and `ITEM_HOLD_WORTH_RATE` (Issue #261
 # item 2f) — and a THIRD seam-scoped rate sits on a different scale PAIR entirely,
-# `GUST_TARGET_WORTH_RATE` (prize<->worth, ADR-TEMP-313). Each carries a recorded reconciliation debt
+# `GUST_TARGET_WORTH_RATE` (prize<->worth, ADR-0107). Each carries a recorded reconciliation debt
 # against a general rate if one is ever derived. Stated here, at the guard, rather than only at the
 # definitions: a reader who takes the paragraph above at face value and then meets three such
 # constants further down has been misled by this file, which is the ADR-0078 complaint being repeated
@@ -214,7 +214,7 @@ def item_hold_to_damage(keep_worth: float) -> float:
     return float(keep_worth) * ITEM_HOLD_WORTH_RATE
 
 
-# ── The GUST-TARGET band — prizes → WORTH, the third seam-scoped rate (ADR-TEMP-313, item 2g) ───
+# ── The GUST-TARGET band — prizes → WORTH, the third seam-scoped rate (ADR-0107, item 2g) ───
 #
 # The first crossing on the **prize ↔ worth** pair. The two above are worth ↔ damage; `PRIZE_DAMAGE_
 # RATE` is prize ↔ damage; this is the leg that had no bridge at all, and one consumer was crossing

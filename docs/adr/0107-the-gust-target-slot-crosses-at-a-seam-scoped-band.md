@@ -1,4 +1,4 @@
-# ADR-TEMP-313 — A prize-denominated marginal enters the Worth DP as a FRACTION of a band, not as a number; and the gust-target instrument was binding on one corpus frame in eighty
+# ADR-0107 — A prize-denominated marginal enters the Worth DP as a FRACTION of a band, not as a number; and the gust-target instrument was binding on one corpus frame in eighty
 
 **Status:** Accepted; **BUILT** 2026-08-02. Build = **Issue #313 item 2g** (the target-side half),
 carved out of Issue #261 (POC-T2) when that tracker closed. Discharges old Issue #189's target/keep

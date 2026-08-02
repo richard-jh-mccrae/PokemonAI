@@ -4319,7 +4319,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # forces a switch of a BENCHED Pokémon (verified at source, `doctrine_gust.py`); the
         # opponent's Active is never a legal gust target, so it never opens a slot here (unlike deny,
         # which strips Energy off either area).
-        # DENOMINATION (ADR-TEMP-313, Issue #313 item 2g — ADR-0080 decision 4 re-inheriting ADR-0076's
+        # DENOMINATION (ADR-0107, Issue #313 item 2g — ADR-0080 decision 4 re-inheriting ADR-0076's
         # currency debt): the row's `value` is PRIZE-equivalents and this assignment sums CARD-WORTH
         # points, so it crosses at the seam-scoped `currency.target_value_to_worth` — the marginal's
         # own derived ceiling (3.9) divided out to a [0,1] fraction of the disruption band, which is

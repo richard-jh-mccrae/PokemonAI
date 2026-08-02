@@ -27,7 +27,7 @@ conversion: opponent-side value never re-enters `card_worth`'s unit; the two cur
 at the prize scale. Consequence: denial can flip a ≤1-prize gap, never a 2-prize one — KO_SCORE
 arithmetic stays untouched.
 
-> **Scope qualifier added 2026-08-02 (ADR-TEMP-313, Issue #313 item 2g).** The "NO worth-points↔prizes
+> **Scope qualifier added 2026-08-02 (ADR-0107, Issue #313 item 2g).** The "NO worth-points↔prizes
 > conversion" sentence governs THIS equation — the **play-side** `gust_value(T)` above, where
 > `their_keep_cost` is already in effective prizes and our own value is prize-denominated, so the two
 > genuinely do meet at the prize scale. It is **not** a rule about the **keep-side** `gust_target`
