@@ -517,6 +517,15 @@ REGISTRY: tuple[TermFamily, ...] = (
             "a card ABOVE one that spent nothing). A snapshot at the true end of my turn is the fix "
             "and it needs substrate the sim does not have. The family is fully live wherever a REAL "
             "board is scored, which is every call Issue #263's 1-ply ordering makes.",
+            "DECK THINNING as a reason to spend a card. The assignment prices what a card COVERS, so "
+            "a card whose slot is already satisfied prices at its latent worth and playing it reads "
+            "as a small loss. The wave-3 ruling on `83457493|1|decision|33` says otherwise on a real "
+            "board: with all three Staryu/Starmie already out, Buddy-Buddy Poffin covers nothing AND "
+            "is worth playing anyway, because removing a dead card raises the quality of every "
+            "subsequent draw. That is a property of the DECK's composition, which no term reads — "
+            "`readiness` and `development` price bodies, and this family prices the hand. Named "
+            "rather than left as a silent zero, because at ordering time a 0 delta is never explored "
+            "(Issue #263's blind-spot contract).",
         ),
     ),
     TermFamily(

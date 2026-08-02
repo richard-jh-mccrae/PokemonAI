@@ -94,6 +94,53 @@ the leaf plays **Harlequin** (a Supporter that shuffles both hands into their de
 match-winning Knock Out. A prize outbid by a positional term is exactly what the `ko-score-band`
 sound-rule entry forbids, so this is a rule breach and not a preference.
 
+### Batch 6 (2026-08-02) — the first nine of the triaged 17
+
+| frame | verdict | developer's line |
+|---|---|---|
+| `82866415\|0\|decision\|43` | **REVERT** | don't attach the Cape to a benched pre-evolution when our wincon is Active and energized |
+| `82867148\|0\|decision\|62` | **CONFORM** | "leak plays buddy buddy and doesnt retrat. good!" |
+| `85163634\|1\|decision\|17` | **REVERT** | don't play Lillie's — we want the Crushing Hammer and Ultra Ball next turn |
+| `83007714\|1\|decision\|8` | **REVERT** | just end the turn |
+| `83054602\|1\|decision\|32` | **REVERT** | Jetting Blow cannot hurt the Crustle, there is nothing to snipe, and we are not doomed — just end the turn |
+| `83457493\|1\|decision\|33` | **CONFORM** | Buddy-Buddy Poffin is worthless here (all three Staryu/Starmie are already out), but playing both to THIN the deck is a good idea — then Harlequin |
+| `85046350\|0\|decision\|21` | **REVERT** | attach to the active Dreepy so it can retreat to Budew, evolve Dreepy to Drakloak, Recon Directive, re-decide; don't play Ultra Ball; attack Itchy Pollen |
+| `82525101\|1\|decision\|69` | **REVERT** | attach to the active Starmie even though it is doomed, so it can Jetting Blow and snipe the other Lucario — sometimes accepting the Knock Out is the aggressive line; Harlequin before attacking |
+| `82750161\|1\|decision\|60` | **REVERT** | Buddy-Buddy Poffin does nothing for us — attack with Jetting Blow |
+
+**Two CONFORMs, the first that turn on the leaf being RIGHT rather than on a mis-tag.** Neither can
+be absorbed on its own: `capture` is all-or-nothing and refuses while any fail-direction frame is
+unruled, so both wait with `82229122|33` from batch 5.
+
+`83457493|33` is the more interesting of the two — the leaf's Buddy-Buddy Poffin is endorsed for a
+reason the recorded rationale never mentions (**deck thinning**, not bench-filling), against a board
+where its stated purpose is already satisfied. No term in the registry prices deck thinning; it is
+now named in `blind_to` rather than left as a silent zero.
+
+**`82866415|43` resolves the contradiction the triage flagged, and it resolves into a RULE**, not a
+coin-flip between two rulings: *don't attach the Cape to a benched pre-evolution when our wincon is
+Active and energized.* That is consistent with f48 five frames later (*"attached to the benched
+Staryu … to protect it from Jetting Blow"*) because the boards differ — on f43 the wincon is the
+Active Mega Starmie ex at 280/330 with three Energy, on f48 it is not. The Cape's target is
+**conditional on where the wincon is**, which is a fact `state_value` has no term for today.
+
+### Card facts, verified at source for this batch
+
+- **Dreepy** is a Basic with **retreat 1**, so the attach in `85046350|21` *is* the retreat cost —
+  the line is exact, not approximate. **Budew** is a Basic, 30 HP, whose **Itchy Pollen** costs *no*
+  Energy for 10 damage and *"During your opponent's next turn, they can't play any Item cards from
+  their hand."* **Recon Directive** is **Drakloak's Ability** (look at the top 2, put 1 into hand),
+  not an attack — so "play Recon Directive, redecide" is an evolve-then-Ability line.
+- **Crustle**'s Ability is *"Prevent all damage done to this Pokémon by attacks from your opponent's
+  Pokémon {ex}"*, which is exactly why `83054602|32` says Jetting Blow cannot hurt it: Mega Starmie
+  ex is an ex.
+
+**A second mid-turn re-plan appears here.** `85046350|21`'s *"Play Recon Directive, redecide"* is the
+same shape as `82225138|82`'s *"redecide on new info"* — the plan branches on what the Ability
+reveals. Two independent instances now, both pointing at
+[ADR-0095](../../docs/adr/0095-information-precedes-commitment.md) and both unrepresentable by a turn
+plan fixed at the start of the turn. Recorded for Issue #263.
+
 † one of the 15 the developer deferred to Issue #278 S13
 ([comment](https://github.com/richard-jh-mccrae/PokemonAI/issues/262#issuecomment-5153527951)); the
 per-frame verdict supersedes that deferral.
@@ -285,6 +332,23 @@ recorded rationale.
 - `82228017|0|decision|4` — "This is about wasting a card that has no value to our game at the moment
   which could otherwise perhaps be used as Ultra Ball fodder. I would play Buddy buddy, attach energy
   to Cinderace, attack Turbo Flare"
+- `82866415|0|decision|43` — "Dont attach cape to a benched preevolution when our wincon is active
+  and energized."
+- `82867148|0|decision|62` — "leak plays buddy buddy and doesnt retrat. good!"
+- `85163634|1|decision|17` — "Dont play lillies. we want the Crushing Hammer and Ultra Ball next turn
+  most likely"
+- `83007714|1|decision|8` — "Just end turn."
+- `83054602|1|decision|32` — "We cant hurt the crustle with Jetting Blow, nothing to snipe, and we
+  are not doomed. just end turn"
+- `83457493|1|decision|33` — "Here, we have all three Staryu/Starmies, so buddy buddy is worthless.
+  thinning the deck by playing both is a good idea. then play harlequin."
+- `85046350|0|decision|21` — "Attach energy to active Dreepy as to retreat it to budew. Then evolve
+  dreepy to Drakloak. Play Recon Directive, redecide. Dont play Ultra Ball. Attack with Itchy Pollen."
+- `82525101|1|decision|69` — "Absolutely attach energy to our active starmie even though its doomed
+  so we can attack with jetting blow and snipe other Lucario. You attached to the other because our
+  active is doomed, but sometimes its better to play more aggressive and accept that we will get
+  KO'd. Then play Harlequin before atacking."
+- `82750161|1|decision|60` — "Buddy Buddy doesnt do anything for us. Attack with Jetting Blow"
 - `82229122|0|decision|33` — "Play Crushing Hammer against the benched Crustle is a fine move."
 - `82522698|1|decision|36` — "My rationale from correction, attach energy first before shuffling away
   hand or attacking"
@@ -336,8 +400,9 @@ went into committed ledger reasons:
 
 ## The pattern these verdicts are making
 
-23 frames ruled, **one CONFORM**. The packet recommended CONFORM on 15 of them and 14 were
-overturned, so the packet's read was wrong and should not be trusted for the remainder.
+32 frames ruled, **three CONFORM**. The packet recommended CONFORM on 15 and 14 were overturned, so
+the packet's read was wrong and should not be trusted for the remainder. Eight of the triaged 17
+remain.
 
 Two things recur:
 
