@@ -48,6 +48,21 @@ REPO = Path(__file__).resolve().parents[2]
 #: target instruments hand them TEMPORARY body dicts whose addresses can be reallocated. Keys are
 #: cached per object (`_Lazily._key`), which is what keeps the increase in single digits rather than
 #: the ~25% a naive re-canonicalisation per read measured. Accepted on the same grounds as above.
+#: **Re-measured 2026-08-02 (Issue #261 item 2d).** The Prize Path's their-side gained a second
+#: ROUTE to my Bench — the shared-budget rider harvest (ADR-0086 decision 5's sharpening), which
+#: `_their_turns_to_ko`'s printed-damage read structurally cannot express. Three fields:
+#: `theirs.bench_harvest_clock` plus the two raw opponent-board arguments it takes.
+#:
+#: The pin caught a real defect before it merged, which is the whole point of it. The obvious
+#: spelling asked the clock PER BODY, and the rider budget is a property of the BENCH — so each
+#: member re-derived the same payload table and re-ran the same subset search. Measured as an exact
+#: in-process A/B (the leg live vs neutered, same pilot, same frames, so machine noise cancels):
+#: **+2.48 / +2.65 / +2.71 ms per Board build (+36% / +36% / +32%)** on dragapult_ex / mega_lucario /
+#: mega_starmie. Solving the clock ONCE for the whole Bench (`CombatMath.bench_harvest_clock`, which
+#: `turns_to_ko_me`'s bench leg now reads underneath, so there is still one derivation) brings that
+#: to **+1.75 / +1.56 / +0.33 ms (+24.8% / +21.8% / +3.7%)**. Accepted on the same grounds as the two
+#: re-measures above: paid once per decision, memoised for the life of the snapshot, and ~3 orders
+#: below the per-match budget (grader: 2 vCPUs x ~10 min/match).
 PER_DECISION_PROFILE = frozenset({
     "mine.active",
     "mine.active.energy_count",       # ← POC-T1: Board's `my_active_energy`, off its one home
@@ -79,10 +94,13 @@ PER_DECISION_PROFILE = frozenset({
     "theirs.active",
     "theirs.active.prize_value",
     "theirs.active.attached_types",   # ← POC-T1: Deny Relevance, off the model's BodyView
+    "theirs.active_raw",              # ← #261 2d: the harvest clock's opponent-Active argument
     "theirs.bench",
     "theirs.bench.attached_types",
     "theirs.bench.prize_value",
+    "theirs.bench_harvest_clock",     # ← #261 2d: the Prize Path's RIDER route to my Bench
     "theirs.bodies",
+    "theirs.body_raws",               # ← #261 2d: that clock's opponent-board argument
     "theirs.discard_energy_counts",
     "theirs.discard_ids",             # ← POC-T1: `opp_has_played_gust`, off the public zone
     "theirs.hand_size",               # ← POC-T1: THE supplier of the opponent hand count
@@ -122,10 +140,13 @@ ATTACH_DECIDER_PROFILE = frozenset({
 #: §6's `tempo_denied` stopped reading the curve, but because the per-decision build now reads it too
 #: (the folded doom read), so it nets out of the "what does this decider ADD" subtraction. The ruling
 #: that it is legitimate cost for THIS decider is unchanged; see PER_DECISION_PROFILE.
+#:
+#: **Re-measured 2026-08-02 (Issue #261 item 2d).** `theirs.active_raw` and `theirs.body_raws` have
+#: LEFT for the same reason and with the same caveat: the Prize Path's rider route reads both on
+#: EVERY decision now, so they net out of this subtraction. §4's `exposure`/`preservation` still read
+#: them, and this decider still pays for them — see PER_DECISION_PROFILE.
 PROMOTE_DECIDER_PROFILE = frozenset({
     "mine.bench_raws",
-    "theirs.active_raw",
-    "theirs.body_raws",
 })
 
 #: The model fields the DENY-SLOT keep price adds (ADR-0080 / Issue #187), on any menu where a

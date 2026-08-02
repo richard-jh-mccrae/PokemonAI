@@ -129,10 +129,13 @@ PROFILE = {
     "deploy_value": True,           # the DEPLOY DECIDER, shipped ON 2026-07-30 (ADR-0086, #197): the Bench
                                     # marginal — netted Needs assignment + bench-drop Ability,
                                     # both dimensionless ratios through DEPLOY_BAND, plus the
-                                    # damage-native accel unlock and Prize-Path exposure. The nine
-                                    # rungs it replaces are DELETED (`keep-a-bench` excepted — decision 7
-                                    # keeps it as a sound rung), so OFF is DEGRADED MODE, not a rollback:
-                                    # bench endorsements go silent and only the empty-Bench guard speaks.
+                                    # damage-native accel unlock and Prize-Path exposure. It owns all
+                                    # THREE bench entry points since Issue #261 item 2d (`_TO_BENCH`
+                                    # was abstaining). Every rung it replaces is DELETED — including
+                                    # `keep-a-bench`, whose fact the `_empty_bench_forced` filter
+                                    # already guards (ADR-0096 decision 2) — so OFF is DEGRADED MODE,
+                                    # not a rollback: bench endorsements go silent and only that
+                                    # filter speaks.
     "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069, the FIRST
                                     # no-shadow decider swap): the axes-sum marginal (`_attach_value`)
                                     # IS the energy-attach decision — attack axis (tonight's

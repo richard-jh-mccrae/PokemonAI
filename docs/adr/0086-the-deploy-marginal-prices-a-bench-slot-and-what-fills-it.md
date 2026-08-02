@@ -885,6 +885,129 @@ longer a decision at all.
 accessor exists. The exposure leg works — the Prize-Path delta is real — but on the coarser read the
 decision meant to replace.
 
+## Amendment G — both PARTIAL findings are BUILT, and one anticipated cost turns out not to exist (2026-08-02)
+
+*(Build, Issue #261 item 2d — POC-T2. Nothing is re-ruled: decisions 5 and 6 stand exactly as
+written, and this records how they were finished plus the one place the ADR's own "costs accepted"
+list did not survive contact.)*
+
+### Decision 6's third entry point is LIVE
+
+`_deploy_supplier_rows` now splits its two sides by **certainty**, not by zone. A `_TO_BENCH`
+candidate is a deck card the search has already found, so no draw stands between it and the Bench —
+it belongs with the hand on the READY side, and its copy is removed from the deck counts so the same
+physical card cannot also re-supply the slot it is about to fill (which would discount it against
+itself). The deck leg keeps its ADR-0086 meaning: RESUPPLY, never a rival supplier.
+
+Two derivations fall out rather than being coded as special cases:
+
+- **The bench-drop Ability is structurally 0 at `_TO_BENCH`, and it is a CARD FACT.** Every
+  bench-drop Ability in the pool reads *"when you play this Pokémon **from your hand** onto your
+  Bench"* — Meowth ex 1071's Last-Ditch Catch, Iron Leaves ex 75, Drilbur 81, Farfetch'd 123,
+  Bloodmoon Ursaluna 135, Durant ex 198, Chien-Pao 209 (`data/EN_Card_Data.csv`; the two "to evolve"
+  siblings are a different trigger again). A Poffin-class fetch puts the body there from the DECK, so
+  the clause is unsatisfiable — the same shape as decision 3's derived pregame zero, for a different
+  reason. Without it the newly-priced entry point would pay a fetched Meowth ex for an Ability that
+  never fires.
+- **The exposure leg reaches `_TO_BENCH` too.** `_bench_path_delta` gated on `option.type == PLAY`,
+  which is a `_MAIN` shape; the question it is actually asking is "does taking this put a body on my
+  Bench", and that is now what it asks.
+
+`bench-fill-a-basic` (+12) is **DELETED** with the wiring. Its own rationale said why it existed —
+*"a CARD-target candidate is invisible to the `option_type==_PLAY` bench reflexes, so every candidate
+would score 0"* — and that is exactly the invisibility this removes. What kept the greedy from
+whiffing was never the rung's magnitude but its positivity, so the decline bar is what had to move:
+at a BENCH grab take-fewer now declines only a candidate priced **below** zero, which is decision 6's
+own wording (*"how a BELOW-zero deploy expresses itself"*) and is correct because the marginal prices
+the whole cost — the slot it displaces and the exposure it hands over — while the search that
+revealed the body is already spent. `_TO_HAND` keeps the `<= 0` bar: there is no equation there, only
+one-sided endorsement rungs, so 0 means "no rung spoke" rather than "free".
+
+**The motivating frame does NOT flip, and the reason is worth recording.** `86091728-43` still
+disagrees with the human — but not for the reason this finding named. All four candidates now price
+**0.00** rather than a tied 12.00, and 0.00 is *correct* for each of them under the specific-needs
+assignment: two Dreepy already sit on the Bench so a third supplies nothing (sets-not-sums), and
+Dunsparce and Budew carry no ROLE and no `TAG_TIER` entry, so they have no slot to fill. The human's
+ruling turns on two facts the model cannot express — that Dudunsparce is prized, which makes
+Dunsparce a dead body, and that Budew's `item_lock` is worth something. Neither is a deploy-seam gap:
+the first is deck-tracking, the second is a hole in the worth vocabulary. Recorded here so the next
+reader does not re-diagnose the entry point.
+
+### Decision 5's `bench_harvest` sharpening is BUILT — as a second ROUTE, not a better read
+
+`_their_turns_to_ko` measures printed damage, which lands on the Active. So the Prize Path could only
+ever describe a benched body of mine being dragged up and hit, which is why it charges
+`_PATH_BENCH_EXTRA`. Riders reach the Bench directly, pay no promotion, and — because attacking ENDS
+their turn — come out of ONE shared per-turn budget, which no per-body read can express (ADR-0071).
+Their cheapest route to a benched body is therefore the **min** of the two, and the harvest leg is
+what was missing.
+
+One derivation (`_their_path_items`) now serves both the live read and `_bench_path_delta`'s
+hypothetical. That is not tidiness: `_bench_path_delta` subtracts its own answer from
+`board.their_path_turns`, so two spellings of "how fast do they fell my bodies" would make the
+subtraction meaningless the moment they drifted. `HARVEST_POSSIBLE` is the declaration, per ADR-0071
+decision 3 — this is a THREAT read, and such a read "must not call a body safe just because they
+could kill a different one".
+
+Sharing the derivation exposed a **pre-existing asymmetry** in that subtraction, fixed here: the
+hypothetical read the their-side without the γ-gated Read overlay while `board.their_path_turns` was
+computed WITH it, so on a confidently-read opponent the two sides answered different questions and
+the delta could report a gift that was not one. `read`/`gamma` are now parameters both callers pass.
+
+This widens the sharpening beyond the deploy seam — `their_path_turns`, `race_ahead` and the derived
+phase all read the harvest route now. That is load-bearing rather than incidental (it is the very
+quantity the exposure leg differences against), and both gates measure it: one leaf frame IMPROVED,
+nothing regressed.
+
+Routed through the **StateModel** (`model.theirs.turns_to_ko_me`), not `CombatMath` — T1's acceptance
+criterion, and it is what makes the per-option cost bearable, since the memo is keyed by the bench
+snapshot and the real Bench is solved once per decision however many deploy options are priced.
+
+**A MIN, where decision 5 wrote "rather than" — stated because it is a departure from the wording.**
+The promote route is not a worse reading of the same fact; it is a different way they collect the
+body, and it is the only one that describes the gust-then-knock-out case decision 5 itself names as
+the reason a harvest-only exposure was rejected. Deleting it would re-import exactly that blind spot.
+Consequently this ADR's standing **OPEN** item on `_PATH_BENCH_EXTRA = 1` — whether the Prize Path's
+promotion surcharge is stale against ADR-0071 decision 6 — is UNANSWERED and stays open: the harvest
+route bypasses the surcharge rather than correcting it, so the two questions are independent.
+
+**The sibling accessor this ADR listed under "Costs accepted" is NOT built, deliberately.** The line
+read: *"`bench_harvest` returns only the index frozenset, so the objective's prize total
+(`_harvest_optima`'s `best_key[0]`) needs a sibling accessor."* That cost belongs to a
+**harvest-delta** formulation of exposure — the alternative decision 5 explicitly REJECTED, because a
+delta of harvest VALUE sees only bench-rider reach and prices a second Mega ex at zero against an
+opponent who simply gusts it up. The formulation that was ruled asks a *membership* question ("at
+which turn does this body fall in the harvest"), which `bench_harvest` already answers. Building the
+accessor anyway would have shipped unread code, so the cost is discharged by not being incurred. If a
+later consumer wants the objective total, it is one line inside `_harvest_optima`'s existing return.
+
+### One defect the new entry point exposed, fixed here
+
+`needs.deploy_marginal` priced a **full positive marginal at capacity 0**. The branch that credits X
+its own slot enumerates X's *eligible* slots without asking whether X can take one, so a body on a
+full Bench read 20.0 rather than 0.0. Latent while only `_PLAY` was wired — the engine never offers
+an illegal placement, so capacity 0 never arrived — and reachable from `_TO_BENCH`, where the
+greedy multi-pick's capacity is OUR hypothetical after an earlier pick rather than the engine's menu.
+A full Bench has no counterfactual: `V(X deployed)` is not a state the board can reach, so the
+marginal is exactly 0. This is Issue #136 directive 11's prediction landing again — arming a seam exposes
+what the seam was never asked.
+
+### Measured (2026-08-02)
+
+```
+Decision Gate        PASS   250/346 agree, unchanged; 0 unruled, 2 held out
+                     (owners Issue #262, Issue #272)
+Discrimination Gate  PASS   IMPROVED 86090164|1|turn|6 MISS -> OK; 0 unruled
+                     (agree reads 182 -> 181/248 after the rebase: item 2c's two held-out
+                      frames, owner Issue #262, arrived on main and are not this change)
+hot path             13.2 / 12.1 /  9.8 ms per decision on 83661652-40 / -44 / 85709280-51
+                     against 14.7 / 13.4 / 12.1 ms before — the harvest route did NOT cost time
+```
+
+The runtime line answers this ADR's own OPEN item about the deploy path's budget for the exposure
+leg specifically: the memoised harvest route is cheaper than the per-option work the deleted rung and
+the duplicated their-side derivation were doing.
+
 ## The Tripwire FAILS, and the attribution so far (2026-07-30)
 
 `gauntlet_swap_ab.py --stage mid-build`, candidate `0a2d7b2` against the pre-swap commit `ac5b5b9`

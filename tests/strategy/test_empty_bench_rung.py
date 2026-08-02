@@ -1,14 +1,20 @@
-"""The post-setup empty-Bench SOUND RUNG (ADR-0086 decision 7, Issue #197).
+"""The post-setup empty-Bench SOUND FILTER (ADR-0086 decision 7, Issue #197).
 
-`keep-a-bench` (+60) is the one rule in the bench table that guards a WIN CONDITION rather than a
-preference: `docs/rules.md` §7 case 2 — "Opponent has no Pokémon in play to replace a KO'd Active".
-An empty Bench under a Knocked-Out Active is not a bad position, it is the game.
+An empty Bench guards a WIN CONDITION rather than a preference: `docs/rules.md` §7 case 2 —
+"Opponent has no Pokémon in play to replace a KO'd Active". An empty Bench under a Knocked-Out
+Active is not a bad position, it is the game.
 
-So it is PROMOTED out of the weight layer rather than folded into the Deploy Marginal. The structural
+So it lives OUTSIDE the weight layer rather than folded into the Deploy Marginal. The structural
 argument is `_LINE_CAP`'s band invariant: max positional (readiness 300 + survival 50 + threat 100 +
 value 40 + line 100) = 590 < 1000 = KO_SCORE, deliberately, so no positional term can outrank a real
 prize. A loss-avoidance value cannot be simultaneously bounded under that band AND un-outbiddable —
 arithmetic, not taste. It is therefore a FILTER on the option order, never a score.
+
+`keep-a-bench` (+60) used to score the same play "so the two agree". That rung is DELETED (ADR-0096
+decision 2, Issue #261 item 2d): one board fact reached the sound-rule whitelist through three
+mechanisms at once, and the rung was the redundant one — it guarded nothing the filter does not
+already guarantee, because the filter runs AFTER `_finish_turn_last` and so wins outright. What the
+tests below assert is the FILTER's behaviour, which is unchanged by that deletion.
 """
 from __future__ import annotations
 

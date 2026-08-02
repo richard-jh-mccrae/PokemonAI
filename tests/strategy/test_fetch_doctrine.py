@@ -238,10 +238,18 @@ def test_multi_pick_grab_takes_fewer_than_max_when_no_need_remains():
 # --- bench-fill grab (TO_BENCH): a min0 bench placement must bench the Basics, not whiff to [] -------
 @pytest.mark.req("REQ-GEN-0035")
 def test_bench_fill_grab_benches_basics_at_to_bench():
-    """A Buddy-Poffin-style bench placement (`_TO_BENCH`, up to 2, minCount 0) presents CARD candidates
-    that the `_PLAY`-gated bench reflexes and the `_TO_HAND`-gated fetch rungs never score. Without a
-    bench-context rung every candidate scores 0 and the greedy take-fewer benches NOTHING (returns []);
-    `bench-fill-a-basic` scores the startable Basics so the grab benches them (the post-refactor whiff)."""
+    """A Buddy-Poffin-style bench placement (`_TO_BENCH`, up to 2, minCount 0) must not whiff to `[]`.
+
+    The rung that used to carry this — `bench-fill-a-basic` (+12) — is DELETED (Issue #261 item 2d):
+    the Deploy Marginal prices this entry point now, so a flat weight that tied every candidate is
+    exactly the indifference Issue #197 was opened to remove. What keeps the whiff away is the
+    take-fewer bar, which at a BENCH grab declines only a candidate priced BELOW zero — ADR-0086
+    decision 6's own wording, and correct because the marginal prices the whole cost (the slot it
+    displaces, the Prize-Path exposure it hands over) while the search that revealed the body is
+    already spent.
+
+    Asserted with the decider at its class DEFAULT (off), which is the degraded path: nothing scores
+    these options at all, and the bar alone must still place bodies rather than waste the search."""
     stats = DictCardStatProvider({BASIC: CardStat(BASIC, hp=70),
                                   STAGE1: CardStat(STAGE1, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -251,8 +259,62 @@ def test_bench_fill_grab_benches_basics_at_to_bench():
                       deck=[{"id": BASIC}, {"id": BASIC}, {"id": STAGE1}],
                       current=state(active=poke(900, energy=1), bench=[]))
     assert sorted(pilot.decide(obs)) == [0, 1]                        # bench both Basics, not [] (no whiff)
-    assert "bench-fill-a-basic" in _fired(pilot.explain(obs).options[0])
-    assert "bench-fill-a-basic" not in _fired(pilot.explain(obs).options[2])  # Stage-1 isn't a starter
+    assert not any("bench-fill-a-basic" in _fired(o) for o in pilot.explain(obs).options)
+
+
+@pytest.mark.req("REQ-DEPLOY-0001")
+def test_the_deploy_marginal_prices_the_to_bench_entry_point():
+    """The third entry point ADR-0086 decision 6 claims is LIVE (Issue #261 item 2d).
+
+    It abstained silently until now: `_deploy_decision` resolved the candidate against hand rows, and
+    a `_TO_BENCH` candidate is a DECK card, so the lookup returned `None` for every option. The
+    measured cost was that all four options on the corpus's only such frame scored identically and
+    the pick fell to menu position.
+
+    Here the win-condition's Line base is on offer beside a body that covers nothing. Only the base
+    fills a live slot, so only it carries a marginal — and the working row is attached to the trace,
+    which is what makes the decision rulable at the Decision Gate."""
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, name="Basicmon", hp=70),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Basicmon"),
+                                  PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=60)})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
+                     lines=[Line(path=[BASIC, WINC], payoff=WINC, role="win_condition")])
+    pilot = Pilot(strat, deck=[BASIC, WINC, PLAINMON] + [PLAINMON] * 57,
+                  general_strategy=GENERAL_STRATEGY, stats=stats)
+    pilot.deploy_value = True
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)],
+                      min_count=0, max_count=1, context=TO_BENCH,
+                      deck=[{"id": PLAINMON}, {"id": BASIC}],
+                      current=state(active=poke(900, energy=1), bench=[poke(900)]))
+    traces = pilot.explain(obs).options
+    assert traces[1].deploy_working is not None                       # the decider SPEAKS here now
+    assert traces[1].deploy_working["cid"] == BASIC
+    assert traces[1].score > traces[0].score                          # the Line base, not the filler
+    assert pilot.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-DEPLOY-0001")
+def test_the_to_bench_multi_pick_stops_when_the_bench_runs_out():
+    """The greedy's virtual board shrinks CAPACITY, and the marginal must answer to it.
+
+    Decision 6 resolves a multi-pick by re-deriving against the board after each take, so the second
+    pick is priced on a Bench one slot smaller. With the last slot spent, `needs.deploy_marginal`
+    returns 0 — there is no counterfactual for a body that cannot be placed — and a take-fewer bar
+    that declined only below zero would otherwise keep grabbing. Here the Bench holds four, one slot
+    is free, and two bodies are offered: exactly one is taken."""
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, name="Basicmon", hp=70),
+                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Basicmon"),
+                                  PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=60)})
+    strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
+                     lines=[Line(path=[BASIC, WINC], payoff=WINC, role="win_condition")])
+    pilot = Pilot(strat, deck=[BASIC, WINC, PLAINMON] + [PLAINMON] * 57,
+                  general_strategy=GENERAL_STRATEGY, stats=stats)
+    pilot.deploy_value = True
+    obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)],
+                      min_count=0, max_count=2, context=TO_BENCH,
+                      deck=[{"id": BASIC}, {"id": PLAINMON}],
+                      current=state(active=poke(900, energy=1), bench=[poke(900)] * 4))
+    assert pilot.decide(obs) == [0]                                   # the Line base fills the last slot
 
 
 # --- whether-to-play (slice 7): a cost_discard fetch is endorsed when it can grab a needed card ---

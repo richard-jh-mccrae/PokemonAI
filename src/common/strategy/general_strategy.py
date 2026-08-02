@@ -6,7 +6,7 @@ docs/weights.md scale, ladder-tuned and overridable by id (ADR-0009).
 This module is now ASSEMBLY-ONLY (ADR-0025). The deck-agnostic baseline rules live one level down in
 `common.strategy.baseline`, clustered by the decision-context they fire on — pure-data Hypotheses,
 no Pilot code (`baseline_energy` / `baseline_snipe` / `baseline_promote` / `baseline_retreat` /
-`baseline_bench` / `baseline_evolution` / `baseline_heal` / `baseline_opening` /
+`baseline_evolution` / `baseline_heal` / `baseline_opening` /
 `baseline_sequencing` / `baseline_disruption`). The four card-archetype doctrines each own their
 Hypotheses AND their Pilot-side `*Mixin` together in `common.strategy.doctrines`:
   • Gust (Boss's Orders)  doctrines/doctrine_gust             ADR-0022

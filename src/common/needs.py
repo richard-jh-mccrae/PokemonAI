@@ -486,6 +486,14 @@ def deploy_marginal(slots, eligibility, resupply, index: int, *, capacity) -> fl
     scale (ADR-0086 amendment B) — this function must never be handed to a damage-scale consumer raw.
     """
     k = max(0, int(capacity))
+    if k <= 0:
+        # No free slot: the deploy cannot HAPPEN, so there is no counterfactual and the marginal is
+        # exactly 0. Without this the branch below still credited X its slot's value — it enumerates
+        # X's eligible slots without asking whether X can take one — and priced a full positive
+        # marginal for an impossible play. Latent while only `_PLAY` was wired (the engine never
+        # offers an illegal placement), reachable from `_TO_BENCH`'s greedy multi-pick, where the
+        # capacity is OUR hypothetical after an earlier pick rather than the engine's menu.
+        return 0.0
     without = frozenset({index})
     tight = max(0, k - 1)
     # Not deploying X: the other candidates have every free slot.

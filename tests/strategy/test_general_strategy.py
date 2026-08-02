@@ -39,16 +39,27 @@ def test_dig_before_commit_prefers_search_in_setup_and_needs_the_tag_table():
 
 
 @pytest.mark.req("REQ-GEN-0003")
-def test_keep_a_bench_fires_only_when_the_bench_is_empty():
+def test_the_empty_bench_guard_is_the_filter_and_no_longer_also_a_rung():
+    """ONE guard per fact (ADR-0096 decision 1). An empty Bench under a knock-outable Active reached
+    the whitelist through THREE mechanisms — `_predicted_loss`, `Pilot._empty_bench_forced`, and
+    `keep-a-bench` (+60) — in direct violation of the POC's headline rule.
+
+    `keep-a-bench` is the one that went (decision 2): it guarded nothing the filter does not already
+    guarantee, because the filter runs AFTER `_finish_turn_last` and so wins outright, and per Issue
+    #231's own numbers it WAS the spare-body cliff (a spare body priced 1.96 on a non-empty Bench
+    against 61.96 on an empty one — the whole gap was that rung).
+
+    What must still hold is the BEHAVIOUR: on an empty Bench the deploy is taken, not ranked."""
     stats = DictCardStatProvider({700: CardStat(700, hp=70)})   # a Pokémon (hp > 0)
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     play_basic = opt(PLAY, area=HAND, index=0)
 
-    empty = make_select([play_basic], current=state(active=poke(999), hand=[700]))
-    assert "keep-a-bench" in _fired(pilot.explain(empty).options[0])
+    assert not any(h.id == "keep-a-bench" for h in GENERAL_STRATEGY.hypotheses)
 
-    has_bench = make_select([play_basic], current=state(active=poke(999), bench=[poke(701)], hand=[700]))
-    assert "keep-a-bench" not in _fired(pilot.explain(has_bench).options[0])
+    END = 14                                 # OptionType.END — the turn-ender
+    empty = make_select([opt(END), play_basic],
+                        current=state(active=poke(999), hand=[700]), context=MAIN)
+    assert pilot.decide(empty) == [1]        # the FILTER forces the body ahead of ending the turn
 
 
 @pytest.mark.req("REQ-GEN-0004")

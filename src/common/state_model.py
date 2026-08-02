@@ -1395,6 +1395,25 @@ class TheirSide(_SideBase):
             my_bench=my_bench, key_ids=key_ids, opp_active=opp_active,
             switch_enabler=switch_enabler, context=context, **extra))
 
+    def bench_harvest_clock(self, my_bench, *, bodies=None, charged=_THREADED,
+                            key_ids=frozenset(), reading: str | None = None,
+                            opp_active: dict | None = None) -> dict:
+        """``{bench index: first turn it falls in the harvest}`` over MY whole Bench — the
+        shared-budget clock, solved once for the Bench rather than once per body.
+
+        The sibling :meth:`turns_to_ko_me` answers the SAME question for one member and reads this
+        underneath, so the two cannot drift. Memoised on the bench snapshot, which is what makes a
+        per-option consumer (the deploy seam's exposure leg re-derives against a hypothetical Bench)
+        pay for the real Bench exactly once per decision."""
+        opp_bodies = self._bodies(bodies)
+        policy = self._charged_policy(charged)
+        key = ("bench_harvest_clock", self._key(tuple(my_bench or ())), self._key(opp_bodies),
+               self._key(policy), frozenset(key_ids or ()), reading, self._key(opp_active))
+        extra = {} if reading is None else {"reading": reading}
+        return self._memoized(key, lambda: self._combat.bench_harvest_clock(
+            my_bench, opp_bodies, charged=policy, key_ids=key_ids,
+            opp_active=opp_active, **extra))
+
     def discard_recur_fuel(self, body) -> int:
         """Basic Energy their discard can reload onto ``body`` (the Aura-Jab class) — the recursion
         half of the discard read, which makes a KO'd threat's line persistent. Takes a

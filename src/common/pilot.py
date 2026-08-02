@@ -1815,7 +1815,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         This SUBSUMES three Set-Up special cases that were separately bolted onto the equation — the
         exposure fallback's pregame branch, the redundancy charge keyed on `setup_placed_ids`, and
-        `bench-fill-a-basic`'s `_SETUP_BENCH` half. Three approximations of one rule.
+        the `_SETUP_BENCH` half of the since-deleted `bench-fill-a-basic`. Three approximations of
+        one rule.
 
         Scoped to `_SETUP_BENCH` only. The Set-Up ACTIVE choice is untouched (a Basic there is
         mandatory), and every in-game bench play is still the Deploy Marginal's to price."""
@@ -1829,12 +1830,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Knock-Out ends the match on the spot (`docs/rules.md` §7 case 2), so a legal Pokémon deploy is
         TAKEN rather than ranked.
 
-        A FILTER on the option order, never a score. `keep-a-bench` was the one rule in the bench
-        table guarding a WIN CONDITION rather than a preference, and `_LINE_CAP`'s band invariant is
-        why it cannot stay a weight: max positional (readiness 300 + survival 50 + threat 100 + value
-        40 + line 100) = 590 < 1000 = KO_SCORE, deliberately, so no positional term can outrank a real
-        prize — and a loss-avoidance value cannot be simultaneously bounded under that band AND
-        un-outbiddable. A filter is the only shape that is both.
+        A FILTER on the option order, never a score, and since Issue #261 item 2d the ONLY mechanism
+        scoring or ordering this fact besides `_predicted_loss` — `keep-a-bench` (+60) scored the same
+        play "so the two agree", and ADR-0096 decision 2 deleted it as the redundant third guard.
+        `_LINE_CAP`'s band invariant is why this cannot be a weight at all: max positional (readiness
+        300 + survival 50 + threat 100 + value 40 + line 100) = 590 < 1000 = KO_SCORE, deliberately,
+        so no positional term can outrank a real prize — and a loss-avoidance value cannot be
+        simultaneously bounded under that band AND un-outbiddable. A filter is the only shape that is
+        both.
 
         It ranks WHICH body, never WHETHER: the surviving order is the Deploy Marginal's, restricted
         to the deploys.
@@ -4949,9 +4952,35 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     # ── the DEPLOY decider (ADR-0086, Issue #197) ────────────────────────────────────────────────
 
-    def _deploy_supplier_rows(self, obs: dict, board: Board):
-        """``(hand_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by ZONE
-        because the two are not interchangeable (ADR-0086 decision 2).
+    def _is_body_card(self, cid) -> bool:
+        """``cid`` is a Pokémon — a card that costs a BENCH slot, which is the only capacity the
+        deploy path bounds. A Trainer covering a draw need takes no slot, so it is not a supplier
+        here however much the assignment values it."""
+        st = self.stats.get(cid) if (self.stats and cid is not None) else None
+        return bool(st is not None and getattr(st, "is_pokemon", False))
+
+    def _deploy_offered_ids(self, obs: dict, select: dict) -> list:
+        """The card ids a `_TO_BENCH` select actually OFFERS, one per option — the Poffin-class
+        fetch's revealed candidates (ADR-0086 decision 6's third entry point).
+
+        These are deck cards, but they are **not** deck RESUPPLY: the search has already found them
+        and the only remaining question is which go onto the Bench. So they are certain suppliers,
+        exactly like a body in hand, and `_deploy_supplier_rows` takes them as such. One row per
+        OPTION rather than per distinct id, because two copies of the same species are two physical
+        bodies that can both be placed.
+
+        Read off the MENU, which during `_greedy_grab`'s re-score still lists candidates already
+        taken this multi-pick. That is deliberate rather than overlooked: the greedy re-scores
+        against a virtual board where those bodies are already in play, so the needs they covered are
+        closed and their rows are eligible for nothing — while `my_bench` has risen, which is what
+        actually tightens the capacity. Filtering them out would need the acquired set threaded
+        through the trace path for no change in the answer."""
+        return [cid for opt in (select.get("option") or [])
+                if self._is_body_card(cid := self._option_card_id(obs, select, opt))]
+
+    def _deploy_supplier_rows(self, obs: dict, board: Board, *, offered=()):
+        """``(ready_rows, deck_rows)`` — the bodies competing for my free Bench slots, split by
+        CERTAINTY because the two are not interchangeable (ADR-0086 decision 2).
 
         Only POKÉMON: capacity here is BENCH capacity, and a Trainer covering a draw need costs no
         Bench slot.
@@ -4966,7 +4995,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         A deck copy is NOT a substitute for one in hand: you have to draw it. So the deck leg enters
         as slot **RESUPPLY** — the odds the closure re-fills that slot anyway, which discounts the
         held copy to ``v × (1 − r)`` — which is what `resupply` exists for and what decision 2's
-        "weighted by Deck-Content Odds" describes."""
+        "weighted by Deck-Content Odds" describes.
+
+        ``offered`` is what makes the split about CERTAINTY rather than about the zone. A
+        `_TO_BENCH` candidate is a deck card the search has ALREADY found, so no draw stands between
+        it and the Bench — it belongs on the ready side with the hand, and its copy is removed from
+        the deck counts so the same physical card cannot also re-supply the slot it is about to
+        fill (which would discount it against itself)."""
         from collections import Counter
         me = self._my_player(obs)
         counts = board.deck_known_counts
@@ -4975,23 +5010,31 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             unseen.subtract(self._visible_card_counts(me))
             counts = {cid: n for cid, n in unseen.items() if n > 0}
 
-        def _is_body(cid) -> bool:
-            st = self.stats.get(cid) if (self.stats and cid is not None) else None
-            return bool(st is not None and getattr(st, "is_pokemon", False))
+        offered = [cid for cid in offered if self._is_body_card(cid)]
+        if offered:
+            counts = dict(counts)
+            for cid in offered:
+                if counts.get(cid, 0) > 0:
+                    counts[cid] -= 1
+            counts = {cid: n for cid, n in counts.items() if n > 0}
 
-        hand_rows = []
+        ready_rows = []
         for c in (me.get("hand") or []):
             cid = (c or {}).get("id")
-            if cid is not None and _is_body(cid):
-                hand_rows.append({"i": len(hand_rows), "cid": cid, "zone": "hand",
-                                  "worth": round(self._role_value(cid), 1),
-                                  "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+            if self._is_body_card(cid):
+                ready_rows.append({"i": len(ready_rows), "cid": cid, "zone": "hand",
+                                   "worth": round(self._role_value(cid), 1),
+                                   "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
+        for cid in offered:
+            ready_rows.append({"i": len(ready_rows), "cid": cid, "zone": "offered",
+                               "worth": round(self._role_value(cid), 1),
+                               "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
         deck_rows = []
-        for cid in sorted(c for c in counts if _is_body(c)):
-            deck_rows.append({"i": len(hand_rows) + len(deck_rows), "cid": cid, "zone": "deck",
+        for cid in sorted(c for c in counts if self._is_body_card(c)):
+            deck_rows.append({"i": len(ready_rows) + len(deck_rows), "cid": cid, "zone": "deck",
                               "worth": round(self._role_value(cid), 1),
                               "deploy": self._deploy_odds(cid, board, counts), "fuel": False})
-        return hand_rows, deck_rows
+        return ready_rows, deck_rows
 
     def _deploy_line_deadline(self, me: dict, cid) -> int:
         """When the line THIS held body belongs to comes online, in turns — the deploy path's
@@ -5074,46 +5117,58 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def _deploy_decision(self, obs: dict, select: dict, board: Board, option: dict):
         """Price ONE candidate Bench deployment — the Pilot half of ADR-0086: resolve board facts
         into `DeployInputs` and delegate. None when the switch is off or the option is not a body
-        reaching my Bench."""
+        reaching my Bench.
+
+        **All three entry points** decision 6 names are live: `_PLAY` (7) at `_MAIN`, `_SETUP_BENCH`
+        (2, refused by decision 9 before it ever reaches a price) and `_TO_BENCH` (5, the
+        Poffin-class fetch). The third abstained silently until Issue #261 item 2d, because the
+        candidate is a DECK card and the supplier lookup read hand rows only — so every option on
+        that select tied and the pick fell to menu position."""
         if not getattr(self, "deploy_value", False):
             return None
         ctx = select.get("context")
-        if ctx not in (_MAIN, _SETUP_BENCH, _TO_BENCH):
+        if ctx != _MAIN and ctx not in _BENCH_PLACEMENT_CONTEXTS:
             return None
         if ctx == _MAIN and option.get("type") != _PLAY:
             return None
         cid = self._option_card_id(obs, select, option)
-        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if stat is None or not getattr(stat, "is_pokemon", False):
+        if not self._is_body_card(cid):
             return None
+        stat = self.stats.get(cid)
 
         from common import needs
         from common.deploy_value import DeployInputs, deploy_value
 
         me = self._my_player(obs)
-        hand_rows, deck_rows = self._deploy_supplier_rows(obs, board)
-        index = next((r["i"] for r in hand_rows if r["cid"] == cid), None)
+        offered = self._deploy_offered_ids(obs, select) if ctx == _TO_BENCH else ()
+        ready_rows, deck_rows = self._deploy_supplier_rows(obs, board, offered=offered)
+        index = next((r["i"] for r in ready_rows if r["cid"] == cid), None)
         if index is None:
             return None
-        # One resolve over BOTH zones so the slot indices line up, then the hand rows are the
+        # One resolve over BOTH sides so the slot indices line up, then the READY rows are the
         # SUPPLIERS and the deck rows become per-slot RESUPPLY (they are not substitutes — you have
         # to draw a deck copy).
-        slots, elig_all = self._resolve_needs(obs, board, hand_rows + deck_rows,
+        slots, elig_all = self._resolve_needs(obs, board, ready_rows + deck_rows,
                                               include_general=False)
-        elig = elig_all[:len(hand_rows)]
+        elig = elig_all[:len(ready_rows)]
         # Re-stamp each LINE slot with the deploy-path deadline before the resupply clamp reads
         # it: `_resolve_needs` supplies the held-PAYOFF direction, which is structurally 99 for
         # a held base. Scoped here so the discard and refresh sites are untouched.
         slots = [dataclasses.replace(s, deadline=self._deploy_line_deadline(me, _slot_cid(s)))
                  if _slot_cid(s) is not None else s for s in slots]
-        resupply = self._deploy_resupply(board, slots, elig_all, len(hand_rows), deck_rows)
+        resupply = self._deploy_resupply(board, slots, elig_all, len(ready_rows), deck_rows)
         capacity = max(0, _BENCH_MAX - int(board.my_bench or 0))
         assignment = needs.deploy_marginal(slots, elig, resupply, index, capacity=capacity)
 
         tags = set(self.functions.tags(cid)) if self.functions else set()
-        # Set Up precedes the first turn, so "once during your turn" is unsatisfiable there — the
-        # pregame zero is DERIVED, which is what makes the old -15 veto deletable (decision 3).
-        can_fire = ("supporter_tutor" in tags and ctx != _SETUP_BENCH
+        # WHERE THE BODY COMES FROM decides whether the trigger exists at all, and it is a card fact
+        # rather than a policy: every bench-drop Ability in the pool reads "when you play this
+        # Pokémon FROM YOUR HAND onto your Bench" (`data/EN_Card_Data.csv` — Meowth ex 1071's
+        # Last-Ditch Catch, Iron Leaves ex 75, Drilbur 81, Farfetch'd 123, Bloodmoon Ursaluna 135,
+        # Durant ex 198, Chien-Pao 209; the two "to evolve" siblings are a different trigger again).
+        # A Poffin-class fetch puts the body there from the DECK, so the clause is unsatisfiable —
+        # the same DERIVED zero decision 3 gives `_SETUP_BENCH`, for the same kind of reason.
+        can_fire = ("supporter_tutor" in tags and ctx == _MAIN
                     and not self._last_ditch_spent(me))
         ability_marginal, ability_odds = 0.0, 0.0
         if can_fire:

@@ -353,6 +353,21 @@ def test_deploy_marginal_prices_a_redundant_body_at_zero_however_free_the_bench(
 
 
 @pytest.mark.req("REQ-NEEDS-0011")
+def test_deploy_marginal_is_zero_with_no_free_slot_because_the_deploy_cannot_happen():
+    """A full Bench has no counterfactual: `V(X deployed)` is not a state the board can reach, so the
+    marginal is exactly 0 rather than X's slot value.
+
+    The branch that credits X its own slot enumerates X's ELIGIBLE slots without asking whether X can
+    take one, so at capacity 0 it priced a full positive marginal for an impossible play. Latent
+    while only `_PLAY` was wired — the engine never offers an illegal placement — and reachable from
+    the `_TO_BENCH` greedy multi-pick, where the capacity is OUR hypothetical after an earlier pick
+    rather than the engine's menu (Issue #261 item 2d)."""
+    slots = [needs.Slot("line", 20.0, 99, "s1")]
+    assert needs.deploy_marginal(slots, [{0}], [0.0], 0, capacity=0) == 0.0
+    assert needs.deploy_marginal(slots, [{0}], [0.0], 0, capacity=1) == 20.0   # ...and one slot pays
+
+
+@pytest.mark.req("REQ-NEEDS-0011")
 def test_deploy_marginal_displacement_reads_the_BEST_rival_not_a_constant():
     """"Emergent, never a constant": the slot cost is whatever the displaced supplier was worth, so a
     last slot contested by a 25 is dearer than the same slot contested by a 5."""
