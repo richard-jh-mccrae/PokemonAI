@@ -991,6 +991,13 @@ class CombatMath:
         elif kind == "fetch" and clause.get("zone") == "deck":
             if clause.get("target") not in ("basic_energy", "energy"):
                 return ()                      # a Pokémon/Trainer fetch is no Energy at all
+            from common.fetch_closure import fetch_is_unconditional
+            if not fetch_is_unconditional(clause):
+                return ()          # a dig / gated / undecidable find is no promise of a unit at all
+            # The clause's `amount` is deliberately NOT read: these units compete for the turn's ONE
+            # manual attach rather than summing, so a second unit of the same pool buys the budget
+            # nothing, and on a `choice` clause (Bug Catching Set) the amount is a cap SHARED with a
+            # non-Energy leg that may consume all of it.
             pool, source = self._clause_pool(ctx.deck, clause.get("energy_type")), "deck"
             amount = 1
         else:

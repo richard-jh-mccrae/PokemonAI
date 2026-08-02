@@ -171,6 +171,11 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "discard_basic_f_energy": frozenset({"my_hand_ids", "my_discard_contents"}),
     "discard_eot": frozenset({"attached_energy", "my_discard_contents"}),
     "discard_own_energy": frozenset({"attached_energy", "my_discard_contents"}),
+    # Issue #301: the dug cards a `dig` fetch does NOT take go to the DISCARD rather than being
+    # shuffled back (Explorer's Guidance). It is the one dig rider that moves cards between two
+    # zones instead of merely re-ordering the deck, which is why it needs a write-set of its own and
+    # `deck_order` is NOT among them — nothing is shuffled, the remainder simply leaves the deck.
+    "discard_remainder": frozenset({"my_discard_contents", "my_deck_count", "deck_odds"}),
     "other_to_bottom": frozenset({"my_deck_count", "deck_odds", "deck_order"}),
     "shuffle_both_hands": frozenset({"my_hand_ids", "their_hand_size", "my_deck_count",
                                      "their_deck_count", "deck_odds", "deck_order"}),
@@ -222,9 +227,28 @@ COVERS_VERDICTS = frozenset({COVERS_FULL, COVERS_PARTIAL})
 #: for the same reason `footprints_writing_unhomed()` is asserted empty: an owed list that can grow
 #: silently is not a schedule. A card leaving it is clause work landing; a card ARRIVING in it is
 #: either new exposure that owes a ruling, or a verdict quietly downgraded — both want a human.
+#:
+#: Entries stay after their card is fixed: this is the record of what was owed when the baseline was
+#: ruled, not a live list. 1086 / 1100 / 1110 / 1118 all promoted to `full` at Issue #301 (the
+#: missing-`amount` fixes) and are kept here for exactly that reason — `partial_clause_cards()` is
+#: where the live answer lives.
+#:
+#: **Issue #301's five additions are NEW EXPOSURE, ruled, not a downgrade.** Each is a card that had
+#: NO clauses at all — so no verdict — and now has an authored set that is honestly incomplete:
+#:
+#: * 1115 Hop's Bag, 1134 Team Rocket's Transceiver, 1215 Ethan's Adventure, 1220 Team Rocket's
+#:   Proton — each restricted to a card-NAME family the closure records but cannot DECIDE (no
+#:   build-time family index over the pool). The clause carries the restriction and
+#:   `fetch_closure` refuses it for reach, which is the fail-CLOSED direction; ignoring the field to
+#:   claim `full` would read Hop's Bag as fetching any Basic. Ruled at Issue #301, cross-posted from
+#:   Issue #306.
+#: * 1206 Larry's Skill — all three search legs authored; *"Discard your hand"* is the card's whole
+#:   cost and no clause field carries it (the same ruling 1192 already carries).
+#:
+#: None of the five is in a shipped deck; their combined meta weight is ~0.4 copies.
 PARTIAL_CLAUSE_BASELINE: frozenset[int] = frozenset({
-    1080, 1086, 1100, 1110, 1118, 1120, 1153, 1181, 1187, 1192, 1199, 1200, 1203, 1207, 1208,
-    1213, 1214, 1216, 1222, 1223, 1227, 1237, 1239, 1242,
+    1080, 1086, 1100, 1110, 1115, 1118, 1120, 1134, 1153, 1181, 1187, 1192, 1199, 1200, 1203,
+    1206, 1207, 1208, 1213, 1214, 1215, 1216, 1220, 1222, 1223, 1227, 1237, 1239, 1242,
 })
 
 
