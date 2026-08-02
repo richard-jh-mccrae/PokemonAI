@@ -30,6 +30,7 @@ the data products **in order** (each step reads the previous output):
 | `build_card_functions.py` | Probe the engine → function-tag table `common/card_functions.json`; **accumulates** across runs | `python tools/build_card_functions.py [--fresh] [--limit N]` |
 | `audit_card_functions.py` | Cross-check the tag table against card **text** (independent oracle) → flags suspect false-positives / misses | `python tools/audit_card_functions.py [--show 15]` |
 | `verify_meta_cards.py` | Same check but **ranked by real usage** in the meta DB → flag-only review list of the popular cards whose tags look wrong (e.g. Munkidori) | `python tools/verify_meta_cards.py [--top 120]` |
+| `apply_seam_coverage.py` | Apply-seam coverage census (POC-A2, Issue #269): resolves every effect site in our decks + the scouting archetypes to a §3b fate → regenerates the data block in `docs/plans/apply-seam-coverage.md` | `python tools/apply_seam_coverage.py [--out PATH] [--json PATH]` |
 | `build_scouting_artifact.py` | Meta store + `cards.json` → `common/scouting/artifact.json` | `python tools/build_scouting_artifact.py [--half-life 21] [--min-episodes 50]` |
 | `run_meta_tracker.py` | Daily fetch: download top episodes, band by rating, parse, build HTML dashboard | `python tools/run_meta_tracker.py [--bands Elite High] [--cap 500]` |
 | `deck_convert.py` | Limitless `.txt` ↔ `deck.csv` (resolves by card name, asserts the 5 deck rules) | `python tools/deck_convert.py to-csv <deck.txt> <name> [--force]`  ·  `to-txt <deck.csv> [-o out.txt]` |
