@@ -1,4 +1,239 @@
 {
+"_covers": {
+"_note": "Per-CARD clause-set COMPLETENESS verdicts (Issue #300): does this card's clause set cover its WHOLE printed effect? `full` | `partial`, each quoting the leg the clauses carry or miss. AUTHORED HERE, in tools/meta_tracker/effect_overrides.json, and re-stamped verbatim into common/card_effects.json under the same key by build_card_effects.py — edit it here, never in the shipped artifact. Ported from the Issue #269 census's hand-ruled table (tools/apply_seam_coverage.py), which read every verdict off the engine's own card text beside the committed clauses; the cards outside that census's pool were ruled the same way. This is a per-card fact, not a per-clause one, so it lives beside the clause lists rather than inside them — a card whose clauses are purely probe-MEASURED needs a verdict too, and giving it a numeric override entry to carry one would REPLACE the measurement. Read by common.snapshot_coverage.partial_clause_cards() and fed to apply_option.fate's `clauses_cover` so a PARTIAL set REFUSES instead of pricing its uncovered leg at 0.",
+"17": {
+"covers": "full",
+"reason": "provision + evolution provision + the end-of-turn discard rider all carried"
+},
+"66": {
+"covers": "full",
+"reason": "draw 3 + `shuffle_self_in`; the self-shuffle IS the rest of the card"
+},
+"120": {
+"covers": "full",
+"reason": "`draw amount 1 window 2` + `other_to_bottom` is the whole dig"
+},
+"140": {
+"covers": "full",
+"reason": "draw 3 under `pokemon_ko_last_turn`; the once-per-turn cap is a condition, not a leg"
+},
+"190": {
+"covers": "full",
+"reason": "energy_recur 2 x {M} from discard on evolve — the whole Ability"
+},
+"648": {
+"covers": "full",
+"reason": "accel 5 x Basic {D} from deck on evolve — the whole Ability"
+},
+"675": {
+"covers": "full",
+"reason": "draw 3 + the discard-a-Basic-{F} cost + the Solrock condition"
+},
+"678": {
+"covers": "full",
+"reason": "attack rider (`on_attack`); not an apply-seam site at all — attacks are TERMINAL"
+},
+"1071": {
+"covers": "full",
+"reason": "fetch a Supporter from deck on bench-play — the whole Ability"
+},
+"1080": {
+"covers": "partial",
+"reason": "clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled"
+},
+"1086": {
+"covers": "partial",
+"reason": "no `amount`: the card fetches UP TO 2 Basics, the clause reads as one"
+},
+"1096": {
+"covers": "full",
+"reason": "heal 150; the discard-pile no-recover sentence is a property of the card once it is in the discard, not a leg of this play"
+},
+"1097": {
+"covers": "full",
+"reason": "both discard-fetch legs (Pokemon, Basic Energy) carried"
+},
+"1100": {
+"covers": "partial",
+"reason": "no `amount` and no `distinct_types`: the card fetches ANY NUMBER of Basic Energy of different types, the clause reads as one"
+},
+"1105": {
+"covers": "full",
+"reason": "heal 60, active {N} only"
+},
+"1110": {
+"covers": "partial",
+"reason": "no `amount`: the card recovers UP TO 5 in any combination, the clause reads as one"
+},
+"1112": {
+"covers": "full",
+"reason": "heal 60 + the `discard_own_energy` rider"
+},
+"1117": {
+"covers": "full",
+"reason": "heal 30"
+},
+"1118": {
+"covers": "partial",
+"reason": "no `amount`: the card recovers UP TO 2 Basic Energy, the clause reads as one"
+},
+"1119": {
+"covers": "full",
+"reason": "fetch a Basic Energy from deck"
+},
+"1120": {
+"covers": "partial",
+"reason": "the flip is carried and `discard_opp_energy` now declares its write-set, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition"
+},
+"1121": {
+"covers": "full",
+"reason": "fetch a Pokemon from deck + the `discard_2` cost"
+},
+"1122": {
+"covers": "full",
+"reason": "fetch a Supporter with `dig: 7`"
+},
+"1130": {
+"covers": "full",
+"reason": "both heal modes (Arven's Pokemon 100, Active 30) carried"
+},
+"1142": {
+"covers": "full",
+"reason": "both {F} legs (Basic Energy, Basic Pokemon) carried"
+},
+"1145": {
+"covers": "full",
+"reason": "fetch a Mega Evolution Pokemon ex from deck"
+},
+"1146": {
+"covers": "full",
+"reason": "accel 1 Basic {P} from discard to a Benched {P}"
+},
+"1147": {
+"covers": "full",
+"reason": "heal 80, active-only, gated on 3+ Energy"
+},
+"1152": {
+"covers": "full",
+"reason": "fetch a no-Rule-Box Pokemon from deck"
+},
+"1153": {
+"covers": "partial",
+"reason": "clause heals 20; REMOVING A SPECIAL CONDITION from the Active is unmodelled"
+},
+"1181": {
+"covers": "partial",
+"reason": "clause draws a flat 4; the card draws 2 and only draws 2 more at 10+ cards in hand, so the clause OVER-states on every normal board"
+},
+"1187": {
+"covers": "partial",
+"reason": "clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and costs a hand discard — neither is carried"
+},
+"1189": {
+"covers": "full",
+"reason": "fetch an ability-less evolution from deck straight onto a body (`dest: in_play`)"
+},
+"1190": {
+"covers": "full",
+"reason": "heal all, gated on 30-or-less remaining HP"
+},
+"1192": {
+"covers": "partial",
+"reason": "clause draws 5; DISCARD YOUR HAND — the card's whole cost — is unmodelled"
+},
+"1198": {
+"covers": "full",
+"reason": "accel 1 from deck + `to_hand: 1` + `distinct_types`"
+},
+"1199": {
+"covers": "partial",
+"reason": "clause draws a flat 8, the card's maximum; the base is 4, the 8 needs the opponent at 3-or-fewer Prizes, and shuffling your hand in is unmodelled"
+},
+"1200": {
+"covers": "partial",
+"reason": "clause draws 4; putting 2 cards from hand on the bottom — the cost, and the gate on being able to pay it — is unmodelled"
+},
+"1203": {
+"covers": "partial",
+"reason": "clause draws 1; the card SWITCHES the Active and then draws up to a 5-card hand. The switch is the reason the card is played"
+},
+"1207": {
+"covers": "partial",
+"reason": "clause draws 4; the end-of-turn discard-your-hand-at-5-or-more is unmodelled (no `discard_eot` rider)"
+},
+"1208": {
+"covers": "partial",
+"reason": "clause draws a flat 4; the card draws UP TO A 6-CARD HAND and costs a discard"
+},
+"1212": {
+"covers": "full",
+"reason": "heal 70, active-only"
+},
+"1213": {
+"covers": "partial",
+"reason": "clause draws 4 for me; the card is symmetric — the OPPONENT's hand is shuffled away and redrawn to 4, which is the entire reason to play it"
+},
+"1214": {
+"covers": "partial",
+"reason": "clause draws a flat 4, the card's maximum; the base is 2 and the extra 2 needs the opponent at 3 or fewer Prizes"
+},
+"1216": {
+"covers": "partial",
+"reason": "clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team Rocket board"
+},
+"1219": {
+"covers": "full",
+"reason": "fetch a Trainer from deck"
+},
+"1222": {
+"covers": "partial",
+"reason": "clause heals 40; the card heals EACH of your Pokemon, which a per-target amount does not carry"
+},
+"1223": {
+"covers": "partial",
+"reason": "clause draws a flat 5; the card is a COIN FLIP between 5/3 and 3/5, and shuffles both hands away"
+},
+"1224": {
+"covers": "full",
+"reason": "draw 3, and that is the whole card"
+},
+"1225": {
+"covers": "full",
+"reason": "both fetch legs (an Evolution and an Energy) carried"
+},
+"1227": {
+"covers": "partial",
+"reason": "clause draws a flat 8, the card's maximum; the base is 6, and 8 needs exactly 6 Prizes left. Shuffling your hand in is unmodelled"
+},
+"1229": {
+"covers": "full",
+"reason": "heal all on a Mega ex + the `bounce_energy_to_hand` rider"
+},
+"1236": {
+"covers": "full",
+"reason": "draw 3, and that is the whole card"
+},
+"1237": {
+"covers": "partial",
+"reason": "clause draws a flat 6; the card is a per-player COIN FLIP between 6 and 3 and puts both hands on the bottom of their decks"
+},
+"1239": {
+"covers": "partial",
+"reason": "clause draws a flat 3; the card draws UP TO a 5-card hand after an optional pre-discard of any size"
+},
+"1240": {
+"covers": "full",
+"reason": "accel 2 Basic Energy from discard onto a Stage 2, gated on the Prize condition"
+},
+"1241": {
+"covers": "full",
+"reason": "heal 150, {P} only"
+},
+"1242": {
+"covers": "partial",
+"reason": "clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried"
+}
+},
 "17": [
 {
 "kind": "energy_provide",
@@ -32,12 +267,43 @@
 "condition": "pokemon_ko_last_turn"
 }
 ],
+"190": [
+{
+"kind": "energy_recur",
+"amount": 2,
+"energy_type": 8,
+"zone": "discard",
+"trigger": "on_evolve",
+"target": "own_type"
+}
+],
+"648": [
+{
+"kind": "accel",
+"amount": 5,
+"source": "deck",
+"target": "own_line",
+"energy": "basic",
+"energy_type": 7,
+"trigger": "on_evolve"
+}
+],
 "675": [
 {
 "kind": "draw",
 "amount": 3,
 "condition": "solrock_in_play",
 "rider": "discard_basic_f_energy"
+}
+],
+"678": [
+{
+"kind": "energy_recur",
+"amount": 3,
+"energy_type": 6,
+"zone": "discard",
+"trigger": "on_attack",
+"target": "bench_only"
 }
 ],
 "1071": [
@@ -190,6 +456,17 @@
 "kind": "fetch",
 "target": "mega",
 "zone": "deck"
+}
+],
+"1146": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "discard",
+"target": "benched",
+"target_type": 5,
+"energy": "basic",
+"energy_type": 5
 }
 ],
 "1147": [
@@ -406,48 +683,6 @@
 "kind": "heal",
 "amount": 10,
 "condition": "played_supporter_this_turn"
-}
-],
-"1146": [
-{
-"kind": "accel",
-"amount": 1,
-"source": "discard",
-"target": "benched",
-"target_type": 5,
-"energy": "basic",
-"energy_type": 5
-}
-],
-"190": [
-{
-"kind": "energy_recur",
-"amount": 2,
-"energy_type": 8,
-"zone": "discard",
-"trigger": "on_evolve",
-"target": "own_type"
-}
-],
-"678": [
-{
-"kind": "energy_recur",
-"amount": 3,
-"energy_type": 6,
-"zone": "discard",
-"trigger": "on_attack",
-"target": "bench_only"
-}
-],
-"648": [
-{
-"kind": "accel",
-"amount": 5,
-"source": "deck",
-"target": "own_line",
-"energy": "basic",
-"energy_type": 7,
-"trigger": "on_evolve"
 }
 ]
 }

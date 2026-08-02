@@ -70,10 +70,14 @@ Sources are all at-source per CLAUDE.md; nothing here is recalled.
   prior, renormalised). An unweighted sum over 122 archetypes would let a hundred one-off brews
   outvote the field.
 * **One hand-ruled column.** Whether a card's clauses cover its *whole* printed effect is not
-  mechanically decidable, so `CLAUSE_JUDGEMENT` in the script is a per-card ruling, each entry
-  quoting the leg the clauses miss. Every clause-bearing card in the pool has one; the script refuses
-  to run if a card is missing an entry, because defaulting either way would fabricate the report's
-  most important column.
+  mechanically decidable, so it is a per-card ruling, each entry quoting the leg the clauses miss.
+  Every clause-bearing card in the pool has one; the script refuses to run if a card is missing an
+  entry, because defaulting either way would fabricate the report's most important column.
+  **Issue #300 moved that ruling out of this script** into the compendium itself
+  (`card_effects.json`'s `_covers` block, authored in `tools/meta_tracker/effect_overrides.json`),
+  where `apply_option` reads it too. The census now reads the same store: the census is a *report*
+  and the compendium is the *truth*, and a report holding its own copy of the fact it reports on
+  would drift with nothing able to see it.
 
 ### Scope note — what this landed beyond the report
 
@@ -361,7 +365,7 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 |---|---|---|---|---|
 | 1227 | Lillie's Determination | 20 | 3.09 | clause draws a flat 8, the card's maximum; the base is 6, and 8 needs exactly 6 Prizes left. Shuffling your hand in is unmodelled |
 | 1086 | Buddy-Buddy Poffin | 10 | 2.49 | no `amount`: the card fetches UP TO 2 Basics, the clause reads as one |
-| 1120 | Crushing Hammer | 8 | 0.54 | the coin is carried; the EFFECT it gates (`discard_opp_energy`) has NO declared write-set in `snapshot_coverage.CLAUSE_WRITES` — see the report's clause-write finding |
+| 1120 | Crushing Hammer | 8 | 0.54 | the flip is carried and `discard_opp_energy` now declares its write-set, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition |
 | 1213 | Judge | 3 | 0.06 | clause draws 4 for me; the card is symmetric — the OPPONENT's hand is shuffled away and redrawn to 4, which is the entire reason to play it |
 | 1080 | Unfair Stamp | 2 | 0.11 | clause draws 5 and shuffles both hands; the OPPONENT's 2-card draw is unmodelled |
 | 1223 | Harlequin | 2 | 0.09 | clause draws a flat 5; the card is a COIN FLIP between 5/3 and 3/5, and shuffles both hands away |
@@ -515,12 +519,27 @@ does not read as *undervalued*, it reads as *never explored*. That is the §3c f
 registry was built to prevent, arriving through the compendium instead of through the snapshot.
 `mega_starmie` is the extreme case: only 1 refused copy in 60, but 14 partial ones.
 
+> **Remediated by Issue #300** (mechanism, not exposure): a clause set now DECLARES whether it is
+> complete — `card_effects.json`'s `_covers` — and `snapshot_coverage.clauses_cover()` turns a
+> `partial` verdict into the fail-closed tri-state `apply_option.fate` refuses on, so a partial set
+> can no longer price as a complete one. The 19 sites are still partial; what changed is that they
+> are now declared, audited (`partial_clause_cards()`, asserted shrink-only) and unable to be silent.
+> Closing them one family at a time is Issue #301, Issue #302, Issue #303 and Issue #304.
+
 **4. `coin`'s write-set is declared EMPTY, and its real effect is undeclared vocabulary.**
 `snapshot_coverage.CLAUSE_WRITES["coin"] = frozenset()` with the note *"it is an RNG READ"* — true of
 the flip, but Crushing Hammer's clause is `{"kind": "coin", "effect": "discard_opp_energy"}`, and
 that `effect` field is a **second vocabulary that `undeclared_clauses()` never walks** (it walks kinds
 and riders only). So the audit test passes while the card's actual write — the opponent's attached
 Energy and their discard — has no declared home. Eight copies across our decks.
+
+> **Fixed by Issue #300.** `effect` is audited vocabulary: `snapshot_coverage.VOCABULARY_KEYS` is
+> `("kind", "rider", "effect")`, the walk (`clause_vocabulary()`) moved out of the test and into the
+> module so no reader can under-walk it, and `discard_opp_energy` declares
+> `{attached_energy, their_discard_contents}`. `attached_energy` grew its their-side home in the same
+> change — a my-side-only home would have declared a write the snapshot could not show. The `coin`
+> entry keeps its empty write-set, correctly: the FLIP writes nothing, and the comment now says which
+> half of the clause it is talking about.
 
 **5. The registry itself is clean.** `clauses_writing_unhomed()`, `unknown_zones()`, `unhomed()` and
 `footprints_writing_unhomed()` are all empty after T1. The §3c contract is being kept; the exposure
@@ -554,10 +573,21 @@ Issue #263.
 4. **Is a clause's `effect` value part of the audited vocabulary?** Finding 4. If yes,
    `undeclared_clauses()` should walk it and `discard_opp_energy` needs a write-set; if no, the
    `coin` entry needs a comment saying so.
+   → **RULED YES (Issue #300).** It is walked, `discard_opp_energy` has a write-set, and the walk
+   lives in `snapshot_coverage` rather than in the test — the reason this went unaudited from the day
+   it was authored is that the walker lived on the checking side, where nobody updates it.
 5. **PARTIAL is not a fate — should it be a failure?** §3c's rule is *"a hard, loud failure rather
    than a silent zero"* for an unrepresented write. A clause set that covers 60 % of a card produces
    the same silent zero on the other 40 %, with no mechanism to notice. Should T4 carry a
    per-clause-set completeness flag and refuse (or telemetry-flag) an incomplete one?
+   → **RULED: a flag, and it REFUSES (Issue #300).** `card_effects.json` carries a per-card
+   `_covers: full | partial` verdict; `snapshot_coverage.clauses_cover()` maps it to the tri-state
+   `apply_option.fate` takes, `partial` → `False` → refuse, absent → `None` → refuse, both fail
+   closed and stay distinguishable. Fail-closed rather than telemetry-only, consistent with
+   `deterministic`: a refusal is always-expanded by the composer, so refusing a partial set costs
+   search rather than correctness, while pricing one costs correctness silently.
+   **Issue #299 wires the `clauses_cover` argument into `fate()`;** Issue #300 shipped the
+   registry, the data and the audit under it — that order is recorded in Issue #300's commit.
 
 ## Recommended follow-ups, ranked by exposure per unit of work
 

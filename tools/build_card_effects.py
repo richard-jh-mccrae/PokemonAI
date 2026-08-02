@@ -22,6 +22,12 @@ AFTER the hand-authored overrides — on conflict the OBSERVED value wins (the e
 the authority) and the conflict is printed loudly. ``--limit 0`` skips the trainer
 probe entirely (observe-only / re-stamp-only runs).
 
+Per-card clause-set completeness verdicts (`_covers`, Issue #300) ride through from the overrides
+file to the shipped table verbatim — they are a hand ruling, never measured, and they are what stops
+a PARTIAL clause set pricing as a complete one at the apply seam. Every card with clauses owes one;
+a missing or unreasoned verdict is printed loudly here and fails
+`tests/strategy/test_snapshot_coverage.py`.
+
 Usage:
     python tools/build_card_effects.py [--out PATH] [--limit N] [--overrides PATH]
                                        [--observed PATH] [--observe-restrictions] [--fresh]
@@ -36,6 +42,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))                # meta_tracker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))    # cg (lazy)
 
+from common import snapshot_coverage                                          # noqa: E402
 from meta_tracker.card_effects import (                                        # noqa: E402
     accumulate_effects, apply_observed_restrictions, apply_overrides, build_effect_table)
 from meta_tracker.cards import load_cards                                     # noqa: E402
@@ -79,11 +86,29 @@ def _load_overrides(path) -> dict[int, list[dict]]:
     return {}
 
 
+def _load_covers(path) -> dict:
+    """The hand-ruled ``{cardId: {covers, reason}}`` block, verbatim — never measured, never merged.
+
+    Kept out of :func:`_load_overrides` on purpose: an override entry REPLACES the measured clauses
+    of its kind, and most cards owing a verdict carry only measured clauses. A verdict is a statement
+    ABOUT a clause set, so it rides beside the sets rather than inside them.
+
+    The authored `_note` rides along with the verdicts: it is what tells a reader of the SHIPPED
+    artifact what the field means and where it is edited, and dropping it would leave the compendium
+    carrying a vocabulary it does not explain."""
+    p = Path(path)
+    if not p.exists():
+        return {}
+    raw = json.loads(p.read_text(encoding="utf-8")).get(snapshot_coverage.COVERS_KEY) or {}
+    notes = {k: v for k, v in raw.items() if str(k).startswith("_")}
+    return {**notes, **{k: v for k, v in raw.items() if snapshot_coverage.is_card_key(k)}}
+
+
 def _load_table(path) -> dict[int, list[dict]]:
     """The previously-shipped ``{cardId: [clauses]}`` table, to accumulate into."""
     p = Path(path)
     if p.exists():
-        return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()}
+        return snapshot_coverage.clause_lists(json.loads(p.read_text(encoding="utf-8")))
     return {}
 
 
@@ -98,8 +123,7 @@ _OBSERVED_NOTE = ("Engine-OBSERVED heal restrictions (ADR-0032 item 6; "
 def _write_observed(path, observed: dict[int, dict]) -> None:
     payload: dict = {"_note": _OBSERVED_NOTE}
     payload.update({str(cid): entry for cid, entry in sorted(observed.items())})
-    Path(path).write_text(json.dumps(payload, ensure_ascii=False, indent=1),
-                          encoding="utf-8")
+    Path(path).write_bytes(json.dumps(payload, ensure_ascii=False, indent=1).encode("utf-8"))
 
 
 def main() -> None:
@@ -151,8 +175,16 @@ def main() -> None:
     after = sum(len(v) for v in table.values())
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    payload = {str(cid): cls for cid, cls in sorted(table.items())}
-    out.write_text(json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8")
+    # `_covers` first, so the completeness verdicts are the first thing a reader of the shipped
+    # artifact meets rather than something buried past 58 clause lists.
+    payload: dict = {snapshot_coverage.COVERS_KEY: _load_covers(args.overrides)}
+    payload.update({str(cid): cls for cid, cls in sorted(table.items())})
+    for problem in snapshot_coverage.covers_problems(payload):
+        print(f"  !! COVERS: {problem}")
+    # Binary write: `Path.write_text` rewrites LF to CRLF on Windows, which would turn every rebuild
+    # into a whole-file diff on a committed store — and this repo builds on Windows and grades on
+    # Linux, so the store must not depend on which one last touched it.
+    out.write_bytes(json.dumps(payload, ensure_ascii=False, indent=0).encode("utf-8"))
     kinds: dict[str, int] = {}
     for cls in table.values():
         for c in cls:

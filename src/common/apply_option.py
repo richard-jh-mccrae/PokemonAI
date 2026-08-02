@@ -472,7 +472,18 @@ def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: boo
                          convention says fail closed.
 
     Terminal options are not a fate — ask :func:`is_terminal` first; this reports `REFUSED` for them
-    rather than inventing a fourth answer, and :func:`apply_option` raises."""
+    rather than inventing a fourth answer, and :func:`apply_option` raises.
+
+    **A fourth gate is owed here: `clauses_cover`** (Issue #299, whose ruling this signature is
+    waiting on). MODELLED is currently a pure kind-table lookup, so a `_PLAY` whose Effect Clauses
+    cover only PART of the printed card resolves to MODELLED anyway and the uncovered leg differences
+    to exactly 0 — the silent-zero failure, arriving through the compendium instead of the snapshot.
+    Everything under that gate already exists and is audited: the per-card verdict ships in
+    `card_effects.json` (`snapshot_coverage.COVERS_KEY`), `CardEffects.clauses_cover(card_id)` hands
+    it over as the tri-state this argument will take — `True` full, `False` partial, `None` unruled —
+    and both falsey answers must REFUSE, fail-closed exactly as ``deterministic`` does. Issue #300
+    shipped that half; wiring it belongs to Issue #299, because Issue #299 is also re-deciding the
+    MODELLED/engine precedence this gate sits inside, and the two cannot be settled separately."""
     how = coverage(transition_kind(option))
     if how == MODELLED:
         return MODELLED
