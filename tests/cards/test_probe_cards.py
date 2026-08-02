@@ -8,13 +8,16 @@ import pytest
 from meta_tracker.card_functions import classify_functions
 from meta_tracker.probe_cards import (
     _attack_turn_logs, _damaged_option_indices, _setup_active_option, _strip_serials,
-    build_evolution_deck, build_pokemon_deck, build_probe_deck, build_trigger_deck,
+    _TRIGGER_SUPPORTERS, build_evolution_deck, build_pokemon_deck, build_probe_deck,
+    build_trigger_deck,
     evolution_chain, extract_probe, find_ability_option, find_evolve_option, find_play_option,
     select_shape,
 )
 
 BASIC_ENERGY, BASIC_MON, STAGE1, ITEM, ACE = 3, 100, 101, 200, 300
 SUPPORTER_A, SUPPORTER_B, SUPPORTER_C = 400, 401, 402
+SUPPORTER_D, SUPPORTER_E = 403, 404      # the pool must exceed `_TRIGGER_SUPPORTERS`,
+                                         # or "exactly N, lowest first" cannot be tested
 
 
 def _pool():
@@ -27,6 +30,8 @@ def _pool():
         SUPPORTER_A: {"category": "supporter", "name": "Filler Supporter A"},
         SUPPORTER_B: {"category": "supporter", "name": "Filler Supporter B"},
         SUPPORTER_C: {"category": "supporter", "name": "Filler Supporter C"},
+        SUPPORTER_D: {"category": "supporter", "name": "Filler Supporter D"},
+        SUPPORTER_E: {"category": "supporter", "name": "Filler Supporter E"},
     }
 
 
@@ -304,16 +309,39 @@ def test_find_evolve_option_none_when_evolution_not_in_hand():
 
 
 @pytest.mark.req("REQ-FUNC-0015")
-def test_build_trigger_deck_stacks_the_line_and_two_supporter_targets():
-    """Two DISTINCT Supporter lines, not one: a Supporter-fetching trigger is skipped entirely by
-    the engine when the deck holds none, so a single 4-copy line lets the shuffle decide the shape
-    (measured at ~1 run in 12)."""
-    deck = build_trigger_deck([BASIC_MON, STAGE1], BASIC_ENERGY, _pool())
+def test_build_trigger_deck_stacks_the_line_and_N_supporter_targets():
+    """`_TRIGGER_SUPPORTERS` DISTINCT Supporter lines, lowest card ids first: a Supporter-fetching
+    trigger is skipped entirely by the engine when the deck holds none, so too few lines let the
+    shuffle decide the recorded shape.
+
+    The STRUCTURE is asserted against the constant; the constant's VALUE is asserted against a
+    literal floor. Both halves are needed and neither alone is honest:
+
+    * parameterising by `_TRIGGER_SUPPORTERS` stops the test breaking when the knob is tuned — this
+      test previously spelled "two" in its name and body and broke on Issue #326's retune for no
+      behavioural reason;
+    * but parameterising ALONE makes it vacuous, because `build_trigger_deck` reads the same
+      constant, so both sides move together and no value can ever fail. Measured, not assumed: with
+      the floor removed, setting the constant to 3 still passed. That is the "assert the join from
+      the side that built it" trap.
+
+    So the floor below is a LITERAL, and it is the Issue #326 finding: 2 lines lost to the mulligan
+    tail (the probe deck's only Basic is the target line, 4 in 60, so ~60% of hands miss for both
+    players and every opponent mulligan deals another card). Lowering the knob past 4 must fail."""
+    assert _TRIGGER_SUPPORTERS >= 4, (
+        "Issue #326: fewer than 4 Supporter lines lets the mulligan tail strip the deck of search "
+        "targets, and the engine then skips the select entirely — the probe records the draw's "
+        "shape instead of the card's")
+    pool = _pool()
+    deck = build_trigger_deck([BASIC_MON, STAGE1], BASIC_ENERGY, pool)
+    sups = sorted(c for c in pool if pool[c]["category"] == "supporter")
+    assert len(sups) > _TRIGGER_SUPPORTERS, "pool too small to test 'exactly N, lowest first'"
+    taken, skipped = sups[:_TRIGGER_SUPPORTERS], sups[_TRIGGER_SUPPORTERS:]
     assert len(deck) == 60
     assert deck.count(BASIC_MON) == 4 and deck.count(STAGE1) == 4
-    assert deck.count(SUPPORTER_A) == 4 and deck.count(SUPPORTER_B) == 4
-    assert SUPPORTER_C not in deck                       # exactly two lines, lowest ids first
-    assert deck.count(BASIC_ENERGY) == 60 - 16
+    assert all(deck.count(s) == 4 for s in taken)        # every chosen line at 4 copies
+    assert not any(s in deck for s in skipped)           # exactly N lines, lowest ids first
+    assert deck.count(BASIC_ENERGY) == 60 - 8 - 4 * _TRIGGER_SUPPORTERS
 
 
 @pytest.mark.req("REQ-FUNC-0015")
