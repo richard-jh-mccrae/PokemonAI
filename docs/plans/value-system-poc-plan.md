@@ -274,7 +274,17 @@ deliberate list; gates green; flips → wave 2.
   unchanged. The
   motivating frame `86091728-43` does NOT flip and the reason is recorded: its ruling needs the
   deck-tracker's prize inference and an `item_lock` worth entry, neither a deploy-seam gap.
-- **Rollout order fix (old Issue #254):** canonical slot ordering via Option-Equivalence.
+- **Rollout order fix (old Issue #254): DONE 2026-08-02 (ADR-0103).** The order-dependence was not
+  the search's but the POLICY's — the develop rollout re-runs `_evaluate` on each intermediate
+  SearchState, whose `(score, needy_line_attach)` sort fell through to the ENGINE MENU INDEX. The
+  third key is now the ADR-0091 fingerprint, index demoted below it; `_greedy_grab` takes the same
+  key (composed with item 2d's context-dependent take-fewer bar, which landed on the same loop).
+  Unconditional and LIVE (a sim-only tie-break would simulate a different agent).
+  **Leaf Lab CLASS ASYMMETRY 5 classes → 0**, Discrimination Gate PASS / 0 moved, leaf SOLE-top
+  38→39. One Decision-Gate REGRESSION went to wave 2 and was **ruled there**
+  (`86089120|0|decision|14`): the user ruled the two tied attaches genuinely equal in value on a bare
+  Dreepy, so the correction's `correct` names one of an indistinguishable-by-value pair — recorded as
+  a **`transposition`** (ADR-0088), the first since ADR-0091 retired the last one. Both gates PASS.
 - **Free-Item hold (old Issue #212):** generalize `_DENIAL_ITEM_COST` into the keep machinery.
 - **Shadow deletion:** `_discard_shadow`, `_threat_shadow`, `_recur_shadow`,
   `_opponent_target_shadow` and the v1 discard fallback (`discard_keep_value` path) deleted as

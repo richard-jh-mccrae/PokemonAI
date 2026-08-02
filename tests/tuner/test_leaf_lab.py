@@ -159,6 +159,25 @@ def test_a_symmetric_class_reports_NO_asymmetry():
     assert "class_asymmetry" not in row
 
 
+def test_float_non_associativity_is_NOT_an_asymmetry():
+    """The one class surviving ADR-0102's canonical ordering reports 124.83000000000001 vs
+    124.82999999999998 — a 2.8e-14 spread from summing the same terms in a different order, not the
+    leaf pricing one decision two ways. An instrument that can never report clean is one readers
+    learn to skip, so the tolerance is what makes "zero" expressible."""
+    obs = _twin_obs([_body(serial=1), _body(serial=2)])
+    row = evaluate_leaf_on_correction(
+        _pilot({0: 124.83000000000001, 1: 124.82999999999998}), _frame(obs=obs, correct=[0]))
+    assert "class_asymmetry" not in row
+
+
+def test_a_difference_the_leaf_can_EXPRESS_is_still_an_asymmetry():
+    """The negative half: the tolerance sits six orders below the 0.001 the leaf's own values are
+    rounded to, so it swallows nothing the leaf could have meant."""
+    obs = _twin_obs([_body(serial=1), _body(serial=2)])
+    row = evaluate_leaf_on_correction(_pilot({0: 124.83, 1: 124.829}), _frame(obs=obs, correct=[0]))
+    assert row["class_asymmetry"] == [{"options": [0, 1], "spread": pytest.approx(0.001)}]
+
+
 def test_asymmetry_does_not_touch_the_gated_verdict():
     """Reported, never gating — the doctrine the tie metrics already carry. The gate reads
     `correct_is_top`, and an asymmetric class must not change it."""

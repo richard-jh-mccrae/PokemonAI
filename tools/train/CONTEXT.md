@@ -404,7 +404,8 @@ where the leaf ranks one of two identical options 12× above the other still rea
 Lab reports it per row, and **never gates on it** (the doctrine the tie metrics already carry): a
 metric nobody has ruled on must not start failing `main`. Decision 5 canonicalises the leaf to the
 class MAXIMUM, which removes the asymmetry without touching the rollout; the rollout's own
-order-dependence is **Issue #254**, which also carries the five frames.
+order-dependence was **Issue #254**, CLOSED by **ADR-0102** (the tie-break is class identity, not
+menu position).
 _Avoid_: leaf noise (it is deterministic), scoring bug (the board scorer is fine — the ROLLOUT that
 reaches the board is incomplete), tie-break
 
@@ -414,6 +415,14 @@ finding alive: **RAW** values are the evidence (canonicalising first would make 
 construction — an instrument that can only ever say "nothing"), while every graded verdict is
 computed on the **CANONICAL** copy, because that is what the develop rung actually ranks. Collapsing
 the two readings breaks one job or the other.
+
+**Re-measured after ADR-0102 (2026-08-02): 0 classes.** Fixing the cause — the policy's tie-break,
+which fell through to the engine's menu index — emptied the finding the symptom fix could only
+correct downstream. The one class still visible in the raw values is `82749168|1|decision|29` at
+`124.83000000000001 / 124.82999999999998`, a `2.8e-14` spread that is float non-associativity rather
+than two prices, so `class_asymmetry` carries a `1e-9` tolerance: an instrument that can never report
+clean is one readers learn to skip. The bar sits six orders below the `0.001` the leaf's own values
+are rounded to, so nothing the leaf can express is swallowed.
 
 ⚠️ **Neither gate exercises the develop rung.** Zero of the 372 committed Corrections carry
 `search_begin_input`, so `_develop_rollout_line` is inert during a Decision Gate replay, and the Leaf

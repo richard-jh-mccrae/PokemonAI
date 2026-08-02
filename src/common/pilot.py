@@ -26,6 +26,8 @@ from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
 from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
+from common.option_equivalence import canonical_keys   # ADR-0102: the ordering tie-break is a board
+                                                       # fact (the fingerprint), never the menu index
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
@@ -1633,10 +1635,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             attach_working=self._attach_working(obs, select, board, options),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
         max_count = select.get("maxCount", 0)
-        # Primary key = score; secondary key breaks an EXACT tie toward an attach feeding a needy Line
-        # body (ep82867148 f87). decide()-only ordering nicety, W-route-invisible, never enters weight fit.
-        by_score = sorted(range(len(options)),
-                          key=lambda i: (traces[i].score, traces[i].attach_to_needy_line), reverse=True)
+        by_score = self._score_order(obs, options, traces)
         by_score = self._prefer_soonest_arming_evolve(by_score, options, traces)
         order = self._finish_turn_last(obs, board, options, traces, by_score, max_count,
                                        select.get("context"))
@@ -1737,6 +1736,41 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return None
         return {"mode": gp.mode.name, "conf": round(gp.confidence, 3), "goal": gp.directed_goal,
                 "route": len(gp.route), "route_turns": gp.route_turns}
+
+    def _score_order(self, obs: dict, options: list, traces: list) -> list:
+        """The menu ranked for `chosen`, **canonically** (ADR-0102, Issue #254).
+
+        Primary key = score; the secondary key breaks an EXACT tie toward an attach feeding a needy
+        Line body (ep82867148 f87) — a decide()-only ordering nicety, W-route-invisible, never in the
+        weight fit. What is new is the THIRD key, and what it replaces.
+
+        A tie used to fall through to the engine's menu index, and the index is the one thing about
+        an option that is not a board fact. After an identical first step onto interchangeable bodies
+        the resulting boards are isomorphic but their menus are *permutations* of each other, so one
+        tie resolved toward a different body on each: `_engine_leaf_value`'s within-turn rollout
+        re-runs this very policy on each intermediate SearchState, which is how it reached a KO from
+        bench 0 and missed the isomorphic line from bench 1 — `81903490|0|decision|49` scored
+        1167.0 / 95.4 / 95.4 on three byte-identical Riolu, reproducibly. ADR-0091 corrected that
+        *reading* (`fan_out` gives the class its demonstrated maximum) and filed the cause as
+        Issue #254; this is the cause.
+
+        So the tie breaks on the option's **Option Equivalence Class identity** — the ADR-0091
+        fingerprint, a pure function of the board — and only then on the index, which now decides
+        just between options that share a key: either the same decision (interchangeable by
+        definition) or unfingerprintable (no canonical identity exists, so menu order is the honest
+        answer). One consequence stated rather than hidden: this changes which of several EXACTLY
+        tied options is picked in live play too, and deliberately — a policy that is invariant only
+        inside the sim would be simulating something other than itself, which is the drift the
+        develop rung's whole override authority rests on not having.
+
+        Unconditional, like `_prefer_soonest_arming_evolve` below (the same defect one layer up, the
+        same fix): it deletes an inconsistency rather than adding a value term, so there is no OFF
+        branch worth carrying. `leaf_option_equivalence` keeps its own narrower contract — the develop
+        rung's class collapse — untouched."""
+        canon = canonical_keys(options, obs)
+        return sorted(range(len(options)),
+                      key=lambda i: (-traces[i].score, not traces[i].attach_to_needy_line,
+                                     canon[i], i))
 
     def _prefer_soonest_arming_evolve(self, order: list, options: list, traces: list) -> list:
         """Break an EXACT tie between EVOLVE options toward the body that arms soonest — i.e. put the

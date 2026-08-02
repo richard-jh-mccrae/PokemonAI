@@ -76,11 +76,14 @@ def test_retest_does_not_treat_an_energized_copy_as_interchangeable():
                       context=DAMAGE,
                       current=state(opp_bench=[poke(677, energy=0, hp=80, max_hp=80),
                                               poke(677, energy=2, hp=80, max_hp=80)]))
-    corr = _correction(obs, correct=[1], live_trace={"chosen": [0], "margin": 0})
+    corr = _correction(obs, correct=[0], live_trace={"chosen": [1], "margin": 0})
 
+    # A bare Pilot scores both at 0.0, so the pick is settled by the canonical tie-break (ADR-0102)
+    # rather than by the menu index — which copy that lands on is not this guard's subject, only that
+    # the two are NOT reconciled to each other.
     r = retest(corr, Pilot(Strategy(hypotheses=[]), deck=[1] * 60))
-    assert r["chosen_after"] == [0]        # picked the bare copy
-    assert r["fixed"] is False             # correct [1] is energized — different body, not a twin
+    assert r["chosen_after"] != corr.correct   # a real positional miss, not a transposed twin
+    assert r["fixed"] is False                 # the copies differ in energy — different bodies
 
 
 def test_retest_reconciles_the_reopened_f75_duplicate_riolu_snipe():

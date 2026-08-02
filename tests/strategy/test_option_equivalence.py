@@ -320,3 +320,38 @@ def test_class_of_defaults_to_the_index_alone():
     assert class_of(equiv, 1) == frozenset({1, 3})
     assert class_of(equiv, 7) == frozenset({7})
     assert class_of({}, 7) == frozenset({7})
+
+
+# ── canonical ordering keys (ADR-0102, Issue #254) ───────────────────────────────────────────────
+
+def test_canonical_keys_are_the_fingerprint_per_option():
+    """The key IS the class identity — two options that are one decision share a key, so no tie-break
+    between them can ever be positional."""
+    from common.option_equivalence import canonical_keys
+    frame = _frame(bench=[_body(serial=1), _body(serial=2)])
+    opts = [{"area": AREA_BENCH, "index": 0, "playerIndex": 0, "type": OPT_CARD},
+            {"area": AREA_BENCH, "index": 1, "playerIndex": 0, "type": OPT_CARD}]
+    keys = canonical_keys(opts, frame)
+    assert keys == [option_fingerprint(opts[0], frame)] * 2
+
+
+def test_canonical_keys_are_INVARIANT_under_a_menu_permutation():
+    """The property the whole fix rests on: permuting the menu (and the bodies it names) permutes the
+    keys with it and invents no new ones, so an ordering keyed on them cannot see menu position."""
+    from common.option_equivalence import canonical_keys
+    a, b = _body(cid=1030, hp=70, serial=1), _body(cid=1030, hp=40, serial=2)
+    opts = [{"area": AREA_BENCH, "index": 0, "playerIndex": 0, "type": OPT_CARD},
+            {"area": AREA_BENCH, "index": 1, "playerIndex": 0, "type": OPT_CARD}]
+    forward = canonical_keys(opts, _frame(bench=[a, b]))
+    reversed_ = canonical_keys(opts, _frame(bench=[b, a]))
+    assert forward == reversed_[::-1]
+    assert len(set(forward)) == 2                    # damaged vs undamaged: two decisions, two keys
+
+
+def test_an_unfingerprintable_option_gets_the_EMPTY_key():
+    """Blind ⇒ conservative, structurally (the module's own rule): a face-down DECK option has no
+    canonical identity, so it gets no canonical key and keeps whatever menu position it had."""
+    from common.option_equivalence import canonical_keys
+    opts = [{"area": AREA_DECK, "index": 0, "playerIndex": 0, "type": OPT_CARD}, {"type": 0}]
+    assert canonical_keys(opts, _frame()) == ["", ""]
+    assert canonical_keys(None, None) == []
