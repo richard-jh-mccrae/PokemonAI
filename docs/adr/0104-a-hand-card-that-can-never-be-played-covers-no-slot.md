@@ -135,18 +135,20 @@ reading, and ADR-0081's `_route_only_at_setup` is where the Set-Up route is mode
 
 ## Consequences
 
-* **Measured 2026-08-02**, re-stated against the rebased base (`main` at the Issue #306 merge, which
-  moved `_deploy_supplier_rows` out from under this branch) — suite **4513 passed / 0 failed**;
-  **both gates PASS with zero unruled flips**, and neither baseline re-captured (ADR-0094):
-  * **Decision Gate** — 372 frames, `agree 250/346 → 250/346`, 4 picks moved. Two are **FIX**
-    (`83038055|0|decision|40` `[5] → [0]`, `83665798|1|decision|39` `[3] → [4]` — both now the
-    human's option); the other two are the held-out pair already owned by Issue #262 / Issue #272. **No new
-    REGRESSION.**
-  * **Discrimination Gate** — 268 frames, gated on 266; the only `OK → MISS` frames are the pair
-    held out onto Issue #262 before this branch existed, and on the rebased base one frame goes the
-    other way — `86090164|1|turn|6`, **IMPROVED** `MISS → OK`. **No new `OK → MISS`.**
-  * So this sub-issue moves scoring, as Issue #278 predicted, and the move is **two frames toward
-    the human and nothing away** — nothing needing a wave-3 verdict.
+* **Measured 2026-08-02**, re-stated against the rebased base (`main` at the Issue #261 item-2e
+  merge, which landed ADR-0103's option canonicalisation and re-stamped the leaf baseline) — suite
+  **4505 passed / 0 failed**; **both gates PASS with zero unruled flips**, and neither baseline
+  re-captured by this branch (ADR-0094):
+  * **Decision Gate** — 372 frames, `agree 249/345 → 251/345`, 8 picks moved. **4 FIX**
+    (`83038055|0|decision|40`, `83665798|1|decision|39`, `85058051|1|decision|4`,
+    `86091435|0|decision|13` — each now the human's option), 1 NEUTRAL, and the held-out pair
+    already owned by Issue #262 / Issue #272. One further REGRESSION is **VOIDED** by the ruling
+    ledger as a transposition (`86089120|0|decision|14`). **No new gating REGRESSION.**
+  * **Discrimination Gate** — 268 frames, gated on 266, measured against the re-stamped baseline
+    (`d8ef7a0`). The only `OK → MISS` frames are the pair held out onto Issue #262 before this
+    branch existed. **No new `OK → MISS`.**
+  * So this sub-issue moves scoring, as Issue #278 predicted, and the move is **toward the human
+    on net** (+2 on the Decision Gate) with nothing new against — nothing needing a wave-3 verdict.
 * A hand of provably-dead evolutions now prices at its **general** worth only — actually at nothing,
   since the general slot is keyed on the same card. That is the intent: the refresh/gamble shed
   digs past it instead of hoarding it.
