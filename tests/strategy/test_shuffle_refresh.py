@@ -108,12 +108,18 @@ def test_disruption_value_survives_the_probable_miss_veto():
     and ARMED the very attacker we were claiming to disrupt. The swing oracle prices that gift
     (−8/card) and correctly refuses, so the old board no longer plays the Judge. The board, not the
     assertion, was wrong: this test's own docstring describes a hand worth shrinking, so give it one.
+
+    `handSizeDamage=20` added 2026-08-02 (ADR-0102). The clearing force used to be the flat
+    `play-harlequin-vs-hand-size` +25, which fired off a `hand_size_attacker` TAG and so needed no
+    printed threat at all; the term that replaced it reads the survival clock, so the stand-in
+    attacker has to actually scale off their hand for there to be any disruption value to survive
+    the veto. Same board, same claim, a card fact instead of a label.
     """
     HSATK = 640
     stats = DictCardStatProvider({JUDGE: CardStat(JUDGE, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   PLAINMON: CardStat(PLAINMON, hp=90),
-                                  HSATK: CardStat(HSATK, hp=90)})
+                                  HSATK: CardStat(HSATK, hp=90, handSizeDamage=20)})
     funcs = CardFunctions({JUDGE: ["draw", "hand_disruption", "shuffle_hand"],
                            HSATK: ["hand_size_attacker"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
@@ -127,8 +133,9 @@ def test_disruption_value_survives_the_probable_miss_veto():
     obs["own_prizes"] = {FILLER2: 6}
     trace = pilot.explain(obs).options[0]
     assert "dont-refresh-into-a-probable-miss" in _fired(trace)       # my pull IS dead
-    assert "play-harlequin-vs-hand-size" in _fired(trace)             # but the disruption is live
-    assert trace.score > 0
+    assert "play-harlequin-vs-hand-size" not in _fired(trace)         # RETIRED (ADR-0102) — the
+    assert trace.score > 0                                            # disruption value is now the
+    #                                                                   priced survival, in `tactical`
     assert pilot.decide(obs) == [0]                                   # played as disruption
 
 

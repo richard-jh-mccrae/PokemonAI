@@ -270,6 +270,27 @@ def phase_scale(*, race_ahead: float | None, opp_prizes_remaining: int) -> float
     return max(0.0, min(1.0, s))
 
 
+def survival_value(*, survival_shift: float, phase: float) -> float:
+    """Turns of survival bought or LOST, in prize-equivalents — the survival leg on its own.
+
+    ``survival_shift`` is a Δ on `turns_to_ko_me` against MY Active, from whatever counterfactual the
+    caller is pricing: removing an opponent body (`opponent_target_value`), or shrinking the hand a
+    hand-size attacker scales off (`pilot._hand_size_relief_tactical`, ADR-0102). ``phase`` is
+    :func:`phase_scale`'s [0, 1] race scaler — how much one turn of survival is worth on this board.
+
+    **SIGNED and SYMMETRICALLY capped** at ``±_SURVIVAL_CAP``. The sign matters because not every
+    counterfactual can only help: a symmetric refresh played into a SMALL hand REFILLS the opponent
+    and shortens my own clock, which is the ml f111 CRITICAL ("Judging a 1-card opponent hand is an
+    enormous blunder") and the whole reason ADR-0102's term is priced rather than thresholded. Callers
+    whose counterfactual is one-directional floor the shift THEMSELVES, at the call site, where the
+    reason for the floor is legible — see :func:`opponent_target_value`.
+
+    Sub-prize by construction (``_SURVIVAL_CAP`` < 1): it breaks ties among prize outcomes and never
+    overrides a real prize difference (the gust-marginal discipline)."""
+    return max(-_SURVIVAL_CAP,
+               min(_SURVIVAL_CAP, float(survival_shift) * float(phase) * _SURVIVAL_PER_TURN))
+
+
 def opponent_target_value(*, prize_advance: float, survival_shift: int, phase: float) -> float:
     """The two-term OPPONENT-TARGET marginal (ruling 1): what removing/damaging an opponent body is
     worth to MY match = ``prize_advance`` (prize-race progress) + the ``survival_shift`` (turns of
@@ -277,9 +298,14 @@ def opponent_target_value(*, prize_advance: float, survival_shift: int, phase: f
     ``phase`` scale (ruling 5). The survival term is SUB-prize (``_SURVIVAL_CAP`` < 1), so it breaks
     ties among prize outcomes but never overrides a real prize difference — the gust-marginal
     discipline. Redundancy (the ADR-0044 guards) is applied by the caller/gate, not priced here. The
-    ONE currency snipe / gust / deny / promo-chip all read (Option B); seeds, grill-matured."""
-    survival = min(_SURVIVAL_CAP, max(0.0, float(survival_shift)) * float(phase) * _SURVIVAL_PER_TURN)
-    return float(prize_advance) + survival
+    ONE currency snipe / gust / deny / promo-chip all read (Option B); seeds, grill-matured.
+
+    The shift is FLOORED at 0 here rather than inside :func:`survival_value`, because the floor is
+    this caller's policy and not the currency's: removing an opponent body can only RAISE my clock, so
+    a negative reading is a bench-harvest redirect artefact rather than a cost of the removal. The
+    hand-size counterfactual has no such guarantee and consumes the signed value."""
+    return float(prize_advance) + survival_value(survival_shift=max(0.0, float(survival_shift)),
+                                                 phase=phase)
 
 
 def gust_target_slot(key: str, *, value: float) -> Slot:

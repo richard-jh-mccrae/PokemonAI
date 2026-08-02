@@ -559,17 +559,18 @@ class Board:
                                           # 0-damage attack (Kyogre's Riptide off an empty discard) or an
                                           # all-unaffordable set is NO threat. `play-energy-denial` stand-down:
                                           # don't strip a body that can't actually hurt us (dragapult f6)
-    opp_has_hand_size_attacker: bool = False  # opponent has a Pokémon in play (or in a committed
-                                          # evolution line) that SCALES damage with hand size (a
-                                          # `hand_size_attacker`, e.g. Alakazam) — `play-harlequin-vs-hand-size` gate. Card-fact, not meta guess
+    # `opp_has_hand_size_attacker` DELETED (ADR-0102, Issue #261 item 2c) with the two rungs that were
+    # its only readers. Nothing re-asks the question: `_hand_size_relief_tactical` puts the hand
+    # counts into the Damage Formula's own `atk_hand` / `def_hand` context keys and lets the survival
+    # clock answer. The retired boolean read the `hand_size_attacker` Function Tag, which was a second
+    # reading of a fact the damage oracle already holds as a scaler (ADR-0102 decision 5).
     opp_hand_size: int = 0                # opponent's current hand size (`handCount`) — the resource
-                                          # STACK a hand-disruption Supporter strips on the engine's
-                                          # swing turn (ADR-0051 Phase 3b `strip-the-stacked-engine-hand`). Sound off handCount.
+                                          # STACK a hand-disruption Supporter strips; the refresh swing
+                                          # oracle's opponent leg (ADR-0060). Sound off handCount.
     my_hand_size: int = 0                 # my current hand size — the don't-gift-a-refresh comparator
                                           # (only strip when theirs exceeds mine, so we net-strip rather than hand them a fresh hand)
-    opp_draw_engine_in_play: bool = False  # opponent has a `draw`-tagged ENGINE (Dudunsparce/Budew
-                                          # class) in play — the "engine swing turn" gate; a non-engine
-                                          # deck has no swing turn to hold for (hand-size decks are `play-harlequin-vs-hand-size`). ADR-0051 Phase 3b
+    # `opp_draw_engine_in_play` DELETED (ADR-0102) with `strip-the-stacked-engine-hand`, its only
+    # reader. `_draw_engine_ids` survives — the Read's deck-recognition still consumes it.
     # -- Opponent RESOURCES (ADR-0047) flattened onto the Board so a `when()` can trigger off them
     #    without reaching through `board.opponent.resources`. Sourced from the match-scoped tracker
     #    (opponent_resources.OpponentResourceModel); every value fails OPEN (unknown -> the no-fire
@@ -1111,13 +1112,10 @@ class OptionTrace:
     attach_to_needy_line: bool = False  # this option attaches Energy to a NEEDY win-condition Line body
                                  # (a base that builds the payoff) — decide()-only ORDERING tie-break: among
                                  # EQUAL-score attaches, feed Line base first. W-route-invisible, never enters weight fit. ep82867148 f87
-    hand_size_relief: float = 0.0  # REPORTING-ONLY (hand-disruption grill ruling, 2026-07-19): the signed
-                                 # incoming-damage delta of a `hand_disruption` refresh against a hand-size
-                                 # attacker in the opponent's forward line — `forward_incoming_damage` now
-                                 # vs at the card's redraw count (+ = damage DENIED off my Active, − = a
-                                 # refill that ARMS them). NOT in `score` — inert telemetry that makes the
-                                 # calc visible while the flat +25/+18 rungs still drive; promotion (ruling
-                                 # 1a/2a: marginal vs my KO, retire the rungs) waits on corpus evidence.
+    # `hand_size_relief` DELETED (ADR-0102, Issue #261 item 2c): the reporting-only field existed so
+    # the hand-size calculation stayed VISIBLE while it earned promotion. It is promoted —
+    # `_hand_size_relief_tactical` is IN `score` — so a second, differently-shaped copy of the same
+    # quantity beside it would be a shadow of a live term, which is the surface this POC deletes.
     deploy_working: dict | None = None  # the DEPLOY DECIDER's legible working (ADR-0086): the per-leg
                                  # breakdown for a Bench deployment. The decider sweep prints it on
                                  # BOTH sides of a flip and a human rules the Decision Gate by
@@ -2027,7 +2025,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
-                    + self._grab_refresh_draw_tactical(board, ctx)
+                    + self._hand_size_relief_tactical(obs, board, ctx)   # ADR-0102: the SURVIVAL leg
+                    + self._grab_refresh_draw_tactical(board, ctx)       # of the same refresh, summed
+                                                                         # ACROSS axes (cards vs damage)
                     + self._denial_play_tactical(obs, board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_relevance_tactical(obs, select, board, option, ctx)
@@ -2059,7 +2059,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                            attach_to_needy_line=ctx.attach_target_is_line_member and ctx.attach_target_needs,
                            attach_spend=(-attach_row["evaporation_loss"] * _ATTACH_VALUE_SCALE
                                          if attach_row is not None else 0.0),
-                           hand_size_relief=self._hand_size_relief(obs, ctx),   # REPORTING-ONLY, not in `score`
                            evolve_working=evolve_row,
                            deploy_working=deploy_row,
                            promote_retreat_working=promote_row)
@@ -3537,50 +3536,122 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 + (_REFRESH_OPPONENT_HAND_FRESH * fresh if stripped > 0 else 0.0)
                 - _REFRESH_OPPONENT_HAND_GIFT * max(opp_net, 0.0))
 
-    def _hand_size_relief(self, obs: dict, ctx) -> float:
-        """REPORTING-ONLY (hand-disruption grill, 2026-07-19): the signed Powerful-Hand damage swing a
-        `hand_disruption` refresh works on a hand-size attacker in the opponent's ACTIVE forward line
-        (Abra→Kadabra→Alakazam Powerful Hand = 20 dmg per card in THEIR hand, aimed at MY Active):
+    def _hand_size_relief_tactical(self, obs: dict, board: Board, ctx) -> float:
+        """Value of playing a hand REFRESH against an attacker whose damage scales off a hand — the
+        survival it buys me, or hands them (**ADR-0102**, promoting the hand-disruption grill's
+        design B).
 
-            relief = handSizeDamage × (their hand now − their redraw count)
+            relief = prize_to_damage( survival_value( turns_to_ko_me(the hands the card leaves)
+                                                      − turns_to_ko_me(the hands as they stand) ) )
 
-        Positive = Powerful-Hand damage DENIED off my Active by shrinking their hand; negative = a
-        refill that ARMS them (the ep85709280-shaped hole: Judge an EMPTY Alakazam hand and you hand
-        them 20/card against your own board). Sign-correct by construction — the point of grill ruling
-        1a/2a. Uses the same `handSizeDamage` the incoming oracle reads (`_forward_hand_size_damage`);
-        the value is self-preservation (incoming), not opponent-worth.
+        Alakazam's Powerful Hand (MEG 743, *"2 damage counters … for each card in your hand"* = 20 per
+        card in THEIR hand, aimed at MY Active) is INCOMING damage, so shrinking their hand is
+        self-preservation, not opponent-worth. The whole term is therefore the same clock every other
+        survival read speaks: ask `turns_to_ko_me` twice, once at the hands as they stand and once at
+        the hands the card leaves both players on, and price the DIFFERENCE in the shared sub-prize
+        survival currency (`needs.survival_value`), crossing to the damage scale on the derived
+        `PRIZE_DAMAGE_RATE`. Nothing new is invented — the counterfactual is two keys of the Damage
+        Formula's own opponent-as-attacker context, which is where every hand scaler already reads
+        its count, and the two redraw numbers are `strategy/refresh.py`'s own branch facts.
 
-        This reports the ISOLATED hand-size damage swing — deliberately NOT the change in worst-case
-        `forward_incoming_damage`, which masks to 0 whenever a hand-INDEPENDENT forward threat (an
-        energy-scaler on the same line) already out-damages Powerful Hand. That masking IS the correct
-        MARGINAL decision value and belongs at promotion; the reported signal is the raw physical
-        quantity that feeds it. Scoped to the ACTIVE forward line (only it can attack next turn) — a
-        BENCHED hand-size attacker, which the flat +25 rung over-fires on, reads 0 here.
+        **BOTH hands, because the card moves both and the pool scales off both.** `atk_hand` is THEIR
+        hand (Powerful Hand) and moves only for a symmetric refresh — the `opponent_shuffles`
+        discriminator, exactly as `net_change` applies it. `def_hand` is MY hand, and it moves for
+        every refresh in the table including the self-only ones: **Mega Froslass ex** (861, Resentful
+        Refrain, *"50 damage for each card in your opponent's hand"*) and **Chandelure** (98, Mind
+        Ruler, 30/card) are in the set, so holding ten cards in front of a Froslass is 500 incoming
+        and a Lillie's down to six is the survival play. Pricing only their hand would have left the
+        bigger of the two scalers unmodelled while claiming to price "the hand-size damage swing".
 
-        INERT: surfaced on the OptionTrace for telemetry, NEVER added to `score`. The flat
-        `play-harlequin-vs-hand-size` (+25) / `disrupt-when-unfavored` (+18) rungs still drive.
-        Promotion (functional, marginal vs my own KO, retire the rungs) waits on corpus evidence —
-        docs/plans/hand-disruption-grill-spec.md §Design B. 0 unless this is the PLAY of an
-        opponent-shuffling refresh (Judge / Harlequin / Unfair Stamp) facing such a line."""
-        if ctx.option_type != _PLAY or "hand_disruption" not in (ctx.tags or []) or not self.stats:
+        **Marginal vs my own KO** (grill ruling 1a), which is why it replaces the flat rungs rather
+        than joining them: 80 damage denied is worth ~0 when my Active survives either way (both
+        clocks read the same, the difference is 0) and a great deal when it moves the clock. The flat
+        +25 could not tell those apart, and its three failures all close here:
+
+        * **Undervaluation** — `_REFRESH_OPPONENT_HAND_STRIP` x 4/card is a fifth of Powerful Hand's
+          real 20/card; the clock reads the damage itself.
+        * **The sign hole** — at their hand 1 the old terms netted ≈ +1, so the Pilot Judged an EMPTY
+          Alakazam hand and refilled it from 20 to 80 damage against its own Active (ml 85709280 f111,
+          *"an enormous blunder"*). Here the refill SHORTENS my clock, the shift is negative, and the
+          term declines. Sign-correct by construction, not by a gate.
+        * **The benched over-fire** — the retired rung fired on `opp_has_hand_size_attacker` anywhere
+          in play, paying the same +25 for an Alakazam line that cannot attack for three turns. The
+          accumulating clock prices a benched threat at its real distance, through the same promotion
+          gate (`opp_active` + `switch_enabler`) every other threat read uses.
+
+        There is deliberately **no card-fact gate** in front of the two clock reads. A guard asking
+        "does any line here scale off a hand" would be a second enumeration of the Damage Formula's
+        scaler families, free to disagree with the oracle it guards — the drift `card_level_damage`
+        was extracted to end. The clock is the authority: on a board where nothing scales off a hand
+        the two reads are equal and the term is 0, which is the same answer a guard would give and
+        cannot fall out of step with the scaler table.
+
+        **No Lever-A multiplier rides on top, and none is smuggled in either.** Stated precisely,
+        because the loose version of this sentence is wrong: the Read-gated half of the deleted
+        `disrupt-when-unfavored` (+18) is **not** re-expressed here — this term reads neither
+        `favorability` nor `matchup_coverage`, so nothing "returns". It is SUBSTITUTED. ADR-0078
+        decision 6 ruled that `_DENIAL_UNFAVORED` and `needs.phase_scale` say the same thing from
+        different inputs, so a path carrying both multiplies one race read by itself, and named
+        `phase_scale` the derived successor. Deny kept the Read-gated scaler only because it reads
+        `phase_scale` on no surface (ADR-0080 decision 3, which says so in as many words); this term
+        reads it directly, as its survival currency's own scaler — so the discipline the +18's
+        posture half was owed ("posture SCALES the oracle, it is never re-added as a flat") is
+        honoured by a scaler that was going to be here anyway, and is strictly the better instrument:
+        board-derived, [0,1]-bounded, live without matchup coverage.
+
+        **Fail direction.** Neither hand's size beyond the redraw count is knowable, so both clocks
+        read hands that are CONSTANT over the horizon: the honest deterministic quantity, never a
+        speculative refill projection.
+
+        The energy policy is `UNCHARGED` — the DOOM policy, named rather than inherited, because this
+        term is the graded generalisation of `_active_doomed` and must fail the way doom fails. The
+        difference from the CEILING (`charged=None`) that the opponent-target rows take is not
+        cosmetic: the ceiling reads an unresolvable attack cost through `can_pay_cheapest`, which is
+        fail-CLOSED, and `_affords` says outright that pointed at the opponent this means *"I cannot
+        tell what this costs, so assume it cannot reach me"* — the one thing a survival read must
+        never say. Under `UNCHARGED` an unresolvable cost counts as payable and the current form is
+        charged no affordability at all (the hidden-Ignition lesson). Threading the Read's own budget
+        instead would let a matched Brief quietly relax a survival read (ADR-0064 keeps that
+        conservatism per-consumer; the `doom-ceiling-fail-direction` whitelist entry is the policy).
+
+        0 unless this is the PLAY of a refresh `strategy/refresh.py` knows, with a live Active to
+        survive on and a counterfactual that actually moves a hand."""
+        from common import needs
+        from common.currency import prize_to_damage
+        if ctx.option_type != _PLAY or not self.stats:
             return 0.0
-        branches = refresh_branches(ctx.card_id, 0, 0)   # opp redraw count is board-independent for these
-        if branches is None or not opponent_shuffles(ctx.card_id):
+        branches = refresh_branches(ctx.card_id, board.my_prizes_remaining,
+                                    board.opp_prizes_remaining)
+        model, now_ctx = self._state_model, self._opp_attack_context
+        if branches is None or model is None or not now_ctx:
             return 0.0
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)
+        me = players[yi] if 0 <= yi < len(players) else {}
         opp = players[1 - yi] if 0 <= 1 - yi < len(players) and players[1 - yi] else {}
-        oa = next((p for p in (opp.get("active") or []) if p), None)
-        oa_id = (oa or {}).get("id")
-        if oa_id is None:
+        ma = next((p for p in ((me or {}).get("active") or []) if p), None)
+        if not (ma and opp):
             return 0.0
-        line = {oa_id} | self._forward_card_ids(oa_id)
-        per_card = max((getattr(self.stats.get(i), "handSizeDamage", 0) or 0 for i in line), default=0)
-        if per_card <= 0:
+        # The two redraw counts, averaged over the card's coin branches exactly as the swing oracle
+        # averages its own (Harlequin's 3/5 split is EV 4, the same number `net_change` prices). Their
+        # hand moves only if the card shuffles it — the `opponent_shuffles` discriminator, applied
+        # here for the same reason `net_change` applies it: a self-only refresh leaves them untouched.
+        after = dict(now_ctx, def_hand=sum(m for m, _o in branches) / len(branches))
+        if opponent_shuffles(ctx.card_id):
+            after["atk_hand"] = sum(o for _m, o in branches) / len(branches)
+        if after == now_ctx:
+            return 0.0                      # the card moves no hand on this board: nothing to price
+        clock = dict(charged=UNCHARGED,
+                     opp_active=next((p for p in (opp.get("active") or []) if p), None),
+                     switch_enabler=self._opp_switch_enabler())
+        shift = (model.theirs.turns_to_ko_me(ma, context=after, **clock)
+                 - model.theirs.turns_to_ko_me(ma, context=now_ctx, **clock))
+        if not shift:
             return 0.0
-        redraw = sum(opp_draw for _my, opp_draw in branches) / len(branches)
-        return float(per_card * ((opp.get("handCount") or 0) - redraw))
+        phase = needs.phase_scale(race_ahead=getattr(board, "race_ahead", None),
+                                  opp_prizes_remaining=board.opp_prizes_remaining)
+        return prize_to_damage(needs.survival_value(survival_shift=shift, phase=phase))
 
     def _grab_refresh_draw_tactical(self, board: Board, ctx) -> float:
         """Sub-point tie-break at a TO_HAND draw-Supporter grab: rank a refresh by its own-draw
@@ -6832,10 +6903,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             opp_has_energy_in_play=self._opp_has_energy_in_play(opp),
             opp_active_has_energy=bool(oa and (oa.get("energies") or [])),
             opp_active_can_damage_us=self._opp_active_can_damage_us(ma, oa),
-            opp_has_hand_size_attacker=self._opp_has_hand_size_attacker(opp),
             opp_hand_size=model.theirs.hand_size,               # ← StateModel (POC-T1): THE
             my_hand_size=model.mine.hand_size,                   #   supplier of BOTH hand counts
-            opp_draw_engine_in_play=bool(self._draw_engine_ids(opp)),
             # Opponent RESOURCES (ADR-0047) flattened for `when()` triggers — sourced from the tracker
             # observed at self.opponent.observe(obs) above; each read fails OPEN (unknown -> no-fire default).
             opp_took_ko_this_turn=bool(getattr(_opp_res, "took_ko_this_turn", False)),
@@ -8948,23 +9017,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
     # (Gust Board-signal builders — _active_ko_prizes, _opp_active_condition_gift, etc. — are in
     # doctrine_gust.GustMixin; `_board` calls them as `self.…`.)
-    def _opp_has_hand_size_attacker(self, opp: dict | None) -> bool:
-        """True if the opponent has a Pokémon in play whose own card OR its forward-evolution line
-        reaches a hand-size attacker (a `hand_size_attacker` Function Tag — e.g. Alakazam's Powerful
-        Hand, '2 damage counters per card in your hand'). Detects both the revealed attacker AND a
-        committed line still building toward it (Kadabra → Alakazam). Card-fact Posture for
-        `play-harlequin-vs-hand-size`; needs the function table. False otherwise."""
-        if not (self.functions and opp):
-            return False
-        for p in (opp.get("active") or []) + (opp.get("bench") or []):
-            cid = p.get("id") if p else None
-            if cid is None:
-                continue
-            for i in {cid} | self._forward_card_ids(cid):
-                if "hand_size_attacker" in self.functions.tags(i):
-                    return True
-        return False
-
+    # `_opp_has_hand_size_attacker` DELETED (ADR-0102, Issue #261 item 2c) with the `Board` field and
+    # the two rungs it gated. It asked the `hand_size_attacker` Function Tag whether a line scales off
+    # the hand, and NOTHING replaces it: a card-fact reader in front of the survival clock would be a
+    # second enumeration of the Damage Formula's scaler families, free to drift from the oracle it
+    # guards. `_hand_size_relief_tactical` asks the clock instead (ADR-0102 decision 5).
     def _opp_has_energy_in_play(self, opp: dict | None) -> bool:
         """True if any of the opponent's Pokémon (Active or Bench) carries Energy — a target an
         energy-denial Item (Function Tag `energy_denial`, e.g. Crushing Hammer) can strip. The

@@ -2,7 +2,8 @@
 
 - `prevent_ex_damage` (Crustle's ex-lock): my ex attacker does 0, so retreat into a NON-ex attacker
   that can KO it. - `stall_target_is_keystone`: gust the opponent's energyless ex to strand it.
-- `opp_has_hand_size_attacker`: play Harlequin to shrink a hand-size deck (Alakazam).
+- hand-size posture: Harlequin against an Alakazam line, priced by the survival it buys (ADR-0102 —
+  the `opp_has_hand_size_attacker` boolean and its flat rung are retired).
 """
 import pytest
 
@@ -30,8 +31,11 @@ def _stats():
         DREEPY: CardStat(DREEPY, name="Dreepy", hp=40),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50, attacks=(20,)),
         CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, retreatCost=3, maxDamage=120),
+        # `handSizeDamage=20` is the card fact this posture now turns on (MEG 743 Powerful Hand,
+        # "2 damage counters … for each card in your hand"): its printed 10 hides the whole threat,
+        # and the scaler is what the Damage Formula — and so the survival clock — actually reads.
         ALAKAZAM: CardStat(ALAKAZAM, name="Alakazam", hp=140, retreatCost=2, ex=True, maxDamage=10,
-                           minCostDamage=10, evolvesFrom="Kadabra"),
+                           minCostDamage=10, evolvesFrom="Kadabra", handSizeDamage=20),
         KADABRA: CardStat(KADABRA, name="Kadabra", hp=80, maxDamage=30, evolvesFrom="Abra"),
         HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),
     }, attacks={11: AttackStat(11, damage=120, cost=1, benchSnipe=50),
@@ -69,16 +73,40 @@ def test_retreat_off_an_ex_locked_wall_into_a_non_ex_attacker():
 
 
 @pytest.mark.req("REQ-GEN-0052")
-def test_play_harlequin_against_a_hand_size_attacker_line():
-    # Opp has Kadabra (line reaches Alakazam, a hand_size_attacker). Play Harlequin to shrink hand.
+def test_harlequin_against_a_hand_size_attacker_line_is_priced_BOTH_ways():
+    # Opp has Kadabra (line reaches Alakazam, whose Powerful Hand scales off THEIR hand). The posture
+    # is unchanged; what changed (ADR-0102) is that it is PRICED rather than flagged. The retired
+    # `play-harlequin-vs-hand-size` (+25) fired off `opp_has_hand_size_attacker` — a boolean, so it
+    # endorsed the play at full strength on BOTH boards below, including the one where the refresh
+    # REFILLS them. `_hand_size_relief_tactical` reads the survival clock instead, so the same card
+    # against the same line is worth a lot, nothing, or less than nothing depending on the hand.
+    from types import SimpleNamespace
+
+    from common.strategy.context import _PLAY as PLAY_OPT
     p = _pilot()
-    me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [], "hand": [{"id": HARLEQUIN}]}
-    opp = {"active": [{"id": KADABRA, "energies": [], "hp": 80}], "bench": []}
-    obs = {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
-           "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
-                      "option": [{"type": PLAY, "index": 0}]}}
-    assert p._board(obs, obs["select"]).opp_has_hand_size_attacker
-    assert "play-harlequin-vs-hand-size" in _fired(p.explain(obs).options[0])
+
+    def relief(opp_hand):
+        me = {"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
+              "hand": [{"id": HARLEQUIN}]}
+        opp = {"active": [{"id": KADABRA, "energies": [], "hp": 80}], "bench": [],
+               "handCount": opp_hand}
+        obs = {"current": {"players": [me, opp], "yourIndex": 0, "turn": 6},
+               "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                          "option": [{"type": PLAY, "index": 0}]}}
+        board = p._board(obs, obs["select"])
+        return p._hand_size_relief_tactical(
+            obs, board, SimpleNamespace(card_id=HARLEQUIN, option_type=PLAY_OPT, tags=()))
+
+    assert relief(opp_hand=12) > 0     # 240/turn down to 80: the strip buys real survival
+    assert relief(opp_hand=4) == 0     # already at Harlequin's redraw count: nothing moves
+    assert relief(opp_hand=1) < 0      # 20/turn UP to 80: the refill arms the attacker
+    assert "play-harlequin-vs-hand-size" not in _fired(p.explain(
+        {"current": {"players": [{"active": [{"id": MEGA, "energies": [1], "hp": 330}], "bench": [],
+                                  "hand": [{"id": HARLEQUIN}]},
+                                 {"active": [{"id": KADABRA, "energies": [], "hp": 80}],
+                                  "bench": [], "handCount": 12}], "yourIndex": 0, "turn": 6},
+         "select": {"context": MAIN, "minCount": 1, "maxCount": 1,
+                    "option": [{"type": PLAY, "index": 0}]}}).options[0])
 
 
 @pytest.mark.req("REQ-DMG-0006")

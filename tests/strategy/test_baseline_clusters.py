@@ -69,11 +69,13 @@ CLUSTERS = {
                                            "dont-play-damage-boost-when-cant-attack",
                                            "use-the-draw-engine-ability",
                                            "dont-spend-unneeded-supporter"}),  # BUILD 4 (weight-0, deferred)
+    # `play-energy-denial` RETIRED (ADR-0062); `play-harlequin-vs-hand-size` (+25),
+    # `disrupt-when-unfavored` (+18) and `strip-the-stacked-engine-hand` (+22) RETIRED (ADR-0102) —
+    # the first two replaced by `pilot._hand_size_relief_tactical`, the third an unfired forward
+    # contract carrying a live weight.
     "disruption": (DISRUPTION_HYPOTHESES, {
-        "play-harlequin-vs-hand-size", "disrupt-when-unfavored",   # play-energy-denial RETIRED (ADR-0062)
         "dont-gift-a-refresh-when-favored",
-        "strip-the-stacked-engine-hand",   # ADR-0060: narrowed to ONE-SIDED strips
-        "disrupt-the-tailored-hand",            # mirror of strip-the-stacked (tailored-DOWN hand); weight-0
+        "disrupt-the-tailored-hand",            # one-sided-strip forward contract; weight-0
         "unfair-stamp-comeback-posture"}),      # post-KO don't-empty-hand vs Stamp opponent; weight-0
     "phases": (PHASES_HYPOTHESES, {   # ADR-0040 advisory bands — the one c.board.phase consumer
         "phase-stabilize-prefer-heal", "phase-close-stop-developing"}),

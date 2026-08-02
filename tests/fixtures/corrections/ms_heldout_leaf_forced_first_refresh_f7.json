@@ -1,0 +1,221 @@
+{
+ "obs": {
+  "current": {
+   "energyAttached": false,
+   "firstPlayer": 0,
+   "looking": null,
+   "players": [
+    {
+     "active": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 50,
+       "id": 741,
+       "maxHp": 50,
+       "playerIndex": 0,
+       "preEvolution": [],
+       "serial": 20,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 46,
+     "discard": [],
+     "hand": null,
+     "handCount": 7,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    },
+    {
+     "active": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 1030,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 81,
+       "tools": []
+      }
+     ],
+     "asleep": false,
+     "bench": [
+      {
+       "appearThisTurn": false,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 1030,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 82,
+       "tools": []
+      },
+      {
+       "appearThisTurn": true,
+       "energies": [],
+       "energyCards": [],
+       "hp": 70,
+       "id": 1030,
+       "maxHp": 70,
+       "playerIndex": 1,
+       "preEvolution": [],
+       "serial": 80,
+       "tools": []
+      }
+     ],
+     "benchMax": 5,
+     "burned": false,
+     "confused": false,
+     "deckCount": 45,
+     "discard": [
+      {
+       "id": 1086,
+       "playerIndex": 1,
+       "serial": 89
+      }
+     ],
+     "hand": [
+      {
+       "id": 1031,
+       "playerIndex": 1,
+       "serial": 83
+      },
+      {
+       "id": 1229,
+       "playerIndex": 1,
+       "serial": 121
+      },
+      {
+       "id": 3,
+       "playerIndex": 1,
+       "serial": 65
+      },
+      {
+       "id": 1223,
+       "playerIndex": 1,
+       "serial": 112
+      },
+      {
+       "id": 666,
+       "playerIndex": 1,
+       "serial": 76
+      }
+     ],
+     "handCount": 5,
+     "paralyzed": false,
+     "poisoned": false,
+     "prize": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+     ]
+    }
+   ],
+   "result": -1,
+   "retreated": false,
+   "stadium": [],
+   "stadiumPlayed": false,
+   "supporterPlayed": false,
+   "turn": 2,
+   "turnActionCount": 3,
+   "yourIndex": 1
+  },
+  "logs": [
+   {
+    "cardId": 1030,
+    "fromArea": 1,
+    "playerIndex": 1,
+    "serial": 80,
+    "toArea": 5,
+    "type": 6
+   },
+   {
+    "playerIndex": 1,
+    "type": 0
+   }
+  ],
+  "remainingOverageTime": 599.4047449999999,
+  "select": {
+   "context": 0,
+   "contextCard": null,
+   "deck": null,
+   "effect": null,
+   "maxCount": 1,
+   "minCount": 1,
+   "option": [
+    {
+     "area": 2,
+     "inPlayArea": 4,
+     "inPlayIndex": 0,
+     "index": 2,
+     "type": 8
+    },
+    {
+     "area": 2,
+     "inPlayArea": 5,
+     "inPlayIndex": 0,
+     "index": 2,
+     "type": 8
+    },
+    {
+     "area": 2,
+     "inPlayArea": 5,
+     "inPlayIndex": 1,
+     "index": 2,
+     "type": 8
+    },
+    {
+     "index": 3,
+     "type": 7
+    },
+    {
+     "type": 14
+    }
+   ],
+   "remainDamageCounter": 0,
+   "remainEnergyCost": 0,
+   "type": 0
+  }
+ },
+ "chosen": [
+  0
+ ],
+ "correct": [
+  0
+ ],
+ "correct_label": "Attach Basic {W} Energy → Staryu",
+ "frame_key": "82522726|1|decision|7",
+ "note": "Held out onto its named owner by the Issue #261 item-2c wave-2 ruling. The agent still MAKES this pick; what regressed is the leaf's forced-first ranking. See claims.decision.why.",
+ "claims": {
+  "decision": {
+   "correct": [
+    0
+   ],
+   "owner": "#262",
+   "ruled": "2026-08-02",
+   "why": "HELD OUT by user ruling 2026-08-02 (Issue #261 wave-2 packet, item 2c -- ADR-0102, the hand-size relief promotion). The ruling is ACCEPT: the DECISION is unchanged and correct, and what moved is the leaf's forced-first RANKING, which is the composition POC-T3 replaces.\n\nWHAT MOVED. Discrimination Gate, `82522726|1|decision|7`, OK -> MISS, rank 1 -> 2.\n  baseline leaf values [58.0, 58.0, 58.0, 58.0, 8.0]   correct [0], top_tie 4\n  now                  [ 8.0,  8.0,  8.0, 58.0, 8.0]   correct [0], rank 2\nThe baseline OK was LENIENT -- a four-way tie at 58.0, so the leaf never discriminated this frame; it now ranks option [3] (Harlequin) uniquely top and the three indistinguishable attaches at 8.0.\n\nTHE DECISION DID NOT MOVE. The shipped Pilot still plays [0], the human's ruled option. The Decision Gate reports 0 unruled REGRESSION on this build.\n\nCAUSE, MEASURED IN THE GATE'S OWN PROCESS (the leaf value is pilot-state dependent, so an isolated two-frame reproduction does not reproduce it):\n  * neutralising `_hand_size_relief_tactical` (the new term)  -> both flips REMAIN\n  * restoring `play-harlequin-vs-hand-size` (+25) alone       -> GATE: PASS\nSo the flip is the +25's deletion, and the promoted term is not involved. On this board the relief is exactly 0.00 and correctly so: the opponent's Alakazam line is an Abra, so shrinking their hand buys no survival.\n\nTHE MECHANISM. `_engine_leaf_value(obs, [i])` forces option i and re-runs `decide()` greedily to the end of the turn. Once the {W} Energy is attached, `attach-before-hand-shuffle` (-60) stops firing and Harlequin sits at tactical -21.60; the +25 lifted that to +3.40, so the rollout played it and the end board banked the readiness of a simulated, auto-resolved draw. Without the +25 the rollout ends the turn, so every line that does not FORCE the refresh first loses that draw -- which is what makes forcing it look best. `_develop_rollout_line` already refuses to rank a stream-riding line for exactly this reason; `leaf_lab.board_leaf_values` bypasses that veto by design (it is measuring the leaf, not the rung).\n\nNOT FIXED HERE, deliberately. The refresh is declined because ADR-0101's v2 SHED prices the hand's keep-cost -- the hand holds a Mega Starmie ex. Restoring a flat to lift it over that signed oracle is the ADR-0063 failure verbatim (\"a booster must SCALE the oracle, never ADD to it\"), and re-fitting the SHED to satisfy one leaf ranking moves every keep-value site including the discard decider's 12/12. The honest reading is that the leaf and the option scorer are two opinions about one board.\n\nOWNER: Issue #262 (POC-T3, `state_value`) -- it owns exactly this, \"replace the develop rollout's `_engine_leaf_value` composition\". When one composed scalar scores both the forced-first ranking and the option, the disagreement cannot exist. Delete this owner then.\n\nNOTE ON SCOPE. The Held-out Ledger is whole-frame by design (gates.held_out_frames: the leaf verdict is not per-lane), so this entry also holds the frame out of the DECISION gate, where it currently passes. That cost is recorded rather than hidden."
+  }
+ }
+}

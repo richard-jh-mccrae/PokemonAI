@@ -564,8 +564,11 @@ hypotheses = [   # deck rules that DON'T fold to general (unchanged from 2026-07
 - **The fetch-set predicates are exact** (`_fetch_target_matches` over FETCH clauses): Poffin's ≤70-HP cap
   (`hp_max`), Poké Pad's no-Rule-Box, Fighting Gong's Basic-only Pokémon are encoded, so `dont-search-an-empty-deck`
   and the confirmed-hit endorsement no longer false-fire on targets a card cannot actually reach.
-- **Unfair Stamp disruption facet** (opp draws only 2) is not rewarded generically (gated on
-  `opp_has_hand_size_attacker`) → valued purely as self-refresh. The deferred general `hand_disruption` seam.
+- **Unfair Stamp disruption facet** (opp draws only 2) was not rewarded generically — the rung that
+  could have was gated on the retired `opp_has_hand_size_attacker` boolean → valued purely as
+  self-refresh. **Since ADR-0102** the facet is priced where it is real: Stamp's 5/2 branch shrinks
+  their hand hardest of the three symmetric refreshes, so `_hand_size_relief_tactical` credits it
+  most against a hand-scaling attacker, and nothing at all against a board with no such line.
 
 **Deferred (designed seams, not shipped):**
 - Munkidori explicit **finish-vs-heal** value-compare (v1 = most-damaged source + convert target).

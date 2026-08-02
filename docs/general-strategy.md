@@ -611,8 +611,10 @@ provably-spent deck) gives P = 0 and fires** — the spent deck is a post-anchor
 N comes from the id-keyed `_DRAW_COUNTS` fact table (verified at `data/EN_Card_Data.csv`): Lillie's
 Determination 6 (**8 at own prizes exactly 6**), Lacey 4 (**8 at opp prizes ≤ 3**), Judge 4, Harlequin
 exact over the coin branches (3/5). The conditional windows fold into N — no boost rung. Disruption
-endorsements (`play-harlequin-vs-hand-size` +25, `disrupt-when-unfavored` +18) clear the −25, so a
-Judge/Harlequin still plays *as disruption*. A/B: neutral (48%, CI 45–51) → ON.
+value clears the −25, so a Judge/Harlequin still plays *as disruption* — since **ADR-0102** that value
+is `pilot._hand_size_relief_tactical` (the survival the refresh buys against a hand-scaling attacker),
+not the flat `play-harlequin-vs-hand-size` +25 / `disrupt-when-unfavored` +18, which are deleted.
+A/B: neutral (48%, CI 45–51) → ON.
 
 **Still deferred:** the **`hand_disruption` axis** — its offensive half (wreck a hoarded hand, scaling
 with opponent hand size) *and* the board-conditioned side of the symmetric-refill cost; the
