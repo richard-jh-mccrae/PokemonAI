@@ -67,9 +67,72 @@ interpreted once.
 | `82228017\|0\|decision\|4` | CONFORM (low conf.) | **REVERT** | the leaf's Hero's Cape is a card with no value to the game right now that is better kept as Ultra Ball fodder — play Buddy-Buddy Poffin, attach to Cinderace, attack Turbo Flare |
 | `82229122\|0\|decision\|17` | CONFORM | **REVERT** | too eager to attack: the turn could have filled the Bench with Buddy-Buddy Poffin AND attached Energy AND evolved Staryu to the main attacker |
 
+### Batch 5 (2026-08-02)
+
+| frame | packet rec | verdict | developer's line |
+|---|---|---|---|
+| `82229122\|0\|decision\|33` | CONFORM | **CONFORM** | "Play Crushing Hammer against the benched Crustle is a fine move." |
+| `82522698\|1\|decision\|36` | REVERT-worthy † | **REVERT** | attach Energy first, before shuffling the hand away or attacking |
+| `82522698\|1\|decision\|62` | REVERT-worthy † | **REVERT** | a lethal decider — the Knock Out to win the match is available, take it and do nothing unnecessary |
+| `82522726\|1\|decision\|7` | CONFORM | **REVERT** | attach Energy to the **active** Staryu |
+
+**`82229122|0|decision|33` is the first CONFORM in 23 frames**, and it holds up at source: Crustle's
+Ability *"Prevent all damage done to this Pokémon by attacks from your opponent's Pokémon {ex}"*
+means an ex attacker cannot damage it at all, so stripping its Energy with Crushing Hammer is a real
+line — and the Correction's own recorded rationale, *"play useful cards in hand first before
+attacking"*, is satisfied by it. It cannot be absorbed on its own: `capture` is all-or-nothing and
+refuses while any fail-direction frame is unruled, so this row waits with the rest.
+
+**`82522726|1|decision|7` is a correction to the developer's own read.** The ruling was given as
+*"as correction states and what it seems you do"* — but the leaf does **not** do that. The frame
+offers the same Basic {W} Energy onto three different Staryu (ACTIVE, BENCH0, BENCH1); the leaf ranks
+the **bench** attach first and the ruled ACTIVE attach 3rd of 5. Recorded as REVERT.
+
+**`82522698|1|decision|62` is the most serious frame ruled so far.** Category `missed_win`, recorded
+rationale *"When the choice is present to win the game, always take that choice immediately"* — and
+the leaf plays **Harlequin** (a Supporter that shuffles both hands into their decks) instead of the
+match-winning Knock Out. A prize outbid by a positional term is exactly what the `ko-score-band`
+sound-rule entry forbids, so this is a rule breach and not a preference.
+
 † one of the 15 the developer deferred to Issue #278 S13
 ([comment](https://github.com/richard-jh-mccrae/PokemonAI/issues/262#issuecomment-5153527951)); the
 per-frame verdict supersedes that deferral.
+
+## Why the remaining 50 are NOT being ruled one at a time
+
+Asked by the developer at batch 5: *"So many of these frames' correction answer is right in their
+rationale. must we really go through all of these?"* **No**, and three measurements say so:
+
+1. **23 ruled, 22 not-conform.** The finding is already established — the T3 leaf regressed the
+   develop corpus. The remaining frames are *evidence of a defect*, not decisions awaiting
+   adjudication, and a 24th REVERT does not make the defect more true.
+2. **A REVERT changes nothing on disk.** It leaves the recorded label standing; the frame simply
+   keeps failing the gate. Only a CONFORM moves anything, because only a CONFORM re-captures a
+   baseline row. So per-frame verdicts are worth the developer's time *only* where the answer might
+   be CONFORM.
+3. **The corpus already holds the answers.** Every `Correction` carries `rationale`,
+   `correct_label`, `category` and `turn_plan`. Nothing needs retyping — `wave3-scan-sheet.md` is
+   generated from the store and the live leaf, and the ideal turn sequences below can be extended
+   the same way.
+
+So the remaining 50 are listed in **`data/leaf_lab/wave3-scan-sheet.md`** with each frame's recorded
+pick, recorded rationale, category, the leaf's actual new pick and the rank it gave the ruled option.
+The default verdict is REVERT; the developer names only the CONFORMs.
+
+**What the categories already say, over all 73 flips:**
+
+| n | category |
+|---|---|
+| 36 | `sequencing_error` |
+| 17 | `wasted_resource` |
+| 7 | `misattachment` |
+| 3 | `slow_setup` |
+| 3 | `wrong_supporter` |
+| 2 | `missed_win` |
+| 1 each | `bad_target`, `bad_retreat`, `ignored_threat`, `missed_disruption`, `other` |
+
+`sequencing_error` is half the corpus of flips on its own. That is the corpus's own label, assigned
+long before this track existed, and it names the same gap the rationales keep describing.
 
 ## Ideal turn sequences — VERBATIM (the Issue #263 / T4 acceptance corpus)
 
@@ -121,6 +184,14 @@ recorded rationale.
 - `82228017|0|decision|4` — "This is about wasting a card that has no value to our game at the moment
   which could otherwise perhaps be used as Ultra Ball fodder. I would play Buddy buddy, attach energy
   to Cinderace, attack Turbo Flare"
+- `82229122|0|decision|33` — "Play Crushing Hammer against the benched Crustle is a fine move."
+- `82522698|1|decision|36` — "My rationale from correction, attach energy first before shuffling away
+  hand or attacking"
+- `82522698|1|decision|62` — "This is a lethal decider, KO to win match available, just take it and
+  dont do unnecessary actions"
+- `82522726|1|decision|7` — "as correction states and what it seems you do. attach energy to active
+  staryu." ⚠️ **the leaf does not do that** — it ranks the BENCH attach first and the ruled ACTIVE
+  attach 3rd of 5.
 - `82229122|0|decision|17` — "as correction rationale says: *'Too eager to attack. could have filled
   up bench with buddy-buddy poffin AND attached energy AND evolved Staryu to main attacker.'*"
 
@@ -164,7 +235,7 @@ went into committed ledger reasons:
 
 ## The pattern these verdicts are making
 
-19 frames ruled, **zero CONFORM**. The packet recommended CONFORM on 12 of them and every one was
+23 frames ruled, **one CONFORM**. The packet recommended CONFORM on 15 of them and 14 were
 overturned, so the packet's read was wrong and should not be trusted for the remainder.
 
 Two things recur:
@@ -182,7 +253,8 @@ Two things recur:
 Both point at one gap: the leaf cannot represent **sequencing within a turn**, so it prices a
 develop-then-attack line and an attack-now line as the same board and lets `survival` break the tie
 toward passivity. That is a T3 finding, not the Issue #278 artifact the deferral assumed — but it is
-recorded here as an observation over 19 frames, not yet a diagnosis.
+recorded here as an observation over 23 frames, not yet a diagnosis — and now corroborated by the
+corpus's own categories, where `sequencing_error` is 36 of the 73 flips.
 
 A third recurrence, from batch 4: **the ledger's stated reason and the developer's stated reason do
 not describe the same decision.** `82228017|4` is filed as *"Resolved by dont-tutor-the-held-wincon:
