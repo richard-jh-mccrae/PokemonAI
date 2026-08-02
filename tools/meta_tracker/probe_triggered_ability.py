@@ -5,8 +5,11 @@ your Bench, you may…"* fires as part of playing that card. The apply-seam cove
 (`tools/apply_seam_coverage.py`, Issue #269) assumes the engine resolves it **inside** the `_PLAY` /
 `_EVOLVE` option, so those 11 pool sites are `_PLAY` / `_EVOLVE` sites and refuse at OPTION_SCOPE
 when unmodelled. The alternative — the engine posing the Ability as its own `_ABILITY` option on a
-later menu — would move all 11 to the one kind `apply_option.ENGINE_ROUTE_KINDS` already routes to
-the engine, and would shrink Issue #299's scope before that ruling is made.
+later menu — would have moved all 11 to the one kind `apply_option.ENGINE_ROUTE_KINDS` then routed to
+the engine, and would have shrunk Issue #299's scope before that ruling was made. (Issue #299 has
+since ruled that the engine route is open per-option to every declared non-terminal kind, so
+`ENGINE_ROUTE_KINDS` no longer gates; what this probe measures still decides which OPTION the census
+files these sites under.)
 
 **No corpus frame settles it.** All 17 `_ABILITY` options observed across the 372-frame diagnostic
 corpus are *activated* ("Once during your turn") — Drakloak's Recon Directive and Lunatone's Lunar

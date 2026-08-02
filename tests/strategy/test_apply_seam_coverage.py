@@ -61,15 +61,57 @@ def test_engine_resolved_sites_carry_no_rng_marker(census):
             assert not mod._hits(s.text, mod._OPPONENT_CHOICE), s.name
 
 
-def test_only_ability_can_reach_the_engine_route(census):
-    """The report's finding 1, as an executable claim: `_ABILITY` is the sole engine-route kind, so
-    every ENGINE-RESOLVED site is an Ability. If a later ruling widens `ENGINE_ROUTE_KINDS` (the
-    report's AMBIGUOUS #1), this fails and the report's verdict needs re-reading."""
+def test_the_engine_route_is_reached_per_option_not_per_kind(census):
+    """The report's finding 1, as an executable claim — **inverted by Issue #299's ruling**, which
+    this test existed to make visible.
+
+    It used to assert `_ABILITY` was the sole engine-route kind. That was the defect: the bridge was
+    pointed at the one kind whose live population is all deck-reading draw engines, so it resolved
+    ZERO live options, while deterministic-shaped sites on MODELLED kinds had nowhere to be sent.
+    Since the ruling the gate is the per-option proof, so the assertion is the opposite one — the
+    route must be reached from MODELLED kinds too, or the ruling did not land.
+
+    `ENGINE_ROUTE_KINDS` is deliberately still `{_ABILITY}`: the ruling promoted and demoted no kind
+    (the composer's pruning depends on `KIND_COVERAGE`), it stopped the table from being the gate."""
     mod, cards, effects, covers, pool = census
     sites, _aside = mod.census(pool, cards, effects, covers)
-    from common.strategy.context import _ABILITY
-    assert seam.ENGINE_ROUTE_KINDS == frozenset({_ABILITY})
-    assert {s.kind for s in sites if s.fate == seam.ENGINE_RESOLVED} <= {_ABILITY}
+    from common.strategy.context import _ABILITY, _PLAY
+    assert seam.ENGINE_ROUTE_KINDS == frozenset({_ABILITY})    # the TABLE is unmoved, on purpose
+    reached = {s.kind for s in sites if s.fate == seam.ENGINE_RESOLVED}
+    assert _PLAY in reached, "no `_PLAY` reaches the engine route — Issue #299's ruling is not wired"
+    assert reached - {_ABILITY}, "only `_ABILITY` reaches it, which is the pre-ruling behaviour"
+    assert reached <= set(seam.KIND_COVERAGE) - seam.TERMINAL_KINDS
+
+
+def test_a_partial_clause_set_no_longer_resolves_to_MODELLED(census):
+    """Issue #300 declared the `_covers: partial` verdict; Issue #299 wired it into `fate`. The join
+    that matters is that the census AGREES: a site the compendium calls partial must not carry the
+    MODELLED fate, or the report would still be counting a silent zero as coverage.
+
+    Positive control in the same assertion: the partial set must be non-empty, otherwise this passes
+    vacuously on a census that produced no partial sites at all."""
+    mod, cards, effects, covers, pool = census
+    sites, _aside = mod.census(pool, cards, effects, covers)
+    partial = [s for s in sites if s.report_class == mod.PARTIAL]
+    assert partial, "no MODELLED-PARTIAL sites at all — the assertion below would be vacuous"
+    assert not [s for s in partial if s.fate == seam.MODELLED], (
+        [(s.card_id, s.name) for s in partial if s.fate == seam.MODELLED])
+
+
+def test_the_census_asks_the_seam_for_the_fate_rather_than_re_deriving_it(census):
+    """One store for the resolution order (Issue #299). The census used to mirror `fate`'s cascade by
+    hand, because `fate` demanded two inputs nothing produces; now it supplies those judgements and
+    calls the function, so the report cannot claim a fate the seam would not return.
+
+    Asserted by re-driving every site through `seam.fate` with the census's own inputs — an
+    independent recomputation, not a re-read of what `resolve` stored."""
+    mod, cards, effects, covers, pool = census
+    sites, _aside = mod.census(pool, cards, effects, covers)
+    for s in sites:
+        want = seam.fate({"type": s.kind}, depth=0, search_api=mod._ENGINE_SEAM,
+                         deterministic=not mod.refusal_cause(s.text, rng_refuses=True),
+                         clauses_cover=mod.clauses_cover(s, covers))
+        assert s.fate == want, (s.card_id, s.name, s.label, s.fate, want)
 
 
 def _report_text() -> str:
@@ -79,13 +121,17 @@ def _report_text() -> str:
 def _partial_rows(text: str) -> dict[int, str]:
     """``{card id: what the clauses miss}`` parsed out of the COMMITTED report's MODELLED-PARTIAL
     table. Read as text, so this is a genuinely independent record of the ruling — a second committed
-    artifact to join the compendium against, rather than the census's own return value."""
+    artifact to join the compendium against, rather than the census's own return value.
+
+    Keyed off the LAST cell rather than a fixed index: the table grew a `fate now` column in Issue
+    #299 (a partial set no longer resolves to MODELLED, so where it lands is worth printing), and a
+    parser pinned to column 4 would have silently joined the wrong field."""
     section = text.split("### MODELLED-PARTIAL")[1].split("\n### ")[0]
     rows: dict[int, str] = {}
     for line in section.splitlines():
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) == 5 and cells[0].isdigit():
-            rows[int(cells[0])] = cells[4]
+        if len(cells) == 6 and cells[0].isdigit():
+            rows[int(cells[0])] = cells[-1]
     return rows
 
 

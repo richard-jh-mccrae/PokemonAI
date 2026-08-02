@@ -282,3 +282,83 @@ are cleared "when it leaves the Active Spot OR evolves" (§8) — both rulebook-
 easy to miss because the rules text leads with the evolve half. `special_conditions` has no home, so
 part of what those two transitions do is currently invisible to a delta. Surfaced as a generated T1
 work list, with a test asserting the set can only shrink.
+
+## Amendment C — the fate is PER-OPTION, not per-kind (ruled 2026-08-02, Issue #299)
+
+Amendment B added the ENGINE-RESOLVED fate and put `_ABILITY` alone behind it. POC-A2's census
+(`docs/plans/apply-seam-coverage.md`, Issue #269) then measured what that cost, and the answer was
+the largest single lever in the whole report.
+
+### C1. What the measurement said
+
+- `ENGINE_ROUTE_KINDS` was `{_ABILITY}`, and **every** live `_ABILITY` option in the 372-frame corpus
+  (17 of them) is Drakloak's Recon Directive or Lunatone's Lunar Cycle — deck-reading draw engines,
+  fail-closed REFUSED. The bridge resolved **zero** live options. That is not a corpus artefact:
+  Issue #305 measured that a *triggered* Ability never poses an `_ABILITY` option at all, so widening
+  the corpus could not have found one.
+- **46 refused sites** on MODELLED kinds (`_PLAY` / `_ATTACH` / `_EVOLVE`) carried no RNG,
+  hidden-zone or opponent-choice marker — precisely the shape B1 calls ENGINE-RESOLVED, refused only
+  because of the kind they sat on.
+- Four cards (Drakloak, Lunatone, Dudunsparce, Fezandipiti ex) carried Effect Clauses covering their
+  **whole** Ability and were unreachable: `fate` returned MODELLED only for a MODELLED kind, so they
+  routed to the engine and the engine refused them for nondeterminism.
+
+### C2. The ruling
+
+**The kind table stops being the gate.** It answers *"is there a uniform board transition for this
+KIND?"*; the fate answers *"can we resolve THIS option's card effect?"* Those are different
+questions, and `refuse(..., scope=OPTION_SCOPE)` already modelled the difference — it just had
+nowhere to send the option. Now it does:
+
+    TERMINAL                                  -> not a fate; `is_terminal` first, `apply_option` raises
+    UNDECLARED                                -> REFUSED (the vocabulary moved underneath us)
+    clauses_cover is True                     -> MODELLED, whatever the kind says
+    kind MODELLED and clauses_cover not False -> MODELLED (the structural path, unchanged)
+    depth 0 + deterministic + search_api      -> ENGINE-RESOLVED, for ANY declared non-terminal kind
+    otherwise                                 -> REFUSED, at the engine precondition it missed
+
+**Decision 1 is not reopened.** It declined the engine as the *runtime pricing mechanism* on two
+measured objections, and both remain excluded by construction exactly as B1 argued: *provably
+deterministic* answers single-sample-past-a-shuffle, and 1-ply-on-a-real-board answers offline
+invisibility. Widening WHICH kinds may cross that bridge changes neither premise — the preconditions
+are properties of the call, never of the kind, which is why gating on the kind was the error.
+
+**`KIND_COVERAGE` is unchanged.** No kind was promoted or demoted: the composer's pruning depends on
+the table and B1 forbids demoting one without a ruling. `ENGINE_ROUTE_KINDS` survives as
+documentation of which kinds have no closed-form answer to fall back to, re-documented at its
+definition and beside `__all__` rather than silently repurposed. `KIND_SCOPE` is likewise kept and
+declared no-longer-emitted: once the table stopped deciding fates, "this kind has no uniform
+transition" stopped being why an option refuses.
+
+### C3. `clauses_cover`, and why its two falsey answers differ
+
+Issue #300 shipped the per-card `_covers` verdict and `snapshot_coverage.clauses_cover()`; this
+amendment wires it into `fate`. `True` wins outright — a complete clause set is closed-form,
+deterministic in distribution, and what the compendium exists to provide, so it is strictly better
+evidence than a kind-level default. `False` (a `partial` verdict) REFUSES a kind the table calls
+MODELLED, which is the entire reason the verdict was declared: before this, a partial set priced as a
+complete one and the uncovered leg differenced to a silent 0.
+
+`None` does **not** refuse, and that asymmetry is deliberate. `None` is *absence of a compendium
+entry*, which covers both "an effect nothing models" **and** "no printed effect for a clause to
+cover" — a vanilla Basic's deploy, a Basic Energy attach, a Tool attach, which are most of the pool
+and are structurally MODELLED. Refusing on `None` would refuse the structural transitions the seam
+exists to provide. Separating the two is the **caller's** obligation, since only the caller holds the
+card's effect text; `tools/apply_seam_coverage.py:clauses_cover` is the worked example and the census
+is the first consumer.
+
+### C4. Consequences
+
+- **Telemetry:** `EngineResolved.clause_gap` must now name the CARD, not only the kind. With the
+  route `_ABILITY`-only the kind was nearly an identifier; open to every declared kind, a backlog
+  line reading *"kind 7"* covers 699 corpus `_PLAY` options. Extended in the existing field, not
+  beside it — the backlog groups by that one string.
+- **Measured movement** in the census: ENGINE-RESOLVED 10 -> 57 sites (8 -> 40 copies across our
+  decks, 0.2 -> 9.8 meta-weighted); MODELLED 312 -> 295 sites, because the 21 MODELLED-PARTIAL sites
+  left it; REFUSED 92 -> 62. The report's "deterministic-shaped" refusal row is now **0**, and its
+  emptiness is a live check on the routing rather than a backlog.
+- **The census now CALLS `fate`** instead of mirroring its cascade by hand, supplying the two
+  judgements it is entitled to make. One store for the resolution order, so the report cannot claim
+  a fate the seam would not return.
+- **Nothing at runtime moved.** No production caller invokes `apply_option` yet (T4 / Issue #263
+  writes them), so both gates were expected to be — and were — unaffected.

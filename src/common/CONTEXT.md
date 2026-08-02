@@ -260,12 +260,20 @@ ruling, not a measurement (no parser reads "and then switch"), authored in
 `tools/meta_tracker/effect_overrides.json` under `_covers` and re-stamped verbatim into
 `card_effects.json`. Read two ways: `snapshot_coverage.partial_clause_cards()` reports the owed list
 (asserted **shrink-only**), and `CardEffects.clauses_cover()` hands the apply seam the fail-closed
-tri-state — `partial` and *unruled* both REFUSE, because §3b has no PARTIAL fate and a set that
-models three quarters of a card prices the last quarter at exactly 0, which under 1-ply ordering
-reads as *never explore this* (Issue #300).
+tri-state (Issue #300), which **Issue #299 wired into `apply_option.fate` as `clauses_cover`**:
+`full` resolves MODELLED whatever the option kind says, and `partial` REFUSES a kind the table calls
+MODELLED — because §3b has no PARTIAL fate and a set that models three quarters of a card prices the
+last quarter at exactly 0, which under 1-ply ordering reads as *never explore this*. **`unruled`
+(`None`) does NOT refuse**, and the asymmetry is deliberate: absence of a compendium entry also
+covers *"this option has no printed effect for a clause to cover"* — a vanilla Basic's deploy, a
+Basic Energy attach — which is most of the pool and is structurally MODELLED, so refusing on `None`
+would refuse the transitions the seam exists to provide. Telling *"nothing models this effect"* from
+*"there is no effect"* needs the card's text and is therefore the CALLER's obligation
+(`tools/apply_seam_coverage.py:clauses_cover` is the worked example).
 _Avoid_: coverage (the seam's option-kind table, `apply_option.KIND_COVERAGE` — a different
 question), complete (bare — `Footprint.complete` is the read/write-set's own flag), partial fate
-(there is none: PARTIAL is a report class and a refusal, never a fourth fate)
+(there is none: PARTIAL is a REPORT class, never a fourth fate — a partial set resolves to REFUSED,
+or to ENGINE-RESOLVED when its printed text is deterministic-shaped)
 
 **Transient Effect**:
 A one-turn effect an ATTACK grants — "during your (opponent's) next turn …": a damage shield

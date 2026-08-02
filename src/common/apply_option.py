@@ -25,6 +25,48 @@ Every option on a menu resolves to exactly one fate:
   caller cannot use the answer without seeing that the engine produced it.
 * **REFUSED** — everything else, and the composer answers a refusal by always-expanding.
 
+## The fate is PER-OPTION, not per-kind (Issue #299, ruled 2026-08-02 — ADR-0098 Amendment C)
+
+The kind table and the fate answer two different questions, and until Issue #299 the first one
+silently decided the second:
+
+* :data:`KIND_COVERAGE` answers *"is there a uniform board transition for this KIND?"*
+* :func:`fate` answers *"can we resolve THIS option's card effect?"*
+
+Conflating them cost the seam its two biggest levers, both measured by the POC-A2 census
+(`docs/plans/apply-seam-coverage.md`):
+
+1. **The engine bridge was pointed at the wrong kind.** `_ABILITY` was the only member of
+   :data:`ENGINE_ROUTE_KINDS`, and every live `_ABILITY` option in the 372-frame corpus (17 of them)
+   is Drakloak's Recon Directive or Lunatone's Lunar Cycle — both deck-reading draw engines, both
+   fail-closed REFUSED. The bridge resolved **zero** live options. Meanwhile **46 refused sites** on
+   MODELLED kinds carried no RNG, hidden-zone or opponent-choice marker at all — exactly the shape
+   §3b calls ENGINE-RESOLVED, refused only because of the kind they sat on.
+2. **Clause-complete cards were unreachable.** Drakloak, Lunatone, Dudunsparce and Fezandipiti ex
+   each carry Effect Clauses covering their whole Ability, and every one routed to the engine and
+   was refused there for nondeterminism. That is a routing bug, not a coverage gap.
+
+So the resolution order is now, in one place (:func:`fate`):
+
+    quarantined                               -> REFUSED (a parity divergence outranks all evidence)
+    TERMINAL                                  -> not a fate; ask `is_terminal` (apply_option raises)
+    UNDECLARED                                -> REFUSED (the vocabulary moved underneath us)
+    clauses_cover is True                     -> MODELLED, whatever the kind says          (Q2)
+    kind MODELLED and clauses_cover not False -> MODELLED (the structural path, unchanged)
+    depth 0 + deterministic + search_api      -> ENGINE-RESOLVED, for ANY declared kind    (Q1)
+    otherwise                                 -> REFUSED
+
+**`KIND_COVERAGE` itself is unchanged** — this ruling promotes and demotes nothing, because the
+composer's pruning depends on the table and §3b forbids demoting a kind without a ruling. What
+changed is that the table stopped being the *gate*: the gate is now the per-option proof.
+
+**The two new ways in are both fail-closed, and both keep ADR-0067's yield convention.** A complete
+clause set (`clauses_cover=True`) is strictly better evidence than a kind-level default — it is
+closed-form, deterministic in distribution, and it is what the compendium exists to provide. A
+*partial* one (`False`, Issue #300's `_covers: partial` verdict) now REFUSES a kind the table calls
+MODELLED, which is the whole point of declaring it: before this wiring a partial set priced as a
+complete one and the uncovered leg differenced to exactly 0.
+
 **The gate is "provably deterministic", NOT "unmodelled".** An unmodelled effect that *might* touch
 RNG is REFUSED, fail-closed, per ADR-0067's yield convention — which is why ``deterministic`` is
 tri-state and its `None` (unproven) default refuses. Two independent reasons, both fatal:
@@ -146,7 +188,14 @@ FATES = (MODELLED, ENGINE_RESOLVED, REFUSED)
 
 #: Why a particular call refused, carried on the :class:`Refusal`. The composer treats them all the
 #: same way (always-expand); the coverage gate and the telemetry line do not.
-KIND_SCOPE = "kind"              # the kind itself is unmodelled
+#:
+#: :data:`KIND_SCOPE` is **no longer emitted by** :func:`apply_option` (Issue #299). Once the engine
+#: route opened to every declared non-terminal kind, "this kind has no uniform transition" stopped
+#: being the reason an option refuses — the reason is whichever ENGINE precondition it missed, which
+#: is the nearest miss and the actionable one. The name is kept rather than deleted because
+#: :func:`coverage` still reports the table's REFUSED class, :func:`refuse` is public for T4, and a
+#: scope the telemetry has already seen must not quietly change meaning.
+KIND_SCOPE = "kind"              # the kind itself is unmodelled — see the note above
 OPTION_SCOPE = "option"          # kind is modelled, this option's card effect is not
 UNDECLARED_SCOPE = "undeclared"  # the option vocabulary grew underneath us
 QUARANTINE_SCOPE = "quarantine"  # parity divergence found for this kind (ADR-0098 decision 4)
@@ -195,8 +244,19 @@ KIND_COVERAGE: dict[int, str] = {
 TRANSITION_KINDS: frozenset[int] = frozenset(
     k for k, c in KIND_COVERAGE.items() if c == MODELLED)
 
-#: Kinds ELIGIBLE for the engine fallback. Eligibility is not the fate: the per-option determinism
-#: proof, a real board and a 1-ply call all still have to hold, or the option refuses.
+#: Kinds the table PREFERS to send to the engine — the ones with no uniform closed-form transition
+#: to fall back to.
+#:
+#: **This is documentation, not the gate** (Issue #299). It gated :func:`fate` until 2026-08-02;
+#: since the ruling the engine route is open to every declared non-terminal kind and the gate is the
+#: per-option proof (`depth == 0`, `deterministic is True`, a live ``search_api``). Membership here
+#: now says only *"the kind table has no closed-form answer for this kind, so the engine is the only
+#: route it will ever have"* — which is why `_ABILITY` is in it and `_PLAY` is not, even though a
+#: `_PLAY` whose card effect no clause covers reaches the same route.
+#:
+#: Kept under its original name deliberately: it is exported and tested, and silently repurposing a
+#: name that used to gate is how a later reader concludes the gate is still here. See the note beside
+#: :data:`__all__`.
 ENGINE_ROUTE_KINDS: frozenset[int] = frozenset(
     k for k, c in KIND_COVERAGE.items() if c == ENGINE_RESOLVED)
 
@@ -253,6 +313,14 @@ class EngineResolved:
     kind: int = -1
     #: The clause-vocabulary gap that forced the fallback — what to model next. Never blank in
     #: practice; this is the telemetry payload.
+    #:
+    #: **It must name the CARD, not only the kind** (Issue #299). While the route was `_ABILITY`-only
+    #: the kind was nearly an identifier; now that every declared non-terminal kind can reach it, a
+    #: backlog line reading *"kind 7"* covers 699 corpus `_PLAY` options and is unreadable as work.
+    #: The convention is ``"<card id> <card name>: <what the clause vocabulary cannot say>"``, e.g.
+    #: ``"1182 Boss's Orders: no `gust` clause kind"``. Deliberately this ONE field rather than a
+    #: second card field: the modelling backlog is grouped by this string, and two fields would let
+    #: half of it be dropped by a caller that only filled the older one.
     clause_gap: str = ""
 
 
@@ -459,8 +527,8 @@ def coverage(kind: int) -> str:
     return KIND_COVERAGE.get(kind, UNDECLARED)
 
 
-def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: bool | None = None
-         ) -> str:
+def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: bool | None = None,
+         clauses_cover: bool | None = None) -> str:
     """Which of §3b's three :data:`FATES` this **specific call** resolves to.
 
     ``depth``          — plies already applied. 0 is the live observation; ≥ 1 means the board is a
@@ -470,25 +538,61 @@ def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: boo
                          hidden zone. `False` = proved otherwise. `None` = *unproven*, which refuses:
                          the gate is "provably deterministic", not "unmodelled", and ADR-0067's yield
                          convention says fail closed.
+    ``clauses_cover``  — do this option's own Effect Clauses cover the WHOLE printed effect? Also
+                         tri-state, from `CardEffects.clauses_cover(card_id)` over
+                         `card_effects.json`'s `_covers` verdict (Issue #300): `True` full, `False`
+                         partial, `None` unruled-or-absent.
 
-    Terminal options are not a fate — ask :func:`is_terminal` first; this reports `REFUSED` for them
-    rather than inventing a fourth answer, and :func:`apply_option` raises.
+    **The resolution order** (Issue #299, ADR-0098 Amendment C — see this module's header for the
+    measurement behind it):
 
-    **A fourth gate is owed here: `clauses_cover`** (Issue #299, whose ruling this signature is
-    waiting on). MODELLED is currently a pure kind-table lookup, so a `_PLAY` whose Effect Clauses
-    cover only PART of the printed card resolves to MODELLED anyway and the uncovered leg differences
-    to exactly 0 — the silent-zero failure, arriving through the compendium instead of the snapshot.
-    Everything under that gate already exists and is audited: the per-card verdict ships in
-    `card_effects.json` (`snapshot_coverage.COVERS_KEY`), `CardEffects.clauses_cover(card_id)` hands
-    it over as the tri-state this argument will take — `True` full, `False` partial, `None` unruled —
-    and both falsey answers must REFUSE, fail-closed exactly as ``deterministic`` does. Issue #300
-    shipped that half; wiring it belongs to Issue #299, because Issue #299 is also re-deciding the
-    MODELLED/engine precedence this gate sits inside, and the two cannot be settled separately."""
-    how = coverage(transition_kind(option))
-    if how == MODELLED:
-        return MODELLED
-    if how != ENGINE_RESOLVED:
+    1. TERMINAL is not a fate. Ask :func:`is_terminal` first; this reports `REFUSED` rather than
+       inventing a fourth answer, and :func:`apply_option` raises.
+    2. A **quarantined** kind refuses, ahead of every gate below (ADR-0098 decision 4). A parity
+       divergence is a statement that the seam's model of this kind is WRONG, so no per-option
+       evidence can speak over it — least of all a clause set, which is a claim about the card.
+    3. UNDECLARED refuses. The engine grew a kind underneath us, so **nothing is known about it at
+       all** — not even whether it has a structural half — and a clause verdict speaks for the
+       card's EFFECT, never for the half of the transition the kind contributes. Fail closed, loudly.
+
+       This is deliberately NARROWER than "any kind the table does not call MODELLED". A kind the
+       table marks REFUSED is not an unknown: :data:`KIND_COVERAGE` rules that such a kind's *"whole
+       content is a card effect"* — which is precisely what a complete clause set covers, and is the
+       same argument that makes step 4 rescue `_ABILITY`. Refusing `_SKILL` or `_YES` on evidence
+       that rescues `_ABILITY` would contradict step 4 rather than reinforce it.
+    4. ``clauses_cover is True`` ⇒ **MODELLED, whatever the kind says.** A complete clause set is
+       strictly better evidence than a kind-level default: closed-form, deterministic in
+       distribution, and precisely what the compendium exists to provide. This is what makes
+       Drakloak, Lunatone, Dudunsparce and Fezandipiti ex reachable — four `_ABILITY` cards whose
+       clauses already covered the whole Ability while the kind table sent them to an engine that
+       refused them for nondeterminism.
+    5. A MODELLED kind stays MODELLED **unless ``clauses_cover is False``.** `False` is Issue #300's
+       *partial* verdict and it now refuses, which is the entire reason that verdict was declared: a
+       partial set used to price as a complete one and the uncovered leg differenced to exactly 0.
+    6. Otherwise the **engine route**, open to every declared non-terminal kind rather than to
+       :data:`ENGINE_ROUTE_KINDS` alone: `depth == 0` **and** ``deterministic is True`` **and** a
+       live ``search_api``.
+    7. Otherwise REFUSED, and :func:`apply_option` carries the per-precondition scope.
+
+    **Why ``None`` does NOT refuse at step 5.** Both falsey answers fail closed *as a clause
+    verdict*, but `None` also covers *"this option has no card effect for a clause to cover"* — a
+    vanilla Basic's deploy, a Basic Energy attach, a Tool attach — which is most of the pool and is
+    structurally MODELLED by construction. Refusing on `None` would therefore refuse the structural
+    transitions this seam exists to provide. The residue is real and belongs to the CALLER: T4 must
+    pass `False`, not `None`, for a card that HAS a printed effect no clause covers. `None` from
+    `CardEffects.clauses_cover` cannot tell those two apart — it is absence of a compendium entry —
+    so the caller has to join it against whether the card carries effect text at all. The POC-A2
+    census does exactly that (`tools/apply_seam_coverage.py:resolve`) and is the worked example."""
+    kind = transition_kind(option)
+    if kind in quarantined_kinds():
         return REFUSED
+    how = coverage(kind)
+    if how == TERMINAL or how == UNDECLARED:
+        return REFUSED
+    if clauses_cover is True:
+        return MODELLED
+    if how == MODELLED and clauses_cover is not False:
+        return MODELLED
     if depth >= 1:
         return REFUSED
     if deterministic is not True:
@@ -545,7 +649,7 @@ def require_model(result: object):
 
 
 def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
-                 deterministic: bool | None = None):
+                 deterministic: bool | None = None, clauses_cover: bool | None = None):
     """The board after taking ``option``.
 
     Returns one of four shapes:
@@ -556,8 +660,10 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     * a :class:`Refusal` — **never a silently unchanged model**, because that prices the option at
       0.0 delta and buries the gap (see :class:`Refusal`).
 
-    ``depth`` / ``search_api`` / ``deterministic`` gate the engine route only; see :func:`fate` for
-    what each means and why ``deterministic=None`` refuses.
+    ``depth`` / ``search_api`` / ``deterministic`` gate the engine route; ``clauses_cover`` decides
+    the MODELLED half. :func:`fate` owns the resolution order and the reason for each step — this
+    function mirrors it exactly and adds only the refusal SCOPES, which are the work each refusal
+    names.
 
     **Lazy, never an eager deep copy.** 1-ply ordering runs this once per candidate per decision, so
     a transition materialises only the fields the caller reads, riding the lazy pure snapshot of
@@ -588,12 +694,16 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     if how == UNDECLARED:
         return refuse(option, f"option kind {kind} is not in the seam's coverage table",
                       scope=UNDECLARED_SCOPE)
-    if how == REFUSED:
-        return refuse(option, f"option kind {kind} has no closed-form transition", scope=KIND_SCOPE)
-    if how == ENGINE_RESOLVED:
-        # Eligible. Each precondition refuses with its OWN scope — the coverage report needs to tell
-        # "we never proved this deterministic" from "the caller wired no engine" from "we were two
-        # plies deep", because they are three different pieces of work.
+    # The FATE is `fate`'s to decide — asked, never re-derived. A second copy of the resolution
+    # order here is the drift ADR-0087 charges for one store over, and it would be invisible: the
+    # census mirrors `fate` while the composer calls this, so a disagreement would price the same
+    # option two ways with nothing to say so. What this function adds is only the SCOPE.
+    if fate(option, depth=depth, search_api=search_api, deterministic=deterministic,
+            clauses_cover=clauses_cover) == REFUSED:
+        # Quarantine, TERMINAL and UNDECLARED already returned above, so a refusal here is an ENGINE
+        # precondition — and exactly which one is the work owed. Each gets its OWN scope, because the
+        # coverage report needs to tell "we never proved this deterministic" from "the caller wired
+        # no engine" from "we were two plies deep": three different pieces of work.
         if depth >= 1:
             return refuse(
                 option,
@@ -628,6 +738,13 @@ def quarantined_kinds() -> frozenset[int]:
     return frozenset()
 
 
+# Two exported names changed MEANING in Issue #299 without changing spelling, and both are called
+# out here as well as at their definitions, because `__all__` is where an importer looks first:
+#
+#   `ENGINE_ROUTE_KINDS` no longer GATES the engine route — it documents which kinds the table has no
+#     closed-form answer for. The gate is the per-option proof in `fate`.
+#   `KIND_SCOPE` is no longer EMITTED by `apply_option`, for the same reason: the kind table stopped
+#     deciding fates, so a refusal names the engine precondition it missed instead.
 __all__: Sequence[str] = (
     "MODELLED", "ENGINE_RESOLVED", "TERMINAL", "REFUSED", "UNDECLARED", "FATES",
     "KIND_SCOPE", "OPTION_SCOPE", "UNDECLARED_SCOPE", "QUARANTINE_SCOPE", "DEPTH_SCOPE",

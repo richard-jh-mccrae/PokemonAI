@@ -110,12 +110,164 @@ def test_there_are_exactly_three_fates_and_terminal_is_not_one():
 
 
 @pytest.mark.req("REQ-APPLY-0008")
-def test_ability_is_ELIGIBLE_for_the_engine_route_rather_than_flatly_refused():
+def test_ability_is_the_kind_the_table_PREFERS_to_send_to_the_engine():
     """ABILITY is 17 live MAIN-menu options in the corpus and the kind IS its effect, so there is no
     uniform closed-form transition — but many Abilities touch no RNG and no hidden zone, and §3b's
-    whole point is that such an effect gets priced through the engine rather than pruned at 0."""
+    whole point is that such an effect gets priced through the engine rather than pruned at 0.
+
+    Since Issue #299 this is a statement about the TABLE, not about eligibility: every declared
+    non-terminal kind can reach the engine route now, so `ENGINE_ROUTE_KINDS` records only which
+    kinds have no closed-form answer to fall back to. `_ABILITY` is in it and `_PLAY` is not, even
+    though a `_PLAY` whose card effect no clause covers reaches the same route."""
     assert ao.coverage(_ABILITY) == ao.ENGINE_RESOLVED
     assert _ABILITY in ao.ENGINE_ROUTE_KINDS and _ABILITY not in ao.TRANSITION_KINDS
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_a_complete_clause_set_beats_the_kind_table():
+    """Issue #299 Q2. Drakloak, Lunatone, Dudunsparce and Fezandipiti ex each carry Effect Clauses
+    covering their WHOLE Ability, and every one of them routed to the engine — which then refused it
+    for nondeterminism, because an Ability that reads the deck is exactly what the determinism proof
+    excludes. The clause work already paid for was unreachable: a routing bug, not a coverage gap.
+
+    A complete clause set is strictly better evidence than a kind-level default (closed-form,
+    deterministic in distribution, and what the compendium exists to provide), so it wins outright —
+    `whatever the kind says`, including a kind the table sends to the engine."""
+    assert ao.coverage(_ABILITY) == ao.ENGINE_RESOLVED          # still engine-PREFERRED in the table
+    assert ao.fate({"type": _ABILITY}, clauses_cover=True) == ao.MODELLED
+    # ...and with no engine wired and no determinism proof, which is the four cards' real situation.
+    assert ao.fate({"type": _ABILITY}, clauses_cover=True, deterministic=False) == ao.MODELLED
+    with pytest.raises(NotImplementedError):                    # MODELLED means T4 owes a transition
+        ao.apply_option(object(), {"type": _ABILITY}, clauses_cover=True)
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_a_PARTIAL_clause_set_refuses_a_kind_the_table_calls_MODELLED():
+    """The other half of the same wiring, and the reason Issue #300 declared the verdict at all.
+    `_covers: partial` reaches here as `clauses_cover=False`, and before this it could not: MODELLED
+    was a pure kind lookup, so a `_PLAY` whose clauses cover part of the printed card priced as if
+    they covered all of it and the uncovered leg differenced to exactly 0 — §3c's silent zero,
+    arriving through the compendium instead of through the snapshot."""
+    assert ao.coverage(_PLAY) == ao.MODELLED
+    assert ao.fate({"type": _PLAY}, clauses_cover=False) == ao.REFUSED
+    assert ao.fate({"type": _PLAY}, clauses_cover=True) == ao.MODELLED
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_an_UNRULED_clause_verdict_still_lets_the_structural_transition_through():
+    """`None` is NOT the same falsey answer as `False` here, and the difference is most of the pool.
+
+    A vanilla Basic's deploy, a Basic Energy attach and a Tool attach carry no card effect for a
+    clause to cover, so `CardEffects.clauses_cover` answers `None` for all of them — refusing on
+    `None` would refuse the structural transitions this seam exists to provide. The residue is the
+    CALLER's: T4 passes `False`, not `None`, for a card that HAS a printed effect no clause covers,
+    because absence-of-a-compendium-entry cannot tell those two apart on its own."""
+    for kind in sorted(ao.TRANSITION_KINDS):
+        assert ao.fate({"type": kind}) == ao.MODELLED, kind
+        assert ao.fate({"type": kind}, clauses_cover=None) == ao.MODELLED, kind
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_a_MODELLED_kind_with_partial_clauses_still_needs_the_determinism_PROOF():
+    """The regression that would silently undo ADR-0067 here. Opening the engine route per-option
+    must not let a `_PLAY` reach it on easier terms than an `_ABILITY` ever could: the gate is still
+    a PROOF, so an unproven `deterministic` refuses even though the kind is MODELLED and the caller
+    wired a live engine."""
+    api = object()
+    assert ao.fate({"type": _PLAY}, clauses_cover=False, search_api=api) == ao.REFUSED
+    assert ao.fate({"type": _PLAY}, clauses_cover=False, search_api=api,
+                   deterministic=None) == ao.REFUSED
+    assert ao.fate({"type": _PLAY}, clauses_cover=False, search_api=api,
+                   deterministic=False) == ao.REFUSED
+    assert ao.fate({"type": _PLAY}, clauses_cover=False, search_api=api,
+                   deterministic=True) == ao.ENGINE_RESOLVED
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_the_engine_route_is_open_to_every_declared_non_terminal_kind():
+    """Issue #299 Q1. The kind table answers *"is there a uniform transition for this KIND?"*; the
+    fate answers *"can we resolve THIS option?"*. Conflating them left 46 refused sites on MODELLED
+    kinds carrying no RNG, hidden-zone or opponent-choice marker at all — the exact shape §3b calls
+    ENGINE-RESOLVED — with nowhere to be sent.
+
+    So eligibility is no longer membership of `ENGINE_ROUTE_KINDS`. Asserted over every declared
+    non-terminal kind rather than over a sample, since the point is that no kind is excluded."""
+    api = object()
+    for kind in sorted(set(ao.KIND_COVERAGE) - ao.TERMINAL_KINDS):
+        assert ao.fate({"type": kind}, search_api=api, deterministic=True,
+                       clauses_cover=False) == ao.ENGINE_RESOLVED, kind
+    assert ao.ENGINE_ROUTE_KINDS == frozenset({_ABILITY})       # the TABLE is deliberately unmoved
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_a_table_REFUSED_kind_IS_rescued_by_a_complete_clause_set():
+    """The deliberate boundary of the guard above, asserted so nobody "tightens" it later.
+
+    `KIND_COVERAGE` rules that a kind like `_SKILL` or `_YES` has no uniform transition because its
+    *"whole content is a card effect"* — which is exactly what a complete clause set covers. That is
+    a RULING about the kind, not ignorance of it, so it is nothing like UNDECLARED. And it is the
+    same argument that rescues `_ABILITY`: refusing `_YES` on evidence that rescues `_ABILITY` would
+    contradict Q2 rather than reinforce it."""
+    for kind in (_SKILL, _YES, _NUMBER, _CARD):
+        assert ao.coverage(kind) == ao.REFUSED, kind
+        assert ao.fate({"type": kind}, clauses_cover=True) == ao.MODELLED, kind
+        assert ao.fate({"type": kind}) == ao.REFUSED, kind          # ...and only on that evidence
+
+
+@pytest.mark.req("REQ-APPLY-0004")
+def test_quarantine_outranks_a_complete_clause_set(monkeypatch):
+    """A parity divergence says the seam's model of this kind is WRONG. No per-option evidence can
+    speak over that — least of all a clause set, which is a claim about the CARD while quarantine is
+    a measured fact about the KIND. Asserted on `fate` as well as `apply_option` because Issue #299
+    moved the clause gate ahead of the kind lookup, and quarantine had to move ahead of it in turn or
+    a clause-complete card would have walked straight through a diverging kind."""
+    monkeypatch.setattr(ao, "quarantined_kinds", lambda: frozenset({_PLAY}))
+    assert ao.fate({"type": _PLAY}, clauses_cover=True) == ao.REFUSED
+    assert ao.fate({"type": _PLAY}, clauses_cover=True, search_api=object(),
+                   deterministic=True) == ao.REFUSED
+    r = ao.apply_option(object(), {"type": _PLAY}, clauses_cover=True)
+    assert isinstance(r, ao.Refusal) and r.scope == ao.QUARANTINE_SCOPE
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_terminal_and_undeclared_are_not_rescued_by_a_complete_clause_set():
+    """The two guards that sit AHEAD of "a complete clause set wins". A turn-ender has no successor
+    state for any evidence to describe. An undeclared kind is worse: a clause verdict speaks for the
+    card's EFFECT and never for the half of the transition the KIND contributes, and for a kind the
+    engine grew underneath us that half is entirely unknown — so `src/cg/api.py`'s warning that the
+    enum grows *during the competition* makes this a live grader path, not a theoretical one."""
+    api = object()
+    for kind in (_ATTACK, _END, 999):
+        assert ao.fate({"type": kind}, clauses_cover=True) == ao.REFUSED, kind
+        assert ao.fate({"type": kind}, clauses_cover=True, search_api=api,
+                       deterministic=True) == ao.REFUSED, kind
+    r = ao.apply_option(object(), {"type": 999}, clauses_cover=True, search_api=api,
+                        deterministic=True)
+    assert isinstance(r, ao.Refusal) and r.scope == ao.UNDECLARED_SCOPE
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_apply_option_resolves_the_same_way_fate_does():
+    """One resolution order, asserted rather than kept by hand in two cascades. `apply_option` adds
+    only the refusal SCOPES; if it ever disagreed with `fate` about the FATE, the census (which
+    mirrors `fate`) and the composer (which calls `apply_option`) would price the same option
+    differently and nothing would say so."""
+    api = object()
+    for kind in sorted(set(ao.KIND_COVERAGE) - ao.TERMINAL_KINDS) + [999]:
+        for cover in (True, False, None):
+            for det in (True, False, None):
+                for search in (api, None):
+                    kw = dict(search_api=search, deterministic=det, clauses_cover=cover)
+                    want = ao.fate({"type": kind}, **kw)
+                    if want == ao.REFUSED:
+                        r = ao.apply_option(object(), {"type": kind}, **kw)
+                        assert isinstance(r, ao.Refusal), (kind, kw)
+                        assert r.scope and r.reason.strip(), (kind, kw)
+                    else:
+                        # MODELLED and ENGINE-RESOLVED are both T4's to implement, so at T0 each
+                        # raises rather than returning the plausible answer an identity stub would.
+                        with pytest.raises(NotImplementedError):
+                            ao.apply_option(object(), {"type": kind}, **kw)
 
 
 @pytest.mark.req("REQ-APPLY-0008")
@@ -166,10 +318,30 @@ def test_the_engine_route_returns_a_WRAPPER_so_the_telemetry_cannot_be_forgotten
     never a resting place"*, so it emits telemetry. Returning a bare model would make that a
     convention every caller could forget; the wrapper makes the engine's involvement part of the
     value you must handle. `require_model` unwraps it; `must_expand` is False — it IS resolved."""
-    er = ao.EngineResolved(model="board", kind=_ABILITY, clause_gap="no clause for Adrena-Brain")
+    er = ao.EngineResolved(model="board", kind=_ABILITY,
+                           clause_gap="1182 Boss’s Orders: no `gust` clause kind")
     assert ao.must_expand(er) is False
     assert ao.require_model(er) == "board"
     assert er.clause_gap
+
+
+@pytest.mark.req("REQ-APPLY-0008")
+def test_the_engine_telemetry_names_the_CARD_now_that_every_kind_can_reach_it():
+    """Issue #299's telemetry consequence, and it is not cosmetic. While the route was
+    `_ABILITY`-only the `kind` field was nearly an identifier for the work owed; with the route open
+    to every declared non-terminal kind a backlog line reading *"kind 7"* covers the corpus's 699
+    `_PLAY` options at once, and a modelling backlog nobody can group by card is unreadable.
+
+    Extended in the EXISTING field rather than beside it: the backlog is grouped by this one string,
+    and a second card field would let half of it be dropped by a caller that filled only the older
+    one. Asserted on the docstring because T0 freezes contracts — the field is a `str` and T4 is what
+    populates it."""
+    import inspect
+    fields = set(ao.EngineResolved.__dataclass_fields__)
+    assert "clause_gap" in fields
+    assert not (fields & {"card", "card_id", "card_name"}), "extend the field, do not add a second"
+    src = inspect.getsource(ao.EngineResolved)
+    assert "must name the CARD" in src and "<card id> <card name>" in src
 
 
 @pytest.mark.req("REQ-APPLY-0008")
@@ -243,10 +415,18 @@ def test_an_unmodellable_kind_returns_a_REFUSAL_not_a_silent_no_op():
     """The ordering amendment's load-bearing assertion. A no-op prices the option at exactly 0.0
     delta, which at ordering time means "never explored" rather than "undervalued" — so an Ability
     the seam cannot model would look like an Ability not worth using, forever, and nothing would
-    report the gap."""
+    report the gap.
+
+    **The SCOPE moved in Issue #299 and the claim did not.** `_SKILL` used to refuse at
+    `KIND_SCOPE`, because the kind table was the gate; now that the engine route is open to every
+    declared non-terminal kind, "this kind has no uniform transition" is no longer why the option
+    refuses — it refuses at whichever engine precondition it missed, which here is the determinism
+    proof, and that is the work actually owed. `KIND_SCOPE` is documented as no longer emitted rather
+    than deleted; see its definition."""
     r = ao.apply_option(object(), {"type": _SKILL})
     assert isinstance(r, ao.Refusal)
-    assert r.kind == _SKILL and r.scope == ao.KIND_SCOPE and r.reason.strip()
+    assert r.kind == _SKILL and r.scope == ao.NONDETERMINISM_SCOPE and r.reason.strip()
+    assert ao.coverage(_SKILL) == ao.REFUSED         # the TABLE still says the kind is unmodellable
 
 
 @pytest.mark.req("REQ-APPLY-0005")
