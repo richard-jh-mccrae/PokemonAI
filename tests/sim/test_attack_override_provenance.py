@@ -28,7 +28,8 @@ from pathlib import Path
 
 import pytest
 
-from sim.generate_attack_overrides import (METHOD_ENGINE_FIT, METHOD_TEXT_VERIFIED,
+from sim.generate_attack_overrides import (ABOUT, CONTROLLED_KEYS, EVIDENCE_KEYS, METHOD_DOC,
+                                           METHOD_ENGINE_FIT, METHOD_TEXT_VERIFIED,
                                            METHOD_UNAUDITED, METHODS, PROVENANCE_VERSION,
                                            load_provenance)
 
@@ -36,19 +37,13 @@ REPO = Path(__file__).resolve().parents[2]
 _TABLE = REPO / "src" / "common" / "attack_overrides.json"
 _SIDECAR = REPO / "src" / "common" / "attack_overrides.provenance.json"
 
-#: An evidence row's shape: everything the harness CONTROLS, then the one thing it measures.
-#: Named explicitly rather than read off a row's key order, so the contradiction check below cannot
-#: quietly start comparing a different tuple if the row shape ever grows a field.
-_CONTROLLED = ("scenario", "sweep", "step", "coin", "atkBench", "defBench", "energies", "hand")
-_ROW_FIELDS = (*_CONTROLLED, "dealt")
-
 #: The 111 entries that were already shipped when provenance became a requirement (2026-08-02). The
 #: capture that produced each of them is gone — `reports/attack_audit/measurements.json` exists
 #: nowhere — so they are recorded as unaudited rather than re-derived, and FROZEN at that.
 #:
-#: Asserted as a SUBSET below, not an equality, and the asymmetry is the whole gate: backfilling one
-#: (unaudited -> engine_fit, once a recapture lands) shrinks the set and passes untouched, while a
-#: NEW unaudited override fails here — so "nobody knows where this number came from" can never again
+#: Asserted as a SUBSET below, never an equality, and the asymmetry is the whole gate: backfilling
+#: one (unaudited -> engine_fit, once a recapture lands) shrinks the set and passes with no edit to
+#: this file, while a NEW unaudited override fails — so "nobody knows where this number came from"
 #: be added silently. Re-driving the pool would change shipped values rather than merely document
 #: them (ADR-0083's Consequences: the old measurements are stale for bench-sensitive attacks), which
 #: is why the debt is recorded rather than paid in one go.
@@ -104,30 +99,44 @@ def test_each_row_records_the_value_that_is_actually_shipped(table, entries):
 
 @pytest.mark.req("REQ-PROV-0002")
 def test_an_engine_fit_carries_the_measurements_that_establish_it(entries):
-    """A fit whose evidence is empty is exactly the pre-#224 state with a label on it."""
+    """A fit whose evidence is empty is exactly the pre-Issue #224 state with a label on it."""
     for aid, e in sorted(entries.items()):
         if e.get("method") != METHOD_ENGINE_FIT:
             continue
         assert e.get("evidence"), f"{aid}: engine_fit with no evidence rows"
         for row in e["evidence"]:
-            assert set(row) == set(_ROW_FIELDS), f"{aid}: malformed evidence row"
+            assert set(row) == set(EVIDENCE_KEYS), f"{aid}: malformed evidence row"
             assert row["dealt"] is not None, f"{aid}: an evidence row with no measured damage"
 
 
 @pytest.mark.req("REQ-PROV-0002")
-def test_a_scaler_fit_keeps_the_rejected_axes_that_prove_the_variable(entries):
-    """The rejected axes are load-bearing, not filler. A FLAT hand axis is what proves hand size was
-    measured and does not move the damage; its ABSENCE is what let 274 fit `atk_hand` in the first
-    place. So a fitted scaler must show more than the axis that won — otherwise the record preserves
-    the conclusion and discards the reason it is sound."""
+def test_a_scaler_fit_keeps_a_measured_FLAT_axis_not_just_the_axes_that_won(entries):
+    """The rejected axes are load-bearing, not filler — and the assertion has to say so, or the test
+    passes on evidence that proves nothing.
+
+    Counting axes is not enough: a `both_bench` fit wins on `atk_bench` AND `def_bench`, so "at
+    least two axes" is satisfied by the two winners alone, and evidence stripped of the flat
+    hand/energy rows would sail through. What actually carries the argument is a measured axis that
+    is FLAT: 274's hand rows read 100/100 *because the benches are pinned across them*, and that
+    flatness is the whole reason hand size is unfittable now. Its ABSENCE is what let 274 ship
+    `atk_hand` in the first place — a variable no measurement supported, in a record that would have
+    looked complete.
+    """
     for aid, e in sorted(entries.items()):
         if e.get("method") != METHOD_ENGINE_FIT or "scaleVar" not in e.get("fields", {}):
             continue
-        axes = {row["sweep"] for row in e["evidence"] if row["sweep"]}
-        assert len(axes) >= 2, (
+        dealt_by_axis: dict[str, set] = {}
+        for row in e["evidence"]:
+            if row["sweep"]:
+                dealt_by_axis.setdefault(row["sweep"], set()).add(row["dealt"])
+        flat = sorted(ax for ax, dealt in dealt_by_axis.items() if len(dealt) == 1)
+        assert len(dealt_by_axis) >= 2, (
             f"{aid}: a scaler fitted from ONE axis. One sweep cannot separate atk_bench from "
-            f"both_bench (ADR-0083 §3), and a flat axis is the evidence a variable was measured "
-            f"rather than missing — saw {sorted(axes)}")
+            f"both_bench (ADR-0083 §3) — saw {sorted(dealt_by_axis)}")
+        assert flat, (
+            f"{aid}: every measured axis MOVES, so nothing here shows a variable was measured and "
+            f"ruled out. Either the flat axes were dropped from the record, or the fit is ambiguous "
+            f"across {sorted(dealt_by_axis)} and should not have shipped")
 
 
 @pytest.mark.req("REQ-PROV-0002")
@@ -144,7 +153,7 @@ def test_no_fit_ships_on_evidence_that_contradicts_itself(entries):
             continue
         seen: dict[tuple, int] = {}
         for row in e["evidence"]:
-            key = tuple(row[k] for k in _CONTROLLED)
+            key = tuple(row[k] for k in CONTROLLED_KEYS)
             assert seen.setdefault(key, row["dealt"]) == row["dealt"], (
                 f"{aid}: two measurements on identical controlled state disagree "
                 f"({seen[key]} vs {row['dealt']}) — this override's own evidence refutes it")
@@ -186,25 +195,35 @@ def test_the_unaudited_set_may_only_shrink(entries):
 
 
 @pytest.mark.req("REQ-PROV-0004")
-def test_the_recorded_debt_is_what_the_bootstrap_ruled(entries):
-    """A backfilled entry should be *reported*, not silently absorbed. This states the count as
-    ruled, so paying the debt down shows up as a deliberate edit to this number rather than as
-    nothing at all."""
+def test_the_recorded_debt_may_only_SHRINK(entries):
+    """The debt ledger, monotone in the same direction as the id set above — deliberately, because
+    an equality here would contradict the sibling test's promise that backfilling costs no edit.
+    Both unmeasured classes may fall to zero without anyone touching this file; either GROWING is
+    a new debt, and a new debt is a decision someone signs for."""
     counts = {m: sum(1 for e in entries.values() if e.get("method") == m) for m in METHODS}
-    assert counts[METHOD_TEXT_VERIFIED] == 4, "the Issue #225 text-verified set changed"
-    assert counts[METHOD_UNAUDITED] == 111, (
-        f"the unaudited debt moved to {counts[METHOD_UNAUDITED]} (was 111 at bootstrap). If a "
-        "recapture backfilled one, update this number in the same commit.")
+    assert counts[METHOD_TEXT_VERIFIED] <= 4, (
+        f"{counts[METHOD_TEXT_VERIFIED]} text-verified entries (4 at bootstrap, Issue #225's). A new "
+        "one is a fact shipped on a human reading rather than a measurement — legitimate when the "
+        "harness provably cannot fit it, but rule it here and give it an owning issue.")
+    assert counts[METHOD_UNAUDITED] <= 111, (
+        f"{counts[METHOD_UNAUDITED]} unaudited entries (111 at bootstrap) — the debt grew.")
 
 
 @pytest.mark.req("REQ-PROV-0001")
-def test_the_sidecar_is_self_describing(entries):
+def test_the_sidecar_is_self_describing_and_its_prose_cannot_drift(entries):
     """Version and glossary live in the file, so a reader never has to leave it to know what a row
-    claims — and a shape change fails loudly in `load_provenance` instead of being half-parsed."""
+    claims — and a shape change fails loudly in `load_provenance` instead of being half-parsed.
+
+    Asserted against the generator's own constants, not merely for shape. `main` re-emits
+    `ABOUT`/`METHOD_DOC` rather than echoing the file back, so the module owns this prose; without
+    this equality a hand-edit could leave the file describing a vocabulary the code no longer has —
+    drift, in the one file built to make drift impossible.
+    """
     payload = json.loads(_SIDECAR.read_text(encoding="utf-8"))
     assert payload["version"] == PROVENANCE_VERSION
+    assert payload["about"] == ABOUT
+    assert payload["methods"] == METHOD_DOC
     assert set(payload["methods"]) == set(METHODS), "the glossary and the vocabulary disagree"
-    assert "Issue #224" in payload["about"]
 
 
 @pytest.mark.req("REQ-PROV-0003")

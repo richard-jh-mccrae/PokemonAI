@@ -59,6 +59,11 @@ The cost of two files is drift, and drift is the solvable half: §2 makes them a
 `tests/sim/test_attack_override_provenance.py` fails when they disagree. Readability and runtime cost
 are not recoverable once inline.
 
+The grader argument only holds if the sidecar actually stays off the grader, so
+`tools/submit/package.py` excludes it from the Kaggle bundle. Its `_IGNORE` filtered `*.md` and
+`docs/` — documentation by extension — and a 24 KB evidence file called `.json` would have shipped
+straight through it, paying the very cost this decision cites for rejecting the inline form.
+
 ### 2. Deriving a value and recording what established it are ONE operation
 
 `derive_entries` returns `{attackId: Derivation(fields, evidence)}`; each of the three derivation
@@ -72,8 +77,8 @@ failure this ADR exists to end, reintroduced one level down.
 
 ### 3. The record keeps the REJECTED axes, not only the winning one
 
-A fitted scaler's evidence is every vanilla, coin-free record for that attack — the axis that won and
-the axes that did not.
+A fitted scaler's evidence is every coin-free **panel** record for that attack — the axis that won,
+the axes that did not, and the modifier scenarios beside them.
 
 This is the load-bearing clause. A **flat** hand axis is what proves hand size was measured and does
 not move the damage; ADR-0083 §3 already makes flat a distinct answer from noisy for exactly this
@@ -81,6 +86,18 @@ reason. For 274 the energy and hand rows read 100/100 *because the benches are p
 that flatness is what makes hand size unfittable now, and its absence is what made the spurious fit
 possible. Keeping only the fitted points would preserve the conclusion and discard the reason it is
 sound.
+
+The gate has to assert that, not merely gesture at it. "At least two axes" does not: a `both_bench`
+fit wins on `atk_bench` *and* `def_bench`, so evidence stripped of the flat rows would satisfy it.
+The check therefore requires **a measured axis that is flat** — the thing a rejected axis exists to
+show. An entry where every measured axis moves is either missing its rejected axes or genuinely
+ambiguous, and both should fail.
+
+The modifier panel (weak / resist / prevent_ex) rides along for a different reason: it establishes
+nothing about the *variable*, since the fit is vanilla-only, but it confirms the oracle's modifier
+ORDER around it — 274's weak row reads 200 = (60+40)×2, and `prevent_ex` zeroes 371 as an ex vs
+Crustle. Issue #224 preserved those rows as part of "the evidence for the two entries that changed",
+so dropping them would lose part of the last surviving copy.
 
 ### 4. Three methods, because "measured" and "read off the card" and "nobody knows" must not look alike
 
@@ -103,10 +120,14 @@ changes. The gate then bites on everything new or changed:
 - an override with no provenance row fails (this is the check that would have flagged 274);
 - a row whose recorded `fields` differ from the table fails — including for the legacy 111, whose
   entire status is *this exact value, on no surviving evidence*;
-- the `unaudited` id set is asserted as a **subset** of the bootstrap set. Backfilling one shrinks it
-  and passes untouched; adding a new one fails.
+- the `unaudited` id set is asserted as a **subset** of the bootstrap set, and both unmeasured
+  counts (111 `unaudited`, 4 `text_verified`) as **ceilings**. Backfilling shrinks them and passes
+  with no test edit; growing either fails.
 
-The subset asymmetry is the whole gate. It makes paying the debt free and makes adding to it loud.
+The monotone asymmetry is the whole gate: paying the debt down is free, adding to it is loud. It has
+to be monotone in *both* the id set and the counts — an equality on the count would have meant a
+backfill turning CI red until someone edited a number, which is the opposite of free, and a promise
+the neighbouring rule was already making.
 
 Recording the debt rather than paying it in one go is a correctness choice, not a budget one. A
 pool-wide recapture would *change* shipped damage values rather than merely document them (ADR-0083's
@@ -148,6 +169,13 @@ already required binary-safe writes to committed data; this is the generator hon
   those four are now the only `text_verified` rows in a file that counts them.
 - **The docs figure was wrong and is corrected.** `docs/attack-effects.md` said 119 attacks; the table
   holds 117. A count nobody checks is the same class of rot as an override nobody can check.
+- **A latent defect in `_coin_bounds` is now visible rather than fixed.** It keys its fork pair on
+  `coin` alone, so forks measured at different sweep points overwrite each other and the shipped
+  bound is an arbitrary survivor. Fixing it would change shipped values, which §5 rules out — so this
+  change records **every** vanilla fork record as evidence instead, and a test fails when a shipped
+  fit's own evidence contradicts itself. Vacuous today (all 99 bound entries are `unaudited`, with no
+  evidence), and armed for the recapture that would otherwise ship the survivor quietly. Owned as a
+  follow-up.
 
 ## Alternatives rejected
 

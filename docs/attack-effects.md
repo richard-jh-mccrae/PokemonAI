@@ -90,14 +90,18 @@ Issue #275), **2 `engine_fit`** (274 and 371, transcribed from Issue #224's pres
 | ID | Requirement |
 |---|---|
 | REQ-PROV-0001 | Table and sidecar cover exactly the same attacks; every row's `method` is in the closed vocabulary. |
-| REQ-PROV-0002 | An `engine_fit` row carries the records that establish it, rejected axes included; a non-fit row carries none. |
+| REQ-PROV-0002 | An `engine_fit` row carries the records that establish it — the rejected/flat axes and the modifier-panel points included; a non-fit row carries none. |
 | REQ-PROV-0003 | A row's recorded `fields` equal the shipped table entry exactly — the freeze. |
-| REQ-PROV-0004 | The `unaudited` id set may only SHRINK: backfilling passes untouched, a new unaudited entry fails. |
+| REQ-PROV-0004 | The unaudited debt may only SHRINK — both the id set and the counts. Backfilling needs no test edit; growing either class fails. |
 | REQ-PROV-0005 | A `text_verified` row names the issue that owes its measurement. |
 | REQ-PROV-0006 | Table and sidecar are emitted in one pass; a regenerate over an empty measurement set reproduces both byte-for-byte. |
 | REQ-PROV-0007 | The generator may retract what it authored (a fit that no longer holds is dropped); never what a human ruled (`--prune` opts in). |
 
+The sidecar is documentation wearing a `.json` extension — the runtime loads only
+`attack_overrides.json` — so `tools/submit/package.py` excludes it from the Kaggle bundle.
+
 Tests: `tests/test_attack_stats.py`, `tests/test_damage_oracle.py`, the behavior goldens in
-`tests/test_posture_cardfacts.py`, and — for the tier above — `tests/sim/test_attack_override_provenance.py`
-+ `tests/sim/test_generate_attack_overrides.py`. Related: [card-functions.md](card-functions.md) (the
-card-level behavioral tags this tier complements).
+`tests/test_posture_cardfacts.py`, and — for the provenance tier —
+`tests/sim/test_attack_override_provenance.py` together with
+`tests/sim/test_generate_attack_overrides.py`. Related: [card-functions.md](card-functions.md)
+(the card-level behavioral tags this tier complements).

@@ -31,6 +31,20 @@ shipped table. `--prune` opts into dropping the last of those.
 
     python tools/sim/generate_attack_overrides.py             # writes the table + the sidecar
     python tools/sim/generate_attack_overrides.py --dry-run   # print, don't write
+
+Requirements:
+    REQ-PROV-0001  Table and sidecar cover exactly the same attacks; every row declares a `method`
+                   from the closed vocabulary (`engine_fit` / `text_verified` / `unaudited`).
+    REQ-PROV-0002  An `engine_fit` row carries the measurement records that establish it — the
+                   REJECTED and flat axes included, and the modifier-panel points alongside the
+                   swept ones. A row that was not fitted carries no evidence.
+    REQ-PROV-0003  A row's recorded `fields` are the value actually shipped — the freeze.
+    REQ-PROV-0004  The unaudited debt may only SHRINK; a new unaudited override is a failure.
+    REQ-PROV-0005  A `text_verified` row names the issue that owes its measurement.
+    REQ-PROV-0006  Table and sidecar are emitted in ONE pass, from one merged result, so they
+                   cannot describe different derivations.
+    REQ-PROV-0007  The generator may retract what it AUTHORED (a fit the fresh measurements no
+                   longer support is dropped); never what a human RULED (`--prune` opts in).
 """
 from __future__ import annotations
 
@@ -64,10 +78,27 @@ METHODS = (METHOD_ENGINE_FIT, METHOD_TEXT_VERIFIED, METHOD_UNAUDITED)
 #: Bumped only when an entry's SHAPE changes; the reader fails loudly rather than mis-parsing.
 PROVENANCE_VERSION = 1
 
-#: The evidence row: the issue's own list (swept variable, swept value, pinned values, dealtActive,
-#: scenario) plus `coin`, without which a bound entry's fork pair is two identical-looking rows.
-_EVIDENCE_FIELDS = ("scenario", "sweep", "step", "coin", "atkBench", "defBench", "energies", "hand",
-                    "dealt")
+#: The evidence row, as ``(field, reader)`` — the issue's own list (swept variable, swept value,
+#: pinned values, dealtActive, scenario) plus `coin`, without which a bound entry's fork pair is two
+#: identical-looking rows. ONE source for the row's shape AND for the dedup key: stating the field
+#: names twice would let a new field join the row while `_evidence` silently kept ignoring it,
+#: collapsing exactly the rows this sidecar exists to keep apart.
+_EVIDENCE_FIELDS = (
+    ("scenario", lambda r: r.get("scenario")),
+    ("sweep", lambda r: (r.get("sweep") or {}).get("var")),
+    ("step", lambda r: (r.get("sweep") or {}).get("step")),
+    ("coin", lambda r: r.get("coin")),
+    ("atkBench", lambda r: r.get("attackerBench")),
+    ("defBench", lambda r: r.get("defenderBench")),
+    ("energies", lambda r: r.get("attackerEnergies")),
+    ("hand", lambda r: r.get("myHandSize")),
+    ("dealt", lambda r: r.get("dealtActive")),
+)
+#: The row's keys, in order. Public so the provenance gate checks the shape it is actually given.
+EVIDENCE_KEYS = tuple(name for name, _ in _EVIDENCE_FIELDS)
+#: Everything the harness CONTROLS — the row minus the one thing it measures. Two rows agreeing here
+#: and disagreeing on `dealt` are a contradiction, not a duplicate.
+CONTROLLED_KEYS = EVIDENCE_KEYS[:-1]
 
 
 def _fit_linear(points: list[tuple[int, int]]) -> tuple[int, int] | None:
@@ -180,16 +211,23 @@ def _fixed_damage(recs: list[dict], st) -> tuple[dict, list[dict]]:
     return {"damage": vals.pop()}, plain
 
 
-def _sweep_panel(recs: list[dict]) -> list[dict]:
-    """Every vanilla, coin-free record — the WINNING axis and the rejected ones alike.
+def _scaler_evidence(recs: list[dict]) -> list[dict]:
+    """Every coin-free PANEL record — the winning axis, the rejected ones, and the modifier points.
 
-    A rejected axis is not noise to be filtered out of the record. A FLAT energy or hand axis is
-    what proves those variables were measured and do not move the damage, and their ABSENCE is
-    what let a combined-bench scaler fit hand size (274 Torcherto). Keeping only the fitted points
-    would preserve the conclusion and discard the reason it is sound — which is the auditability
-    gap Issue #224 exists to close, reintroduced one level down.
+    Three things a reader needs, and only the first is what the fit consulted:
+
+    * The winning axis, obviously.
+    * The **rejected** axes. A flat energy or hand axis is what proves those variables were measured
+      and do not move the damage, and their ABSENCE is what let a combined-bench scaler fit hand
+      size (274 Torcherto). Keeping only the fitted points would preserve the conclusion and discard
+      the reason it is sound — the auditability gap Issue #224 exists to close, one level down.
+    * The **modifier** panel (weak / resist / prevent_ex). The fit is vanilla-only, so these
+      establish nothing about the variable — they confirm the oracle's modifier ORDER around it
+      (274's weak row reads 200 = (60+40)x2; prevent_ex zeroes 371 as an ex vs Crustle). Issue #224
+      preserved them as part of "the evidence for the two entries that changed", so dropping them
+      would lose part of the last surviving copy.
     """
-    return [r for r in recs if r.get("scenario") == "vanilla" and not r.get("coin")]
+    return [r for r in recs if not r.get("coin") and r.get("scenario") in _PANEL]
 
 
 def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
@@ -203,7 +241,7 @@ def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
         return {}, []                                    # parser already named it
     bench = _bench_family(recs)
     if bench:
-        return {"scaleVar": bench[0], "scalePerUnit": bench[1]}, _sweep_panel(recs)
+        return {"scaleVar": bench[0], "scalePerUnit": bench[1]}, _scaler_evidence(recs)
     plain = _plain_panel(recs)
     for var, (scale_var, rec_key) in _SWEEP_VARS.items():
         pts = [(int(r.get(rec_key, 0)), int(r["dealtActive"])) for r in plain
@@ -213,7 +251,7 @@ def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
                 and r.get("scenario") == "vanilla" and not r.get("coin")]
         fit = _fit_linear(pts)
         if fit:
-            return {"scaleVar": scale_var, "scalePerUnit": fit[1]}, _sweep_panel(recs)
+            return {"scaleVar": scale_var, "scalePerUnit": fit[1]}, _scaler_evidence(recs)
     return {}, []
 
 
@@ -227,11 +265,7 @@ _RULES = (_coin_bounds, _fixed_damage, _scaler)
 def _evidence_row(r: dict) -> dict:
     """One measurement, distilled to what justifies a fit — the swept variable and its value, the
     pinned values, the scenario, and what the engine actually dealt."""
-    sweep = r.get("sweep") or {}
-    return {"scenario": r.get("scenario"), "sweep": sweep.get("var"), "step": sweep.get("step"),
-            "coin": r.get("coin"), "atkBench": r.get("attackerBench"),
-            "defBench": r.get("defenderBench"), "energies": r.get("attackerEnergies"),
-            "hand": r.get("myHandSize"), "dealt": r.get("dealtActive")}
+    return {name: read(r) for name, read in _EVIDENCE_FIELDS}
 
 
 def _evidence(used: list[dict]) -> list[dict]:
@@ -244,7 +278,7 @@ def _evidence(used: list[dict]) -> list[dict]:
     damage is a contradiction, and collapsing it to whichever came last would silently discard the
     one record a reader most needs to see. Identical rows collapse; contradicting ones do not.
     """
-    rows = {tuple(str(row[k]) for k in _EVIDENCE_FIELDS): row
+    rows = {tuple(str(row[k]) for k in EVIDENCE_KEYS): row
             for row in (_evidence_row(r) for r in used)}
     return [rows[k] for k in sorted(rows)]
 
@@ -399,22 +433,25 @@ def _write_json(path: Path, payload: dict) -> None:
 
 
 def load_provenance(path: Path = _PROVENANCE) -> dict:
-    """The committed sidecar as ``{"version", "about", "methods", "entries": {int: entry}}``.
+    """The committed sidecar as ``{"version", "entries": {int: entry}}``.
+
+    The `about` and `methods` prose is deliberately NOT read back. This module owns it, so a
+    regenerate re-emits ``ABOUT``/``METHOD_DOC`` rather than echoing whatever is on disk — echoing
+    would let the file's own description of the vocabulary drift away from the vocabulary, in the
+    one file built to make drift impossible.
 
     A missing file reads as empty — bootstrapping is a real state. A version this generator does
     not know raises: silently re-emitting a shape it cannot read is how a sidecar would lose the
     very entries it exists to preserve.
     """
     if not path.exists():
-        return {"version": PROVENANCE_VERSION, "about": ABOUT, "methods": dict(METHOD_DOC),
-                "entries": {}}
+        return {"version": PROVENANCE_VERSION, "entries": {}}
     payload = json.loads(path.read_text(encoding="utf-8"))
     got = payload.get("version")
     if got != PROVENANCE_VERSION:
         raise ValueError(f"{path.name} is version {got}, this generator writes "
                          f"{PROVENANCE_VERSION} — migrate it rather than overwriting it")
-    return {"version": got, "about": payload.get("about", ABOUT),
-            "methods": payload.get("methods", dict(METHOD_DOC)),
+    return {"version": got,
             "entries": {int(k): v for k, v in (payload.get("entries") or {}).items()}}
 
 
@@ -451,8 +488,8 @@ def main(argv=None) -> int:
     if args.dry_run:
         return 0
     _write_json(args.out, {str(k): e["fields"] for k, e in sorted(entries.items())})
-    _write_json(args.provenance, {"version": PROVENANCE_VERSION, "about": prov["about"],
-                                  "methods": prov["methods"],
+    _write_json(args.provenance, {"version": PROVENANCE_VERSION, "about": ABOUT,
+                                  "methods": dict(METHOD_DOC),
                                   "entries": {str(k): e for k, e in sorted(entries.items())}})
     print(f"-> {args.out}\n-> {args.provenance}")
     return 0

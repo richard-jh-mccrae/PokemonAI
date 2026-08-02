@@ -357,7 +357,7 @@ def test_measured_attacks_ignores_a_run_that_only_ledgered_errors():
 @pytest.mark.req("REQ-PROV-0006")
 def test_a_regenerate_with_nothing_measured_reproduces_both_committed_files_byte_for_byte(tmp_path):
     """The strongest statement of the whole rule, end-to-end: run the real generator over an EMPTY
-    measurement set and both shipped stores come back unchanged, to the byte. That pins three things
+    measurement set and both shipped stores come back unchanged, to the byte. Three claims fall out
     at once — the merge never regresses an unmeasured fact, the table is emitted from the sidecar's
     own `fields` so the two cannot desync, and the writer's format (CRLF, indent, key order) is
     exactly what is committed, on whichever OS runs this."""

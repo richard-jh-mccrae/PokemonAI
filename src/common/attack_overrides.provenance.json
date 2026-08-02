@@ -290,6 +290,17 @@
      "energies": null,
      "hand": null,
      "dealt": 100
+    },
+    {
+     "scenario": "weak",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 200
     }
    ]
   },
@@ -352,6 +363,17 @@
    "capturedAt": "2026-07-30",
    "note": "272 Lillie's Clefairy ex, Full Moon Rondo: byte-identical text to 274. Re-measured 2026-07-30 against the committed native engine with per-seat bench control (Issue #213 / ADR-0083). Fits printed + 20 x (atkBench + defBench) exactly; attacker-axis slope 20 equals defender-axis slope 20, which is what NAMES the combined family per REQ-AUDIT-0019. The energy and hand axes are FLAT because both benches are pinned across them — that flatness is what makes hand size unfittable, and its absence is what let this attack ship an exact-looking atk_hand/5 fit. Rows transcribed from Issue #224's preserved table: reports/attack_audit/measurements.json no longer exists, so per-row hand size and energy count could not be recovered and are null.",
    "evidence": [
+    {
+     "scenario": "prevent_ex",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 0
+    },
     {
      "scenario": "vanilla",
      "sweep": null,
@@ -472,6 +494,17 @@
      "energies": null,
      "hand": null,
      "dealt": 60
+    },
+    {
+     "scenario": "weak",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 120
     }
    ]
   },

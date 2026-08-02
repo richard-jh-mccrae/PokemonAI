@@ -64,6 +64,23 @@ def test_package_ships_tuned_json_when_present(tmp_path):
     assert "tuned.json" in top
 
 
+@pytest.mark.req("REQ-PROV-0001")
+def test_package_ships_the_override_table_but_not_its_provenance_sidecar(tmp_path):
+    """ADR-TEMP-224 §1 rejected inline provenance *citing grader cost* — 24 KB of measurement rows
+    parsed and discarded on every provider build, inside a 10-minute-per-match budget. Shipping the
+    sidecar instead would pay that cost anyway, and `_IGNORE` prunes documentation by EXTENSION
+    (`*.md`, `docs`), which a `.json` evidence file sails straight through.
+
+    The runtime loads only `attack_overrides.json` (`load_attack_overrides`), so the table must be
+    in and the sidecar out. Asserted together, because an exclusion pattern that caught both would
+    silently un-price every override in the Bundle.
+    """
+    with zipfile.ZipFile(package("mega_starmie", tmp_path, agents_root=FIXTURE_AGENTS)) as zf:
+        names = set(zf.namelist())
+    assert "common/attack_overrides.json" in names
+    assert "common/attack_overrides.provenance.json" not in names
+
+
 @pytest.mark.req("REQ-SIM-0004")
 def test_package_accepts_a_path_to_the_agent_dir(tmp_path):
     # tab-completed path (trailing separator), not just a bare name, should work

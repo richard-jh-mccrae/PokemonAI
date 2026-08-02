@@ -58,12 +58,9 @@ agents:
 arena:
   - 'tools/arena/**'
   - 'tests/arena/**'
-# The two attack-override stores are named here deliberately. `common_agent_core` matches
-# `src/common/*.py` -- .py ONLY -- so a diff that touched just the override table matched no
-# filter at all and reached the suite through the `any` fail-safe (ci.yml: "something changed
-# but nothing recognised => full suite"). It ran, but by accident, and the accident would end
-# the day someone adds a `src/common/*.json` line to a broader filter. `tests/sim` owns their
-# generator and their provenance gate, so a table edit runs that gate BY DESIGN.
+# The two attack-override stores are named here because `common_agent_core` matches
+# `src/common/*.py` -- .py ONLY -- so a table-only diff reached the suite via the `any`
+# fail-safe rather than by design. Rationale in full: docs/ci.md, the `tools/sim/**` row.
 sim:
   - 'tools/sim/**'
   - 'tests/sim/**'
