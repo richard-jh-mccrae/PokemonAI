@@ -1,0 +1,1231 @@
+{
+ "version": 1,
+ "about": "Provenance for attack_overrides.json (ADR-0108 / Issue #224): what established each shipped override, and — for an engine fit — the measurement rows that establish it. reports/attack_audit/ is gitignored, so without this file an override can only be re-derived by re-driving the engine, never checked. Emitted by tools/sim/generate_attack_overrides.py in the same pass as the table; tests/sim/test_attack_override_provenance.py fails when the two disagree.",
+ "methods": {
+  "engine_fit": "Derived by this generator from engine measurements; `evidence` carries the rows it fitted, INCLUDING the rejected/flat axes that prove a variable was measured rather than missing.",
+  "text_verified": "A human read one card's own printed sentence into one attackId. Carries an `owner` — the issue that owes the measurement — and a `note` giving the text and why the harness cannot fit it today.",
+  "unaudited": "Shipped before provenance was recorded, and the capture that produced it no longer exists (reports/attack_audit/ is gitignored). The value is FROZEN: the test asserts this exact id set, so a NEW unaudited entry fails rather than joining a silent backlog, and changing one of these values means re-ruling it here."
+ },
+ "entries": {
+  "6": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 120
+   },
+   "evidence": []
+  },
+  "25": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "52": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 180
+   },
+   "evidence": []
+  },
+  "55": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 230
+   },
+   "evidence": []
+  },
+  "64": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "75": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "81": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 90
+   },
+   "evidence": []
+  },
+  "91": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 10,
+    "damageMax": 10
+   },
+   "evidence": []
+  },
+  "120": {
+   "method": "text_verified",
+   "fields": {
+    "scaleVar": "both_active_energy",
+    "scalePerUnit": 30
+   },
+   "owner": "#275",
+   "note": "96 Teal Mask Ogerpon ex, Myriad Leaf Shower: \"This attack does 30 more damage for each Energy attached to both Active Pokemon.\" UNFITTABLE on the current axes: with the defender holding no Energy, both_active_energy and atk_active_energy are indistinguishable under every point the sweep can produce.",
+   "evidence": []
+  },
+  "126": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 10,
+    "damageMax": 10
+   },
+   "evidence": []
+  },
+  "138": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 180
+   },
+   "evidence": []
+  },
+  "173": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "177": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 40
+   },
+   "evidence": []
+  },
+  "195": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 30
+   },
+   "evidence": []
+  },
+  "226": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 30
+   },
+   "evidence": []
+  },
+  "228": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "244": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 10,
+    "damageMax": 10
+   },
+   "evidence": []
+  },
+  "259": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "261": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 100,
+    "damageMax": 100
+   },
+   "evidence": []
+  },
+  "274": {
+   "method": "engine_fit",
+   "fields": {
+    "scaleVar": "both_bench",
+    "scalePerUnit": 20
+   },
+   "capturedAt": "2026-07-30",
+   "note": "203 Skeledirge, Torcherto: \"This attack does 20 more damage for each Benched Pokemon (both yours and your opponent's).\" Re-measured 2026-07-30 against the committed native engine with per-seat bench control (Issue #213 / ADR-0083). Fits printed + 20 x (atkBench + defBench) exactly; attacker-axis slope 20 equals defender-axis slope 20, which is what NAMES the combined family per REQ-AUDIT-0019. The energy and hand axes are FLAT because both benches are pinned across them — that flatness is what makes hand size unfittable, and its absence is what let this attack ship an exact-looking atk_hand/5 fit. Rows transcribed from Issue #224's preserved table: reports/attack_audit/measurements.json no longer exists, so per-row hand size and energy count could not be recovered and are null.",
+   "evidence": [
+    {
+     "scenario": "vanilla",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "atk_bench",
+     "step": 0,
+     "coin": null,
+     "atkBench": 0,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 80
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "atk_bench",
+     "step": 1,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "atk_bench",
+     "step": 2,
+     "coin": null,
+     "atkBench": 2,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 120
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "def_bench",
+     "step": 0,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 0,
+     "energies": null,
+     "hand": null,
+     "dealt": 80
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "def_bench",
+     "step": 1,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "def_bench",
+     "step": 2,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 2,
+     "energies": null,
+     "hand": null,
+     "dealt": 120
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "energy",
+     "step": 1,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "energy",
+     "step": 2,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "hand",
+     "step": 2,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "hand",
+     "step": 4,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 100
+    },
+    {
+     "scenario": "weak",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 200
+    }
+   ]
+  },
+  "292": {
+   "method": "text_verified",
+   "fields": {
+    "scaleVar": "def_counters_all",
+    "scalePerUnit": 10
+   },
+   "owner": "#275",
+   "note": "217 Azelf, Neurokinesis: \"This attack does 10 more damage for each damage counter on all of your opponent's Pokemon.\" No defender-damage axis exists in the harness.",
+   "evidence": []
+  },
+  "326": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "350": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 240
+   },
+   "evidence": []
+  },
+  "352": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 90,
+    "damageMax": 90
+   },
+   "evidence": []
+  },
+  "363": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 20
+   },
+   "evidence": []
+  },
+  "364": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "371": {
+   "method": "engine_fit",
+   "fields": {
+    "scaleVar": "both_bench",
+    "scalePerUnit": 20
+   },
+   "capturedAt": "2026-07-30",
+   "note": "272 Lillie's Clefairy ex, Full Moon Rondo: byte-identical text to 274. Re-measured 2026-07-30 against the committed native engine with per-seat bench control (Issue #213 / ADR-0083). Fits printed + 20 x (atkBench + defBench) exactly; attacker-axis slope 20 equals defender-axis slope 20, which is what NAMES the combined family per REQ-AUDIT-0019. The energy and hand axes are FLAT because both benches are pinned across them — that flatness is what makes hand size unfittable, and its absence is what let this attack ship an exact-looking atk_hand/5 fit. Rows transcribed from Issue #224's preserved table: reports/attack_audit/measurements.json no longer exists, so per-row hand size and energy count could not be recovered and are null.",
+   "evidence": [
+    {
+     "scenario": "prevent_ex",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 0
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "atk_bench",
+     "step": 0,
+     "coin": null,
+     "atkBench": 0,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 40
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "atk_bench",
+     "step": 1,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "atk_bench",
+     "step": 2,
+     "coin": null,
+     "atkBench": 2,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 80
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "def_bench",
+     "step": 0,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 0,
+     "energies": null,
+     "hand": null,
+     "dealt": 40
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "def_bench",
+     "step": 1,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "def_bench",
+     "step": 2,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 2,
+     "energies": null,
+     "hand": null,
+     "dealt": 80
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "energy",
+     "step": 1,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "energy",
+     "step": 2,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "hand",
+     "step": 2,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "vanilla",
+     "sweep": "hand",
+     "step": 4,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 60
+    },
+    {
+     "scenario": "weak",
+     "sweep": null,
+     "step": null,
+     "coin": null,
+     "atkBench": 1,
+     "defBench": 1,
+     "energies": null,
+     "hand": null,
+     "dealt": 120
+    }
+   ]
+  },
+  "390": {
+   "method": "text_verified",
+   "fields": {
+    "scaleVar": "atk_bench_stage2",
+    "scalePerUnit": 40
+   },
+   "owner": "#275",
+   "note": "283 Mamoswine ex, Rumbling March: \"This attack does 40 more damage for each Stage 2 Pokemon on your Bench.\" The bench axis exists but its bodies are basics, so the Stage-2 predicate is never satisfied and a fit would read a flat axis as no scaler.",
+   "evidence": []
+  },
+  "391": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "404": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "408": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 360
+   },
+   "evidence": []
+  },
+  "425": {
+   "method": "text_verified",
+   "fields": {
+    "scaleVar": "def_ex_in_play",
+    "scalePerUnit": 60
+   },
+   "owner": "#275",
+   "note": "306 Dudunsparce ex, Tenacious Tail: \"This attack does 60 damage for each of your opponent's Pokemon {ex} in play.\" Printed 60x on a base of 0, so before this entry the oracle computed ZERO under every bound — a blind spot, not an under-read. The harness would CONFIRM the wrong answer: it pins both benches at 1 and fills them with whatever basics the drive drew, so def_ex_in_play measures 0 and a fit concludes \"no scaler\" from data that could not have shown one.",
+   "evidence": []
+  },
+  "469": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 140,
+    "damageMax": 140
+   },
+   "evidence": []
+  },
+  "486": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "498": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "505": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 10,
+    "damageMax": 10
+   },
+   "evidence": []
+  },
+  "533": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 920
+   },
+   "evidence": []
+  },
+  "551": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 1180
+   },
+   "evidence": []
+  },
+  "578": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 80
+   },
+   "evidence": []
+  },
+  "595": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 60,
+    "damageMax": 60
+   },
+   "evidence": []
+  },
+  "603": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 50,
+    "damageMax": 50
+   },
+   "evidence": []
+  },
+  "630": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "651": {
+   "method": "unaudited",
+   "fields": {
+    "damage": 80
+   },
+   "evidence": []
+  },
+  "657": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 320
+   },
+   "evidence": []
+  },
+  "662": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 90,
+    "damageMax": 90
+   },
+   "evidence": []
+  },
+  "664": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 60
+   },
+   "evidence": []
+  },
+  "668": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 180
+   },
+   "evidence": []
+  },
+  "678": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "684": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "686": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "708": {
+   "method": "unaudited",
+   "fields": {
+    "damage": 80
+   },
+   "evidence": []
+  },
+  "717": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 1150
+   },
+   "evidence": []
+  },
+  "727": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 60,
+    "damageMax": 60
+   },
+   "evidence": []
+  },
+  "728": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 400
+   },
+   "evidence": []
+  },
+  "733": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "747": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 160
+   },
+   "evidence": []
+  },
+  "758": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 100,
+    "damageMax": 200
+   },
+   "evidence": []
+  },
+  "790": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 120,
+    "damageMax": 120
+   },
+   "evidence": []
+  },
+  "792": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 40
+   },
+   "evidence": []
+  },
+  "805": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 50,
+    "damageMax": 50
+   },
+   "evidence": []
+  },
+  "833": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 50,
+    "damageMax": 50
+   },
+   "evidence": []
+  },
+  "835": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 180
+   },
+   "evidence": []
+  },
+  "843": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 50
+   },
+   "evidence": []
+  },
+  "879": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 60
+   },
+   "evidence": []
+  },
+  "887": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "889": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 80
+   },
+   "evidence": []
+  },
+  "894": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 20
+   },
+   "evidence": []
+  },
+  "951": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "973": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "975": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 700
+   },
+   "evidence": []
+  },
+  "1003": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 90,
+    "damageMax": 90
+   },
+   "evidence": []
+  },
+  "1013": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1016": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 150
+   },
+   "evidence": []
+  },
+  "1037": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 50,
+    "damageMax": 50
+   },
+   "evidence": []
+  },
+  "1051": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 60
+   },
+   "evidence": []
+  },
+  "1054": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1056": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "1059": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1067": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "1079": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 50
+   },
+   "evidence": []
+  },
+  "1081": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1087": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1092": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 1350
+   },
+   "evidence": []
+  },
+  "1125": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 130,
+    "damageMax": 130
+   },
+   "evidence": []
+  },
+  "1135": {
+   "method": "unaudited",
+   "fields": {
+    "scaleVar": "atk_active_energy",
+    "scalePerUnit": 20
+   },
+   "evidence": []
+  },
+  "1137": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1153": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 140
+   },
+   "evidence": []
+  },
+  "1178": {
+   "method": "unaudited",
+   "fields": {
+    "damage": 10
+   },
+   "evidence": []
+  },
+  "1184": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "1205": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1213": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 460
+   },
+   "evidence": []
+  },
+  "1229": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 40,
+    "damageMax": 40
+   },
+   "evidence": []
+  },
+  "1256": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 210
+   },
+   "evidence": []
+  },
+  "1260": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1266": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 10,
+    "damageMax": 10
+   },
+   "evidence": []
+  },
+  "1270": {
+   "method": "unaudited",
+   "fields": {
+    "damage": 120
+   },
+   "evidence": []
+  },
+  "1271": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1309": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 40,
+    "damageMax": 40
+   },
+   "evidence": []
+  },
+  "1319": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 50,
+    "damageMax": 50
+   },
+   "evidence": []
+  },
+  "1328": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1335": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1346": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 50,
+    "damageMax": 50
+   },
+   "evidence": []
+  },
+  "1366": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 2400
+   },
+   "evidence": []
+  },
+  "1369": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1382": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1428": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 20,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "1439": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 240
+   },
+   "evidence": []
+  },
+  "1453": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1458": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1470": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1492": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 270
+   },
+   "evidence": []
+  },
+  "1493": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 20
+   },
+   "evidence": []
+  },
+  "1498": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 30,
+    "damageMax": 30
+   },
+   "evidence": []
+  },
+  "1526": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 150
+   },
+   "evidence": []
+  },
+  "1528": {
+   "method": "unaudited",
+   "fields": {
+    "damage": 30
+   },
+   "evidence": []
+  },
+  "1547": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 0,
+    "damageMax": 0
+   },
+   "evidence": []
+  },
+  "1548": {
+   "method": "unaudited",
+   "fields": {
+    "damageMin": 160,
+    "damageMax": 160
+   },
+   "evidence": []
+  }
+ }
+}

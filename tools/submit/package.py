@@ -22,7 +22,12 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
-_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs")  # ship code, not docs
+# Ship code, not docs. `attack_overrides.provenance.json` is named because it is documentation
+# wearing a `.json` extension: 24 KB of measurement rows the runtime never reads (only
+# `attack_overrides.json` is loaded, by `load_attack_overrides`). ADR-0108 §1 rejected inline
+# evidence citing exactly this cost, so shipping the sidecar instead would have paid it anyway.
+_IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs",
+                                 "attack_overrides.provenance.json")
 
 
 def _git_hash(repo: Path) -> str:

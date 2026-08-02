@@ -52,7 +52,7 @@ Resistant / Crustle) plus single-variable sweeps and coin forks (`search_begin(m
 and `tools/sim/diff_attack_audit.py` diffs every measurement against `compute_active_damage` —
 coin records against their own bound, a conditional's live outcome against its [min, max]. The
 generator (`tools/sim/generate_attack_overrides.py`) turns fork bounds / constant effect damage /
-exact sweep fits into the shipped `common/attack_overrides.json` (119 attacks, engine-derived).
+exact sweep fits into the shipped `common/attack_overrides.json` (117 attacks, engine-derived).
 **Pool-wide status (2026-07-02, all 1556 attacks, 11.8k measurements): 9211/9539 = 96.6% verified;
 over-predictions ZERO — every residual gap under-predicts, the safe direction (a Lethal never
 banks on damage the engine won't deal). 328 gap-records remain (unfitted scaler variants and
@@ -67,6 +67,41 @@ conditional bonuses), all on the classified ledger.** Layers:
 | REQ-DMG-0005 | Weakness ×2 / Resistance −30 each pierced by its flag; W-then-R order; damage never negative. |
 | REQ-DMG-0006 | Fail-open degradation + per-target semantics: missing stats → printed damage; a prevented Active hit never hides the bench-snipe credit. |
 
-Tests: `tests/test_attack_stats.py`, `tests/test_damage_oracle.py`, and the behavior goldens in
-`tests/test_posture_cardfacts.py`. Related: [card-functions.md](card-functions.md) (the card-level
-behavioral tags this tier complements).
+## Provenance — how each override was established (ADR-0108)
+
+`reports/attack_audit/` is gitignored and the capture that produced the shipped table no longer
+exists anywhere, so an override used to be *re-derivable* but never *checkable*. That is how 274
+(Skeledirge, Torcherto) shipped an exact-looking `atk_hand`/5 fit for an attack that scales on the
+combined bench: bench was the one variable the harness neither swept nor recorded, so hand size was
+the only thing the fitter could see, and nobody could look.
+
+`common/attack_overrides.provenance.json` is the committed sidecar, emitted by the generator in the
+**same pass** as the table so the two cannot describe different derivations. One row per `attackId`:
+
+| method | means | carries |
+|---|---|---|
+| `engine_fit` | derived from engine measurements | the fitted rows **and the rejected/flat axes** — a flat hand axis is what proves hand size was measured rather than missing |
+| `text_verified` | a human read one card's printed sentence | an `owner` (the issue that owes the measurement) + the text and why the harness cannot fit it |
+| `unaudited` | shipped before provenance was required; the capture is gone | nothing, and that *is* the claim |
+
+At bootstrap (2026-08-02): **111 `unaudited`, 4 `text_verified`** (Issue #225's scalers, owed by
+Issue #275), **2 `engine_fit`** (274 and 371, transcribed from Issue #224's preserved measurements).
+
+| ID | Requirement |
+|---|---|
+| REQ-PROV-0001 | Table and sidecar cover exactly the same attacks; every row's `method` is in the closed vocabulary. |
+| REQ-PROV-0002 | An `engine_fit` row carries the records that establish it — the rejected/flat axes and the modifier-panel points included; a non-fit row carries none. |
+| REQ-PROV-0003 | A row's recorded `fields` equal the shipped table entry exactly — the freeze. |
+| REQ-PROV-0004 | The unaudited debt may only SHRINK — both the id set and the counts. Backfilling needs no test edit; growing either class fails. |
+| REQ-PROV-0005 | A `text_verified` row names the issue that owes its measurement. |
+| REQ-PROV-0006 | Table and sidecar are emitted in one pass; a regenerate over an empty measurement set reproduces both byte-for-byte. |
+| REQ-PROV-0007 | The generator may retract what it authored (a fit that no longer holds is dropped); never what a human ruled (`--prune` opts in). |
+
+The sidecar is documentation wearing a `.json` extension — the runtime loads only
+`attack_overrides.json` — so `tools/submit/package.py` excludes it from the Kaggle bundle.
+
+Tests: `tests/test_attack_stats.py`, `tests/test_damage_oracle.py`, the behavior goldens in
+`tests/test_posture_cardfacts.py`, and — for the provenance tier —
+`tests/sim/test_attack_override_provenance.py` together with
+`tests/sim/test_generate_attack_overrides.py`. Related: [card-functions.md](card-functions.md)
+(the card-level behavioral tags this tier complements).

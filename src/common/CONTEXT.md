@@ -226,6 +226,13 @@ that can separate these variables and scopes them to the two cards a corpus coul
 Mamoswine ex and 217 Azelf are provably absent from every deck, dossier, Brief and correction frame,
 so measuring them would verify a number nothing consumes. See
 `tests/strategy/test_visible_state_scalers.py`, which asserts that absence so the claim cannot rot.
+**How each shipped fact was established is itself recorded** (ADR-0108, Issue #224):
+`attack_overrides.provenance.json` is a committed sidecar, emitted by the generator in the same pass
+as the table, carrying one row per `attackId` — `engine_fit` (with the fitted rows *and the rejected,
+flat axes* that prove a variable was measured rather than missing), `text_verified` (with the owning
+issue), or `unaudited` (the 111 entries whose capture no longer exists, frozen at their shipped
+values). `reports/attack_audit/` is gitignored, so before that sidecar an override could be
+re-derived but never checked — which is how 274's `atk_hand` fit sat wrong and unseen.
 _Avoid_: expected value (a probability blend — breaks soundness in both directions), printed damage
 (the base term only), bounds (the coin-RNG fallback, not the general shape)
 

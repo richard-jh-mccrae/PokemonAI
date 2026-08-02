@@ -58,9 +58,14 @@ agents:
 arena:
   - 'tools/arena/**'
   - 'tests/arena/**'
+# The two attack-override stores are named here because `common_agent_core` matches
+# `src/common/*.py` -- .py ONLY -- so a table-only diff reached the suite via the `any`
+# fail-safe rather than by design. Rationale in full: docs/ci.md, the `tools/sim/**` row.
 sim:
   - 'tools/sim/**'
   - 'tests/sim/**'
+  - 'src/common/attack_overrides.json'
+  - 'src/common/attack_overrides.provenance.json'
 submit:
   - 'tools/submit/**'
   - 'tools/submit_agent.py'
