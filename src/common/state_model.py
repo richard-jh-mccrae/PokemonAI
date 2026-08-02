@@ -64,7 +64,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from common.board_cards import body_card_ids     # the ONE walk over a body's attached CARDS
+from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk / the ONE unit read
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
@@ -381,11 +381,10 @@ class BodyView(_Lazily):
         the right length for :attr:`energy_count`; the card identities live on ``energyCards`` and
         are read by :func:`~common.board_cards.body_card_ids`.
 
-        The engine gives the codes as bare ints, so the coercion below is a cheap guard rather than
-        a real branch: a memo key must never be the thing that raises, and ``len()``-only readers
-        would not have noticed a wrong shape. One accessor, so no memo re-invents it."""
-        return tuple(e.get("id") if isinstance(e, dict) else e
-                     for e in (self.body.get("energies") or ()))
+        The read itself is :func:`~common.board_cards.body_unit_codes`, shared with
+        :attr:`~common.strategy.combat.CombatMath.attached_unit_codes` — one accessor, so no memo
+        and no affordability leg re-invents it."""
+        return body_unit_codes(self.body)
 
     # `attacks` and `attack_slots` were DELETED by POC-T1 (Issue #260): zero consumers, and both
     # were pass-throughs to card knowledge that has a home already — `stat.attacks` and

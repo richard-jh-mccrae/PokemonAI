@@ -204,20 +204,27 @@ code, and one of those is live on a shipped deck:
   `[0, 0, 0]`, so it handed a typed line **three units able to pay any colour**. The very card this
   ADR's previous amendment is about was priced `{0}` in hand and wild once attached — the two
   readings the amendment says agree, disagreeing.
-* **`RAINBOW = 10`** (Legacy Energy, card 12) and **`DRAGON`/`TEAM_ROCKET`** resolved to Special
-  Energy cards whose own `energyType` is 0, so they counted as neither typed nor wild — nothing.
+* **`DRAGON = 9`**, **`RAINBOW = 10`** and **`TEAM_ROCKET = 11`** resolved to Special Energy cards
+  (Boomerang, Neo Upper, Mist) whose own `energyType` is 0, so they counted as neither typed nor
+  wild — nothing. This is also where the coincidence really stops: at **8**, not 9.
 
 **Ruled: the attached leg reads the unit codes directly.** One accessor
-(`CombatMath.attached_unit_codes`) and one mapping (`combat.unit_colours`), so the three consumers
+(`board_cards.body_unit_codes`, exposed as `CombatMath.attached_unit_codes` and as
+`BodyView.energy_key`) and one mapping (`combat.unit_colours`), so the typed-affordability family
 cannot disagree about what is on a body:
 
 | unit code | pays | note |
 |---|---|---|
-| `GRASS`..`DRAGON` (1-9) | its own colour | was already right, by coincidence |
+| `GRASS`..`DRAGON` (1-9) | its own colour | 1-8 were already right, by coincidence; 9 counted as nothing |
 | `COLORLESS` (0) | colourless slots ONLY | **was wild** |
 | `RAINBOW` (10) | any colour — genuinely wild | "Every Types" |
-| `TEAM_ROCKET` (11) | `{PSYCHIC, DARKNESS}` | forward contract; no pool card provides it |
+| `TEAM_ROCKET` (11) | `{PSYCHIC, DARKNESS}` | Team Rocket's Energy (card 15) is a POOL card, absent from the corpus; whether the engine renders code 11 for it is unverified |
 | anything else | wild (fail-OPEN) | a later set's enum member this build predates |
+
+Per-card provisions above are read off the printed provision column of `data/EN_Card_Data.csv`, NOT
+off `CardStat.energyType` — that field is the card's own colour tag and reads 0 for most Special
+Energy whatever it provides, which is exactly how a first pass of this amendment came to claim no
+pool card provides `TEAM_ROCKET`.
 
 The fail-open direction is unchanged for everything genuinely unknown; what changed is that
 COLORLESS stopped being counted as unknown. `attack_type_payable`'s coarse count arithmetic cannot
@@ -236,3 +243,15 @@ reading — 25 mine, 7 theirs; 31 of 372 frames touched; by unit code, 83 `COLOR
 (0 picks moved), and the Discrimination Gate moves one frame's ranking in the expected direction
 (`81903490|0|decision|49` `correct=[1]`: MISS rank 10/13 -> 7/13, the human's option rising as
 unpayable competitors are suppressed) plus three top-tie counts, none of which gate.
+
+**Not converted, and owned: the retreat-discard cost.** `Pilot._retreat_cost_legs` /
+`_retreat_discard_choice` make the same mistake one layer over — they choose which Energy a retreat
+sheds by walking `energies` and then price the shed with `_role_value(eid)`, a CARD-worth lookup on
+a unit code, so ADR-0069 §5c's one-shot premium reads an attached Ignition as worth nothing and a
+Rock Fighting as Basic {F}. It is NOT fixed here, because unlike the affordability family it is not
+a mis-read to correct but a MODEL to choose: a retreat discards Energy CARDS while its cost is paid
+in UNITS, so one Ignition pays three retreat and the greedy per-unit search has no card to charge.
+That is a scoring change with its own design question, so it is recorded here **owed and unowned**
+rather than folded in — the next reader of this amendment should not infer from "one accessor" that
+every consumer of `energies` was converted. Two were not: `_retreat_discard_choice` (which Energy
+goes) and `_retreat_cost_legs` (what it cost).

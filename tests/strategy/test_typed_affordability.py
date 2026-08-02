@@ -162,7 +162,7 @@ def test_retreat_lethal_stands_down_on_a_colorless_funded_wincon():
     Blow's {W}: the retreat carries no KO-class value. The spent Active (Turbo 50 vs 100 HP) can't
     KO either, so only a GENUINELY payable wincon justifies the retreat-lethal."""
     pilot = _pilot()
-    bench_wincon = poke(WINCON, hp=330, energy_cards=[(IGNITION, _IGNITION_UNITS)])
+    bench_wincon = poke(WINCON, hp=330, attached_energy=[(IGNITION, _IGNITION_UNITS)])
     cur = state(active=poke(CINDER, energy=1, hp=160), bench=[bench_wincon],
                 opp_active=poke(OPP, hp=100))
     obs = make_select([attack_opt(TURBO), opt(RETREAT), opt(END)], context=0, current=cur)

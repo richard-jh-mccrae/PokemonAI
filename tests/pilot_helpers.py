@@ -52,7 +52,7 @@ def attack_opt(attack_id: int) -> dict:
 
 
 def poke(cid: int, *, energy: int = 0, hp: int = 0, max_hp: int = 0,
-         energy_card: int = 0, energy_cards=None) -> dict:
+         energy_card: int = 0, attached_energy=None) -> dict:
     """A Pokémon on the board with Energy attached, in the engine's REAL two-field shape.
 
     The engine gives a body TWO Energy fields and they are different facts (`cg/api.py`
@@ -83,14 +83,16 @@ def poke(cid: int, *, energy: int = 0, hp: int = 0, max_hp: int = 0,
       Energy's card id and register that card in the test's `DictCardStatProvider`. (Deny Relevance
       needs the same, for the same reason — it asks *which* Energy is doing the work, matching the
       body's attached types against the attack's `energyTypes`.)
-    * `energy_cards` — the general form for anything Special: a sequence of `(card_id, units)`
+    * `attached_energy` — the general form for anything Special: a sequence of `(card_id, units)`
       pairs, `units` being the EnergyType codes that ONE copy of that card provides. An Ignition
       plus a Rock Fighting on one body is `[(17, (0, 0, 0)), (20, (6,))]`. Overrides the sugar.
+      Deliberately not spelled `energy_cards` — one character from `energy_card` and a different
+      shape entirely is a typo the reader cannot see.
     """
-    if energy_cards is None:
-        energy_cards = [(energy_card, (energy_card,))] * max(0, int(energy))
+    if attached_energy is None:
+        attached_energy = [(energy_card, (energy_card,))] * max(0, int(energy))
     units, cards = [], []
-    for card, provides in energy_cards:
+    for card, provides in attached_energy:
         units.extend(provides)
         if card:                       # 0 == the card-less placeholder: a unit with no card
             cards.append({"id": card, "serial": 0})

@@ -12,6 +12,7 @@ from collections import Counter
 from dataclasses import dataclass, field
 from itertools import combinations
 
+from common.board_cards import body_unit_codes   # the ONE read of a body's attached Energy UNITS
 from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
 from common.strategy.damage import compute_active_damage, wr_adjust
@@ -66,9 +67,12 @@ DISCARD_SUPPLY = "discard"     # the shared capacity group every discard-drawing
 #: engine puts in ``Pokemon.energies`` (Issue #297). Empty = WILD, and it means "every colour", never
 #: "unknown"; the unknown case is handled by :func:`unit_colours`'s fallback.
 #:
-#: Only the codes whose answer is NOT ``{code}`` are listed; ``GRASS``..``DRAGON`` (1-9) each pay
-#: their own colour and fall through. Values verified at source (`src/cg/api.py` ``EnergyType``,
-#: whose members are the authority for these numbers):
+#: Listed here are the codes that do NOT simply pay their own colour; ``GRASS``..``DRAGON`` (1-9)
+#: fall through to ``{code}``. Codes from `src/cg/api.py` ``EnergyType``; the per-card provisions
+#: below are from the **printed provision column** of `data/EN_Card_Data.csv` — NOT from
+#: ``CardStat.energyType``, which is the card's own colour tag and is 0 for most Special Energy
+#: whatever it provides (Team Rocket's Energy is the trap: ``energyType`` 0, provision
+#: ``{Team Rocket}{Team Rocket}``).
 #:
 #:   * ``COLORLESS = 0`` — a colourless unit pays a colourless slot and NOTHING else. This is the
 #:     one that used to be wrong: an attached Ignition Energy renders ``[0, 0, 0]``, the old read
@@ -76,13 +80,22 @@ DISCARD_SUPPLY = "discard"     # the shared capacity group every discard-drawing
 #:     units became three blank cheques that could fund a typed ``{F}{F}`` line. `AttachUnit` and
 #:     `_special_energy_groups` both already SAID ``{0}`` — the same Ignition sitting in HAND was
 #:     priced colourless-only — so the attached leg was the one place contradicting the contract.
-#:   * ``RAINBOW = 10`` ("Every Types") — genuinely wild. Legacy Energy (card 12) is the pool's only
-#:     source of it; it appears once in the committed corpus, on an opponent body.
-#:   * ``TEAM_ROCKET = 11`` ("PSYCHIC and DARKNESS") — pays either of those two. No card in the pool
-#:     provides it today (swept: the 8 Basic Energies are types 1-8; of the 12 Special Energies,
-#:     eight are COLORLESS, three are typed 1/5/6 and one — Legacy — is RAINBOW), so this entry is a
-#:     forward contract rather than a live path. Stated anyway, because the alternative is a silent
-#:     hole the next set fills.
+#:     Five pool cards provide ``{C}``: Boomerang 9, Mist 11, Enriching 13, Spiky 14, Ignition 17
+#:     (three units).
+#:   * ``RAINBOW = 10`` ("Every Types") — genuinely wild. Three pool cards print the rainbow-class
+#:     ``{A}``: Neo Upper 10 (``{A}{A}``), Legacy 12, Prism 16. The code appears once in the
+#:     committed corpus, on an opponent body.
+#:   * ``TEAM_ROCKET = 11`` ("PSYCHIC and DARKNESS") — pays either of those two. **Team Rocket's
+#:     Energy (card 15) prints ``{Team Rocket}{Team Rocket}``**, so this is a pool card, not a
+#:     hypothetical; it is simply absent from the committed corpus because no shipped agent deck
+#:     runs it. Which code the engine renders for it is therefore UNVERIFIED here — no board we hold
+#:     carries one — so this entry is what happens IF it renders as 11, stated rather than left as a
+#:     silent hole.
+#:
+#: ``DRAGON = 9`` needs no entry — it pays its own colour like 1-8 — and no pool card provides it.
+#: Worth stating anyway, because it is where the old card-id round-trip's coincidence actually
+#: stopped: at **8**, not 9. Card 9 is Boomerang Energy, whose ``energyType`` is 0, so a DRAGON unit
+#: resolved to neither a colour nor "unresolvable" and counted as nothing at all.
 _UNIT_COLOURS = {
     0: frozenset({0}),
     10: frozenset(),
@@ -727,20 +740,20 @@ class CombatMath:
         return sum(items[i][1] for i in self.best_ko_subset(items, spread))
 
     # --- typed affordability ---------------------------------------------------------------
-    @staticmethod
-    def attached_unit_codes(target: dict | None) -> tuple:
-        """The ``EnergyType`` codes of the **Energy Units** attached to ``target`` — the engine's
-        ``Pokemon.energies``, read as what it is (Issue #297).
-
-        The ONE accessor for the attached leg of the typed-affordability family, so
-        :meth:`attached_type_counts`, :meth:`attack_type_payable` and :meth:`_attached_units` cannot
-        disagree about what is on a body. It used to be three separate walks that each fed the code
-        to :meth:`_card_stat` **as a card id**: an identity round-trip that returned the right
-        colour for codes 1-8 purely because the eight Basic Energy card ids equal their type codes,
-        and that mis-answered every other code — 0 became "unresolvable, therefore wild", 9-11
-        resolved to Special Energy cards whose own ``energyType`` is 0 and counted as nothing."""
-        return tuple(e.get("id") if isinstance(e, dict) else e
-                     for e in ((target or {}).get("energies") or ()))
+    #: The **Energy Units** attached to a body, as ``EnergyType`` codes — the engine's
+    #: ``Pokemon.energies``, read as what it is (Issue #297).
+    #:
+    #: Bound here so the typed-affordability family has ONE name for it:
+    #: :meth:`attached_type_counts`, :meth:`attack_type_payable` and :meth:`_attached_units` used to
+    #: be three separate walks that each fed the code to :meth:`_card_stat` **as a card id** — an
+    #: identity round-trip that returned the right colour for codes 1-8 purely because the eight
+    #: Basic Energy card ids equal their type codes, and that mis-answered every other code (0
+    #: became "unresolvable, therefore wild"; 9-11 resolved to a Special Energy card whose own
+    #: ``energyType`` is 0 and counted as nothing).
+    #:
+    #: The implementation lives in :mod:`common.board_cards` beside the CARD walk, because the two
+    #: are one distinction and a body-shape read has one home.
+    attached_unit_codes = staticmethod(body_unit_codes)
 
     def attached_type_counts(self, target: dict) -> dict:
         """{EnergyType: count} of the SPECIFIC-colour Energy attached to ``target``.

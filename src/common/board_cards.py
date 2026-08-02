@@ -15,8 +15,13 @@ because the eight Basic Energy card ids are numerically equal to their ``EnergyT
 and `cg.api.EnergyType`). The coincidence ends at the ninth card: Ignition Energy is card **17** and
 renders as ``[0, 0, 0]`` (three COLORLESS units), Rock Fighting Energy is card **20** and renders as
 ``[6]`` — the code for Basic {F} Energy, a card it is not. A counter that walks ``energies`` for card
-identity therefore misses card 17 entirely and decrements card 6 for every card 20 (Issue #297;
-measured on the committed corrections corpus, **137 of 5902** board bodies disagree).
+identity therefore misses card 17 entirely and decrements card 6 for every card 20.
+
+Measured on the committed corrections store (Issue #297): **137 of 5902** board-body OCCURRENCES
+carry an ``energies`` that disagrees with its ``energyCards`` — occurrences rather than distinct
+bodies, since one body recurs across the frames of a turn. Narrowed to the 372 frames the two
+ADR-0072 gates replay, and to MY side (the only one :attr:`~common.state_model.MySide.visible_counts`
+walks): **25 of 1018 bodies**, every one of them an Ignition.
 
 So: **card identity comes from** :data:`CARD_STACKS`; **unit counts come from** ``energies``. Every
 reader that wants "which cards are provably out of the deck" goes through :func:`body_card_entries`
@@ -67,3 +72,20 @@ def body_card_ids(body):
         cid = card_id(entry)
         if cid is not None:
             yield cid
+
+
+def body_unit_codes(body) -> tuple:
+    """The OTHER half: a body's ``energies`` as a tuple of ``EnergyType`` codes — the Energy UNITS
+    its attached cards provide.
+
+    Here rather than at either reader, for the same reason as :func:`body_card_ids`: the model's
+    :attr:`~common.state_model.BodyView.energy_key` and
+    :meth:`~common.strategy.combat.CombatMath.attached_unit_codes` had this expression
+    character-for-character each, and each docstring called itself the one accessor. Two accessors
+    for one field is how the card half drifted in the first place.
+
+    Tuple rather than a generator because both callers need it hashable — one is a memo key, the
+    other is walked twice. The engine gives bare ints; the dict coercion is a cheap guard so a
+    hand-built fixture cannot make a memo key raise."""
+    return tuple(e.get("id") if isinstance(e, dict) else e
+                 for e in ((body or {}).get("energies") or ()))
