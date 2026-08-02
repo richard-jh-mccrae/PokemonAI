@@ -98,6 +98,44 @@ sound-rule entry forbids, so this is a rule breach and not a preference.
 ([comment](https://github.com/richard-jh-mccrae/PokemonAI/issues/262#issuecomment-5153527951)); the
 per-frame verdict supersedes that deferral.
 
+## ⚠️ What the flips do NOT mean — measured 2026-08-02
+
+Prompted by the developer's question: *"we did already agree that the Lethal Solver shall remain
+intact as it is today in the turn planner. so are you talking about something in addition?"* The
+answer was no, and checking it overturned a conclusion this record previously drew.
+
+**The Lethal Solver is the Turn Planner's TOP rung**
+([ADR-0037](../../docs/adr/0037-lethal-solver-is-the-turn-planners-top-rung.md)), so it decides a
+lethal frame before the develop rung's leaf ranks anything. On all three `missed_win` frames the
+live pilot picks **exactly** the ruled option — `82522698|62` → `[15]`, `82523164|75` → `[8]`,
+`82524455|55` → `[1]`. The leaf ranking the winning line 16th, 11th and 3rd never reaches a decision.
+
+Cross-tabulating **every** flip against `data/decider_lab/baseline.json` (valid as the current
+build's live decisions, because the Decision Gate passes with 0 picks moved), honouring the recorded
+option-equivalence classes:
+
+| | count |
+|---|---|
+| flips where the **live pick is still the ruled option** — the leaf flip is inert | **50** |
+| flips where the live pick differs from the ruling | 23 |
+
+So **the T3 swap is decision-neutral on this corpus.** The 23 were already live disagreements before
+T3 and are unchanged by it; the other 50 are frames a higher rung owns.
+
+**This does not make the flips harmless, and it must not be read as "the leaf is fine."** The
+developer has ruled 22 of 23 examined frames as REVERT: the leaf's *isolated ranking* is genuinely
+worse. It does not bite today because the develop rung rarely decides these frames — but Issue #263
+(T4) hands the planner exactly these families, at which point this ranking becomes the live decision.
+The Discrimination Gate is a **leading indicator for T4**, not a measure of today's play. That is why
+it is worth taking seriously and why it should not be silenced.
+
+**A win terminal in `state_value` was proposed and is WITHDRAWN.** The reasoning was that a won board
+prices only as a prize lead (measured: a match win at exactly `4 × KO_SCORE` losing to Harlequin at
+`4400.701`), so a positional term outbids a prize. The measurement is real, but the fix is not ours:
+lethality is the Lethal Solver's fact, and a second authority deriving "this wins" is the duplication
+[ADR-0096](../../docs/adr/0096-one-guard-per-fact-bench-carry-forward.md) exists to prevent. Recorded
+as a known, bounded blind spot of the scalar instead.
+
 ## Why the remaining 50 are NOT being ruled one at a time
 
 Asked by the developer at batch 5: *"So many of these frames' correction answer is right in their
