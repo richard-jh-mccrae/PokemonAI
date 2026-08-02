@@ -1,4 +1,4 @@
-# ADR-TEMP-224 — A shipped override carries the evidence that established it, and an unaudited one says so
+# ADR-0108 — A shipped override carries the evidence that established it, and an unaudited one says so
 
 **Status:** Accepted (2026-08-02, Issue #224). Build: Issue #224. **Refines ADR-0032** (the Damage
 Formula / Attack Effects) and **completes ADR-0083** rather than overturning either: the
@@ -9,9 +9,6 @@ merely re-derivable.
 **Context issues:** Issue #224 (this build), Issue #213 / ADR-0083 (the harness fix that produced
 the evidence preserved here), Issue #225 (the four text-verified scalers), Issue #275 (owns their
 measurement debt), ADR-0032 (the Damage Formula).
-
-**Number is a temp.** Authored as `ADR-TEMP-224` per `docs/adr/README.md` §"Temp naming"; `/open-pr`
-assigns the real number at rebase. **Cite it as ADR-TEMP-224, Issue #224** until then.
 
 ## Context
 

@@ -1,5 +1,5 @@
 """**A shipped override is checkable against its own evidence** — `attack_overrides.json` against
-`attack_overrides.provenance.json` (ADR-TEMP-224, Issue #224).
+`attack_overrides.provenance.json` (ADR-0108, Issue #224).
 
 `reports/attack_audit/` is gitignored, so before this sidecar a shipped override could only be
 *re-derived* by re-driving the engine, never *checked*. That is not a theoretical gap. Attack 274

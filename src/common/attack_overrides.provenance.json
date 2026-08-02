@@ -1,6 +1,6 @@
 {
  "version": 1,
- "about": "Provenance for attack_overrides.json (ADR-TEMP-224 / Issue #224): what established each shipped override, and — for an engine fit — the measurement rows that establish it. reports/attack_audit/ is gitignored, so without this file an override can only be re-derived by re-driving the engine, never checked. Emitted by tools/sim/generate_attack_overrides.py in the same pass as the table; tests/sim/test_attack_override_provenance.py fails when the two disagree.",
+ "about": "Provenance for attack_overrides.json (ADR-0108 / Issue #224): what established each shipped override, and — for an engine fit — the measurement rows that establish it. reports/attack_audit/ is gitignored, so without this file an override can only be re-derived by re-driving the engine, never checked. Emitted by tools/sim/generate_attack_overrides.py in the same pass as the table; tests/sim/test_attack_override_provenance.py fails when the two disagree.",
  "methods": {
   "engine_fit": "Derived by this generator from engine measurements; `evidence` carries the rows it fitted, INCLUDING the rejected/flat axes that prove a variable was measured rather than missing.",
   "text_verified": "A human read one card's own printed sentence into one attackId. Carries an `owner` — the issue that owes the measurement — and a `note` giving the text and why the harness cannot fit it today.",

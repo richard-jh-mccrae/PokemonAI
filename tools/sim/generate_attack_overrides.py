@@ -14,7 +14,7 @@ and a fit may only claim a variable the harness actually controls. 274 Torcherto
 case — a combined-bench scaler that shipped an exact-looking `atk_hand`/5 fit purely because bench
 was the one variable the harness neither swept nor recorded.
 
-**Every entry carries its provenance** (ADR-TEMP-224, Issue #224). `reports/attack_audit/` is
+**Every entry carries its provenance** (ADR-0108, Issue #224). `reports/attack_audit/` is
 gitignored, so a shipped override used to be uncheckable against its own evidence — which is
 precisely how 274 sat wrong and unseen. The generator therefore emits a committed SIDECAR,
 `attack_overrides.provenance.json`, in the SAME pass as the table: one `attackId` -> how the fact
@@ -394,7 +394,7 @@ def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
     return entries, notes
 
 
-ABOUT = ("Provenance for attack_overrides.json (ADR-TEMP-224 / Issue #224): what established each "
+ABOUT = ("Provenance for attack_overrides.json (ADR-0108 / Issue #224): what established each "
          "shipped override, and — for an engine fit — the measurement rows that establish it. "
          "reports/attack_audit/ is gitignored, so without this file an override can only be "
          "re-derived by re-driving the engine, never checked. Emitted by "

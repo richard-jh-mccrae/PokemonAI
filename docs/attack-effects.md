@@ -67,7 +67,7 @@ conditional bonuses), all on the classified ledger.** Layers:
 | REQ-DMG-0005 | Weakness ×2 / Resistance −30 each pierced by its flag; W-then-R order; damage never negative. |
 | REQ-DMG-0006 | Fail-open degradation + per-target semantics: missing stats → printed damage; a prevented Active hit never hides the bench-snipe credit. |
 
-## Provenance — how each override was established (ADR-TEMP-224)
+## Provenance — how each override was established (ADR-0108)
 
 `reports/attack_audit/` is gitignored and the capture that produced the shipped table no longer
 exists anywhere, so an override used to be *re-derivable* but never *checkable*. That is how 274

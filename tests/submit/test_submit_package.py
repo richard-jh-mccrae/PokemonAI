@@ -66,7 +66,7 @@ def test_package_ships_tuned_json_when_present(tmp_path):
 
 @pytest.mark.req("REQ-PROV-0001")
 def test_package_ships_the_override_table_but_not_its_provenance_sidecar(tmp_path):
-    """ADR-TEMP-224 §1 rejected inline provenance *citing grader cost* — 24 KB of measurement rows
+    """ADR-0108 §1 rejected inline provenance *citing grader cost* — 24 KB of measurement rows
     parsed and discarded on every provider build, inside a 10-minute-per-match budget. Shipping the
     sidecar instead would pay that cost anyway, and `_IGNORE` prunes documentation by EXTENSION
     (`*.md`, `docs`), which a `.json` evidence file sails straight through.

@@ -24,7 +24,7 @@ REPO = Path(__file__).resolve().parents[2]
 MS = REPO / "src"
 # Ship code, not docs. `attack_overrides.provenance.json` is named because it is documentation
 # wearing a `.json` extension: 24 KB of measurement rows the runtime never reads (only
-# `attack_overrides.json` is loaded, by `load_attack_overrides`). ADR-TEMP-224 §1 rejected inline
+# `attack_overrides.json` is loaded, by `load_attack_overrides`). ADR-0108 §1 rejected inline
 # evidence citing exactly this cost, so shipping the sidecar instead would have paid it anyway.
 _IGNORE = shutil.ignore_patterns("__pycache__", "*.pyc", "*.md", "docs",
                                  "attack_overrides.provenance.json")
