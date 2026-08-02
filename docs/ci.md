@@ -56,6 +56,7 @@ test, that test runs.
 | `src/cgpy/**`, `tests/parity/**`, `tests/fixtures/parity/**`, `data/engine/coverage.json` | `tests/parity` | The ADR-0050/59 pure-Python engine twin is self-contained — nothing else imports `src/cgpy` at runtime, so its heavy trace-replay gate runs *only* when cgpy files change (and an unrelated PR never pays for it) |
 | shared test infra (`tests/conftest.py`, `tests/*_helpers.py`, `tests/fixtures/**` except `tests/fixtures/parity/**`), `requirements.txt`, `.coveragerc`, `pytest.ini`, `.github/workflows/**`, `data/**` except `data/engine/coverage.json`, root card-builder scripts | **full suite** | Can break anything |
 | `tools/apply_seam_coverage.py`, and its inputs `src/agents/*/deck.csv`, `src/agents/*/STRATEGY.md`, `docs/plans/apply-seam-coverage.md` (the `strategy` filter) | `tests/strategy` | The POC-A2 apply-seam coverage census (Issue #269) is a `tools/` script whose only tests live in `tests/strategy`, because what it measures is `common/apply_option` + `common/snapshot_coverage`. Its inputs are named on the same filter deliberately: the census's rot-guard trips when a **deck** gains a card carrying Effect Clauses, but `agents` maps only to `tests/agents`, and the markers test reads a **`.md`**, which `docs` plans as nothing — so without these lines each guard would be skipped by exactly the change that breaks it |
+| `tools/meta_tracker/probe_cards.py`, `tools/meta_tracker/probe_triggered_ability.py` (also on the `strategy` filter) | `tests/strategy` (plus `meta`'s broad set, since both files are under `tools/meta_tracker/**`) | Issue #305's triggered-Ability measurement lives in `tests/strategy` but is *driven* by the probe harness, which `meta` maps to `tests/meta_tracker` only — so without these lines an edit to the probe would never run the one test that re-drives it against the live engine |
 | a single `tests/<area>/**` file with no matching source change | just `tests/<area>` | A pure test-file edit touches no source, so it stays narrow instead of paying for a broader filter's reverse-dependency add-list |
 | docs / any `*.md` | **nothing** (job passes green) | No runtime surface |
 | anything unmatched | **full suite** | A new top-level area is never silently skipped |
@@ -96,7 +97,7 @@ full suite):
 
 Both run on every non-docs change, gating, and together they cost about 2 minutes.
 
-- **Determinism backstop** — the six live-native-engine modules, repeated **15×**. They are the
+- **Determinism backstop** — the seven live-native-engine modules, repeated **15×**. They are the
   only tests whose answer can ride the engine's RNG (a shuffle *inside* a simulated line is not
   reproducible — `docs/pyeng/determinism.md` §4), and the whole set runs in ~4 s, so repeating it
   is nearly free. A frame that answers differently between repeats is unstable by definition. This

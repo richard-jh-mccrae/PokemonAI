@@ -612,14 +612,10 @@ Issue #263.
    clause set cannot rescue an option whose KIND is routed to the engine (finding 2 above). Is the
    kind table meant to dominate the per-option clause evidence, or should the fate be
    `MODELLED if clauses_cover(option) else coverage(kind)`?
-3. **Do on-play / on-evolve triggered Abilities pose their own `_ABILITY` option, or resolve inside
-   the `_PLAY` / `_EVOLVE`?** This report assumes the latter — a triggered Ability rides its option
-   and is what makes an otherwise-structural deploy or evolve carry an effect. **No corpus frame
-   settles it**: all 17 `_ABILITY` options observed are activated ("Once during your turn"), and no
-   frame contains a triggered one. If the engine in fact poses them separately, 12 sites move from
-   `_PLAY` / `_EVOLVE` to `_ABILITY` and gain the engine route. Affects Marnie's Grimmsnarl ex,
-   Archaludon ex, Hariyama, Noctowl, Kadabra, Alakazam, Hop's Dubwool, Meowth ex, Chien-Pao, Iron
-   Leaves ex, Bloodmoon Ursaluna and Iono's Bellibolt ex.
+3. ~~**Do on-play / on-evolve triggered Abilities pose their own `_ABILITY` option, or resolve
+   inside the `_PLAY` / `_EVOLVE`?**~~ **ANSWERED by measurement (Issue #305): they RIDE the
+   option.** This report's assumption holds, and the 11 sites it affects stay `_PLAY` / `_EVOLVE`
+   — they do **not** gain the engine route. See *The triggered-Ability ruling* below.
 4. **Is a clause's `effect` value part of the audited vocabulary?** Finding 4. If yes,
    `undeclared_clauses()` should walk it and `discard_opp_energy` needs a write-set; if no, the
    `coin` entry needs a comment saying so.
@@ -650,6 +646,66 @@ Issue #263.
 4. **Fix the 14 partial draw clauses** — 29 copies of silently-wrong numbers (47 counts all 19
    partial sites), and the family the
    1-ply ordering amendment was written to rescue.
-5. **Rule AMBIGUOUS #3 by measurement**, not argument: a single probe of a triggered-Ability evolve
-   through the live engine settles where 12 sites belong.
+5. ~~**Rule AMBIGUOUS #3 by measurement**~~ — **DONE (Issue #305).** Two probes through the live
+   engine, one per trigger kind, settled where the 11 sites belong: on the `_PLAY` / `_EVOLVE` they
+   ride. Nothing moved. *The triggered-Ability ruling* below carries the evidence.
 6. **Stadium vocabulary** — 14 sites, and unlike the others it has no partial answer available today.
+
+## The triggered-Ability ruling (AMBIGUOUS #3, answered by measurement — Issue #305)
+
+**Answer: a triggered Ability RIDES the option that played the card.** It does not pose its own
+`_ABILITY` option, so its site is the `_PLAY` / `_EVOLVE` this report already files it under, and it
+is **not** engine-route eligible under the current kind table. Nothing in the census moved; the
+numbers above are unchanged by this ruling.
+
+Measured, not argued, because nothing in the corpus could settle it: all 17 `_ABILITY` options
+across the 372 diagnostic frames are *activated* ones (Drakloak's Recon Directive, Lunatone's Lunar
+Cycle), and not one frame contains a triggered Ability at all.
+
+**What the engine does.** One subject per trigger kind, both from shipped decks — *Marnie's
+Grimmsnarl ex* (`on_evolve`, Punk Up, 3 copies in `grimmsnarl_ex`) and *Meowth ex* (`on_play`,
+Last-Ditch Catch, 3 copies in `mega_starmie`). Both behave identically:
+
+| step | select | context | what it is |
+|---|---|---|---|
+| the option | `EVOLVE` / `PLAY` | `MAIN` | the play itself |
+| 1 | `YES_NO` | `ACTIVATE` (43) | the *"you may"* gate; `contextCard` names the card just played |
+| 2… | `CARD` | `ATTACH_TO` → `ATTACH_FROM` (Punk Up) / `TO_HAND` (Last-Ditch Catch) | the effect's **own** selects, inside the same option's resolution |
+| last | `MAIN` | `MAIN` | back to the menu |
+
+**No `OptionType.ABILITY` appears at any point** — not in the gate, not among the effect's selects,
+and not on the MAIN menu of that turn or the next. That holds on the DECLINE branch too, which is
+the stronger half of the question: an Ability the engine merely *offered* alongside the option would
+still be offered once its rider was refused, and it is not. After a NO the engine returns straight to
+MAIN and the Ability is gone for good.
+
+**Evidence, committed rather than claimed.** `tests/fixtures/triggered_ability_selects.json`,
+captured by `tools/meta_tracker/probe_triggered_ability.py` (which drives
+`meta_tracker.probe_cards.probe_triggered_ability`). Every recorded field is shuffle-invariant —
+measured identical across 80/80 runs — so `tests/strategy/test_triggered_ability_shape.py` re-drives
+both probes against the live engine on every suite run and fails if the shape ever moves. A future
+engine build that posed these separately breaks that test instead of silently invalidating the
+scope of AMBIGUOUS #1's ruling.
+
+**Consequence for AMBIGUOUS #1.** The two questions attack the same exposure from opposite ends, and
+this one does **not** shrink the other's scope. Chien-Pao (discard a Stadium), Iron Leaves ex
+(self-switch + Energy move) and Bloodmoon Ursaluna (attach from hand) are deterministic, touch no
+hidden zone and involve no opponent choice — but they stay REFUSED unless AMBIGUOUS #1 opens an
+engine route inside a MODELLED kind. That decision now carries all 11 sites.
+
+**Consequence for the `gust` clause kind.** Two of the 11 are gusts that ride an evolve — Hariyama's
+Heave-Ho Catcher and Hop's Dubwool's Defiant Horn. Had the answer been *own `_ABILITY` option* they
+would have been engine-route eligible and the new clause kind could have skipped them. It was not, so
+the `gust` vocabulary has to reach a clause that is **triggered by an evolve** and not only one played
+off a Trainer — a shape requirement that follow-up 3 now inherits.
+
+**Erratum.** An earlier draft of AMBIGUOUS #3 and of follow-up 5 said *"12 sites"* and listed **Iono's
+Bellibolt ex** among them. That was wrong: Electric Streamer reads *"As often as you like during your
+turn, you may attach…"*, which is **activated**, and the census classifies it correctly as an
+`_ABILITY` site (it appears as one in the ability table above). The count is **11** and Bellibolt is
+not one of them:
+
+| trigger | cards |
+|---|---|
+| `on_evolve` (7) | Marnie's Grimmsnarl ex, Archaludon ex, Hariyama, Noctowl, Kadabra, Alakazam, Hop's Dubwool |
+| `on_play` (4) | Meowth ex, Iron Leaves ex, Bloodmoon Ursaluna, Chien-Pao |

@@ -18,11 +18,40 @@ _ENERGY_CARD = {0: 3, 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7, 8: 8}  # EnergyT
 _OPT_PLAY = 7    # OptionType.PLAY — `index` = hand position (see cg/api.py)
 _OPT_EVOLVE = 9  # OptionType.EVOLVE — `area`+`index` locate the evolution card in hand
 _OPT_ABILITY = 10  # OptionType.ABILITY — `area`+`index` locate the Pokémon whose Ability fires
+_TRIGGER_SUPPORTERS = 2  # distinct Supporter lines in a triggered-Ability probe deck (see below)
 
 
 def _first(cards: dict[int, dict], pred) -> int | None:
     """Lowest card id matching ``pred`` (deterministic), or None."""
     return next((cid for cid in sorted(cards) if pred(cards[cid])), None)
+
+
+def _strip_serials(node):
+    """A select record with every ``serial`` dropped.
+
+    A card's serial is its position in a SHUFFLED deck, so it differs run to run while the select's
+    shape does not. Dropping it is what makes a captured raw select comparable across games."""
+    if isinstance(node, dict):
+        return {k: _strip_serials(v) for k, v in node.items() if k != "serial"}
+    if isinstance(node, list):
+        return [_strip_serials(v) for v in node]
+    return node
+
+
+def select_shape(sel: dict) -> dict:
+    """The shuffle-INVARIANT shape of one select: what KIND of decision it is, not how many
+    candidates this particular shuffle happened to offer.
+
+    Deliberately drops ``n_options`` and the ``deck`` payload — a deck search over 42 remaining
+    cards offers a different count every game, and a fixture that pinned the count would fail on
+    the shuffle rather than on the engine."""
+    cc = sel.get("contextCard") or None
+    return {"select_type": sel.get("type"),
+            "context": sel.get("context"),
+            "min_count": sel.get("minCount"),
+            "max_count": sel.get("maxCount"),
+            "option_types": sorted({o.get("type") for o in (sel.get("option") or [])}),
+            "context_card_id": cc.get("id") if cc else None}
 
 
 def build_probe_deck(target_id: int, cards: dict[int, dict], low_hp: bool = False,
@@ -156,6 +185,31 @@ def build_evolution_deck(chain: list[int], attack_energies: list[int] | None) ->
     return deck
 
 
+def build_trigger_deck(chain: list[int], fill_energy: int,
+                       cards: dict[int, dict]) -> list[int]:
+    """A 60-card deck for the TRIGGERED-Ability probe: the target's whole evolution line,
+    ``_TRIGGER_SUPPORTERS`` distinct Supporters at 4 copies each, and basic Energy to fill.
+
+    The Supporters are not fodder, and there is more than one of them on purpose. A
+    Supporter-fetching trigger (Meowth ex's Last-Ditch Catch) is **skipped entirely** by the engine
+    when the deck holds no target, so a single 4-copy line makes the captured shape depend on
+    whether the shuffle happened to put all four in hand — measured at ~1 run in 12. Two lines put
+    exhaustion out of reach, so the recorded sequence is the card's shape rather than the draw's.
+    The Energy fill plays the same role for an attach trigger (Marnie's Grimmsnarl ex's Punk Up
+    searches the deck for Basic {D}).
+    """
+    deck: list[int] = []
+    for cid in chain:
+        deck += [cid] * 4
+    sups = [c for c in sorted(cards)
+            if cards[c].get("category") == "supporter" and c not in deck][:_TRIGGER_SUPPORTERS]
+    for sup in sups:
+        deck += [sup] * 4
+    while len(deck) < _DECK_SIZE:
+        deck.append(fill_energy)
+    return deck[:_DECK_SIZE]
+
+
 def find_evolve_option(obs: dict, evolved_id: int, me: int = 0,
                        in_play_area: int | None = None) -> int | None:
     """Index into ``obs.select.option`` that evolves a field Pokémon into ``evolved_id``, or None.
@@ -233,6 +287,8 @@ _AREA_ACTIVE = 4    # AreaType.ACTIVE
 _AREA_BENCH = 5     # AreaType.BENCH
 _CTX_REMOVE_DMG = 16  # SelectContext.REMOVE_DAMAGE_COUNTER
 _CTX_HEAL = 17        # SelectContext.HEAL
+_CTX_ACTIVATE = 43    # SelectContext.ACTIVATE — YesNo: "Would you like to activate the effect?"
+_OPT_NO = 2           # OptionType.NO
 
 
 def _attack_turn_logs(logs: list[dict]) -> list[dict]:
@@ -714,3 +770,128 @@ def probe_evolution(target_id: int, cards: dict[int, dict], *, me: int = 0,
     finally:
         battle_finish()
     return {"actor": me, "logs": logs, "contexts": contexts} if (logs or contexts) else None
+
+
+# --- triggered-Ability shape probe (Issue #305) ------------------------------------
+
+_TRIGGER_RESOLVE_STEPS = 16   # sub-decisions a single trigger may raise before returning to MAIN
+_TRIGGER_MENU_STEPS = 24      # drive steps allowed while sampling the MAIN menus that follow
+
+
+def _capture_trigger(battle_select, obs, opt: int, taken: str, me: int, *,
+                     decline: bool, main_menus: int) -> dict:
+    """Take option ``opt`` and record every select it raises, then the MAIN menus that follow.
+
+    ``decline`` answers NO to the *"you may"* gate instead of YES — the strongest form of the
+    question, because an Ability the engine posed separately would still be offered after its
+    rider was refused. Sub-decisions resolve first-options-first (``minCount``, or one when the
+    select is optional), which is deterministic and therefore reproducible.
+
+    Every field of the record is shuffle-INVARIANT, so it can be pinned as a fixture: the MAIN
+    menus that follow are reported as *counts* (how many were sampled, how many carried an
+    `_ABILITY` option) rather than as their option sets, because which cards a hand happens to hold
+    changes the set every game and has nothing to do with the question.
+    """
+    obs = battle_select([opt])
+    raw_gate = _strip_serials(obs["select"])
+    effect_selects: list[dict] = []
+    reached_main = False
+    for _ in range(_TRIGGER_RESOLVE_STEPS):
+        sel = obs["select"]
+        if obs["current"]["result"] >= 0:
+            break
+        if sel["context"] == _CTX_MAIN:
+            reached_main = True
+            break
+        if sel["context"] != _CTX_ACTIVATE:                 # the gate itself is `raw_gate`
+            effect_selects.append(select_shape(sel))
+        if decline and sel["context"] == _CTX_ACTIVATE:
+            no = next((i for i, o in enumerate(sel["option"]) if o.get("type") == _OPT_NO), 0)
+            obs = battle_select([no])
+        else:
+            k = min(sel["maxCount"], max(sel["minCount"], 1)) if sel["option"] else 0
+            obs = battle_select(list(range(k)))
+
+    sampled = n_with_ability = 0
+    for _ in range(_TRIGGER_MENU_STEPS):
+        if sampled >= main_menus or obs["current"]["result"] >= 0:
+            break
+        cur, sel = obs["current"], obs["select"]
+        if cur["yourIndex"] != me:
+            obs = _end_turn(battle_select, obs)
+        elif sel["context"] == _CTX_MAIN:
+            sampled += 1
+            n_with_ability += any(o.get("type") == _OPT_ABILITY for o in (sel.get("option") or []))
+            obs = _end_turn(battle_select, obs)
+        else:
+            obs = _advance(battle_select, obs)
+
+    return {"option_taken": taken, "gate_select": raw_gate, "effect_selects": effect_selects,
+            "returned_to_main": reached_main, "main_menus_sampled": sampled,
+            "main_menus_with_ability_option": n_with_ability,
+            "ability_option_seen": bool(n_with_ability) or
+                                   any(_OPT_ABILITY in s["option_types"] for s in effect_selects)}
+
+
+def probe_triggered_ability(target_id: int, cards: dict[int, dict], *, decline: bool = False,
+                            me: int = 0, max_steps: int = 400,
+                            main_menus: int = 2) -> dict | None:
+    """Drive a game until ``target_id`` enters play by the option its TRIGGERED Ability rides, then
+    capture the select sequence that option raises. Record or None.
+
+    Answers Issue #305: does an Ability reading *"When you play this Pokemon from your hand to
+    evolve / onto your Bench, you may…"* pose its **own** `_ABILITY` option on a later menu, or
+    resolve **inside** the `_PLAY` / `_EVOLVE`? The two put the site on different sides of
+    `apply_option`'s kind table, and no corpus frame settles it — every `_ABILITY` option the
+    372-frame corpus ever observed is an *activated* one.
+
+    A Stage 1/2 target climbs its line on the Active and the probe takes the last EVOLVE; a Basic
+    target is deployed from hand to the Bench with a PLAY (the Bench is left empty at setup so the
+    spare copies stay in hand and the deploy is available on the first MAIN turn). Neither side
+    ever attacks, so the capture is not racing a KO.
+
+    The returned ``ability_option_seen`` is the answer bit: True means the engine posed the Ability
+    separately, False means it rides the option it was played by.
+    """
+    chain = evolution_chain(target_id, _evolution_data())
+    etype = _card_energy_type().get(target_id, 0)
+    battle_start, battle_select, battle_finish = _engine()
+    deck = build_trigger_deck(chain, _ENERGY_CARD.get(etype, 3), cards)
+    obs, start = battle_start(deck, deck)
+    if start.errorPlayer >= 0:
+        battle_finish()
+        return None
+    basic, evolving = chain[0], len(chain) > 1
+    try:
+        for _ in range(max_steps):
+            cur = obs["current"]
+            if cur["result"] >= 0:
+                return None
+            you, ctx = cur["yourIndex"], obs["select"]["context"]
+            if ctx == _SETUP_ACTIVE and you == me:
+                o = _setup_active_option(obs, basic)
+                obs = battle_select([o] if o is not None else [0])          # the line's Basic Active
+            elif ctx == _SETUP_BENCH and you == me:
+                obs = battle_select(list(range(obs["select"]["minCount"])))  # keep copies in HAND
+            elif ctx != _CTX_MAIN:
+                obs = _advance(battle_select, obs)                          # setup / sub-decision
+            elif you != me:
+                obs = _end_turn(battle_select, obs)                         # opponent never acts
+            elif not evolving:
+                po = find_play_option(obs, target_id)                       # Basic: deploy to Bench
+                if po is not None:
+                    return _capture_trigger(battle_select, obs, po, "PLAY", me,
+                                            decline=decline, main_menus=main_menus)
+                obs = _end_turn(battle_select, obs)
+            else:
+                active = (cur["players"][me].get("active") or [None])[0]
+                nxt = chain[chain.index(active.get("id")) + 1] if active and \
+                    active.get("id") in chain[:-1] else target_id
+                eo = find_evolve_option(obs, nxt, me, in_play_area=_AREA_ACTIVE)
+                if eo is not None and nxt == target_id:
+                    return _capture_trigger(battle_select, obs, eo, "EVOLVE", me,
+                                            decline=decline, main_menus=main_menus)
+                obs = battle_select([eo]) if eo is not None else _end_turn(battle_select, obs)
+        return None
+    finally:
+        battle_finish()

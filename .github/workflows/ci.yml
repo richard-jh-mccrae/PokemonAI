@@ -232,7 +232,7 @@ jobs:
       # the real guard (deterministic: a sampled frame fails the day it lands); this is the cheap
       # backstop underneath them, for anything the probe cannot see.
       #
-      # All 35 live-engine tests run in ~4.3 s, so repeating them is close to free. A frame that
+      # All 41 live-engine tests run in ~4.9 s, so repeating them is close to free. A frame that
       # answers differently between repeats is unstable BY DEFINITION — no interpretation needed.
       - name: Determinism backstop (repeat the live-engine tests)
         if: steps.plan.outputs.empty != 'true'
@@ -242,6 +242,7 @@ jobs:
                         tests/sim/test_transients_engine.py
                         tests/strategy/test_lethal_engine.py
                         tests/strategy/test_planner_engine.py
+                        tests/strategy/test_triggered_ability_shape.py
                         tests/cards/test_card_effects_engine.py"
           for i in $(seq 1 15); do
             python -m pytest $ENGINE_TESTS -q -p no:cacheprovider --tb=line \

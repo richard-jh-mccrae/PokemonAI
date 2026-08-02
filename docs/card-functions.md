@@ -267,6 +267,7 @@ Lib-free unit/oracle/audit tests run without the engine; the audit *tool* reads 
 | REQ-FUNC-0012 | Text-consistency audit: `audit_card` flags a behavioral tag with no supporting text cue (false positive) and a strong text cue with no tag (miss). |
 | REQ-FUNC-0013 | Golden oracle: named, deterministic cards carry their expected tag in the shipped table (end-to-end regression gate). |
 | REQ-FUNC-0014 | Meta-card verification: rank cards by real usage (`rank_card_usage`, band-weighted) to prioritise the text-audit toward the staples that decide games. |
+| REQ-FUNC-0015 | Triggered-Ability shape probe (Issue #305): build a deck whose triggers have real targets, and reduce a captured select to the shuffle-INVARIANT record a fixture can pin (`build_trigger_deck`, `select_shape`, `_strip_serials`). |
 
 ## Status
 

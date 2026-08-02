@@ -7,12 +7,14 @@ import pytest
 
 from meta_tracker.card_functions import classify_functions
 from meta_tracker.probe_cards import (
-    _attack_turn_logs, _damaged_option_indices, _setup_active_option, build_evolution_deck,
-    build_pokemon_deck, build_probe_deck, evolution_chain, extract_probe, find_ability_option,
-    find_evolve_option, find_play_option,
+    _attack_turn_logs, _damaged_option_indices, _setup_active_option, _strip_serials,
+    build_evolution_deck, build_pokemon_deck, build_probe_deck, build_trigger_deck,
+    evolution_chain, extract_probe, find_ability_option, find_evolve_option, find_play_option,
+    select_shape,
 )
 
 BASIC_ENERGY, BASIC_MON, STAGE1, ITEM, ACE = 3, 100, 101, 200, 300
+SUPPORTER_A, SUPPORTER_B, SUPPORTER_C = 400, 401, 402
 
 
 def _pool():
@@ -22,6 +24,9 @@ def _pool():
         STAGE1: {"category": "pokemon", "stage": "stage1", "name": "Filler Stage1"},
         ITEM: {"category": "item", "name": "Nest Ball"},
         ACE: {"category": "item", "name": "Master Ball", "aceSpec": True},
+        SUPPORTER_A: {"category": "supporter", "name": "Filler Supporter A"},
+        SUPPORTER_B: {"category": "supporter", "name": "Filler Supporter B"},
+        SUPPORTER_C: {"category": "supporter", "name": "Filler Supporter C"},
     }
 
 
@@ -293,3 +298,59 @@ def test_find_evolve_option_none_when_evolution_not_in_hand():
     obs = {"select": {"option": [{"type": 9, "area": 2, "index": 0, "inPlayArea": 4, "inPlayIndex": 0}]},
            "current": {"yourIndex": 0, "players": [{"hand": [{"id": 10}]}, {}]}}
     assert find_evolve_option(obs, 12, me=0) is None
+
+
+# --- triggered-Ability probe helpers (Issue #305) ---------------------------------
+
+
+@pytest.mark.req("REQ-FUNC-0015")
+def test_build_trigger_deck_stacks_the_line_and_two_supporter_targets():
+    """Two DISTINCT Supporter lines, not one: a Supporter-fetching trigger is skipped entirely by
+    the engine when the deck holds none, so a single 4-copy line lets the shuffle decide the shape
+    (measured at ~1 run in 12)."""
+    deck = build_trigger_deck([BASIC_MON, STAGE1], BASIC_ENERGY, _pool())
+    assert len(deck) == 60
+    assert deck.count(BASIC_MON) == 4 and deck.count(STAGE1) == 4
+    assert deck.count(SUPPORTER_A) == 4 and deck.count(SUPPORTER_B) == 4
+    assert SUPPORTER_C not in deck                       # exactly two lines, lowest ids first
+    assert deck.count(BASIC_ENERGY) == 60 - 16
+
+
+@pytest.mark.req("REQ-FUNC-0015")
+def test_build_trigger_deck_never_double_counts_a_target_already_in_the_line():
+    """A Supporter can't be the evolution line, but the guard is the same one that keeps a card
+    from exceeding its 4-copy cap — assert it rather than assume the categories stay disjoint."""
+    deck = build_trigger_deck([SUPPORTER_A], BASIC_ENERGY, _pool())
+    assert deck.count(SUPPORTER_A) == 4
+    assert deck.count(SUPPORTER_B) == 4 and deck.count(SUPPORTER_C) == 4
+
+
+@pytest.mark.req("REQ-FUNC-0015")
+def test_strip_serials_drops_shuffle_dependent_ids_only():
+    """A card's `serial` is its position in a SHUFFLED deck, so it differs run to run while the
+    select's shape does not — dropping it is what makes a captured raw select comparable."""
+    sel = {"type": 9, "contextCard": {"id": 648, "serial": 12, "playerIndex": 0},
+           "option": [{"type": 1}, {"type": 2}], "deck": [{"id": 7, "serial": 43}]}
+    assert _strip_serials(sel) == {
+        "type": 9, "contextCard": {"id": 648, "playerIndex": 0},
+        "option": [{"type": 1}, {"type": 2}], "deck": [{"id": 7}]}
+
+
+@pytest.mark.req("REQ-FUNC-0015")
+def test_select_shape_keeps_the_kind_and_drops_the_candidate_count():
+    """The shape is what KIND of decision a select is. A deck search over 42 remaining cards offers
+    a different count every game, so `n_options` and the `deck` payload must not reach a fixture."""
+    sel = {"type": 1, "context": 22, "minCount": 0, "maxCount": 5,
+           "option": [{"type": 3, "index": i} for i in range(34)],
+           "deck": [{"id": 7}] * 42, "contextCard": None}
+    assert select_shape(sel) == {"select_type": 1, "context": 22, "min_count": 0, "max_count": 5,
+                                 "option_types": [3], "context_card_id": None}
+
+
+@pytest.mark.req("REQ-FUNC-0015")
+def test_select_shape_names_the_card_a_gate_belongs_to():
+    """`contextCard` is how a consumer knows whose trigger an ACTIVATE gate is."""
+    sel = {"type": 9, "context": 43, "minCount": 1, "maxCount": 1,
+           "option": [{"type": 1}, {"type": 2}], "contextCard": {"id": 1071, "playerIndex": 0}}
+    assert select_shape(sel)["context_card_id"] == 1071
+    assert select_shape(sel)["option_types"] == [1, 2]

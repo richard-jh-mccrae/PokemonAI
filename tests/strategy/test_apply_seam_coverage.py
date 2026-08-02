@@ -12,36 +12,22 @@ here:
 * `apply_option`'s kind table moves, so the fates the report quotes are no longer the fates the seam
   returns.
 """
-import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
 
 from common import apply_option as seam
+from seam_census_helpers import census_pool, load_census
 
 _ROOT = Path(__file__).resolve().parents[2]
 
 
-def _load():
-    """Import the script by path — `tools/` is on `sys.path` (conftest) but the module is a CLI, so
-    load it explicitly rather than relying on a package that does not exist."""
-    path = _ROOT / "tools" / "apply_seam_coverage.py"
-    spec = importlib.util.spec_from_file_location("apply_seam_coverage", path)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = mod
-    spec.loader.exec_module(mod)
-    return mod
-
-
 @pytest.fixture(scope="module")
 def census():
-    mod = _load()
-    cards, effects, covers = mod.load_cards(), mod.load_effects(), mod.load_covers()
-    decks = mod.load_our_decks()
-    builds, _priors = mod.load_opponent_builds()
-    pool = set().union(*[set(c) for c in decks.values()], *[set(c) for c in builds.values()])
-    return mod, cards, effects, covers, pool
+    """The census plus its pool. The by-path load lives in `tests/seam_census_helpers.py` so the two
+    modules that assert against the census share one loader (see Issue #305)."""
+    mod, cards, effects, covers = load_census()
+    return mod, cards, effects, covers, census_pool(mod)
 
 
 def test_every_clause_bearing_pool_card_has_a_ruling(census):

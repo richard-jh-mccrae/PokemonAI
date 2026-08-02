@@ -1,0 +1,176 @@
+{
+  "schema": "triggered-ability-selects/1",
+  "answer": "rider",
+  "subjects": [
+    {
+      "card_id": 648,
+      "trigger": "on_evolve",
+      "ability": "Punk Up",
+      "deck": "grimmsnarl_ex",
+      "why": "3 copies in a shipped deck, clauses already ruled `covers: full`, and its effect (attach up to 5 Basic {D} from deck) is loud enough to read straight off the selects",
+      "name": "Marnie's Grimmsnarl ex",
+      "stage": "stage2",
+      "accept": {
+        "option_taken": "EVOLVE",
+        "gate_select": {
+          "type": 9,
+          "context": 43,
+          "minCount": 1,
+          "maxCount": 1,
+          "remainDamageCounter": 0,
+          "remainEnergyCost": 0,
+          "option": [
+            {
+              "type": 1
+            },
+            {
+              "type": 2
+            }
+          ],
+          "deck": null,
+          "contextCard": {
+            "id": 648,
+            "playerIndex": 0
+          },
+          "effect": null
+        },
+        "effect_selects": [
+          {
+            "select_type": 1,
+            "context": 22,
+            "min_count": 0,
+            "max_count": 5,
+            "option_types": [
+              3
+            ],
+            "context_card_id": null
+          },
+          {
+            "select_type": 1,
+            "context": 21,
+            "min_count": 1,
+            "max_count": 1,
+            "option_types": [
+              3
+            ],
+            "context_card_id": 7
+          }
+        ],
+        "returned_to_main": true,
+        "main_menus_sampled": 2,
+        "main_menus_with_ability_option": 0,
+        "ability_option_seen": false
+      },
+      "decline": {
+        "option_taken": "EVOLVE",
+        "gate_select": {
+          "type": 9,
+          "context": 43,
+          "minCount": 1,
+          "maxCount": 1,
+          "remainDamageCounter": 0,
+          "remainEnergyCost": 0,
+          "option": [
+            {
+              "type": 1
+            },
+            {
+              "type": 2
+            }
+          ],
+          "deck": null,
+          "contextCard": {
+            "id": 648,
+            "playerIndex": 0
+          },
+          "effect": null
+        },
+        "effect_selects": [],
+        "returned_to_main": true,
+        "main_menus_sampled": 2,
+        "main_menus_with_ability_option": 0,
+        "ability_option_seen": false
+      }
+    },
+    {
+      "card_id": 1071,
+      "trigger": "on_play",
+      "ability": "Last-Ditch Catch",
+      "deck": "mega_starmie",
+      "why": "3 copies in a shipped deck; the deploy trigger is measured separately from the evolve trigger rather than assumed to match it",
+      "name": "Meowth ex",
+      "stage": "basic",
+      "accept": {
+        "option_taken": "PLAY",
+        "gate_select": {
+          "type": 9,
+          "context": 43,
+          "minCount": 1,
+          "maxCount": 1,
+          "remainDamageCounter": 0,
+          "remainEnergyCost": 0,
+          "option": [
+            {
+              "type": 1
+            },
+            {
+              "type": 2
+            }
+          ],
+          "deck": null,
+          "contextCard": {
+            "id": 1071,
+            "playerIndex": 0
+          },
+          "effect": null
+        },
+        "effect_selects": [
+          {
+            "select_type": 1,
+            "context": 7,
+            "min_count": 0,
+            "max_count": 1,
+            "option_types": [
+              3
+            ],
+            "context_card_id": null
+          }
+        ],
+        "returned_to_main": true,
+        "main_menus_sampled": 2,
+        "main_menus_with_ability_option": 0,
+        "ability_option_seen": false
+      },
+      "decline": {
+        "option_taken": "PLAY",
+        "gate_select": {
+          "type": 9,
+          "context": 43,
+          "minCount": 1,
+          "maxCount": 1,
+          "remainDamageCounter": 0,
+          "remainEnergyCost": 0,
+          "option": [
+            {
+              "type": 1
+            },
+            {
+              "type": 2
+            }
+          ],
+          "deck": null,
+          "contextCard": {
+            "id": 1071,
+            "playerIndex": 0
+          },
+          "effect": null
+        },
+        "effect_selects": [],
+        "returned_to_main": true,
+        "main_menus_sampled": 2,
+        "main_menus_with_ability_option": 0,
+        "ability_option_seen": false
+      }
+    }
+  ]
+}
