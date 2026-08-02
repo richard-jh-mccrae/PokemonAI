@@ -3443,7 +3443,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0                                        # "your {F} Pokémon" — attacker-type gate
         if not st.applies_to_holder(active):
             return 0                                        # "the Hop's Pokémon this card is attached
-                                                            # to" — owner-family HOLDER gate (#306)
+                                                            # to" — the owner-family HOLDER gate
         opp_stat = self.stats.get(opp.get("id")) if self.stats else None
         if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
             return 0                                        # "{ex}" defender gate (incl. Mega ex)

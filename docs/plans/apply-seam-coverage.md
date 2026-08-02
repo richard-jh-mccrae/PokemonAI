@@ -496,10 +496,15 @@ those** and named the rest:
   question about this card's one holder.
 - **Gravity Gemstone** is the only Tool whose static effect is a **cost**, and `retreatReduction` is
   now SIGNED (−1) rather than gaining a second `retreatIncrease` field — two fields for one quantity
-  is how a sign gets dropped later. Every consumer was audited: the three that subtract it clamp at
-  0, the four that look for an *enabling* Tool test `> 0` and correctly reject a surcharge, and
+  is how a sign gets dropped later. Every **reader of that field** was audited: the four that
+  subtract it now share one signed reader (`Pilot._attached_retreat_delta`) and clamp at 0, the seven
+  that look for an *enabling* Tool test `> 0` and correctly reject a surcharge, and
   `_retreat_shortfall` — which sized a KO_SCORE-class retreat claim off the **printed** cost — was
-  fixed to read the effective one, since ignoring a surcharge under-states the need.
+  fixed to read the effective one, since ignoring a surcharge under-states the need. That is
+  deliberately narrower than *"every retreat-cost reader"*: five further sites read the printed cost
+  and consult no Tool at all, and are enumerated with their fail directions in
+  `tests/scouting/test_retreat_cost_grants.py`'s KNOWN DIVERGENCE. None is KO_SCORE-class and three
+  are fail-open against the opponent by design, so that is a recorded boundary, not a live bug.
 - **The seven that stay unmodelled are named as such in the table above, each with its reason** —
   per "no silent caps", a group that reads as covered when it is not is worse than one that reads as
   missing. Five are REACTIVE (Lucky Helmet, Handheld Fan, Deluxe Bomb, Powerglass, Lillie's Pearl):
@@ -516,6 +521,13 @@ body, and `attackCostReduction` is **parsed but not priced** — affordability i
 `_attack_cost(aid) <= energy`, all attack-keyed, and threading a body-keyed discount through them is
 a redesign this issue did not carry (and an unsafe one to guess at, since a wrong credit manufactures
 a KO_SCORE-class phantom). It is a T4 `state_value` input, which is what this whole track produces.
+
+That second caveat has a named stake, so it should not be filed as theoretical:
+`docs/matchups/hop_s_trevenant_hop_s_snorlax.md` already calls the discount decisive — *"Choice Band
+drops its cost to 0 energy"*, which is what turns Horrifying Revenge into a free ~220 swing — and
+that archetype ships a Brief (`scouting/briefs/hop_s_trevenant_hop_s_snorlax.json`). So the fact is
+carried as **doctrine** today and now as **data**, with nothing joining them. Whoever prices an
+opponent's clock next should start there.
 
 **stadium — structurally hampered.** 14 refused sites, all needing vocabulary that does not exist.
 `snapshot_coverage` homes `stadium` (which Stadium is in play) and T1 added

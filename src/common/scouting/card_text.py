@@ -6,6 +6,15 @@ record types. Shared doctrine: match ONLY the clean UNCONDITIONAL phrasing (whol
 where a rider demands it), so a conditional variant parses to 0/None — under-crediting
 never over-credits a claim the board might not honor. Split out of ``provider.py``
 (ADR-0054); ``provider`` re-exports every name, so the historical import path stays valid.
+
+**Two things the doctrine does not say, both added at Issue #306.** (1) An owner-family
+qualifier in the subject ("the Cynthia's Pokémon this card is attached to") is not a
+condition the parser has to refuse — it is a condition it can CARRY, in
+``CardStat.holderNameFamily``, for the consumer to evaluate against the actual holder; the
+amount and its gate are parsed together and travel together. (2) The doctrine is written
+for BENEFITS, and the safe direction INVERTS for a cost: missing a penalty (Gravity
+Gemstone's ``{C}`` MORE to retreat) makes a board look cheaper than it is, so a
+cost-parser errs by matching MORE readily, not less. Both are called out where they apply.
 """
 from __future__ import annotations
 
@@ -16,10 +25,10 @@ import re
 #
 # Three Tools in the pool restrict their static modifier to a NAMED family of holders: Cynthia's
 # Power Weight ("The Cynthia's Pokémon this card is attached to gets +70 HP"), Hop's Choice Band
-# ("Attacks used by the Hop's Pokémon this card is attached to …") and Lillie's Pearl. Until #306
-# they broke every subject-adjacent pattern and parsed to 0, which read as *"attaching this Tool is
-# worth nothing"* — a plausible answer, which is why it went unnoticed for Hop's Choice Band, the
-# most-played Tool in the tracked meta.
+# ("Attacks used by the Hop's Pokémon this card is attached to …") and Lillie's Pearl. Until
+# Issue #306 they broke every subject-adjacent pattern and parsed to 0, which read as *"attaching
+# this Tool is worth nothing"* — a plausible answer, and why it went unnoticed for Hop's Choice
+# Band, the most-played Tool in the tracked meta.
 #
 # The family is EVALUABLE, unlike the board-level predicates `_RETREAT_FREE_GRANT_RES` deliberately
 # refuses: `docs/rules.md` §9 records that the owner prefix IS part of the printed card name
@@ -33,12 +42,16 @@ import re
 # `CardStat.holderNameFamily`. The value parsers accept the qualifier in the subject position but
 # never re-read it, so the amount and its gate cannot drift apart the way two parsers for one fact
 # always eventually do (Issue #213).
-_NAME_FAMILY = r"(?:[A-Z][\w.-]+ ){0,3}[A-Z][\w.-]*['’]s"
+#
+# Written with \u escapes, not literal characters, for the reason the `.` = é convention below
+# exists: this file must read identically on either platform under any editor's default encoding.
+_NAME_FAMILY = r"(?:[A-Z][\w.-]+ ){0,3}[A-Z][\w.-]*['" + "\u2019" + r"]s"
 
-#: Every apostrophe the pool prints, folded to ASCII. The card records mix them WITHIN one family —
-#: `Hop's Phantump` (878) is ASCII where `Hop's Silicobra` (288) is U+2019 — so a raw prefix
-#: comparison would answer "no" for half the family. Normalise both sides, always.
-_APOSTROPHES = str.maketrans({"’": "'", "ʼ": "'", "‘": "'"})
+#: Every apostrophe the pool prints (U+2019 right single quote, U+02BC modifier letter, U+2018 left
+#: single quote), folded to ASCII. The card records mix them WITHIN one family — `Hop's Phantump`
+#: (878) is ASCII where `Hop's Silicobra` (288) is U+2019 — so a raw prefix comparison would answer
+#: "no" for half the family. Normalise both sides, always.
+_APOSTROPHES = str.maketrans({"\u2019": "'", "\u02bc": "'", "\u2018": "'"})
 
 _HOLDER_FAMILY_RE = re.compile(
     r"\b[Tt]he (" + _NAME_FAMILY + r") Pok.mon this card is attached to")
@@ -62,6 +75,14 @@ def name_in_family(name: str | None, family: str | None) -> bool:
         only when the name carries the owner prefix, per ``docs/rules.md`` §9 ("Cynthia's" →
         "Cynthia's Garchomp ex", never "Garchomp"). An unknown name against a real gate is False:
         fail-CLOSED, so a modifier is never credited to a body we cannot identify.
+
+    Note for Issue #301 (POC-A2.1/2), which met the same owner families in its `fetch` clauses and
+    ruled *"do not invent a substring match on the card name — mark these four `partial`"*: this is
+    not that. A substring test is what would claim `Amulet of Hope` for the `Hop's` family; this is a
+    normalised PREFIX test, and it answers a different question — the holder of a Tool is one body
+    already in play whose name we hold, where #301's four cards ask which cards in a hidden DECK
+    satisfy the family. If #301 later wants the deck-side oracle, this is the string half of it, and
+    what it still needs is a build-time index over `cards.json` keyed by family.
     """
     if not family:
         return True
@@ -118,7 +139,12 @@ _RETREAT_TOOL_RE = re.compile(
 # benefit: "As long as the Pokémon this card is attached to is in the Active Spot, the Retreat Cost
 # of both Active Pokémon is {C} more." Recorded as a NEGATIVE `retreatReduction` rather than a
 # second `retreatIncrease` field: ONE quantity deserves one field, and two fields for one quantity is
-# how the sign gets dropped downstream. Every consumer was audited for the sign (Issue #306).
+# how the sign gets dropped downstream. Every READER OF THIS FIELD was audited for the sign at
+# Issue #306 — the four that subtract it now share `Pilot._attached_retreat_delta` and clamp at 0,
+# the seven that look for an ENABLING Tool test `> 0` and correctly reject a surcharge. That is a
+# narrower claim than "every retreat-cost reader": five sites read the PRINTED `retreatCost` and
+# consult no Tool at all, and are enumerated in tests/scouting/test_retreat_cost_grants.py's KNOWN
+# DIVERGENCE with their fail directions.
 #
 # The holder leg is EXACT despite the Active-Spot rider — a body only ever PAYS a Retreat Cost from
 # the Active Spot, which is precisely when the clause is live. The symmetric leg (the OPPONENT's

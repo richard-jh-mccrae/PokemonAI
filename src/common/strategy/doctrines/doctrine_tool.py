@@ -196,12 +196,14 @@ class ToolMixin:
                               and active_incoming >= board.my_active_hp + bonus)  # protect the successor
         candidates = self._tool_carrier_candidates(obs, me, board, active_incoming, successor_mode,
                                                    tool_stat=stat)
+        active_is_carrier = bool(candidates and candidates[0][0] == (_ACTIVE, 0))
         slot = self._best_gain_slot(candidates, bonus, wincon=True)        # (1) win-condition body
         if slot is not None:
             return slot
-        if (board.active_is_wincon and not successor_mode                  # (2) proactive default
-                and any(slot_ == (_ACTIVE, 0) for slot_, *_ in candidates)):
-            return (_ACTIVE, 0)                                            # (family-gated out ⇒ absent)
+        if board.active_is_wincon and not successor_mode and active_is_carrier:
+            return (_ACTIVE, 0)          # (2) proactive default — but only onto a body the Tool
+                                         #     actually reaches (a family-gated Tool has no Active
+                                         #     candidate at all, and neither has an empty Active Spot)
         return self._best_gain_slot(candidates, bonus, wincon=False,       # (3) a wall, only if it is
                                     require_threat=True)                   # actually in danger (not a safe body)
 

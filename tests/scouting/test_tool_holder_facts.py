@@ -1,4 +1,4 @@
-"""Tool static facts whose subject is a RESTRICTED holder, and the one Tool that is a COST (#306).
+"""Tool static facts whose subject is a RESTRICTED holder, and the one Tool that is a COST.
 
 Ten of the fourteen Pokémon Tools in the pool recovered no `CardStat` field at all, so attaching
 them differenced to ~0 — *"this Tool is worth nothing"*, a plausible answer, which is exactly why it
@@ -176,6 +176,29 @@ def test_gravity_gemstone_reads_as_a_NEGATIVE_retreat_reduction():
     assert _parse_tool_retreat_reduction(card) == -1
 
 
+def test_the_surcharge_parser_declines_a_clause_it_cannot_evaluate():
+    """THE NEGATIVE CASE for the surcharge widening — and it needs its deviation stated, because the
+    fail direction INVERTS for a cost.
+
+    The battery's doctrine (match only the clean unconditional phrasing) is written for BENEFITS:
+    under-crediting a bonus is safe. Missing a PENALTY is not — it makes a retreat look cheaper than
+    it is, which is the retreat-happy pathology `_effective_retreat_cost` exists to avoid. So this
+    parser deliberately matches Gravity Gemstone's core clause WITHOUT requiring its "As long as …
+    in the Active Spot" rider, and over-charging is the safe miss.
+
+    What it must still decline is a clause whose SUBJECT it cannot resolve — an increase aimed at
+    somebody else's body, or at a set this Tool's holder may not be in. Charging my Active for those
+    would be a fabricated cost, not a conservative one."""
+    assert _parse_tool_retreat_reduction(_Card(
+        "The Retreat Cost of your opponent's Active Pokémon is {C} more.")) == 0
+    assert _parse_tool_retreat_reduction(_Card(
+        "The Retreat Cost of each Pokémon that has a Tool attached is {C}{C} more.")) == 0
+    assert _parse_tool_retreat_reduction(_Card(
+        "Flip a coin. If heads, the Retreat Cost of both Active Pokémon is {C} more.")) == -1
+    # ^ the ONE deliberate over-match: a coin-gated surcharge is charged in full. Under-charging a
+    #   penalty is the unsafe direction, so a maybe-cost is priced as a cost.
+
+
 def test_the_flat_discount_tools_keep_their_positive_sign():
     """The regression guard on the sign: Air Balloon and Rescue Board must stay POSITIVE, since the
     three rungs that recognise a retreat-enabler Tool key on `retreatReduction > 0`."""
@@ -229,6 +252,10 @@ def test_the_widening_moved_exactly_three_facts_across_the_whole_pool():
     assert carriers("hpBonus") == {1159: 100, 1173: 70}
     assert carriers("retreatReduction") == {1157: 1, 1166: -1, 1174: 2}
     assert carriers("retreatFreeAtHp") == {1157: 30}
+    # `retreatFreeGrant` is pinned too even though this issue never touched its parser: folding
+    # newlines in `_skill_texts` widened EVERY card-level parser's input, so its inventory is part
+    # of the blast radius whether or not its regex changed.
+    assert carriers("retreatFreeGrant") == {170: "metal_attached", 184: "basic"}
     assert carriers("attackCostReduction") == {1171: 1}
     assert carriers("damageBoost") == {1141: 30, 1158: 50, 1171: 30, 1211: 40}
     assert carriers("holderNameFamily") == {1154: "Team Rocket’s", 1171: "Hop’s",

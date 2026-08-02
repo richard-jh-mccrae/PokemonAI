@@ -36,8 +36,8 @@ be built as a Pilot and owns no corpus frames. The debt is named here rather tha
        _can_retreat(active)                  ->  False  (printed cost 2 > 0 Energy attached)
 
    So the promote/retreat decider would price a free pivot that the affordability gate denies. The
-   same blindness sits in `objectives.py` (:400) and `combat.py` (:965) — the "one function owns the
-   fact" lesson ADR-0070 drew for `_build_standing`, not yet applied to retreat cost.
+   "one function owns the fact" lesson ADR-0070 drew for `_build_standing`, not yet applied to
+   retreat cost.
 
    **Partly discharged by Issue #306.** The *attached-Tool* half is now one function:
    `Pilot._attached_retreat_delta` is the single, SIGNED reader that `_effective_retreat_cost`,
@@ -47,6 +47,25 @@ be built as a Pilot and owns no corpus frames. The debt is named here rather tha
    while every Tool was a discount but would UNDER-state it against a surcharge, and that sizes a
    KO_SCORE-class claim. The BOARD-LEVEL half (`retreatFreeGrant`) is still `_effective_retreat_cost`
    alone, so the divergence above stands exactly as written.
+
+   **The five sites that still read the PRINTED cost and consult no Tool at all** — enumerated here
+   because #306 made the sign matter, and a list is what stops "the consumers were audited" being
+   read as "every retreat-cost reader is correct". Ignoring a Tool DISCOUNT over-states a cost
+   (fail-closed, which is why they survived); ignoring a Tool SURCHARGE under-states it, so each is
+   named with the direction that miss actually pushes:
+
+   | site | whose body | a missed surcharge makes it… |
+   |---|---|---|
+   | `objectives.py` `_path_bench_extra` | theirs | read them as MORE mobile — pessimistic about the threat, safe |
+   | `combat.py` `_can_promote` | theirs | admit the promotion — documented fail-OPEN by design, safe |
+   | `planner.py` `_opp_active_pinned` | theirs | claim "not pinned", so FEWER deferrals — fail-closed, safe |
+   | `pilot.py` `_retreat_mobility_credit` | mine | credit a body as retreat-funded one Energy early — a value term, not a claim |
+   | `pilot.py` the disruptor-lock retreat guard | mine | believe a retreat is reachable when it is not — a crude guard, explicitly so |
+
+   None is KO_SCORE-class, and Gravity Gemstone is 0 copies across our five decks, so this is a
+   recorded boundary rather than a live bug. Wiring the delta into all five would move decisions on
+   five unrelated surfaces in a commit that must land one cause at a time — and three of them are
+   deliberately fail-open against the opponent, where the fix is not obviously a fix.
 
    **This is LATENT, not live**: every reader agrees on the four decks that have strategy modules,
    because none of them runs a board-level grant (`grimmsnarl_ex`/`mega_lucario` run Air Balloon,
