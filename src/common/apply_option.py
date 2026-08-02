@@ -482,8 +482,8 @@ def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: boo
     `card_effects.json` (`snapshot_coverage.COVERS_KEY`), `CardEffects.clauses_cover(card_id)` hands
     it over as the tri-state this argument will take — `True` full, `False` partial, `None` unruled —
     and both falsey answers must REFUSE, fail-closed exactly as ``deterministic`` does. Issue #300
-    shipped that half; wiring it is #299's, because #299 is also re-deciding the MODELLED/engine
-    precedence this gate sits inside and the two cannot be settled separately."""
+    shipped that half; wiring it belongs to Issue #299, because Issue #299 is also re-deciding the
+    MODELLED/engine precedence this gate sits inside, and the two cannot be settled separately."""
     how = coverage(transition_kind(option))
     if how == MODELLED:
         return MODELLED

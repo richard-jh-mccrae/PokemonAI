@@ -1,5 +1,6 @@
 {
 "_covers": {
+"_note": "Per-CARD clause-set COMPLETENESS verdicts (Issue #300): does this card's clause set cover its WHOLE printed effect? `full` | `partial`, each quoting the leg the clauses carry or miss. AUTHORED HERE, in tools/meta_tracker/effect_overrides.json, and re-stamped verbatim into common/card_effects.json under the same key by build_card_effects.py — edit it here, never in the shipped artifact. Ported from the Issue #269 census's hand-ruled table (tools/apply_seam_coverage.py), which read every verdict off the engine's own card text beside the committed clauses; the cards outside that census's pool were ruled the same way. This is a per-card fact, not a per-clause one, so it lives beside the clause lists rather than inside them — a card whose clauses are purely probe-MEASURED needs a verdict too, and giving it a numeric override entry to carry one would REPLACE the measurement. Read by common.snapshot_coverage.partial_clause_cards() and fed to apply_option.fate's `clauses_cover` so a PARTIAL set REFUSES instead of pricing its uncovered leg at 0.",
 "17": {
 "covers": "full",
 "reason": "provision + evolution provision + the end-of-turn discard rider all carried"

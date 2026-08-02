@@ -258,7 +258,7 @@ def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
 
 @pytest.mark.req("REQ-SNAPSHOT-0004")
 def test_the_partial_list_only_ever_SHRINKS():
-    """Same shape and same reason as `footprints_writing_unhomed()` being pinned empty: an owed list
+    """Same shape and same reason as `footprints_writing_unhomed()` being asserted empty: an owed list
     that can grow silently is not a schedule. A card LEAVING the baseline is clause work landing — no
     failure. A card ARRIVING is either new exposure that owes a ruling or a verdict quietly
     downgraded, and both want a human before they land."""
@@ -291,3 +291,9 @@ def test_the_reserved_covers_key_is_never_read_as_a_clause_list():
     assert sc.COVERS_KEY not in {str(cid) for cid in sc.clause_lists(payload)}
     assert set(sc.clause_lists(payload)) == set(sc.covers_table(payload)), (
         "the clause lists and the verdicts must cover exactly the same cards")
+    # The verdict block carries its own authored `_note` into the SHIPPED artifact — a compendium
+    # that carries a vocabulary but not the sentence explaining where it is edited sends its next
+    # reader to the wrong file. It is reserved, so no card walk may pick it up.
+    assert "_note" in payload[sc.COVERS_KEY] and "effect_overrides.json" in \
+        payload[sc.COVERS_KEY]["_note"]
+    assert not sc.is_card_key("_note") and not sc.is_card_key(sc.COVERS_KEY)

@@ -194,6 +194,15 @@ _ON_EVOLVE = re.compile(r"from your hand to evolve", re.I)
 
 # ── the clause-coverage ruling, read from the compendium ──────────────────────────────────────────
 
+#: The compendium's verdict vocabulary -> this report's MODELLED split. One map rather than a
+#: cascade, keyed off `snapshot_coverage`'s own constants so a third verdict cannot be silently
+#: dropped on the floor here — it simply has no report class, and :func:`validate` says so.
+_VERDICT_CLASS: dict[str, str] = {
+    snapshot_coverage.COVERS_FULL: FULL,
+    snapshot_coverage.COVERS_PARTIAL: PARTIAL,
+}
+
+
 def _covers_class(entry) -> tuple[str, str] | None:
     """One card's compendium verdict as ``(report class, what the clauses carry or miss)``.
 
@@ -201,14 +210,10 @@ def _covers_class(entry) -> tuple[str, str] | None:
     than defaulting either way, because defaulting would fabricate the report's most important
     column. The verdict itself lives in `card_effects.json`; see this module's header for why it is
     not duplicated here."""
-    if not entry:
+    report_class = _VERDICT_CLASS.get((entry or {}).get("covers"))
+    if report_class is None:
         return None
-    verdict = entry.get("covers")
-    if verdict == snapshot_coverage.COVERS_FULL:
-        return FULL, str(entry.get("reason", "")).strip()
-    if verdict == snapshot_coverage.COVERS_PARTIAL:
-        return PARTIAL, str(entry.get("reason", "")).strip()
-    return None
+    return report_class, str(entry.get("reason", "")).strip()
 
 
 # ── loading ───────────────────────────────────────────────────────────────────────────────────────

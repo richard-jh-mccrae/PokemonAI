@@ -91,12 +91,17 @@ def _load_covers(path) -> dict:
 
     Kept out of :func:`_load_overrides` on purpose: an override entry REPLACES the measured clauses
     of its kind, and most cards owing a verdict carry only measured clauses. A verdict is a statement
-    ABOUT a clause set, so it rides beside the sets rather than inside them."""
+    ABOUT a clause set, so it rides beside the sets rather than inside them.
+
+    The authored `_note` rides along with the verdicts: it is what tells a reader of the SHIPPED
+    artifact what the field means and where it is edited, and dropping it would leave the compendium
+    carrying a vocabulary it does not explain."""
     p = Path(path)
     if not p.exists():
         return {}
     raw = json.loads(p.read_text(encoding="utf-8")).get(snapshot_coverage.COVERS_KEY) or {}
-    return {k: v for k, v in raw.items() if str(k).lstrip("-").isdigit()}
+    notes = {k: v for k, v in raw.items() if str(k).startswith("_")}
+    return {**notes, **{k: v for k, v in raw.items() if snapshot_coverage.is_card_key(k)}}
 
 
 def _load_table(path) -> dict[int, list[dict]]:

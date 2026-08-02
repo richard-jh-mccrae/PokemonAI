@@ -524,7 +524,7 @@ registry was built to prevent, arriving through the compendium instead of throug
 > `partial` verdict into the fail-closed tri-state `apply_option.fate` refuses on, so a partial set
 > can no longer price as a complete one. The 19 sites are still partial; what changed is that they
 > are now declared, audited (`partial_clause_cards()`, asserted shrink-only) and unable to be silent.
-> Closing them one family at a time is Issues #301–#304.
+> Closing them one family at a time is Issue #301, Issue #302, Issue #303 and Issue #304.
 
 **4. `coin`'s write-set is declared EMPTY, and its real effect is undeclared vocabulary.**
 `snapshot_coverage.CLAUSE_WRITES["coin"] = frozenset()` with the note *"it is an RNG READ"* — true of
@@ -586,8 +586,8 @@ Issue #263.
    closed and stay distinguishable. Fail-closed rather than telemetry-only, consistent with
    `deterministic`: a refusal is always-expanded by the composer, so refusing a partial set costs
    search rather than correctness, while pricing one costs correctness silently.
-   **Issue #299 wires the `clauses_cover` argument into `fate()`;** #300 shipped the registry,
-   the data and the audit under it (the two landed in that order — see #300's commit message).
+   **Issue #299 wires the `clauses_cover` argument into `fate()`;** Issue #300 shipped the
+   registry, the data and the audit under it — that order is recorded in Issue #300's commit.
 
 ## Recommended follow-ups, ranked by exposure per unit of work
 

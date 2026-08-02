@@ -228,13 +228,22 @@ PARTIAL_CLAUSE_BASELINE: frozenset[int] = frozenset({
 })
 
 
-def clause_lists(payload: Mapping) -> dict[int, list[dict]]:
-    """``{card id: [clauses]}`` from a raw compendium payload — the numeric entries only.
+def is_card_key(key) -> bool:
+    """Is this JSON key a card id rather than one of the file's reserved keys?
 
-    Reserved keys (:data:`COVERS_KEY`, any `_note`) are skipped rather than `int()`-ed, which is what
-    a hand-rolled ``{int(k): v for k, v in raw.items()}`` in each reader would do to them."""
-    return {int(k): list(v) for k, v in (payload or {}).items()
-            if str(k).lstrip("-").isdigit()}
+    The one predicate, because every store in this family (`card_effects.json`,
+    `effect_overrides.json`, `observed_restrictions.json`) mixes numeric card entries with `_note`
+    prose and, since Issue #300, :data:`COVERS_KEY`. A reader that rolls its own `int(k)` walk is the
+    one that trips on the next reserved key somebody adds."""
+    return str(key).lstrip("-").isdigit()
+
+
+def clause_lists(payload: Mapping) -> dict[int, list[dict]]:
+    """``{card id: [clauses]}`` from a raw compendium payload — the card entries only.
+
+    Reserved keys are skipped rather than `int()`-ed, which is what a hand-rolled
+    ``{int(k): v for k, v in raw.items()}`` in each reader would do to them."""
+    return {int(k): list(v) for k, v in (payload or {}).items() if is_card_key(k)}
 
 
 def covers_table(payload: Mapping) -> dict[int, dict]:
@@ -245,7 +254,7 @@ def covers_table(payload: Mapping) -> dict[int, dict]:
     rather than to a fabricated "full"."""
     block = (payload or {}).get(COVERS_KEY) or {}
     return {int(k): dict(v) for k, v in block.items()
-            if str(k).lstrip("-").isdigit() and isinstance(v, Mapping)}
+            if is_card_key(k) and isinstance(v, Mapping)}
 
 
 def clause_vocabulary(payload: Mapping) -> list[str]:
@@ -389,7 +398,8 @@ __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
     "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS",
     "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",
-    "clause_lists", "covers_table", "clause_vocabulary", "clauses_cover", "partial_clause_cards",
+    "is_card_key", "clause_lists", "covers_table", "clause_vocabulary", "clauses_cover",
+    "partial_clause_cards",
     "covers_problems", "validate", "homes", "unhomed",
     "undeclared_clauses", "unknown_zones", "clauses_writing_unhomed",
 )

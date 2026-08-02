@@ -365,8 +365,13 @@ def test_covers_survives_the_override_to_build_to_compendium_round_trip(tmp_path
         },
     })
     fx = CardEffects.load(out)
+    shipped = json.loads(out.read_text(encoding="utf-8"))["_covers"]
     assert fx.covers(1112) == "full" and fx.covers(1203) == "partial"
-    assert "SWITCHES" in json.loads(out.read_text(encoding="utf-8"))["_covers"]["1203"]["reason"]
+    assert "SWITCHES" in shipped["1203"]["reason"]
+    # The authored `_note` rides along: it is what tells a reader of the shipped artifact where the
+    # field is edited, and the numeric filter that keeps `_note` out of the card walk must not also
+    # strip it from the file.
+    assert shipped["_note"] == "fixture"
     # And an unruled card is UNKNOWN, not assumed complete.
     assert fx.covers(9999) is None
 
