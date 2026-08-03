@@ -153,7 +153,7 @@ def test_lever_c_suppresses_a_denied_evolving_threats_forward_rank():
     # Read CONFIRMS that line (on an evolution_path) rank is unchanged; when a recognized
     # archetype runs NO such line, lever C suppresses the forward signal (γ-scaled); unknown -> generic
     stats = DictCardStatProvider({
-        SNIPER: CardStat(SNIPER, name="Sniper", maxDamage=120, attacks=(11,)),
+        SNIPER: CardStat(SNIPER, synthetic=True, name="Sniper", maxDamage=120, attacks=(11,)),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamage=0),
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=220, megaEx=True,
                                maxDamage=270, evolvesFrom="Riolu"),
@@ -449,7 +449,7 @@ SNIPER = 700
 
 def _mp_snipe_pilot(matchup_targeting=True):
     prov = DictCardStatProvider({
-        SNIPER: CardStat(SNIPER, name="Sniper", maxDamage=120, minAttackCost=1, minCostDamage=120,
+        SNIPER: CardStat(SNIPER, synthetic=True, name="Sniper", maxDamage=120, minAttackCost=1, minCostDamage=120,
                          attacks=(11,)),
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=280, megaEx=True,
                                maxDamage=270, evolvesFrom="Riolu"),
@@ -614,7 +614,7 @@ def _lever_stats(attacks=None):
     270), the Solrock engine body, a Gardevoir line (a NON-briefed evolving pre-evolution, for
     denial parity in gust tests) and a plain bruiser."""
     return DictCardStatProvider({
-        SNIPER: CardStat(SNIPER, name="Sniper", hp=200, maxDamage=120, minAttackCost=1,
+        SNIPER: CardStat(SNIPER, synthetic=True, name="Sniper", hp=200, maxDamage=120, minAttackCost=1,
                          minCostDamage=120, attacks=(11,)),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=80, maxDamage=0),
         MEGA_LUCARIO: CardStat(MEGA_LUCARIO, name="Mega Lucario ex", hp=340, megaEx=True,
@@ -623,10 +623,10 @@ def _lever_stats(attacks=None):
         KIRLIA: CardStat(KIRLIA, name="Kirlia", hp=80, maxDamage=0),
         GARDEVOIR: CardStat(GARDEVOIR, name="Gardevoir ex", hp=310, maxDamage=190,
                             evolvesFrom="Kirlia"),
-        BRUISER: CardStat(BRUISER, name="Bruiser", hp=120, maxDamage=120),
-        EX_INERT: CardStat(EX_INERT, name="Inert ex", hp=80, ex=True, maxDamage=120),
-        SUPPORT_EX: CardStat(SUPPORT_EX, name="Support ex", hp=80, ex=True, maxDamage=0),
-        TERA_WINCON: CardStat(TERA_WINCON, name="Tera ex", hp=200, ex=True, maxDamage=200, tera=True,
+        BRUISER: CardStat(BRUISER, synthetic=True, name="Bruiser", hp=120, maxDamage=120),
+        EX_INERT: CardStat(EX_INERT, synthetic=True, name="Inert ex", hp=80, ex=True, maxDamage=120),
+        SUPPORT_EX: CardStat(SUPPORT_EX, synthetic=True, name="Support ex", hp=80, ex=True, maxDamage=0),
+        TERA_WINCON: CardStat(TERA_WINCON, synthetic=True, name="Tera ex", hp=200, ex=True, maxDamage=200, tera=True,
                               minAttackCost=1, minCostDamage=200),   # a READY attacker (as a real Tera-ex
                               #                                        wincon is) — so the forced-promotion
                               #                                        key can legitimately land on it

@@ -28,8 +28,8 @@ ACTIVE_ID, BENCH_ID = 900, 901
 
 
 def _pilot(strategy=None):
-    stats = DictCardStatProvider({ACTIVE_ID: CardStat(ACTIVE_ID, hp=90, minAttackCost=1),
-                                  BENCH_ID: CardStat(BENCH_ID, hp=70, minAttackCost=1)})
+    stats = DictCardStatProvider({ACTIVE_ID: CardStat(ACTIVE_ID, synthetic=True, hp=90, minAttackCost=1),
+                                  BENCH_ID: CardStat(BENCH_ID, synthetic=True, hp=70, minAttackCost=1)})
     return Pilot(strategy or Strategy(), deck=[], general_strategy=GENERAL_STRATEGY, stats=stats)
 
 

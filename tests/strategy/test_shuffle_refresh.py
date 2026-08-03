@@ -37,8 +37,8 @@ def test_a_dead_hand_refresh_is_still_played_over_end():
     so the extra +8 changed no behavior)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  BASIC: CardStat(BASIC, hp=70),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  BASIC: CardStat(BASIC, synthetic=True, hp=70),
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[WINC, BASIC, BASIC], general_strategy=GENERAL_STRATEGY,
@@ -58,7 +58,7 @@ def test_a_playable_tutor_is_played_before_the_refresh():
     the tutor plays first regardless of raw scores."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  BASIC: CardStat(BASIC, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  BASIC: CardStat(BASIC, synthetic=True, hp=70), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     _fm = {LILLIES: ["draw", "shuffle_hand"], ULTRA: ["search", "tutor_pokemon", "cost_discard"]}
     funcs = CardFunctions(_fm)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
@@ -80,7 +80,7 @@ def test_probable_miss_vetoes_a_refresh_into_a_provably_spent_deck():
     post-anchor situation in practice.)"""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     deck = [WINC, PLAINMON, LILLIES] + [FILLER2] * 27
@@ -118,8 +118,8 @@ def test_disruption_value_survives_the_probable_miss_veto():
     HSATK = 640
     stats = DictCardStatProvider({JUDGE: CardStat(JUDGE, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90),
-                                  HSATK: CardStat(HSATK, hp=90, handSizeDamage=20)})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90),
+                                  HSATK: CardStat(HSATK, synthetic=True, hp=90, handSizeDamage=20)})
     funcs = CardFunctions({JUDGE: ["draw", "hand_disruption", "shuffle_hand"],
                            HSATK: ["hand_size_attacker"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
@@ -148,7 +148,7 @@ def _anchored_refresh_pilot(refresh_id, refresh_tags, *, opp_prizes=0):
     the lone hand card, so the pull pool stays 30 and P(hit in N) = N/30."""
     stats = DictCardStatProvider({refresh_id: CardStat(refresh_id, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({refresh_id: refresh_tags})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     deck = [PLAINMON, refresh_id, WINC] + [FILLER2] * 37
@@ -198,8 +198,8 @@ def test_the_swing_oracle_owns_the_shuffle_refresh_and_dig_owns_the_plain_draw()
     The cycling credit is preserved EXACTLY (`_REFRESH_CYCLE` = 20, the same +20 dig used to give)
     and now arrives as a tactical term that also prices what the shuffle actually moves. A plain
     draw card is untouched: `dig-before-commit` still owns it."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINDRAW: CardStat(PLAINDRAW, hp=0),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), PLAINDRAW: CardStat(PLAINDRAW, synthetic=True, hp=0),
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], PLAINDRAW: ["draw"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     # SETUP (no win-condition Line) - dig-before-commit is eligible to fire on a draw card here.
@@ -223,8 +223,8 @@ def test_shuffle_refresh_is_sequenced_before_the_turn_ending_attack():
     the refill. With the endorsement restored, the Shuffle-Refresh scores positive -> `_finish_turn_last`
     tiers it (tier 3) BEFORE the attack (tier 4), so the agent cycles its hand THEN attacks the same turn
     (the engine re-presents the menu after the non-ending refresh)."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), PLAINMON: CardStat(PLAINMON, hp=90),
-                                  BASIC: CardStat(BASIC, hp=70)})
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90),
+                                  BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     # pre-anchor: the post-anchor Layer-B veto is silent by construction.
     pilot = Pilot(Strategy(), deck=[BASIC] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -243,10 +243,10 @@ def test_hold_wincon_dont_shuffle_fires_when_the_held_wincon_would_be_shuffled_a
     and the agent doesn't bury the piece it just found — the fold of the retired `hold-wincon-dont-
     shuffle` guard into the one currency. (A realistic deck so the closure's re-access math is live.)"""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu",
+                                  WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Staryu",
                                                  name="Mega Lucario ex"),
                                   STARYU: CardStat(STARYU, hp=70, name="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     # deck still holds the Staryu base -> the wincon is DEPLOYABLE (the evolution gate keeps its worth).
@@ -267,7 +267,7 @@ def test_hold_wincon_dont_shuffle_silent_when_the_wincon_is_not_in_hand():
     (the refresh is then judged purely on the dead-hand fallback)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[BASIC], general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -284,10 +284,10 @@ def test_hold_wincon_with_base_dont_shuffle_fires_when_a_base_is_benched():
     scores NEGATIVE and the agent takes a board action this turn instead of refilling — the fold of the
     retired `hold-wincon-with-base-dont-shuffle` stack. ep82867148 f52."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu",
+                                  WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Staryu",
                                                  name="Mega Lucario ex"),
                                   STARYU: CardStat(STARYU, hp=70, name="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
@@ -304,7 +304,7 @@ def test_hold_wincon_is_cheap_to_shuffle_when_the_hand_is_dregs():
     is ~0, so the refresh keeps its full CYCLE credit and stays POSITIVE — a genuinely dead hand still
     refills freely (the graded shed is not a blanket anti-refresh, ADR-0065)."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0),
-                                  STARYU: CardStat(STARYU, hp=70), PLAINMON: CardStat(PLAINMON, hp=90)})
+                                  STARYU: CardStat(STARYU, synthetic=True, hp=70), PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])
@@ -321,11 +321,11 @@ def _undeployable_pilot(base_in_deck: bool):
     The Staryu stat is always KNOWN to the provider (so `evolvesFrom` resolves to an id); it is only its
     presence in the DECK that changes."""
     stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0, name="Lillie's Determination"),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu",
+                                  WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Staryu",
                                                  name="Mega Lucario ex"),
                                   STARYU: CardStat(STARYU, hp=70, name="Staryu"),
-                                  PLAINMON: CardStat(PLAINMON, hp=90, name="Plainmon"),
-                                  BASIC: CardStat(BASIC, hp=0, name="Basic Energy")})
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90, name="Plainmon"),
+                                  BASIC: CardStat(BASIC, synthetic=True, hp=0, name="Basic Energy")})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"]})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[STARYU, WINC], payoff=WINC)])

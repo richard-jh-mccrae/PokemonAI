@@ -28,13 +28,13 @@ def _stats():
     return DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
                        minCostDamage=120, attacks=(11,), evolvesFrom="Staryu"),
-        DREEPY: CardStat(DREEPY, name="Dreepy", hp=40),
+        DREEPY: CardStat(DREEPY, synthetic=True, name="Dreepy", hp=40),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, minAttackCost=1, minCostDamage=50, attacks=(20,)),
         CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, retreatCost=3, maxDamage=120),
         # `handSizeDamage=20` is the card fact this posture now turns on (MEG 743 Powerful Hand,
         # "2 damage counters … for each card in your hand"): its printed 10 hides the whole threat,
         # and the scaler is what the Damage Formula — and so the survival clock — actually reads.
-        ALAKAZAM: CardStat(ALAKAZAM, name="Alakazam", hp=140, retreatCost=2, ex=True, maxDamage=10,
+        ALAKAZAM: CardStat(ALAKAZAM, synthetic=True, name='Alakazam', hp=140, retreatCost=2, ex=True, maxDamage=10,
                            minCostDamage=10, evolvesFrom="Kadabra", handSizeDamage=20),
         KADABRA: CardStat(KADABRA, name="Kadabra", hp=80, maxDamage=30, evolvesFrom="Abra"),
         HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),

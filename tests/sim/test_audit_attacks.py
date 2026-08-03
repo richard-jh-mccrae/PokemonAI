@@ -11,7 +11,7 @@ from sim.audit_attacks import (
     merge_records, pick_panel, plan_scenarios, record_key, shape_record,
 )
 
-# Synthetic pool: plain dicts, same as drive-shell builds from all_card_data().
+# pool: plain dicts, same as drive-shell builds from all_card_data().
 W, F, P, G, FIRE = 3, 6, 5, 1, 2   # EnergyType ints
 
 

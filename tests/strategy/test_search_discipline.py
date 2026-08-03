@@ -91,7 +91,7 @@ def test_fetch_the_wincon_stands_down_when_the_payoff_is_already_in_play():
 # --- fetch-energy-when-starved -------------------------------------------------------------------
 @pytest.mark.req("REQ-GEN-0014")
 def test_fetch_energy_when_starved_takes_a_reusable_basic():
-    stats = DictCardStatProvider({700: CardStat(700, hp=70), BASIC_W: CardStat(BASIC_W, energyType=WATER)})
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, hp=70), BASIC_W: CardStat(BASIC_W, synthetic=True, energyType=WATER)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # starved: Active has 0 Energy, none in hand -> take the Energy over the Pokémon
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
@@ -157,9 +157,9 @@ def test_development_still_beats_a_weak_chip_via_attack_last():
     # The attach must be PRICEABLE for the decider to endorse it (#139, ADR-0069): a real ATTACH names
     # its TARGET, and the target needs an attack to build toward. A stat-blind body earns nothing on any
     # axis, so without this the pin would be asserting the absence of a signal, not attack-last ordering.
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30, maxDamage=90,
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER, hp=30, maxDamage=90,
                                                 maxDamageCost=2, minAttackCost=1, attacks=(11, 12)),
-                                  900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)},
+                                  900: CardStat(900, synthetic=True, energyType=LIGHTNING, maxDamage=120, hp=200)},
                                  attacks={11: AttackStat(11, damage=50, cost=1),
                                           12: AttackStat(12, damage=90, cost=2)})
     strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])  # active=payoff -> RACE
@@ -173,8 +173,8 @@ def test_development_still_beats_a_weak_chip_via_attack_last():
 @pytest.mark.req("REQ-GEN-0016")
 def test_a_weak_chip_is_taken_when_no_development_is_available():
     # point of the removal: nothing better to do -> chip, don't end turn doing nothing
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER, hp=30),
-                                  900: CardStat(900, energyType=LIGHTNING, maxDamage=120, hp=200)},
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER, hp=30),
+                                  900: CardStat(900, synthetic=True, energyType=LIGHTNING, maxDamage=120, hp=200)},
                                  attacks={11: AttackStat(11, damage=50)})
     strat = Strategy(lines=[Line(path=[700], payoff=700, ready=Ready(energy=1))])
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -202,7 +202,7 @@ def test_board_intent_rules_do_not_leak_onto_search_options():
 def test_attack_last_sequences_development_before_the_turn_ending_attack():
     """A KO attack co-exists with a beneficial development (a +30 play). Attacking ends the turn,
     but the KO survives the play — so develop first and keep the attack for last (same turn)."""
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40)},
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER), 900: CardStat(900, synthetic=True, hp=40)},
                                  attacks={11: AttackStat(11, damage=50)})
     dev = Hypothesis(id="dev", rationale="", when=lambda c: c.option_type == PLAY, weight=30)
     pilot = Pilot(Strategy(hypotheses=[dev]), deck=[1] * 60, stats=stats)
@@ -216,7 +216,7 @@ def test_attack_last_sequences_development_before_the_turn_ending_attack():
 
 @pytest.mark.req("REQ-GEN-0017")
 def test_attack_last_takes_the_attack_once_no_beneficial_development_remains():
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40)},
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER), 900: CardStat(900, synthetic=True, hp=40)},
                                  attacks={11: AttackStat(11, damage=50)})
     pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats)
     obs = make_select([attack_opt(11), opt(14)], context=MAIN,    # only the KO and End (score 0)
@@ -229,8 +229,8 @@ def test_attack_last_protects_a_knockout_from_an_active_evolve_but_not_otherwise
     """Evolving the Active replaces its attack, so it must NOT be sequenced ahead of an available
     knockout (that would forfeit the KO) — but with no KO on the menu it is normal development."""
     EVOLVE, ACTIVE_AREA = 9, 4
-    stats = DictCardStatProvider({700: CardStat(700, energyType=WATER), 900: CardStat(900, hp=40),
-                                  901: CardStat(901, hp=200)},
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, energyType=WATER), 900: CardStat(900, synthetic=True, hp=40),
+                                  901: CardStat(901, synthetic=True, hp=200)},
                                  attacks={11: AttackStat(11, damage=50)})
     ev = Hypothesis(id="ev", rationale="", when=lambda c: c.option_type == EVOLVE, weight=40)
     pilot = Pilot(Strategy(hypotheses=[ev]), deck=[1] * 60, stats=stats)
@@ -296,7 +296,7 @@ def test_promote_three_way_priority_ready_wincon_then_evolvable_then_staller():
     # without `attacks` prices every body at zero and the frame asserts nothing about the decider.
     stats = DictCardStatProvider(
         {STARYU: CardStat(STARYU, hp=70),
-         MEGA: CardStat(MEGA, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
+         MEGA: CardStat(MEGA, synthetic=True, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
                         maxDamageCost=3, attacks=(21,)),
          CINDERACE: CardStat(CINDERACE, hp=160, minAttackCost=1, maxDamage=50,
                              maxDamageCost=1, attacks=(22,))},
@@ -332,8 +332,8 @@ def test_retreat_to_a_ready_benched_wincon_over_a_weak_chip():
     # The benched win-condition carries a real attack record: the decider prices a retreat by what
     # the DESTINATION reaches, so without one the "ready" wincon reaches nothing (ADR-0052).
     stats = DictCardStatProvider(
-        {CINDERACE: CardStat(CINDERACE, hp=60, minAttackCost=1, attacks=(11,)),
-         MEGA: CardStat(MEGA, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
+        {CINDERACE: CardStat(CINDERACE, synthetic=True, hp=60, minAttackCost=1, attacks=(11,)),
+         MEGA: CardStat(MEGA, synthetic=True, megaEx=True, hp=330, minAttackCost=3, maxDamage=210,
                         maxDamageCost=3, attacks=(12,))},
         attacks={11: AttackStat(11, damage=50, cost=1), 12: AttackStat(12, damage=210, cost=3)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
@@ -349,7 +349,7 @@ def test_retreat_to_a_ready_benched_wincon_over_a_weak_chip():
 
 @pytest.mark.req("REQ-GEN-0020")
 def test_retreat_to_ready_attacker_never_overrides_a_knockout():
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=60), MEGA: CardStat(MEGA, megaEx=True, hp=330)},
+    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, synthetic=True, hp=60), MEGA: CardStat(MEGA, synthetic=True, megaEx=True, hp=330)},
                                  attacks={11: AttackStat(11, damage=50)})
     strat = Strategy(lines=[Line(path=[STARYU, MEGA], payoff=MEGA, ready=Ready(energy=1))],
                      roles={MEGA: ["win_condition", "primary_attacker"]})
@@ -384,8 +384,8 @@ def test_drew_the_evolution_evolve_then_retreat_the_staller_into_the_ready_winco
     # payoff reaches, so a stat-blind Mega has `payoff_damage` 0 and the evolve earns nothing on any
     # term (fail-closed, ADR-0067). Without this the pin asserts the absence of a signal rather than
     # the behaviour — the same synthetic gap #139 fixed on two of its own pins.
-    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, hp=120), STARYU: CardStat(STARYU, hp=70),
-                                  MEGA: CardStat(MEGA, megaEx=True, hp=330, maxDamage=210,
+    stats = DictCardStatProvider({CINDERACE: CardStat(CINDERACE, synthetic=True, hp=120), STARYU: CardStat(STARYU, synthetic=True, hp=70),
+                                  MEGA: CardStat(MEGA, synthetic=True, megaEx=True, hp=330, maxDamage=210,
                                                  maxDamageCost=1, minAttackCost=1, attacks=(99,))},
                                  attacks={11: AttackStat(11, damage=30),
                                           99: AttackStat(99, damage=210, cost=1)})

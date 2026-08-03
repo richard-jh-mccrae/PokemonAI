@@ -10,7 +10,7 @@ worthwhile strip from a wasted Item:
     (Crushing Hammer -> Poké Pad).
   - fix (a): the KO stand-down now keys on `active_can_ko` (BEST affordable attack) instead of only
     `active_cheap_attack_kos` (cheapest) — so a deck whose KO comes from an EXPENSIVE attack (dragapult's
-    Phantom Dive; Mega Starmie's Nebula Beam) also holds the Item. Synthetic proof below.
+    Phantom Dive; Mega Starmie's Nebula Beam) also holds the Item. proof below.
 
 f32 (the third fixture) is deliberately SPLIT OUT: the opp there (Cynthia's Gabite, Dragonslice {F} 40) CAN
 damage us, so no damage-gate stands the strip down without also breaking the legitimate race/setup strips

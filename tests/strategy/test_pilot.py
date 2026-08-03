@@ -250,9 +250,9 @@ def test_weakness_doubles_tactical_damage_and_can_flip_the_choice():
     WATER, FIRE = 3, 2
     ATK = 11
     stats = DictCardStatProvider({
-        700: CardStat(700, energyType=WATER),                           # my Water attacker
-        800: CardStat(800, energyType=FIRE, weakness=WATER, hp=160),    # weak to Water
-        900: CardStat(900, energyType=FIRE, weakness=None, hp=160),     # not weak
+        700: CardStat(700, synthetic=True, energyType=WATER),                           # my Water attacker
+        800: CardStat(800, synthetic=True, energyType=FIRE, weakness=WATER, hp=160),    # weak to Water
+        900: CardStat(900, synthetic=True, energyType=FIRE, weakness=None, hp=160),     # not weak
     }, attacks={ATK: AttackStat(ATK, damage=90)})
     # positional rule lifts non-attack play to 100; attack prints 90
     prefer_play = Hypothesis(id="prefer-play", rationale="", when=lambda c: c.option_type == PLAY, weight=100)
@@ -272,7 +272,7 @@ def test_weakness_doubles_tactical_damage_and_can_flip_the_choice():
 
 @pytest.mark.req("REQ-PILOT-0015")
 def test_context_exposes_cardstat_to_hypotheses():
-    stats = DictCardStatProvider({222: CardStat(222, ex=True, megaEx=True)})
+    stats = DictCardStatProvider({222: CardStat(222, synthetic=True, ex=True, megaEx=True)})
     # A General Strategy hypothesis reading engine stats off Context (a 3-prize Mega liability).
     mega_aware = Hypothesis(id="mega-aware", rationale="reads ctx.stat",
                             when=lambda c: bool(c.stat and c.stat.megaEx), weight=50)
@@ -307,7 +307,7 @@ def test_context_board_exposes_wincon_in_hand_undeployable():
                        when=lambda c: c.board.wincon_in_hand_undeployable, weight=5)
     stats = DictCardStatProvider({
         MEGA_STARMIE: CardStat(MEGA_STARMIE, megaEx=True, hp=330, evolvesFrom="Staryu"),
-        STARYU: CardStat(STARYU, hp=70), 700: CardStat(700, hp=90)})
+        STARYU: CardStat(STARYU, synthetic=True, hp=70), 700: CardStat(700, synthetic=True, hp=90)})
     strat = Strategy(hypotheses=[watch], roles={MEGA_STARMIE: ["win_condition"]},
                      lines=[Line(path=[STARYU, MEGA_STARMIE], payoff=MEGA_STARMIE)])
     pilot = Pilot(strat, deck=[1] * 60, stats=stats)
@@ -337,7 +337,7 @@ def test_wincon_in_hand_undeployable_is_false_for_a_basic_payoff_wincon():
     still right — the signal must NOT fire and free a refresh to shuffle it away."""
     watch = Hypothesis(id="dead-wincon", rationale="",
                        when=lambda c: c.board.wincon_in_hand_undeployable, weight=5)
-    stats = DictCardStatProvider({666: CardStat(666, hp=110), 700: CardStat(700, hp=90)})
+    stats = DictCardStatProvider({666: CardStat(666, synthetic=True, hp=110), 700: CardStat(700, synthetic=True, hp=90)})
     strat = Strategy(hypotheses=[watch], roles={666: ["win_condition"]},
                      lines=[Line(path=[666], payoff=666)])              # Basic payoff, no pre-evo
     pilot = Pilot(strat, deck=[1] * 60, stats=stats)
@@ -394,7 +394,7 @@ def test_context_exposes_target_forward_damage_and_is_fail_closed():
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-        500: CardStat(500, name="Sunkern", maxDamage=20),    # dead-end Basic
+        500: CardStat(500, synthetic=True, name="Sunkern", maxDamage=20),    # dead-end Basic
     })
     probe = Hypothesis(id="evo>=100", rationale="",
                        when=lambda c: (c.target_forward_damage or 0) >= 100, weight=1)
@@ -418,7 +418,7 @@ def test_context_exposes_target_forward_damage_and_is_fail_closed():
 @pytest.mark.req("REQ-PILOT-0017")
 def test_tactical_values_a_ko_by_the_defenders_prize_count():
     ATK = 11
-    stats = DictCardStatProvider({800: CardStat(800, megaEx=True), 900: CardStat(900)},
+    stats = DictCardStatProvider({800: CardStat(800, synthetic=True, megaEx=True), 900: CardStat(900, synthetic=True)},
                                  attacks={ATK: AttackStat(ATK, damage=150)})   # 150 KOs 100 hp
     pilot = Pilot(Strategy(), deck=[1] * 60, stats=stats)
 

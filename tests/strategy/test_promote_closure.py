@@ -38,14 +38,14 @@ def _pilot():
     the menu, so this turn can still draw the enabler — which is exactly the probabilistic MIDDLE
     `readiness_p` exists to price, between "already reaches" (1.0) and "cannot" (0.0)."""
     stats = DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Wincon", hp=330, megaEx=True, minAttackCost=3,
+        WINCON: CardStat(WINCON, synthetic=True, name="Wincon", hp=330, megaEx=True, minAttackCost=3,
                          maxDamage=210, maxDamageCost=3, energyType=WATER, attacks=(A_PAYOFF,)),
-        DIGGER: CardStat(DIGGER, name="Digger", hp=90, hasAbility=True),
-        OPENER: CardStat(OPENER, name="Opener", hp=160, minAttackCost=1, maxDamage=20,
+        DIGGER: CardStat(DIGGER, synthetic=True, name="Digger", hp=90, hasAbility=True),
+        OPENER: CardStat(OPENER, synthetic=True, name="Opener", hp=160, minAttackCost=1, maxDamage=20,
                          maxDamageCost=1, attacks=(A_CHIP,)),
-        WALL: CardStat(WALL, name="Wall", hp=400, minAttackCost=2, maxDamage=60,
+        WALL: CardStat(WALL, synthetic=True, name="Wall", hp=400, minAttackCost=2, maxDamage=60,
                        maxDamageCost=2, attacks=(A_WALL,)),
-        WATER_ENERGY: CardStat(WATER_ENERGY, name="Water Energy", hp=0, energyType=WATER,
+        WATER_ENERGY: CardStat(WATER_ENERGY, synthetic=True, name="Water Energy", hp=0, energyType=WATER,
                                cardType=_BASIC_ENERGY),
     }, attacks={A_PAYOFF: AttackStat(A_PAYOFF, damage=210, cost=3, energyTypes=(WATER, WATER, WATER)),
                 A_CHIP: AttackStat(A_CHIP, damage=20, cost=1),

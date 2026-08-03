@@ -33,16 +33,16 @@ KEY_IDS = frozenset({DREEPY, DRAKLOAK})
 def _combat():
     stats = DictCardStatProvider(
         {
-            DREEPY: CardStat(DREEPY, name="Dreepy", hp=70),
-            DUNSPARCE: CardStat(DUNSPARCE, name="Dunsparce", hp=70),
-            DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90),
-            TERA_EX: CardStat(TERA_EX, name="Tera ex", hp=70, ex=True, tera=True),
-            PLAIN_EX: CardStat(PLAIN_EX, name="Plain ex", hp=70, ex=True),
-            DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True,
+            DREEPY: CardStat(DREEPY, synthetic=True, name="Dreepy", hp=70),
+            DUNSPARCE: CardStat(DUNSPARCE, synthetic=True, name="Dunsparce", hp=70),
+            DRAKLOAK: CardStat(DRAKLOAK, synthetic=True, name="Drakloak", hp=90),
+            TERA_EX: CardStat(TERA_EX, synthetic=True, name="Tera ex", hp=70, ex=True, tera=True),
+            PLAIN_EX: CardStat(PLAIN_EX, synthetic=True, name="Plain ex", hp=70, ex=True),
+            DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name="Dragapult ex", hp=320, ex=True,
                                 minAttackCost=2, maxDamage=200, attacks=(PHANTOM_DIVE,)),
-            STARMIE: CardStat(STARMIE, name="Mega Starmie ex", hp=300, megaEx=True,
+            STARMIE: CardStat(STARMIE, synthetic=True, name="Mega Starmie ex", hp=300, megaEx=True,
                               minAttackCost=1, maxDamage=120, attacks=(JETTING_BLOW,)),
-            WALL: CardStat(WALL, name="Wall", hp=200, retreatCost=2, attacks=()),
+            WALL: CardStat(WALL, synthetic=True, name="Wall", hp=200, retreatCost=2, attacks=()),
         },
         attacks={
             PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(0, 0),

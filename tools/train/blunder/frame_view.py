@@ -14,7 +14,7 @@ in ADRs, fixture notes and chat.
 * the **full-information film** snapshot (``current`` from a replay's ``visualize`` film, or the
   copy a Correction embeds in ``decision.current``) — both decks, both hands, both prize piles are
   listed, and cards carry ``name``; enums are *strings* (``"Attach"``, ``"ToActive"``); or
-* the per-seat **agent Observation** (``obs.current``, what a fixture pins) — opponent hand is
+* the per-seat **agent Observation** (``obs.current``, what a fixture records) — opponent hand is
   ``None``, ``prize`` is a bare count, ``deck`` is absent entirely, cards carry only ``id``, and
   every enum is an *int*.
 
@@ -451,11 +451,11 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
                replay_path: Path | None = None) -> FrameHit:
     """Locate ``episode-frame`` in the best source available, richest first.
 
-    1. ``replay_path`` when given, else any replay under ``replays`` whose ``info.EpisodeId``
-       matches — the full film, so *any* frame resolves, not only tagged ones.
+    1. ``replay_path`` when given — the full film, so *any* frame resolves, not only tagged ones.
     2. the Correction tree — the frames a human tagged, each carrying its own embedded
        full-information snapshot plus the ruling.
-    3. ``tests/fixtures/corrections`` — the per-seat Observation a test pins, matched on the
+    3. any replay under ``replays`` whose ``info.EpisodeId`` matches.
+    4. ``tests/fixtures/corrections`` — the per-seat Observation a test records, matched on the
        ``<ep>-<frame>`` key in its ``note``.
 
     Raises ``LookupError`` naming every place searched when nothing matches.
@@ -468,22 +468,6 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
         if hit is None:
             raise LookupError(f"{replay_path} has no frame {frame}")
         return hit
-
-    replays = Path(replays) if replays else None
-    if replays and replays.is_dir():
-        searched.append(f"{replays}/**/*.json[.gz]")
-        for path in sorted(replays.rglob("*.json")) + sorted(replays.rglob("*.json.gz")):
-            try:
-                replay = _read_json(path)
-            except (OSError, ValueError):
-                continue
-            if (replay.get("info") or {}).get("EpisodeId") != episode_id:
-                continue
-            hit = _hit_from_film(replay, path, episode_id, frame)
-            if hit is not None:
-                return hit
-    elif replays:
-        searched.append(f"{replays} (absent — raw replays are not committed, ADR-0002)")
 
     corrections = Path(corrections) if corrections else None
     if corrections and corrections.exists():
@@ -504,6 +488,34 @@ def find_frame(episode_id: int, frame: int, *, replays=DEFAULT_REPLAYS,
                 if (c.decision or {}).get("frame") != frame:
                     continue
                 return _hit_from_correction(c.to_dict(), path)
+
+    replays = Path(replays) if replays else None
+    if replays and replays.is_dir():
+        searched.append(f"{replays}/**/*.json[.gz]")
+        candidates = (
+            sorted(replays.rglob(f"episode-{episode_id}-*.json"))
+            + sorted(replays.rglob(f"episode-{episode_id}-*.json.gz"))
+        )
+        if not candidates:
+            candidates = sorted(replays.rglob("*.json")) + sorted(replays.rglob("*.json.gz"))
+        for path in candidates:
+            if path.name.endswith("-logs.json"):
+                continue
+            if path.name.startswith("episode-") and f"episode-{episode_id}-" not in path.name:
+                continue
+            try:
+                replay = _read_json(path)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(replay, dict):
+                continue
+            if (replay.get("info") or {}).get("EpisodeId") != episode_id:
+                continue
+            hit = _hit_from_film(replay, path, episode_id, frame)
+            if hit is not None:
+                return hit
+    elif replays:
+        searched.append(f"{replays} (absent — raw replays are not committed, ADR-0002)")
 
     fixtures = Path(fixtures) if fixtures else None
     if fixtures and fixtures.is_dir():

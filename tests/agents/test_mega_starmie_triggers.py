@@ -39,7 +39,7 @@ _STATS = DictCardStatProvider({
     # Raboot is PRINTED but never on the deck list — which is what strands the Cinderace.
     # "Stranded" is a claim about the DECK; `common.playability` (ADR-0104) fails OPEN on a previous
     # stage the pool holds no printing of, because that is unreadable data, not a dead card.
-    RABOOT: CardStat(RABOOT, energyType=FIRE, weakness=WATER, hp=90, name="Raboot"),
+    RABOOT: CardStat(RABOOT, synthetic=True, energyType=FIRE, weakness=WATER, hp=90, name='Raboot'),
 })
 _TAGS = CardFunctions({CINDERACE: ["opener"]})
 
@@ -160,7 +160,7 @@ HEROS_CAPE, FIRE = 1159, 2
 _CAPE_STATS = DictCardStatProvider({
     MEGA_STARMIE: CardStat(MEGA_STARMIE, energyType=WATER, weakness=LIGHTNING, megaEx=True,
                            hp=330, minCostDamage=120),
-    HEROS_CAPE: CardStat(HEROS_CAPE, hp=0, aceSpec=True, hpBonus=100),  # ACE SPEC Tool, +100 parsed
+    HEROS_CAPE: CardStat(HEROS_CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),  # ACE SPEC Tool, +100 parsed
     8888: CardStat(8888, energyType=FIRE, maxDamage=400),       # opp hits 400: +100 (430) buys survival turn
     7777: CardStat(7777, energyType=FIRE, maxDamage=500),       # opp hits 500: doomed even at 430 -> wasted
     6666: CardStat(6666, energyType=FIRE, maxDamage=200),       # opp hits 200: +100 still banks survival turn
@@ -226,8 +226,8 @@ _GUST_STATS = DictCardStatProvider({
                            hp=330, minAttackCost=1, minCostDamage=120,   # Jetting Blow 120 at 1 W
                            attacks=(_A_JET_GUST,)),
     BOSS_ORDERS: CardStat(BOSS_ORDERS, hp=0),
-    WALL_810: CardStat(WALL_810, hp=330),       # opp Active wall -- Jetting Blow can't KO it
-    KO_BENCH_811: CardStat(KO_BENCH_811, hp=60),  # opp benched mon -- Jetting Blow KOs it after gust
+    WALL_810: CardStat(WALL_810, synthetic=True, hp=330),       # opp Active wall -- Jetting Blow can't KO it
+    KO_BENCH_811: CardStat(KO_BENCH_811, synthetic=True, hp=60),  # opp benched mon -- Jetting Blow KOs it after gust
 }, attacks={_A_JET_GUST: AttackStat(_A_JET_GUST, damage=120, cost=1)})
 _GUST_TAGS = CardFunctions({BOSS_ORDERS: ["gust"], CINDERACE: ["opener"]})
 

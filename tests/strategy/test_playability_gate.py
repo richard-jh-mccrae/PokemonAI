@@ -134,10 +134,10 @@ def test_the_rare_candy_root_must_actually_be_a_basic():
     confirmed to evolve from nothing. Shown on a synthetic four-stage chain — no real line is this
     deep, which is exactly why an assumption here would never be caught by a shipped deck."""
     stats = DictCardStatProvider({
-        1: CardStat(1, name="Root", hp=60),
-        2: CardStat(2, name="S1", hp=80, evolvesFrom="Root"),
-        3: CardStat(3, name="S2", hp=110, evolvesFrom="S1", stage2=True),
-        4: CardStat(4, name="S3", hp=160, evolvesFrom="S2", stage2=True),
+        1: CardStat(1, synthetic=True, name="Root", hp=60),
+        2: CardStat(2, synthetic=True, name="S1", hp=80, evolvesFrom="Root"),
+        3: CardStat(3, synthetic=True, name="S2", hp=110, evolvesFrom="S1", stage2=True),
+        4: CardStat(4, synthetic=True, name="S3", hp=160, evolvesFrom="S2", stage2=True),
         RARE_CANDY: CardStat(RARE_CANDY, name="Rare Candy", cardType=1),
     })
     # S3's two-hops-down card is S1, which is NOT a Basic -> no escape, even with the Candy live.
@@ -192,8 +192,8 @@ def test_a_name_cycle_grounds_out_instead_of_recursing_forever():
     """A malformed pool where two cards evolve from each other must terminate — and ground out as
     UNPLAYABLE, since such a chain never reaches a Basic (the `_stranded_evolution_set` rule)."""
     stats = DictCardStatProvider({
-        1: CardStat(1, name="A", hp=60, evolvesFrom="B"),
-        2: CardStat(2, name="B", hp=60, evolvesFrom="A"),
+        1: CardStat(1, synthetic=True, name="A", hp=60, evolvesFrom="B"),
+        2: CardStat(2, synthetic=True, name="B", hp=60, evolvesFrom="A"),
     })
     assert not _playable(1, hand=[2], stats=stats)
 

@@ -27,13 +27,13 @@ WATER = 3                  # a reusable Basic Energy
 
 def _stats():
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
                          evolvesFrom="Staryu", energyType=3),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, attacks=(12,), evolvesFrom=None),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
-        POKEGEAR: CardStat(POKEGEAR, name="Pokegear 3.0", hp=0, cardType=ITEM),
+        POKEGEAR: CardStat(POKEGEAR, synthetic=True, name="Pokegear 3.0", hp=0, cardType=ITEM),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", hp=0, cardType=SUPPORTER),
         DRAWSUP: CardStat(DRAWSUP, name="Cheren", hp=0, cardType=SUPPORTER),
         LILLIES: CardStat(LILLIES, name="Lillie's Determination", hp=0, cardType=SUPPORTER),
@@ -131,9 +131,9 @@ def test_a_gust_play_is_never_sequenced_ahead_of_a_menu_ko():
     defender-changing commitment, so with a KO on the menu it drops to the last tier; its own
     KO-UNLOCK path (KO_SCORE-class gust tactical) still rides tier 0."""
     stats = _stats()
-    stats._stats[BOSS] = CardStat(BOSS, name="Boss's Orders", hp=0, cardType=SUPPORTER)
-    stats._stats[OPPFRAIL] = CardStat(OPPFRAIL, name="opp mega", hp=330, energyType=7)
-    stats._stats[OPPBENCHIE] = CardStat(OPPBENCHIE, name="opp benchie", hp=70, energyType=7)
+    stats._stats[BOSS] = CardStat(BOSS, synthetic=True, name="Boss's Orders", hp=0, cardType=SUPPORTER)
+    stats._stats[OPPFRAIL] = CardStat(OPPFRAIL, synthetic=True, name="opp mega", hp=330, energyType=7)
+    stats._stats[OPPBENCHIE] = CardStat(OPPBENCHIE, synthetic=True, name="opp benchie", hp=70, energyType=7)
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)],
                      hypotheses=[Hypothesis(id="t-endorse-gust", rationale="test", weight=100,

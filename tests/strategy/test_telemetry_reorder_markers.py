@@ -40,11 +40,11 @@ def _trace(index, score, **kw):
 
 def _pilot(**kw):
     stats = DictCardStatProvider({
-        ATTACKER: CardStat(ATTACKER, name="attacker", hp=200, energyType=3, minAttackCost=1,
+        ATTACKER: CardStat(ATTACKER, synthetic=True, name="attacker", hp=200, energyType=3, minAttackCost=1,
                            minCostDamage=100, maxDamage=100, attacks=(ATK,)),
-        OPPA: CardStat(OPPA, name="opp active", hp=200, energyType=7),
-        BASIC: CardStat(BASIC, name="benchie", hp=60, energyType=3),
-        BALL: CardStat(BALL, name="search item", hp=0),
+        OPPA: CardStat(OPPA, synthetic=True, name="opp active", hp=200, energyType=7),
+        BASIC: CardStat(BASIC, synthetic=True, name="benchie", hp=60, energyType=3),
+        BALL: CardStat(BALL, synthetic=True, name="search item", hp=0),
     }, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
     return Pilot(Strategy(roles={ATTACKER: ["primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats,

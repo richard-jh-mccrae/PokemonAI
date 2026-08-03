@@ -26,14 +26,14 @@ MEGA, STARYU, CINDERACE, SALVATORE, HILDA, LILLIES, HARLEQUIN, WALLYS, CAPE, WAT
 def _setup(hand_ids):
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True),
-        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, cardType=0),
+        CINDERACE: CardStat(CINDERACE, synthetic=True, name='Cinderace', hp=160, cardType=0),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
         HILDA: CardStat(HILDA, name="Hilda", cardType=3),
-        LILLIES: CardStat(LILLIES, name="Lillie's", cardType=3),
+        LILLIES: CardStat(LILLIES, synthetic=True, name="Lillie's", cardType=3),
         HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),
-        WALLYS: CardStat(WALLYS, name="Wally's", cardType=3),
-        CAPE: CardStat(CAPE, name="Hero's Cape", aceSpec=True, hpBonus=100, cardType=2),
-        WATER: CardStat(WATER, name="Water", energyType=2),
+        WALLYS: CardStat(WALLYS, synthetic=True, name="Wally's", cardType=3),
+        CAPE: CardStat(CAPE, synthetic=True, name="Hero's Cape", aceSpec=True, hpBonus=100, cardType=2),
+        WATER: CardStat(WATER, synthetic=True, name="Water", energyType=2),
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
                            LILLIES: ["draw", "shuffle_hand"], WALLYS: ["heal", "clutch_heal"],

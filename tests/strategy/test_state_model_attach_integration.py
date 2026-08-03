@@ -37,8 +37,8 @@ def _stats():
                        energyType=WATER_TYPE, attacks=(JETTING, NEBULA)),
         STARYU: CardStat(STARYU, name="Staryu", hp=70, maxDamage=20, minCostDamage=20,
                          minAttackCost=1, maxDamageCost=1, energyType=WATER_TYPE),
-        WATER: CardStat(WATER, name="Water", cardType=_BASIC_ENERGY, energyType=WATER_TYPE),
-        IGNITION: CardStat(IGNITION, name="Ignition", cardType=_SPECIAL_ENERGY, energyType=COLORLESS),
+        WATER: CardStat(WATER, synthetic=True, name="Water", cardType=_BASIC_ENERGY, energyType=WATER_TYPE),
+        IGNITION: CardStat(IGNITION, synthetic=True, name="Ignition", cardType=_SPECIAL_ENERGY, energyType=COLORLESS),
     }, attacks={
         JETTING: AttackStat(JETTING, damage=120, cost=1, energyTypes=(WATER_TYPE,)),
         NEBULA: AttackStat(NEBULA, damage=210, cost=3,

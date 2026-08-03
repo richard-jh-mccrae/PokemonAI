@@ -1,4 +1,4 @@
-"""Attack-value refinements (ADR-0022): the #14 bench-snipe bonus and the #2 simultaneous-draw guard,
+"""Attack-value refinements (ADR-0022): item 14 bench-snipe bonus and item 2 simultaneous-draw guard,
 both in the Pilot's Tactical layer (`_tactical`). Lib-free: per-attackId maps are injected directly.
 """
 import pytest
@@ -28,21 +28,21 @@ SEEK, SUPER_PSY_BOLT, COPY_HIT, COPY_WEAK_HIT = 1201, 1202, 1203, 1204
 WATER, FIGHTING = 3, 6
 
 _CARDS = {
-    MY_ATK: CardStat(MY_ATK, energyType=WATER),
-    MY_EX: CardStat(MY_EX, energyType=WATER, ex=True, hp=200),
-    FIGHT_ATK: CardStat(FIGHT_ATK, energyType=FIGHTING),
-    MY_RESISTER: CardStat(MY_RESISTER, hp=100, resistance=FIGHTING),
-    OPP: CardStat(OPP, hp=100),          # 1 prize, no resistance
-    RESISTER: CardStat(RESISTER, hp=100, resistance=FIGHTING),
-    OPP_FIGHTER: CardStat(OPP_FIGHTER, energyType=FIGHTING, maxDamage=120),
-    OPP_BENCH: CardStat(OPP_BENCH, hp=60),
+    MY_ATK: CardStat(MY_ATK, synthetic=True, energyType=WATER),
+    MY_EX: CardStat(MY_EX, synthetic=True, energyType=WATER, ex=True, hp=200),
+    FIGHT_ATK: CardStat(FIGHT_ATK, synthetic=True, energyType=FIGHTING),
+    MY_RESISTER: CardStat(MY_RESISTER, synthetic=True, hp=100, resistance=FIGHTING),
+    OPP: CardStat(OPP, synthetic=True, hp=100),          # 1 prize, no resistance
+    RESISTER: CardStat(RESISTER, synthetic=True, hp=100, resistance=FIGHTING),
+    OPP_FIGHTER: CardStat(OPP_FIGHTER, synthetic=True, energyType=FIGHTING, maxDamage=120),
+    OPP_BENCH: CardStat(OPP_BENCH, synthetic=True, hp=60),
     OPP_BENCH2: CardStat(OPP_BENCH2, hp=60),
-    EX_BENCHIE: CardStat(EX_BENCHIE, hp=200, ex=True),   # 2-prize benched ex
+    EX_BENCHIE: CardStat(EX_BENCHIE, synthetic=True, hp=200, ex=True),   # 2-prize benched ex
     SLOWKING: CardStat(SLOWKING, name="Slowking", hp=120, attacks=(SEEK, SUPER_PSY_BOLT)),
     COPY_BODY: CardStat(COPY_BODY, hp=120, attacks=(COPY_HIT,)),
-    COPY_RULEBOX: CardStat(COPY_RULEBOX, hp=220, ex=True, attacks=(COPY_HIT,)),
-    COPY_TRAINER: CardStat(COPY_TRAINER, name="Trainer", cardType=3),
-    COPY_WEAK: CardStat(COPY_WEAK, hp=120, attacks=(COPY_WEAK_HIT,)),
+    COPY_RULEBOX: CardStat(COPY_RULEBOX, synthetic=True, hp=220, ex=True, attacks=(COPY_HIT,)),
+    COPY_TRAINER: CardStat(COPY_TRAINER, synthetic=True, name="Trainer", cardType=3),
+    COPY_WEAK: CardStat(COPY_WEAK, synthetic=True, hp=120, attacks=(COPY_WEAK_HIT,)),
 }
 
 
@@ -245,7 +245,7 @@ def test_top_deck_select_is_silent_without_active_seek_inspiration():
     assert opts[0].tactical == opts[1].tactical == 0
 
 
-# --- #14 bench-snipe bonus: prefer the equal-cost KO that also snipes a benched target -------------
+# --- ADR-0022 item 14: prefer the equal-cost KO that also snipes a benched target -----------------
 
 @pytest.mark.req("REQ-GUST-0007")
 def test_equal_cost_ko_prefers_the_attack_with_a_bench_snipe():
@@ -457,7 +457,7 @@ def test_move_counter_amount_is_max():
     assert p.decide(obs) == [2]   # the "3" option
 
 
-# --- #2 simultaneous-draw guard: a game-winning KO whose recoil double-KOs is a DRAW, not a win ----
+# --- ADR-0022 item 2: a game-winning KO whose recoil double-KOs is a DRAW, not a win --------------
 
 @pytest.mark.req("REQ-GUST-0008")
 def test_lethal_with_recoil_double_ko_is_not_scored_as_a_win():

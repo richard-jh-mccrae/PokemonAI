@@ -133,10 +133,10 @@ def test_the_guard_covers_the_PLANNER_branch_too():
     the guard only `planned.next_step` cannot work, because the guard reorders WITHIN the order it
     is given and the planned step is precisely where the deploy is absent. It is handed the full
     menu instead."""
-    stats = {ATTACKER: CardStat(ATTACKER, name="attacker", hp=200, energyType=3, minAttackCost=1,
+    stats = {ATTACKER: CardStat(ATTACKER, synthetic=True, name="attacker", hp=200, energyType=3, minAttackCost=1,
                                 minCostDamage=100, maxDamage=100, attacks=(ATK,)),
-             OPPA: CardStat(OPPA, name="opp", hp=60, energyType=7),
-             RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=3)}
+             OPPA: CardStat(OPPA, synthetic=True, name="opp", hp=60, energyType=7),
+             RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=3)}
     provider = DictCardStatProvider(stats, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
 
     def _planner_pilot():
@@ -187,10 +187,10 @@ def test_when_the_guard_overrides_the_planner_no_line_is_reported():
     drive that only sometimes reaches an empty Bench, so it passed 15/15 locally and failed on repeat
     6 of 15 in the determinism backstop. Asserted here on a board that forces the condition, rather
     than on a drive that stumbles into it."""
-    stats = {ATTACKER: CardStat(ATTACKER, name="attacker", hp=200, energyType=3, minAttackCost=1,
+    stats = {ATTACKER: CardStat(ATTACKER, synthetic=True, name="attacker", hp=200, energyType=3, minAttackCost=1,
                                 minCostDamage=100, maxDamage=100, attacks=(ATK,)),
-             OPPA: CardStat(OPPA, name="opp", hp=60, energyType=7),
-             RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=3)}
+             OPPA: CardStat(OPPA, synthetic=True, name="opp", hp=60, energyType=7),
+             RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=3)}
     provider = DictCardStatProvider(stats, attacks={ATK: AttackStat(ATK, damage=100, cost=1)})
     pilot = Pilot(Strategy(roles={ATTACKER: ["primary_attacker"]}), deck=[1] * 60,
                   general_strategy=GENERAL_STRATEGY, stats=provider,

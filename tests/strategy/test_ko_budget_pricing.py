@@ -41,8 +41,8 @@ def _combat(*attacks) -> CombatMath:
                                 energyTypes=(PSYCHIC, PSYCHIC, PSYCHIC)),
                COLORLESS3: AttackStat(attackId=COLORLESS3, damage=200, cost=3, damageMax=200)}
     stats = DictCardStatProvider({
-        ATTACKER: CardStat(cardId=ATTACKER, name="attacker", hp=200, attacks=attacks),
-        OPP: CardStat(cardId=OPP, name="opp", hp=190),
+        ATTACKER: CardStat(synthetic=True, cardId=ATTACKER, name="attacker", hp=200, attacks=attacks),
+        OPP: CardStat(synthetic=True, cardId=OPP, name="opp", hp=190),
     }, {aid: rec for aid, rec in records.items() if aid in attacks})
     return CombatMath(stats=stats, functions=None)
 

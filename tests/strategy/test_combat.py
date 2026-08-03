@@ -20,8 +20,8 @@ def _oracle(functions=None, transients=None):
         {STARMIE: CardStat(STARMIE, name="Mega Starmie ex", hp=330, megaEx=True, energyType=WATER,
                            attacks=(JETTING, NEBULA), minAttackCost=1, maxDamage=210),
          CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, energyType=FIRE, weakness=WATER),
-         CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, energyType=6),
-         PIKA: CardStat(PIKA, name="Pikachu", hp=60, energyType=LIGHTNING, resistance=WATER)},
+         CRUSTLE: CardStat(CRUSTLE, synthetic=True, name="Crustle", hp=150, energyType=6),
+         PIKA: CardStat(PIKA, synthetic=True, name="Pikachu", hp=60, energyType=LIGHTNING, resistance=WATER)},
         attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
                  NEBULA: AttackStat(NEBULA, damage=210, cost=3,
                                     ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
@@ -70,8 +70,8 @@ def test_predicted_max_damage_reads_the_ceiling_and_honors_exclusions():
 @pytest.mark.req("REQ-COMBAT-0002")
 def test_predicted_max_damage_coin_attack_threatens_its_ceiling():
     stats = DictCardStatProvider(
-        {STARMIE: CardStat(STARMIE, energyType=WATER, attacks=(COIN,), maxDamage=120),
-         CRUSTLE: CardStat(CRUSTLE, hp=150, energyType=6)},
+        {STARMIE: CardStat(STARMIE, synthetic=True, energyType=WATER, attacks=(COIN,), maxDamage=120),
+         CRUSTLE: CardStat(CRUSTLE, synthetic=True, hp=150, energyType=6)},
         attacks={COIN: AttackStat(COIN, damage=120, cost=1, damageMin=0, damageMax=240)})
     o = CombatMath(stats, None)
     # Incoming reads the worst case: "if heads +120" threatens 240, not the printed 120.
@@ -127,7 +127,7 @@ def test_can_damage_a_zeroed_conditional_is_no_threat():
     scaler = 14
     stats = DictCardStatProvider(
         {STARMIE: CardStat(STARMIE, energyType=WATER, attacks=(scaler,)),
-         CRUSTLE: CardStat(CRUSTLE, hp=150, energyType=6)},
+         CRUSTLE: CardStat(CRUSTLE, synthetic=True, hp=150, energyType=6)},
         attacks={scaler: AttackStat(scaler, damage=0, cost=1,
                                     scaleVar="atk_discard_energy", scalePerUnit=20)})
     o = CombatMath(stats, None)
@@ -208,7 +208,7 @@ def test_best_affordable_ko_value_min_bound_never_locks_a_coin():
     o = _oracle()
     stats = DictCardStatProvider(
         {STARMIE: CardStat(STARMIE, energyType=WATER, attacks=(COIN,)),
-         CRUSTLE: CardStat(CRUSTLE, hp=100, energyType=6)},
+         CRUSTLE: CardStat(CRUSTLE, synthetic=True, hp=100, energyType=6)},
         attacks={COIN: AttackStat(COIN, damage=120, cost=1, damageMin=0, damageMax=240)})
     o = CombatMath(stats, None)
     opp = {"id": CRUSTLE, "hp": 100}
@@ -221,7 +221,7 @@ def test_best_affordable_ko_value_type_guard_and_boost_rider():
     typed = 17
     stats = DictCardStatProvider(
         {STARMIE: CardStat(STARMIE, energyType=WATER, attacks=(typed,)),
-         CRUSTLE: CardStat(CRUSTLE, hp=150, energyType=6),
+         CRUSTLE: CardStat(CRUSTLE, synthetic=True, hp=150, energyType=6),
          3: CardStat(3, cardType=5, energyType=WATER)},
         attacks={typed: AttackStat(typed, damage=100, cost=2, energyTypes=(WATER, WATER))})
     o = CombatMath(stats, None)
@@ -272,11 +272,11 @@ def test_active_doomed_sees_the_forward_evolution_threat():
     fns = CardFunctions({})
     riolu, mega_l, a_big = 333, 678, 18
     stats = DictCardStatProvider(
-        {riolu: CardStat(riolu, name="Riolu", hp=60, energyType=6, maxDamage=10,
+        {riolu: CardStat(riolu, synthetic=True, name='Riolu', hp=60, energyType=6, maxDamage=10,
                          minAttackCost=1, attacks=()),
-         mega_l: CardStat(mega_l, name="Mega Lucario ex", evolvesFrom="Riolu", energyType=6,
+         mega_l: CardStat(mega_l, synthetic=True, name='Mega Lucario ex', evolvesFrom="Riolu", energyType=6,
                           maxDamage=270, minAttackCost=2, attacks=(a_big,)),
-         CINDERACE: CardStat(CINDERACE, hp=130, energyType=2)},
+         CINDERACE: CardStat(CINDERACE, synthetic=True, hp=130, energyType=2)},
         attacks={a_big: AttackStat(a_big, damage=270, cost=2)})
     o = CombatMath(stats, fns)
     ma = {"id": CINDERACE, "hp": 130}
@@ -301,9 +301,9 @@ def test_turns_to_ko_is_ceil_over_best_affordable_damage():
 
 @pytest.mark.req("REQ-COMBAT-0003")
 def test_wr_adjust_is_the_one_card_level_wr_rule():
-    atk = CardStat(1, energyType=WATER)
-    weak = CardStat(2, weakness=WATER)
-    resist = CardStat(3, resistance=WATER)
+    atk = CardStat(1, synthetic=True, energyType=WATER)
+    weak = CardStat(2, synthetic=True, weakness=WATER)
+    resist = CardStat(3, synthetic=True, resistance=WATER)
     assert wr_adjust(atk, weak, 120) == 240          # Weakness x2 (S&V)
     assert wr_adjust(atk, resist, 120) == 90         # Resistance flat -30, floored at 0
     assert wr_adjust(atk, resist, 20) == 0

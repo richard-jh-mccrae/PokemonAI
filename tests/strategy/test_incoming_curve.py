@@ -8,7 +8,7 @@ already MAXIMAL at t=1 — ``forward_card_ids`` returns all descendants (existen
 under the one-attach budget — so t moves ONLY the energy budget. That is exactly why
 ``incoming(t=1)`` is byte-identical to ``reachable_incoming``: the latter delegates to it.
 
-Lib-free synthetic provider, mirroring ``test_reachable_incoming.py``.
+Lib-free provider, mirroring ``test_reachable_incoming.py``.
 """
 from common.strategy.combat import CombatMath
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -32,12 +32,12 @@ def _combat():
     stats = DictCardStatProvider({
         MY: CardStat(MY, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                      minAttackCost=1, attacks=(NEBULA,), evolvesFrom="Staryu", energyType=3),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, maxDamage=30, minAttackCost=2,
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, maxDamage=30, minAttackCost=2,
                         minCostDamage=30, attacks=(ACC_STAB,), energyType=6),
         MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, maxDamage=270,
                            minAttackCost=1, minCostDamage=130, attacks=(AURA_JAB, MEGA_BRAVE),
                            evolvesFrom="Riolu", energyType=6),
-        GOLEM: CardStat(GOLEM, name="Golem", hp=140, maxDamage=100, minAttackCost=2,
+        GOLEM: CardStat(GOLEM, synthetic=True, name="Golem", hp=140, maxDamage=100, minAttackCost=2,
                         minCostDamage=100, attacks=(GOLEM_ATK,), energyType=6),
     }, attacks={
         ACC_STAB: AttackStat(ACC_STAB, damage=30, cost=2, energyTypes=(FIGHTING, FIGHTING)),

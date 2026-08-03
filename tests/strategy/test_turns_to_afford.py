@@ -42,7 +42,7 @@ COLORLESS, FIGHTING = 0, 6
 
 def _combat():
     stats = DictCardStatProvider({
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
         MLUC: CardStat(MLUC, name="Mega Lucario ex", hp=340, megaEx=True, evolvesFrom="Riolu",
                        maxDamageCost=2, maxDamage=270, attacks=(21, 22)),
     }, attacks={11: AttackStat(11, damage=30, cost=1),
@@ -118,11 +118,11 @@ def _recur_model(pre_energy=0, discard=2):
     from common.state_model import StateModel
     DURA, ARCH, METAL, METAL_ENERGY = 189, 190, 8, 71
     stats = DictCardStatProvider({
-        DURA: CardStat(DURA, name="Duraludon", hp=110, maxDamageCost=1, maxDamage=30,
+        DURA: CardStat(DURA, synthetic=True, name="Duraludon", hp=110, maxDamageCost=1, maxDamage=30,
                        attacks=(30,), energyType=METAL),
-        ARCH: CardStat(ARCH, name="Archaludon ex", hp=280, evolvesFrom="Duraludon",
+        ARCH: CardStat(ARCH, synthetic=True, name='Archaludon ex', hp=280, evolvesFrom="Duraludon",
                        maxDamageCost=3, maxDamage=220, attacks=(31,), energyType=METAL),
-        METAL_ENERGY: CardStat(METAL_ENERGY, name="Basic {M} Energy", energyType=METAL,
+        METAL_ENERGY: CardStat(METAL_ENERGY, synthetic=True, name="Basic {M} Energy", energyType=METAL,
                                cardType=5),
     }, attacks={30: AttackStat(30, damage=30, cost=1, energyTypes=(METAL,)),
                 31: AttackStat(31, damage=220, cost=3, energyTypes=(METAL, METAL, METAL))})
@@ -159,7 +159,7 @@ def test_the_clock_refuses_an_on_attack_bench_only_reload():
     from common.effects import CardEffects
     FIGHTING, F_ENERGY = 6, 6
     stats = DictCardStatProvider({
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,),
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,),
                         energyType=FIGHTING),
         MLUC: CardStat(MLUC, name="Mega Lucario ex", hp=340, megaEx=True, evolvesFrom="Riolu",
                        maxDamageCost=2, maxDamage=270, attacks=(21, 22), energyType=FIGHTING),

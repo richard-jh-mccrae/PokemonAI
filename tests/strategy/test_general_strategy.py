@@ -50,7 +50,7 @@ def test_the_empty_bench_guard_is_the_filter_and_no_longer_also_a_rung():
     against 61.96 on an empty one — the whole gap was that rung).
 
     What must still hold is the BEHAVIOUR: on an empty Bench the deploy is taken, not ranked."""
-    stats = DictCardStatProvider({700: CardStat(700, hp=70)})   # a Pokémon (hp > 0)
+    stats = DictCardStatProvider({700: CardStat(700, synthetic=True, hp=70)})   # a Pokémon (hp > 0)
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     play_basic = opt(PLAY, area=HAND, index=0)
 
@@ -88,10 +88,10 @@ def test_dont_feed_the_doomed_attaches_to_the_bench_when_the_active_will_die():
     # Both of my bodies need a real attack for the decider to price: a stat-blind body earns no build
     # on either side of the gate, and the pin would then pass on a coincidence rather than on the rule.
     stats = DictCardStatProvider({
-        700: CardStat(700, energyType=WATER, weakness=LIGHTNING, hp=70,    # my Active (Weak to L)
+        700: CardStat(700, synthetic=True, energyType=WATER, weakness=LIGHTNING, hp=70,    # my Active (Weak to L)
                       maxDamage=60, maxDamageCost=2, minAttackCost=1),
-        900: CardStat(900, energyType=LIGHTNING, maxDamage=120),           # opp Active: 120, Lightning
-        800: CardStat(800, energyType=WATER, hp=110,                       # my benched successor
+        900: CardStat(900, synthetic=True, energyType=LIGHTNING, maxDamage=120),           # opp Active: 120, Lightning
+        800: CardStat(800, synthetic=True, energyType=WATER, hp=110,                       # my benched successor
                       maxDamage=60, maxDamageCost=2, minAttackCost=1),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -244,7 +244,7 @@ def test_only_snipe_rules_fire_at_a_damage_select():
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-        900: CardStat(900, name="Zubat", maxDamage=30),
+        900: CardStat(900, synthetic=True, name="Zubat", maxDamage=30),
     })
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=DAMAGE,
@@ -265,7 +265,7 @@ def test_protect_ace_spec_tool_stacks_extra_reluctance_off_the_wincon():
     """An ACE SPEC Tool is a one-of, irreplaceable card. Attaching it to a NON-wincon Pokémon draws
     the base `save-tool-for-the-attacker` reluctance PLUS an extra `protect-ace-spec-tool` bump."""
     stats = DictCardStatProvider({1159: CardStat(1159, aceSpec=True),     # ACE SPEC Tool
-                                  700: CardStat(700, hp=120)})            # non-wincon target
+                                  700: CardStat(700, synthetic=True, hp=120)})            # non-wincon target
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                   functions=CardFunctions({1159: ["tool"]}))
     obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
@@ -278,7 +278,7 @@ def test_protect_ace_spec_tool_stacks_extra_reluctance_off_the_wincon():
 @pytest.mark.req("REQ-GEN-0023")
 def test_protect_ace_spec_tool_silent_on_a_plain_tool():
     """A non-ACE-SPEC Tool draws only the base reluctance — the intensifier stays off."""
-    stats = DictCardStatProvider({1160: CardStat(1160, aceSpec=False), 700: CardStat(700, hp=120)})
+    stats = DictCardStatProvider({1160: CardStat(1160, synthetic=True, aceSpec=False), 700: CardStat(700, synthetic=True, hp=120)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                   functions=CardFunctions({1160: ["tool"]}))
     obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=BENCH, inPlayIndex=0)],
@@ -301,9 +301,9 @@ def _hp_tool_pilot(*, hp_bonus=100, opp_type=_FIRE, opp_dmg=400, wincon_role=Tru
     `opp_dmg`, with a +`hp_bonus` Tool in hand. `opp_type` == the wincon's weakness doubles the
     incoming hit (the weakness-aware breakpoint)."""
     stats = DictCardStatProvider({
-        _WINCON: CardStat(_WINCON, hp=330, energyType=_WATER, weakness=_LIGHTNING),
-        _HP_TOOL: CardStat(_HP_TOOL, hp=0, hpBonus=hp_bonus),
-        800: CardStat(800, energyType=opp_type, maxDamage=opp_dmg),
+        _WINCON: CardStat(_WINCON, synthetic=True, hp=330, energyType=_WATER, weakness=_LIGHTNING),
+        _HP_TOOL: CardStat(_HP_TOOL, synthetic=True, hp=0, hpBonus=hp_bonus),
+        800: CardStat(800, synthetic=True, energyType=opp_type, maxDamage=opp_dmg),
     })
     roles = {_WINCON: ["win_condition"]} if wincon_role else {}
     return Pilot(Strategy(roles=roles), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,

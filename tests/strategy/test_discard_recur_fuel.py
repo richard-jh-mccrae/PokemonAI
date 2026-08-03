@@ -24,7 +24,7 @@ F_ENERGY_CARD = 6   # Basic {F} Energy, the CARD id (EnergyType.FIGHTING is also
 
 def _combat(tags):
     stats = DictCardStatProvider({
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, energyType=FIGHTING, maxDamageCost=1, attacks=()),
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=70, energyType=FIGHTING, maxDamageCost=1, attacks=()),
         MLUC: CardStat(MLUC, name="Mega Lucario ex", hp=340, evolvesFrom="Riolu",
                        energyType=FIGHTING, maxDamageCost=2, attacks=()),
     })

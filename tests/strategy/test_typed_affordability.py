@@ -46,14 +46,14 @@ TURBO = 20          # {C} -> untyped
 
 def _stats(attacks=None):
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=120,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=120,
                          maxDamageCost=3, minAttackCost=3, minCostDamage=120, attacks=(JETTING,),
                          evolvesFrom="Staryu", energyType=3),
         CINDER: CardStat(CINDER, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=50, attacks=(TURBO,), energyType=2),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
-        OPP: CardStat(OPP, name="opp", hp=100),
+        OPP: CardStat(OPP, synthetic=True, name="opp", hp=100),
     }, attacks=attacks)
 
 
