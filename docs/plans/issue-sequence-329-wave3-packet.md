@@ -15,6 +15,11 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `85785609\|0\|turn\|8` | leaf (Discrimination) | Issue #329 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational.** Predicted; reproduced. |
 | `82229122\|0\|decision\|17` | leaf (held out, `owner=#263`) | Issue #329 | resolved by Issue #284, passing | REGRESSED again, rank 1 -> 2 | **No action — and it VINDICATES the ruling.** Issue #284's L1 recommended KEEPING this `owner=#263` ruling rather than retiring it because the frame had started passing; the developer ruled **KEEP both**. It now fails again, so retiring it would have been wrong. |
 | `82228017\|0\|decision\|4` | leaf (held out, `owner=#263`) | Issue #329 | REGRESSED, rank 1 -> 2 | REGRESSED, rank 1 -> 3 | **No action.** Already ruled and held out; only the rank deepened. |
+| `81904451\|0\|decision\|9` | leaf (Discrimination) | Issue #332 | OK, rank 1/n | MISS, rank 2/n | **RULE, do not conform.** A body the discount newly refuses to fund. |
+| `83457493\|1\|decision\|20` | leaf (Discrimination) | Issue #332 | OK, rank 1/n | MISS, rank 2/n | **RULE, do not conform.** Same class. |
+| `83661649\|0\|decision\|54` | leaf (Discrimination) | Issue #332 | OK, rank 1/n | MISS, rank 5/n | **RULE, do not conform.** Same class, and the deepest of the three. |
+| `82228640\|0\|decision\|53` | leaf (Discrimination) | Issue #332 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational — not a regression against the baseline.** A windfall improvement lost. |
+| `82525741\|0\|decision\|58` | leaf (Discrimination) | Issue #332 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational.** Same class. |
 | *(not a frame)* `test_PLAYING_the_boost_card_…` | **no gate** — a sibling issue's acceptance test | Issue #329 vs Issue #282 | `total_after > total_before` (+0.016667) | positional half is **−0.032051** | **RULING OWED — read this one even though no gate reports it.** See *"A sibling issue's acceptance assertion inverted"* below. It was rewritten rather than left failing, which is the one thing in this run that resembles conforming; the developer may direct otherwise. |
 
 **Decision Gate: PASS, and the before/after reports are byte-identical** — `agree 250/347 -> 250/347`,
@@ -162,6 +167,114 @@ outright on the full sequence score.
 **Nothing was retuned to accommodate any of this**, and the rewritten test is strictly stronger than
 the one it replaces — it would fail under a boost that stopped being priced, which is the property
 Issue #282 actually exists to guard.
+
+## Issue #332 — `readiness` funded the Active over the benched successor
+
+### What was built
+
+`_readiness_odds`' FORWARD leg is now discounted by the body's own survival clock —
+`1 - halve(turns_to_ko_me - 1)`, the exact complement of the grade `survival` already puts on the
+same clock, through the same newly-extracted `_survival_clock` call so the two families cannot come
+to disagree about when a body dies. The NOW leg is untouched: a payoff cashed on MY turn happens
+before the opponent's, so a body about to fall still swings and owes no discount. Nothing was
+retuned; `attach_value` (ADR-0069) is structurally unreachable from this module and its own suites
+(`test_attach_decider.py`, `test_attach_bands.py`, `test_attach_discipline.py`) pass unchanged.
+
+### Gate arithmetic — attributed against a BEFORE control, not against #329's table
+
+The before column is a real re-run with `_survives_to_spend` forced to `1.0`, so these three flips
+are this issue's own and not inherited.
+
+| | before (#329's end state) | after |
+|---|---|---|
+| unruled `OK -> MISS` | 4 | **7** (+3, named above) |
+| `IMPROVED MISS -> OK` | 14 | **12** (−2, named above) |
+| held-out set | 80 | **80 — unchanged, no frame gained or lost an owner** |
+| leaf agree | 123/249 | 122/249 |
+| Decision Gate | PASS, 0 picks moved | **PASS, 0 picks moved, 0 rulings moved** |
+
+`⚠️ corpus shape moved: +1 / -1` appears on BOTH columns and is not this issue's: it is
+`85709280|1|match|` → `85709280|1|decision|51`, the re-scope committed at `819ffc4e` before this
+branch started. **No baseline was re-captured for it.**
+
+### The two frames the issue was filed on
+
+| frame | before | after |
+|---|---|---|
+| `83037962\|0\|decision\|48` | `OK -> MISS` — `readiness` the SOLE decider at −0.0184 | **FIXED.** No family is a decider; the leaf no longer prefers the doomed Active. |
+| `81906755\|1\|decision\|93` | `OK -> MISS`, `readiness` −0.0118 | **STILL MISS**, `readiness` −0.0063. Improved by 47% and not flipped. |
+
+**Frame 93 is not the same decision as frame 48, and the issue body's *"they are the same decision
+twice"* does not survive re-measurement.** Frame 48's Active reads `turns_to_ko_me == 1` and the
+developer's rationale is explicitly a survivability argument (*"active doomed mega starmie … therefor
+should start powering up our reserve benched staryu"*). Frame 93's Active is **undamaged at 330 HP
+with a clock of 3**, and the developer's rationale is the generic *"attach energy when able and
+pokemons need it"* — a ruling against the AGENT's choice, which was to **attack** (option 10), not
+against attaching to the Active. Both of the leaf's candidates on that frame are attaches, so the
+ruling does not discriminate between them at all. What remains is a geometric-decay effect with no
+survivability content: one attach moves a body already at `halve(2)` more than one at `halve(3)`,
+and the Active's payoff is 2.1 prizes against the Staryu's 0.2. **Recommend RULING frame 93 rather
+than chasing it** — the acceptance criterion allows either, and no survivability reading can flip it.
+
+### The two frames NO family explained — both answered
+
+* **`86089617\|1\|decision\|4`** (`End` vs `Gravity Mountain`) — the issue's hypothesis is
+  **CONFIRMED and is not the whole story**. `development` reads exactly `0.0000` across the Stadium
+  play, which is precisely what `development.blind_to` says (*"`model.stadium` has a supplier and no
+  reader"*, owner Issue #263). What actually decided the frame was a sub-floor `readiness` wobble of
+  −0.0022 — below `family_diag`'s 0.005 decider floor, which is why the run reported no decider. The
+  survivability discount removes it, `readiness` now reads `+0.0000`, and **the frame is FIXED.**
+* **`82749168\|1\|decision\|88`** (`Nebula Beam 210` vs `Harlequin`) — **not noise, and not a term at
+  all.** The ruled option's line **WINS THE GAME** in the sim, so it never reaches the board branch of
+  `_engine_leaf_value`: it takes the dominant-win short-circuit `KO_SCORE * (start_prizes + 1)` and
+  scores a flat **2000**, tied with the eight other options that also win once the rollout finishes
+  the turn. `Harlequin` scores **6789.9** through the ordinary board branch, because
+  `state_value`'s `prize_race` lead leg is UNIT-SLOPE and deliberately uncapped. The winning board's
+  own `state_value` is **6.909985 prizes = 6910**, which would have ranked it FIRST. So the
+  short-circuit is not failing to help — **it is what causes the misranking**, and its comment still
+  reads *"dominant"*.
+
+  Swept over the corpus: **26 of 361 frames reach a coin-free simulated win** (the positive control),
+  and on **4** of those a non-winning option out-scores it, by up to 4789.9 leaf points. Spun off as
+  **Issue #362** rather than built here — different module, its own magnitude decision to derive
+  (`LOSS_PRIZES` is the mirror constant and there is no `WIN_PRIZES`), and bundling it would have made
+  these three flips unattributable. **No ruling is owed on this one; it is a build.**
+
+### The double-count question, argued rather than assumed
+
+Issue #332's first acceptance criterion. `readiness_odds` now consults `turns_to_ko_me`, which
+`survival` prices, and the one-fact-one-family rule is `state_value`'s headline. The call is made and
+recorded in three places (`_survives_to_spend`'s docstring, `readiness.composition`, and
+`test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact`):
+
+* The two families price two different **consequences** of the one fact in two different currencies —
+  `survival` charges the `prize_at_risk` handed over when the body falls, this discounts the
+  damage-denominated `payoff` that dies with it. Removing the body raises one family and lowers the
+  other, so it is not one quantity added twice.
+* The registry fact stays `readiness_odds`, already in `readiness.reads`; the clock is an INPUT to
+  that probability exactly as `turns_to_afford` is. `double_counted()` stays empty and MEANS it.
+* This is `survival`'s own shipped precedent applied to the mirror case: its `_predicted_loss`
+  consults `prize_race`'s `their_prizes_remaining` as a win-condition TEST and keeps `predicted_loss`
+  as the registry fact. **Splitting the clock into a second fact string to make the read visible is
+  the move both places reject** — `sound_rules.SCHEDULED_PAIRS` records the same temptation and the
+  same answer, because a fact renamed to dodge a detector makes the detector pass vacuously.
+
+### One thing the developer may want to overrule
+
+The discount reaches **exactly 0** at a clock of 1, and a term with no derivative is never explored
+under 1-ply differencing — a hazard this module names four separate times. It is argued as a PRICED
+zero rather than a pruning one: the zero is on one leg of one body, every play that arms that body
+THIS turn still moves the now-leg, and a play that only advances a doomed body's future arming
+genuinely buys nothing. **Measured consequence on a sibling's test:** Issue #286's
+`test_the_going_first_shape_an_IGNITION_onto_a_BASIC_now_buys_nothing_forward` runs on a 70 HP Staryu
+against a funded Phantom Dive — clock 1 — so its `ign == bare` equality now holds at `0.0 == 0.0`
+rather than at `0.000375`. The test still passes and its non-vacuity guard (`bare < water`, carried by
+the now-leg) still fires, **and it was not edited**. If the developer prefers a strictly-positive
+grade, `1 - halve(clock)` is the one-character alternative — and it was MEASURED rather than argued
+about: under it `83037962|0|decision|48` reads `readiness −0.0064` and stays a MISS,
+`81906755|1|decision|93` reads −0.0090 (against −0.0063 as shipped), and `86089617|1|decision|4`
+reads −0.0011 instead of flat. **It fixes none of the three.** The shipped grade is the one that
+buys the two fixes, which is why the zero is taken rather than softened.
 
 ## Neither baseline was recaptured
 

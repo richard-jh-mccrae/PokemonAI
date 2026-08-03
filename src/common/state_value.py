@@ -13,7 +13,9 @@ composition of an already-FIRING equation, and where a coverage gap remains it i
     prize_race    `StateModel.prize_race`
     survival      `theirs.turns_to_ko_me` (Bench-Harvest kwargs threaded) + `grading.halve`
     threat        `needs.opponent_target_value` + `needs.phase_scale`
-    readiness     `mine.readiness_p` + `mine.turns_to_afford`, at `planner._READINESS_ATTACK_W`'s band
+    readiness     `mine.readiness_p` + `mine.turns_to_afford`, the forward leg discounted by
+                  `theirs.turns_to_ko_me` through the same `grading.halve` `survival` grades with,
+                  all at `planner._READINESS_ATTACK_W`'s band
     hand          `needs.assignment_split` — `set_keep_v2`'s own `_keep_slot_dp`, read as its two
                   halves rather than as the set marginal, so `coverage` and `re_access` arrive
                   separately the way the frozen composition asks for them
@@ -684,7 +686,24 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "roll-up (ADR-0109). That makes `body_payoff` depend on MY Bench CONTENTS for a "
                     "bench-gated attack, which is not a second claim on `bench_slot_price`: "
                     "`development` prices how many slots are left, this prices what one attack can "
-                    "land, and the two never read the same number.",
+                    "land, and the two never read the same number. "
+                    "**`readiness_odds` consults `turns_to_ko_me`, and that is not a disjointness "
+                    "breach** — stated here because it is the first thing a reader of the tuples "
+                    "will suspect, and because Issue #332 required the call to be argued rather "
+                    "than assumed. The odds ask *does this body get to its payoff attack*, and a "
+                    "body the opponent removes first does not get there; the clock is an INPUT to "
+                    "that probability the way `turns_to_afford` already is, consulted on the "
+                    "FORWARD leg alone (`_survives_to_spend`). `survival` prices a different "
+                    "CONSEQUENCE of the same fact in a different currency — the `prize_at_risk` "
+                    "handed over when the body falls, against the damage-denominated potential that "
+                    "dies with it — so removing the body raises one family and lowers the other, "
+                    "which is not one quantity added twice. Both families read the clock through "
+                    "ONE call (`_survival_clock`), so they cannot come to disagree about it. The "
+                    "registry fact stays `readiness_odds`, exactly as `survival` keeps "
+                    "`predicted_loss` while consulting `prize_race`'s counts: splitting the clock "
+                    "into a second fact string to make the read visible would make "
+                    "`double_counted()` pass VACUOUSLY, which is the answer "
+                    "`sound_rules.SCHEDULED_PAIRS` already records for the same temptation.",
         blind_to=(
             "who is ACTIVE — `readiness_p` is per body and area-aware through the Attach Budget, "
             "but nothing here prices the Active SLOT itself, so a retreat that puts the right body "
@@ -725,7 +744,21 @@ REGISTRY: tuple[TermFamily, ...] = (
             "corpus. What stays wrong is the extreme case: a BENCHED Mega Starmie ex that cannot "
             "attack at all still reads `readiness_p == 1.0`. Unmasking it means teaching the "
             "now-leg whether the body may attack THIS turn, which is *who is ACTIVE* above; "
-            "specced as Issue #351, ledgered to Issue #263.",
+            "specced as Issue #351, ledgered to Issue #263. **Issue #332's survivability discount "
+            "rides the same forward leg and is masked by the same now-leg**, so a benched body "
+            "reading a phantom 1.0 keeps full readiness however short its clock — one defect now "
+            "hides two corrections, which is the strongest argument on the ledger for #351's "
+            "priority.",
+            "what a DOOMED body could still do THIS turn OUTSIDE its payoff attack — the "
+            "survivability discount (`_survives_to_spend`, Issue #332) zeroes the FORWARD leg on a "
+            "body whose clock reads 1, which is exact for a payoff that lands on a later turn, and "
+            "the now-leg is what keeps that body priced for a swing it can take right now. What "
+            "nothing prices is the lesser swing: `attack_payoff` names ONE attack, so a doomed Mega "
+            "Starmie ex whose Nebula Beam is unaffordable reads 0 forward while Jetting Blow is "
+            "still on the menu in front of it. That swing is `attack_ev`'s at the terminal action "
+            "rather than a hole in this family, and it is recorded because the zero is NEW — before "
+            "Issue #332 the forward leg paid the doomed body anyway, so a reader diffing the two "
+            "would otherwise read the drop as the body's whole value disappearing.",
         ),
     ),
     TermFamily(
@@ -967,15 +1000,29 @@ def _exposed_bodies(model: "StateModel") -> tuple:
     branching here would encode the oracle's internals in `state_value` and would go stale the day a
     rider learns to scale. The cost is nil — the context is memoized per direction and
     identity-stable, so it canonicalises once into the clock's memo key."""
-    bench_raws = model.mine.bench_raws
-    opp_active = model.theirs.active_raw
-    context = model.damage_context(attacker="theirs")
     return tuple(
-        ExposedBody(prize_at_risk=float(b.prize_value),
-                    turns_to_ko_me=int(model.theirs.turns_to_ko_me(
-                        b.body, my_benched=not b.is_active, my_bench=bench_raws,
-                        opp_active=opp_active, context=context)))
+        ExposedBody(prize_at_risk=float(b.prize_value), turns_to_ko_me=_survival_clock(model, b))
         for b in model.mine.bodies)
+
+
+def _survival_clock(model: "StateModel", body) -> int:
+    """**THE** clock on one of my bodies — the single call two families read (Issue #332).
+
+    Extracted from :func:`_exposed_bodies` rather than copied into the readiness path, and the
+    extraction is the correctness rather than tidiness. `survival` grades exposure by this clock and
+    `readiness` now discounts a body's FORWARD potential by it (:func:`_survives_to_spend`); asking
+    the oracle twice with two independently-written argument lists is precisely how the two families
+    come to hold different opinions about when the same body dies. The sole-supplier ruling forbids a
+    second opinion, and one call site is what makes that structural instead of hopeful.
+
+    Every kwarg is :func:`_exposed_bodies`' own, unchanged and argued there: the Bench-Harvest pair
+    (``my_benched`` / ``my_bench``), ``opp_active``, and the THEIRS-direction Damage Formula context
+    (Issue #280) — the attacker on a survival read is the opponent. Cost is nil on the second
+    reader: `StateModel.turns_to_ko_me` is memoized by VALUE over every argument, and all three
+    board reads below are `lazy` snapshot properties, so the readiness path pays a memo hit."""
+    return int(model.theirs.turns_to_ko_me(
+        body.body, my_benched=not body.is_active, my_bench=model.mine.bench_raws,
+        opp_active=model.theirs.active_raw, context=model.damage_context(attacker="theirs")))
 
 
 def _predicted_loss(model: "StateModel") -> bool:
@@ -1217,6 +1264,10 @@ def _ready_bodies(model: "StateModel") -> tuple:
       saturated term has zero derivative, so the attach that completes the payoff cost would price
       at 0 delta and never be explored. The attack id comes from the SAME `AttackPayoff` record as the
       damage, which is what keeps the pair honest once a gated maximum falls back to a lesser attack.
+      Its FORWARD leg is discounted by the body's own survival clock (:func:`_survives_to_spend`,
+      Issue #332): potential that lands on a later turn needs the body to still be standing on that
+      turn, and `turns_to_ko_me` is the shipped answer. Read through :func:`_survival_clock`, the
+      one call `survival` reads too, so neither family can hold its own opinion about the clock.
     * ``role_relevance`` — `role_value` normalised by `DEPLOY_WORTH_SCALE`, which is exactly
       `deploy_value._relevance`'s dimensionless ratio. Composed rather than re-derived so a role
       re-tier moves both instruments together."""
@@ -1312,11 +1363,65 @@ def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     Unmasking the rest means teaching the now-leg whether the body may attack THIS turn — it does
     not ask, and a BENCHED body reads 1.0 — which is *who is ACTIVE* (`readiness.blind_to`), Issue
     #263's ledger. Specced as **Issue #351**; the correct half is built here and the masking is a
-    packet line rather than a second, unruled retune."""
+    packet line rather than a second, unruled retune.
+
+    **The forward leg is also discounted by the body's own SURVIVAL clock** (Issue #332,
+    :func:`_survives_to_spend`), and it rides the forward leg ALONE for the same reason
+    `exclude_expiring` does: the two legs answer about two different turns. The now-leg is about a
+    payoff cashed on MY turn, which happens before the opponent's next one, so a body about to fall
+    still swings and no discount is owed. The forward leg is about a payoff cashed on a LATER turn,
+    which the body has to still be standing for — and `turns_to_ko_me` is exactly the shipped answer
+    to whether it will be. Without it `readiness` prices an attach onto a body the opponent removes
+    next turn identically to one onto the successor behind it, which is the measured misplay
+    (`83037962|0|decision|48`: *"Placed second energy on active doomed mega starmie … therefor
+    should start powering up our reserve benched staryu"*)."""
     now = model.mine.readiness_p(body, attack_id)
     arm = model.mine.turns_to_afford(body, exclude_expiring=True)
-    forward = 0.0 if arm is None else halve(arm)
+    forward = 0.0 if arm is None else halve(arm) * _survives_to_spend(model, body)
     return max(0.0, min(1.0, max(now, forward)))
+
+
+def _survives_to_spend(model: "StateModel", body) -> float:
+    """How much of this body's FUTURE I still own, in [0, 1] — ``1 - halve(turns_to_ko_me - 1)``.
+
+    The complement of `survival`'s own grade, on the same clock through the same
+    :func:`_survival_clock` call, so the two families cannot come to disagree about when a body
+    dies. No new curve and no new constant: `survival` grades a body's exposure by
+    ``halve(turns_to_ko_me - 1)`` — undiscounted when they can Knock it Out this coming turn, an
+    eighth of the worry at three turns — and this is one minus that number.
+
+    **It reads as an exact statement rather than as a smoothing at the end that matters.** A clock
+    of 1 means they Knock the body Out on their very NEXT turn, and the forward leg is a payoff that
+    lands on one of MY later turns — which comes after theirs. So a forward payoff on a body with a
+    clock of 1 is never spent, and `1 - halve(0) == 0.0` says so. At 2 the body survives to act once
+    more and the grade is 0.5; the smoothing is in the middle of the curve, not at the end the
+    measured frame turns on.
+
+    **The zero is a priced zero, not a pruning one, and the distinction is the module's own.** A
+    saturated term has no derivative and is never explored (see the constants block), so a factor
+    that flattened a whole family would be a defect. This flattens ONE leg of ONE body: every play
+    that arms that body THIS turn still moves the now-leg, and a play that only advances a doomed
+    body's future arming genuinely buys nothing — 0 delta is the developer's ruling on that frame,
+    not a term failing to notice. What the zero DOES leave unpriced is named in `readiness.blind_to`
+    rather than left to be discovered.
+
+    **Why this is not a double count against `survival`, argued rather than assumed** (Issue #332's
+    first acceptance criterion). The two families price two different CONSEQUENCES of the one fact,
+    in two different currencies: `survival` charges the body's ``prize_at_risk`` — the prizes handed
+    over when it falls — and this discounts the body's ``payoff`` — the damage-denominated potential
+    that dies with it. Removing the doomed body from the board would raise `survival` (less
+    exposure) and lower `readiness` (lost potential), so the two readings are not one quantity added
+    twice.
+
+    The registry fact therefore stays `readiness_odds`, already in `readiness.reads`, and the clock
+    is an INPUT to that probability exactly as `turns_to_afford` already is. This is `survival`'s own
+    shipped precedent, applied to the mirror case: its `_predicted_loss` consults
+    `their_prizes_remaining`, which `prize_race` owns, as a win-condition TEST rather than as race
+    value, and keeps `predicted_loss` as the registry fact. **Splitting the clock into a second fact
+    string to make the read visible is the move both places reject** — `sound_rules.SCHEDULED_PAIRS`
+    records the same temptation and the same answer, because a fact renamed to dodge a detector makes
+    the detector pass VACUOUSLY. `double_counted()` stays empty and means it."""
+    return 1.0 - halve(_survival_clock(model, body) - 1)
 
 
 #: The floor under an UNDECLARED body's role relevance, and it is derived rather than chosen: the
@@ -1571,7 +1676,14 @@ def readiness(bodies: Iterable[ReadyBody]) -> float:
     requirement: `payoff` is the body's printed line payoff and does not depend on what is attached,
     so a partly-funded attacker scores `payoff x odds x relevance` with odds strictly between 0 and
     1 — not zero, not full. A term that read "can it attack right now" instead would price every
-    mid-turn board at 0 and prune every attach before the leaf could vindicate it."""
+    mid-turn board at 0 and prune every attach before the leaf could vindicate it.
+
+    **Odds are FORWARD-LOOKING on both clocks** (Issue #332). `readiness_odds` asks whether the body
+    gets to its payoff attack, and there are two ways not to: it never affords the cost
+    (`turns_to_afford`), or the opponent removes it first (`turns_to_ko_me`, through
+    :func:`_survives_to_spend`). Funding a body the opponent Knocks Out next turn therefore buys
+    nothing forward, which is what stops this family preferring the body already in front to the
+    successor being built behind it."""
     total = 0.0
     for body in bodies:
         contribution = (_READINESS_W * float(body.payoff)

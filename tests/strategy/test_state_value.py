@@ -1240,6 +1240,173 @@ def test_a_basic_energy_is_never_stripped_from_the_forward_clock():
                 == board.mine.turns_to_afford(body, exclude_expiring=True))
 
 
+# ── Issue #332 — readiness must not fund a body the opponent removes next turn ───────────────────
+#
+# The measured misplay is `83037962|0|decision|48` (`mega_starmie`, category `misattachment`), where
+# `readiness` was the SOLE decider — every other family read exactly 0.0000 on both sides — and it
+# preferred a second Energy on a doomed Active over the first Energy on the benched successor. The
+# developer's rationale is a survivability argument the term could not see: *"Placed second energy on
+# active doomed mega starmie. this deosnt allow it to attack with Nebula Beam … therefor should start
+# powering up our reserve benched staryu"*.
+
+#: A deck the Starmie line can actually fund from, so `turns_to_afford`'s deck-fetch leg has {W} to
+#: find. The default `DECK` is `mega_lucario`'s and holds only {F}, which would make every clock here
+#: read "unknown" for a reason that has nothing to do with the fact under test.
+STARMIE_DECK = [E_W] * 6 + [STARYU] * 3 + [MEGA_STARMIE] * 3
+
+
+def _successor_board(*, active_energies=(), bench_energies=(), active_damage=0):
+    """MY Mega Starmie ex Active with the Staryu that becomes its successor on the Bench behind it,
+    the turn's manual attach already SPENT, against a fully-funded Dragapult ex.
+
+    ``active_damage`` is the ONE fact the doomed and safe boards differ by. Verified at source:
+    Phantom Dive is ``{R}{P}`` for 200 (`data/EN_Card_Data.csv` Card ID 121) and this Mega Starmie ex
+    prints 330 HP with no Weakness to Dragon, so an undamaged Active needs two swings (clock 2) and
+    one damaged to 200 remaining needs one (clock 1). Nothing else on the board moves — same bodies,
+    same Energy total, same deck, same prizes.
+
+    The two FUNDING choices are then the same board with one Energy in two places: on the Active, or
+    on the Bench. That is exactly the option pair the corpus frame offers."""
+    return _model(
+        _player(active=_poke(MEGA_STARMIE, hp=330, damage=active_damage,
+                             energies=list(active_energies)),
+                bench=[_poke(STARYU, hp=70, energies=list(bench_energies), serial=2)], prize=4),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+        energy_attached=True, deck=STARMIE_DECK)
+
+
+def _clock(model, body):
+    """The body's survival clock as `survival` itself reads it — through the ONE shared call."""
+    return sv._survival_clock(model, body)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_doomed_active_and_the_safe_one_differ_by_EXACTLY_the_clock():
+    """The fixture's own control, asserted before anything is concluded from it. If the damaged and
+    undamaged boards did not actually differ in `turns_to_ko_me` the two tests below would pass or
+    fail for a reason that has nothing to do with survivability — the classic instrument that reports
+    a clean result because it is pointed at nothing."""
+    doomed = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    safe = _successor_board(active_energies=[E_W], bench_energies=[E_W])
+    assert _clock(doomed, doomed.mine.active) == 1, "the damaged Active is not actually doomed"
+    assert _clock(safe, safe.mine.active) == 2, "the undamaged Active is not actually safe"
+    # …and the SUCCESSOR is the same body on both, so nothing else can be doing the work.
+    assert _clock(doomed, doomed.mine.bench[0]) == _clock(safe, safe.mine.bench[0])
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_energy_on_a_DOOMED_body_no_longer_outbids_the_successor_behind_it():
+    """The corpus frame, as a fixture. Both boards hold the same two Energy; they differ only in
+    WHICH body carries the second one, and the Active is one the opponent Knocks Out on their very
+    next turn.
+
+    A payoff the body only reaches on a LATER turn cannot be spent by a body that is gone before that
+    turn arrives, so the Energy has to be worth more on the successor. Before Issue #332 the forward
+    leg paid the doomed Active in full and this comparison ran the other way."""
+    funded_active, funded_successor = {}, {}
+    sv.state_value(_successor_board(active_energies=[E_W, E_W], active_damage=130),
+                   working=funded_active)
+    sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130),
+                   working=funded_successor)
+    assert funded_successor["readiness"] > funded_active["readiness"], (
+        "readiness still prefers funding a body the opponent removes next turn")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_SAFE_board_still_prefers_funding_the_active_wincon():
+    """The control that makes the test above mean something. The discount is a survivability read,
+    not a blanket preference for the Bench — on the identical board with the Active undamaged, the
+    3-prize wincon in front is still the better place for the Energy, because its payoff is ten times
+    the Staryu's and it now survives to spend it.
+
+    Without this half, zeroing `readiness` outright would pass the doomed case too."""
+    funded_active, funded_successor = {}, {}
+    sv.state_value(_successor_board(active_energies=[E_W, E_W]), working=funded_active)
+    sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W]),
+                   working=funded_successor)
+    assert funded_active["readiness"] > funded_successor["readiness"], (
+        "the discount inverted a board where funding the Active is right")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_survivability_discount_is_GRADED_rather_than_a_gate():
+    """`1 - halve(turns_to_ko_me - 1)`, the exact complement of the grade `survival` puts on the same
+    clock — so the same shipped decay convention, no new curve and no new constant.
+
+    Graded rather than binary for the reason the constants block gives: a term with no derivative is
+    never explored under 1-ply differencing, so a body two turns from a Knock Out has to score
+    strictly between a doomed one and a safe one rather than falling off a cliff."""
+    assert sv._survives_to_spend.__doc__                      # the argument lives on the function
+    board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    assert sv._survives_to_spend(board, board.mine.active) == 0.0
+    for clock, expected in ((2, 0.5), (3, 0.75), (5, 0.9375)):
+        assert 1.0 - sv.halve(clock - 1) == pytest.approx(expected)
+    # strictly increasing in the clock, and never above 1 however far out the Knock Out is
+    grades = [1.0 - sv.halve(t - 1) for t in range(1, sv.HORIZON + 1)]
+    assert grades == sorted(grades) and grades[-1] < 1.0
+    assert len(set(grades)) == len(grades), "the grade collapsed — a clock read that discriminates 1 bit"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_survival_and_readiness_read_ONE_clock_and_cannot_disagree():
+    """The sole-supplier half of the fix, and the reason `_survival_clock` was extracted rather than
+    the call copied. `survival` grades a body's exposure by this clock and `readiness` discounts its
+    forward potential by the same one; two independently-written argument lists (the Bench-Harvest
+    pair, `opp_active`, the THEIRS-direction Damage Formula context) is exactly how two families come
+    to believe a body dies on different turns."""
+    board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    exposed = {round(b.prize_at_risk): b.turns_to_ko_me for b in sv._exposed_bodies(board)}
+    for body in board.mine.bodies:
+        clock = exposed[round(float(body.prize_value))]
+        assert sv._survives_to_spend(board, body) == pytest.approx(1.0 - sv.halve(clock - 1))
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_NOW_leg_takes_NO_survivability_discount():
+    """The half of `_readiness_odds` this must not touch, pinned as a number rather than argued.
+
+    A body that can fire its payoff THIS turn attacks before the opponent's turn happens at all, so
+    its clock says nothing about whether the potential is spendable — `readiness_p` stays the answer.
+    Mega Starmie ex holding ``{W}{W}{W}`` pays Nebula Beam ``{C}{C}{C}`` outright, so the now-leg
+    reads 1.0; damaging it to a one-shot clock must not move `readiness` by anything at all.
+
+    This is also where Issue #351's masking bites, and the assertion is written to fail loudly if it
+    ever stops: the same `max(now, forward)` that exempts a real attacker here also exempts a BENCHED
+    body that cannot attack at all."""
+    doomed, safe = {}, {}
+    sv.state_value(_successor_board(active_energies=[E_W] * 3, active_damage=130), working=doomed)
+    sv.state_value(_successor_board(active_energies=[E_W] * 3), working=safe)
+    board = _successor_board(active_energies=[E_W] * 3, active_damage=130)
+    body = board.mine.active
+    assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0
+    assert sv._survives_to_spend(board, body) == 0.0, "the fixture's Active is not doomed"
+    assert doomed["readiness"] == pytest.approx(safe["readiness"]), (
+        "the survivability discount reached the now-leg — a body attacking THIS turn was charged "
+        "for a Knock Out that happens after it swings")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
+    """Issue #332's first acceptance criterion, executable. `readiness_odds` consults
+    `turns_to_ko_me`, which `survival` prices, and the one-fact-one-family rule is this module's
+    headline — so the call has to be argued rather than assumed.
+
+    The registry fact stays `readiness_odds`: the clock is an INPUT to that probability exactly as
+    `turns_to_afford` is, and the two families price two different CONSEQUENCES of it in two
+    different currencies (the prizes handed over when the body falls, against the potential that
+    dies with it). That is `survival`'s own shipped precedent — its `_predicted_loss` consults
+    `prize_race`'s counts as a win-condition TEST and keeps `predicted_loss` as the fact — and both
+    places refuse the alternative, because a fact renamed to dodge the detector makes the detector
+    pass VACUOUSLY."""
+    assert sv.double_counted() == []
+    assert sv.registry_gaps() == []
+    assert sv.FAMILIES["readiness"].reads == ("body_payoff", "readiness_odds", "role_relevance")
+    assert "turns_to_ko_me" in sv.FAMILIES["survival"].reads
+    assert "turns_to_ko_me" not in sv.FAMILIES["readiness"].reads
+    # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
+    assert "turns_to_ko_me" in sv.FAMILIES["readiness"].composition
+
+
 @pytest.mark.req("REQ-STATEVALUE-0009")
 def test_a_heal_above_the_incoming_raises_survival():
     """The second case the ruling names, and the family that motivated differencing in the first
