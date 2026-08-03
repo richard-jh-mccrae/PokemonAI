@@ -611,7 +611,9 @@ def render_report(entries, vocab: Vocabulary, reviewed: dict, src_root: Path = D
         "",
         f"* ledger entries: **{sum(1 for v in reviewed.values() if isinstance(v, dict))}**",
         f"* entries naming a retired rung: **{len(entries)}**",
-        "* by disposition: " + ", ".join(f"`{d}` **{len(v)}**" for d, v in sorted(by_disposition.items())),
+        "* by disposition: " + (
+            ", ".join(f"`{d}` **{len(v)}**" for d, v in sorted(by_disposition.items())) or "(none)"
+        ),
         f"* live rung vocabulary: **{len(vocab.live)}** `Hypothesis(id=…)` in `src/` "
         f"(+ **{len(vocab.sound_rules)}** `SoundRule(id=…)`)",
         f"* retired rung vocabulary: **{len(vocab.retired)}**",
@@ -751,8 +753,10 @@ def main(argv=None) -> int:
     unresolved = unresolved_tally(reviewed, vocab)
     print(f"ledger entries          : {sum(1 for v in reviewed.values() if isinstance(v, dict))}")
     print(f"naming a RETIRED rung   : {len(entries)}")
-    print("  by disposition        : " + ", ".join(
-        f"{d}={n}" for d, n in sorted(Counter(e.disposition for e in entries).items())))
+    disposition_summary = ", ".join(
+        f"{d}={n}" for d, n in sorted(Counter(e.disposition for e in entries).items())
+    ) or "(none)"
+    print("  by disposition        : " + disposition_summary)
     print(f"live rungs in src/      : {len(vocab.live)} Hypothesis + {len(vocab.sound_rules)} SoundRule")
     print(f"retired rung vocabulary : {len(vocab.retired)}")
     print(f"unresolved tokens       : {len(unresolved)} distinct / {sum(unresolved.values())} occurrences")

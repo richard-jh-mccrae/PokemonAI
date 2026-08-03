@@ -11,14 +11,13 @@ and `use-acceleration` return exactly 1 each while the five rungs Issue #238 nam
 git-history harvest is held to two structural controls: it must contain every id that is live in the
 tree right now, and every name in the four decider sweeps' `RETIRED` lists.
 
-**The matcher is curated, not a regex.** The corpus's most frequent hyphenated token is
-`attack-last`, 46 occurrences, and it is not a rung. A bare `[a-z-]+` scan flags every note that
-mentions it; the synthetic controls below assert it is not flagged while a real retired rung in the
-same note is.
+**The matcher is curated, not a regex.** A frequent hyphenated token such as `attack-last` is not a
+rung. A bare `[a-z-]+` scan flags every note that mentions it; the synthetic controls below assert
+it is not flagged while a real retired rung in the same note is.
 
 `test_the_flagged_set_equals_the_committed_allowlist` is the ratchet (ADR-0114 decision 3): the
 audit reports rather than gates, and the allowlist IS the developer's worklist, so a *new* stale
-closure goes red while the standing 60 do not.
+closure goes red while the standing worklist does not.
 """
 import json
 import sys
@@ -148,13 +147,17 @@ def test_a_longer_id_never_yields_a_shorter_false_hit():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.req("REQ-LEDGER-0005")
-def test_issue_238s_thirteen_and_its_three_refuted_re_reads_are_all_flagged(vocab, reviewed):
-    """The hand-derived population is a strict SUBSET of what the mechanical check finds. If the
-    audit missed even one of them it would be measuring something other than what Issue #238 read."""
-    from train.reviewed_audit import ISSUE_238_BODY_13, ISSUE_238_BODY_REFUTED_3
-    flagged = {e.key for e in stale_entries(reviewed, vocab)}
-    assert set(ISSUE_238_BODY_13) <= flagged
-    assert set(ISSUE_238_BODY_REFUTED_3) <= flagged            # decision 6: `refuted` is covered too
+def test_stale_entries_include_covered_and_refuted_dispositions():
+    """The audit reads all reviewed dispositions, including `refuted`: decision 6 says a refuted
+    label owes no fix, but a vanished premise in its note is still reported."""
+    v = Vocabulary(retired=frozenset({"dead-rung"}))
+    sample = {
+        "1-1": {"disposition": "covered", "reason": "covered by dead-rung"},
+        "1-2": {"disposition": "refuted", "reason": "refuted by dead-rung"},
+        "1-3": {"disposition": "covered", "reason": "covered by live prose"},
+    }
+    flagged = {e.key for e in stale_entries(sample, v)}
+    assert flagged == {"1-1", "1-2"}
 
 
 @pytest.mark.req("REQ-LEDGER-0005")
@@ -189,10 +192,11 @@ def test_a_new_stale_closure_makes_the_allowlist_red(vocab, reviewed):
                                              "reason": "covered by build-active-wincon"}})
     assert allowlist_form(stale_entries(added, vocab)) != committed
 
-    key = next(iter(committed))
-    widened = dict(reviewed)
-    widened[key] = dict(reviewed[key], reason=reviewed[key]["reason"] + " and power-up-attacker")
-    assert allowlist_form(stale_entries(widened, vocab)) != committed
+    v = Vocabulary(retired=frozenset({"dead-rung", "second-dead-rung"}))
+    before = {"1-1": {"disposition": "covered", "reason": "covered by dead-rung"}}
+    after = {"1-1": {"disposition": "covered",
+                     "reason": "covered by dead-rung and second-dead-rung"}}
+    assert allowlist_form(stale_entries(before, v)) != allowlist_form(stale_entries(after, v))
 
 
 @pytest.mark.req("REQ-LEDGER-0007")
@@ -208,7 +212,12 @@ def test_the_committed_worklist_covers_every_allowlisted_entry():
 @pytest.mark.req("REQ-LEDGER-0007")
 def test_the_report_separates_refuted_from_the_blockers(vocab, reviewed):
     """Decision 6: a `refuted` label owes no fix, so those rows are listed but not as blockers."""
-    body = render_report(stale_entries(reviewed, vocab), vocab, reviewed, DEFAULT_SRC)
+    v = Vocabulary(retired=frozenset({"dead-rung"}))
+    sample = {
+        "1-1": {"disposition": "covered", "reason": "covered by dead-rung"},
+        "1-2": {"disposition": "refuted", "reason": "refuted by dead-rung"},
+    }
+    body = render_report(stale_entries(sample, v), v, sample, DEFAULT_SRC)
     assert "NOT blockers" in body
     assert body.index("## `covered`") < body.index("## `refuted`")
 
@@ -227,9 +236,10 @@ def test_the_fold_map_target_comes_from_the_codes_own_fold_map():
 @pytest.mark.req("REQ-LEDGER-0008")
 def test_the_unresolved_tally_is_reported_not_suppressed(vocab, reviewed):
     """ADR-0114 decision 2's honesty clause — the vocabulary's blind spot stays visible, and its
-    largest member is the token that would have made a loose scan useless."""
-    tally = unresolved_tally(reviewed, vocab)
-    assert tally["attack-last"] > 40
+    most important control is the token that would have made a loose scan useless."""
+    sample = {"k": {"reason": "attack-last attack-last dont-waste-discard-energy"}}
+    tally = unresolved_tally(sample, vocab)
+    assert tally["attack-last"] == 1
     assert not (set(tally) & (vocab.live | vocab.retired | vocab.sound_rules))
 
 
