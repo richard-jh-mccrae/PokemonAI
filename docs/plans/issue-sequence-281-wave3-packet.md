@@ -1,7 +1,45 @@
 # Wave-3 packet — issue-sequence run (Issues #281, #280, #343, #282, #345, #346, #284, #285, #286)
 
-Gate flips from this batch, pending developer ruling. None conformed into either baseline.json —
-a baseline is a ruling record, not something a sub-issue may recapture on its own recognisance.
+**RULED by the developer 2026-08-03. This packet is closed.** Nothing in it was conformed, and
+neither `data/leaf_lab/baseline.json` nor `data/decider_lab/baseline.json` was recaptured at any
+point in the run — a baseline is a ruling record, not something a sub-issue may recapture on its own
+recognisance.
+
+The one gate flip is ruled **REVERT**; the canonical record, with the developer's line verbatim and
+the card fact that refutes this packet's own reasoning, is **Batch 8 of
+`data/leaf_lab/wave3-rulings.md`**. Every other line was ruled *"follow the recommendation"*, which
+is tabulated below. Read the dispositions table before the analysis sections — several of those
+sections argue for a recommendation that the ruling has now settled.
+
+## Dispositions — the developer's ruling, 2026-08-03
+
+| line | issue | recommendation as filed | ruling |
+|---|---|---|---|
+| Leaf flip `81906755\|1\|decision\|9` | #280 | REVERT | **REVERT** — and the packet's *reasoning* is refuted too; see below |
+| 15 deferred `mega_starmie` frames: 0 of 15 moved, twice | #280 | informational | noted; prediction refuted, no action |
+| #343 reads moved, no decision did | #343 | no ruling owed | accepted |
+| #282 premise refuted — fix already at HEAD | #282 | only the residue shipped | accepted |
+| #345 / #346 zeros, explained + controlled | #345/#346 | accept as built | **accepted as built** |
+| L1 two `owner=#263` rulings may be retirable | #284 | KEEP both, re-check at #291 | **KEEP both** |
+| L2 family sees their bench, cannot grade it | #284 | no action inside this track | **no action** |
+| L3 two defects in #284's own spec | #284 | accept as built | **accepted as built** |
+| L1 denial credit invisible under `_THREAT_CAP` | #285 | accept as built; rule the anchor as ONE decision over three issues | **accepted as built**; the anchor stays a single open decision spanning #284, #285 and itself |
+| L1 forward fix live on deck, masked on corpus | #286 | RULE, do not conform | **not conformed**; Issue #351 carries the spec and stays queued |
+| L2 leaf-board hypothesis | #286 | refuted by measurement | no action |
+| L3 shipped Pilot prices this; successor has no `cashed` | #286 | informational | noted, bears on POC-T4 |
+| L4 `energies` is not a card list; 3 hardcoded provision readings | #286 | packet line only | **packet line only** |
+| `attach_value` passes card ids into the unit list | #286 | packet line only — corpus-ruled equation | **packet line only** |
+| Post-merge `84890060\|1\|decision\|11` windfall lost | main (#283/#287) | not a baseline regression | recorded, no action |
+
+**The one thing still open** is the `_THREAT_CAP` / `_MAX_PRIZE_VALUE` anchor, deliberately: it was
+ruled as a single decision covering Issues #284, #285 and the anchor itself rather than three
+separate ones, and no work in this run touched it.
+
+## The flip as originally filed
+
+The analysis below is preserved as written, pre-ruling. Its recommendation was upheld; its
+*explanation* was not — the developer's ruling turns on Teal Mask Ogerpon ex's Ability, which this
+packet never read. See Batch 8 of `data/leaf_lab/wave3-rulings.md`.
 
 Each sub-issue in this run measures its own contribution by an explicit **before/after A/B**: stash
 the working tree, run the gate against the committed baseline, unstash, run it again, diff the two
@@ -12,7 +50,7 @@ claim as *"this change moved nothing"*.
 
 | frame | gate | issue | old | new | recommendation |
 |---|---|---|---|---|---|
-| `81906755\|1\|decision\|9` | leaf (Discrimination) | Issue #280 | OK, rank 1/2, ruled option scores 480.70 | MISS, rank 2/2, ruled option 418.20 vs top 475.45 | **REVERT** — the reading is card-true, the resulting preference is not. See below. |
+| `81906755\|1\|decision\|9` | leaf (Discrimination) | Issue #280 | OK, rank 1/2, ruled option scores 480.70 | MISS, rank 2/2, ruled option 418.20 vs top 475.45 | **RULED REVERT** 2026-08-03 (recommendation upheld, reasoning refuted — `wave3-rulings.md` Batch 8). |
 
 Issue #281: **zero** flips on either gate.
 Issue #280: **one** leaf flip (above); Decision Gate **PASS, 0 picks moved, 0 rulings moved**.
