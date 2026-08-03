@@ -272,10 +272,30 @@ _READINESS_CAP = 0.3
 #: their exposure is a standing POSITION, and the prize for actually converting it is `attack_ev`'s
 #: at the terminal action. See :func:`threat` for why the my-side/their-side asymmetry is real.
 #:
-#: Nominally a RUNAWAY GUARD, like its three positional siblings — which means it should not bite in
-#: normal play. It bites on 100% of inputs instead, because it has no SCALE ANCHOR in front of it;
-#: `threat`'s `blind_to` carries the measurement and the derivation of the anchor that would fix it.
+#: A RUNAWAY GUARD, like its three positional siblings, and since Issue #329 it behaves like one: with
+#: :data:`_THREAT_W` in front of it the guard bites on **45 of 614** non-empty corpus inputs (7.3%)
+#: rather than on 100%. It bites at all because `threat` sums over up to six targets while the anchor's
+#: divisor is ONE target's ceiling — 5 prizes of simultaneously-reachable exposure is exactly the
+#: extreme board a runaway guard is for. **Do not fold the anchor into this number.**
+#: :data:`POSITIONAL_MAX` sums the four positional caps and :data:`LOSS_PRIZES` is derived from that
+#: sum, so shrinking `_THREAT_CAP` would silently move the predicted-loss dominance constant.
 _THREAT_CAP = 0.1
+#: **`threat`'s scale anchor — DERIVED, not authored** (Issue #329, ADR-0107's form applied to the
+#: third member of the opponent-target family).
+#:
+#: T3 ported the incumbent rung `min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)`, whose
+#: input is a printed attack's DAMAGE and whose weight is 0.1 *per damage point* — so its guard bit
+#: only past 1000 damage. The port re-denominated the input into PRIZES and carried the cap across
+#: **without the weight**, leaving `threat` the one positional family with a runaway guard and no
+#: scale anchor. Measured consequence, over one full leaf pass (2061 calls, 614 non-empty): 33
+#: distinct input sums collapsed to exactly 2 distinct outputs.
+#:
+#: Both operands are already-shipped constants, so this adds no scaffold debt. The divisor is
+#: `needs.TARGET_VALUE_CEILING` (3.9 = `MAX_PRIZE_VALUE` 3 + `_SURVIVAL_CAP` 0.9), the true ceiling of
+#: `opponent_target_value` *as a function* and ADR-0107's own choice for the sibling `gust_target`
+#: seam. Measured against the alternative `_MAX_PRIZE_VALUE` (3.0) on the same 614 inputs: 3.9 yields
+#: **28** distinct outputs with the guard biting 45 times, 3.0 yields 26 with it biting 180 times.
+_THREAT_W = _THREAT_CAP / _needs.TARGET_VALUE_CEILING
 
 #: **The per-body deploy band, in prizes** — `currency.DEPLOY_BAND` (25 damage) across
 #: `PRIZE_DAMAGE_RATE`. The ratified ADR-0086 answer to "what is one body on the board worth", reused
@@ -516,45 +536,51 @@ REGISTRY: tuple[TermFamily, ...] = (
             "no multiplicity, so Kyurem's Trifrost (*110 damage to 3 of your opponent's Pokémon*) "
             "and Greninja ex's 2-target rider read as reachable against a fourth and fifth body "
             "they could not actually all fell. An over-read, and unrepresentable as a fix without a "
-            "new parsed field. It is absorbed by `_THREAT_CAP` today — but read the SATURATION "
-            "entry below before taking comfort from that: the cap binds on every non-empty input, "
-            "so an extra target is currently free in BOTH directions, and the day the parked scale "
-            "anchor lands this over-read starts costing something.",
-            "the BENCH LEG'S OWN REACH, whenever their Active is already reachable — the "
-            "saturation entry below is not a separate topic, it is the ceiling on what Issue #284 "
-            "could deliver. `min(_THREAT_CAP, sum)` binds on every non-empty input, so a second "
-            "reachable body adds exactly 0 and a chipped bench under a reachable Active scores "
-            "identically to a fresh one. Measured on the 371-frame corrections corpus: the bench "
-            "leg is ASKED 904 times, returns a non-zero reach 338 times, and `threat` moves on 13 "
-            "frames — every one of them 0.0 -> 0.1, i.e. exactly the boards where the Active leg "
-            "read nothing. So the family now SEES their bench and still cannot grade it, and the "
-            "unlock is the same parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, not more "
-            "reachability. Recorded rather than fixed: applying that anchor is a calibration change "
-            "this module has already measured as a corpus regression.",
-            "THE DENIAL CREDIT'S OWN MAGNITUDE, for the same reason and to a stricter degree "
-            "(Issue #285). Every appended target contributes `prize_advance >= 1.0` — "
-            "`CombatMath.prize_value` returns 1, 2 or 3 and never less — so `min(_THREAT_CAP, sum)` "
-            "with `_THREAT_CAP` 0.1 binds on EVERY frame where the loop appends anything at all, "
-            "while the largest credit measured anywhere on the corrections corpus is 0.054 prizes "
-            "(Riolu 30 → Mega Lucario ex 270: 0.045 x 240/100 x halve(1); the doctrine's headline "
-            "Staryu 20 → Mega Starmie ex 210 is smaller still at 0.043). The credit is therefore "
-            "invisible in `state_value` on 100% of boards, not merely on already-firing ones. It is "
-            "nonetheless correct where it is READ, and that is where it is measured: "
-            "`_reachable_target_values` is module-private with exactly one caller — `state_value` "
-            "itself, one line below — so *no consumer outside this module sees it today*, and the "
-            "claim being made is about the extractor's arithmetic, not about a downstream reader. "
-            "Same unlock as the entry above and the same refusal: `_THREAT_CAP / _MAX_PRIZE_VALUE` "
-            "is a calibration change this track was told not to make, and it must be measured "
-            "TOGETHER with this credit and Issue #284's widening rather than one at a time.",
+            "new parsed field. **It was free while the cap bound on every input; since Issue #329's "
+            "scale anchor it is not.** A phantom extra target now costs `_THREAT_W` x its "
+            "`opponent_target_value` — 0.0256 prizes for a 1-prize body, up to 0.0769 for a Mega ex "
+            "— where it previously cost exactly 0, and the corpus carries 2 or 3 targets on 74 of "
+            "614 non-empty calls. So this entry moved from harmless to priced, in the OVER-read "
+            "direction, and it is the one entry here the anchor made worse rather than better.",
+            "the BENCH LEG'S OWN REACH beyond the SNIPE RIDER — narrowed by Issue #284 and no "
+            "longer erased by the cap. The old form of this entry recorded a ceiling that Issue "
+            "#329 removed: `min(_THREAT_CAP, sum)` bound on every non-empty input, so a second "
+            "reachable body added exactly 0 and a chipped bench under a reachable Active scored "
+            "identically to a fresh one — 904 asks, 338 live reaches and `threat` moving on 13 "
+            "frames, every one of them 0.0 -> 0.1. **Re-measured after the anchor, same instrument, "
+            "same corpus (one leaf pass, 2061 calls, the leg severed to 0.0 as the control):** the "
+            "bench leg now moves `threat` on **336** of those calls by 0.023 to 0.077 prizes, and "
+            "**58** of the 336 are boards where the Active leg ALREADY read something — the case "
+            "that used to be worth zero (the most common shape is 0.0769 -> 0.1, 31 calls). What "
+            "remains blind is the leg's reach itself: the route is the indivisible single-target "
+            "rider, so spread payloads and un-parsed riders still contribute nothing at all.",
+            "THE DENIAL CREDIT'S SIZE relative to the prize leg it rides on (Issue #285) — real, "
+            "read, and small. Until Issue #329 it was not merely small but INVISIBLE: every "
+            "appended target contributes `prize_advance >= 1.0` (`CombatMath.prize_value` returns "
+            "1, 2 or 3 and never less), so `min(_THREAT_CAP, sum)` bound on every frame the loop "
+            "touched and the credit could not move the family on ANY board. **Re-measured after the "
+            "anchor** (same leaf pass, `_denied_forward_payoff` severed to 0.0 as the control): the "
+            "credit changes 327 of 614 non-empty inputs and now moves `threat`'s OUTPUT on **296** "
+            "calls, by **0.000115 to 0.002192** prizes. The residual 31 are where the runaway guard "
+            "absorbs it — small, not zero, and no longer structural. "
+            "**Two credit maxima are recorded in this module and they measure different things; do "
+            "not overwrite one with the other.** 0.054 prizes is the largest SINGLE-target credit "
+            "on the corrections corpus (Riolu 30 → Mega Lucario ex 270: 0.045 x 240/100 x "
+            "halve(1); the doctrine's headline Staryu 20 → Mega Starmie ex 210 is smaller still at "
+            "0.043). 0.0855 is the largest TOTAL across every target in ONE `threat()` call, which "
+            "only became possible when Issue #284 let the loop append more than one body; at "
+            "`_THREAT_W` that is the 0.002192 above. Both are correct at their own seam.",
             "THE PRIZE a denied line would have YIELDED — the credit reads `owed_damage` only, so a "
             "pre-evolution whose forward form is a 3-prize Mega ex and one whose forward form is a "
             "1-prize body of the same printed damage price IDENTICALLY. That is a real gap against "
             "the doctrine's own headline, *\"trade 1 prize for a denied 3\"* — the sentence is about "
-            "PRIZES and this term answers in DAMAGE. It is not an oversight: `ForwardPayoff` carries "
-            "no prize leg, `development.evolve_marginal` prices its my-side mirror the same way, and "
-            "adding one here would price a forward form's prize value in a family whose `blind_to` "
-            "for the SAME quantity on the current form is `_MAX_PRIZE_VALUE`-capped and saturated. "
-            "Closing it means the parked scale anchor first; recorded so the damage-only reading is "
+            "PRIZES and this term answers in DAMAGE. Re-checked at Issue #329 and it SURVIVES the "
+            "scale anchor unchanged, because the anchor scales the whole marginal and adds no leg: "
+            "`ForwardPayoff` still carries no prize leg, and `development.evolve_marginal` still "
+            "prices its my-side mirror the same way, so adding one here would give the same card "
+            "two valuation bases across the board. What the anchor DID retire is the old reason "
+            "given for deferring it — *\"the parked scale anchor first\"* — so this is now a plain "
+            "ForwardPayoff-shape gap with no prerequisite, recorded so the damage-only reading is "
             "read as measured rather than as complete.",
             "THEIR DECKLIST, when crediting a denied forward payoff — `TheirSide.forward_payoff` "
             "reads the POOL-level forward index, so a Staryu on their board carries the Mega Starmie "
@@ -613,28 +639,6 @@ REGISTRY: tuple[TermFamily, ...] = (
             "opponent's never is (`_SideBase._deck_facts` claims `(None, None)`), so threading the "
             "context did NOT quietly give the deck count a reader the way it gave the hand size "
             "one. Narrowed, not closed; T4 must always-expand disruption plays.",
-            "SATURATION INTO ONE BIT — this family cannot tell a 1-prize Basic from a 3-prize Mega "
-            "ex. `needs.opponent_target_value` returns `prize_advance` essentially unscaled at the "
-            "``survival_shift=0`` this module passes, so `min(_THREAT_CAP, sum)` binds on EVERY "
-            "non-empty input. Measured 2026-08-02 across Issue #262's 22 gating frames: 0.0 on 20 "
-            "and exactly the cap on 2, never a value between. The cause is a unit slip in the port "
-            "— the incumbent rung is `min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * magnitude)` with "
-            "`_PLANNER_THREAT_W` 0.1 per DAMAGE point (`planner._threat_magnitude`), so its guard "
-            "bit only past 1000 damage; T3 re-denominated the input into PRIZES and carried the cap "
-            "across without the weight, leaving this the one positional family with a runaway guard "
-            "and no scale anchor, against the rule the module header states for all four. "
-            "**The fix is derived and MEASURED, and deliberately NOT applied.** It is "
-            "`_THREAT_CAP / _MAX_PRIZE_VALUE`, so a maximum-yield target lands at the band and "
-            "everything below grades (1 prize -> 0.033, 2 -> 0.067, 3 -> 0.1), leaving "
-            "`POSITIONAL_MAX` and `ko-score-band` untouched. Applied, its ONLY measured effect on "
-            "the corpus is negative: the Discrimination Gate goes 65 -> 68 unruled and loses two "
-            "`MISS -> OK` improvements, five frames worse and none better. All five were winning by "
-            "a margin SMALLER than the 0.067 prizes of threat advantage the saturation handed them "
-            "— each reaches a 1- or 2-prize target the unscaled term priced at the 3-prize maximum "
-            "— so removing the windfall is correct and still costs rulings this module cannot "
-            "write. Parked with the other calibration findings for the post-POC fit against a "
-            "held-out set (Issues #146-#148); `test_state_value.py`'s strict-xfail TARGET is the "
-            "standing record and turns red the day it lands.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
             "STEP: `_reachable_target_values` credits nothing for a body unless my Active's best "
             "reachable damage AGAINST THAT SEAT already meets its remaining HP, so a Mega "
@@ -643,7 +647,8 @@ REGISTRY: tuple[TermFamily, ...] = (
             "legs are still steps, so bench chip that does not reach the rider still prices 0. "
             "This family is `survival`'s mirror "
             "in name and NOT in form — survival grades continuously by a clock "
-            "(`halve(turns_to_ko_me - 1)`), threat is on/off — and the asymmetry is exactly what "
+            "(`halve(turns_to_ko_me - 1)`), while this family's REACHABILITY is on/off however "
+            "finely Issue #329's anchor grades what a reached body yields — and that is exactly what "
             "the wave-3 ruling on `83116501|0|decision|60` objects to: *\"Our Starmie cannot KO the "
             "Lucario in under 3 turns. We can KO it with 2 Jetting Blows and a single Nebula "
             "Beam.\"* A multi-turn KO plan prices 0 every turn until the last one. Closing it needs "
@@ -1517,17 +1522,25 @@ def threat(targets: Iterable[float]) -> float:
     six. CONVERTING any of them is still `attack_ev`'s at the terminal action; what this family
     prices is the exposure standing on the board (see its `blind_to`).
 
-    **POSITIONAL, so capped** at :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 /
-    `KO_SCORE`), which is where the my-side/their-side asymmetry described in the module header
-    lives. Their exposure standing on the board is worth something — it constrains what they can
-    afford to leave in front — but the PRIZE for converting it belongs to the attack that converts
-    it, and `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for one
-    Knock Out twice.
+    **POSITIONAL, so SCALED then capped** — :data:`_THREAT_W` crosses the prize-denominated sum into
+    the positional band, and :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 / `KO_SCORE`) is
+    the runaway guard behind it. That band is where the my-side/their-side asymmetry described in the
+    module header lives. Their exposure standing on the board is worth something — it constrains what
+    they can afford to leave in front — but the PRIZE for converting it belongs to the attack that
+    converts it, and `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for
+    one Knock Out twice.
 
-    **This family SATURATES, and that is a known open defect** — see its `blind_to` entry
-    *"saturation into one bit"* for the measurement, the derivation of the fix, and the measured
-    reason the fix is not applied here yet."""
-    return min(_THREAT_CAP, float(sum(float(t) for t in targets)))
+    **The anchor is in FRONT of the cap and the cap is untouched** (Issue #329). Order is
+    load-bearing rather than stylistic: :data:`POSITIONAL_MAX` sums the four positional caps and
+    :data:`LOSS_PRIZES` is derived from that sum, so folding the anchor into `_THREAT_CAP` would move
+    the predicted-loss dominance constant without anything saying so.
+
+    **The guard still bites, on 7.3% of non-empty corpus inputs, and that is not a residual defect.**
+    This is a SUM over up to six targets while `_THREAT_W`'s divisor is a SINGLE target's ceiling, so
+    reaching a 3-prize Mega ex and a 2-prize body at once sums to 5.0 — 1.28x the divisor. Five prizes
+    of simultaneously-reachable exposure is the extreme board a runaway guard exists for. Do not write
+    *"the cap never binds"* anywhere; it is measurably false."""
+    return min(_THREAT_CAP, _THREAT_W * float(sum(float(t) for t in targets)))
 
 
 def readiness(bodies: Iterable[ReadyBody]) -> float:

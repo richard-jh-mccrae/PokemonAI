@@ -344,23 +344,35 @@ limitation of that guard, not only of this term.
 > deck-agnostic, so a Staryu carries the Mega Starmie ex credit whether or not they run one. Both are
 > over-reads, both named in `threat.blind_to` rather than papered over.
 >
-> **What this fix does NOT reach, and it is the same wall F6 hit — harder.** Every appended target
+> **What this fix did NOT reach, and it was the same wall F6 hit — harder.** Every appended target
 > carries `prize_advance >= 1.0` (`prize_value` is 1, 2 or 3 and never less), so `min(_THREAT_CAP,
-> sum)` with `_THREAT_CAP` 0.1 binds on **every** frame the loop touches, and the credit's measured
+> sum)` with `_THREAT_CAP` 0.1 bound on **every** frame the loop touches, and the credit's measured
 > range is 0.0045-0.054 prizes — the maximum being Riolu (30) → Mega Lucario ex (270), owed 240,
 > while the doctrine's headline Staryu (20) → Mega Starmie ex (210) is owed 190 and scores 0.043.
 > It also answers in DAMAGE where the doctrine's *"trade 1 prize for a denied 3"* is about PRIZES:
 > `owed_damage` is the only leg read, so two forward forms of equal printed damage and unequal prize
 > value price the same. Named in `threat.blind_to`, not left implied.
-> The credit is therefore invisible in `state_value` on 100% of boards
+> The credit was therefore invisible in `state_value` on 100% of boards
 > rather than merely on already-firing ones. Measured on the 371-frame corrections corpus:
 > `_denied_forward_payoff` is ASKED **270** times, returns a non-zero credit **110** times, moves
 > `_reachable_target_values` on **51 frames** (49 `mega_starmie`, 1 `dragapult_ex`, 1
-> `mega_lucario`) — and moves `threat` on **0**. Control C, same harness with the reachability read
-> severed instead, moves `threat` on **114** frames, so the zero is the cap and not the instrument.
-> Carried as a wave-3 packet line (`docs/plans/issue-sequence-281-wave3-packet.md`); the unlock is the
-> parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, which must be measured TOGETHER with this credit and
-> F6's widening rather than one at a time.
+> `mega_lucario`) — and moved `threat` on **0**. Control C, same harness with the reachability read
+> severed instead, moves `threat` on **114** frames, so the zero was the cap and not the instrument.
+>
+> > **The wall came down — BUILT, Issue #329, POC-T3.5.** With `state_value._THREAT_W` =
+> > `_THREAT_CAP / needs.TARGET_VALUE_CEILING` in front of the cap, the credit reaches the family.
+> > Re-measured on one leaf pass (2061 `threat()` calls, `_denied_forward_payoff` severed to `0.0` as
+> > the control): the credit changes **327** of 614 non-empty inputs and moves `threat`'s OUTPUT on
+> > **296** calls, by **0.000115 to 0.002192** prizes. The residual 31 are where the runaway guard
+> > absorbs it. Small, read, and no longer structurally zero. **Two maxima now coexist and neither
+> > supersedes the other:** 0.054 prizes is the largest SINGLE-target credit (Riolu → Mega Lucario
+> > ex, above); 0.0855 is the largest TOTAL across all targets in ONE `threat()` call, which only
+> > became possible once F6's widening let the loop append more than one body. The DAMAGE-versus-
+> > PRIZES gap in the paragraph above is unaffected and was re-checked rather than assumed —
+> > `ForwardPayoff` still carries no prize leg — but its stated prerequisite (*"the parked scale
+> > anchor first"*) is discharged, so it is now a plain `ForwardPayoff`-shape gap with nothing in
+> > front of it. Note also that the anchor's divisor is `TARGET_VALUE_CEILING` (3.9), not the
+> > `_MAX_PRIZE_VALUE` (3.0) every pre-#329 record names.
 >
 > Coverage-matrix **row 5** and **row 6**'s footnote are **left as audited on purpose** — Issue #291
 > owns reconciling the report, and every sibling in this track recorded its outcome the same way, in
@@ -430,15 +442,29 @@ Zeraora ×1) — and it applies to a plain gust-and-KO too, which every deck has
 > sole-supplier ruling forbids. What the finding actually needs from that module is its *subject* —
 > that a bench route exists — and that comes off `AttackStat.benchSnipe` directly.
 >
-> **What this fix does NOT reach, and it is the same wall the family already had.** `threat` is
-> `min(_THREAT_CAP, sum)` and its own `blind_to` records the measured saturation: the cap binds on
-> every non-empty input. So the bench leg moves the scalar exactly when the ACTIVE leg reads 0, and
-> a chipped bench under an already-reachable Active still scores identically to a fresh one.
+> **What this fix did NOT reach, and it was the same wall the family already had.** `threat` was
+> `min(_THREAT_CAP, sum)` and its own `blind_to` recorded the measured saturation: the cap bound on
+> every non-empty input. So the bench leg moved the scalar exactly when the ACTIVE leg read 0, and
+> a chipped bench under an already-reachable Active still scored identically to a fresh one.
 > Measured on the 371-frame corrections corpus: the bench leg is asked 904 times, returns a non-zero
-> reach 338 times, and `threat` moves on **13** frames — every one of them `0.0 → 0.1`. The
-> discrimination that would make the rest of them count is the parked `_THREAT_CAP /
-> _MAX_PRIZE_VALUE` scale anchor, which is derived, measured, and deliberately not applied. Carried
-> as a wave-3 packet line (`docs/plans/issue-sequence-281-wave3-packet.md`), not fixed here.
+> reach 338 times, and `threat` moved on **13** frames — every one of them `0.0 → 0.1`. The
+> discrimination that would make the rest of them count is the `_THREAT_CAP / TARGET_VALUE_CEILING`
+> scale anchor.
+>
+> > **The wall came down — BUILT, Issue #329, POC-T3.5.** The anchor landed as
+> > `state_value._THREAT_W = _THREAT_CAP / needs.TARGET_VALUE_CEILING` (0.1 / 3.9), in FRONT of the
+> > cap so `POSITIONAL_MAX` (3.4) and `LOSS_PRIZES` (28.9) are byte-identical. Note the divisor: the
+> > sentence above and every other pre-#329 record name `_MAX_PRIZE_VALUE` (3.0), and 3.9 is what
+> > shipped — it is the true ceiling of `opponent_target_value` *as a function*, ADR-0107's own
+> > choice for the sibling `gust_target` seam, and it discriminates strictly better (28 distinct
+> > outputs against 3.0's 26, with the runaway guard biting on 45 of 614 non-empty corpus inputs
+> > instead of 180). **Re-measured with the same instrument** — one leaf pass, 2061 `threat()` calls,
+> > the bench leg severed to `0.0` as the control: the leg now moves `threat` on **336** calls by
+> > 0.023 to 0.077 prizes, and **58 of the 336 are boards where the Active leg already read
+> > something** — precisely the case this note recorded as worth exactly zero. The commonest shape is
+> > no longer `0.0 → 0.1` but `0.0769 → 0.1` (31 calls). The guard still bites, on 7.3% of non-empty
+> > inputs, because this is a SUM over up to six targets while the divisor is ONE target's ceiling;
+> > *"the cap never binds"* must not be asserted anywhere.
 >
 > Row 5 of the coverage matrix above and #6's footnote are **left as audited on purpose** — Issue
 > #291 owns reconciling the report, and every sibling in this track recorded its outcome the same

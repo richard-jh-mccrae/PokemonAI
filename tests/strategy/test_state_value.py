@@ -86,7 +86,7 @@ from __future__ import annotations
 
 import pytest
 
-from common import currency, state_value as sv
+from common import currency, needs as _needs, state_value as sv
 from common.card_worth import ROLE_TIER, TAG_TIER
 from common.cards import CardFunctions
 from common.effects import CardEffects
@@ -1541,36 +1541,91 @@ def test_more_cards_in_THEIR_hand_never_improves_survival():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
-@pytest.mark.xfail(strict=True, reason="OPEN DEFECT, diagnosed and parked — see the test body and "
-                                       "`threat`'s `blind_to` entry 'SATURATION INTO ONE BIT'")
 def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit():
-    """A strict-xfail **TARGET** (the `test_hyperclosure_corpus.py` idiom): a defect stated as the
-    assertion that will pass the day it is fixed, so the fix cannot land silently and the defect
-    cannot rot into scenery. Green while `threat` is still broken; a red XPASS is the signal to
-    delete this mark.
+    """The regression guard for Issue #329, and the ex-strict-xfail TARGET it discharges.
 
     `threat`'s inputs are `needs.opponent_target_value`, which at the fail-closed
-    ``survival_shift=0`` this module passes returns the target's PRIZE value essentially unscaled —
-    1, 2 or 3 (`docs/rules.md` §6, verified at source: regular / ex / Mega ex). Against a 0.1-prize
-    cap with no weight in front of it, `min(cap, sum)` binds on **every** non-empty input, so the
-    family answers one bit — *is their Active reachable at all* — and a 1-prize Basic prices the
-    same as a 3-prize Mega ex. Measured on Issue #262's 22 gating Discrimination-Gate frames:
-    `threat` read 0.0 on 20 and exactly the cap on 2, never a value between.
+    ``survival_shift=0`` this module passes returns the target's PRIZE value plus Issue #285's small
+    forward credit — so a single target sits between 1.0 and ~3.09 (`docs/rules.md` §6, verified at
+    source: regular / ex / Mega ex). Against a 0.1-prize cap with **no weight in front of it**,
+    `min(cap, sum)` bound on every non-empty input and the family answered one bit — *is anything of
+    theirs reachable at all* — so a 1-prize Basic priced the same as a 3-prize Mega ex.
 
-    **Why the fix is not applied**, since it is derived rather than authored
-    (`_THREAT_CAP / _MAX_PRIZE_VALUE`) and leaves the positional band untouched: measured on the
-    corpus, its only effect is negative — the Discrimination Gate goes 65 -> 68 unruled and loses
-    two `MISS -> OK` improvements. Five frames were winning by a margin smaller than the 0.067
-    prizes of threat advantage the saturation handed them. Removing a windfall is correct AND costs
-    rulings, and this module does not get to write them; the fix is parked with the other
-    calibration findings for the post-POC fit (Issues #146-#148).
+    Measured on one full leaf-lab pass over the 371-frame corpus, 2061 `threat()` calls: **614
+    non-empty inputs spanning 33 distinct sums collapsed to exactly 2 distinct outputs** (0.0 x1447,
+    0.1 x614), with the cap binding on 614/614. That is the defect, and this test is the assertion
+    that could not hold while it stood.
+
+    The fix is :data:`sv._THREAT_W` = ``_THREAT_CAP / needs.TARGET_VALUE_CEILING`` — both terms
+    already-shipped constants, so it is DERIVED rather than authored and adds no scaffold debt. It
+    goes in FRONT of the cap, never into it: :data:`sv.POSITIONAL_MAX` sums the four positional caps
+    and :data:`sv.LOSS_PRIZES` is derived from that sum, so moving `_THREAT_CAP` itself would
+    silently move the predicted-loss dominance constant.
+    `test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved` is that guard.
 
     The assertion is STRICT monotonicity, which is exactly what the saturated form cannot satisfy,
-    plus the two band properties any fix must preserve."""
+    plus the band property any fix must preserve. The 3-prize case is asserted against the anchor's
+    own value rather than against the cap: under `/3.9` a maximum-value SINGLE target reads
+    0.076923, not the band — the cap is reached only by a multi-target SUM."""
     assert sv.threat([1.0]) < sv.threat([2.0]) < sv.threat([3.0])
-    assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_CAP)
-    assert sv.threat([3.0, 3.0]) == pytest.approx(sv._THREAT_CAP)
+    assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_W * sv._MAX_PRIZE_VALUE)
+    assert sv.threat([sv._MAX_PRIZE_VALUE]) < sv._THREAT_CAP, (
+        "a single maximum-prize target is BELOW the band — the divisor is the single-target ceiling "
+        "3.9, and only a sum over several targets can reach it")
     assert sv.threat(()) == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_threat_anchor_is_DERIVED_from_the_two_shipped_constants():
+    """`_THREAT_W` is a quotient of numbers this module and `needs` already verify at source, not a
+    seed. Asserted against the operands rather than against `0.025641…`, because a literal would
+    agree with a hand-typed constant as readily as with the derivation.
+
+    `TARGET_VALUE_CEILING` is the divisor because it is the true ceiling of `opponent_target_value`
+    *as a function* — `MAX_PRIZE_VALUE` 3 plus `_SURVIVAL_CAP` 0.9 — and because ADR-0107 already
+    chose it for `gust_target`, the sibling member of the opponent-target family. Measured both ways
+    over 614 non-empty corpus inputs: `/3.9` yields 28 distinct outputs with the guard biting on
+    45 (7.3%), `/3.0` yields 26 with the guard biting on 180 (29.3%)."""
+    assert sv._THREAT_W == sv._THREAT_CAP / _needs.TARGET_VALUE_CEILING
+    assert _needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved():
+    """The guard that proves Issue #329 scaled the INPUT rather than shrinking the guard.
+
+    `POSITIONAL_MAX` sums the four positional runaway guards, and `LOSS_PRIZES` — the predicted-loss
+    dominance constant — is derived from it. Had the anchor been folded into `_THREAT_CAP` (say
+    `0.1/3.9`), both would have moved silently and `ko-score-band`'s two-band argument would have
+    shifted with them. Pinned as the literals so the failure is legible rather than tautological."""
+    assert sv._THREAT_CAP == 0.1
+    assert sv.POSITIONAL_MAX == 3.4
+    assert sv.LOSS_PRIZES == 28.9
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_runaway_guard_still_guards_a_multi_target_SUM():
+    """The cap is not decoration after the anchor — it binds on 45 of 614 non-empty corpus inputs
+    (7.3%), and the reason is structural: `threat` sums over up to six targets while
+    `TARGET_VALUE_CEILING` is ONE target's ceiling. Reaching a 3-prize Mega ex *and* a 2-prize body
+    sums to 5.0, which is 1.28x the divisor — five prizes of simultaneously-reachable exposure, which
+    is exactly the extreme board a runaway guard exists for.
+
+    The threshold is stated honestly: the sum used here is `>= TARGET_VALUE_CEILING`, not `2 x
+    _MAX_PRIZE_VALUE`. `[3.0, 3.0]` would clamp too, but it would not say where the edge is."""
+    assert sum([3.0, 2.0]) >= _needs.TARGET_VALUE_CEILING, "the test states the real threshold"
+    assert sv.threat([3.0, 2.0]) == pytest.approx(sv._THREAT_CAP)
+    assert sv.threat([sv._MAX_PRIZE_VALUE] * 6) == pytest.approx(sv._THREAT_CAP)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_threat_grades_the_COUNT_of_reachable_targets_not_merely_their_existence():
+    """The property Issue #284's widening created and this anchor makes readable. While the cap bound
+    on every non-empty input a second reachable body added exactly 0, so a chipped bench under a
+    reachable Active scored identically to a fresh one. Measured on the corpus: 74 of 614 non-empty
+    calls carry 2 or 3 targets, and all 74 were flattened."""
+    assert sv.threat([1.0]) < sv.threat([1.0, 1.0]) < sv.threat([1.0, 1.0, 1.0])
+    assert sv.threat([1.0, 1.0, 1.0]) < sv._THREAT_CAP, "three 1-prize bodies is not an extreme board"
 
 
 # ── a live Trainer damage-BOOST reaches the scalar, gates and all (Issue #282) ────────────────────
@@ -1633,26 +1688,36 @@ def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
-def test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss():
+def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss():
     """**The issue's headline sentence, as an arithmetic claim about the whole transition.**
 
     The cases around this one hold the hand fixed and vary only the live boost, which shows the
-    boost is READ but not that playing the card comes out ahead. This one models the actual
-    `_PLAY`: before, Premium Power Pro is in hand and no boost is live; after, the card is gone and
-    the boost is live. That is exactly what `apply_option` will difference, and it is the only
-    arrangement in which the epic's failure mode can appear at all —
+    boost is READ but not what playing the card comes out at. This one models the actual `_PLAY`:
+    before, Premium Power Pro is in hand and no boost is live; after, the card is gone and the boost
+    is live. That is exactly what `apply_option` will difference, and it is the only arrangement in
+    which the epic's failure mode can appear at all —
     *"a card whose effect no term reads prices at MINUS the hand value of the card spent"*.
 
     The hand leg has to be real for the claim to mean anything, so a `needs.Resolution` supplies the
     held card's latent Worth at `card_worth.TAG_TIER["gust"]` — the shipped tier for a situational
     Trainer, cited rather than invented (its own comment: *"reach (Boss's Orders) — the ladder's −10
     keep floor"*, the band this ladder gives a held utility Trainer). At `POC_WORTH_PRIZE_RATE` that
-    is 1/12 of a prize the play gives up.
+    is 1/12 of a prize (0.083333) the play gives up.
 
-    The margin is deliberately narrow and is asserted in BOTH directions: the boost's `threat` gain
-    must exceed the hold, so the play is a gain — and the hold must be genuinely non-zero, so the
-    test would go negative the moment the boost stopped being priced. A wide margin here would pass
-    on a board where the hand cost nothing, which is the vacuous version of this test."""
+    ⚠️ **This test asserted `total_after > total_before` until Issue #329, and that margin was a
+    windfall.** The old `threat` had no scale anchor, so ANY reachable target priced at the full
+    `_THREAT_CAP` 0.1 and the transition read +0.016667 — 0.1 against the 0.083333 hold. With the
+    anchor a 2-prize Dragapult ex prices `_THREAT_W x 2 = 0.051282` and the POSITIONAL half of the
+    transition is −0.032051. That is not a regression, it is the double-count `_THREAT_CAP` exists
+    to prevent: `threat` prices the exposure STANDING on the board and the prize for CONVERTING it
+    is `attack_ev`'s, under `score = state_value(end board) + EV(terminal action)`. A boost played
+    and never cashed genuinely is a spent card for a position; the old form paid the conversion
+    prize twice and called the difference a gain.
+
+    So the claim is now made where it actually lives, in three parts: the positional half is priced
+    as the BOOST (exactly `threat` gained minus `hand` lost, to the float), the boost recovers most
+    of the card's cost rather than none of it, and on the full sequence score — the surface the
+    planner ranks — playing and cashing it is a large gain."""
     from common import needs
 
     def _held(worth):
@@ -1670,11 +1735,31 @@ def test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss():
 
     assert b["hand"] > 0.0 and a["hand"] == 0.0, "the hand loss must be REAL, or this passes vacuously"
     assert a["threat"] > b["threat"] == 0.0, "the boost must be what crosses the breakpoint"
-    assert total_after > total_before, (
-        f"playing the boost scored as a mistake: {total_after} <= {total_before}")
-    # and the failure mode, stated as the counterfactual: with the boost UNPRICED the same play is
-    # a strict loss, which is what makes the assertion above a claim rather than a coincidence.
-    assert total_before - sv.state_value(_vs_dragapult_at(300)) == pytest.approx(b["hand"])
+    assert total_after - total_before == pytest.approx(a["threat"] - b["hand"]), (
+        "the positional half of the transition is the boost's gain against the card's hold, and "
+        "nothing else — no third family may move")
+    assert a["threat"] == pytest.approx(sv._THREAT_W * 2.0), (
+        "Dragapult ex is a 2-prize body (`docs/rules.md` §6), priced at the anchor and not at the "
+        "band — asserting the operand is what makes the arithmetic above a claim about the anchor")
+
+    # The boost is READ: it recovers 0.051282 of the 0.083333 the card cost, where an unpriced
+    # effect recovers exactly nothing. `unpriced` is the SAME post-play board scored as though no
+    # term read the boost — which is what the epic's failure mode actually is — so the two identities
+    # below are the epic's sentence, and they hold at any scale of the anchor.
+    unpriced = sv.state_value(_vs_dragapult_at(300))     # boost gone from BOTH hand and board
+    assert total_after - unpriced == pytest.approx(a["threat"]), (
+        "priced, the played boost is worth exactly the exposure it creates")
+    assert total_before - unpriced == pytest.approx(b["hand"]), (
+        "…and unpriced it is worth nothing, so the play would score at MINUS the whole hand value "
+        "of the card spent — the epic's failure mode, stated as the counterfactual")
+
+    # …and on the sequence score the planner actually ranks, the play is a gain outright. The boost
+    # is what makes Mega Brave's 270 into the 300 that Knocks Out a 300 HP 2-prize body, so the
+    # terminal leg it unlocks dwarfs the positional half either equation produces.
+    ko = sv.attack_ev(damage=300.0, target_hp=300.0, target_prizes=2.0)
+    no_ko = sv.attack_ev(damage=270.0, target_hp=300.0, target_prizes=2.0)
+    assert ko.knockout == pytest.approx(2.0) and no_ko.knockout == 0.0
+    assert total_after + ko.total > total_before + no_ko.total
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
@@ -2226,25 +2311,31 @@ def test_the_two_forward_payoff_suppliers_agree_and_diverge_only_where_the_DECKL
 
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
-def test_the_denial_credit_is_INVISIBLE_once_the_cap_binds():
-    """The ceiling on what this issue can deliver, asserted rather than described.
+def test_the_denial_credit_REACHES_the_family_once_the_anchor_is_in_front_of_the_cap():
+    """The wall this test used to record, now measured from the far side.
 
-    `threat` is `min(_THREAT_CAP, sum)` and `_THREAT_CAP` is 0.1, while every appended target carries
-    `prize_advance >= 1.0` because `prize_value` is 1, 2 or 3 and never less. So the cap binds on
-    every frame this loop touches, while the largest credit measured anywhere on the corrections
-    corpus is 0.054 prizes. It cannot move the family — on ANY board, not merely on already-firing
-    ones.
+    Until Issue #329 `threat` was `min(_THREAT_CAP, sum)` with no scale anchor, and every appended
+    target carries `prize_advance >= 1.0` because `prize_value` is 1, 2 or 3 and never less — so the
+    cap bound on every frame this loop touches and the credit was invisible in the family on ANY
+    board, not merely on already-firing ones. This test asserted exactly that, and was written to
+    turn red the day the anchor landed. It did.
 
-    This is the same wall Issue #284 measured from the other side, and the unlock is the same parked
-    `_THREAT_CAP / _MAX_PRIZE_VALUE` scale anchor, which this track was told not to move. Recorded as
-    a test so the next reader meets it as a measurement rather than as a surprise — and so that the
-    day the anchor lands, this test fails and points at the packet line."""
+    With `_THREAT_W` in front of the cap the seam's discrimination survives into the family: a
+    1-prize body whose line becomes Mega Starmie ex now outscores a 1-prize dead end by the credit
+    times the anchor. That product is SMALL — the largest single-target credit measured anywhere on
+    the corrections corpus is 0.054 prizes, so its `threat` contribution tops out near 0.0014 — which
+    is why the assertion is a strict inequality and not a magnitude claim. Small and read beats
+    larger and erased."""
     staryu = _starmie_board(_poke(STARYU, hp=70, serial=9))
     dead_end = _starmie_board(_poke(MUNKIDORI, hp=110, damage=40, serial=9))
 
     assert _target_values(staryu)[0] > _target_values(dead_end)[0], "the seam DOES discriminate"
-    assert _threat_of(staryu) == _threat_of(dead_end) == sv._THREAT_CAP, (
-        "…and the capped family cannot: both boards saturate at exactly the cap")
+    assert _threat_of(staryu) > _threat_of(dead_end) > 0.0, (
+        "…and the family now carries that discrimination instead of flattening it")
+    assert _threat_of(staryu) < sv._THREAT_CAP, "one 1-prize target is nowhere near the guard"
+    assert _threat_of(staryu) - _threat_of(dead_end) == pytest.approx(
+        sv._THREAT_W * (_target_values(staryu)[0] - _target_values(dead_end)[0])), (
+        "the gap the family shows IS the seam's gap, scaled by the anchor and nothing else")
     # Not asserted on `state_value` itself: these two boards differ in their Active's own attacks, so
     # `survival` moves between them for a reason that has nothing to do with this credit. The claim
     # under test is about `threat`, and it is made about `threat`.
