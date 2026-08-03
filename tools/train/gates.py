@@ -1285,7 +1285,7 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
 #:
 #: The slugs are the stable half (tests assert on them); the sentences paraphrase the constructor's
 #: own `ValueError` text and are free to be re-worded.
-REFUSED_SHAPES = {
+REFUSED_SHAPE_RULES = {
     "unknown_source": "`source` is not one of the two recorded sources",
     "unknown_scope": "`scope` is not one of decision / turn / match",
     "match_names_a_correct": "a match-scope Correction cannot name a `correct` option — no single "
@@ -1299,7 +1299,7 @@ REFUSED_SHAPES = {
 
 
 def shape_the_constructor_would_refuse(correction) -> list:
-    """Which of `build_correction`'s rules an ALREADY-COMMITTED record breaks — `REFUSED_SHAPES`
+    """Which of `build_correction`'s rules an ALREADY-COMMITTED record breaks — `REFUSED_SHAPE_RULES`
     slugs, empty when the constructor would have accepted it (Issue #256).
 
     **The store holds a shape its own writer forbids.** `build_correction` validates at *write* time

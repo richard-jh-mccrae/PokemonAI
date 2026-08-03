@@ -80,7 +80,7 @@ would assert nothing; the writer refuses it. That is a coherent, deliberate desi
 
 So turn-scope Anchor grading is not an accident of the gates reaching for whatever field was handy —
 it is the schema working as ADR-0049 specified. The issue asked that it *stop looking accidental*;
-this paragraph and the test pinning the enforcement rule are the whole change. **No code, gate-neutral.**
+this paragraph and the test asserting the enforcement rule are the whole change. **No code, gate-neutral.**
 
 The contrast with decision 1 is the load-bearing part: `turn` scope has a rule that makes the Anchor's
 `correct` mean something, and `match` scope has a rule that forbids it from existing. The two scopes
@@ -121,7 +121,7 @@ refuse the corpus is a gate that cannot report on the corpus.
 But *unvalidated* must not mean *unobserved* — and it was. Nothing re-applied the writer's rules to
 what is already on disk, which is how the one forbidden record got in and stayed. So:
 
-* `gates.shape_the_constructor_would_refuse(correction)` — per record, returns `REFUSED_SHAPES` slugs.
+* `gates.shape_the_constructor_would_refuse(correction)` — per record, returns `REFUSED_SHAPE_RULES` slugs.
 * `gates.refused_shapes(store)` — the corpus walk, `[{key, id, scope, violations}, ...]`.
 * `decider_lab.print_refused_shape_readout` — a second reporting-only section, printed by both
   subcommands, silent at zero.
@@ -141,7 +141,7 @@ documented as *extensible*, and grows by process. Refusing a committed record be
 later renamed would report **a vocabulary edit as a corpus defect** — a different question, and one
 that needs a ruling rather than a predicate. Measured either way: all 372 records pass `source`,
 `scope` **and** `category` today, so the line costs nothing now and is drawn for the future. A test
-pins the omission, with a positive control proving the constructor really does refuse a stale
+asserts the omission, with a positive control proving the constructor really does refuse a stale
 category — so it reads as a decision rather than as a rule nobody noticed.
 
 Two smaller faithfulness choices, both stated so they are not "fixed" later by accident:

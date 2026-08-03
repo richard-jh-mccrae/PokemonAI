@@ -104,7 +104,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (REFUSED_SHAPES, classes_of, decider_lab_diff,  # noqa: E402
+from train.gates import (REFUSED_SHAPE_RULES, classes_of, decider_lab_diff,  # noqa: E402
                          decision_gate_verdict, decision_fail_keys, equivalence_index,
                          guarded_capture, held_out_frames, keyed_corrections, orphan_rulings,
                          print_agree_delta, print_gate_report, print_ruling_moves,
@@ -328,10 +328,11 @@ def print_refused_shape_readout(refused, rpt: dict) -> None:
                  else "not in this capture's gradeable population")
         print(f"    {key}  ({f.get('id')}, {f.get('scope')} scope); {state}")
         for slug in f["violations"]:
-            print(f"      {slug}: {REFUSED_SHAPES.get(slug, slug)}")
-        row = rows.get(key) or {}
-        print(f"      recorded correct {row.get('correct')}; this build's agent picks "
-              f"{row.get('chosen')}")
+            print(f"      {slug}: {REFUSED_SHAPE_RULES.get(slug, slug)}")
+        row = rows.get(key)
+        if row is not None:                   # absent when the record is in no capture at all;
+            print(f"      recorded correct {row.get('correct')}; this build's agent picks "
+                  f"{row.get('chosen')}")     # `correct None; picks None` would read as DATA
         print("      -> re-rule the record. `Correction.from_dict` does not validate, deliberately "
               "(ADR-TEMP-256): a loader that refused this would take both gates down on load.")
 

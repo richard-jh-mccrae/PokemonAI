@@ -26,7 +26,7 @@ import pytest
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (REFUSED_SHAPES, refused_shapes,  # noqa: E402
+from train.gates import (REFUSED_SHAPE_RULES, refused_shapes,  # noqa: E402
                          shape_the_constructor_would_refuse as refuses)
 
 #: The one committed record the audit exists for.
@@ -147,12 +147,12 @@ def test_the_category_vocabulary_is_deliberately_NOT_re_applied():
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_every_slug_the_predicate_can_emit_has_a_printable_sentence():
-    """`REFUSED_SHAPES` is the one source both the predicate and the readout read, so a slug with no
+    """`REFUSED_SHAPE_RULES` is the one source both the predicate and the readout read, so a slug with no
     sentence would print as a bare identifier in an operator's report."""
     emitted = {"unknown_source", "unknown_scope", "match_names_a_correct", "correct_off_the_menu",
                "turn_correct_equals_chosen", "unprovable_decline"}
-    assert emitted == set(REFUSED_SHAPES)
-    assert all(REFUSED_SHAPES[s] and isinstance(REFUSED_SHAPES[s], str) for s in emitted)
+    assert emitted == set(REFUSED_SHAPE_RULES)
+    assert all(REFUSED_SHAPE_RULES[s] and isinstance(REFUSED_SHAPE_RULES[s], str) for s in emitted)
 
 
 # ---------------------------------------------------------------------------
@@ -262,7 +262,7 @@ def test_a_refused_shape_gets_no_excuse_from_either_gate():
     """**The report-only ruling, asserted behaviourally rather than by reading source.** The audit
     reaches no verdict, in either direction: a REGRESSION or an `OK -> MISS` on a record with a
     refused shape must fail exactly as any other unruled flip does. Wiring an exclusion is the change
-    this pins against — the same ruling Issue #251 made for the **Unstatable Decline**."""
+    this test refuses — the same ruling Issue #251 made for the **Unstatable Decline**."""
     from train.gates import decision_gate_verdict, discrimination_gate_verdict
     assert decision_gate_verdict([{"key": THE_RECORD, "verdict": "REGRESSION"}],
                                  held_out={}) is False
@@ -345,6 +345,9 @@ def test_the_readout_says_so_when_a_refused_record_is_in_no_capture(capsys):
     out = capsys.readouterr().out
     assert key in out and "GRADING anyway" not in out
     assert "not in this capture's gradeable population" in out
+    # ... and the row line is WITHHELD rather than printed as `correct None; picks None`, which
+    # reads as data — the record's ruling being null — when it means the capture has no such row.
+    assert "recorded correct" not in out
 
 
 @pytest.mark.req("REQ-GATE-0009")
