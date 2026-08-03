@@ -345,10 +345,14 @@ function fillScope(f){
   applyScope();
 }
 function applyScope(){
-  const s=$('scope').value, sel=$('correct');
+  const s=$('scope').value, sel=$('correct'), optional=FR[i].min_count===0;
   if(s==='match'){ [...sel.options].forEach(o=>o.selected=false); }
   sel.disabled=(s==='match')||!FR[i].taggable;
-  $('correctlab').innerHTML=s==='decision'?'Correct move(s) — the better legal option'
+  // At decision scope on an OPTIONAL select, selecting nothing is itself the ruling — a decline.
+  // Say so, or the affordance exists and no human knows it is there.
+  $('correctlab').innerHTML=s==='decision'?(optional
+      ?'Correct move(s) — the better legal option, or <i>none</i> to rule a <b>decline</b>'
+      :'Correct move(s) — the better legal option')
     :s==='turn'?'Correct move(s) — <i>optional</i>: the first divergent option at this anchor'
     :'Correct move(s) — <i>n/a</i>: a whole-match verdict names no option';
   $('scopehint').textContent=s==='decision'?''
@@ -490,7 +494,12 @@ $('plain').onclick=()=>{$('viewer').src='/viewer/';};
 $('save').onclick=async()=>{
   const f=FR[i], scope=$('scope').value, own=isOwn(f.seat);
   const correct=scope==='match'?[]:[...$('correct').selectedOptions].map(o=>+o.value);
-  if(scope==='decision'&&!correct.length){$('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
+  // An empty `correct` at decision scope is a DECLINE — "take none of these" — and is a real ruling
+  // wherever the select is OPTIONAL (Issue #229). It is refused everywhere else, including where
+  // `min_count` is unknown, which is exactly what `build_correction` does with the same number: the
+  // pane must never offer a save the validator will reject, nor block one it would accept.
+  if(scope==='decision'&&!correct.length&&f.min_count!==0){
+    $('msg').className='ko';$('msg').textContent='pick the correct move(s)';return;}
   const rationale=applyCritical($('rationale').value,$('critical').checked);   // checkbox owns the CRITICAL token
   const body={frame:f.frame,correct,category:$('category').value,rationale,
     scope:$('scope').value,                        // what the tag is about (ADR-0049)

@@ -134,6 +134,160 @@ def test_an_effect_value_nobody_declared_is_caught_by_the_walk():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_gust_family_declares_the_pull_AND_what_leaving_the_active_spot_clears():
+    """**Issue #303's write-set, and the rules check it rests on.**
+
+    A gust is three writes, not one. The pull rewrites who is Active (`bodies_in_play`), and
+    `docs/rulebook.txt` L143 says what moving a body out of the Active Spot does to it: *"When your
+    Active Pokémon goes to your Bench (whether it retreated or got there some other way), some
+    things do go away—Special Conditions and any effects from attacks."* Declaring only the move
+    would price the clear at exactly 0, which is the silent zero this module exists to prevent.
+
+    **`allowance_retreat_used` is deliberately absent**, and that is the question the issue owed at
+    source: `docs/rules.md` §3 prints the manual limit as *"1 (pay the Retreat cost in Energy; card
+    effects can switch for free)"*, and `docs/rulebook.txt` L618 defines retreating as discarding
+    Energy equal to the printed Retreat Cost, once per turn. Prime Catcher and Team Rocket's
+    Giovanni both say *switch*, never *retreat* — so an effect switch neither pays the cost nor
+    spends the allowance, and declaring it would make every gust look like it burned the turn's
+    retreat."""
+    vocab = sc.clause_vocabulary(_compendium())
+    assert {"gust", "self_switch", "confuse_target"} <= set(vocab)
+    both = {"bodies_in_play", "special_conditions", "transient_grants"}
+    assert sc.CLAUSE_WRITES["gust"] == both
+    assert sc.CLAUSE_WRITES["self_switch"] == both
+    assert "allowance_retreat_used" not in sc.CLAUSE_WRITES["self_switch"]
+    assert sc.CLAUSE_WRITES["confuse_target"] == {"special_conditions"}
+    # `transient_grants` is homed on BOTH sides for the same reason `attached_energy` is: a gust
+    # clears the OPPONENT's Active's attack effects, and a my-side-only home would declare a write
+    # the snapshot could not show.
+    assert sc.homes()["transient_grants"] == ["mine.active.grant", "theirs.active.grant"]
+    # The pull itself is deterministic — I choose the target off a public Bench. Only the COIN in
+    # front of Pokemon Catcher's copy is not, and that is `coin`'s entry, not this one.
+    assert "gust" not in sc.NONDETERMINISTIC_CLAUSES
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_stadium_kinds_delegate_their_write_to_the_effect_they_resolve_into():
+    """**Issue #304's write-sets.** A Stadium is not one mechanic — the 22 in the pool are five
+    unrelated effect shapes wearing one card type — so it gets two kinds, and neither carries a
+    write-set of its own. What each one writes is what its `effect` names, which is 1120 Crushing
+    Hammer's `coin` shape and the reason the Issue #300 walk covers `effect` at all.
+
+    **Both kinds reading EMPTY is the assertion, not an omission**, and the case is pinned two ways
+    so the reading cannot rot: the kinds are empty, AND every `effect` value they resolve into is
+    declared. Reading `stadium_static == frozenset()` as *"a Stadium writes nothing"* is exactly the
+    defect Crushing Hammer taught.
+
+    Only `hp_delta` writes the snapshot. Lively Stadium's +30 and Gravity Mountain's −30 move a
+    body's max HP, and `damage_counters` is the zone homed on the HP read. The three damage
+    modifiers are read by `CombatMath` off the `stadium` zone when it prices an attack and store
+    nothing, so declaring a write for them would claim a change that never happens."""
+    from common.strategy.context import _PLAY
+    vocab = set(sc.clause_vocabulary(_compendium()))
+    assert {"stadium_static", "stadium_trigger"} <= vocab
+    assert {"hp_delta", "damage_reduction", "damage_boost", "prevent_damage",
+            "damage_counters"} <= vocab
+    assert sc.CLAUSE_WRITES["stadium_static"] == frozenset()
+    assert sc.CLAUSE_WRITES["stadium_trigger"] == frozenset()
+    assert sc.undeclared_clauses(sorted(vocab)) == []
+    assert sc.CLAUSE_WRITES["hp_delta"] == {"damage_counters"}
+    assert sc.CLAUSE_WRITES["damage_counters"] == {"damage_counters"}
+    for read_only in ("damage_reduction", "damage_boost", "prevent_damage"):
+        assert sc.CLAUSE_WRITES[read_only] == frozenset(), read_only
+    # A Stadium's board write — the displacement and the allowance — is STRUCTURAL, so it is
+    # `apply_option`'s `_PLAY` footprint's and not any card's clauses'. Asserted here so the two
+    # halves of one mechanic cannot drift into each declaring the other's job.
+    assert {"stadium", "allowance_stadium_played"} <= ao.footprint(_PLAY).writes
+    assert not any("stadium" in zs for zs in
+                   (sc.CLAUSE_WRITES["stadium_static"], sc.CLAUSE_WRITES["stadium_trigger"]))
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_damage_counters_is_homed_on_BOTH_sides_and_on_the_bench():
+    """A symmetric Stadium writes this zone on bodies that are neither mine nor Active (Issue #304):
+    Gravity Mountain is *"Each Stage 2 Pokémon in play (both yours and your opponent's)"*, and Risky
+    Ruins places 2 counters on whichever player just benched a Basic. A my-Active-only home would
+    declare a write the snapshot cannot show — the same argument that already homes `attached_energy`
+    and (Issue #303) `transient_grants` on both sides.
+
+    The home was too narrow before those clauses landed, which is why this is a fix and not merely an
+    accommodation: `heal` writes here too and 1096 Poke Vital A heals *"1 of your Pokémon"*, benched
+    or not."""
+    assert sc.homes()["damage_counters"] == [
+        "mine.active.hp_remaining", "mine.bench", "theirs.active.hp_remaining", "theirs.bench"]
+    # The bench legs name the CONTAINER, exactly as `bodies_in_play` does; each `BodyView` inside it
+    # carries the per-body reads. Asserted so "mine.bench" cannot be read as a scalar HP field.
+    assert hasattr(sm.BodyView, "hp_remaining") and hasattr(sm.BodyView, "damage_counters")
+    assert sc.homes()["bodies_in_play"] == ["mine.active", "mine.bench", "theirs.active",
+                                            "theirs.bench"]
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_two_refresh_riders_declare_exactly_the_hands_they_move():
+    """**Issue #302's write-sets.** Two new riders, and the reason each is its own key rather than a
+    reuse of `shuffle_both_hands` is the same both times: the difference between them IS the card.
+
+    `shuffle_own_hand_in` is the ONE-SIDED refresh — Lillie's Determination (24 copies, our largest
+    partial exposure) and Lacey shuffle only MY hand away. It is `shuffle_both_hands` minus
+    `their_hand_size` and `their_deck_count`, and declaring those two would claim a strip the card
+    never performs. `common/strategy/refresh.py`'s ADR-0060 oracle already splits on exactly this
+    (`opponent_shuffles`), so the compendium agreeing with it is one fact stated once.
+
+    `both_hands_to_bottom` writes the SAME six zones as `shuffle_both_hands` — a hand leaving for the
+    deck is the same set of writes wherever in the deck it lands — and is still a distinct key,
+    because to-BOTTOM and shuffled-IN are different facts about `deck_order`, a distinction
+    `other_to_bottom` already keeps for the dig riders.
+
+    Both are NONDETERMINISTIC: both shuffle, so both defeat the determinism proof the engine route
+    needs, exactly as `shuffle_both_hands` does."""
+    own, both = sc.CLAUSE_WRITES["shuffle_own_hand_in"], sc.CLAUSE_WRITES["both_hands_to_bottom"]
+    assert own == {"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}
+    assert not (own & {"their_hand_size", "their_deck_count"})
+    assert both == sc.CLAUSE_WRITES["shuffle_both_hands"]
+    assert both == own | {"their_hand_size", "their_deck_count"}
+    assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= sc.NONDETERMINISTIC_CLAUSES
+    # Declared, and actually USED — a write-set for a rider no card carries would be untested prose.
+    assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= set(sc.clause_vocabulary(_compendium()))
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_every_clause_KEY_in_the_compendium_is_a_declared_parameter():
+    """**Issue #302's other axis.** `CLAUSE_WRITES` audits the VALUES of `kind` / `rider` / `effect`;
+    until now nothing audited the KEYS, so a parameter no reader knows — a typo, or a shape authored
+    ahead of the consumer meant to read it — sat in the store and priced exactly 0. That is the same
+    silent zero the module exists to prevent, arriving through the other axis of the same dict.
+
+    The walk descends into `amount_if`, so a typo one level down is as visible as one at the top."""
+    keys = sc.clause_keys(_compendium())
+    assert sc.undeclared_clause_keys(keys) == [], (
+        "clause keys with no CLAUSE_PARAMETERS entry: %s" % sc.undeclared_clause_keys(keys))
+    # The three shapes Issue #302 minted, and the nested block they live beside.
+    assert {"to_hand_size", "amount_if", "cost_required", "condition"} <= set(keys)
+    # Every VOCABULARY key is also a parameter key — one dict, two axes, not two vocabularies.
+    assert set(sc.VOCABULARY_KEYS) <= set(sc.CLAUSE_PARAMETERS)
+    # Every declared parameter says what it carries; an undescribed key is an undocumented one.
+    assert [k for k, v in sc.CLAUSE_PARAMETERS.items() if not str(v).strip()] == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_clause_KEY_audit_actually_bites_including_inside_a_nested_block():
+    """The positive control for the walk above. A green key audit means nothing unless the check can
+    go red, and it must go red for a typo NESTED inside `amount_if` as well as for a top-level one —
+    the nested case is the one a shallow walk would pass by not looking."""
+    assert sc.undeclared_clause_keys(["a_parameter_nobody_declared"]) == \
+        ["a_parameter_nobody_declared"]
+    fabricated = {"999": [{"kind": "draw", "amount": 2,
+                           "amount_if": {"condition": "x", "amonut": 4}}]}
+    assert sc.undeclared_clause_keys(sc.clause_keys(fabricated)) == ["amonut"]
+    # …and the same walk on the same fabricated card finds the legitimate nested key too, so the
+    # single result above is a measurement rather than a walk that reached nothing.
+    assert "condition" in sc.clause_keys(fabricated)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
     """One vocabulary, not two. A write-set naming an invented zone would look like coverage while
     corresponding to nothing the snapshot was ever checked for."""
@@ -228,19 +382,34 @@ def test_the_unhomed_guard_cannot_see_a_card_with_no_clauses_at_all():
     """**The limitation Issue #282 asks to be recorded, as a test rather than only a docstring.**
 
     Both `unhomed` guards work off DECLARED write-sets: `clauses_writing_unhomed()` walks the
-    compendium, and `footprints_writing_unhomed()` walks the per-KIND footprints — where `_PLAY` is
-    absent because a Trainer's effect is per-card, to be unioned from its clauses at T4. A card with
-    NO clauses unions to the empty set, so neither guard can ever report it, however much state it
+    compendium, and `footprints_writing_unhomed()` walks the per-KIND footprints. A card with NO
+    clauses unions to the empty set, so neither guard can ever report it, however much state it
     writes. The three boost cards are exactly that shape, which is asserted here against the
     committed compendium so the claim cannot rot into an anecdote.
 
     The control is the second assertion: the same lookup DOES return clauses for a card that has
-    them, so an empty answer above is evidence about those cards rather than about a broken read."""
+    them, so an empty answer above is evidence about those cards rather than about a broken read.
+
+    **Restated 2026-08-03, when Issue #298's batch gave `_PLAY` a footprint.** This test previously
+    asserted `_PLAY` was ABSENT from :data:`apply_option.FOOTPRINTS` — that was the mechanism, not
+    the finding, and asserting the mechanism made the test fail on a change that did not touch the
+    limitation at all. `_PLAY` now carries a footprint of the STRUCTURAL zones every play moves (the
+    card leaves hand, a Stadium swaps, an allowance is spent, a Basic reaches the Bench), and every
+    one of them is HOMED. It is `complete=False` precisely because the card's own EFFECT is still
+    not covered — that comes from its clauses, to be unioned at T4. So the guard still reports
+    nothing for a clause-less card, and the limitation Issue #282 asked to be recorded is untouched.
+    The assertions below now pin THAT, which is the thing that must not silently change."""
     compendium = _compendium()
     for cid in ("1141", "1211", "1175"):             # Power Pro, Black Belt's Training, Brave Bangle
         assert compendium.get(cid) is None, cid
     assert compendium.get("1086"), "the positive control — this card DOES carry clauses"
-    assert _PLAY_KIND not in ao.FOOTPRINTS, "`_PLAY` carries no per-kind footprint, by design"
+
+    play = ao.FOOTPRINTS[_PLAY_KIND]
+    assert not play.complete, "`_PLAY`'s footprint is structural only — the card's effect is not in it"
+    homes = sc.homes()
+    assert sorted(z for z in play.writes if not homes.get(z)) == [], \
+        "every zone `_PLAY` declares is HOMED, so the footprint guard can never report a play"
+    assert ao.footprints_writing_unhomed() == {}
     assert "no clauses unions to the empty set" in (ao.footprints_writing_unhomed.__doc__ or "")
 
 
@@ -289,12 +458,17 @@ def test_the_completeness_audit_bites():
 
 @pytest.mark.req("REQ-SNAPSHOT-0004")
 def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
-    """The owed list, generated off the artifact rather than re-derived. *Surfer* is the worked
-    example the census led with: it carries `draw 1`, and the printed card SWITCHES the Active first
-    — the reason it is played at all."""
+    """The owed list, generated off the artifact rather than re-derived.
+
+    *Surfer* used to be the worked example here — `draw 1` on a card that SWITCHES the Active first —
+    and Issue #302 closed it (the switch is now the `self_switch` rider), which is what a shrinking
+    owed list is supposed to look like. The example moved to *Judge*, whose leg cannot be closed the
+    same way: the card is SYMMETRIC, and pricing the opponent's shuffled-away hand needs a
+    `state_value` term the POC does not have, so it is a declared unknown rather than unfinished
+    work."""
     partial = sc.partial_clause_cards(_compendium())
     assert partial, "no card is declared partial — the audit would be reporting on nothing"
-    assert 1203 in partial and "switch" in partial[1203].lower()
+    assert 1213 in partial and "symmetric" in partial[1213].lower()
     assert all(reason.strip() for reason in partial.values())
     # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.
     clauses = sc.clause_lists(_compendium())

@@ -323,7 +323,12 @@ decision 1 satisfied and the corpus *layout* still duplicated. Both halves come 
   holds eleven DECLINE rulings, which is the mis-keyed baseline's count. The corpus holds **10**, all
   `turn` scope. Fixing prose that quotes a wrong key is part of fixing the key.
 - **One corpus record needs a scope re-tag** (`85709280`, `match` → `decision|51`), which is a
-  ruling-record edit and stays outside this PR per decision 5.
+  ruling-record edit and stays outside this PR per decision 5. **Done 2026-08-03** — the developer
+  made exactly this edit, reviewing an independently-arrived-at Issue #256 finding that did not cite
+  this ADR (it should have; the search that filed #256 missed it). See
+  [ADR-0113](0113-the-store-is-an-archive-so-the-writers-rules-are-re-applied-as-a-report.md)
+  Amendment A for the executed edit, the `reviewed.json` re-key it also required, and the measured
+  gate consequence (verdict-neutral on both gates).
 - **A Held-out ruling can shelter a regression it was never ruled against.** `83661652|0|decision|44`
   regressed *after* the ruling that holds it out, and the gate excused it automatically — correctly
   by ADR-0072 decision 4 as written, and still worth knowing. The ledger records *"this frame is out

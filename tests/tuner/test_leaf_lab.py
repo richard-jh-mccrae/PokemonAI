@@ -54,6 +54,24 @@ def _pilot(values):
 
 
 @pytest.mark.req("REQ-TUNER-0019")
+def test_a_decision_scope_DECLINE_has_no_rank_and_the_lab_invents_none():
+    """Issue #229 D3 — the behaviour the lab already had, asserted so admitting the shape cannot
+    silently change what gets scored.
+
+    A DECLINE (`correct: []`) names no option, so there is nothing to *rank*. Two independent layers
+    say so and both must keep saying it: the frame is not a leaf frame at all (no `correct`, no
+    `turn_plan`), and were it scored anyway there are no `correct_vals`, so every verdict is `None`
+    behind `unscorable: True` — which `gates._scorable` filters out of the diff. The lab needing no
+    change is the finding; a rank fabricated for a decline would be a phantom regression."""
+    decline = _frame(obs=_obs(3, context=0), correct=[], scope="decision")
+    assert is_leaf_frame(decline) is False
+    v = evaluate_leaf_on_correction(_pilot({0: 90.0, 1: 40.0, 2: 55.0}), decline)
+    assert v["unscorable"] is True
+    assert v["correct"] == []
+    assert (v["correct_value"], v["correct_rank"], v["correct_is_top"]) == (None, None, None)
+
+
+@pytest.mark.req("REQ-TUNER-0019")
 def test_evaluate_reports_the_correct_pick_rank_and_top_tie():
     """The ep86090164 shape: leaf scores the correct pick [0] at 60, but four options tie at 65 above
     it. The lab must report `correct` is NOT top, its rank (5th — four strictly outscore it), and the

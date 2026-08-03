@@ -25,9 +25,17 @@
 "covers": "full",
 "reason": "energy_recur 2 x {M} from discard on evolve — the whole Ability"
 },
+"310": {
+"covers": "full",
+"reason": "the on-evolve gust is the whole Ability; \"you may\" is an optional gate, exactly as it is on the 190 / 648 on-evolve clauses"
+},
 "648": {
 "covers": "full",
 "reason": "accel 5 x Basic {D} from deck on evolve — the whole Ability"
+},
+"674": {
+"covers": "full",
+"reason": "the on-evolve gust is the whole Ability; the once-per-turn cap is a condition, not a leg (the 140 precedent), and it is vacuous on an on-evolve trigger anyway"
 },
 "675": {
 "covers": "full",
@@ -56,6 +64,10 @@
 "1086": {
 "covers": "full",
 "reason": "fetch up to 2 Basics with 70 HP or less straight onto the Bench"
+},
+"1088": {
+"covers": "full",
+"reason": "the pull AND the `self_switch` it triggers — \"If you do, switch your Active Pokemon with 1 of your Benched Pokemon\" — both legs carried"
 },
 "1092": {
 "covers": "full",
@@ -129,6 +141,10 @@
 "covers": "full",
 "reason": "fetch a Supporter with `dig: 7`"
 },
+"1124": {
+"covers": "partial",
+"reason": "the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts)"
+},
 "1125": {
 "covers": "full",
 "reason": "fetch a Pokemon from deck"
@@ -178,8 +194,12 @@
 "reason": "clause heals 20; REMOVING A SPECIAL CONDITION from the Active is unmodelled"
 },
 "1181": {
-"covers": "partial",
-"reason": "clause draws a flat 4; the card draws 2 and only draws 2 more at 10+ cards in hand, so the clause OVER-states on every normal board"
+"covers": "full",
+"reason": "draws 2, and 4 INSTEAD once the hand holds 10 or more AFTER that draw (`amount_if`); the card prints no other leg"
+},
+"1182": {
+"covers": "full",
+"reason": "the pull IS the whole card — \"Switch in 1 of your opponent's Benched Pokemon to the Active Spot\", no rider, no restriction"
 },
 "1184": {
 "covers": "full",
@@ -191,7 +211,7 @@
 },
 "1187": {
 "covers": "partial",
-"reason": "clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and costs a hand discard — neither is carried"
+"reason": "the discard-1 cost and its playability gate are carried (`cost_required`); the MAGNITUDE is one card per opponent BENCHED Pokemon, a board-scaled count no clause field expresses, so the clause deliberately states NO amount rather than the flat 3 the probe measured"
 },
 "1189": {
 "covers": "full",
@@ -202,8 +222,8 @@
 "reason": "heal all, gated on 30-or-less remaining HP"
 },
 "1192": {
-"covers": "partial",
-"reason": "clause draws 5; DISCARD YOUR HAND — the card's whole cost — is unmodelled"
+"covers": "full",
+"reason": "draws 5 at the cost of DISCARDING YOUR HAND (`cost: discard_hand`). The go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry (1220's ruling)"
 },
 "1193": {
 "covers": "full",
@@ -218,32 +238,36 @@
 "reason": "accel 1 from deck + `to_hand: 1` + `distinct_types`"
 },
 "1199": {
-"covers": "partial",
-"reason": "clause draws a flat 8, the card's maximum; the base is 4, the 8 needs the opponent at 3-or-fewer Prizes, and shuffling your hand in is unmodelled"
+"covers": "full",
+"reason": "shuffles my hand into my deck, draws 4, and 8 INSTEAD once the opponent is at 3 or fewer Prizes"
 },
 "1200": {
-"covers": "partial",
-"reason": "clause draws 4; putting 2 cards from hand on the bottom — the cost, and the gate on being able to pay it — is unmodelled"
+"covers": "full",
+"reason": "puts 2 cards from hand on the bottom (`cost: bottom_2`, `cost_required` — the card is unplayable if it cannot be paid) and draws 4"
 },
 "1203": {
-"covers": "partial",
-"reason": "clause draws 1; the card SWITCHES the Active and then draws up to a 5-card hand. The switch is the reason the card is played"
+"covers": "full",
+"reason": "switches my Active with a Benched body (`self_switch`) and refills to a 5-card hand; the *If you do* is inherent in the rider, since a switch presupposes a body on the Bench"
+},
+"1204": {
+"covers": "full",
+"reason": "the Basic-only pull AND the `confuse_target` rider — \"If you do, the new Active Pokemon is now Confused\" — both legs carried"
 },
 "1205": {
 "covers": "full",
 "reason": "fetch up to 3 Pokemon {ex} from deck"
 },
 "1206": {
-"covers": "partial",
-"reason": "all three search legs (a Pokemon, a Supporter, a Basic Energy) are carried; DISCARD YOUR HAND — the card's whole cost — is unmodelled"
+"covers": "full",
+"reason": "all three search legs, plus DISCARD YOUR HAND as `cost: discard_hand` repeated on each — 1092 Secret Box's shipped shape for one cost paid once across a multi-leg find"
 },
 "1207": {
 "covers": "partial",
 "reason": "clause draws 4; the end-of-turn discard-your-hand-at-5-or-more is unmodelled (no `discard_eot` rider)"
 },
 "1208": {
-"covers": "partial",
-"reason": "clause draws a flat 4; the card draws UP TO A 6-CARD HAND and costs a discard"
+"covers": "full",
+"reason": "refills to a 6-card hand, at the cost of a discard the card cannot be played without"
 },
 "1210": {
 "covers": "full",
@@ -255,19 +279,23 @@
 },
 "1213": {
 "covers": "partial",
-"reason": "clause draws 4 for me; the card is symmetric — the OPPONENT's hand is shuffled away and redrawn to 4, which is the entire reason to play it"
+"reason": "the OWN leg is now exact — shuffle my hand in, draw 4 — but the card is SYMMETRIC, and the opponent's identical shuffle-and-redraw-4 is the entire reason to play it. Pricing their hand needs a `state_value` term the POC does not have"
 },
 "1214": {
-"covers": "partial",
-"reason": "clause draws a flat 4, the card's maximum; the base is 2 and the extra 2 needs the opponent at 3 or fewer Prizes"
+"covers": "full",
+"reason": "draws 2, and 4 INSTEAD once the opponent is at 3 or fewer Prizes (`amount_if`) — 1199 Lacey's predicate, and one store cannot hold two verdicts for one shape"
 },
 "1215": {
 "covers": "partial",
 "reason": "the Basic {R} Energy leg is exact; the Ethan's NAME family on the Pokemon leg is recorded and UNDECIDED, so that leg deliberately reaches nothing"
 },
 "1216": {
+"covers": "full",
+"reason": "refills to 5, or to 8 INSTEAD when every one of my Pokemon in play is a Team Rocket's Pokemon. That family is DECIDED, not merely recorded: the bodies are IN PLAY and we hold their names, so `card_text.name_in_family`'s prefix test answers it (1255 Postwick's ruling) — unlike 1134 / 1220, which ask it of a hidden DECK"
+},
+"1218": {
 "covers": "partial",
-"reason": "clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team Rocket board"
+"reason": "both legs are carried — the `self_switch` first, then the pull it gates (\"If you do\") — but the Team Rocket's NAME family restricting BOTH of my bodies is recorded and UNDECIDED, so it deliberately decides nothing rather than reading as an unrestricted switch (the 1115 / 1134 / 1215 / 1220 ruling)"
 },
 "1219": {
 "covers": "full",
@@ -283,7 +311,7 @@
 },
 "1223": {
 "covers": "partial",
-"reason": "clause draws a flat 5; the card is a COIN FLIP between 5/3 and 3/5, and shuffles both hands away"
+"reason": "the own leg now carries both coin branches (5 heads / 3 tails) and the both-hands shuffle, but a coin stated as two certainties is still not an `Expectation` (1120 Crushing Hammer's ruling), and the opponent's mirrored 3/5 redraw is unmodelled"
 },
 "1224": {
 "covers": "full",
@@ -294,8 +322,8 @@
 "reason": "both fetch legs (an Evolution and an Energy) carried"
 },
 "1227": {
-"covers": "partial",
-"reason": "clause draws a flat 8, the card's maximum; the base is 6, and 8 needs exactly 6 Prizes left. Shuffling your hand in is unmodelled"
+"covers": "full",
+"reason": "shuffles my hand into my deck, draws 6, and 8 INSTEAD at exactly 6 Prize cards remaining"
 },
 "1229": {
 "covers": "full",
@@ -315,7 +343,7 @@
 },
 "1237": {
 "covers": "partial",
-"reason": "clause draws a flat 6; the card is a per-player COIN FLIP between 6 and 3 and puts both hands on the bottom of their decks"
+"reason": "the own leg now carries both coin branches (6 heads / 3 tails) and both hands going to the BOTTOM, but the coin still needs an `Expectation` (1120's ruling) and the opponent's own per-player flip and redraw is unmodelled"
 },
 "1238": {
 "covers": "full",
@@ -323,7 +351,7 @@
 },
 "1239": {
 "covers": "partial",
-"reason": "clause draws a flat 3; the card draws UP TO a 5-card hand after an optional pre-discard of any size"
+"reason": "refills to a 5-card hand (`to_hand_size`), which is the card's whole draw; the OPTIONAL pre-discard of any size — and the *(If you can't draw any cards in this way, you can't use this card)* gate it exists to open — is not carried"
 },
 "1240": {
 "covers": "full",
@@ -336,6 +364,30 @@
 "1242": {
 "covers": "partial",
 "reason": "clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried"
+},
+"1244": {
+"covers": "full",
+"reason": "the whole card: -30 damage taken by {M} bodies, symmetric, after Weakness/Resistance, and only from the opponent's attacks"
+},
+"1247": {
+"covers": "full",
+"reason": "the prevention IS the card — the no-Rule-Box defender and the ex/V attacker are both carried, and `no_rule_box` is the predicate 1152 Poke Pad is already ruled `full` on (one store cannot hold two opposite verdicts for one predicate). The second sentence, \"This card can't be put into your hand or deck from the discard pile\", is a property of the card once it is IN the discard rather than a leg of this play — 1096 Poke Vital A's shipped ruling verbatim"
+},
+"1251": {
+"covers": "full",
+"reason": "+30 HP to every Basic in play, both sides — the whole card"
+},
+"1252": {
+"covers": "full",
+"reason": "-30 HP to every Stage 2 in play, both sides — the whole card, and `CardStat.stage2` exists FOR this card"
+},
+"1255": {
+"covers": "full",
+"reason": "+30 damage from Hop's attackers to the opponent's Active, before Weakness/Resistance, symmetric. The Hop's family is DECIDED here and not merely recorded: the bodies are in play and we hold their names, so `card_text.name_in_family`'s normalised PREFIX test answers it — which is the question its own docstring separates from Issue #301's deck-side one (1115 / 1134 / 1215 / 1220 are `partial` because no build-time index over a HIDDEN deck exists, not because the string test is unavailable)"
+},
+"1260": {
+"covers": "full",
+"reason": "2 damage counters on any Basic non-{D} put onto EITHER player's Bench during their turn — the whole card, and the tax the Deploy Marginal (ADR-0086) currently misses"
 }
 },
 "17": [
@@ -398,6 +450,13 @@
 "target": "own_type"
 }
 ],
+"310": [
+{
+"kind": "gust",
+"target": "any",
+"trigger": "on_evolve"
+}
+],
 "648": [
 {
 "kind": "accel",
@@ -407,6 +466,14 @@
 "energy": "basic",
 "energy_type": 7,
 "trigger": "on_evolve"
+}
+],
+"674": [
+{
+"kind": "gust",
+"target": "any",
+"trigger": "on_evolve",
+"condition": "once_per_turn_ability"
 }
 ],
 "675": [
@@ -468,6 +535,13 @@
 "hp_max": 70,
 "amount": 2,
 "dest": "bench"
+}
+],
+"1088": [
+{
+"kind": "gust",
+"target": "any",
+"rider": "self_switch"
 }
 ],
 "1092": [
@@ -652,6 +726,13 @@
 "dig": 7
 }
 ],
+"1124": [
+{
+"kind": "coin",
+"effect": "gust",
+"target": "any"
+}
+],
 "1125": [
 {
 "kind": "fetch",
@@ -760,7 +841,17 @@
 "1181": [
 {
 "kind": "draw",
+"amount": 2,
+"amount_if": {
+"condition": "hand_size_10_plus_after_draw",
 "amount": 4
+}
+}
+],
+"1182": [
+{
+"kind": "gust",
+"target": "any"
 }
 ],
 "1184": [
@@ -793,7 +884,8 @@
 "1187": [
 {
 "kind": "draw",
-"amount": 3
+"cost": "discard_1",
+"cost_required": true
 }
 ],
 "1189": [
@@ -815,7 +907,8 @@
 "1192": [
 {
 "kind": "draw",
-"amount": 5
+"amount": 5,
+"cost": "discard_hand"
 }
 ],
 "1193": [
@@ -854,19 +947,34 @@
 "1199": [
 {
 "kind": "draw",
+"amount": 4,
+"amount_if": {
+"condition": "opp_3_or_fewer_prizes",
 "amount": 8
+},
+"rider": "shuffle_own_hand_in"
 }
 ],
 "1200": [
 {
 "kind": "draw",
-"amount": 4
+"amount": 4,
+"cost": "bottom_2",
+"cost_required": true
 }
 ],
 "1203": [
 {
 "kind": "draw",
-"amount": 1
+"to_hand_size": 5,
+"rider": "self_switch"
+}
+],
+"1204": [
+{
+"kind": "gust",
+"target": "basic",
+"rider": "confuse_target"
 }
 ],
 "1205": [
@@ -881,17 +989,20 @@
 {
 "kind": "fetch",
 "target": "basic_energy",
-"zone": "deck"
+"zone": "deck",
+"cost": "discard_hand"
 },
 {
 "kind": "fetch",
 "target": "pokemon",
-"zone": "deck"
+"zone": "deck",
+"cost": "discard_hand"
 },
 {
 "kind": "fetch",
 "target": "supporter",
-"zone": "deck"
+"zone": "deck",
+"cost": "discard_hand"
 }
 ],
 "1207": [
@@ -903,7 +1014,9 @@
 "1208": [
 {
 "kind": "draw",
-"amount": 4
+"to_hand_size": 6,
+"cost": "discard_1",
+"cost_required": true
 }
 ],
 "1210": [
@@ -932,13 +1045,18 @@
 "1213": [
 {
 "kind": "draw",
-"amount": 4
+"amount": 4,
+"rider": "shuffle_both_hands"
 }
 ],
 "1214": [
 {
 "kind": "draw",
+"amount": 2,
+"amount_if": {
+"condition": "opp_3_or_fewer_prizes",
 "amount": 4
+}
 }
 ],
 "1215": [
@@ -962,7 +1080,19 @@
 "1216": [
 {
 "kind": "draw",
-"amount": 2
+"to_hand_size": 5,
+"amount_if": {
+"condition": "all_own_pokemon_team_rocket",
+"to_hand_size": 8
+}
+}
+],
+"1218": [
+{
+"kind": "gust",
+"target": "any",
+"rider": "self_switch",
+"name_family": "Team Rocket's"
 }
 ],
 "1219": [
@@ -990,7 +1120,12 @@
 "1223": [
 {
 "kind": "draw",
-"amount": 5
+"amount": 5,
+"amount_if": {
+"condition": "coin_tails",
+"amount": 3
+},
+"rider": "shuffle_both_hands"
 }
 ],
 "1224": [
@@ -1014,7 +1149,12 @@
 "1227": [
 {
 "kind": "draw",
+"amount": 6,
+"amount_if": {
+"condition": "exactly_6_prizes_remaining",
 "amount": 8
+},
+"rider": "shuffle_own_hand_in"
 }
 ],
 "1229": [
@@ -1061,7 +1201,12 @@
 "1237": [
 {
 "kind": "draw",
-"amount": 6
+"amount": 6,
+"amount_if": {
+"condition": "coin_tails",
+"amount": 3
+},
+"rider": "both_hands_to_bottom"
 }
 ],
 "1238": [
@@ -1085,7 +1230,7 @@
 "1239": [
 {
 "kind": "draw",
-"amount": 3
+"to_hand_size": 5
 }
 ],
 "1240": [
@@ -1110,6 +1255,67 @@
 "kind": "heal",
 "amount": 10,
 "condition": "played_supporter_this_turn"
+}
+],
+"1244": [
+{
+"kind": "stadium_static",
+"effect": "damage_reduction",
+"amount": 30,
+"applies_to": "metal",
+"source": "opponent_attack",
+"timing": "after_weakness_resistance",
+"symmetric": true
+}
+],
+"1247": [
+{
+"kind": "stadium_static",
+"effect": "prevent_damage",
+"applies_to": "no_rule_box",
+"source": "opponent_attack",
+"source_class": "ex_or_v",
+"symmetric": true
+}
+],
+"1251": [
+{
+"kind": "stadium_static",
+"effect": "hp_delta",
+"amount": 30,
+"applies_to": "basic",
+"symmetric": true
+}
+],
+"1252": [
+{
+"kind": "stadium_static",
+"effect": "hp_delta",
+"amount": -30,
+"applies_to": "stage2",
+"symmetric": true
+}
+],
+"1255": [
+{
+"kind": "stadium_static",
+"effect": "damage_boost",
+"amount": 30,
+"applies_to": "name_family",
+"name_family": "Hop's",
+"target": "opponent_active",
+"timing": "before_weakness_resistance",
+"symmetric": true
+}
+],
+"1260": [
+{
+"kind": "stadium_trigger",
+"on": "bench_play",
+"effect": "damage_counters",
+"amount": 2,
+"applies_to": "basic_non_dark",
+"symmetric": true
 }
 ]
 }

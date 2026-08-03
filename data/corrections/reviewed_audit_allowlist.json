@@ -1,0 +1,191 @@
+{
+  "_note": "The covered-disposition WORKLIST (Issue #238, ADR-0114 decision 3). Every reviewed.json entry whose justification names a rung that no longer exists. This is an ALLOWLIST, not an exemption: a test asserts the audit's flagged set equals this file exactly, so a NEW stale closure is red immediately. Rule the frame (docs/plans/covered-disposition-audit.md says how), re-close it against a live rule, then DELETE its line here. Regenerate with `python tools/train/reviewed_audit.py --write-allowlist` only when re-seeding deliberately.",
+  "entries": {
+    "81785223-38": [
+      "evolve-into-wincon"
+    ],
+    "81785223-44": [
+      "evolve-into-wincon"
+    ],
+    "81903490-27": [
+      "dont-waste-discard-energy"
+    ],
+    "81903490-49": [
+      "dont-waste-discard-energy"
+    ],
+    "81903490-74": [
+      "evolve-into-wincon"
+    ],
+    "81904064-29": [
+      "evolve-into-wincon"
+    ],
+    "81904451-50": [
+      "dont-waste-discard-energy",
+      "tutor-the-wincon"
+    ],
+    "81904451-6": [
+      "dont-waste-discard-energy"
+    ],
+    "81905522-47": [
+      "power-up-attacker"
+    ],
+    "81906131-25": [
+      "dont-waste-discard-energy"
+    ],
+    "81906755-77": [
+      "play-energy-denial"
+    ],
+    "82224509-29": [
+      "evolve-into-wincon"
+    ],
+    "82224509-31": [
+      "spread-attach-to-the-needy"
+    ],
+    "82224509-41": [
+      "retreat-to-ready-attacker"
+    ],
+    "82224509-67": [
+      "play-energy-denial"
+    ],
+    "82225643-12": [
+      "play-energy-denial"
+    ],
+    "82226116-48": [
+      "retreat-to-ready-attacker"
+    ],
+    "82226116-70": [
+      "evolve-into-wincon"
+    ],
+    "82226759-16": [
+      "evolve-into-wincon"
+    ],
+    "82226759-29": [
+      "evolve-into-wincon"
+    ],
+    "82226759-64": [
+      "play-harlequin-vs-hand-size"
+    ],
+    "82228640-25": [
+      "concentrate-energy-on-wincon",
+      "prefer-reusable-over-burst"
+    ],
+    "82523811-15": [
+      "play-energy-denial"
+    ],
+    "82523811-59": [
+      "build-active-wincon"
+    ],
+    "82523811-79": [
+      "play-energy-denial"
+    ],
+    "82523811-95": [
+      "build-active-wincon"
+    ],
+    "82524455-27": [
+      "build-active-wincon"
+    ],
+    "82525101-102": [
+      "play-energy-denial"
+    ],
+    "82525101-92": [
+      "play-energy-denial"
+    ],
+    "82525741-81": [
+      "build-active-wincon"
+    ],
+    "82748422-26": [
+      "play-energy-denial"
+    ],
+    "82748522-15": [
+      "hold-wincon-dont-shuffle"
+    ],
+    "82749168-21": [
+      "play-energy-denial"
+    ],
+    "82749168-38": [
+      "dont-snipe-a-benched-tera"
+    ],
+    "82750161-59": [
+      "concentrate-energy-on-wincon",
+      "dont-waste-discard-energy"
+    ],
+    "82752045-80": [
+      "concentrate-energy-on-wincon"
+    ],
+    "82752045-97": [
+      "concentrate-energy-on-wincon"
+    ],
+    "82752604-61": [
+      "concentrate-energy-on-wincon"
+    ],
+    "82753102-37": [
+      "hold-wincon-dont-shuffle",
+      "play-energy-denial"
+    ],
+    "82754241-41": [
+      "play-energy-denial"
+    ],
+    "82754875-8": [
+      "tutor-the-wincon"
+    ],
+    "82756664-74": [
+      "conserve-burst-when-no-ko"
+    ],
+    "82866415-43": [
+      "hold-irreplaceable-tool-dont-shuffle"
+    ],
+    "82867148-34": [
+      "develop-turbo-flare-recipient"
+    ],
+    "82867148-87": [
+      "dont-waste-discard-energy"
+    ],
+    "83007714-135": [
+      "play-energy-denial"
+    ],
+    "83007714-22": [
+      "spread-attach-to-the-needy"
+    ],
+    "83007714-7": [
+      "dont-waste-discard-energy"
+    ],
+    "83116081-17": [
+      "play-harlequin-vs-hand-size"
+    ],
+    "83116501-89": [
+      "concentrate-energy-on-wincon"
+    ],
+    "83661652-3": [
+      "dont-pre-bench-the-supporter-tutor"
+    ],
+    "83661652-30": [
+      "keep-line-base-at-discard"
+    ],
+    "83661652-31": [
+      "keep-line-base-at-discard"
+    ],
+    "83661652-33": [
+      "develop-the-wincon-base-first"
+    ],
+    "83661652-44": [
+      "develop-the-wincon-base-first"
+    ],
+    "83667237-107": [
+      "snipe-the-evolving-threat"
+    ],
+    "85046350-20": [
+      "hold-position-in-setup"
+    ],
+    "85058574-114": [
+      "attach-energy-last"
+    ],
+    "85785067-14": [
+      "dont-play-switch-for-no-gain",
+      "hold-position-in-setup"
+    ],
+    "85785606-1": [
+      "arm-the-doomed-active",
+      "start-solrock-over-lunatone"
+    ]
+  }
+}

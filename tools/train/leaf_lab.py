@@ -29,7 +29,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import print_gate_report                     # noqa: E402
+from train.gates import CAPTURE_POINT, print_gate_report      # noqa: E402
 
 _PLACEHOLDER_SBI = "leaf-lab-cgpy-reseed"   # any non-empty token passes `_simulate_line`'s gate; cgpy
                                             # then reconstructs the search state from the structured obs
@@ -316,7 +316,12 @@ def _print_diff(diff, held_out, before_meta, voided=None) -> None:
               f"-{len(diff['removed'])} removed since the capture — re-capture the baseline.")
     for f in diff["miss_to_ok"]:
         print(f"  IMPROVED  {f['key']}  MISS -> OK")
-    from train.gates import split_excused
+    from train.gates import print_stale_baseline, split_excused
+    # BEFORE the gate block, matching `print_ruling_moves` above and the `CORPUS SHIFTED` line: the
+    # verdict is the last thing printed, and everything that changes what it MEANS comes ahead of it.
+    # These frames are still listed as `REGRESSED` inside that block — the label explains the line,
+    # it does not replace or excuse it (ADR-0110 decision 1).
+    print_stale_baseline(diff.get("stale_baseline") or [])
     voided = voided or {}
     gating, ruled, void_hits = split_excused(diff["ok_to_miss"], held_out, voided)
     print_gate_report(
@@ -338,7 +343,14 @@ def main(argv=None) -> int:
     ap.add_argument("--agent", default=None, help="restrict to one agent (default: all)")
     ap.add_argument("--store", default=str(REPO / "data" / "corrections"))
     sub = ap.add_subparsers(dest="cmd")
-    cap = sub.add_parser("capture", help="write a baseline report artifact (the gate's reference)")
+    cap = sub.add_parser(
+        "capture", help="write a baseline report artifact (the gate's reference)",
+        # WHERE you capture from is not checked by anything — `guarded_capture` asks whether every
+        # fail-direction frame carries a ruling, never whether the tree carries the change under
+        # test. So the one rule that cannot be enforced is the one `--help` has to state
+        # (ADR-0110 decision 4).
+        epilog=f"Capture point: {CAPTURE_POINT}. Capturing at HEAD bakes the change under test into "
+               f"its own reference, and the gate can then never speak about that change again.")
     cap.add_argument("--out", type=Path, required=True)
     res = sub.add_parser("restamp", help="rewrite ONLY the recorded git_rev (a rebase moved the base)")
     res.add_argument("--baseline", type=Path, required=True)
@@ -406,6 +418,10 @@ def main(argv=None) -> int:
                 "gate": "discrimination", "passed": passed, "git_rev": _git_rev(),
                 "baseline_git_rev": before.get("git_rev"), "compared": diff["compared"],
                 "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
+                # A SUBSET of `ok_to_miss` above, never a subtraction from it: these flips still
+                # gate, and a machine consumer must be able to tell a reference that has gone stale
+                # from a build that regressed without re-deriving it (ADR-0110 decision 2).
+                "stale_baseline": [f["key"] for f in diff["stale_baseline"]],
                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
                 "added": diff["added"], "removed": diff["removed"],
                 "ruling_moves": diff["ruling_moves"],   # reported, never gating (ADR-0087 d7)
