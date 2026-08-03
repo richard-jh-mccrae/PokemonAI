@@ -789,3 +789,217 @@ development is MY-side only … `threat` reads their bodies as targets, not as d
 change stays inside `threat`'s declared subject (`opponent_target_value` over reachable Knock Outs)
 and adds no read of their line topology, their bench count, or their development. No ledger line is
 disputed.
+
+---
+
+# Issue #285 — sniping a pre-evolution denies a forward payoff
+
+`_reachable_target_values` priced a target by `prize_value` alone — what the body yields NOW — so
+killing a Staryu scored exactly as much as killing any other 1-prize body, while the doctrine's whole
+point is that it erases three. `prize_advance` now carries the forward payoff the removal DENIES:
+`TheirSide.forward_payoff` (the mirror of `MySide.forward_payoff`) through
+`state_value._denied_forward_payoff`, on `development.evolve_marginal`'s own expression
+`_READINESS_W x (owed_damage / PRIZE_DAMAGE_RATE) x halve(hops)`. **No new constant.**
+
+## Flips
+
+**Zero on both gates, and both reports are BYTE-IDENTICAL to the pre-change tree.** Leaf: `1
+unruled` — still `81906755|1|decision|9`, carried from Issue #280 and ruled at the top of this
+packet; 65 ruled, 3 voided, 200 gated, unchanged. Decision Gate: **PASS, `agree 250/347 -> 250/347`,
+0 picks moved, 0 rulings moved**, 24 voided. Neither baseline touched. No row is added to the Flips
+table because this change produced none.
+
+Measured as an explicit A/B from HEAD `35d25999`: run both gates with the change in the tree, `git
+stash push -u`, run both again, `diff` the two reports. Both diffs are empty, over a 381-line leaf
+report that prints every one of the 277 scored leaf rows at full float precision — so byte-identity
+here is zero movement on every scored row, not an empty report.
+
+## L1 — the fix is CORRECT and STRUCTURALLY INVISIBLE to both gates, and that is the headline
+
+This is not a quiet zero to be reported and moved past. **The credit cannot move `state_value` on any
+board, by arithmetic, and the reason is the cap Issue #284 already flagged — one step worse.**
+
+`threat` is `min(_THREAT_CAP, sum)` with `_THREAT_CAP` **0.1**. Every value the loop appends is
+`opponent_target_value(prize_advance >= 1.0, survival_shift=0, …)`, because `CombatMath.prize_value`
+returns 1, 2 or 3 and never less. So the sum exceeds the cap by at least 10× the moment the loop
+appends **anything**, while the largest credit measured anywhere on the corpus is **0.054 prizes** —
+**Riolu (30) → Mega Lucario ex (270)**, owed 240: `0.045 x 240/100 x halve(1)`. The doctrine's own
+headline line is *smaller*: Staryu (20) → Mega Starmie ex (210) is owed 190, i.e. **0.043**.
+
+*(Corrected by `/code-review`: three places in the first draft attributed the 0.054 maximum to
+Staryu and then showed working — `0.045 x 190/100 x halve(1)` — that evaluates to 0.043. Both halves
+were wrong at once, which is why the number is now stated with its card and its arithmetic together.)*
+
+Issue #284's L2 said the family *"now SEES their bench and still cannot GRADE it"*, and could still
+point at 13 frames that moved `0.0 → 0.1` because widening the loop changes whether it is EMPTY.
+Issue #285 changes only the VALUE of an entry that already exists, so it has no such escape: it
+moves `threat` on **zero** frames and always will, until the anchor lands.
+
+**Measured, not asserted** — `_denied_forward_payoff` instrumented over all 371 corrections-corpus
+frames, each scored through the same `state_value` the leaf gate scores, with the credit severed
+in-process for the B arm:
+
+| | |
+|---|---|
+| corpus frames scored | **371** (0 errors) |
+| `_denied_forward_payoff` **ASKED** | **270** — once per reachable target |
+| …returning a **non-zero** credit | **110** |
+| frames carrying ≥1 non-zero credit | **51** |
+| frames where `_reachable_target_values` **MOVED** | **51** — 49 `mega_starmie`, 1 `dragapult_ex`, 1 `mega_lucario` |
+| frames where **`threat`** moved | **0** |
+| credit min / median / max | 0.0045 / 0.0180 / **0.0540** |
+
+**Positive control C — can that harness see a `threat` move at all?** The identical A/B with the
+*reachability* read severed instead (`MySide.best_reachable_damage_vs` and
+`best_reachable_bench_damage` → 0.0, i.e. Issue #281's and Issue #284's own legs) moves
+`_reachable_target_values` on **114** frames and `threat` on **114**. So the instrument is live and
+the 0 above is a fact about `_THREAT_CAP`, not about the measurement. Without this control the two
+numbers "0" and "my harness is blind" would have been indistinguishable — which is the failure this
+batch has now hit five times.
+
+**Recommendation: ACCEPT AS BUILT, and rule the anchor as one decision covering three issues.** The
+valuation is right, it is exercised 270 times on the corpus and live on 110, and the seam it changes
+(`_reachable_target_values`) is what Issue #263's composer consumes. What it cannot do is reach the
+scalar, and no amount of further reachability or valuation work inside `threat` will change that. The
+unlock is the parked `_THREAT_CAP / _MAX_PRIZE_VALUE` scale anchor — derived and measured in
+`threat.blind_to`'s SATURATION entry, and deliberately not applied because applying it ALONE measured
+as a corpus regression (65 → 68 unruled, two `MISS → OK` improvements lost). Those five regressing
+frames were all *"winning by a margin SMALLER than the 0.067 prizes of threat advantage the
+saturation handed them"* — which is exactly the windfall that Issue #284's widening and this issue's
+credit both change. **The anchor should therefore be measured TOGETHER with both, not alone**, and
+that is a calibration decision this track was told not to make.
+
+## L2 — what the credit's SIZE says, before anyone fits the anchor
+
+Worth putting next to the ruling above, because it is the number that will decide whether the anchor
+alone is enough. With the anchor applied, a 1-prize target lands at 0.033 and a 3-prize target at
+0.1. The largest denial credit measured is 0.054 **before** that rescaling, i.e. it would itself be
+divided by `_MAX_PRIZE_VALUE` and land near 0.018 — still under the 0.033 step between prize tiers.
+
+So under the derived anchor a Staryu still prices below a bare 2-prize body, which is arguably right
+(a denied payoff is not a prize) and arguably not (the doctrine says *"trade 1 prize for a denied
+3"*). The issue's own instruction — *"cross to prizes on the same anchors `development` uses; do not
+introduce a new constant"* — is what fixes the scale here, and it is `_READINESS_W` 0.045, a
+POSITIONAL band deliberately far below a prize. **If the developer wants the denial to compete with a
+prize count, that is a different constant and a separate ruling; this build declined to invent one.**
+
+**And the currency is DAMAGE, not prizes — which is the sharper half of the same point.** The credit
+reads `owed_damage` alone, so a pre-evolution whose forward form is a 3-prize Mega ex and one whose
+forward form is a 1-prize body of the same printed damage price **identically**. The doctrine's
+sentence is *"trade 1 prize for a denied 3"* and it is about PRIZES; this term answers in damage.
+That is not an oversight — `ForwardPayoff` carries no prize leg and `development.evolve_marginal`
+prices its my-side mirror the same way, so adding one on the opponent side alone would give the same
+card two valuation bases. It is now named in `threat.blind_to` rather than left implied, and it is a
+second reason the anchor ruling should be taken as one decision rather than piecemeal.
+
+## L3 — the audit's named instrument is incomplete, and the missing half needed an extraction
+
+Issue #285's spec is **not** a repeat of Issue #284's wrong-instrument defect: every instrument it
+names is real and was verified at HEAD — `MySide.forward_payoff` / `ForwardPayoff`
+(`state_model.py`), `grading.halve`, `development.evolve_marginal`, `EvolveBody.p_arrive`
+(`evolve_value.py`), and `TheirSide._forward_ids`, which really is threaded into `turns_to_afford`
+(`state_model.py`, `forward_ids=self._forward_ids`). Its central claim also holds: no `blind_to`
+entry anywhere names the VALUE of a denied forward payoff, only the reachability of a benched body.
+
+One capability claim is nonetheless misleading, and it changed what had to be built. The issue says
+*"`owed_damage` / `hops` — computable. The forward index is already threaded on `TheirSide`"*, and
+the audit's F5 says the fix *"reuses the shipped forward index … no new oracle"*. **The forward index
+carries no hops.** `_ForwardIndex.forward_card_ids` returns a FLAT frozenset over
+`_descendant_names`, whose whole job is to discard depth. The only shipped depth walk is the
+`evolvesFrom` name-chain inside `CombatMath.turns_to_afford`, which folds it into a `max` with the
+energy leg and exposes neither. And that `max` is the DEEPEST form, while a forward payoff needs the
+hops to the best-DAMAGE form — a different aggregation over the same walk.
+
+So the build extracted `CombatMath._forward_hop_depths` (`{form name: depth}`) and gave
+`turns_to_afford` the `max` of its values, leaving that oracle's result byte-identical, then added
+`CombatMath.forward_payoff_terms` as the caller-facing `(owed_damage, hops)` read. Re-deriving the
+walk in `state_model` would have left two copies of a depth rule free to drift — the failure
+`card_level_damage` was extracted to end, in the same file.
+
+Stale line references, recorded for the epic's author but pre-excused by its own *"re-locate by
+function name"* instruction: `needs.py:253` for `opponent_target_value` is `:318`, and
+`state_model.py:852` for `MySide.forward_payoff` is `:1322`.
+
+## The two legs that could not be mirrored, and why both fail OPEN
+
+`MySide.forward_payoff` returns three legs. Two are card knowledge and mirror cleanly; the third is
+not, and the direction it degrades in is a decision rather than an accident.
+
+| leg | my side | their side |
+|---|---|---|
+| `owed_damage` | best printed damage in the forward closure minus own | same, via `forward_payoff_terms` |
+| `hops` | BFS depth over my DECKLIST's children map | `evolvesFrom` name-chain depth over the POOL closure |
+| `reachable` | `unseen_counts` + `hand_ids` — provable | **hardcoded True** |
+
+Their deck is untracked and their hand is a COUNT (`TheirSide.hand_size`), so *"is a copy of that
+form still gettable"* has no sound answer. It fails OPEN because the alternative — claiming their
+line is dead — would cancel a denial credit against a threat that is perfectly real, and
+`development.line_topology` only gets to CANCEL on my side because my side can prove it. The same
+asymmetry makes the pool-level index deck-agnostic: a Staryu on their board carries the Mega Starmie
+ex credit whether or not they run one. Both over-reads are named in `threat.blind_to`. The eventual
+narrowing supplier is the archetype Read, which is a matched-Brief probability rather than a
+decklist; consuming it here would give this family a second opinion about the Read, which the
+sole-supplier ruling forbids.
+
+Two further blind spots are recorded there rather than fixed: the credit reads printed `maxDamage`
+(so denying an Abra credits almost nothing — Alakazam's threat is a scaling term), and it prices what
+the line OWES without asking whether they can actually evolve it (the evolution card in hand, a Rare
+Candy, the played-this-turn gate). The printed read is deliberate: `forward_threat_ceiling` is the
+board-priced instrument, and using it on one side only would give the same card two valuation bases
+while using it on both would retune `development.evolve_marginal`, which ADR-0070 rules.
+
+## Scope boundary with Issue #263 — checked, and it is a closer call than Issue #284's
+
+The epic's ledger routes *"their board topology"* to Issue #263, and this credit is derived from
+their evolution line. The reason it is nonetheless in scope, stated explicitly so a developer can
+overrule it:
+
+* What `development.blind_to` rules out is **valuing their development as a positional term** —
+  *"their bench filling up, or their line completing, moves nothing here"* — and the same entry says
+  in the next clause that *"`threat` reads their bodies as targets"*. This prices one target more
+  precisely; it adds no positional term about their board.
+* Nothing here reads their BOARD. The credit is card knowledge about one body — its `evolvesFrom`
+  chain and printed damage — which is the same class of fact `prize_value` already is, off the same
+  `CardStat`. Their bench count, their development, their hand and their deck are all still unread.
+* The audit says so itself, at F10's ledger row: *"**Their board topology** … Accepted POC asymmetry
+  — but see **F5**, which is the *valuation* half and is **not** ruled."* F5 is this issue.
+
+## Tests, and whether they are worth anything
+
+Seven new cases in `tests/strategy/test_state_value.py`, mutation-checked in-process:
+
+| mutation | new cases failing |
+|---|---|
+| none (control) | 0 of 7 |
+| the denial credit always returns 0.0 | **5 of 7** |
+| the hop discount `halve(hops)` removed | **1 of 7** — the two-hop case, exactly the claim it isolates |
+| `TheirSide` reachability fails CLOSED instead of open | **1 of 7** — exactly the case that asserts it |
+| the hop walk returns depth 1 for every form | **2 of 7** — the extraction's two consumers |
+| the `hops > 0 and owed > 0` guard removed | **0 of 7** |
+
+The two survivors of the first mutation are the hop-count assertions (they assert `hops`, not the
+credit) and the best-form case (it asserts the credit is 0, which severing preserves) — both intended.
+
+**The last row is a zero that is recorded rather than glossed.** Deleting that guard changes no
+result, because `forward_payoff_terms` returns `(0.0, 0)` for both conditions together and
+`_READINESS_W x 0 x halve(0)` is already 0. It is kept because the coupling is a property of that
+oracle's current shape rather than an invariant — a future reading that returned owed damage at 0
+hops would be priced UNDISCOUNTED, since `halve(0)` is 1.0 — and `_development_legs` carries the same
+guard for the same reason. The docstring says so, so the guard does not read as tested.
+
+The hop-discount case is a pair that INVERTS without the discount, which is why it is the test and a
+same-owed pair would not be: **Dreepy** is two hops from Dragapult ex and owed **160**, **Drakloak**
+is one hop and owed **130**, so undiscounted Dreepy prices ABOVE Drakloak and only `halve(hops)` can
+reverse it. A same-owed pair passes under any monotone discount, including one applied to the wrong
+quantity.
+
+Card facts verified at `data/EN_Card_Data.csv` and asserted by number rather than left implied —
+Staryu (1030) → Mega Starmie ex (1031) is **one** hop with no "Starmie" in this set, Riolu (677) →
+Mega Lucario ex (678) is **one** with no "Lucario", and Dreepy (119) → Drakloak (120) → Dragapult ex
+(121) is a genuine **two**. `test_the_hop_counts_are_THIS_SETS_and_a_mainline_chain_would_fail_here`
+is the executable form of the issue's own last test, and the two-hop line is what stops it being a
+test that everything is one hop.
+
+`test_the_denial_credit_is_INVISIBLE_once_the_cap_binds` asserts L1 above as a test: the seam
+discriminates the two boards, `threat` reads exactly `_THREAT_CAP` on both. It turns red the day the
+anchor lands, which is where the packet line will be wanted.

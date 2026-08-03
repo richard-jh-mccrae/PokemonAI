@@ -319,6 +319,53 @@ limitation of that guard, not only of this term.
 
 ### F5 — Denying a forward payoff prices at the target's current worth only  ·  HIGH
 
+> **BUILT — Issue #285, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). `TheirSide.forward_payoff` mirrors
+> `MySide.forward_payoff` onto their bodies, and `_reachable_target_values` adds the denied payoff to
+> `opponent_target_value`'s `prize_advance` through `state_value._denied_forward_payoff` —
+> `development.evolve_marginal`'s own expression, `_READINESS_W x (owed_damage / PRIZE_DAMAGE_RATE) x
+> halve(hops)`, with **no new constant**.
+>
+> **The mirror is not a copy, and the audit's "cheapest fix" understates what it costs.** The line
+> *"reuses the shipped forward index (ADR-0020's provider primitive); no new oracle"* is right about
+> `owed_damage` and wrong about `hops`: `_ForwardIndex.forward_card_ids` is a FLAT all-descendants
+> frozenset (`_descendant_names` discards depth by construction), so the hop count the discount needs
+> is not in it. The only shipped walk that computes depth lived INSIDE
+> `CombatMath.turns_to_afford`, which folds it into a `max` with the energy leg and returns neither
+> separately. So the build extracted `CombatMath._forward_hop_depths` — `turns_to_afford` now takes
+> the `max` of its values and is otherwise byte-identical — and added
+> `CombatMath.forward_payoff_terms` as the one caller-facing read. That is still "a new caller of
+> existing math", but the extraction was owed and the finding did not name it.
+>
+> **Two legs of the mirror could not be mirrored, and both fail OPEN.** `reachable` is hardcoded
+> True: my side proves a line dead from `unseen_counts` + `hand_ids` and `development.line_topology`
+> then cancels the credit, while their deck is untracked and their hand is a COUNT, so claiming the
+> same proof would zero a denial against a threat that is perfectly real. And the pool-level index is
+> deck-agnostic, so a Staryu carries the Mega Starmie ex credit whether or not they run one. Both are
+> over-reads, both named in `threat.blind_to` rather than papered over.
+>
+> **What this fix does NOT reach, and it is the same wall F6 hit — harder.** Every appended target
+> carries `prize_advance >= 1.0` (`prize_value` is 1, 2 or 3 and never less), so `min(_THREAT_CAP,
+> sum)` with `_THREAT_CAP` 0.1 binds on **every** frame the loop touches, and the credit's measured
+> range is 0.0045-0.054 prizes — the maximum being Riolu (30) → Mega Lucario ex (270), owed 240,
+> while the doctrine's headline Staryu (20) → Mega Starmie ex (210) is owed 190 and scores 0.043.
+> It also answers in DAMAGE where the doctrine's *"trade 1 prize for a denied 3"* is about PRIZES:
+> `owed_damage` is the only leg read, so two forward forms of equal printed damage and unequal prize
+> value price the same. Named in `threat.blind_to`, not left implied.
+> The credit is therefore invisible in `state_value` on 100% of boards
+> rather than merely on already-firing ones. Measured on the 371-frame corrections corpus:
+> `_denied_forward_payoff` is ASKED **270** times, returns a non-zero credit **110** times, moves
+> `_reachable_target_values` on **51 frames** (49 `mega_starmie`, 1 `dragapult_ex`, 1
+> `mega_lucario`) — and moves `threat` on **0**. Control C, same harness with the reachability read
+> severed instead, moves `threat` on **114** frames, so the zero is the cap and not the instrument.
+> Carried as a wave-3 packet line (`docs/plans/issue-sequence-281-wave3-packet.md`); the unlock is the
+> parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, which must be measured TOGETHER with this credit and
+> F6's widening rather than one at a time.
+>
+> Coverage-matrix **row 5** and **row 6**'s footnote are **left as audited on purpose** — Issue #291
+> owns reconciling the report, and every sibling in this track recorded its outcome the same way, in
+> the finding's own BUILT note rather than in the ledger.
+
 **Unread dimension.** Their board's **topology** — that the 70-HP body I can reach is the base of a
 330-HP, 3-prize payoff.
 

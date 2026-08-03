@@ -294,7 +294,12 @@ class CarriedState:
 # ── body views ────────────────────────────────────────────────────────────────────────────────
 
 class ForwardPayoff(NamedTuple):
-    """What a body's evolution line still OWES it — :meth:`MySide.forward_payoff`'s answer.
+    """What a body's evolution line still OWES it — the answer of BOTH sides' ``forward_payoff``.
+
+    Two suppliers since Issue #285: :meth:`MySide.forward_payoff` computes all three legs from my
+    decklist and my zones; :meth:`TheirSide.forward_payoff` computes the first two from card
+    knowledge and fails OPEN on the third, because their deck is untracked. The shape is shared so
+    the two sides price one line the same way; the divergence is argued at the their-side method.
 
     NAMED rather than a bare 3-tuple for the reason `state_value.ExposedBody` gives one field over:
     three positional values of three different kinds invite a transposed unpack that still runs and
@@ -1661,6 +1666,41 @@ class TheirSide(_SideBase):
                               lambda: self._combat.discard_recur_fuel(
                                   view.body, self.discard_energy_counts,
                                   forward_ids=self._forward_ids))
+
+    # -- evolution topology (the forward closure over the POOL) ---------------------------------
+    def forward_payoff(self, card_id) -> "ForwardPayoff":
+        """:class:`ForwardPayoff` for one of THEIR bodies — what its line still OWES it, so that
+        removing the body can be priced for what it DENIES (Issue #285, POC-T3.5).
+
+        The mirror of :meth:`MySide.forward_payoff`, and **the mirror is not a copy** — one of the
+        three legs cannot be computed for a side whose deck is hidden, and it degrades in the
+        OPPOSITE direction from mine, deliberately:
+
+        * ``owed_damage`` / ``hops`` — **computed**, by `CombatMath.forward_payoff_terms` over the
+          threaded ``forward_ids`` availability gate (the same callable :meth:`turns_to_afford`
+          passes, defaulting to the pool-level index). Card knowledge only: `evolvesFrom` chains and
+          printed damage, both of which the stat cache already holds for every card in the set.
+        * ``reachable`` — **NOT computable, and therefore always True.** My side reads `hand_ids`
+          plus `unseen_counts` to ask *"is a copy of that form still gettable"*; their hand is a
+          COUNT (:attr:`hand_size`) and their deck is untracked, so the question has no sound answer
+          here. It **fails OPEN**: we cannot prove their line is dead, and claiming so would cancel a
+          denial credit against a threat that is perfectly real. That is the opposite fail direction
+          from `MySide.forward_payoff`, whose `line_topology` leg CANCELS the credit for a line it
+          can prove dead — and the asymmetry is the point, because over-crediting a live opponent
+          line is the safe error where under-crediting one is not.
+
+        Consequence worth stating plainly rather than leaving to be discovered: a Staryu on their
+        board carries the Mega Starmie ex credit whether or not they run Mega Starmie ex, because the
+        pool index is deck-agnostic. `MySide.forward_index` narrows to MY decklist precisely because
+        it can; nothing narrows this one. `TheirSide.read` (the archetype Read) is the eventual
+        supplier of that narrowing and is not consumed here — it is a matched-Brief probability, not
+        a decklist, and threading it would give this a second opinion about the Read.
+        """
+        return self._memoized(("their_forward_payoff", card_id),
+                              lambda: ForwardPayoff(
+                                  *self._combat.forward_payoff_terms(
+                                      card_id, forward_ids=self._forward_ids),
+                                  True))
 
 
 # ── the model ─────────────────────────────────────────────────────────────────────────────────

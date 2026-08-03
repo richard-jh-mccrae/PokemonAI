@@ -457,7 +457,7 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="threat",
-        reads=("opponent_target_value", "my_reachable_kos"),
+        reads=("opponent_target_value", "my_reachable_kos", "denied_forward_payoff"),
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
@@ -469,7 +469,14 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "the attack's single-target snipe RIDER, which ignores Weakness and Resistance "
                     "by rule and is zeroed on the Active path (Issue #284). What the bench leg "
                     "prices is the STANDING position — chip already on their bench makes a body one "
-                    "rider from dead between turns — never the conversion, which stays `attack_ev`'s.",
+                    "rider from dead between turns — never the conversion, which stays `attack_ev`'s. "
+                    "`prize_advance` then carries the forward payoff the removal DENIES "
+                    "(`TheirSide.forward_payoff`, Issue #285), on `development.evolve_marginal`'s own "
+                    "`_READINESS_W` / `PRIZE_DAMAGE_RATE` / `halve(hops)` expression — the same "
+                    "anchors, because forward payoff is printed damage held as POTENTIAL on either "
+                    "side of the board. Not a second reading of `development`, which is MY-side only "
+                    "by its own `blind_to`: this prices ONE reachable Knock Out more precisely, from "
+                    "card knowledge about that body, and reads nothing about their board.",
         blind_to=(
             "SPREAD riders as a bench route — `benchSpread` is a SHARED counter budget across their "
             "whole Bench (Phantom Dive: *put 6 damage counters on your opponent's Benched Pokémon "
@@ -500,6 +507,56 @@ REGISTRY: tuple[TermFamily, ...] = (
             "unlock is the same parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, not more "
             "reachability. Recorded rather than fixed: applying that anchor is a calibration change "
             "this module has already measured as a corpus regression.",
+            "THE DENIAL CREDIT'S OWN MAGNITUDE, for the same reason and to a stricter degree "
+            "(Issue #285). Every appended target contributes `prize_advance >= 1.0` — "
+            "`CombatMath.prize_value` returns 1, 2 or 3 and never less — so `min(_THREAT_CAP, sum)` "
+            "with `_THREAT_CAP` 0.1 binds on EVERY frame where the loop appends anything at all, "
+            "while the largest credit measured anywhere on the corrections corpus is 0.054 prizes "
+            "(Riolu 30 → Mega Lucario ex 270: 0.045 x 240/100 x halve(1); the doctrine's headline "
+            "Staryu 20 → Mega Starmie ex 210 is smaller still at 0.043). The credit is therefore "
+            "invisible in `state_value` on 100% of boards, not merely on already-firing ones. It is "
+            "nonetheless correct where it is READ, and that is where it is measured: "
+            "`_reachable_target_values` is module-private with exactly one caller — `state_value` "
+            "itself, one line below — so *no consumer outside this module sees it today*, and the "
+            "claim being made is about the extractor's arithmetic, not about a downstream reader. "
+            "Same unlock as the entry above and the same refusal: `_THREAT_CAP / _MAX_PRIZE_VALUE` "
+            "is a calibration change this track was told not to make, and it must be measured "
+            "TOGETHER with this credit and Issue #284's widening rather than one at a time.",
+            "THE PRIZE a denied line would have YIELDED — the credit reads `owed_damage` only, so a "
+            "pre-evolution whose forward form is a 3-prize Mega ex and one whose forward form is a "
+            "1-prize body of the same printed damage price IDENTICALLY. That is a real gap against "
+            "the doctrine's own headline, *\"trade 1 prize for a denied 3\"* — the sentence is about "
+            "PRIZES and this term answers in DAMAGE. It is not an oversight: `ForwardPayoff` carries "
+            "no prize leg, `development.evolve_marginal` prices its my-side mirror the same way, and "
+            "adding one here would price a forward form's prize value in a family whose `blind_to` "
+            "for the SAME quantity on the current form is `_MAX_PRIZE_VALUE`-capped and saturated. "
+            "Closing it means the parked scale anchor first; recorded so the damage-only reading is "
+            "read as measured rather than as complete.",
+            "THEIR DECKLIST, when crediting a denied forward payoff — `TheirSide.forward_payoff` "
+            "reads the POOL-level forward index, so a Staryu on their board carries the Mega Starmie "
+            "ex credit whether or not they run one, and the `reachable` leg is hardcoded True "
+            "because their hand is a COUNT and their deck is untracked. Both are OVER-reads, both "
+            "deliberate: `MySide.forward_payoff` can prove a line dead from `unseen_counts` and "
+            "CANCELS the credit (`development.line_topology`), and claiming the same proof about a "
+            "hidden deck would zero a denial against a threat that is perfectly real. The eventual "
+            "narrowing supplier is the archetype Read (`TheirSide.read` / the matched Brief), which "
+            "is a probability rather than a decklist — consuming it here would hand this family a "
+            "second opinion about the Read, which the sole-supplier ruling forbids.",
+            "BACKWARD topology on the denial credit — whether they can actually EVOLVE the body this "
+            "turn. The credit prices what the line owes, not what they hold: an evolution card in "
+            "hand, a Rare Candy skipping the Stage 1 (`data/EN_Card_Data.csv` id 1079), the "
+            "played-this-turn gate (`docs/rules.md` §4) and their remaining hops are all unread, so "
+            "a Dreepy they can never grow and one holding Drakloak price identically. `hand`'s "
+            "mirror of this question is Issue #288's playability gate on MY side; there is no "
+            "opponent-side equivalent and there cannot be one without their hand.",
+            "the SCALING half of a denied payoff — the credit reads printed `maxDamage`, mirroring "
+            "`MySide.forward_payoff` exactly so one card prices the same from either side. That "
+            "makes it blind the way the printed forward index is blind: Alakazam's whole threat is a "
+            "scaling term and its printed damage is 10, so denying an Abra credits almost nothing. "
+            "`CombatMath.forward_threat_ceiling` is the board-priced instrument and is deliberately "
+            "NOT substituted — using it on one side only would give the same card two valuation "
+            "bases, and using it on both would retune `development.evolve_marginal`, which ADR-0070 "
+            "rules.",
             "the non-Tera BENCH-IMMUNITY set — `docs/rules.md` §11's own warning: the immunity set "
             "is BROADER than Tera ex (Antique Plume Fossil, Misty's Magikarp, Poltchageist all "
             "carry unconditional prevent-all-while-Benched) and `CardStat` has no field for it "
@@ -924,6 +981,38 @@ def _reachable_target_values(model: "StateModel") -> tuple:
     cannot answer both. It is read inside the Active branch only: the bench route is a printed rider
     that no scaler reaches, so passing a context there would key a memo on a value nothing consumes.
 
+    **The DENIAL credit, because a pre-evolution is worth what it becomes** (Issue #285). A target's
+    `prize_value` is what the body yields NOW, so killing a Staryu priced exactly as much as killing
+    any other 1-prize body — while the doctrine's whole point is that it erases three. *"Snipe/gust a
+    Staryu before it rush-evolves … to trade 1 prize for a denied 3"*; *"prioritise sniping Snover
+    pre-evolution — a 1-prize cost erases a 3-prize wincon"*; *"race the fragile pre-evos — KO Dreepy
+    (70) / Drakloak (90) before they become the wall"* — **seven of the eight matchup docs** make this
+    their primary or secondary lever, and it applies to a plain gust-and-Knock-Out too. So
+    `prize_advance` now carries the forward payoff the removal DENIES, from
+    :meth:`TheirSide.forward_payoff`.
+
+    The credit is `development.evolve_marginal`'s expression, term for term — `_READINESS_W x
+    (owed_damage / PRIZE_DAMAGE_RATE) x halve(hops)` — and reusing it rather than choosing a scale is
+    the point: forward payoff is printed damage held as POTENTIAL on both sides of the board, so the
+    same anchor prices it, and a re-tier moves both together. `halve(hops)` is `EvolveBody.p_arrive`'s
+    shipped convention (ADR-0070 §6), which is what keeps a body three hops from its payoff from
+    pricing as though it were one. **No new constant** enters here.
+
+    Two legs of that expression are deliberately NOT mirrored. `relevance` is `MySide.role_worth` —
+    the deck's own DECLARED opinion about what a body is for, which no opponent supplies — so the
+    opponent leg carries none and reads at full weight. And the `line_topology` CANCELLATION cannot
+    apply, because `TheirSide.forward_payoff` fails OPEN on reachability (their deck is untracked);
+    the fail direction is argued at that method. Both make this an OVER-read rather than an
+    under-read, which is the safe direction for a threat term and is recorded in `blind_to`.
+
+    **This is not a read of their board TOPOLOGY**, which the epic's ledger routes to Issue #263 and
+    `development.blind_to` rules out (*"their bench filling up, or their line completing, moves
+    nothing here"*). Nothing here reads their bench count, their development, or what they hold: the
+    credit is CARD KNOWLEDGE about one target body — its `evolvesFrom` chain and printed damage —
+    exactly the class of fact `prize_value` already is. What `development` is blind to is valuing
+    THEIR development as a positional term; this values one reachable Knock Out more precisely, which
+    is `threat`'s own declared subject.
+
     ``survival_shift=0`` is the fail-closed answer to a missing supplier, named in `blind_to` rather
     than hidden: the shift is a Δ of `turns_to_ko_me` under REMOVAL of the body and the model exposes
     no removal-delta route. `phase` is still threaded honestly, so the term sharpens with the race
@@ -942,9 +1031,50 @@ def _reachable_target_values(model: "StateModel") -> tuple:
                  model.mine.best_reachable_bench_damage(mine, target))
         if reach < target.hp_remaining:
             continue
-        values.append(_needs.opponent_target_value(prize_advance=float(target.prize_value),
+        advance = float(target.prize_value) + _denied_forward_payoff(model, target)
+        values.append(_needs.opponent_target_value(prize_advance=advance,
                                                    survival_shift=0, phase=phase))
     return tuple(values)
+
+
+def _forward_credit(forward, *, relevance: float = 1.0) -> float:
+    """What a line's UNPAID forward payoff is worth, in prizes — the ONE expression, both sides.
+
+    `_development_legs` prices MY body's owed payoff with it and :func:`_denied_forward_payoff`
+    prices the DENIAL of theirs, and they are the same quantity read from opposite ends of the
+    board: printed damage held as POTENTIAL, crossed on `PRIZE_DAMAGE_RATE`, carried at the
+    positional `_READINESS_W` band, hop-discounted by `EvolveBody.p_arrive`'s shipped `halve`
+    convention (ADR-0070 §6). Two copies would let a re-tier land on one side and not the other,
+    which is the divergence `CombatMath._forward_hop_depths` was extracted to prevent one module
+    over — the same discipline, applied to the expression rather than to the walk.
+
+    ``relevance`` is the my-side leg only: `MySide.role_worth` is the deck's DECLARED opinion about
+    what a body is for, and no opponent supplies one. It defaults to 1.0 rather than to 0.0 so the
+    opponent reading carries the payoff at full weight, which is an OVER-read and the safe direction
+    for a threat term (`threat.blind_to`).
+
+    **The guard is defensive, not load-bearing, and mutation testing says so** — deleting it changes
+    no result, because `forward_payoff_terms` and `MySide.forward_payoff` both return owed damage 0
+    exactly when hops is 0, and `_READINESS_W x 0 x halve(0)` is already 0. It is kept because that
+    coupling is a property of those two oracles' current shape rather than an invariant: a future
+    reading returning owed damage at 0 hops would be priced UNDISCOUNTED, since `halve(0)` is 1.0.
+    Recorded rather than left to look tested.
+    """
+    if forward.hops <= 0 or forward.owed_damage <= 0.0:
+        return 0.0
+    return (_READINESS_W * (forward.owed_damage / currency.PRIZE_DAMAGE_RATE)
+            * halve(forward.hops) * relevance)
+
+
+def _denied_forward_payoff(model: "StateModel", target) -> float:
+    """The forward payoff removing ``target`` DENIES, in prizes — `threat`'s denial credit.
+
+    :func:`_forward_credit` against THEIR body, minus the two legs that have no opponent-side
+    supplier: `relevance` (defaulted, see above) and the `line_topology` CANCELLATION, which cannot
+    apply because `TheirSide.forward_payoff` fails OPEN on reachability. Both are argued at
+    :func:`_reachable_target_values` and named in `threat.blind_to`.
+    """
+    return _forward_credit(model.theirs.forward_payoff(target.card_id))
 
 
 def _ready_bodies(model: "StateModel") -> tuple:
@@ -1084,9 +1214,11 @@ def _development_legs(model: "StateModel") -> dict:
       relevance through `currency.deploy_relevance_to_damage`, the deploy marginal's own bridge,
       then across `PRIZE_DAMAGE_RATE`. Benching a body raises it, which is what makes a deploy
       price above zero under differencing.
-    * ``evolve_marginal`` — the FORWARD payoff a line still OWES, hop-discounted by `grading.halve`
-      (the convention `EvolveBody.p_arrive` already uses) and crossed on :data:`_READINESS_W`, the
-      same positional anchor `readiness` uses. The anchor is not decoration: forward payoff is
+    * ``evolve_marginal`` — the FORWARD payoff a line still OWES, through :func:`_forward_credit`:
+      hop-discounted by `grading.halve` (the convention `EvolveBody.p_arrive` already uses) and
+      crossed on :data:`_READINESS_W`, the same positional anchor `readiness` uses. That helper is
+      shared with `threat`'s denial credit (Issue #285), which prices the SAME quantity from the
+      other end of the board. The anchor is not decoration: forward payoff is
       printed damage held as POTENTIAL, exactly like readiness's, and pricing it at raw prize scale
       instead made this leg alone reach 0.5 prizes per Stage-2 line and saturate the family's guard
       on an ordinary board. Evolving raises it by consuming a hop; it reads the forward CLOSURE and
@@ -1112,9 +1244,8 @@ def _development_legs(model: "StateModel") -> dict:
         relevance = _body_relevance(model, b.card_id, seen)
         deploy += currency.deploy_relevance_to_damage(relevance) / currency.PRIZE_DAMAGE_RATE
         forward = mine.forward_payoff(b.card_id)
-        if forward.hops > 0 and forward.owed_damage > 0.0:
-            credit = (_READINESS_W * (forward.owed_damage / currency.PRIZE_DAMAGE_RATE)
-                      * halve(forward.hops) * relevance)
+        credit = _forward_credit(forward, relevance=relevance)
+        if credit:
             evolve += credit
             if not forward.reachable:
                 topology -= credit

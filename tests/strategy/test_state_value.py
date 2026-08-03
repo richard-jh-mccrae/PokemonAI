@@ -38,6 +38,24 @@ Pilot and no engine boot. Card facts VERIFIED at source (`data/EN_Card_Data.csv`
   * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and {F} is added here as 6 ({W} as 3).
   * Prize values: Mega ex 3, ex 2, else 1 (`docs/rules.md` §6).
 
+Issue #285 adds the three PRE-EVOLUTIONS the denial credit is about, and the hop counts are the whole
+point of declaring them — a fixture built on the mainline chains would silently test nothing:
+  * Staryu (1030) Basic HP 70, {W}, Weakness {L}, Retreat 1 — Water Gun ``{W}`` 20, its only attack,
+    so `maxDamage` 20. **Staryu → Mega Starmie ex is ONE hop**: 1031's ``Previous stage`` column reads
+    ``Staryu``, and **1031 is the only card in the pool whose ``Previous stage`` is ``Staryu``** —
+    swept, not recalled. (The pool DOES print a *Misty's* Starmie, id 361, but its ``Previous stage``
+    is ``Misty's Staryu`` (360), a different line: the owner prefix is part of the printed name,
+    `docs/rules.md` §9. An earlier draft of this line claimed the set prints no "Starmie" at all,
+    which is false — the kind of from-memory mainline claim CLAUDE.md's verify-at-source rule exists
+    to catch, found by review.)
+  * Dreepy (119) Basic HP 70, Dragon, **no Weakness and no Resistance** — Petty Grudge ``{P}`` 10 /
+    Bite ``{R}{P}`` 40, so `maxDamage` 40.
+  * Drakloak (120) Stage 1, evolvesFrom **Dreepy**, HP 90, Dragon, no Weakness/Resistance, Retreat 1
+    — Recon Directive (Ability) / Dragon Headbutt ``{R}{P}`` 70, so `maxDamage` 70.
+  * So **Dreepy → Drakloak → Dragapult ex is TWO hops** and Drakloak → Dragapult ex is one, which is
+    the pair that isolates the hop discount. Both chains verified in `data/EN_Card_Data.csv`'s
+    ``Previous stage`` column, alongside the standing `Riolu → Mega Lucario ex` single hop above.
+
 Issue #281 adds four more, every field read off `data/EN_Card_Data.csv` (the numbers are Card IDs):
   * Mega Starmie ex (1031) Stage 1 *Mega Pokémon ex*, evolvesFrom **Staryu**, HP 330, {W},
     Weakness {L} — Jetting Blow ``{W}`` 120 (+50 to one Benched) / Nebula Beam ``●●●`` 210,
@@ -84,6 +102,7 @@ DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 MEGA_STARMIE, GOUGING_FIRE, CRUSTLE, BRAVIARY = 1031, 46, 345, 1008
 ALAKAZAM = 743
 SLOWKING, BRAVE_BANGLE = 163, 1175
+STARYU, DREEPY, DRAKLOAK = 1030, 119, 120
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
 SUPER_PSY_BOLT = 214
 JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
@@ -132,6 +151,16 @@ _STATS = {
                        attacks=(SUPER_PSY_BOLT,), cardType=0),
     BRAVE_BANGLE: CardStat(BRAVE_BANGLE, name="Brave Bangle", cardType=2, damageBoost=30,
                            damageBoostVsEx=True, holderNoRuleBox=True),
+    # ── Issue #285's cast: the PRE-EVOLUTIONS whose removal denies a forward payoff ────────────
+    STARYU: CardStat(STARYU, name="Staryu", hp=70, energyType=WATER, weakness=LIGHTNING,
+                     retreatCost=1, maxDamage=20, maxDamageCost=1, minAttackCost=1,
+                     minCostDamage=20, cardType=0),
+    DREEPY: CardStat(DREEPY, name="Dreepy", hp=70, energyType=DRAGON, retreatCost=1,
+                     maxDamage=40, maxDamageCost=2, minAttackCost=1, minCostDamage=10,
+                     cardType=0),
+    DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON,
+                       evolvesFrom="Dreepy", retreatCost=1, maxDamage=70, maxDamageCost=2,
+                       minAttackCost=2, minCostDamage=70, cardType=0),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
@@ -1499,6 +1528,223 @@ def test_the_dragapult_cross_turn_shape_is_priced_BEFORE_the_gust_and_not_only_a
         "after the gust BOTH are reachable — Jetting Blow's 120 covers a fresh 70 HP")
     assert _threat_of(pre_fresh) == 0.0
     assert _threat_of(pre_chipped) > 0.0
+
+
+# ── sniping a pre-evolution denies a forward payoff (Issue #285) ──────────────────────────────────
+#
+# `_reachable_target_values` priced a target by `prize_value` alone — what the body yields NOW — so
+# killing a Staryu scored exactly as much as killing any other 1-prize body, while the doctrine's
+# whole point is that it erases three. Seven of the eight matchup docs make this their primary or
+# secondary lever (*"snipe/gust a Staryu before it rush-evolves … to trade 1 prize for a denied 3"*).
+#
+# The credit is `development.evolve_marginal`'s own expression — `_READINESS_W x (owed_damage /
+# PRIZE_DAMAGE_RATE) x halve(hops)` — against `TheirSide.forward_payoff`. No new constant.
+#
+# **These assertions are made at `_reachable_target_values`, not at `threat`, and that is deliberate
+# rather than a convenience.** Every appended target carries `prize_advance >= 1.0` (`prize_value` is
+# 1, 2 or 3), so `min(_THREAT_CAP, sum)` with `_THREAT_CAP` 0.1 binds on every frame the loop touches
+# and the largest credit measured anywhere on the corpus — 0.054 prizes, Riolu (30) → Mega Lucario ex
+# (270) — is invisible in the capped family by construction.
+# `test_the_denial_credit_is_INVISIBLE_once_the_cap_binds` asserts exactly that, so the choice of seam
+# is itself a claim under test rather than an unexamined one.
+
+
+def _target_values(model) -> tuple:
+    """The UNCAPPED per-target values `threat` is handed — the seam the denial credit changes."""
+    return sv._reachable_target_values(model)
+
+
+def _credit_for(model, card_id: int) -> float:
+    """The denial credit for the body carrying ``card_id``, off the SHIPPED helper.
+
+    Read rather than re-derived on purpose: a test that recomputed `_READINESS_W x (owed /
+    PRIZE_DAMAGE_RATE) x halve(hops)` would agree with a broken implementation as readily as with a
+    correct one. That the credit actually reaches `prize_advance` is a separate claim, asserted
+    against `_target_values` on boards with exactly one reachable target."""
+    body = next(b for b in model.theirs.bodies if b.card_id == card_id)
+    return sv._denied_forward_payoff(model, body)
+
+
+def _their_hops(model, card_id: int) -> int:
+    return model.theirs.forward_payoff(card_id).hops
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_a_pre_evolution_prices_above_an_identical_body_that_evolves_into_nothing():
+    """The headline. Two 1-prize bodies at the same 70 HP in the same seat, both inside Jetting
+    Blow's 120, differing only in what their line becomes.
+
+    Staryu (1030) evolves into Mega Starmie ex — ONE hop, and 1031 is the only card in the pool whose
+    `Previous stage` is ``Staryu`` (Misty's Starmie 361 evolves from Misty's *Staryu*, a different
+    line). Munkidori (112) is a Basic that evolves into nothing at all, so it is the control the
+    comparison needs: without it a credit that fired on *every* body would pass this test just as
+    happily."""
+    staryu = _starmie_board(_poke(STARYU, hp=70, serial=9))
+    dead_end = _starmie_board(_poke(MUNKIDORI, hp=110, damage=40, serial=9))
+
+    assert len(_target_values(staryu)) == len(_target_values(dead_end)) == 1, "both reachable"
+    assert _credit_for(dead_end, MUNKIDORI) == 0.0, "the control: a line that goes nowhere owes 0"
+    assert _credit_for(staryu, STARYU) > 0.0
+    assert _target_values(staryu)[0] > _target_values(dead_end)[0]
+    # …and the credit really is what got there, rather than something else moving the value.
+    assert _target_values(dead_end) == (1.0,)
+    assert _target_values(staryu) == pytest.approx((1.0 + _credit_for(staryu, STARYU),))
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_a_two_hop_base_prices_below_a_one_hop_base_on_the_SAME_terminal_payoff():
+    """The hop discount, isolated by a pair that INVERTS without it.
+
+    Both bodies' lines terminate on the same card — Dragapult ex, `maxDamage` 200 — but Dreepy is two
+    hops from it and Drakloak is one (`data/EN_Card_Data.csv`: 120's `Previous stage` is ``Dreepy``,
+    121's is ``Drakloak``). Dreepy's own printed damage is LOWER (40 against Drakloak's 70), so it is
+    owed MORE: 160 against 130. Undiscounted, Dreepy would therefore price ABOVE Drakloak. The only
+    thing that can reverse that ordering is `halve(hops)`, which is why this pair is the test and a
+    same-owed pair would not be — a same-owed pair passes under any monotone discount, including one
+    applied to the wrong quantity."""
+    dreepy = _starmie_board(_poke(DREEPY, hp=70, serial=9))
+    drakloak = _starmie_board(_poke(DRAKLOAK, hp=90, serial=9))
+
+    assert _their_hops(dreepy, DREEPY) == 2 and _their_hops(drakloak, DRAKLOAK) == 1
+    assert _credit_for(dreepy, DREEPY) > 0.0 and _credit_for(drakloak, DRAKLOAK) > 0.0
+    assert _credit_for(drakloak, DRAKLOAK) > _credit_for(dreepy, DREEPY), (
+        "the two-hop base is owed MORE damage and must still price LESS — the discount, doing work")
+
+    owed_dreepy = dreepy.theirs.forward_payoff(DREEPY).owed_damage
+    owed_drakloak = drakloak.theirs.forward_payoff(DRAKLOAK).owed_damage
+    assert owed_dreepy > owed_drakloak, (
+        "the premise of the inversion: without it this test would pass on the owed damage alone")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_the_hop_counts_are_THIS_SETS_and_a_mainline_chain_would_fail_here():
+    """The card-fact guard the issue asks for, executable.
+
+    The mainline TCG runs Riolu → Lucario → Mega Lucario and Staryu → Starmie → Mega Starmie; this set
+    runs neither, and `docs/rulebook.txt` Appendix 1 says so outright — *"Mega Lucario ex doesn't
+    evolve from Lucario or Lucario ex—just Riolu"*. A fixture carrying the three-stage chain would
+    still produce a plausible credit, just a wrongly-discounted one, so the hop counts are asserted by
+    number rather than left implied by the fixture's shape.
+
+    Dreepy → Drakloak → Dragapult ex is the counter-example that keeps this from being a test that
+    everything is one hop: it is a genuine two."""
+    board = _starmie_board(_poke(MUNKIDORI, hp=110, serial=9))
+    assert _their_hops(board, RIOLU) == 1, "Riolu → Mega Lucario ex, no intermediate Lucario"
+    assert _their_hops(board, STARYU) == 1, "Staryu → Mega Starmie ex, no intermediate Starmie"
+    assert _their_hops(board, DREEPY) == 2, "Dreepy → Drakloak → Dragapult ex"
+    assert _their_hops(board, DRAKLOAK) == 1
+    assert _their_hops(board, MEGA_LUC) == 0, "a body already in its best form owes no hop"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_reachability_fails_OPEN_on_their_side_and_CLOSED_on_mine():
+    """The one leg of the mirror that cannot be computed, and the direction it degrades in.
+
+    `MySide.forward_payoff` proves a line dead from `unseen_counts` — every copy of the forward form
+    visible outside the deck — and `development.line_topology` then CANCELS the credit. Their deck is
+    untracked and their hand is a count, so the same proof is unavailable and `TheirSide` fails OPEN.
+
+    Asserted as an asymmetry on ONE card with all three Mega Lucario ex in my discard, so both sides
+    answer about the same line on the same board. A test that only checked `reachable is True` on
+    their side would pass against a stub that hardcoded True for both sides, which is exactly the
+    mistake this shape rules out."""
+    board = _model(
+        _player(active=_poke(MEGA_STARMIE, hp=330, energies=[E_W]),
+                discard=[MEGA_LUC, MEGA_LUC, MEGA_LUC], prize=4),
+        _player(active=_poke(RIOLU, hp=80, serial=9), prize=4),
+        energy_attached=True)
+
+    assert board.mine.forward_payoff(RIOLU).reachable is False, (
+        "the control: my side CAN prove this line dead — all three copies are in my discard")
+    assert board.theirs.forward_payoff(RIOLU).reachable is True
+    assert board.theirs.forward_payoff(RIOLU).owed_damage > 0.0
+    assert _credit_for(board, RIOLU) > 0.0, "…and the credit survives: we cannot prove otherwise"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_a_body_already_in_its_best_form_gets_no_credit():
+    """Mega Starmie ex is the end of its own line, so removing it denies nothing beyond the three
+    prizes it already yields — a credit that fired here would pay twice for the same card, once as
+    the payoff and once as the denial of itself.
+
+    **This is a NEGATIVE assertion and it cannot bite on the guard it looks like it covers.** Review
+    established the accounting: it survives deleting the `hops > 0 and owed_damage > 0` guard, and it
+    survives deleting the whole credit — both leave the credit at 0, which is what it asserts. What
+    it DOES catch is the regression it is named for: a credit that fired unconditionally, or one
+    whose `owed_damage` floor at 0 was lost so a softer forward form read negative-then-credited. Its
+    positive control is the sibling above, where the same helper must return a non-zero number on a
+    body that IS a pre-evolution; `_forward_credit`'s own docstring records that the guard is a
+    defensive no-op today, so nothing here reads as tested when it is not."""
+    board = _starmie_board(_poke(MEGA_STARMIE, hp=330, damage=220, serial=9))
+
+    assert _target_values(board) == (3.0,), "exactly its prize count, with nothing added"
+    assert _credit_for(board, MEGA_STARMIE) == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_the_credit_reaches_a_BENCHED_pre_evolution_which_is_where_they_actually_sit():
+    """The seat that matters. The doctrine is *snipe the pre-evo* — a pre-evolution is on their
+    Bench, not in front of me — and before Issue #284 this loop never saw a benched body at all.
+
+    Jetting Blow's 50 rider does not cover a fresh 70-HP Staryu, so the board carries the two counters
+    that bring it inside. Their Active is a 320-HP Dragapult ex the 120 cannot reach, so the Active
+    leg contributes nothing and every value here is the bench leg's."""
+    board = _bench_board([_poke(STARYU, hp=70, damage=20, serial=11)])
+
+    assert len(_target_values(board)) == 1, "the benched Staryu, reached by the rider alone"
+    assert _credit_for(board, STARYU) > 0.0
+    assert _target_values(board) == pytest.approx((1.0 + _credit_for(board, STARYU),))
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_the_two_forward_payoff_suppliers_agree_and_diverge_only_where_the_DECKLIST_does():
+    """The word "mirror" made executable — because two implementations of one quantity is exactly the
+    shape that drifts, and `MySide._forward_payoff` (a DFS over my decklist's children map, no hop
+    cap) and `CombatMath.forward_payoff_terms` (the pool closure plus `_forward_hop_depths`, capped
+    at 3) really are two implementations.
+
+    On Riolu both are computable and must agree: `DECK` runs 3 Riolu and 3 Mega Lucario ex, so my
+    decklist index and the pool closure see the same single hop to the same card.
+
+    On Staryu they must NOT agree, and that is the deck-agnostic over-read `threat.blind_to` names:
+    my side runs no Staryu line, so `MySide.forward_index` has no ``Staryu`` key and the my-side
+    reading is the fail-closed `(0.0, 0)` — while their side credits Mega Starmie ex anyway, because
+    the pool index cannot know what they run. Asserting BOTH halves is what makes this a test of the
+    divergence rather than of the agreement alone."""
+    board = _starmie_board(_poke(RIOLU, hp=80, serial=9))
+
+    mine, theirs = board.mine.forward_payoff(RIOLU), board.theirs.forward_payoff(RIOLU)
+    assert (mine.owed_damage, mine.hops) == (theirs.owed_damage, theirs.hops) != (0.0, 0), (
+        "one line, one number, from two implementations")
+
+    assert board.mine.forward_payoff(STARYU) == (0.0, 0, True), "my decklist runs no Staryu line"
+    assert board.theirs.forward_payoff(STARYU).owed_damage > 0.0, (
+        "…and theirs credits it regardless, because the pool index is deck-agnostic")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0013")
+def test_the_denial_credit_is_INVISIBLE_once_the_cap_binds():
+    """The ceiling on what this issue can deliver, asserted rather than described.
+
+    `threat` is `min(_THREAT_CAP, sum)` and `_THREAT_CAP` is 0.1, while every appended target carries
+    `prize_advance >= 1.0` because `prize_value` is 1, 2 or 3 and never less. So the cap binds on
+    every frame this loop touches, while the largest credit measured anywhere on the corrections
+    corpus is 0.054 prizes. It cannot move the family — on ANY board, not merely on already-firing
+    ones.
+
+    This is the same wall Issue #284 measured from the other side, and the unlock is the same parked
+    `_THREAT_CAP / _MAX_PRIZE_VALUE` scale anchor, which this track was told not to move. Recorded as
+    a test so the next reader meets it as a measurement rather than as a surprise — and so that the
+    day the anchor lands, this test fails and points at the packet line."""
+    staryu = _starmie_board(_poke(STARYU, hp=70, serial=9))
+    dead_end = _starmie_board(_poke(MUNKIDORI, hp=110, damage=40, serial=9))
+
+    assert _target_values(staryu)[0] > _target_values(dead_end)[0], "the seam DOES discriminate"
+    assert _threat_of(staryu) == _threat_of(dead_end) == sv._THREAT_CAP, (
+        "…and the capped family cannot: both boards saturate at exactly the cap")
+    # Not asserted on `state_value` itself: these two boards differ in their Active's own attacks, so
+    # `survival` moves between them for a reason that has nothing to do with this credit. The claim
+    # under test is about `threat`, and it is made about `threat`.
 
 
 # ── inertness is over; the seam is not ────────────────────────────────────────────────────────────
