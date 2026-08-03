@@ -228,7 +228,10 @@ and a `damage_context(attacker, defender)` that is the only place a per-side fac
 `atk_`/`def_`/`both_` key. Two suppliers call it, `Pilot._damage_context` and
 `StateModel.damage_context(attacker=)`, and a parity test pins them key-for-key on corpus frames;
 the model needs its own because `state_value(model)` may read no second supplier (the sole-supplier
-ruling, `docs/plans/value-system-poc-plan.md` §4-T0).
+ruling, `docs/plans/value-system-poc-plan.md` §4-T0). The module also owns `bench_gate_context` — the
+matchup-FREE slice, the bench-partner condition's one key — because a caller pricing a body's own
+Attack Payoff must not read the defender's countables, and the `atk_` key must still be spelled in
+exactly one place (ADR-0109).
 Damage that scales on **visible** state is
 thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hidden**-state scaler
 (Mega Abomasnow ex's deck-discard) is bounded soundly via the deck tracker (pigeonhole floor) and
@@ -387,6 +390,23 @@ only safe under the consumer's quantifier — deadness asks `all(gone)`, where a
 set would *fabricate* one.
 _Avoid_: "the fetch predicate" (singular — there is one function, two readings, and conflating them
 is the ADR-0073 defect), whiff (that's the deadness reading's *outcome*, not the reading)
+
+**Attack Payoff**:
+What a body can actually **land on this board**, as one record: `AttackPayoff(attack_id, damage)`,
+from `_SideBase.attack_payoff` (ADR-0109, Issue #287). Distinct from `CardStat.maxDamage`, the
+PRINTED roll-up over a card's attacks, which no board condition can reach: Solrock's Cosmic Beam is
+*"70 … if you don't have Lunatone on your Bench, this attack does nothing"*, and the roll-up says 70
+either way. The read walks the body's own attacks through the ONE damage oracle **matchup-free** (no
+defender, so no Weakness/Resistance and no prevention — that is `threat`'s and `survival`'s question)
+at `bound="exact"`, so `AttackStat.requiresBench` fires; a gated maximum falls back to the best
+attack that still pays, and the card-level roll-up is the degradation when NO attack record resolves.
+The id and the damage travel TOGETHER because the odds leg (`readiness_p`) must be asked about the
+same attack the payoff was priced from. Its context is the one-key `bench_gate_context`, not the full
+`damage_context` — a body's own payoff must not swing on who is Active.
+_Avoid_: "payoff" bare (that is the **Line** payoff — see Stranded Payoff — one abstraction up, the
+evolved end-card a development line aims at), `maxDamage` (the printed roll-up this replaced),
+"the payoff attack" for the printed-max attack (`BodyView.payoff_attack` is DELETED — it could not
+see the Bench)
 
 **Stranded Payoff**:
 An evolved win-condition (a Stage-1/2/Mega) fetched or held with **no deployable base** — no Line

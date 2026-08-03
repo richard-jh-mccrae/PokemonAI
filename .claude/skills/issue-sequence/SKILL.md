@@ -56,6 +56,20 @@ For each item in the queue, in order:
    instead of it sitting silently in a completed background result.
 2. Give it a fully self-contained prompt (it has no memory of this conversation). Include:
    - The repo path and branch name — already checked out, tell it not to create or switch branches.
+   - **Pre-work rebase** (every issue except the very first item in the queue — that branch was just
+     created fresh off `main` in Step 2, so there is nothing to rebase yet): before touching any code
+     or fetching the issue body, run `git fetch origin main && git rebase origin/main`. This is the
+     subagent's literal first action — it runs because the *previous* queued issue just finished
+     cleanly (full local test suite passing is part of what `/implement`'s report-back already
+     gates on in Step 3.3, so reaching this subagent at all means that condition held). If the
+     rebase reports conflicts, resolve them immediately, before reading the issue body or writing any
+     issue code — a conflict is this subagent's first problem to solve, not something to defer. Prefer
+     the textually obvious resolution (e.g. both sides added independent lines/files); if a conflict is
+     semantic — two sides changed the same logic and picking one silently drops behavior — treat it as
+     an ambiguity stop-and-ask (below) rather than guessing. Only once the rebase is clean does the
+     subagent move on to fetching the issue and building it. Note this in the final report even when
+     there was nothing to resolve (`rebase: clean, no conflicts` / `rebase: resolved N conflicts in
+     <files>` / `rebase: NEEDS DEVELOPER INPUT, see below`).
    - Its issue number, and to fetch the full body + comments itself
      (`gh issue view <N> --repo richard-jh-mccrae/PokemonAI --comments`).
    - The parent epic's standing-discipline section, if you found one in Step 1, pasted verbatim —
@@ -76,9 +90,10 @@ For each item in the queue, in order:
      option first, both plain-English and technical explanation for each option). If it fires, that
      question must be the first line of the subagent's final report, marked
      `NEEDS DEVELOPER INPUT:` — you cannot answer on the developer's behalf.
-   - What its **final report** must cover: files/functions touched, suite result, gate-diff result
-     (clean, or N flips packeted — name the file), PR state, issue-tracker status, and — always,
-     explicitly, even when the answer is "no" — whether it triaged any scope creep this run.
+   - What its **final report** must cover: pre-work rebase result (per above), files/functions
+     touched, suite result, gate-diff result (clean, or N flips packeted — name the file), PR state,
+     issue-tracker status, and — always, explicitly, even when the answer is "no" — whether it
+     triaged any scope creep this run.
 3. Read the report.
    - **Developer question present** → relay it verbatim to the user in chat. Wait for the actual
      answer (do not answer on their behalf, do not proceed past it). Once you have it, `SendMessage`
@@ -98,8 +113,11 @@ For each item in the queue, in order:
   the first issue number; body lists every issue number in the queue as it stood at PR-creation time.
   **Do not arm the 5-minute CI check-in / auto-fix loop yet** — local pytest and local gate diffs are
   this run's authority, not GitHub CI, and the next queued issue must never wait on a CI run.
-- **Every other item** (including ones inserted mid-run by Tier-2 triage): commit, then plain
-  `git push` — no rebase-onto-main, no ADR finalization, no CI wait. Update the PR body's issue list
+- **Every other item** (including ones inserted mid-run by Tier-2 triage, and a blocked issue's
+  second pass after its prerequisite lands): commit, then plain `git push` — no ADR finalization, no
+  CI wait. This item's subagent already rebased onto `main` as its first action (Step 3's pre-work
+  rebase) before it wrote any code, so there is nothing left to reconcile at push time; a second
+  rebase immediately before pushing would be redundant, not additive. Update the PR body's issue list
   if the queue changed.
 - **Last item in the queue** — whatever it ends up being after any insertions — gets the full
   `/open-pr` ceremony: rebase onto `main`, finalize any temp-named ADRs, push, finalized PR body

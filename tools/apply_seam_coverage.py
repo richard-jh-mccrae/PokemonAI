@@ -714,7 +714,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
                      f"{wsum(lambda s, f=fate: s.fate == f, ours)}",
                      _pct(wsum(lambda s, f=fate: s.fate == f, ours), sum(ours.values())),
                      f"{wsum(lambda s, f=fate: s.fate == f, meta):.1f}"])
-    add(_table(rows, ["fate", "sites", "% sites", "copies in our 5 decks", "% our copies",
+    add(_table(rows, ["fate", "sites", "% sites", f"copies in our {len(decks)} decks", "% our copies",
                       "meta-weighted copies"]))
     add("")
     add("MODELLED splits — and the seam's own table cannot tell the two apart:")
@@ -736,7 +736,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         rows.append([f"**{cls}**", n_cards, _pct(n_cards, len(worst)), n_ours,
                      _pct(n_ours, sum(ours.values())), f"{n_meta:.1f}",
                      _pct(n_meta, sum(meta.values()))])
-    add(_table(rows, ["worst site on the card", "cards", "% cards", "copies in our 5 decks",
+    add(_table(rows, ["worst site on the card", "cards", "% cards", f"copies in our {len(decks)} decks",
                       "% our copies", "meta copies", "% meta copies"]))
     add("")
 
@@ -765,7 +765,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         if not group:
             continue
         n_ours = sum(ours.get(s.card_id, 0) for s in group)
-        add(f"#### {cause} — {len(group)} sites, {n_ours} copies across our 5 decks")
+        add(f"#### {cause} — {len(group)} sites, {n_ours} copies across our {len(decks)} decks")
         add("")
         add(_table([[s.card_id, s.name, s.label, ours.get(s.card_id, 0),
                      f"{meta.get(s.card_id, 0.0):.2f}", s.family,
@@ -843,7 +843,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add("")
     er = sorted((s for s in sites if s.fate == seam.ENGINE_RESOLVED),
                 key=lambda s: (-ours.get(s.card_id, 0), -meta.get(s.card_id, 0.0), s.name))
-    add(f"{len(er)} sites, {sum(ours.get(s.card_id, 0) for s in er)} copies across our 5 decks. "
+    add(f"{len(er)} sites, {sum(ours.get(s.card_id, 0) for s in er)} copies across our {len(decks)} decks. "
         "Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, "
         "which is necessary for the `deterministic=True` proof but is not the proof itself.")
     add("")

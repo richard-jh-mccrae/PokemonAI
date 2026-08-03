@@ -593,9 +593,34 @@ attacker, both halves of a mutual dependency. `slowking` 4 (2× Metagross, whose
 +150 *"if Beldum and Metang are on your Bench"* and the deck runs neither; 2× Kyurem, whose Plasma
 Bane is gated on the **opponent's** discard containing a "Colress" card).
 
-**Cheapest fix.** Extend the existing `condition` field from draw clauses to a payoff clause and have
-`_ready_bodies` zero the payoff when the condition fails. The precedent is committed and one card
-already uses it.
+**Cheapest fix.** Do not extend the clause vocabulary — ask the damage oracle. `_ready_bodies` takes
+the best attack the body can pay off with ON THIS BOARD, and the gate is already shipped one layer
+down.
+
+> **Corrected 2026-08-02 while BUILDING Issue #287 (ADR-0109)** — the first draft of this paragraph
+> said *"extend the existing `condition` field from draw clauses to a payoff clause … the precedent is
+> committed and one card already uses it"*, and the finding's own body says the vocabulary *"can carry
+> the condition"*. Three measurements against `HEAD` retired that:
+>
+> 1. **The precedent evaluates nothing.** `"solrock_in_play"` is in `card_effects.json` as DATA only;
+>    no evaluator in `src/` recognises the string. The two that exist (`planner._condition_holds`,
+>    `combat._AttachCtx.condition_met`) know three conditions between them and both fail *closed* on
+>    anything else — so Lunatone's draw condition is not read either.
+> 2. **The capability is already shipped.** `parse_attack_bench_requirement` parses Cosmic Beam's own
+>    sentence into `AttackStat.requiresBench`, and `strategy/damage.py` has zeroed the attack on an
+>    unmet partner since ADR-0032. A hand-enumerated condition vocabulary beside a parser that reads
+>    the card text would violate Issue #278's own *"Compose, don't invent"*. It also dissolves the
+>    LOUD-on-unknown requirement: there is no vocabulary to be ignorant of.
+> 3. **Two of the three named cards are not this bug.** Walking the whole set with that parser finds
+>    exactly TWO gated attacks — Solrock (676) and Mesprit (216), the latter in no shipped deck.
+>    **Metagross (276)**: Conjoined Beams is 130 printed and the conditional *"+150 more"* was never
+>    in `maxDamage`, so there is no over-price and the finding's own test passes unfixed.
+>    **Kyurem (144)**: Plasma Bane is an **Ability** that cheapens *Trifrost*'s COST to `{C}`; the
+>    damage is not gated at all, and at `maxDamage` 0 the body is skipped outright. That is a
+>    `readiness_odds` question in the opposite direction, not this finding.
+>
+> The exposure line above therefore over-counts: `slowking` 4 is **0**, and the real exposure is
+> `mega_lucario`'s 3× Solrock. ADR-0109 is authoritative over this section.
 
 **Ruled?** **New.** `readiness.blind_to` names Ability readiness (a *missing payoff*); this is the
 opposite failure — a payoff that is present in `CardStat` and conditionally worth nothing.

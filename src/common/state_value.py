@@ -418,7 +418,11 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("prize_at_risk", "opponent_target_value"),
         composition="Lead plus proximity over the two prize counts. The RACE only — what a body is "
                     "worth when it falls is `survival` (mine) or `threat` (theirs), so the prize "
-                    "VALUES of individual bodies are deliberately absent here.",
+                    "VALUES of individual bodies are deliberately absent here. One reader arrives "
+                    "from the other side and must not mistake it for a breach: `survival`'s "
+                    "terminal `_predicted_loss` ALSO reads `their_prizes_remaining`, as a "
+                    "win-condition TEST rather than as race value (ADR-0064 Amendment B, Issue "
+                    "#283). Lead-and-proximity stays this family's alone.",
         blind_to=(
             "deck_count / deck-out proximity — win condition 3 (`docs/rules.md` §7) is a second "
             "race and no family reads either side's deck count. A mill or a heavy-draw line moves "
@@ -437,14 +441,34 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "`damage_context(attacker='theirs')`, so a scaling attack of theirs prices its "
                     "actual damage rather than its printed 0 (Issue #280); the direction is the "
                     "attacker's, and on a survival read the attacker is them. "
-                    "`_predicted_loss` (-KO_SCORE bench-empty doom, ADR-0064) "
-                    "survives here as a TERMINAL term, outside the positional band by construction. "
-                    "The band is the SUM of the positional caps (readiness 300 + survival 50 + "
-                    "threat 100 + value 40 + line 100 = 590) against KO_SCORE 1000, of which "
-                    "`_LINE_CAP` is the line term's 100 (`strategy/planner.py`) — a loss-avoidance "
-                    "value cannot be both bounded under that band AND un-outbiddable, so it is "
-                    "neither.",
+                    "`_predicted_loss` (ADR-0064) survives here as a TERMINAL "
+                    "term at `LOSS_PRIZES`, outside the positional band by construction. The band "
+                    "is the SUM of the positional caps (readiness 300 + survival 50 + threat 100 + "
+                    "value 40 + line 100 = 590) against KO_SCORE 1000, of which `_LINE_CAP` is the "
+                    "line term's 100 (`strategy/planner.py`) — a loss-avoidance value cannot be "
+                    "both bounded under that band AND un-outbiddable, so it is neither. That "
+                    "terminal term prices BOTH loss conditions of `docs/rules.md` §7 a next-turn "
+                    "Knock Out can reach (ADR-0064 Amendment B, Issue #283): case 2, no Pokémon in "
+                    "play to promote, and case 1, the Knock Out takes their LAST prize. "
+                    "**Case 1 consults `their_prizes_remaining`, and that is not a disjointness "
+                    "breach**, which is stated here because it is the first thing a reader of the "
+                    "tuples will suspect. It is consulted as a WIN-CONDITION TEST and never as race "
+                    "value: does THIS body's prize yield cover what they still need? Lead and "
+                    "proximity stay `prize_race`'s alone and this family prices neither. The "
+                    "registry fact remains `predicted_loss` — already in `reads` — because what "
+                    "enters the scalar is the terminal verdict, not their count; the count is an "
+                    "input to that verdict the way `turns_to_ko_me`'s own inputs are. Splitting the "
+                    "count into a second fact string to make the read visible was considered and "
+                    "rejected: `sound_rules.SCHEDULED_PAIRS` records the same temptation and the "
+                    "same answer — a fact renamed to dodge a detector makes the detector pass "
+                    "VACUOUSLY. Which is exactly why this paragraph exists instead.",
         blind_to=(
+            "the MARGIN below the case-1 win-condition test — a body whose loss hands them 2 of "
+            "the 3 prizes they need is worse than the flat exposure above and prices identically "
+            "to one that hands them none, so moving a body across that margin is a genuine 0 "
+            "delta. BINARY is Issue #283's explicit POC ruling (a terminal term firing on a "
+            "non-terminal fact is the worse error), which makes this an OWNED zero rather than an "
+            "oversight: the graded form is the named post-POC question and nobody prices it today.",
             "special_conditions — Asleep/Paralyzed/Poisoned/Burned change what survives and what "
             "can act, and `snapshot_coverage` lists the zone as OWED (no snapshot home). Curing a "
             "condition therefore prices 0. Owned by T1 (Issue #260) via the completeness contract.",
@@ -644,13 +668,34 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("assignment_coverage", "bench_slot_price"),
         composition="Per-body payoff x readiness odds x role relevance, composed from the existing "
                     "Attach-Budget / readiness-odds / Needs machinery rather than a second opinion "
-                    "about any of them.",
+                    "about any of them. The payoff is `StateModel.attack_payoff` — the best attack the "
+                    "body can pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` "
+                    "roll-up (ADR-0109). That makes `body_payoff` depend on MY Bench CONTENTS for a "
+                    "bench-gated attack, which is not a second claim on `bench_slot_price`: "
+                    "`development` prices how many slots are left, this prices what one attack can "
+                    "land, and the two never read the same number.",
         blind_to=(
             "who is ACTIVE — `readiness_p` is per body and area-aware through the Attach Budget, "
             "but nothing here prices the Active SLOT itself, so a retreat that puts the right body "
             "in front moves this family only through the Budget. `promote_retreat_value` is the "
             "instrument and composes into `survival`; the retreat allowance itself is an OWED "
             "snapshot zone (T1).",
+            "a board condition that is NOT a bench-partner condition — ADR-0109 routed the payoff "
+            "through the damage oracle, which reads the one condition family the card-text parser "
+            "extracts (`AttackStat.requiresBench`). Walking the whole set for *\"this attack does "
+            "nothing\"* finds 24 attacks: 10 are coin flips (the `damageMin`/`damageMax` family, a "
+            "different question), 2 are bench-partner gates and are now priced, and the remaining "
+            "**12 are unread** — no Stadium in play (Fan Rotom 174), a Bench-count floor (Victini "
+            "490), an exact hand size (Medicham 884), hand parity with the opponent (Iron Boulder "
+            "971), a defender predicate (Sawk 602 vs {ex}, Camerupt 857 vs Burned, Basculin 577 vs "
+            "an undamaged Active), their prize count (Hop's Cramorant 311), and a pay-from-hand "
+            "discard (Decidueye 129, Lurantis 398, Ceruledge 797). Each still prices its PRINTED "
+            "damage. **Exposure across the five shipped decks is 0** — the deck-csv walk finds only "
+            "Solrock 676 — which is why Issue #278's *\"add only what the four decks need\"* leaves "
+            "them here rather than in the build. This is the address, not a verdict: a deck change "
+            "that adds one of the 12 makes it a live over-price, and the fix is another parser in "
+            "`scouting/card_text.py` plus a context key, never a hand-enumerated condition "
+            "vocabulary (ADR-0109's rejected option).",
             "Ability readiness — the incumbent leaf scored attack and Ability CO-EQUALLY "
             "(`planner._ability_readiness`, `_READINESS_ABILITY_VALUE`). Nothing in the model "
             "supplies an Ability payoff, so an evolve whose whole point is switching an engine "
@@ -771,6 +816,17 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
             "opponent-choice riders — 'your opponent discards a card' and its relatives have no "
             "opponent model, so their value is 0. The apply-seam REFUSES the same class; the two "
             "refusals are the same gap seen from two sides.",
+            "opponent ACTION-ECONOMY locks — a rider that restricts what the opponent may DO on "
+            "their next turn (an Item lock, an Evolution lock, a named-attack lock) is not a body "
+            "grant, so `transient_grants` (ADR-0033, homed `mine.active.grant` only) does not carry "
+            "it even in principle: its vocabulary is `self_lock`/`same_lock`/`self_bonus`/"
+            "`prevent_all`/`reduction` (`state_model.py`'s `grant` docstring), none of which is "
+            "'opponent can't play card-type X'. Budew's Itchy Pollen (235, `item_lock`, free "
+            "attack, verified at source) is the concrete case — 1 card in 1 deck, but the reason "
+            "`dragapult_ex` sets `preferred_start=\"second\"` (`docs/rules.md` §2: the first player "
+            "cannot attack turn 1) — a 1-of that moved a deck-level parameter. Pricing it needs a "
+            "THEIR-side extension of `transient_grants`, the same OWED-zone class Issue #282 needs "
+            "for damage-boost Trainers; declaring it here is free and honest now (Issue #290).",
         ),
     ),
 )
@@ -912,33 +968,75 @@ def _exposed_bodies(model: "StateModel") -> tuple:
 
 
 def _predicted_loss(model: "StateModel") -> bool:
-    """The bench-empty doom (ADR-0064, whitelisted `predicted-loss`): my only Pokémon is a doomed
-    Active, so the Knock Out ends the match (`docs/rules.md` §7 case 2).
+    """Can the opponent WIN next turn? — the terminal-loss family (whitelisted `predicted-loss` and
+    `prize-lethality`), charged at :data:`LOSS_PRIZES` inside `survival`.
 
-    ``evo_min_energy=1`` is ADR-0064's bounded-pessimism guard carried over verbatim — an
-    evolution-based Knock Out counts only off a pre-evolution that ALREADY carries Energy, because a
-    bare 0-Energy pre-evo is not a credible next-turn game-ender. Dropping it would make this rung
-    fire on boards the incumbent leaves alone, which is a behaviour change disguised as a port.
+    **Two cases of `docs/rules.md` §7, one clock.** Both are win conditions a next-turn Knock Out
+    reaches, and both fire only when the budgeted Incoming actually Knocks the body Out:
 
-    ``context`` completes that port (Issue #280). The rung this is a port OF —
-    `planner.Planner._predicted_loss` — makes the same `reachable_incoming(evo_min_energy=1)` call
-    WITH ``context=self._opp_attack_context``, the Pilot's own THEIRS-direction dict
-    (`pilot._damage_context(obs, attacker_is_me=False)`, *"OPPONENT-as-attacker context"*); it
-    differs only in naming a simulated end board through ``bodies=``, which is that rung's question
-    and not this one's. So the direction here is the incumbent's own, not a fresh judgement about
-    which side attacks — this call site was simply the one that dropped it. Omitting it did not make
-    this rung conservative, it made it BLIND: every Damage Formula scaler contributed 0, so a
-    Powerful Hand at 21 cards read as 0 damage rather than 420 and a doomed board with an empty
-    Bench scored as a healthy one. Measured on the corrections corpus, five bench-empty frames read
-    a different Incoming once the context is threaded; on `82226759|64` it is 30 → 420 against a
-    330 HP Active. Under-reading incoming damage is the one direction a survival estimate may never
-    fail in, and a terminal `-KO_SCORE` rung is where that failure costs the most."""
-    active = model.mine.active
-    if active is None or not active.hp_remaining or model.mine.bench:
-        return False
-    return model.theirs.reachable_incoming(
-        active.body, evo_min_energy=1,
-        context=model.damage_context(attacker="theirs")) >= active.hp_remaining
+    * **case 2** (ADR-0064) — my Bench is EMPTY under a doomed Active, so there is nothing to
+      promote and the Knock Out ends the match.
+    * **case 1** (ADR-0064 Amendment B, Issue #283) — a doomed body whose Knock Out yields at least
+      the prizes they still need, so the Knock Out takes their LAST prize.
+
+    **Why case 1 is here and could not be anywhere else.** *"They are at 3 prizes and my Active is a
+    3-prize Mega"* is a loss; *"they are at 6"* is an exposure. The fact separating them is the
+    PRODUCT of a body's prize yield and their remaining count, and the double-counting rule splits
+    those across `survival` (owns `prize_at_risk`) and `prize_race` (owns the counts) — so neither
+    positional family may form it, and :func:`registry_gaps` reported nothing because the fact was
+    *claimed*, just by families structurally unable to combine it. This term is the one already
+    licensed to price a game-ending fact outside the positional band. It reads their count as a
+    win-condition TEST and never as race value; both families' `blind_to` say so.
+
+    Case 1 spans BOTH areas, because §7 case 1 is about a BODY rather than the Active Spot: a
+    chipped multi-prize body on the Bench under a live snipe rider ends the game just as finally.
+    The area is declared to the clock (``my_benched=``), which confines a benched body's
+    reachability to the snipe/spread riders and honours Tera bench-immunity (`docs/rules.md` §11)
+    instead of crediting printed damage that cannot land there.
+
+    ``evo_min_energy=1`` is ADR-0064's bounded-pessimism guard carried over verbatim, and shared by
+    both cases — an evolution-based Knock Out counts only off a pre-evolution that ALREADY carries
+    Energy, because a bare 0-Energy pre-evo is not a credible next-turn game-ender. Dropping it for
+    the new case would make this rung fire on boards the incumbent leaves alone, which is a
+    behaviour change disguised as a port.
+
+    ``context`` is the THEIRS-direction Damage Formula dict (Issue #280), threaded into the clock
+    both cases share. The rung this is a port OF — `planner.Planner._predicted_loss` — makes the same
+    `reachable_incoming(evo_min_energy=1)` call WITH ``context=self._opp_attack_context``, the
+    Pilot's own *"OPPONENT-as-attacker context"*, so the direction here is the incumbent's rather
+    than a fresh judgement about which side attacks; this call site was simply the one that dropped
+    it. Omitting it did not make the rung conservative, it made it BLIND: every Damage Formula
+    scaler contributed 0, so a Powerful Hand at 21 cards read as 0 damage rather than 420 and a
+    doomed board with an empty Bench scored as a healthy one. Measured on the corrections corpus,
+    five bench-empty frames read a different Incoming once the context is threaded; on
+    `82226759|64` it is 30 → 420 against a 330 HP Active. Under-reading incoming damage is the one
+    direction a survival estimate may never fail in, and a terminal rung is where it costs most.
+
+    The answer is a BOOL rather than a magnitude, which is Issue #283's explicit POC ruling made
+    structural: a body whose loss hands them 2 of the 3 prizes they need is worse than the flat
+    exposure `survival` prices but is not a loss, and grading that is a post-POC question."""
+    mine, theirs = model.mine, model.theirs
+
+    def _doomed(body) -> bool:
+        return bool(body.hp_remaining) and theirs.reachable_incoming(
+            body.body, evo_min_energy=1, my_benched=not body.is_active,
+            context=model.damage_context(attacker="theirs")) >= body.hp_remaining
+
+    # case 2 — the visible bench-empty fact gates the clock read, so a board with a Bench pays
+    # nothing for this leg (a bench body soaks: recoverable, not a loss).
+    active = mine.active
+    if active is not None and not mine.bench and _doomed(active):
+        return True
+
+    # case 1 — the CHEAP prize comparison gates the expensive clock read, and it is false on every
+    # board where they still need more prizes than my biggest body is worth (i.e. almost all of
+    # them), so the extra reads are paid only where the fact can actually fire.
+    #
+    # `prizes_remaining` reads an ABSENT `prize` zone as 0, and 0 is falsy here, which is the fail
+    # direction rather than an accident: a hand-built board that carries no zone makes no claim, and
+    # a board on which they have already taken their last prize has no next turn to predict.
+    left = model.prize_race.opp_prizes_remaining
+    return bool(left) and any(b.prize_value >= left and _doomed(b) for b in mine.bodies)
 
 
 def _reachable_target_values(model: "StateModel") -> tuple:
@@ -1094,28 +1192,34 @@ def _denied_forward_payoff(model: "StateModel", target) -> float:
 def _ready_bodies(model: "StateModel") -> tuple:
     """MY bodies as `readiness` reads them.
 
-    * ``payoff`` — the body's PRINTED line payoff (`CardStat.maxDamage`) in prizes. The body's own
-      form, deliberately: what a FORWARD form would achieve is evolution topology and belongs to
-      `development`, and reading the forward closure here would price one fact in two families.
+    * ``payoff`` — the body's line payoff in prizes, as `StateModel.attack_payoff` reads it: the best
+      attack this body can actually pay off with **on this board**, not the printed
+      `CardStat.maxDamage` roll-up (Issue #287, ADR-0109). A printed number cannot carry a board
+      condition, so Solrock's Cosmic Beam — *"70 … if you don't have Lunatone on your Bench, this
+      attack does nothing"* — used to price 70 on a Bench that would never pay it, and benching or
+      losing the Lunatone moved this term by exactly 0. The body's OWN form, deliberately: what a
+      FORWARD form would achieve is evolution topology and belongs to `development`, and reading the
+      forward closure here would price one fact in two families.
     * ``readiness_odds`` — `readiness_p` asked about the body's PAYOFF attack, not about "any
       attack". The distinction is load-bearing and not pedantry: pairing a max-damage payoff with
       the any-attack (famine) probability saturates the term for every real attacker, and a
       saturated term has zero derivative, so the attach that completes the payoff cost would price
-      at 0 delta and never be explored. See `BodyView.payoff_attack`.
+      at 0 delta and never be explored. The attack id comes from the SAME `AttackPayoff` record as the
+      damage, which is what keeps the pair honest once a gated maximum falls back to a lesser attack.
     * ``role_relevance`` — `role_value` normalised by `DEPLOY_WORTH_SCALE`, which is exactly
       `deploy_value._relevance`'s dimensionless ratio. Composed rather than re-derived so a role
       re-tier moves both instruments together."""
     out = []
     seen: set = set()
     for b in model.mine.bodies:
-        stat = b.stat
-        if stat is None:
+        if b.stat is None:
             continue                       # unknown card: make no claim (the oracle's own direction)
-        payoff = float(getattr(stat, "maxDamage", 0) or 0) / currency.PRIZE_DAMAGE_RATE
+        paying = model.mine.attack_payoff(b)
+        payoff = paying.damage / currency.PRIZE_DAMAGE_RATE
         if payoff <= 0.0:
-            continue
+            continue                       # nothing this body can land: a condition it cannot meet
         out.append(ReadyBody(payoff=payoff,
-                             readiness_odds=_readiness_odds(model, b),
+                             readiness_odds=_readiness_odds(model, b, paying.attack_id),
                              role_relevance=_body_relevance(model, b.card_id, seen)))
     return tuple(out)
 
@@ -1148,9 +1252,15 @@ def _saturation(model: "StateModel", card_id, seen: set) -> float:
     return 1.0
 
 
-def _readiness_odds(model: "StateModel", body) -> float:
+def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     """P(this body gets to its payoff attack) — `readiness_p` OR the forward clock, whichever is
     better, and the `or` is the part that matters.
+
+    ``attack_id`` is the attack the payoff was PRICED from (`Payoff.attack_id`), passed in rather
+    than re-derived so the two legs cannot name different attacks. They can now differ: a body whose
+    biggest attack is gated by an unmet board condition falls back to its best paying attack, and
+    asking these odds about the dead one would price a real payoff at a probability that belongs to
+    nothing.
 
     `readiness_p` is a THIS-TURN probability and fails closed at 0.0, which is the right answer to
     the question it asks and the wrong shape for a positional term: once the turn's one manual attach
@@ -1192,7 +1302,7 @@ def _readiness_odds(model: "StateModel", body) -> float:
     not ask, and a BENCHED body reads 1.0 — which is *who is ACTIVE* (`readiness.blind_to`), Issue
     #263's ledger. Specced as **Issue #351**; the correct half is built here and the masking is a
     packet line rather than a second, unruled retune."""
-    now = model.mine.readiness_p(body, body.payoff_attack)
+    now = model.mine.readiness_p(body, attack_id)
     arm = model.mine.turns_to_afford(body, exclude_expiring=True)
     forward = 0.0 if arm is None else halve(arm)
     return max(0.0, min(1.0, max(now, forward)))

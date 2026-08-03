@@ -156,10 +156,18 @@ WRITABLE: tuple[Zone, ...] = (
     # ── hidden: no field can hold it. Recorded so nobody 'fixes' it. ──────────────────────────────
     Zone("deck_order", "the ORDER of cards in a deck — what a shuffle and a to-bottom rider change",
          HIDDEN,
-         priced_by="Unknowable from an observation, and the reason the apply-seam refuses anything "
-                   "riding a shuffle: the engine has no deal-seed, so a simulated shuffle is ONE "
-                   "SAMPLE, not a distribution. Priced as a distribution by `deck_odds` "
-                   "hypergeometrics instead (ADR-0029), which is `deck_odds` above."),
+         priced_by="Unknowable from an observation FOR A SHUFFLE, and the reason the apply-seam "
+                   "refuses anything riding one: the engine has no deal-seed, so a simulated shuffle "
+                   "is ONE SAMPLE, not a distribution. Priced as a distribution by `deck_odds` "
+                   "hypergeometrics instead (ADR-0029), which is `deck_odds` above. **A to-top "
+                   "effect is a different case, recorded so it is not conflated with the shuffle "
+                   "one** — Ciphermaniac's Codebreaking (1188) and Academy at Night (1248) both put "
+                   "a KNOWN card on top, so the next draw is knowable, not hidden information at "
+                   "all. This zone stays HIDDEN here too, today, because nothing tracks it — a "
+                   "dedicated `known_top` zone (an ordered tuple, invalidated on any shuffle) was "
+                   "sketched but is an open build-or-decline decision (Issue #289), not yet ruled. "
+                   "Until it lands, `deck_odds` prices a to-top card exactly as an unseen one, which "
+                   "is a KNOWN gap rather than the honest silence it is for an actual shuffle."),
 )
 
 #: id -> Zone.

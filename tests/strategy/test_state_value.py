@@ -110,6 +110,21 @@ WATER_GUN = 91030          # Staryu's only attack (Issue #286)
 HEAT_BLAST, BLAZE_BLITZ, POWERFUL_HAND = 946, 947, 9743
 E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
 IGNITION = 17               # Issue #286 — the pool's ONE `discard_eot` Energy
+#: The bench-GATED pair, and the ONE the shipped decks actually expose (Issue #287). Verified at
+#: source: Solrock (676) Basic HP 110 {F}, weak {G}, retreat 1 — Cosmic Beam ``{F}`` 70, *"If you
+#: don't have Lunatone on your Bench, this attack does nothing. This attack's damage isn't affected
+#: by Weakness or Resistance."* — its only attack. Lunatone (675) Basic HP 110 {F}, weak {G},
+#: retreat 1 — Ability Lunar Cycle, and Power Gem ``{F}{F}`` 50. `mega_lucario` runs 3x Solrock and
+#: 2x Lunatone, and they are each other's enablers: Lunar Cycle needs Solrock in play, Cosmic Beam
+#: needs Lunatone on the Bench.
+SOLROCK, LUNATONE = 676, 675
+COSMIC_BEAM, POWER_GEM = 9676, 9675
+#: The conditional-BONUS shape, as opposed to the conditional-ZERO one above — Metagross (276)
+#: Stage 2 HP 170 {P}, `evolvesFrom` Metang: Wrack Down ``{P}`` 60 and Conjoined Beams ``{P}{P}``
+#: **130**, *"If Beldum and Metang are on your Bench, this attack does 150 more damage."* Verified
+#: at source. `slowking` runs 2x and neither partner, so the bonus is unpayable for the whole match.
+METAGROSS = 276
+WRACK_DOWN, CONJOINED_BEAMS = 9276, 9277
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
@@ -177,10 +192,30 @@ _STATS = {
     # Brave ``{F}{F}``. `cardType=6` is SPECIAL_ENERGY (`cg.api.CardType`).
     IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
+    SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, energyType=FIGHTING, weakness=GRASS,
+                      minAttackCost=1, maxDamage=70, maxDamageCost=1, minCostDamage=70,
+                      attacks=(COSMIC_BEAM,), cardType=0),
+    LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING, weakness=GRASS,
+                       minAttackCost=2, maxDamage=50, maxDamageCost=2, minCostDamage=50,
+                       attacks=(POWER_GEM,), cardType=0),
+    METAGROSS: CardStat(METAGROSS, name="Metagross", hp=170, stage2=True, evolvesFrom="Metang",
+                        energyType=PSYCHIC, minAttackCost=1, maxDamage=130, maxDamageCost=2,
+                        minCostDamage=60, attacks=(WRACK_DOWN, CONJOINED_BEAMS), cardType=0),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
+    #: Added for ADR-0064 Amendment B's BENCH leg (Issue #283) — the only opponent in this fixture
+    #: whose attack reaches my Bench at all. Verified at source, and carried WHOLE rather than
+    #: trimmed to the one attack the test needs: Mega Starmie ex (1031) Stage 1 HP 330, {W},
+    #: `Mega Pokémon ex` -> 3 prizes, evolvesFrom **Staryu**, Jetting Blow ``{W}`` 120 *"also does
+    #: 50 damage to 1 of your opponent's Benched Pokémon"* and Nebula Beam ``●●●`` 210. A fixture
+    #: that quietly drops the second attack would carry a `maxDamage` the real card contradicts.
+    #: Referenced by exactly one test, so no existing assertion moves.
+    MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
+                           energyType=WATER, evolvesFrom="Staryu", maxDamage=210, maxDamageCost=3,
+                           minAttackCost=1, minCostDamage=120,
+                           attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
@@ -205,8 +240,20 @@ _ATTACKS = {
                               ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
     SUPER_PSY_BOLT: AttackStat(SUPER_PSY_BOLT, damage=120, cost=3,
                                energyTypes=(PSYCHIC, PSYCHIC, COLORLESS)),
+    COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, energyTypes=(FIGHTING,),
+                            requiresBench=("Lunatone",), ignoresWeakness=True,
+                            ignoresResistance=True),
+    POWER_GEM: AttackStat(POWER_GEM, damage=50, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    WRACK_DOWN: AttackStat(WRACK_DOWN, damage=60, cost=1, energyTypes=(PSYCHIC,)),
+    # `damageMax` 280 is the +150 leg, exactly as the provider carries it: the bonus is REACHABLE
+    # through the oracle's "max" bound and must not be reachable through this read.
+    CONJOINED_BEAMS: AttackStat(CONJOINED_BEAMS, damage=130, cost=2,
+                                energyTypes=(PSYCHIC, PSYCHIC), damageMax=280),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
+#: `mega_lucario`'s single-prize core beside the Mega line — the deck the Solrock cases score
+#: against, so the deck-fetch leg of `readiness_p` sees the Energy the pair actually runs.
+LUNAR_DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [SOLROCK] * 3 + [LUNATONE] * 2
 
 #: The deck's DECLARED Roles as Worth (`card_worth.ROLE_TIER`), supplied through the model's
 #: `role_worth=` resolver. Roles are declaration, not card data — `card_worth.role_value` says so
@@ -214,7 +261,9 @@ DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 #: tried to put them on the stat would be testing an API that does not exist.
 _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condition_base"],
                MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"],
-               MEGA_STARMIE: ROLE_TIER["win_condition"]}
+               MEGA_STARMIE: ROLE_TIER["win_condition"],
+               SOLROCK: ROLE_TIER["secondary_attacker"], LUNATONE: ROLE_TIER["engine"],
+               METAGROSS: ROLE_TIER["secondary_attacker"]}
 
 #: Issue #282's two boost cards, as the ``(amount, attackerEnergyType|None, vsExOnly)`` triple
 #: `CardStat.damageBoost` / `damageBoostType` / `damageBoostVsEx` carries and `strategy/damage.py`
@@ -297,12 +346,12 @@ class _Boosts:
         return self._boosts if side == 0 else ()
 
 
-def _model(me, opp, *, energy_attached=False, turn=5, needs=None, boosts=None):
+def _model(me, opp, *, energy_attached=False, turn=5, needs=None, boosts=None, deck=None):
     obs = {"current": {"players": [me, opp], "yourIndex": 0, "turn": turn,
                        "energyAttached": energy_attached, "supporterPlayed": False,
                        "stadium": []}, "logs": []}
-    return StateModel.build(obs, combat=_combat(), deck=DECK, needs=needs,
-                            role_worth=_ROLE_WORTH.get,
+    return StateModel.build(obs, combat=_combat(), deck=DECK if deck is None else deck,
+                            needs=needs, role_worth=_ROLE_WORTH.get,
                             turn_boosts=None if boosts is None else _Boosts(boosts))
 
 
@@ -568,6 +617,167 @@ def test_a_predicted_loss_outscales_every_other_family_combined():
     merely_awful = sv.survival([sv.ExposedBody(3.0, 1)] * sv._MAX_BODIES)
     assert doomed < merely_awful
 
+    # …and end-to-end through the scalar on a board that is PRIZE-lethal rather than bench-empty
+    # (ADR-0064 Amendment B) — the second case must inherit the same dominance, not merely the same
+    # constant. Every positional family is free to be as favourable as this fixture allows; the
+    # scalar still has to rank the lethal board below the identical board they cannot yet win on.
+    lethal = _lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)], their_prizes=3)
+    survivable = _lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)], their_prizes=4)
+    assert sv.state_value(survivable) - sv.state_value(lethal) > sv.POSITIONAL_MAX
+
+
+# ── case 1: prize lethality (ADR-0064 Amendment B, Issue #283) ────────────────────────────────────
+#
+# `docs/rules.md` §7 case 1 — *they take their last prize card*. The positional families price "they
+# are at 3 and my Active is a 3-prize Mega" identically to "they are at 6": `survival` owns
+# `prize_at_risk`, `prize_race` owns the counts, and the double-counting rule forbids the two of
+# them to form the product between them. The terminal term is the one licensed to.
+#
+# Every board below carries a NON-EMPTY Bench, so case 2 is structurally out of the picture and only
+# case 1 can be moving the number. The doomed reading is the fixture's own: my Mega Lucario ex at 60
+# HP under a fully-funded Phantom Dive 200.
+
+
+#: Half of the terminal charge — the epsilon every assertion below uses to say *"this gap is the
+#: terminal term firing, not positional drift"*. Named rather than repeated inline because a bare
+#: `LOSS_PRIZES / 2.0` reads as arithmetic when what it means is a THRESHOLD, and the whole point of
+#: `LOSS_PRIZES` being DERIVED is that no positional sum can cross it.
+_TERMINAL_JUMP = sv.LOSS_PRIZES / 2.0
+
+
+def _survival_of(me, opp) -> float:
+    """The `survival` leg alone, off a full `state_value` evaluation of the two player dicts.
+
+    Read through `working` rather than by calling `sv.survival` directly, deliberately: the point of
+    every case below is what the SCALAR does with the board, and a test that composed the family by
+    hand could pass while `_terms` fed it something else."""
+    working: dict = {}
+    sv.state_value(_model(me, opp), working=working)
+    return working["survival"]
+
+
+def _bench_riolu(serial=2):
+    """A benched 1-prize soak — it removes case 2 from the picture and can never fire case 1."""
+    return _poke(RIOLU, hp=80, serial=serial)
+
+
+def _survival_at(**kw) -> float:
+    """`survival` on the `_lucario_board` fixture with a Bench, varied by `my_hp` / `their_prizes`."""
+    working: dict = {}
+    sv.state_value(_lucario_board(bench=[_bench_riolu()], **kw), working=working)
+    return working["survival"]
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_the_same_doomed_body_is_a_LOSS_at_three_prizes_and_merely_exposed_at_six():
+    """The headline: identical body, identical clock, only THEIR prize count differs.
+
+    My Mega Lucario ex is worth 3 prizes (`megaEx`, `docs/rules.md` §6) and is doomed at 60 HP. At 3
+    prizes remaining that Knock Out yields exactly the 3 they need and the match ends; at 6 it is an
+    expensive body and no more. Before this term the two scored the same."""
+    assert _survival_at(my_hp=60, their_prizes=3) < _survival_at(my_hp=60, their_prizes=6) - _TERMINAL_JUMP
+    # The boundary is `>=`, not `>`: 3 prizes for a 3-prize body ends it, 4 does not.
+    assert _survival_at(my_hp=60, their_prizes=4) == _survival_at(my_hp=60, their_prizes=6)
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_the_mega_lucario_prize_trade_shape_a_one_prize_body_is_not_a_loss():
+    """`mega_lucario`'s CRITICAL doctrine (its STRATEGY.md §4, user-ruled 2026-06-29): interleave a
+    1-prize body between Mega exposures, because *"Solrock → Lucario → Lucario"* hands them 7 and
+    loses while *"Solrock → Lucario → Hariyama → Lucario"* buys the turn that wins.
+
+    Same clock, same 3 prizes remaining: the 3-prize Mega Active is a predicted loss and a 1-prize
+    Riolu Active is not. **Exactly when** is the other half of the doctrine and is asserted too — at
+    6 prizes the separation vanishes, so the interleave is not a standing preference this term
+    manufactures. It appears only once their count makes the Mega's loss lethal."""
+    def _survival(active, their_prizes):
+        return _survival_of(
+            _player(active=active, bench=[_bench_riolu()], prize=4),
+            _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
+                    prize=their_prizes))
+
+    mega, riolu = _poke(MEGA_LUC, hp=60), _poke(RIOLU, hp=60, serial=3)
+    assert _survival(mega, 3) < _survival(riolu, 3) - _TERMINAL_JUMP
+    # …and the separation is a LETHALITY effect, not a preference: at 6 it is only the prize values.
+    assert _survival(mega, 6) - _survival(riolu, 6) > -_TERMINAL_JUMP
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_prize_lethality_is_BINARY_two_of_their_three_prizes_is_not_a_loss():
+    """Issue #283's explicit POC ruling, and the reason `_predicted_loss` returns a BOOL: a 2-prize
+    `ex` against 3 remaining is worse than the flat exposure above, but it is not a loss and the
+    terminal term must not claim it is. A graded form is the named post-POC question, recorded in
+    `survival`'s `blind_to` so the composer sees the margin as a named zero rather than an accident.
+
+    Dragapult ex is a real 2-prize body (`data/EN_Card_Data.csv` id 121, Rule "Pokémon ex", 320 HP)
+    — a fabricated prize value would contradict `docs/rules.md` §6 in the one test whose whole
+    subject is a prize value."""
+    def _survival(their_prizes):
+        return _survival_of(
+            _player(active=_poke(DRAGAPULT, hp=60), bench=[_bench_riolu()], prize=4),
+            _player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F], serial=9),
+                    prize=their_prizes))
+
+    stat = DictCardStatProvider(_STATS, attacks=_ATTACKS).get(DRAGAPULT)
+    assert stat.prize_value == 2                      # positive control: the body IS worth 2
+    assert _survival(3) == _survival(4)               # 2 < 3 — no terminal claim
+    assert _survival(2) < _survival(3) - _TERMINAL_JUMP     # 2 >= 2 ends the match
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_prize_lethality_needs_the_CLOCK_and_not_only_the_count():
+    """It is a predicted LOSS, not an exposure re-priced. At full 340 HP the same 3-prize Mega
+    out-lives Phantom Dive's 200, so their being at 3 prizes claims nothing — and the guard is
+    ADR-0064's own `evo_min_energy=1`, shared with case 2 verbatim rather than re-derived."""
+    assert _survival_at(my_hp=340, their_prizes=3) == _survival_at(my_hp=340, their_prizes=6)
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_prize_lethality_covers_a_BENCHED_body_through_the_snipe_rider():
+    """§7 case 1 is about a BODY, not the Active Spot. Their Mega Starmie ex's Jetting Blow carries a
+    50 bench-snipe rider (verified at source), so my chipped 3-prize Mega on the BENCH is reachable
+    and its Knock Out takes their last 3 prizes.
+
+    The area is declared to the clock (`my_benched=`), which is what keeps the read honest: the
+    printed 120 lands on the Active only, and the rider is what reaches the Bench. The control is
+    the same board one HP higher — 60 > the 50 rider, so nothing is reachable there and the count
+    alone must claim nothing.
+
+    Their attached ``{W}`` is the right type code for Jetting Blow but is NOT what makes the attack
+    reachable: the ceiling energy policy credits an attack a body can pay under ``attached + 1``
+    attach, and this one costs 1. Said here rather than implied, because a reader would otherwise
+    take the Energy for the load-bearing part and a later change to the policy would look like a
+    change to this test."""
+    def _survival(bench_hp):
+        return _survival_of(
+            _player(active=_poke(RIOLU, hp=80),       # 1 prize — the ACTIVE leg cannot fire
+                    bench=[_poke(MEGA_LUC, hp=bench_hp, serial=2)], prize=4),
+            _player(active=_poke(MEGA_STARMIE, hp=330, energies=[WATER], serial=9), prize=3))
+
+    assert _survival(50) < _survival(60) - _TERMINAL_JUMP
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_case_2_is_untouched_by_the_new_case_including_where_they_would_overlap():
+    """Issue #283's third test bullet — *"Case 2 (bench-empty) behaviour unchanged"* — asserted
+    rather than left to the pre-existing fixtures, because the two cases now share one function and
+    a caller cannot see which of them fired.
+
+    Three readings of the SAME bench-empty doomed board, at prize counts that respectively cannot
+    fire case 1 (6), sit exactly on its boundary (3) and are inside it (2). Case 2 already charges
+    `LOSS_PRIZES`, the charge is a bool, and so the board scores identically at all three — the new
+    case can neither double-charge nor mask the old one. The `>` control is the same board with a
+    Bench, which must NOT carry the charge at 6."""
+    def _bench_empty(their_prizes):
+        return _survival_of(_player(active=_poke(MEGA_LUC, hp=60), prize=4),
+                            _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
+                                    prize=their_prizes))
+
+    assert _bench_empty(6) == _bench_empty(3) == _bench_empty(2)
+    # positive control: the board IS carrying the case-2 charge, so the equality above is not
+    # three readings of an inert term.
+    assert _survival_at(my_hp=60, their_prizes=6) > _bench_empty(6) + _TERMINAL_JUMP
+
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
 def test_the_bench_slot_price_escalates_so_the_last_slot_is_the_expensive_one():
@@ -812,7 +1022,7 @@ def test_the_forward_clock_no_longer_counts_an_energy_that_will_be_DISCARDED():
                    working=real)
     board = _expiring_board(GOUGING_FIRE, energies=[COLORLESS], energy_cards=[IGNITION], hp=230)
     body = board.mine.active
-    assert board.mine.readiness_p(body, body.payoff_attack) == 0.0, "the now-leg must be the 0 here"
+    assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 0.0, "the now-leg must be the 0 here"
     assert board.mine.turns_to_afford(body) == 2                      # the incumbent, unmoved
     assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3
     assert loan["readiness"] < real["readiness"], (
@@ -849,7 +1059,7 @@ def test_the_going_first_shape_an_IGNITION_onto_a_BASIC_now_buys_nothing_forward
     sv.state_value(_expiring_board(STARYU, energies=[], energy_cards=[], hp=70), working=bare)
     board = _expiring_board(STARYU, energies=[COLORLESS], energy_cards=[IGNITION], hp=70)
     body = board.mine.active
-    assert board.mine.readiness_p(body, body.payoff_attack) == 0.0, (
+    assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 0.0, (
         "a colourless unit must not read as paying Water Gun's {W}")
     assert board.mine.turns_to_afford(body) == 2                       # the incumbent, unmoved
     assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3
@@ -885,7 +1095,7 @@ def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
     should read it again."""
     board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
     body = board.mine.active
-    assert board.mine.readiness_p(body, body.payoff_attack) == 1.0
+    assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0
     assert board.mine.turns_to_afford(body) == 0                       # armed, by a loan
     assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3    # the seam DOES move
     loan, real = {}, {}
@@ -932,7 +1142,7 @@ def test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom():
     sv.state_value(_lucario_board(my_hp=60), working=alone)
     sv.state_value(_lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)]), working=benched)
     assert benched["development"] > alone["development"]
-    assert benched["survival"] > alone["survival"] + sv.LOSS_PRIZES / 2.0, (
+    assert benched["survival"] > alone["survival"] + _TERMINAL_JUMP, (
         "the bench-empty doom did not lift when a body arrived to soak the Knock Out")
 
 
@@ -1127,7 +1337,11 @@ def test_the_new_read_keeps_the_incumbents_BUDGET_affordability_filter():
 # is built on a board whose two hands DIFFER.
 
 
-def _survival_of(model) -> float:
+def _survival_of_model(model) -> float:
+    """The `survival` leg off an already-built model (Issue #280's context cases).
+
+    A sibling of :func:`_survival_of`, which takes the two player dicts — these cases need the model
+    itself because the board they perturb is built by `_alakazam_board`, not by `_player` pairs."""
     working: dict = {}
     sv.state_value(model, working=working)
     return working["survival"]
@@ -1171,9 +1385,9 @@ def test_the_survival_clock_reads_THEIR_hand_and_never_MINE():
     assert sv._exposed_bodies(mine_big)[0].turns_to_ko_me == 9
     # Mega Lucario ex yields 3 prizes (`docs/rules.md` §6), and one body ranks first, so `survival`
     # is `-(3 x halve(t - 1))` on both boards.
-    assert _survival_of(theirs_big) == pytest.approx(-3.0 * 0.5)
-    assert _survival_of(mine_big) == pytest.approx(-3.0 / 256)
-    assert _survival_of(theirs_big) < _survival_of(mine_big)
+    assert _survival_of_model(theirs_big) == pytest.approx(-3.0 * 0.5)
+    assert _survival_of_model(mine_big) == pytest.approx(-3.0 / 256)
+    assert _survival_of_model(theirs_big) < _survival_of_model(mine_big)
 
 
 @pytest.mark.req("REQ-STATEVALUE-0010")
@@ -1193,8 +1407,8 @@ def test_the_bench_empty_doom_reads_their_SCALED_damage_too():
     assert sv._predicted_loss(doomed) is True, "80 does, and my Bench is empty (rules.md §7 case 2)"
     assert sv._predicted_loss(my_hand_big) is False, "MY hand is `def_hand` — it is not their damage"
 
-    assert _survival_of(doomed) <= -sv.LOSS_PRIZES
-    assert _survival_of(safe) > -sv.LOSS_PRIZES
+    assert _survival_of_model(doomed) <= -sv.LOSS_PRIZES
+    assert _survival_of_model(safe) > -sv.LOSS_PRIZES
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1202,7 +1416,7 @@ def test_more_cards_in_THEIR_hand_never_improves_survival():
     """The monotonicity class Issue #262 requires, on this issue's axis. Hands 1..12 keep the sweep
     clear of the bench-empty doom (340 HP needs a 17-card hand), so this is the POSITIONAL term
     alone."""
-    values = [_survival_of(_alakazam_board(n)) for n in range(1, 13)]
+    values = [_survival_of_model(_alakazam_board(n)) for n in range(1, 13)]
     assert all(after <= before for before, after in zip(values, values[1:])), values
     assert values[-1] < values[0], "the axis is flat — the context is not reaching the clock"
 
@@ -2225,3 +2439,112 @@ def test_on_real_frames_healing_my_active_never_lowers_survival(corpus_models):
         assert after >= before - 1e-9, f"{key}: a full heal LOWERED survival"
         strict += after > before + 1e-9
     assert strict, "no corpus frame moved at all — the class would pass on a constant term"
+
+
+# ── a companion-GATED payoff (Issue #287) ─────────────────────────────────────────────────────────
+#
+# `readiness` prices *what this body achieves once it is online*. Read off `CardStat.maxDamage` that
+# number is PRINTED, and a printed number cannot carry a board condition — so a Solrock with no
+# Lunatone benched scored exactly the Solrock that had one, and losing the Lunatone moved nothing.
+#
+# The repair is composition, not vocabulary: `AttackStat.requiresBench` already parses Cosmic Beam's
+# own sentence and `strategy/damage.py` already zeroes the attack when the partner is absent, so the
+# term asks the damage oracle (through `StateModel.payoff`) instead of forming a second opinion.
+
+
+def _lunar_board(*, bench=(), solrock_energies=(E_F,), energy_attached=False):
+    """MY Solrock Active against THEIR Dragapult ex, with a caller-chosen Bench — the one fact the
+    gated payoff turns on. One {F} is already down, so Cosmic Beam's ``{F}`` cost is PAID and the
+    only thing standing between this body and its 70 is the Bench."""
+    return _model(
+        _player(active=_poke(SOLROCK, hp=110, energies=solrock_energies),
+                bench=list(bench), prize=4),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+        energy_attached=energy_attached, deck=LUNAR_DECK)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_a_companion_gated_attacker_is_not_ready_without_its_companion():
+    """The symptom, asserted at the term. Cosmic Beam is Solrock's ONLY attack, so with no Lunatone
+    on the Bench this body achieves nothing — and `readiness` must say so rather than price the
+    printed 70 it will never deal."""
+    bare, paired = {}, {}
+    sv.state_value(_lunar_board(bench=[_poke(RIOLU, hp=80, serial=2)]), working=bare)
+    sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=paired)
+    assert paired["readiness"] > bare["readiness"], "the gate never fired: printed damage priced"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_benching_the_companion_is_what_raises_readiness():
+    """The play the old reading could not see. Dropping Lunatone onto an EMPTY Bench is exactly the
+    develop that arms the attacker, and under 1-ply differencing a play no term reads prices at 0
+    delta — which at ordering time means never explored, not merely undervalued."""
+    empty, benched = {}, {}
+    sv.state_value(_lunar_board(bench=[]), working=empty)
+    sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=benched)
+    assert benched["readiness"] > empty["readiness"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_losing_the_companion_lowers_readiness():
+    """The mirror, and the half that makes the term a defence: their Boss's Orders on my Lunatone —
+    or a Knock Out that removes it — has to cost me something, or the agent will trade the enabler
+    away for free."""
+    with_luna, without = {}, {}
+    sv.state_value(_lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)]), working=with_luna)
+    sv.state_value(_lunar_board(bench=[]), working=without)
+    assert without["readiness"] < with_luna["readiness"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_an_UNGATED_body_reads_exactly_its_printed_roll_up():
+    """The regression half. The gate is a new REASON to price 0, never a new number on a card that
+    carries no condition — so on every body of a board holding no conditional attack the new read
+    must return `CardStat.maxDamage` exactly, which is the value the retired printed path produced.
+
+    Asserted against `maxDamage` rather than against `state_value` called twice: comparing the
+    scalar to itself would pass on any implementation whatsoever (it is a determinism check, and
+    `test_state_value_is_BIT_IDENTICAL...` already owns that question). `maxDamage` is the number
+    this change replaced, so it is the only honest witness to "nothing moved"."""
+    model = _lucario_board(my_energies=[E_F, E_F],
+                           bench=[_poke(RIOLU, hp=80, energies=[E_F], serial=2),
+                                  _poke(MUNKIDORI, hp=70, serial=3)])
+    priced = 0
+    for body in model.mine.bodies:
+        assert model.mine.attack_payoff(body).damage == float(body.stat.maxDamage), body.stat.name
+        priced += 1
+    assert priced == 3, "the fixture stopped exercising every area"
+    working = {}
+    sv.state_value(model, working=working)
+    assert working["readiness"] > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_a_conditional_BONUS_is_not_credited_by_the_payoff_read():
+    """The bound this read takes, pinned — and the other half of Issue #287's refutation.
+
+    Metagross's Conjoined Beams is *"130 … If Beldum and Metang are on your Bench, this attack does
+    150 more damage"* (verified at source, id 276), which the provider carries as ``damage=130`` with
+    ``damageMax=280``. `slowking` runs the card and neither partner, so the +150 can never be paid —
+    and it never was, because `CardStat.maxDamage` is the printed number. That is why the issue's
+    Metagross scope item was retired as already-true.
+
+    Retired is not the same as safe. The bonus IS reachable through this read, on one character: at
+    ``bound="max"`` the oracle returns ``damageMax`` and readiness would price 280 for a body that
+    can land 130. So the exact bound gets a test rather than a comment."""
+    model = _model(_player(active=_poke(METAGROSS, hp=170, energies=[E_P, E_P]), prize=4),
+                   _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
+                   deck=[METAGROSS, E_P, E_P])
+    paying = model.mine.attack_payoff(model.mine.active)
+    assert paying == (CONJOINED_BEAMS, 130.0), "the conditional +150 leaked into the payoff"
+    assert model.mine.active.stat.maxDamage == 130     # it was never in the roll-up either
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_the_gated_bodys_odds_are_asked_about_the_attack_that_actually_pays():
+    """Payoff and odds must name the SAME attack. Pairing one attack's damage with another's
+    probability is the saturation defect the payoff read was split out to avoid, and the gate makes
+    it reachable for the first time: a body whose max-damage attack is dead still has the lesser
+    one, and its cost is what the odds leg owes an answer about."""
+    model = _lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)])
+    assert model.mine.attack_payoff(model.mine.active).attack_id == COSMIC_BEAM
