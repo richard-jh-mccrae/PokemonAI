@@ -1585,9 +1585,16 @@ def test_the_threat_anchor_is_DERIVED_from_the_two_shipped_constants():
     *as a function* — `MAX_PRIZE_VALUE` 3 plus `_SURVIVAL_CAP` 0.9 — and because ADR-0107 already
     chose it for `gust_target`, the sibling member of the opponent-target family. Measured both ways
     over 614 non-empty corpus inputs: `/3.9` yields 28 distinct outputs with the guard biting on
-    45 (7.3%), `/3.0` yields 26 with the guard biting on 180 (29.3%)."""
+    45 (7.3%), `/3.0` yields 26 with the guard biting on 180 (29.3%).
+
+    The third assertion is what keeps this from testing a definition: without it, deleting
+    `_THREAT_W` from `threat()`'s body — leaving the constant defined and unused — would still pass.
+    """
     assert sv._THREAT_W == sv._THREAT_CAP / _needs.TARGET_VALUE_CEILING
     assert _needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
+    assert sv.threat([1.0]) == pytest.approx(sv._THREAT_W), (
+        "…and the equation actually READS it — a defined-but-unused anchor would pass the two "
+        "assertions above")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1611,11 +1618,40 @@ def test_the_runaway_guard_still_guards_a_multi_target_SUM():
     sums to 5.0, which is 1.28x the divisor — five prizes of simultaneously-reachable exposure, which
     is exactly the extreme board a runaway guard exists for.
 
-    The threshold is stated honestly: the sum used here is `>= TARGET_VALUE_CEILING`, not `2 x
-    _MAX_PRIZE_VALUE`. `[3.0, 3.0]` would clamp too, but it would not say where the edge is."""
-    assert sum([3.0, 2.0]) >= _needs.TARGET_VALUE_CEILING, "the test states the real threshold"
-    assert sv.threat([3.0, 2.0]) == pytest.approx(sv._THREAT_CAP)
+    The threshold is stated honestly: the edge is at a sum of `TARGET_VALUE_CEILING`, not at `2 x
+    _MAX_PRIZE_VALUE`. `[3.0, 3.0]` would clamp too, but it would not say where the edge is — so the
+    edge is asserted from BOTH sides, which is also what stops this test being arithmetic on
+    literals that never reaches the implementation."""
+    ceiling = _needs.TARGET_VALUE_CEILING
+    assert sv.threat([ceiling]) == pytest.approx(sv._THREAT_CAP), "at the edge, the guard binds"
+    assert sv.threat([ceiling - 0.1]) < sv._THREAT_CAP, "…and just below it, it does not"
+    assert sum([3.0, 2.0]) >= ceiling
+    assert sv.threat([3.0, 2.0]) == pytest.approx(sv._THREAT_CAP), (
+        "a reachable 3-prize Mega ex AND a 2-prize body is 5.0, past the edge")
     assert sv.threat([sv._MAX_PRIZE_VALUE] * 6) == pytest.approx(sv._THREAT_CAP)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_no_legal_input_drives_the_family_outside_its_BAND():
+    """The band property, swept rather than sampled at two points.
+
+    Every legal input is between 1 and `_MAX_BODIES` targets, each a `opponent_target_value` in
+    `[1.0, TARGET_VALUE_CEILING]` — `prize_value` is 1, 2 or 3 (`docs/rules.md` §6) plus a forward
+    credit the corpus caps at 0.0855, and `_MAX_BODIES` is 6 because the Bench holds 5
+    (`docs/rulebook.txt` L75). Sweeping that whole space, the family must stay inside
+    `[0, _THREAT_CAP]` — the guarantee `POSITIONAL_MAX` and the module's two-band argument rest on.
+
+    Monotone in every argument too, which the point assertions elsewhere cannot show: adding a target
+    or raising one never lowers the answer."""
+    ladder = [1.0, 2.0, 3.0, _needs.TARGET_VALUE_CEILING]
+    assert sv.threat(()) == 0.0
+    for v in ladder:
+        for n in range(1, sv._MAX_BODIES + 1):
+            got = sv.threat([v] * n)
+            assert 0.0 < got <= sv._THREAT_CAP, f"{n} x {v} left the band at {got}"
+            assert got >= sv.threat([v] * (n - 1)), f"a {n}th target of {v} LOWERED the answer"
+    for a, b in zip(ladder, ladder[1:]):
+        assert sv.threat([a]) <= sv.threat([b]), "a more valuable target scored less"
 
 
 @pytest.mark.req("REQ-STATEVALUE-0012")
@@ -1754,8 +1790,10 @@ def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss(
         "of the card spent — the epic's failure mode, stated as the counterfactual")
 
     # …and on the sequence score the planner actually ranks, the play is a gain outright. The boost
-    # is what makes Mega Brave's 270 into the 300 that Knocks Out a 300 HP 2-prize body, so the
-    # terminal leg it unlocks dwarfs the positional half either equation produces.
+    # is what makes Mega Brave's 270 into the 300 that Knocks Out the fixture's Dragapult ex — whose
+    # PRINTED HP is 320 (`data/EN_Card_Data.csv` id 121); `_vs_dragapult_at(300)` chips it to 300
+    # remaining, which is the number the breakpoint is against. So the terminal leg the boost unlocks
+    # dwarfs the positional half either equation produces.
     ko = sv.attack_ev(damage=300.0, target_hp=300.0, target_prizes=2.0)
     no_ko = sv.attack_ev(damage=270.0, target_hp=300.0, target_prizes=2.0)
     assert ko.knockout == pytest.approx(2.0) and no_ko.knockout == 0.0

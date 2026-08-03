@@ -546,22 +546,28 @@ REGISTRY: tuple[TermFamily, ...] = (
             "longer erased by the cap. The old form of this entry recorded a ceiling that Issue "
             "#329 removed: `min(_THREAT_CAP, sum)` bound on every non-empty input, so a second "
             "reachable body added exactly 0 and a chipped bench under a reachable Active scored "
-            "identically to a fresh one — 904 asks, 338 live reaches and `threat` moving on 13 "
-            "frames, every one of them 0.0 -> 0.1. **Re-measured after the anchor, same instrument, "
-            "same corpus (one leaf pass, 2061 calls, the leg severed to 0.0 as the control):** the "
-            "bench leg now moves `threat` on **336** of those calls by 0.023 to 0.077 prizes, and "
-            "**58** of the 336 are boards where the Active leg ALREADY read something — the case "
-            "that used to be worth zero (the most common shape is 0.0769 -> 0.1, 31 calls). What "
-            "remains blind is the leg's reach itself: the route is the indivisible single-target "
-            "rider, so spread payloads and un-parsed riders still contribute nothing at all.",
+            "identically to a fresh one. **Both figures below are in `threat()` CALLS over one leaf "
+            "pass (2061 calls, the leg severed to 0.0 as the control), so they are comparable**; "
+            "Issue #284's own 904-ask / 338-reach / 13-move measurement is denominated in corpus "
+            "FRAMES and is NOT the same denominator. Under the old equation the leg could only move "
+            "the output by making an empty input non-empty, which is **278** calls. Under the "
+            "anchor it moves **336**, by 0.023 to 0.077 prizes — and the extra **58** are exactly "
+            "the boards where the Active leg ALREADY read something, the case the cap used to erase "
+            "(commonest shape 0.0769 -> 0.1, 31 calls). What remains blind is the leg's reach "
+            "itself: the route is the indivisible single-target rider, so spread payloads and "
+            "un-parsed riders still contribute nothing at all.",
             "THE DENIAL CREDIT'S SIZE relative to the prize leg it rides on (Issue #285) — real, "
             "read, and small. Until Issue #329 it was not merely small but INVISIBLE: every "
             "appended target contributes `prize_advance >= 1.0` (`CombatMath.prize_value` returns "
             "1, 2 or 3 and never less), so `min(_THREAT_CAP, sum)` bound on every frame the loop "
             "touched and the credit could not move the family on ANY board. **Re-measured after the "
-            "anchor** (same leaf pass, `_denied_forward_payoff` severed to 0.0 as the control): the "
+            "anchor** (same leaf pass, `_denied_forward_payoff` severed to 0.0 as the control, and "
+            "in the same CALL denominator as the entry above): the "
             "credit changes 327 of 614 non-empty inputs and now moves `threat`'s OUTPUT on **296** "
-            "calls, by **0.000115 to 0.002192** prizes. The residual 31 are where the runaway guard "
+            "of 2061 calls, by **0.000115 to 0.002192** prizes, against **0** calls under the old "
+            "equation — a credit can never make an empty input non-empty, so this was the one leg "
+            "the cap erased completely rather than partly. "
+            "The residual 31 are where the runaway guard "
             "absorbs it — small, not zero, and no longer structural. "
             "**Two credit maxima are recorded in this module and they measure different things; do "
             "not overwrite one with the other.** 0.054 prizes is the largest SINGLE-target credit "
@@ -1534,6 +1540,11 @@ def threat(targets: Iterable[float]) -> float:
     load-bearing rather than stylistic: :data:`POSITIONAL_MAX` sums the four positional caps and
     :data:`LOSS_PRIZES` is derived from that sum, so folding the anchor into `_THREAT_CAP` would move
     the predicted-loss dominance constant without anything saying so.
+
+    The shape is ADR-0107's, CLAMP INCLUDED — that ADR's `gust_target` seam is
+    `GUST_TARGET_BAND x min(1, otv / TARGET_VALUE_CEILING)`, and `min(_THREAT_CAP, _THREAT_W * sum)`
+    is the same expression with the band factored out of the clamp. Worth stating because the
+    fraction is written UNclamped in more than one prose record of this family.
 
     **The guard still bites, on 7.3% of non-empty corpus inputs, and that is not a residual defect.**
     This is a SUM over up to six targets while `_THREAT_W`'s divisor is a SINGLE target's ceiling, so

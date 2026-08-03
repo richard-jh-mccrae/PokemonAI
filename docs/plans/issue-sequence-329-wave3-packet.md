@@ -15,6 +15,7 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `85785609\|0\|turn\|8` | leaf (Discrimination) | Issue #329 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational.** Predicted; reproduced. |
 | `82229122\|0\|decision\|17` | leaf (held out, `owner=#263`) | Issue #329 | resolved by Issue #284, passing | REGRESSED again, rank 1 -> 2 | **No action — and it VINDICATES the ruling.** Issue #284's L1 recommended KEEPING this `owner=#263` ruling rather than retiring it because the frame had started passing; the developer ruled **KEEP both**. It now fails again, so retiring it would have been wrong. |
 | `82228017\|0\|decision\|4` | leaf (held out, `owner=#263`) | Issue #329 | REGRESSED, rank 1 -> 2 | REGRESSED, rank 1 -> 3 | **No action.** Already ruled and held out; only the rank deepened. |
+| *(not a frame)* `test_PLAYING_the_boost_card_…` | **no gate** — a sibling issue's acceptance test | Issue #329 vs Issue #282 | `total_after > total_before` (+0.016667) | positional half is **−0.032051** | **RULING OWED — read this one even though no gate reports it.** See *"A sibling issue's acceptance assertion inverted"* below. It was rewritten rather than left failing, which is the one thing in this run that resembles conforming; the developer may direct otherwise. |
 
 **Decision Gate: PASS, and the before/after reports are byte-identical** — `agree 250/347 -> 250/347`,
 **0 picks moved, 0 rulings moved**, 24 voided. No shipped decision changes; this is the leaf's
@@ -59,8 +60,9 @@ rather than trusted. Re-taken here, under the **/3.9** divisor that actually shi
 | named frames that reproduced | — | 5 of 5 |
 | frames the old measurement did not name | — | **1: `82752045\|1\|decision\|94`** |
 
-So the answer is: **landing after #281/#284/#285 did not rescue any of the five named frames, and
-/3.9 costs one improvement more than /3.0 did.** That is the direction the issue body predicted —
+So the answer is: **landing after Issues #281, #284 and #285 did not rescue any of the five named
+frames, and /3.9 costs one improvement more than /3.0 did.** That is the direction the issue body
+predicted —
 *"3.9 scales harder than the 3.0 that produced those numbers (a 1-prize target reads 0.0256 rather
 than 0.0333), so the windfall is removed more aggressively, not less."* Predicted, then measured, then
 found to hold.
@@ -93,12 +95,25 @@ never reached `threat` would otherwise report a clean zero.
 | cap binds — before / after | **614/614** / **45/614 (7.3%)** |
 | target-count distribution | `{0: 1447, 1: 540, 2: 72, 3: 2}` |
 
-Two legs re-measured with severance controls (the leg forced to `0.0`, per-call values diffed):
+Two legs re-measured with severance controls (the leg forced to `0.0`, per-call values diffed).
+**Both columns are in `threat()` CALLS over the same 2061-call pass, so they are comparable.** The
+before-column is derived exactly rather than re-run: under `min(_THREAT_CAP, sum)` a call's output is
+`0.1` for every non-empty input and `0.0` otherwise, so a leg could move the OUTPUT only by changing
+whether the input was empty at all.
 
-| leg | before the anchor | after |
+⚠️ Issue #284's own published figures — 904 asks, 338 live reaches, **13 moves** — are denominated in
+corpus FRAMES, not calls. They are not the before-column here and must not be read as `13 -> 336`.
+
+| leg | before (calls) | after (calls) |
 |---|---|---|
-| Issue #284's bench widening | moved `threat` on **13** frames, every one `0.0 -> 0.1` | moves it on **336** calls by 0.023–0.077 prizes; **58** of those are boards where the Active leg already read something |
-| Issue #285's denial credit | moved `threat` on **0** | changes 327 of 614 inputs, moves the OUTPUT on **296** calls by 0.000115–0.002192 prizes |
+| Issue #284's bench widening | **278** of 2061 — every one an empty input becoming non-empty, i.e. `0.0 -> 0.1` | **336** of 2061, by 0.023–0.077 prizes. The extra **58** are exactly the boards where the Active leg already read something — the case the cap erased |
+| Issue #285's denial credit | **0** of 2061 — a credit cannot make an empty input non-empty, so the cap erased this leg completely | **296** of 2061, by 0.000115–0.002192 prizes (327 of 614 inputs change; 31 are absorbed by the guard) |
+
+**`tests/strategy/test_leaf_profile.py` confirmed rather than assumed**, as the issue asked: its three
+`<=` ceilings are on declared READ FIELDS (the `theirs.bench.*` block), not on any family's output
+range, and `threat`'s output range is unchanged at `[0, _THREAT_CAP]`. Nothing to move; file
+untouched. Positive control for that sweep: `threat` does appear in the file (3 times), so the
+instrument was not silently looking at nothing.
 
 ### One question for the developer, if 7.3% is judged too high
 
@@ -111,13 +126,18 @@ by `_MAX_BODIES x TARGET_VALUE_CEILING`, which is derived but flattens the commo
 to near-nothing, or (b) change the composition from a sum to a max-with-discount, which is a
 frozen-composition change. **Neither is taken here, and no new constant was invented.**
 
-### One further consequence, recorded because it is not a gate flip and would otherwise be invisible
+### A sibling issue's acceptance assertion inverted — RULING OWED
+
+**No gate reports this, which is exactly why it is tabled.** Flagged by `/code-review`'s Spec axis as
+the one thing in this run that resembles conforming rather than ruling.
 
 `tests/strategy/test_state_value.py::test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss`
 (Issue #282) asserted that playing Premium Power Pro is a net gain on the `_PLAY` transition. Its
 +0.016667 margin was `0.1` of saturated `threat` against a `0.083333` hand hold. Under the anchor a
 2-prize Dragapult ex prices `_THREAT_W x 2 = 0.051282` and the positional half of that transition
-reads **−0.032051**.
+reads **−0.032051**. So Issue #282's headline acceptance — *"a Trainer damage-boost must not price as
+a hand loss"* — is now **false on `state_value` alone**, and true only once the terminal action is
+included.
 
 That is not a regression; it is the double-count `_THREAT_CAP` exists to prevent. `threat` prices the
 exposure STANDING on the board and the prize for CONVERTING it is `attack_ev`'s, under
@@ -126,10 +146,22 @@ spent card for a position; the old form paid the conversion prize twice and call
 gain. The test is renamed `..._is_priced_as_the_BOOST_and_not_as_the_hand_loss` and made stronger — it
 now pins the positional half to the float, asserts the boost recovers 0.051282 of the card's cost
 where an unpriced effect recovers none (the epic's actual sentence), and asserts the play is a gain
-outright on the full sequence score. **Recorded here in case the developer reads the sign of that
-positional half as a calibration finding between `hand`'s `POC_WORTH_PRIZE_RATE` denomination and
-`threat`'s positional band** — a gust-tier held card is worth 0.083333 prizes, which exceeds `threat`'s
-entire SINGLE-target range (max 0.076923). Nothing was retuned to accommodate it.
+outright on the full sequence score.
+
+**Three dispositions are available and the ruling should name one:**
+
+1. **ACCEPT the rewrite** (recommended) — the sign is correct and the old margin was a windfall of
+   exactly the class this issue removes. Nothing further changes.
+2. **Treat the sign as a cross-family calibration finding.** A gust-tier held card is worth 0.083333
+   prizes, which exceeds `threat`'s entire SINGLE-target range (max 0.076923), so under the anchor no
+   single-target reachability gain can pay for a gust-tier card out of hand on the positional half
+   alone. That is a `hand`-vs-`threat` banding question. **Not acted on here**: `hand`'s equation is
+   corpus-ruled and `threat`'s divisor was just settled, so this track may retune neither.
+3. **REVERT the anchor** if the developer judges Issue #282's acceptance the stronger commitment.
+
+**Nothing was retuned to accommodate any of this**, and the rewritten test is strictly stronger than
+the one it replaces — it would fail under a boost that stopped being priced, which is the property
+Issue #282 actually exists to guard.
 
 ## Neither baseline was recaptured
 

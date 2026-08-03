@@ -372,7 +372,7 @@ limitation of that guard, not only of this term.
 > > `ForwardPayoff` still carries no prize leg — but its stated prerequisite (*"the parked scale
 > > anchor first"*) is discharged, so it is now a plain `ForwardPayoff`-shape gap with nothing in
 > > front of it. Note also that the anchor's divisor is `TARGET_VALUE_CEILING` (3.9), not the
-> > `_MAX_PRIZE_VALUE` (3.0) every pre-#329 record names.
+> > `_MAX_PRIZE_VALUE` (3.0) named by every record written before Issue #329.
 >
 > Coverage-matrix **row 5** and **row 6**'s footnote are **left as audited on purpose** — Issue #291
 > owns reconciling the report, and every sibling in this track recorded its outcome the same way, in
@@ -454,17 +454,20 @@ Zeraora ×1) — and it applies to a plain gust-and-KO too, which every deck has
 > > **The wall came down — BUILT, Issue #329, POC-T3.5.** The anchor landed as
 > > `state_value._THREAT_W = _THREAT_CAP / needs.TARGET_VALUE_CEILING` (0.1 / 3.9), in FRONT of the
 > > cap so `POSITIONAL_MAX` (3.4) and `LOSS_PRIZES` (28.9) are byte-identical. Note the divisor: the
-> > sentence above and every other pre-#329 record name `_MAX_PRIZE_VALUE` (3.0), and 3.9 is what
+> > sentence above and every record written before Issue #329 name `_MAX_PRIZE_VALUE` (3.0), and 3.9 is what
 > > shipped — it is the true ceiling of `opponent_target_value` *as a function*, ADR-0107's own
 > > choice for the sibling `gust_target` seam, and it discriminates strictly better (28 distinct
 > > outputs against 3.0's 26, with the runaway guard biting on 45 of 614 non-empty corpus inputs
-> > instead of 180). **Re-measured with the same instrument** — one leaf pass, 2061 `threat()` calls,
-> > the bench leg severed to `0.0` as the control: the leg now moves `threat` on **336** calls by
-> > 0.023 to 0.077 prizes, and **58 of the 336 are boards where the Active leg already read
-> > something** — precisely the case this note recorded as worth exactly zero. The commonest shape is
-> > no longer `0.0 → 0.1` but `0.0769 → 0.1` (31 calls). The guard still bites, on 7.3% of non-empty
-> > inputs, because this is a SUM over up to six targets while the divisor is ONE target's ceiling;
-> > *"the cap never binds"* must not be asserted anywhere.
+> > instead of 180). **Re-measured** on one leaf pass, 2061 `threat()` calls, the bench leg severed
+> > to `0.0` as the control. ⚠️ **The re-measurement is denominated in `threat()` CALLS; the 904 /
+> > 338 / 13 figures above are in corpus FRAMES, and the two are not comparable** — so the
+> > before-figure is restated in calls here: under the old equation the leg could only move the
+> > output by making an empty input non-empty, which is **278** calls. Under the anchor it moves
+> > **336**, by 0.023 to 0.077 prizes — and the extra **58 are exactly the boards where the Active
+> > leg already read something**, precisely the case this note recorded as worth zero. The commonest
+> > shape is no longer `0.0 → 0.1` but `0.0769 → 0.1` (31 calls). The guard still bites, on 7.3% of
+> > non-empty inputs, because this is a SUM over up to six targets while the divisor is ONE target's
+> > ceiling; *"the cap never binds"* must not be asserted anywhere.
 >
 > Row 5 of the coverage matrix above and #6's footnote are **left as audited on purpose** — Issue
 > #291 owns reconciling the report, and every sibling in this track recorded its outcome the same
