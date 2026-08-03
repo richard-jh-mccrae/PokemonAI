@@ -25,6 +25,8 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `82523164\|1\|decision\|75` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 5 | **FIXED** | **No ruling owed.** Same cause, same class — see the four measured frames below. |
 | `82524455\|1\|decision\|55` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 2 | **FIXED** | **No ruling owed.** Same class. |
 | `82522698\|1\|decision\|62` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 2 | **FIXED** | **No ruling owed.** Same class, the narrowest margin of the four (400.7). |
+| `85046350\|0\|decision\|85` | leaf (Discrimination) | Issue #351 | OK, rank 1/10 | MISS, rank 3/10 | **RULE, do not conform.** The ONE unruled flip this issue adds. An all-Bench attach menu (`dragapult_ex` t8, 5 attach targets); the legality gate zeroes the now-leg on every benched body, so the five are now ranked by the FORWARD clock alone — which is also where Issue #332's survivability discount rides. First frame where both corrections compose. Margin is **1.12 leaf points** (correct -249.1139 vs top -247.9933), against a pre-gate margin of 0. |
+| `82752604\|0\|decision\|88` | leaf (Discrimination) | Issue #351 | MISS (Issue #329's unruled flip, row 1 of this table) | **FIXED**, back to `OK` | **No ruling owed — it is a build.** The gate RETIRES one of Issue #329's three unruled flips. Recommend the row above stay on the ledger anyway (Issue #284's L1 precedent: a frame that starts passing may fail again). |
 
 **Decision Gate: PASS, and the before/after reports are byte-identical** — `agree 250/347 -> 250/347`,
 **0 picks moved, 0 rulings moved**, 24 voided. No shipped decision changes; this is the leaf's
@@ -417,3 +419,81 @@ is RANKING among candidates the rung was already willing to consider, which is t
 
 `data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json` are untouched by this run. Verified
 with `git status`.
+
+## Issue #351 — the now-leg credited a body that could not attack, masking Issue #286
+
+### What was built
+
+`_readiness_odds`'s NOW leg is asked only of a body that may LEGALLY attack this turn
+(`state_value._may_attack_now` — `BodyView.is_active` AND `not MySide.attack_blocked`). The oracle
+itself is untouched: `readiness_p` is shared with `promote_retreat_value` (ADR-0073), whose whole
+question is what a benched body would do once promoted, so an area-aware oracle would break it. The
+gate therefore lives in the consumer that asks about a body standing still.
+`test_the_gate_leaves_readiness_p_ITSELF_byte_identical` pins that the incumbent did not move.
+
+Issue #351's **option 2** — stripping the expiring Energy from the now-leg too — was REJECTED, and
+the corpus is why (below): on 21 of the 25 affected bodies the Energy really is spendable this turn.
+
+### Gate arithmetic — attributed against a BEFORE control on the same tree
+
+Measured by forcing `_may_attack_now` to `return True` and re-running, so main's own 10 commits are
+held constant and only this change moves.
+
+| | before (gate forced off) | after |
+|---|---|---|
+| unruled `OK -> MISS` | 7 | **7** |
+| — membership | — | **one FIXED, one ADDED** (see the two rows above) |
+| Decision Gate | PASS | **PASS, 0 picks moved, 0 rulings moved** |
+
+The count is unchanged and the membership is not: `82752604\|0\|decision\|88` (Issue #329's) leaves,
+`85046350\|0\|decision\|85` arrives. Net ledger effect on this batch is therefore **zero new unruled
+flips**, with one of Issue #329's three retired.
+
+The other six unruled flips are all present with the gate OFF and are NOT this issue's:
+`81904451\|0\|decision\|9`, `83457493\|1\|decision\|20`, `83661649\|0\|decision\|54` (Issue #332,
+tabled above), `85785606\|0\|decision\|19`, `85785606\|0\|decision\|21` (Issue #329, tabled above),
+and `81906755\|1\|decision\|9` (Issue #280's, already ruled **REVERT** in the closed
+`issue-sequence-281-wave3-packet.md`).
+
+### The measurement, with its positive control
+
+Swept over the committed corrections corpus through the shipped Pilot at this commit — **372 frames,
+1018 of my bodies**. Positive control asserted rather than assumed: **536** bodies read
+`readiness_p == 0.0`, so a silent 1.0 everywhere is not what the counts below are measuring.
+
+| | before | after |
+|---|---|---|
+| bodies holding a `discard_eot` Energy | 25 | 25 |
+| ...where the FORWARD clock moves once it is stripped | 25 | 25 |
+| ...where `_readiness_odds` moves | **0** | **4** |
+
+The 4 are exactly the bodies the rules forbid an attack to: **1 benched** — `83664991|43`, a Mega
+Starmie ex, the frame the issue was filed on, `1.0000 -> 0.1245` — and **3 `attack_blocked`**
+(first player on turn 1): `81903490|8` and `81903490|10` at `1.0000 -> 0.4922`, and `81904451|9` at
+`1.0000 -> 0.0000`. That last one is the two corrections composing: the gate removes the phantom
+now-leg and Issue #332's `_survives_to_spend` then zeroes the forward leg behind it.
+
+Episode `81903490` is the very episode `docs/rules.md` cites as its worked example of a reason-only
+rule (*"don't attach Ignition T1-going-first — you can't attack, so it's discarded for nothing"*,
+correction `ep81903490 f5`), so three of the four defect bodies are the documented misplay itself.
+
+### The issue's tripwire prediction was WRONG, and the test stayed green deliberately
+
+Issue #351's acceptance criteria named
+`test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix` as *"the tripwire; it was
+written to fail here"*. **It did not turn red, and it should not have.** Its fixture is the ACTIVE
+body on `turn=5` — a body that may legally attack, whose `{C}{C}{C}` pays Nebula Beam outright — so
+`readiness_p == 1.0` is TRUE of it and the masking is the family answering correctly. The 21 corpus
+bodies in the same position are the general case.
+
+The test was kept and its docstring rewritten to record that, and it now serves as the ANTI-regression
+against option 2: a change that gated the now-leg hard enough to fail it would be telling an armed
+Active attacker it cannot swing.
+
+This is the second self-filed issue in this batch to carry a claim verification did not support (Issue
+#362's `start_prizes` was the first), and it is reported here rather than quietly resolved.
+
+## Neither baseline was recaptured (Issue #351)
+
+`data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json` are untouched by this issue's work
+as well. Verified with `git status`.

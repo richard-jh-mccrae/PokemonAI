@@ -755,10 +755,12 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "`double_counted()` pass VACUOUSLY, which is the answer "
                     "`sound_rules.SCHEDULED_PAIRS` already records for the same temptation.",
         blind_to=(
-            "who is ACTIVE — `readiness_p` is per body and area-aware through the Attach Budget, "
-            "but nothing here prices the Active SLOT itself, so a retreat that puts the right body "
-            "in front moves this family only through the Budget. `promote_retreat_value` is the "
-            "instrument and composes into `survival`; the retreat allowance itself is an OWED "
+            "the VALUE of the Active slot — narrowed by Issue #351, which took the legality half. "
+            "`_may_attack_now` now gates the now-leg on the area and on `attack_blocked`, so a "
+            "benched body no longer claims it can attack this turn; what stays unpriced is the "
+            "slot's WORTH, so a retreat that puts the right body in front still moves this family "
+            "only through the Attach Budget and the gate's on/off step. `promote_retreat_value` is "
+            "the instrument and composes into `survival`; the retreat allowance itself is an OWED "
             "snapshot zone (T1).",
             "a board condition that is NOT a bench-partner condition — ADR-0109 routed the payoff "
             "through the damage oracle, which reads the one condition family the card-text parser "
@@ -781,24 +783,21 @@ REGISTRY: tuple[TermFamily, ...] = (
             "supplies an Ability payoff, so an evolve whose whole point is switching an engine "
             "Ability on prices only its attack payoff. The largest single regression risk in this "
             "swap, and named here so T4 reads it as a gap rather than a verdict.",
-            "an Energy that EVAPORATES, on the now-leg — and the blindness is what hides most of "
-            "Issue #286's forward-leg fix. `_readiness_odds` is `max(readiness_p, "
-            "halve(turns_to_afford))`; the forward clock now drops `discard_eot` Energy "
+            "an Energy that EVAPORATES, on the now-leg of a body that CAN cash it — and this is now "
+            "a VERDICT rather than a gap (Issue #351). `_readiness_odds` is `max(readiness_p, "
+            "halve(turns_to_afford))`; the forward clock drops `discard_eot` Energy "
             "(`MySide.turns_to_afford(exclude_expiring=True)`) but `readiness_p` keeps it, and the "
             "two legs read the same attachment through the same matcher, so an Energy that FULLY "
-            "arms the body zeroes the clock and pins the now-leg at 1.0 together. MEASURED over "
-            "the committed corpus (2026-08-03): 25 of 1015 of my bodies hold one, the clock moves "
-            "on all 25, this family moves on none — every one sits on an Evolution, where "
-            "Ignition's {C}{C}{C} pays the payoff outright. A PARTIAL loan is still priced right "
-            "(a Staryu holding one Ignition), so the fix is live on the deck and invisible on the "
-            "corpus. What stays wrong is the extreme case: a BENCHED Mega Starmie ex that cannot "
-            "attack at all still reads `readiness_p == 1.0`. Unmasking it means teaching the "
-            "now-leg whether the body may attack THIS turn, which is *who is ACTIVE* above; "
-            "specced as Issue #351, ledgered to Issue #263. **Issue #332's survivability discount "
-            "rides the same forward leg and is masked by the same now-leg**, so a benched body "
-            "reading a phantom 1.0 keeps full readiness however short its clock — one defect now "
-            "hides two corrections, which is the strongest argument on the ledger for Issue #351's "
-            "priority.",
+            "arms the body zeroes the clock and pins the now-leg at 1.0 together. Issue #351 gated "
+            "the now-leg on LEGALITY (`_may_attack_now` — the area plus `attack_blocked`) rather "
+            "than stripping the Energy from it, and the measurement is why: over the committed "
+            "corpus, 25 of 1018 of my bodies hold a `discard_eot` Energy and the clock moves on all "
+            "25, but **21 of those are the Active on an unblocked turn**, where the body really can "
+            "spend the Energy this turn and the 1.0 is TRUE. Masking the forward leg there is this "
+            "family answering its own question correctly. What remains unpriced is only the "
+            "residue: an Active that will attack with a DIFFERENT attack than its payoff, leaving "
+            "the Ignition partly unspent. That is `attack_ev`'s at the terminal action (Issue #263) "
+            "rather than a hole here, and it is bounded by the same 21 frames.",
             "what a DOOMED body could still do THIS turn OUTSIDE its payoff attack — the "
             "survivability discount (`_survives_to_spend`, Issue #332) zeroes the FORWARD leg on a "
             "body whose clock reads 1, which is exact for a payoff that lands on a later turn, and "
@@ -1396,25 +1395,23 @@ def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     Ignition T1-going-first — you can't attack, so it's discarded for nothing"*, correction
     ep81903490 f5), and `mega_starmie` runs four of them in thirteen Energy.
 
-    **Measured caveat, recorded because it is half the result** (2026-08-03, swept over the
-    committed corrections corpus): the ``max`` MASKS the correction wherever the expiring Energy
-    FULLY arms the body. Both legs read the same attached Energy through the same matcher —
-    `matched_slots` is *"the matcher `reachable_attach` uses"* — so an Energy that zeroes the clock
-    also pins `readiness_p` at 1.0, and the ``max`` then discards the forward leg. 25 of my 1015
-    corpus bodies hold a `discard_eot` Energy; the clock moves on all 25 and this function on none,
-    because every one of them sits on an EVOLUTION, where Ignition's ``{C}{C}{C}`` pays both shipped
-    payoffs outright.
-
     It is live on a PARTIAL loan, and `mega_starmie` prints one: Ignition on a **Basic** provides
     only ``{C}``, so a Staryu holding one is still two attaches from its line's ``{C}{C}{C}`` payoff
     and `readiness_p` reads 0.0 (a colourless unit cannot pay Water Gun's ``{W}``). Measured on the
     real pilot: `readiness` 0.000750 → **0.000375**, which is exactly the bare-Staryu value. An
     Ignition on a Staryu now buys nothing forward, which is the correction.
 
-    Unmasking the rest means teaching the now-leg whether the body may attack THIS turn — it does
-    not ask, and a BENCHED body reads 1.0 — which is *who is ACTIVE* (`readiness.blind_to`), Issue
-    #263's ledger. Specced as **Issue #351**; the correct half is built here and the masking is a
-    packet line rather than a second, unruled retune.
+    **The now-leg is asked only of a body that may LEGALLY attack this turn** (Issue #351,
+    :func:`_may_attack_now`), and that is what un-masks the rest of Issue #286's fix. The oracle has
+    no legality leg — nothing on its path reads the body's area, the turn, or the first-player attack
+    ban — so a BENCHED body, or an Active on a turn with no attack step, used to read 1.0 and
+    ``max`` discarded the forward clock behind it. Measured over the committed corrections corpus
+    (372 frames / 1018 of my bodies, positive control 536 reading 0.0): 25 hold a `discard_eot`
+    Energy and the clock moves on all 25; **21 are Active on an unblocked turn**, where the 1.0 is
+    TRUE and the masking is this function answering correctly, and **4** are not — 1 benched
+    (`83664991|43`) and 3 first-player-turn-1 (`81903490|8`, `81903490|10`, `81904451|9`). Those 4
+    are the whole of the defect, and Issue #351's option 2 — stripping the expiring Energy from the
+    now-leg too — was rejected because it would tell an armed Active attacker it cannot swing.
 
     **The forward leg is also discounted by the body's own SURVIVAL clock** (Issue #332,
     :func:`_survives_to_spend`), and it rides the forward leg ALONE for the same reason
@@ -1426,10 +1423,63 @@ def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     next turn identically to one onto the successor behind it, which is the measured misplay
     (`83037962|0|decision|48`: *"Placed second energy on active doomed mega starmie … therefor
     should start powering up our reserve benched staryu"*)."""
-    now = model.mine.readiness_p(body, attack_id)
+    now = model.mine.readiness_p(body, attack_id) if _may_attack_now(model, body) else 0.0
     arm = model.mine.turns_to_afford(body, exclude_expiring=True)
     forward = 0.0 if arm is None else halve(arm) * _survives_to_spend(model, body)
     return max(0.0, min(1.0, max(now, forward)))
+
+
+def _may_attack_now(model: "StateModel", body) -> bool:
+    """May ``body`` attack THIS turn at all — the legality leg `readiness_p` does not have.
+
+    The now-leg asks *P(this body is READY to use the attack this turn)* and answers it from
+    affordability alone. Verified at source rather than recalled: `MySide.readiness_p` →
+    `CombatMath.readiness_p` → `reachable_attach_p` → `reachable_attach`, whose only
+    non-affordability gates are the ADR-0033 transient `self_lock`/`same_lock`. Nothing on that
+    path reads the
+    body's AREA, the turn number, or the first-player attack ban — so a **BENCHED** body reads 1.0,
+    and so does an Active on a turn the rules give no attack step to.
+
+    Two facts, both already shipped and neither re-derived here:
+
+    * :attr:`BodyView.is_active` — only the Active attacks. The Bench is where a body waits
+      (`docs/rules.md` §3).
+    * :attr:`MySide.attack_blocked` — the RULE leg, carrying all three of Asleep, Paralyzed and the
+      first player on turn 1 (`docs/rules.md` §2, *"CANNOT attack — the starting player skips the
+      attack step on turn 1"*, `[RULE: rulebook L152]`).
+
+    **This is `active_famine`'s composition, applied to an arbitrary body rather than to the
+    Active.** That property is the shipped precedent for the shape: it checks `attack_blocked`
+    BEFORE calling the affordability oracle, and its docstring says why — *"only the RULE leg may
+    claim a famine without one"*. The rules leg lives in the caller; this is a caller that was
+    missing it. `active_famine` itself is not reusable here because it is Active-scoped by
+    construction, and the body this function is asked about is usually not the Active.
+
+    **Why the gate is HERE and not in `readiness_p`** (Issue #278's *"never retune the incumbent"*).
+    The oracle is shared, and its area-blindness is CORRECT for its other caller: `promote_retreat_value`
+    (ADR-0073) reads it to price bringing a benched body TO the Active spot, and a `readiness_p` that
+    returned 0 for a benched body would answer that question with the very fact the promote changes.
+    So the legality leg belongs to the consumer that asks about a body standing still, which is this
+    one. `test_the_gate_leaves_readiness_p_ITSELF_byte_identical` pins that the oracle did not move.
+
+    **What this does NOT do, stated because the difference is the whole design.** It does not strip
+    the evaporating Energy from the now-leg (Issue #351's rejected option 2). Where the body CAN
+    attack, an Ignition on it is genuinely spendable this turn and the 1.0 is true; masking Issue
+    #286's forward leg there is the family answering correctly, not a defect. Measured over the
+    committed corpus at the fix commit: of the 25 of my bodies holding a `discard_eot` Energy, **21
+    are Active on an unblocked turn** and keep their 1.0, and **4** fail this gate — one benched
+    (`83664991|43`) and three first-player-turn-1 (`81903490|8`, `81903490|10`, `81904451|9`, the
+    episode `docs/rules.md` cites for exactly this misplay).
+
+    **The ABSENT-fact direction is fail-CLOSED**, which is the safe one here: `attack_blocked` reads
+    ``self.turn <= 1`` over ``self.turn = int(turn or 0)``, so a board that states no turn at all
+    reads turn 0 and comes back BLOCKED — the now-leg then claims nothing and the family falls back
+    to the forward clock. That is the opposite of the collapses
+    `test_value_stack_integration.RULED_COLLAPSES` catalogues, where an absent fact arrives as a
+    number that reads like a measurement, and it is the direction this gate wants: the failure it
+    must never have is crediting a body that cannot swing.
+    `test_the_legality_gate_fails_CLOSED_on_a_board_that_states_no_turn` pins it."""
+    return body.is_active and not model.mine.attack_blocked
 
 
 def _survives_to_spend(model: "StateModel", body) -> float:

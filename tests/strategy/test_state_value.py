@@ -1156,17 +1156,28 @@ def test_readiness_survives_the_turns_one_manual_attach_being_spent():
 # ── Issue #286 — readiness's FORWARD leg must not count Energy that evaporates ────────────────────
 
 
-def _expiring_board(cid, *, energies, energy_cards, hp):
+def _expiring_board(cid, *, energies, energy_cards, hp, benched=False, turn=5):
     """MY body holding a chosen Energy set, the turn's manual attach already SPENT and my hand empty.
 
     Both are deliberate: with the attach spent and nothing in hand the Attach Budget adds nothing, so
     `readiness_p`'s answer is a fact about what is ON the body rather than about what the fixture's
     deck happens to hold. Their side is a bare Dragapult ex, the same defender every other board in
-    this file uses."""
+    this file uses.
+
+    ``benched`` (Issue #351) puts the SAME body on the Bench behind a bare Staryu instead of in the
+    Active spot, which is the one fact that decides whether it may attack this turn. Staryu is the
+    line's real Basic, so the benched shape is `mega_starmie`'s own — the corpus frame this fixture
+    stands for (`83664991|…|43`) is a benched Mega Starmie ex. ``turn`` is the other fact —
+    ``turn=1`` is the first player's turn, where the rules skip the attack step outright
+    (`MySide.attack_blocked`). Both default to the pre-Issue #351 shape, so every board above is
+    byte-identical."""
+    body = _poke(cid, hp=hp, energies=energies, energy_cards=energy_cards)
+    mine = (_player(active=_poke(STARYU, hp=70, serial=4), bench=[body], prize=4) if benched
+            else _player(active=body, prize=4))
     return _model(
-        _player(active=_poke(cid, hp=hp, energies=energies, energy_cards=energy_cards), prize=4),
+        mine,
         _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
-        energy_attached=True)
+        energy_attached=True, turn=turn)
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1253,11 +1264,24 @@ def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
     EVOLUTION. The partial-loan case above is the deck's other half and is NOT masked; the corpus
     simply holds no frame of it.
 
-    This test therefore asserts a gap, not a virtue. Its worst case is not the masking itself but
-    what the masking rests on: `readiness_p` never asks whether the body may attack at all, so a
-    BENCHED Mega Starmie ex reads 1.0 (corpus frame `83664991|…|43`). Issue #351 is the spec; Issue
-    #263 owns *who is Active*. This turns red the day either lands, which is exactly when someone
-    should read it again."""
+    **Issue #351 landed and this test stayed GREEN — deliberately, and the prediction it replaces was
+    wrong.** Issue #351's acceptance criteria called this test *"the tripwire; it was written to fail
+    here"*, and the paragraph that stood here said it *"turns red the day either lands"*. It did not,
+    because the fixture's body is the **ACTIVE** on ``turn=5``: it may legally attack this turn, its
+    ``{C}{C}{C}`` pays Nebula Beam outright, and so ``readiness_p == 1.0`` is a TRUE statement about
+    it. The ``max`` discarding the forward leg here is the family answering its own question
+    correctly — *P(this body gets to its payoff attack)* is 1.0 when the body attacks this turn.
+
+    So what survives is the honest half: masking is CORRECT wherever the body can cash the Energy,
+    and it was only ever a defect where the body cannot. Issue #351 gated exactly that — the now-leg
+    is asked only of a body the AREA and the RULES both permit an attack to (`_may_attack_now`) — and
+    the four corpus bodies that failed the gate are covered by the tests below this block. This board
+    is not one of them, which is why the assertion is unchanged and this docstring is what moved.
+
+    Kept rather than deleted because it is now the ANTI-regression: a later change that gates the
+    now-leg more aggressively — stripping the expiring Energy from it (Issue #351's rejected option
+    2), say — would break this, and it should, because it would be telling an armed Active attacker
+    it is not ready to swing."""
     board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
     body = board.mine.active
     assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0
@@ -1269,6 +1293,174 @@ def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
                                    energy_cards=[E_W, E_W, E_W], hp=330), working=real)
     assert loan["readiness"] == real["readiness"], (
         "the now-leg no longer masks the forward leg — re-read the packet line, this is the unlock")
+
+
+# ── Issue #351 — the NOW leg may not credit a body the rules will not let attack ─────────────────
+#
+# `readiness_p` has NO legality leg, and that is the defect. Verified at source rather than recalled:
+# `MySide.readiness_p` -> `CombatMath.readiness_p` -> `reachable_attach_p` -> `reachable_attach`,
+# whose only non-affordability gates are the ADR-0033 transient `self_lock`/`same_lock`. Nothing on
+# that path reads
+# the body's AREA, the turn number, or the first-player attack ban. `MySide.active_famine` is the
+# shipped proof it is missing: that property checks `attack_blocked` BEFORE calling the oracle, and
+# its docstring says why — *"only the RULE leg may claim a famine without one"*. The rules leg lives
+# in the caller, so the oracle does not have it, and `_readiness_odds` is a caller that never added
+# it.
+#
+# MEASURED at this commit over the committed corrections corpus, through the shipped Pilot (372
+# frames / 1018 of my bodies; positive control 536 bodies reading `readiness_p == 0.0`, so a silent
+# 1.0 everywhere is not what is being counted): 25 bodies hold a `discard_eot` Energy, the forward
+# clock moves on all 25, and `_readiness_odds` moved on NONE. Of those 25, **4** are bodies the rules
+# forbid an attack to — 1 BENCHED (`83664991|43`, a Mega Starmie ex, the issue's named frame) and
+# **3 `attack_blocked`** (`81903490|8`, `81903490|10`, `81904451|9` — the first player on turn 1,
+# which is the very episode `docs/rules.md` cites as its worked example of a reason-only rule,
+# correction `ep81903490 f5`). The other 21 are ACTIVE on an unblocked turn and their 1.0 is HONEST,
+# which is why the fix is a legality gate and not a strip of the now-leg.
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_a_BENCHED_body_is_not_READY_to_attack_however_much_energy_it_holds():
+    """The issue's named frame as a fixture — `83664991|…|43`, a **BENCHED** Mega Starmie ex holding
+    one Ignition, reading `readiness_p == 1.0`.
+
+    A benched Pokémon cannot attack. `docs/rules.md` §3 — *"Attack: 1, and it ends the turn"* — is a
+    thing the ACTIVE does; the Bench is where a body waits. So the now-leg's claim *"P(this body is
+    READY to use the attack this turn)"* is false for every benched body, whatever its Energy says,
+    and the family must fall back to the forward clock.
+
+    Asserted on the SAME body in both spots so the only difference is the area: identical card,
+    identical Energy, identical everything. The Active reading is the control — it must NOT move,
+    because an Active Mega Starmie ex with ``{C}{C}{C}`` genuinely can swing Nebula Beam right
+    now."""
+    benched = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                              hp=330, benched=True)
+    body = benched.mine.bench[0]
+    aid = benched.mine.attack_payoff(body).attack_id
+    assert body.is_active is False
+    assert benched.mine.attack_blocked is False, "turn 5 — the RULES allow an attack; area is the fact"
+
+    # The incumbent oracle is UNTOUCHED and still says 1.0. That is the point: the fix is a gate in
+    # the caller, not a retune of a probability `promote_retreat_value` (ADR-0073) also reads.
+    assert benched.mine.readiness_p(body, aid) == 1.0
+
+    # …and the composed answer no longer repeats it. It rides the forward clock, which Issue #286
+    # already taught to drop the evaporating Energy.
+    assert sv._readiness_odds(benched, body, aid) < 1.0
+
+    # The ACTIVE control: same body, same Energy, in the spot where 1.0 is true.
+    active = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
+    a_body = active.mine.active
+    assert sv._readiness_odds(active, a_body,
+                              active.mine.attack_payoff(a_body).attack_id) == 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_now_leg_is_zero_when_the_RULES_forbid_an_attack_at_all():
+    """The first player on turn 1 — three of the four corpus bodies, and `docs/rules.md`'s own worked
+    example of a reason-only rule.
+
+    Verified at source: *"Player going FIRST, turn 1 — restrictions: CANNOT attack (the starting
+    player skips the attack step on turn 1)"* (`docs/rules.md` §2, `[RULE: rulebook L152]`,
+    `[PROJECT-VERIFIED: ep81903490 f5]`). `MySide.attack_blocked` is the shipped read and it carries
+    all three rule facts — Asleep, Paralyzed, and ``turn <= 1``.
+
+    This is the case the deck doctrine names outright — *"don't attach Ignition T1-going-first, you
+    can't attack, so it's discarded for nothing"* — and the ACTIVE body makes it independent of the
+    area gate above: it is in the attacking spot and still may not swing."""
+    board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330,
+                            turn=1)
+    body = board.mine.active
+    aid = board.mine.attack_payoff(body).attack_id
+    assert body.is_active is True, "the AREA is fine here — the RULES are what forbid the attack"
+    assert board.mine.attack_blocked is True
+
+    assert board.mine.readiness_p(body, aid) == 1.0        # the oracle, still legality-blind
+    assert sv._readiness_odds(board, body, aid) < 1.0      # the composed answer, no longer
+
+    # Non-vacuity: the SAME board on a turn the rules allow reads the full 1.0, so this test is
+    # measuring the rule and not some other property of the fixture.
+    allowed = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                              hp=330, turn=5)
+    a_body = allowed.mine.active
+    assert sv._readiness_odds(allowed, a_body,
+                              allowed.mine.attack_payoff(a_body).attack_id) == 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_legality_gate_UNMASKS_issue_286s_forward_leg_on_a_benched_body():
+    """Issue #351's headline: the correction Issue #286 built becomes VISIBLE.
+
+    On a body that cannot attack, the now-leg is gone and `readiness` rides the forward clock alone —
+    so the clock's `exclude_expiring` strip finally reaches the family. The Ignition board must now
+    fall to exactly the BARE board, the same equality Issue #286's own T1 test asserts for the
+    partial-loan case, because an Energy that evaporates buys no FORWARD readiness at all.
+
+    The Basic-Energy control is what makes it a statement about evaporation rather than about the
+    gate: three real ``{W}`` on the same benched body do not expire, so that board must stay strictly
+    above both."""
+    ign, water, bare = {}, {}, {}
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                                   hp=330, benched=True), working=ign)
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[E_W] * 3, energy_cards=[E_W] * 3,
+                                   hp=330, benched=True), working=water)
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[], energy_cards=[], hp=330,
+                                   benched=True), working=bare)
+    assert ign["readiness"] == pytest.approx(bare["readiness"]), (
+        "an evaporating Energy still buys forward readiness on a body that cannot cash it")
+    assert bare["readiness"] < water["readiness"], (
+        "non-vacuity: real Energy must still buy readiness, or the equality above is trivial")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_legality_gate_fails_CLOSED_on_a_board_that_states_no_turn():
+    """The absent-fact direction, which `test_value_stack_integration`'s query census requires an
+    answer for before a new model read joins `state_value` — made executable here rather than left
+    as the comment beside its `CONSUMED` entry.
+
+    `MySide.attack_blocked` reads `self.turn <= 1` over `self.turn = int(turn or 0)`, so a board
+    that states no turn at all reads turn 0, which is blocked. The now-leg then claims nothing and
+    the family falls back to the forward clock. That is the SAFE direction for this gate — the
+    failure it must never have is crediting a body that cannot swing — and it is the opposite of the
+    `RULED_COLLAPSES` hazard, where an absent fact arrives as a number that reads like a
+    measurement.
+
+    Both spellings of absent are asserted, because `int(turn or 0)` collapses them and a reader
+    should not have to trust that it does."""
+    for missing in (None, 0):
+        board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                                hp=330, turn=missing)
+        body = board.mine.active
+        assert board.mine.attack_blocked is True, f"turn={missing!r} must fail CLOSED"
+        assert sv._may_attack_now(board, body) is False
+        assert sv._readiness_odds(board, body, board.mine.attack_payoff(body).attack_id) < 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_gate_leaves_readiness_p_ITSELF_byte_identical():
+    """The standing discipline's *"add a sibling accessor — never retune the incumbent"*, executable.
+
+    `readiness_p` is shared: `promote_retreat_value` (ADR-0073) reads it to price a promote, and it
+    is right for that caller precisely BECAUSE it is area-blind — a promote's whole question is what
+    a body would do once it reaches the Active spot, so an oracle that returned 0 for a benched body
+    would break it. That is the argument for gating in `_readiness_odds` rather than in the oracle,
+    and this test is that argument as an assertion.
+
+    Walks the four boards the gate discriminates between and pins the oracle at 1.0 on every one."""
+    for board, benched, turn in ((_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
+                                                  energy_cards=[IGNITION], hp=330), False, 5),
+                                 (_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
+                                                  energy_cards=[IGNITION], hp=330,
+                                                  benched=True), True, 5),
+                                 (_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
+                                                  energy_cards=[IGNITION], hp=330,
+                                                  turn=1), False, 1),
+                                 (_expiring_board(MEGA_STARMIE, energies=[E_W] * 3,
+                                                  energy_cards=[E_W] * 3, hp=330,
+                                                  benched=True), True, 5)):
+        body = board.mine.bench[0] if benched else board.mine.active
+        assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0, (
+            f"the shared oracle moved (benched={benched}, turn={turn}) — the gate belongs in the "
+            f"caller, not in `readiness_p`")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
