@@ -79,6 +79,26 @@ _Avoid_: excluded / held out / skipped (it is graded exactly like any other fram
 acts this one deliberately is not), degenerate record (true but says nothing about *what* it cannot
 state), invalid (the record is well-formed; the vocabulary was missing)
 
+**Refused Shape**:
+A **committed** Correction carrying a shape `build_correction` would refuse to *create* — the store
+holding what its own writer forbids. `build_correction` validates at write time; `Correction.from_dict`,
+THE loader and so what the **Corpus Reader** inherits, validates nothing, and that asymmetry is
+deliberate (**ADR-TEMP-256**, Issue #256): a validating loader would reject committed records at read
+time and take *both* gates down over a record that has been green for weeks. *Load anything committed,
+refuse to create new bad shapes* is the contract for a store that is also an **archive**.
+`gates.shape_the_constructor_would_refuse` re-applies the writer's rules to a record and
+`gates.refused_shapes` walks the corpus with it; the **Decision Gate** readout's `refused shape`
+section names every hit. **REPORTED, never excluded** — the same ruling the **Unstatable Decline**
+carries, for the same reason: ungrading a frame outlives the record shape that caused it. One record
+carries it today, `85709280|1|match|` (`ee3191f7c3d6`) — `match` scope naming `correct: [0]`, hand-edited
+past the writer on 2026-07-29 — and it is *grading in both gates*. The `category` vocabulary is
+deliberately NOT re-applied: it is extensible, so refusing an old record over it would report a
+vocabulary edit as a corpus defect.
+_Avoid_: invalid / corrupt (the record loads, round-trips and grades — it is well-formed as *data*),
+malformed (nearer, but says nothing about *whose* rule it breaks), schema violation (there is no schema
+layer; there is a constructor), unstatable (a different defect — that record's shape is legal, its
+ruling is not sayable)
+
 **Category**:
 The **human** axis of a Correction — *what kind* of mistake the blunder is, picked from a
 closed, extensible vocabulary (`missed_win`, `overextension`, `misattachment`, …).

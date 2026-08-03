@@ -75,6 +75,16 @@ including after the record is repaired, which Issue #229 made possible — and a
 indistinguishable from one with nothing to report. The line says what to do about it: re-rule the
 record, do not ungrade the frame.
 
+## Reading the `refused shape` section
+
+`build_correction` validates at write time; `Correction.from_dict` — what the **Corpus Reader** loads
+through — does not validate at all, so the store can hold a shape its own writer forbids. One does:
+`85709280|1|match|` is `match` scope carrying `correct: [0]`, which the constructor refuses outright,
+and it is *grading in both gates*. `gates.refused_shapes` re-applies the constructor's rules to every
+committed record and this section names what it finds. **The asymmetry stays** (ADR-TEMP-256): a
+validating loader would reject committed records at read time and take both gates down over a record
+that has been green for weeks. Reported, never a verdict — the cure is to re-rule the record.
+
 **The baseline is a RULING RECORD, never auto-recaptured** — the same discipline `data/leaf_lab/`
 carries. Re-capture only once a build's flips have been ruled with the user, or the gate becomes a
 mirror that agrees with whatever it is shown. Frames ruled out of a decider's scope are held out via
@@ -94,13 +104,13 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
-from train.gates import (classes_of, decider_lab_diff, decision_gate_verdict,  # noqa: E402
-                         decision_fail_keys, equivalence_index, guarded_capture, held_out_frames,
-                         keyed_corrections, orphan_rulings, print_agree_delta, print_gate_report,
-                         print_ruling_moves, print_ruling_readout,
-                         records_a_decline_it_cannot_state, restamp_artifact, rows_by_key,
-                         ruling_index, satisfies_human, split_excused, voided_frames,
-                         write_json_artifact)
+from train.gates import (REFUSED_SHAPES, classes_of, decider_lab_diff,  # noqa: E402
+                         decision_gate_verdict, decision_fail_keys, equivalence_index,
+                         guarded_capture, held_out_frames, keyed_corrections, orphan_rulings,
+                         print_agree_delta, print_gate_report, print_ruling_moves,
+                         print_ruling_readout, records_a_decline_it_cannot_state, refused_shapes,
+                         restamp_artifact, rows_by_key, ruling_index, satisfies_human,
+                         split_excused, voided_frames, write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -282,6 +292,50 @@ def print_unstatable_readout(exposed, rpt: dict) -> None:
               "rather than excluding it")
 
 
+def print_refused_shape_readout(refused, rpt: dict) -> None:
+    """Name every committed record carrying a shape `build_correction` would refuse to create — and
+    say whether it is **grading anyway** (Issue #256).
+
+    A second reporting-only section beside `print_unstatable_readout`, and deliberately not a shared
+    helper with it: the two answer different questions about different populations (that one is
+    report-scoped and asks *"can this record state its ruling?"*; this one is corpus-wide and asks
+    *"could the writer have written this record at all?"*). Two printers of eleven lines beat one
+    parameterised printer that has to explain which mode it is in; if a third arrives, that is when to
+    extract one.
+
+    What it shares is the shape that made that one testable: a pure `(data, report) -> None` printer,
+    resolved once in `main` and called from both subcommands, silent at zero, and indexing rows
+    through `gates.rows_by_key` — *the one place a capture is turned into a lookup*.
+
+    The gradeable claim is COMPUTED from `gradeable_rows`, never asserted, for that function's own
+    reason: a readout with a private idea of the denominator could say "still grading" about a frame
+    something else had quietly dropped. A corpus-wide audit legitimately names records that are in no
+    capture at all (unreplayable, or filtered out by ``--agent``), and the line says so rather than
+    implying a row exists.
+
+    ``refused`` is passed in rather than computed here so the section is testable on a synthetic
+    finding. The live one has never moved, so a test that only read the corpus could not prove the
+    section survives a second record appearing — which is the whole property the audit adds."""
+    if not refused:
+        return
+    rows = rows_by_key(rpt)
+    gradeable = {r["key"] for r in gradeable_rows(rpt.get("rows") or [])}
+    print(f"\n  refused shape ({len(refused)}) — committed records `build_correction` would NOT "
+          f"create (Issue #256):")
+    for f in refused:
+        key = f["key"]
+        state = ("GRADING anyway, in this capture's denominator" if key in gradeable
+                 else "not in this capture's gradeable population")
+        print(f"    {key}  ({f.get('id')}, {f.get('scope')} scope); {state}")
+        for slug in f["violations"]:
+            print(f"      {slug}: {REFUSED_SHAPES.get(slug, slug)}")
+        row = rows.get(key) or {}
+        print(f"      recorded correct {row.get('correct')}; this build's agent picks "
+              f"{row.get('chosen')}")
+        print("      -> re-rule the record. `Correction.from_dict` does not validate, deliberately "
+              "(ADR-TEMP-256): a loader that refused this would take both gates down on load.")
+
+
 def _print_summary(rpt: dict, equiv=None) -> None:
     by_ctx = {}
     for r in rpt["rows"]:
@@ -349,6 +403,12 @@ def main(argv=None) -> int:
     # see `unstatable_frames`. Reported only — it reaches no verdict, and Issue #251 ruled it
     # never should.
     exposed = unstatable_frames(args.store, args.agent)
+    # The **Refused Shape** audit (Issue #256), resolved here for the same reason and reported the
+    # same way — a property of the CORPUS, not of a capture. Unlike `exposed` it is deliberately NOT
+    # narrowed by `--agent`: "could the writer have written this record?" is not a question about
+    # which agent is being gated, and a record hidden by a filter is the one least likely to be
+    # repaired. Reported only; it reaches no verdict.
+    refused = refused_shapes(args.store)
 
     if args.cmd == "capture":
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
@@ -360,6 +420,7 @@ def main(argv=None) -> int:
             _print_summary(rpt, equiv)
             print_ruling_readout(index, voided, orphans=orphans, detail=True)
             print_unstatable_readout(exposed, rpt)
+            print_refused_shape_readout(refused, rpt)
             print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
 
         return guarded_capture(
@@ -390,6 +451,7 @@ def main(argv=None) -> int:
         print_ruling_moves(diff["ruling_moves"])
         print_ruling_readout(index, voided, orphans=orphans)
         print_unstatable_readout(exposed, rpt)
+        print_refused_shape_readout(refused, rpt)
         if args.context is None:
             print_agree_delta(diff["agree_delta"])
         else:

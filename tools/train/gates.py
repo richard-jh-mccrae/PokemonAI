@@ -1279,6 +1279,123 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
     return sorted(chosen) == sorted(correct)
 
 
+#: The `build_correction` rules a **Refused Shape** audit re-applies to already-committed records,
+#: as ``{slug: the sentence a readout prints}``. ONE source, so the predicate and the printer cannot
+#: describe a rule differently — the shape `CAPTURE_POINT` already has for the stale-baseline line.
+#:
+#: The slugs are the stable half (tests assert on them); the sentences paraphrase the constructor's
+#: own `ValueError` text and are free to be re-worded.
+REFUSED_SHAPES = {
+    "unknown_source": "`source` is not one of the two recorded sources",
+    "unknown_scope": "`scope` is not one of decision / turn / match",
+    "match_names_a_correct": "a match-scope Correction cannot name a `correct` option — no single "
+                             "select carries a whole-match verdict",
+    "correct_off_the_menu": "`correct` does not index the Anchor's own options",
+    "turn_correct_equals_chosen": "a turn-scope `correct` equal to `chosen` asserts nothing — it "
+                                  "must name the first DIVERGENT option at the Anchor",
+    "unprovable_decline": "an empty `correct` at decision scope is a DECLINE, recordable only where "
+                          "the record's `obs` PROVES the select optional (minCount 0)",
+}
+
+
+def shape_the_constructor_would_refuse(correction) -> list:
+    """Which of `build_correction`'s rules an ALREADY-COMMITTED record breaks — `REFUSED_SHAPES`
+    slugs, empty when the constructor would have accepted it (Issue #256).
+
+    **The store holds a shape its own writer forbids.** `build_correction` validates at *write* time
+    and `Correction.from_dict` — THE loader, and so what the **Corpus Reader** inherits — performs no
+    validation at all: it backfills `id`/`agent`/`scope`/`subject` and calls the dataclass. That
+    asymmetry is deliberate and stays (ADR-TEMP-256 decision 4): validating on load would reject
+    committed records at read time and take *both* gates down over a record that has been sitting
+    green for weeks. *Load anything committed, refuse to create new bad shapes* is the right contract
+    for a store that is also an archive.
+
+    But **unvalidated must not mean unobserved**, and it was: nothing re-applied the constructor's
+    rules to what is already on disk, which is how `85709280|1|match|` — `match` scope carrying
+    `correct: [0]`, hand-edited past the writer on 2026-07-29 — got in and stayed, *grading in both
+    gates*. This is the missing half. It reports; it changes no verdict.
+
+    **Which rules, and why not the others.** Re-applied are the rules whose truth is a property of
+    the record *itself* against vocabularies fixed in `correction.py` and never grown: `source`,
+    `scope`, and the four `correct`-shape rules. Deliberately NOT re-applied is `is_valid_category`,
+    whose vocabulary lives in `categories.py`, is documented as *extensible*, and grows by process —
+    retroactively refusing a committed record because a category was later renamed would report a
+    **vocabulary edit as a corpus defect**, which is a different question and needs a ruling rather
+    than a predicate. Measured either way: all 372 committed records pass `source`, `scope` and
+    `category` today, so nothing is being hidden by the line — it is drawn for the future.
+
+    **Every applicable rule is reported, where the constructor stops at the first raise.** "Would
+    refuse" is true if ANY fires, so reporting all of them is strictly more informative and cannot be
+    wrong about any one. The single exception is an unrecognised ``scope``: every rule below it
+    dispatches on scope, so classifying further would be guessing.
+
+    An absent ``correct`` (``None``) is read the way the constructor's own truthiness test reads it —
+    as *no option named*. `build_correction` cannot produce one (it always stores ``list(correct)``),
+    so such a record is refusable regardless; the corpus holds none.
+
+    Duck-typed and defensive, for `records_a_decline_it_cannot_state`'s reason: a malformed record is
+    exactly what this walks over, and it must not take a gate run down mid-corpus. A spurious hit
+    costs one advisory line and no verdict at all."""
+    from train.blunder.correction import SCOPES, SOURCES, select_min_count
+
+    broken = []
+    if getattr(correction, "source", None) not in SOURCES:
+        broken.append("unknown_source")
+    scope = getattr(correction, "scope", None)
+    if scope not in SCOPES:
+        return broken + ["unknown_scope"]
+
+    correct = getattr(correction, "correct", None) or []
+    chosen = getattr(correction, "chosen", None) or []
+    n_options = len(((getattr(correction, "decision", None) or {}).get("options")) or [])
+    if scope == "match":
+        if correct:
+            broken.append("match_names_a_correct")
+    elif not correct:
+        if scope == "decision" and select_min_count(getattr(correction, "obs", None)) != 0:
+            broken.append("unprovable_decline")
+    else:
+        # The constructor's own test, verbatim — including that `bool` is an `int` in Python, so it
+        # would admit `correct: [True]` as index 1. The audit answers *what would the writer refuse*,
+        # not *what should it*; widening here would make the two disagree about one record.
+        if any(not isinstance(i, int) or i < 0 or i >= n_options for i in correct):
+            broken.append("correct_off_the_menu")
+        if scope == "turn" and set(correct) == set(chosen):
+            broken.append("turn_correct_equals_chosen")
+    return broken
+
+
+def refused_shapes(store=None) -> list:
+    """Every committed Correction carrying a **Refused Shape**, as
+    ``[{key, id, scope, violations}, ...]``. Empty list = the corpus is one the writer could have
+    written. Findings-as-dicts, like `claim_agreement`'s, so a readout and a machine consumer read
+    the same record without re-deriving anything.
+
+    Read through `keyed_corrections` — THE **Corpus Reader** (ADR-0087 decision 1) — and never by
+    walking raw JSONL: **23 records carry no explicit `scope` key** and only default to ``decision``
+    inside `Correction.from_dict`, so a raw walk mis-scopes them and every rule here dispatches on
+    scope. That is the same trap `unstatable_frames` documents, and it is why the audit lives beside
+    the reader rather than in a script.
+
+    Corpus-wide, not report-scoped — and that is the one way it differs from `unstatable_frames`,
+    which deliberately narrows to the replayable population `build_report` scores so *"is it still
+    gradeable?"* is answerable. A malformed record that cannot be replayed is still malformed, so
+    narrowing here would hide exactly the records least likely to be looked at. It is also why the
+    walk lives in `gates.py` beside the other corpus queries rather than in `decider_lab.py`.
+
+    **It reaches no verdict.** Neither `decision_gate_verdict` nor `discrimination_gate_verdict`
+    consults it, deliberately: a record's shape is the *record's* defect, and ungrading a frame over
+    it would outlive the repair — the identical argument Issue #251 settled for the **Unstatable
+    Decline**. The cure is to re-rule the record."""
+    out = []
+    for key, c in keyed_corrections(store):
+        violations = shape_the_constructor_would_refuse(c)
+        if violations:
+            out.append({"key": key, "id": getattr(c, "id", None),
+                        "scope": getattr(c, "scope", None), "violations": violations})
+    return out
+
+
 def rows_by_key(rpt: dict, *, keep=None) -> dict:
     """A capture's rows indexed by **Frame Key** — the one place a capture is turned into a lookup.
 
