@@ -229,16 +229,35 @@ weight does.
 | `81905522-75` | 15 | mega_starmie | bad_target | Hariyama | Riolu |
 | `85058574-121` | 21 | mega_lucario | wrong_attack | Lunatone (bench 1 · 110/110) | Hariyama (bench 4 · 150/150) — stage t |
 
-## Tier A — `refuted` labels (18) — no fix owed
+## Tier A — `refuted` labels (18 captured, 3 since WITHDRAWN — 15 standing) — no fix owed
 
 The Correction itself is wrong. The agent disagreeing with it is the agent being **right**, and a
 build that "fixed" one of these would be a regression wearing a `FIX` label.
 
+⚠️ **Three rows no longer say that.** `81904451-37`, `81905522-64` and `81906755-93` carried
+refutations that the developer has since **withdrawn** — the entries were deleted from
+`data/corrections/reviewed.json`, so the recorded labels stand, the agent is **wrong** on those three
+frames, and they are back in the gate. Read those rows as history, never as a ruling; they are kept
+in the table rather than deleted so the withdrawal itself is on the record. Provenance:
+
+- `92d5b26` (wave-3 batch 1, Issue #262) — `81904451-37` (with `|53`): *"The developer's line does not
+  forgo the Knock Out, it sequences it… Entries removed, so both labels stand and both frames
+  re-enter the gate."*
+- `036e5c9` (wave-3 batch 2) — `81905522-64`, `81906755-93`: *"Both are the same misreading batch 1
+  corrected on 37/53… **Four of the six voided frames have now fallen to that one misreading.**"*
+
+`81904451-58` carries the identical refutation reason and was deliberately **not** touched — it has
+not been ruled — so it remains a live Tier A row. That is the check worth copying before trusting any
+row here: the store, not this file, is the ruling record (`data/corrections/reviewed.json`, 142
+entries at the time of writing: 108 `covered`, 23 `refuted`, 8 `fixed`, 1 each `deferred`,
+`deferred-multi-turn`, `transposition`).
+
 They still count against the agree rate, which is the one piece of unfinished business in this tier:
-**the 230/331 readout is pessimistic by up to 18 frames.** The honest denominator for "is the agent
-right" is nearer 230/313. Recording that in the corpus rather than in this file is a Corrections-schema
-question — it belongs with ADR-0082's Claim vocabulary and with Issue #229, which is already open on
-the neighbouring question of what a Correction may record.
+**the 230/331 readout is pessimistic by up to 15 frames** (18 as captured, less the three
+withdrawals). The honest denominator for "is the agent right" is nearer 230/316. Recording that in
+the corpus rather than in this file is a Corrections-schema question — it belongs with ADR-0082's
+Claim vocabulary and with Issue #229, which is already open on the neighbouring question of what a
+Correction may record.
 
 Three of the 18 also cite a deleted rung in their refutation note (`82525741-81`
 `build-active-wincon`, `82867148-87` `dont-waste-discard-energy`, `85058574-114` `attach-energy-last`).
@@ -254,9 +273,9 @@ a frame can be thoroughly ruled and still read as "never reviewed" here, because
 one store and the project rules frames in several. Tier C is a *starting* list, not a backlog.
 | frame | ctx | agent | category | agent played | human ruled | review note |
 |---|---|---|---|---|---|---|
-| `81904451-37` | 0 | mega_starmie | sequencing_error | Attack | Play Hilda | forgoes a KO (tactical ~1000) — over-eager; a positional rule must never override a Knock Out |
-| `81905522-64` | 0 | mega_starmie | sequencing_error | Attack | Attach Basic {W} Energy → Staryu | forgoes a 209-damage attack — over-eager |
-| `81906755-93` | 0 | mega_starmie | sequencing_error | Attack | Attach Basic {W} Energy → Staryu | forgoes a KO (tactical ~1000) — over-eager |
+| `81904451-37` | 0 | mega_starmie | sequencing_error | Attack | Play Hilda | ⚠️ **WITHDRAWN `92d5b26`** — was "forgoes a KO (tactical ~1000) — over-eager; a positional rule must never override a Knock Out". The Hilda line sequences the KO, it does not forgo it. Label STANDS; the agent is wrong here |
+| `81905522-64` | 0 | mega_starmie | sequencing_error | Attack | Attach Basic {W} Energy → Staryu | ⚠️ **WITHDRAWN `036e5c9`** — was "forgoes a 209-damage attack — over-eager". Same misreading. Label STANDS; the agent is wrong here |
+| `81906755-93` | 0 | mega_starmie | sequencing_error | Attack | Attach Basic {W} Energy → Staryu | ⚠️ **WITHDRAWN `036e5c9`** — was "forgoes a KO (tactical ~1000) — over-eager". Same misreading. Label STANDS; the agent is wrong here |
 | `82524455-6` | 0 | mega_starmie | wasted_resource | Play Buddy-Buddy Poffin | Attach Basic {W} Energy → Staryu | Requires deck-content certainty (no Staryu left in deck) not soundly derivable from one obs: only 1 of 3 Stary |
 | `82525741-58` | 0 | mega_starmie | wasted_resource | Play Boss’s Orders | Attach Basic {W} Energy → Mega Starmie | Chosen Boss's Orders reaches a guaranteed KO (gust-for-the-ko fires: gust_best_ko_prizes 1 > active_ko_prizes  |
 | `82525741-81` | 0 | mega_starmie | misattachment | Attach Basic {W} Energy → Mega Starmie | Attach Basic {W} Energy → Mega Starmie | Mis-tagged: correct [2] == chosen [2] (both attach {W} to bench0) — structurally unsatisfiable (no ranking con |
