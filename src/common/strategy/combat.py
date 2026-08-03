@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 
 from common.board_cards import body_unit_codes   # the ONE read of a body's attached Energy UNITS
+from common.board_cards import card_id as body_card_id   # …and the ONE read of a card ENTRY's id
 from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
 from common.strategy.damage import compute_active_damage, wr_adjust
@@ -1636,6 +1637,71 @@ class CombatMath:
         hops = max(self._forward_hop_depths(st, fwd_stats, max_hops=max_hops).values(), default=0)
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
+
+    def without_expiring_energy(self, body: dict | None) -> dict | None:
+        """``body`` as it will stand once the rules discard its EVAPORATING Energy — the hypothetical
+        a FORWARD clock must be asked about (Issue #286, POC-T3.5).
+
+        The subtractive mirror of `MySide.best_reachable_damage`'s ``extra_energy_ids``: that one
+        asks *what if this body also held X*, this one asks *what does it hold once X is gone*. Both
+        return a plain raw body, so every oracle below is asked the ordinary question about an
+        ordinary board and nothing learns a second vocabulary.
+
+        **Card identity comes from ``energyCards``, never from ``energies``**, and that is the whole
+        difficulty rather than a detail. ``energies`` is a list of ``EnergyType`` UNITS, not cards
+        (`common/board_cards.py`): one Ignition Energy is card **17** on ``energyCards`` and renders
+        as ``[0, 0, 0]`` — three COLORLESS units — on ``energies``. Filtering ``energies`` for card
+        17 therefore matches nothing at all and the strip would be silently inert, which is exactly
+        the shape this codebase has been bitten by before (Issue #297).
+
+        Three committed sources, each answering the part only it can:
+
+        * **which cards expire** — the Effect Clause's ``rider == "discard_eot"``. The behavioural
+          Function Tag of the same name exists too, and is deliberately NOT the instrument: the tag
+          says *that* a card evaporates, the clause is the parametric record (ADR-0032/ADR-0067).
+        * **how many units each provides** — `CardFunctions.energy_provision`, the same accessor
+          :meth:`_special_energy_groups` sizes a hand attach with. It takes the HOLDER's stage,
+          because Ignition provides ``{C}`` on a Basic and ``{C}{C}{C}`` on an Evolution. It is NOT
+          the codebase's only reading of that quantity — `pilot._attach_provision` (ADR-0069 §5, and
+          corpus-ruled), `pilot._attach_lethal_tactical` and `planner._attach_provided` each hardcode
+          ``3 if discard_eot and evolution else 1``. Composing the accessor here adds no fourth;
+          folding those three into it would move `attach_value`, which is not this issue's to move.
+        * **which units** — the card's ``CardStat.energyType``, the colour :meth:`_attached_units`
+          gives those units, so only matching codes are removed and a Basic Energy beside them
+          survives.
+
+        Fail-CLOSED at every step, and per CARD as well as per body: no clause compendium, no
+        clause, no resolvable HOLDER (the provision is stage-dependent, so an unknown stage cannot
+        size it), no provision tag, no matching unit, or no ``energyCards`` key at all, and that card
+        is left exactly where it was. When nothing at all was removed the body is returned **by
+        identity**, so the overwhelmingly common case (no expiring Energy anywhere on the board)
+        costs one walk and no allocation, and a caller may use ``is`` to detect it."""
+        entries = tuple((body or {}).get("energyCards") or ())
+        holder = self._card_stat((body or {}).get("id"))
+        if not entries or self.effects is None or self.functions is None or holder is None:
+            return body
+        evolution = getattr(holder, "evolvesFrom", None) is not None
+        units, keep, dropped = list(body_unit_codes(body)), [], 0
+        for entry in entries:
+            cid = body_card_id(entry)
+            clauses = self.effects.clauses(cid) if cid is not None else ()
+            removed = 0
+            if any(cl.get("rider") == "discard_eot" for cl in (clauses or ())):
+                code = getattr(self._card_stat(cid), "energyType", None)
+                for _ in range(self.functions.energy_provision(cid, evolution=evolution)):
+                    if code in units:
+                        units.remove(code)
+                        removed += 1
+            # The card STAYS unless its units actually left. Dropping it while its units survive
+            # would hand the caller a body whose two Energy keys disagree — the exact cards-vs-units
+            # split `common/board_cards.py` exists to keep straight — and the guard is per-CARD
+            # because the whole-body `dropped` check below cannot see one card's silent no-op.
+            if not removed:
+                keep.append(entry)
+            dropped += removed
+        if not dropped:
+            return body                       # identity: nothing expires, nothing is re-keyed
+        return dict(body, energies=units, energyCards=keep)
 
     @staticmethod
     def _forward_hop_depths(st, fwd_stats, *, max_hops: int = 3) -> dict:

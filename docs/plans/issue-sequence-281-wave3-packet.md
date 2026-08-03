@@ -1003,3 +1003,224 @@ test that everything is one hop.
 `test_the_denial_credit_is_INVISIBLE_once_the_cap_binds` asserts L1 above as a test: the seam
 discriminates the two boards, `threat` reads exactly `_THREAT_CAP` on both. It turns red the day the
 anchor lands, which is where the packet line will be wanted.
+---
+
+# Issue #286 — readiness must not count Energy that will evaporate at end of turn
+
+## Flips
+
+**Zero flips on either gate, and this time the whole report is byte-identical.** The A/B is the
+strongest one in this batch: `leaf_lab.py diff` was run on the pre-change tree and on the post-change
+tree and `diff` over the two full reports returns **0 lines** — not merely the same verdicts, the
+same per-frame `correct=` and `top=` VALUES. The Decision Gate reports `agree 250/347 -> 250/347
+(0 picks moved, 0 rulings moved)` and **PASS**.
+
+The one unruled leaf flip the gate still reports — `81906755|1|decision|9` — is Issue #280's, carried
+from earlier in this batch and already ruled **REVERT** at the top of this packet. Nothing in Issue
+#286 touched it.
+
+## L1 — the fix is CORRECT; the `max()` above it hides it on the CORPUS but not on the DECK
+
+`_readiness_odds` is `max(readiness_p, halve(turns_to_afford))`. Issue #286 fixes the SECOND leg: the
+forward clock no longer counts Energy the rules discard at the end of this turn. It does not touch the
+first, on the issue's own instruction — *"the now-leg keeps them — the Energy genuinely is there this
+turn, and that is not the error."*
+
+**Measured, over the committed corrections corpus, through the shipped methods:**
+
+| | |
+|---|---|
+| corpus frames scored | **371** (0 errors) |
+| MY bodies walked | **1015** |
+| ...on which `CombatMath.without_expiring_energy` bites | **25** |
+| ...on which `MySide.turns_to_afford(exclude_expiring=True)` returns a DIFFERENT number | **25 — all of them** |
+| ...on which `_readiness_odds` returns a different number | **0** |
+| the now-leg (`readiness_p`) on those 25 bodies | **1.0 on every single one** |
+| the clock's movement on them | `0 -> 1` ×10, `0 -> 2` ×6, `0 -> 3` ×9 |
+
+**The masking is structural, not a coincidence of this corpus.** Both legs read the same attached
+Energy through the same matcher — `CombatMath.matched_slots` documents itself as *"the matcher
+`reachable_attach` uses"* — so `turns_to_afford == 0` and `readiness_p == 1.0` are very nearly the
+same proposition. Whenever the expiring Energy is enough to zero the clock it is also enough to pin
+the now-leg, and `max(1.0, anything)` discards the forward leg entirely. Ignition provides `{C}{C}{C}`
+on an **Evolution** and both `mega_starmie` payoffs it can pay cost three or fewer, so on an Evolution
+of that deck the expiring Energy always fully arms the body it sits on — which is every Ignition in
+the corpus and, below, not every Ignition the deck can play.
+
+The fix therefore bites only where **the payoff costs strictly more than the expiring card provides**
+— a partial loan. **`mega_starmie` prints exactly that**, and the first draft of this section wrongly
+said it did not; `/code-review`'s Spec axis caught it. The deck runs **3 Staryu**, Staryu is a Basic,
+and an Ignition on a Basic provides only `{C}` against the line's `{C}{C}{C}` payoff. Measured on the
+real pilot, not on a fixture:
+
+| Staryu Active, turn's attach spent | `readiness_p` | clock | `_readiness_odds` | `readiness` |
+|---|---|---|---|---|
+| + one **Ignition**, incumbent | 0.000 | 2 | 0.2500 | 0.000750 |
+| + one **Ignition**, with the fix | 0.000 | **3** | **0.1250** | **0.000375** |
+| + one Basic {W} | 1.000 | 2 | 1.0000 | 0.003000 |
+| bare | 0.000 | 3 | 0.1250 | 0.000375 |
+
+The Ignition row lands exactly on the BARE row: an Ignition on a Staryu now buys no forward readiness
+at all, which is the correction stated as a number, and it is the issue's own T1-going-first test —
+the doctrine's *"Going first: attach Water (never Ignition — it'd discard unused)"*.
+`test_the_going_first_shape_an_IGNITION_onto_a_BASIC_now_buys_nothing_forward` is that table,
+executable. The now-leg's 0.000 is card-true rather than a fixture artifact: Staryu's only attack is
+Water Gun `{W}` and a colourless unit pays colourless slots ONLY.
+
+**No board in the committed CORPUS reaches it**, which is a narrower statement and the true
+explanation of the byte-identical gate: all 25 Ignitions there sit on Cinderace (666) or Mega Starmie
+ex (1031), both Evolutions.
+
+**Recommendation — RULE, do not conform.** The forward half is correct and is built. The masking is
+the now-leg's, and unmasking it means teaching `readiness_p` whether the body may attack **this turn
+at all**, which is *who is ACTIVE* — the epic's explicitly out-of-scope ledger, owner Issue #263. So
+this line asks the developer for a verdict on one question and nothing was changed on its account:
+
+> Should `readiness_p` — a THIS-TURN probability — count Energy that will be discarded before the
+> body is next able to spend it, on a body that cannot attack this turn?
+
+The corpus says the question is live, not hypothetical. Frame `83664991|…|43` carries a **BENCHED**
+Mega Starmie ex holding an Ignition and `readiness_p` reads **1.0** for it: the model says a body
+that cannot legally attack is fully ready to attack, funded by a card that will be in the discard
+before it ever can. **Issue #351 is filed with the spec** (see below); it is queued work, deliberately
+not built in this run.
+
+## L2 — the OTHER explanation for the zero, tested and refuted
+
+`/code-review`'s Spec axis raised a competing and simpler hypothesis: the develop rung scores a
+**simulated end-of-turn** board, and the engine twin discards `discard_eot` Energy in
+`cgpy/turn.py::_eot_energy_discards` between `TURN_END` and the next `TURN_START`. If the leaf board
+is captured after that point, the strip finds nothing to strip on any leaf board and the `max()`
+masking is not the reason the gate is quiet.
+
+**Measured, not argued.** `planner.state_value` was hooked and every leaf board the develop rung
+scores was inspected:
+
+| | |
+|---|---|
+| leaf frames simulated | **277** |
+| leaf models handed to `state_value` | **2061** |
+| MY bodies on those leaf boards | **6697** |
+| ...still carrying a `discard_eot` Energy | **114** |
+
+Examples: Mega Starmie ex (1031) with `energyCards [3, 17]` / `energies [3, 0, 0, 0]`; Cinderace (666)
+the same. So the leaf board **does** carry the Ignition, the hypothesis is refuted, and L1's masking
+is the explanation. The 114 is also the hook's own positive control — a zero there would have meant a
+broken instrument rather than a discarded Energy.
+
+## L3 — the shipped Pilot already prices this, and the successor has no equivalent read
+
+Worth stating plainly, because it changes how L1 should be read. `dont-waste-discard-energy` is
+**DELETED** — verified at `src/common/strategy/baseline/baseline_energy.py`, whose fold map records it
+and four siblings collapsing into `Pilot._attach_value` at ADR-0069 §7. The live agent's answer to
+*"don't torch an Ignition on turn 1"* is the **EVAPORATION gate** in `pilot._attach_value`:
+
+```
+cashed      = this_turn > 0 and not role_gated and not overkill
+evaporates  = burst and not cashed
+attack_axis = 0.0 if (role_gated or overkill or evaporates) else max(this_turn, build, accel_value, 0.0)
+marginal    = attack_axis + retreat_equity + ability_fuel - evaporation_loss
+```
+
+So the misplay `docs/rules.md` names is already handled **at the option level, by the incumbent
+decider**. What Issue #286 fixes is the T3.5 **board scalar** that is being built to replace it — and
+the scalar has no equivalent of `cashed`, because `cashed` is a fact about an OPTION and
+`state_value` scores a BOARD. `attack_ev` is the term that prices a swing actually taken. That
+asymmetry is the real content of L1: the incumbent asks *"does this attach cash before it
+evaporates?"* and the successor currently asks nothing of the kind.
+
+## L4 — `energies` is not a card list, and the issue's own fix text would have been inert
+
+Recorded because it is the fifth spec in this batch to name an instrument that does not read what it
+claims. The issue says to *"build the raw body with `discard_eot`-riding Energy removed"*. Done the
+obvious way — filtering the body's `energies` for card **17** — that removes **nothing at all**:
+`energies` is a list of `EnergyType` UNIT codes, not cards, and an attached Ignition renders as
+`[0, 0, 0]` (`common/board_cards.py`, Issue #297). Card 17 never appears there.
+
+The strip therefore reads three stores, each answering only what it can:
+
+| question | source | why not the other one |
+|---|---|---|
+| which attached cards expire | `card_effects.json` clause `rider == "discard_eot"` | the same-named Function Tag is behavioural-only; ADR-0032's split is tag ROUTES, clause QUANTIFIES |
+| how many units each provides | `CardFunctions.energy_provision` | the accessor `_special_energy_groups` already sizes a hand attach with, so the two cannot drift. It is stage-dependent: `{C}` on a Basic, `{C}{C}{C}` on an Evolution |
+| which units to remove | `CardStat.energyType` (COLORLESS for Ignition) | the colour `_attached_units` gives those units, so a Basic Energy beside them survives |
+
+`test_the_clause_and_the_tag_agree_about_every_expiring_cards_provision` walks the real 1267-card pool
+and asserts the two stores agree AND that exactly **one** card carries the rider, so a second one
+cannot arrive unnoticed.
+
+`CardFunctions.energy_provision` is **not** the codebase's only reading of that quantity, and the
+first draft of this section claimed it was. Three sites hardcode `3 if discard_eot and evolution
+else 1` — `pilot._attach_provision` (ADR-0069 §5, corpus-ruled), `pilot._attach_lethal_tactical` and
+`planner._attach_provided`. Composing the accessor here adds no fourth; folding those three into it
+would move `attach_value`, which is not this issue's to move. A packet line, not a change.
+
+## The positive control, because a byte-identical report is not by itself a result
+
+A clean gate diff proves *"no NEW unruled flip"*. It does not prove the changed path was reached. So
+the sweep above was re-run **through the shipped methods only** — `CombatMath.without_expiring_energy`,
+`MySide.turns_to_afford(exclude_expiring=True)`, `state_value._readiness_odds` — and paired with a
+negative control: with the strip monkeypatched to return its argument, the same sweep reports **0**
+bites instead of 25. The instrument reads the path, and it reads nothing else.
+
+Mutation-checked in-process, over the ten new cases (a pytest plugin, so `src/` was never edited):
+
+| mutation | new cases failing |
+|---|---|
+| none (control) | 0 of 10 |
+| the strip returns its argument unchanged | **5 of 10** |
+| `MySide.turns_to_afford` ignores the flag | **4 of 10** |
+| `_readiness_odds` stops passing the flag | **2 of 10** — both partial-loan cases, exactly what the wiring exists for |
+| the strip filters `energies` by CARD id (the L4 bug, shipped) | **5 of 10** |
+| the provision is hardcoded to 1 instead of asked per holder stage | **3 of 10** |
+
+The fourth row is the one worth keeping: it is the exact silently-inert implementation the issue's own
+prose invites, and the suite catches it.
+
+## What `/code-review` changed
+
+Both axes ran and both found real defects; every one is fixed above or recorded here.
+
+**Standards.** (1) The strip's fail-CLOSED contract was true per BODY but not per CARD: a rider card
+whose provision resolved to 0, or whose colour was absent from `energies`, was dropped from
+`energyCards` while its units stayed — the exact cards-vs-units disagreement `board_cards.py` exists
+to prevent. Now a card stays unless its units actually left. (2) No `holder is None` guard, so an
+unknown holder read `evolution=False` and under-stripped by two units on my own clock, the unsafe
+direction. (3) The claim that `energy_provision` was the only reading — see L4. (4) The strip was
+recomputed outside the memo lambda while the docstring said otherwise; it now derives inside, as
+`best_reachable_damage` does. (5) `pins` used for a test case, against CLAUDE.md's vocabulary rule.
+(6) House typography (em-dash, `Pokémon`) in the new test block.
+
+**Spec.** The load-bearing claim — `energies` is UNIT codes, so the issue's literal instruction ships
+inert — was independently re-verified TRUE by a corpus scan (26 body-occurrences of card 17 on
+`energyCards`, zero occurrences of `17` in `energies`). Two findings changed the result: the shipped
+deck DOES reach the live shape (A1, now the table in L1) and the leaf-board hypothesis needed testing
+(A2, now L2). The axis also re-derived the mutation matrix independently and added four mutations of
+its own; every new case is killed by at least one, except the two-store consistency test, which
+carries its own positive control (`assert checked == 1`).
+
+## The incumbent-unchanged guard
+
+`test_the_incumbent_turns_to_afford_read_is_BYTE_IDENTICAL` asserts, over four attached-Energy shapes,
+that `MySide.turns_to_afford(body)` still equals `CombatMath.turns_to_afford(the real body,
+attaches_per_turn=1, typed=True)` — the oracle asked the unmodified question about the unmodified
+body — and that passing `exclude_expiring=False` explicitly is the same read as omitting it.
+`CombatMath.turns_to_afford` itself is untouched at the character level, which is what keeps
+`pilot._opp_turns_to_ready`'s *"DELEGATES here (byte-identical)"* true and leaves every corpus-ruled
+deny decision where it was. The existing `test_opp_turns_to_ready_delegates_to_the_snapshot_route`
+still passes unchanged.
+
+## Scope boundary with Issue #263 and Issue #332 — checked, not crossed
+
+- **Issue #263** (POC-T4) owns *who is ACTIVE* per the epic's out-of-scope ledger. The now-leg fix is
+  routed there by L1 rather than taken here.
+- **Issue #332** (`readiness` funds the Active over the benched successor) is the nearest open work and
+  it is a DIFFERENT fact — *which body to fund*, discounted by that body's survival clock. Its own
+  Prior-art section already draws the line: *"Issue #286 … is about which Energy counts, not which
+  body to fund."* Its proposed fix multiplies a per-body factor and would not unmask this leg either.
+- **`attach_value` (ADR-0069)** was not touched. One latent defect was noticed there and deliberately
+  left alone: `pilot._attach_value` passes `extra_energy_ids=(ecid,) * units` — CARD ids appended to
+  the UNIT list — so a hypothetical Ignition attach enters as three code-`17` units, which
+  `unit_colours` treats as WILD (fail-open) rather than colourless-only. It is the same
+  `energies`-is-not-cards confusion as L4, one seam over, in a **corpus-ruled** equation. It is
+  recorded here as a packet line and nothing more.

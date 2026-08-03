@@ -656,6 +656,20 @@ REGISTRY: tuple[TermFamily, ...] = (
             "supplies an Ability payoff, so an evolve whose whole point is switching an engine "
             "Ability on prices only its attack payoff. The largest single regression risk in this "
             "swap, and named here so T4 reads it as a gap rather than a verdict.",
+            "an Energy that EVAPORATES, on the now-leg — and the blindness is what hides most of "
+            "Issue #286's forward-leg fix. `_readiness_odds` is `max(readiness_p, "
+            "halve(turns_to_afford))`; the forward clock now drops `discard_eot` Energy "
+            "(`MySide.turns_to_afford(exclude_expiring=True)`) but `readiness_p` keeps it, and the "
+            "two legs read the same attachment through the same matcher, so an Energy that FULLY "
+            "arms the body zeroes the clock and pins the now-leg at 1.0 together. MEASURED over "
+            "the committed corpus (2026-08-03): 25 of 1015 of my bodies hold one, the clock moves "
+            "on all 25, this family moves on none — every one sits on an Evolution, where "
+            "Ignition's {C}{C}{C} pays the payoff outright. A PARTIAL loan is still priced right "
+            "(a Staryu holding one Ignition), so the fix is live on the deck and invisible on the "
+            "corpus. What stays wrong is the extreme case: a BENCHED Mega Starmie ex that cannot "
+            "attack at all still reads `readiness_p == 1.0`. Unmasking it means teaching the "
+            "now-leg whether the body may attack THIS turn, which is *who is ACTIVE* above; "
+            "specced as Issue #351, ledgered to Issue #263.",
         ),
     ),
     TermFamily(
@@ -1149,9 +1163,37 @@ def _readiness_odds(model: "StateModel", body) -> float:
     reused rather than re-derived, over MY half of the Two Clocks (ADR-0070 §6). Armed now grades
     1.0, next turn 0.5, unknown 0.0 (fail closed, no claim). Taking the MAX rather than adding keeps
     the result a probability and keeps it monotone in both inputs: attaching Energy can only shorten
-    the clock or raise the odds, so it can only raise this."""
+    the clock or raise the odds, so it can only raise this.
+
+    **The forward leg excludes EVAPORATING Energy** (`exclude_expiring`, Issue #286): Ignition
+    Energy is discarded at the end of the turn it is attached, so a clock that counts it is not
+    reading the board this body will stand on next turn. The now-leg deliberately keeps it — the
+    Energy genuinely is there this turn, and that is a fact, not the error. `docs/rules.md` names
+    the misplay the rider causes as its worked example of a reason-only rule (*"don't attach
+    Ignition T1-going-first — you can't attack, so it's discarded for nothing"*, correction
+    ep81903490 f5), and `mega_starmie` runs four of them in thirteen Energy.
+
+    **Measured caveat, recorded because it is half the result** (2026-08-03, swept over the
+    committed corrections corpus): the ``max`` MASKS the correction wherever the expiring Energy
+    FULLY arms the body. Both legs read the same attached Energy through the same matcher —
+    `matched_slots` is *"the matcher `reachable_attach` uses"* — so an Energy that zeroes the clock
+    also pins `readiness_p` at 1.0, and the ``max`` then discards the forward leg. 25 of my 1015
+    corpus bodies hold a `discard_eot` Energy; the clock moves on all 25 and this function on none,
+    because every one of them sits on an EVOLUTION, where Ignition's ``{C}{C}{C}`` pays both shipped
+    payoffs outright.
+
+    It is live on a PARTIAL loan, and `mega_starmie` prints one: Ignition on a **Basic** provides
+    only ``{C}``, so a Staryu holding one is still two attaches from its line's ``{C}{C}{C}`` payoff
+    and `readiness_p` reads 0.0 (a colourless unit cannot pay Water Gun's ``{W}``). Measured on the
+    real pilot: `readiness` 0.000750 → **0.000375**, which is exactly the bare-Staryu value. An
+    Ignition on a Staryu now buys nothing forward, which is the correction.
+
+    Unmasking the rest means teaching the now-leg whether the body may attack THIS turn — it does
+    not ask, and a BENCHED body reads 1.0 — which is *who is ACTIVE* (`readiness.blind_to`), Issue
+    #263's ledger. Specced as **Issue #351**; the correct half is built here and the masking is a
+    packet line rather than a second, unruled retune."""
     now = model.mine.readiness_p(body, body.payoff_attack)
-    arm = model.mine.turns_to_afford(body)
+    arm = model.mine.turns_to_afford(body, exclude_expiring=True)
     forward = 0.0 if arm is None else halve(arm)
     return max(0.0, min(1.0, max(now, forward)))
 

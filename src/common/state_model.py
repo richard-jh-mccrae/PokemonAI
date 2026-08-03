@@ -1264,7 +1264,8 @@ class MySide(_SideBase):
                                         pool=pool, draws=draws,
                                         p_by_type=self.deck_energy_p if weighted else None)
 
-    def turns_to_afford(self, body, *, attaches_per_turn: int = 1) -> int | None:
+    def turns_to_afford(self, body, *, attaches_per_turn: int = 1,
+                        exclude_expiring: bool = False) -> int | None:
         """**The Two Clocks**, my half (ADR-0070 §6): the earliest future turn ``body``'s line is
         ARMED — the MAX of the energy-deficit leg and the FORWARD-HOP leg, never the sum.
 
@@ -1280,13 +1281,32 @@ class MySide(_SideBase):
         here, unlike the their-side twin: ``discard_energy_recur`` is a fact about the OPPONENT's
         clock in every consumer that reads it, and neither shipped line sits in one of our decks — so
         crediting my own reload would be an unexercised code path, and an unexercised credit on MY
-        clock fails in the unsafe direction (it would price a line as armed sooner than it is)."""
+        clock fails in the unsafe direction (it would price a line as armed sooner than it is).
+
+        ``exclude_expiring`` (Issue #286, POC-T3.5) asks the same clock about the board this body
+        will actually stand on NEXT turn: Energy the rules discard at the END of this turn
+        (Ignition's ``discard_eot`` rider) is removed first, through
+        :meth:`~common.strategy.combat.CombatMath.without_expiring_energy`. A FORWARD clock counting
+        an Energy that will not be there is not conservative, it is wrong — Mega Starmie ex holding
+        one Ignition reads *armed now* and is three attaches from Nebula Beam the moment the turn
+        ends.
+
+        It is a SIBLING reading and the incumbent is deliberately untouched, because
+        :meth:`~common.strategy.combat.CombatMath.turns_to_afford` is shared with the deny clock for
+        THEIR bodies (`pilot._opp_turns_to_ready` *"DELEGATES here (byte-identical)"*) and
+        `attach_value`'s ADR-0069 counterfactual reads its own leg beside it. Teaching the oracle the
+        rider would move corpus-ruled decisions on the other side of the board; a flag nobody else
+        passes cannot. Keyed into the memo, and keyed on the REAL body — the hypothetical is derived
+        inside, so two callers asking different questions about one body never collide."""
         view = self.view_of(body)
         if view is None:
             return None
-        return self._memoized(("mine_turns_to_afford", self._key(view.body), attaches_per_turn),
+        return self._memoized(("mine_turns_to_afford", self._key(view.body), attaches_per_turn,
+                               bool(exclude_expiring)),
                               lambda: self._combat.turns_to_afford(
-                                  view.body, attaches_per_turn=attaches_per_turn, typed=True))
+                                  self._combat.without_expiring_energy(view.body)
+                                  if exclude_expiring else view.body,
+                                  attaches_per_turn=attaches_per_turn, typed=True))
 
     # `famine` was DELETED by POC-T1 (Issue #260). It was `active_famine` MINUS the rule leg — the
     # affordability half alone — so a consumer taking it would have missed Asleep, Paralyzed and the

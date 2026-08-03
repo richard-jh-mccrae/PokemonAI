@@ -106,8 +106,10 @@ STARYU, DREEPY, DRAKLOAK = 1030, 119, 120
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
 SUPER_PSY_BOLT = 214
 JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
+WATER_GUN = 91030          # Staryu's only attack (Issue #286)
 HEAT_BLAST, BLAZE_BLITZ, POWERFUL_HAND = 946, 947, 9743
 E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
+IGNITION = 17               # Issue #286 — the pool's ONE `discard_eot` Energy
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
@@ -152,15 +154,28 @@ _STATS = {
     BRAVE_BANGLE: CardStat(BRAVE_BANGLE, name="Brave Bangle", cardType=2, damageBoost=30,
                            damageBoostVsEx=True, holderNoRuleBox=True),
     # ── Issue #285's cast: the PRE-EVOLUTIONS whose removal denies a forward payoff ────────────
+    # ``attacks`` added by Issue #286: Water Gun ``{W}`` 20, Staryu's ONLY attack
+    # (`data/EN_Card_Data.csv` Card ID 1030). Issue #285 introduced this row purely as a
+    # forward-payoff pre-evolution and read only its `maxDamage`, so the attack was never declared.
+    # It is load-bearing here: `readiness_p` must be able to ask whether a COLOURLESS unit pays a
+    # ``{W}`` slot, and a body with no attacks answers 0.0 for the wrong reason.
     STARYU: CardStat(STARYU, name="Staryu", hp=70, energyType=WATER, weakness=LIGHTNING,
                      retreatCost=1, maxDamage=20, maxDamageCost=1, minAttackCost=1,
-                     minCostDamage=20, cardType=0),
+                     minCostDamage=20, attacks=(WATER_GUN,), cardType=0),
     DREEPY: CardStat(DREEPY, name="Dreepy", hp=70, energyType=DRAGON, retreatCost=1,
                      maxDamage=40, maxDamageCost=2, minAttackCost=1, minCostDamage=10,
                      cardType=0),
     DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON,
                        evolvesFrom="Dreepy", retreatCost=1, maxDamage=70, maxDamageCost=2,
                        minAttackCost=2, minCostDamage=70, cardType=0),
+    # ── Issue #286's one card: the Energy that is GONE at the end of the turn ─────────────────
+    # Ignition Energy (17), verified at `data/EN_Card_Data.csv`: *Special Energy*, `Type` {C}{C}{C},
+    # *"If this card is attached to 1 of your Pokémon, discard it at the end of your turn. … it
+    # provides {C} Energy. If this card is attached to an Evolution Pokémon, it provides {C}{C}{C}
+    # Energy instead."* `energyType` is COLORLESS — the units it supplies pay colourless slots only,
+    # which is why it arms Nebula Beam ``{C}{C}{C}`` outright and does nothing at all for Mega
+    # Brave ``{F}{F}``. `cardType=6` is SPECIAL_ENERGY (`cg.api.CardType`).
+    IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
@@ -173,6 +188,7 @@ _ATTACKS = {
     AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
     MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
     JETTING_BLOW: AttackStat(JETTING_BLOW, damage=120, cost=1, energyTypes=(WATER,), benchSnipe=50),
+    WATER_GUN: AttackStat(WATER_GUN, damage=20, cost=1, energyTypes=(WATER,)),
     NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3,
                             energyTypes=(COLORLESS, COLORLESS, COLORLESS),
                             ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
@@ -221,19 +237,40 @@ POWER_PRO = (30, FIGHTING, False)
 BLACK_BELT = (40, None, True)
 
 
+#: Ignition Energy's two committed records, as `CardFunctions` / `CardEffects` entries (Issue #286).
+#: BOTH are needed and they answer different halves: the CLAUSE's ``rider`` says the card evaporates
+#: (the parametric record, ADR-0032), the TAG's ``provides`` pair says how many units it supplies
+#: (`CardFunctions.energy_provision`, the accessor the Attach Budget already sizes a hand attach
+#: with). Restated here rather than loaded from disk for the same reason every other fact in this
+#: file is: a fixture that read the shipped stores would move whenever they did.
+_IGNITION_TAGS = {IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}
+_IGNITION_CLAUSES = {IGNITION: [{"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3,
+                                 "type": "colorless", "rider": "discard_eot"}]}
+
+
 def _combat():
     return CombatMath(DictCardStatProvider(_STATS, attacks=_ATTACKS),
-                      functions=CardFunctions({}), transients=None, effects=CardEffects({}))
+                      functions=CardFunctions(_IGNITION_TAGS), transients=None,
+                      effects=CardEffects(_IGNITION_CLAUSES))
 
 
-def _poke(cid, *, hp, energies=(), serial=1, damage=0, tools=()):
+def _poke(cid, *, hp, energies=(), serial=1, damage=0, tools=(), energy_cards=None):
     """One in-play body. ``tools`` is the raw ``tools`` key `_SideBase.tool_ids` reads (Issue #260's
     homed `attached_tools` zone) — the route by which a Tool's boost, unlike a Trainer's, reaches a
     snapshot as BOARD state rather than through the turn tracker. Defaults to empty, so every
-    existing board in this file is byte-identical."""
+    existing board in this file is byte-identical.
+
+    ``energy_cards`` is the OTHER attached-Energy key (Issue #286) and it is separate from
+    ``energies`` because the engine keeps them separate: ``energies`` is the ``EnergyType`` UNITS
+    the attached cards PROVIDE, ``energyCards`` is the CARDS (`common/board_cards.py`). One Ignition
+    on an Evolution is ``energy_cards=[17]`` and ``energies=[0, 0, 0]``. Omitted by default, which
+    leaves every board that predates this issue byte-identical AND leaves the expiring-Energy strip
+    making no claim about them — card identity is what a rider is read from."""
     body = {"id": cid, "hp": hp - damage, "energies": list(energies), "serial": serial}
     if tools:
         body["tools"] = [{"id": t} for t in tools]
+    if energy_cards is not None:
+        body["energyCards"] = [{"id": c} for c in energy_cards]
     return body
 
 
@@ -739,6 +776,139 @@ def test_readiness_survives_the_turns_one_manual_attach_being_spent():
     sv.state_value(_lucario_board(my_energies=[E_F, E_F], energy_attached=True), working=richer)
     assert spent["readiness"] > 0.0, "the spent attach flattened readiness to zero"
     assert richer["readiness"] > spent["readiness"]
+
+
+# ── Issue #286 — readiness's FORWARD leg must not count Energy that evaporates ────────────────────
+
+
+def _expiring_board(cid, *, energies, energy_cards, hp):
+    """MY body holding a chosen Energy set, the turn's manual attach already SPENT and my hand empty.
+
+    Both are deliberate: with the attach spent and nothing in hand the Attach Budget adds nothing, so
+    `readiness_p`'s answer is a fact about what is ON the body rather than about what the fixture's
+    deck happens to hold. Their side is a bare Dragapult ex, the same defender every other board in
+    this file uses."""
+    return _model(
+        _player(active=_poke(cid, hp=hp, energies=energies, energy_cards=energy_cards), prize=4),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+        energy_attached=True)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_forward_clock_no_longer_counts_an_energy_that_will_be_DISCARDED():
+    """Gouging Fire ex holds ONE Ignition. It is a **Basic**, so the card provides ``{C}`` — one
+    colourless unit, which fills exactly the ``{C}`` slot of Blaze Blitz ``{R}{R}{C}`` and pays
+    neither ``{R}``. So the payoff is unreachable THIS turn (the now-leg is an honest 0) and the
+    whole of `readiness` here rides on the forward clock.
+
+    The incumbent clock counted that unit and said *two more attaches*. It will not be there next
+    turn — the rules discard it at the end of this one — so the honest answer is three, and the
+    family must fall accordingly. The control below is the same board funded by a Basic {R}, where
+    nothing expires and nothing may move."""
+    loan, real = {}, {}
+    sv.state_value(_expiring_board(GOUGING_FIRE, energies=[COLORLESS], energy_cards=[IGNITION],
+                                   hp=230), working=loan)
+    sv.state_value(_expiring_board(GOUGING_FIRE, energies=[E_R], energy_cards=[E_R], hp=230),
+                   working=real)
+    board = _expiring_board(GOUGING_FIRE, energies=[COLORLESS], energy_cards=[IGNITION], hp=230)
+    body = board.mine.active
+    assert board.mine.readiness_p(body, body.payoff_attack) == 0.0, "the now-leg must be the 0 here"
+    assert board.mine.turns_to_afford(body) == 2                      # the incumbent, unmoved
+    assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3
+    assert loan["readiness"] < real["readiness"], (
+        "an evaporating Energy still prices as a permanent one")
+    # …and the drop is the halve() step the forward leg is graded by, not some other number.
+    assert loan["readiness"] == pytest.approx(real["readiness"] / 2.0)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_going_first_shape_an_IGNITION_onto_a_BASIC_now_buys_nothing_forward():
+    """Issue #286's own T1-going-first test, on `mega_starmie`'s real cards — and the proof that the
+    fix is live on a shipped deck rather than only on a fixture.
+
+    The deck runs 3 Staryu and 4 Ignition. Staryu is a **Basic**, so an Ignition on it provides
+    ``{C}`` — ONE unit — while the line's deepest payoff is Mega Starmie ex's Nebula Beam
+    ``{C}{C}{C}``. That is a PARTIAL loan: the unit fills one colourless slot and the clock still
+    owes two, so the incumbent read *two attaches away* and the honest answer is three.
+
+    The now-leg reads 0.0 for a card-true reason and not a fixture accident: Staryu's only attack is
+    Water Gun ``{W}``, and a colourless unit pays colourless slots ONLY (`combat.unit_colours`), so
+    the Ignition arms nothing this turn. Which is exactly the doctrine's rule — *"Going first: attach
+    Water (never Ignition — it'd discard unused)"* — and `docs/rules.md`'s worked example of a
+    reason-only rule (correction ep81903490 f5).
+
+    Both halves are asserted: the Water board must outscore the Ignition board (it did BEFORE this
+    change too, so that alone would be a vacuous test), **and the gap must WIDEN**, which is the part
+    only this change produces. The Ignition board lands exactly on the BARE-Staryu value — an
+    evaporating Energy buys no forward readiness at all, which is the correction stated as a
+    number."""
+    ign, water, bare = {}, {}, {}
+    sv.state_value(_expiring_board(STARYU, energies=[COLORLESS], energy_cards=[IGNITION], hp=70),
+                   working=ign)
+    sv.state_value(_expiring_board(STARYU, energies=[E_W], energy_cards=[E_W], hp=70), working=water)
+    sv.state_value(_expiring_board(STARYU, energies=[], energy_cards=[], hp=70), working=bare)
+    board = _expiring_board(STARYU, energies=[COLORLESS], energy_cards=[IGNITION], hp=70)
+    body = board.mine.active
+    assert board.mine.readiness_p(body, body.payoff_attack) == 0.0, (
+        "a colourless unit must not read as paying Water Gun's {W}")
+    assert board.mine.turns_to_afford(body) == 2                       # the incumbent, unmoved
+    assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3
+    assert ign["readiness"] < water["readiness"]
+    # The part that is NEW: the Ignition board falls all the way to the bare board. Before this
+    # change it sat strictly between the two, crediting a card that will be in the discard.
+    assert ign["readiness"] == pytest.approx(bare["readiness"])
+    assert bare["readiness"] < water["readiness"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
+    """The measured finding, executable — Issue #286's fix is correct and, wherever the expiring
+    Energy FULLY arms the body, invisible.
+
+    `_readiness_odds` is ``max(now, halve(arm))`` and the two legs read the SAME attached Energy
+    through the SAME matcher (`matched_slots` documents itself as *"the matcher `reachable_attach`
+    uses"*). So whenever the expiring Energy is enough to zero the clock it is also enough to pin
+    the now-leg at 1.0, and the ``max`` discards the forward leg entirely. Mega Starmie ex holding
+    one Ignition is exactly that: ``{C}{C}{C}`` on an Evolution pays Nebula Beam ``{C}{C}{C}``
+    outright.
+
+    Swept over the committed corrections corpus (Issue #286, 2026-08-03): **25 of 1015** of my
+    bodies hold a `discard_eot` Energy, the forward clock moves on **all 25**, and `_readiness_odds`
+    moves on **none** — every one of them reads ``now == 1.0``, because every one of them sits on an
+    EVOLUTION. The partial-loan case above is the deck's other half and is NOT masked; the corpus
+    simply holds no frame of it.
+
+    This test therefore asserts a gap, not a virtue. Its worst case is not the masking itself but
+    what the masking rests on: `readiness_p` never asks whether the body may attack at all, so a
+    BENCHED Mega Starmie ex reads 1.0 (corpus frame `83664991|…|43`). Issue #351 is the spec; Issue
+    #263 owns *who is Active*. This turns red the day either lands, which is exactly when someone
+    should read it again."""
+    board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
+    body = board.mine.active
+    assert board.mine.readiness_p(body, body.payoff_attack) == 1.0
+    assert board.mine.turns_to_afford(body) == 0                       # armed, by a loan
+    assert board.mine.turns_to_afford(body, exclude_expiring=True) == 3    # the seam DOES move
+    loan, real = {}, {}
+    sv.state_value(board, working=loan)
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[E_W, E_W, E_W],
+                                   energy_cards=[E_W, E_W, E_W], hp=330), working=real)
+    assert loan["readiness"] == real["readiness"], (
+        "the now-leg no longer masks the forward leg — re-read the packet line, this is the unlock")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_a_basic_energy_is_never_stripped_from_the_forward_clock():
+    """The regression guard the issue names. Nothing about a Basic Energy expires, so the flagged
+    and unflagged clocks must return the SAME number on every board that holds only Basic Energy —
+    including the boards this file was already built on, which carry no ``energyCards`` key at all
+    and where the strip must therefore make no claim."""
+    for board in (_expiring_board(GOUGING_FIRE, energies=[E_R], energy_cards=[E_R], hp=230),
+                  _expiring_board(MEGA_STARMIE, energies=[E_W, E_W], energy_cards=[E_W, E_W],
+                                  hp=330),
+                  _lucario_board(my_energies=[E_F], energy_attached=True)):
+        body = board.mine.active
+        assert (board.mine.turns_to_afford(body)
+                == board.mine.turns_to_afford(body, exclude_expiring=True))
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
