@@ -507,8 +507,15 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
-                    "the two must not both read a clock — `turns_to_ko_me` is THEIR clock on MY "
-                    "bodies. Reach is one affordability filter (the Attach Budget) over two damage "
+                    "THIS family must not read a clock — `turns_to_ko_me` is THEIR clock on MY "
+                    "bodies, which says nothing about how exposed THEIR bodies are to me, so "
+                    "reading it here would be a genuine second pricing of `survival`'s fact rather "
+                    "than a different consequence of it. (Since Issue #332 `readiness` DOES consult "
+                    "the clock, on the forward leg of `readiness_odds`; that is argued at "
+                    "`_survives_to_spend` and is a different question from this one. The rule was "
+                    "never *at most one family may consult a fact* — it is *at most one family may "
+                    "PRICE it*, which is what `reads` records.) "
+                    "Reach is one affordability filter (the Attach Budget) over two damage "
                     "ROUTES: their Active through `best_reachable_damage_vs`, the DAMAGE MODEL "
                     "against the body actually in front of me (Weakness, Resistance, prevention, my "
                     "live boosts — Issue #281); their Bench through `best_reachable_bench_damage`, "
@@ -747,7 +754,7 @@ REGISTRY: tuple[TermFamily, ...] = (
             "specced as Issue #351, ledgered to Issue #263. **Issue #332's survivability discount "
             "rides the same forward leg and is masked by the same now-leg**, so a benched body "
             "reading a phantom 1.0 keeps full readiness however short its clock — one defect now "
-            "hides two corrections, which is the strongest argument on the ledger for #351's "
+            "hides two corrections, which is the strongest argument on the ledger for Issue #351's "
             "priority.",
             "what a DOOMED body could still do THIS turn OUTSIDE its payoff attack — the "
             "survivability discount (`_survives_to_spend`, Issue #332) zeroes the FORWARD leg on a "
@@ -1018,8 +1025,9 @@ def _survival_clock(model: "StateModel", body) -> int:
     Every kwarg is :func:`_exposed_bodies`' own, unchanged and argued there: the Bench-Harvest pair
     (``my_benched`` / ``my_bench``), ``opp_active``, and the THEIRS-direction Damage Formula context
     (Issue #280) — the attacker on a survival read is the opponent. Cost is nil on the second
-    reader: `StateModel.turns_to_ko_me` is memoized by VALUE over every argument, and all three
-    board reads below are `lazy` snapshot properties, so the readiness path pays a memo hit."""
+    reader: `StateModel.turns_to_ko_me` is memoized by VALUE over every argument, `bench_raws` and
+    `active_raw` are `lazy` snapshot properties, and `damage_context` is a method memoized per
+    DIRECTION and identity-stable — so the readiness path pays a memo hit rather than a re-derivation."""
     return int(model.theirs.turns_to_ko_me(
         body.body, my_benched=not body.is_active, my_bench=model.mine.bench_raws,
         opp_active=model.theirs.active_raw, context=model.damage_context(attacker="theirs")))

@@ -1405,6 +1405,55 @@ def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
     assert "turns_to_ko_me" not in sv.FAMILIES["readiness"].reads
     # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
     assert "turns_to_ko_me" in sv.FAMILIES["readiness"].composition
+    # …and the consultation it argues for is REAL. Without this the assertions above would hold on a
+    # module that never consults the clock at all — a contract describing something that does not
+    # happen, which is the vacuity the whole `reads` map exists to prevent.
+    board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    body = board.mine.active
+    attack = board.mine.attack_payoff(body).attack_id
+    arm = board.mine.turns_to_afford(body, exclude_expiring=True)
+    assert arm is not None and board.mine.readiness_p(body, attack) == 0.0
+    assert sv._readiness_odds(board, body, attack) < sv.halve(arm), (
+        "the forward leg is not actually consulting the clock the composition claims it does")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_ADR_0069_attach_decider_is_STRUCTURALLY_unable_to_move_under_this_module():
+    """Issue #332's owed *"`attach_value` unmoved"* guard, in the form that is not a re-measurement.
+
+    ADR-0069's attach marginal is `Pilot._attach_value`, and Issue #278's standing discipline forbids
+    retuning it. The strongest available statement is not *"the corpus did not move"* — a corpus can
+    fail to move for the wrong reason — but that `pilot.py` cannot READ this module at all: no
+    import, no reference, so a change to `state_value` is unable to reach the attach decider however
+    it is written.
+
+    Asserted over the parsed module rather than a substring search, because `pilot.py` does mention
+    `state_value` in prose (a docstring explaining why it does NOT thread a context into it) and a
+    raw `in` check would fail on the documentation.
+
+    **A negative result needs a positive control** (CLAUDE.md): the same instrument is pointed at two
+    deciders `pilot.py` genuinely does consume, and must find both."""
+    import ast
+    from pathlib import Path
+
+    src = Path(sv.__file__).with_name("pilot.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name.split(".")[-1] for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            names.add((node.module or "").split(".")[-1])
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+    assert {"evolve_value", "promote_retreat_value"} <= names, (
+        "the instrument found neither shipped decider — it is broken, not the codebase")
+    assert "state_value" not in names, (
+        "pilot.py grew a `state_value` reader — the ADR-0069 attach decider is no longer insulated "
+        "from this module and `attach_value unmoved` stops holding by construction")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")

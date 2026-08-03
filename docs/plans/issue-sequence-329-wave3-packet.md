@@ -180,12 +180,12 @@ before the opponent's, so a body about to fall still swings and owes no discount
 retuned; `attach_value` (ADR-0069) is structurally unreachable from this module and its own suites
 (`test_attach_decider.py`, `test_attach_bands.py`, `test_attach_discipline.py`) pass unchanged.
 
-### Gate arithmetic — attributed against a BEFORE control, not against #329's table
+### Gate arithmetic — attributed against a BEFORE control, not against Issue #329's table
 
 The before column is a real re-run with `_survives_to_spend` forced to `1.0`, so these three flips
 are this issue's own and not inherited.
 
-| | before (#329's end state) | after |
+| | before (Issue #329's end state) | after |
 |---|---|---|
 | unruled `OK -> MISS` | 4 | **7** (+3, named above) |
 | `IMPROVED MISS -> OK` | 14 | **12** (−2, named above) |
