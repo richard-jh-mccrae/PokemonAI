@@ -2509,9 +2509,14 @@ class PlannerMixin:
             if bst.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
                 return False                                  # defender {ex} gate
             if not bst.applies_to_holder(stat):
-                return False                                  # owner-family HOLDER gate, Issue #306: a Tool
-                                                              # boost reaches only "the Hop's Pokémon
-                                                              # this card is attached to"
+                return False                                  # the HOLDER gate(s): an owner family
+                                                              # ("the Hop's Pokémon this card is
+                                                              # attached to", Issue #306) or a
+                                                              # no-Rule-Box condition (Brave Bangle,
+                                                              # Issue #345). Asked as one test, so a
+                                                              # gate added later reaches this site
+                                                              # without it being edited — which is
+                                                              # exactly what happened at Issue #345.
             return best_dmg < hp <= best_dmg + bst.damageBoost   # short by ≤ this one boost
         if any(_crosses(self.stats.get(cid) if self.stats else None) for cid in hand_ids):
             return []                                         # held boost crosses -> deterministic line

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from .card_text import (  # noqa: F401
     _parse_tool_attack_cost_reduction,
     _parse_tool_holder_family,
+    _parse_tool_holder_no_rule_box,
     _parse_tool_hp_bonus,
     _parse_retreat_free_grant,
     _parse_tool_retreat_free_at_hp,
@@ -86,6 +87,16 @@ class CardStat:
                                        # rules.md §9: the owner prefix IS part of the printed name, so
                                        # this is an exact membership test over a KNOWN holder, not a
                                        # guess. None = unconditional. Test it with `applies_to_holder`.
+    holderNoRuleBox: bool = False      # this Tool's static modifiers reach ONLY a holder with no
+                                       # Rule Box — Brave Bangle (1175), the pool's one such card
+                                       # (Issue #345). The SECOND holder gate, and unlike the family
+                                       # above it is a property of the holder's own rules text, not
+                                       # of its name, which is why it needed a field of its own. Over
+                                       # this pool the predicate is EXACT rather than approximate —
+                                       # "has a Rule Box" and `is_ex_body` are the same 151 bodies,
+                                       # swept in tests/scouting/test_tool_holder_facts.py, which
+                                       # fails the day a Radiant / V / VSTAR card arrives. Never read
+                                       # this field directly; ask `applies_to_holder`.
     retreatFreeAtHp: int = 0           # remaining HP at or below which an attached Tool zeroes the
                                        # holder's Retreat Cost outright (Rescue Board: 30) — the
                                        # CONDITIONAL leg the flat read above could not carry
@@ -212,10 +223,30 @@ class CardStat:
         """Do THIS Tool's static modifiers (``hpBonus`` / ``damageBoost`` / ``attackCostReduction``)
         reach ``holder`` — the body it is (or would be) attached to?
 
-        The one place the owner-family gate is evaluated, so a consumer that reads any gated amount
-        reads its condition through the same test (Issue #306). True for every unrestricted Tool, so
+        The one place EVERY holder gate is evaluated, so a consumer that reads any gated amount
+        reads its conditions through the same test (Issue #306). True for every unrestricted Tool, so
         an ungated consumer's behaviour is unchanged. An unknown holder against a real gate is
-        False: fail-CLOSED, never credit a body we cannot identify."""
+        False: fail-CLOSED, never credit a body we cannot identify.
+
+        Two gates today, ANDed, and adding the second (Issue #345) is why they are evaluated here
+        rather than at the call sites. There are FOUR consumers — ``state_model._SideBase
+        .damage_boosts``, ``Pilot._boost_lethal_tactical``, ``doctrine_tool._tool_reaches`` (the
+        deploy picker) and ``planner._gamble_pump_ko_classes``'s ``_crosses`` — and none of them was
+        touched when the second gate landed. A gate added at three of them is a gate the fourth
+        silently ignores.
+
+        * ``holderNameFamily`` — the owner NAME family ("the Hop's Pokémon this card is attached to").
+        * ``holderNoRuleBox`` — the holder must have no Rule Box (Brave Bangle). Over this pool that
+          is exactly ``is_ex_body``: `docs/rulebook.txt` names Pokémon ex (L337, Mega ex included),
+          Radiant (L364) and V / V-UNION (L391-392) as the Rule-Box categories, and a sweep of all
+          1061 bodies finds only the first — pinned, so the day that stops being true the test fails
+          instead of the boost quietly over-crediting.
+        """
+        # `getattr` with a True default rather than `holder.is_ex_body`, to match the family leg's
+        # defensive read one line down: a holder we cannot interrogate must fail the SAME way on
+        # both gates, and for a benefit that way is "has a Rule Box" — refuse.
+        if self.holderNoRuleBox and (holder is None or getattr(holder, "is_ex_body", True)):
+            return False
         return name_in_family(getattr(holder, "name", None), self.holderNameFamily)
 
     def can_pay_cheapest(self, energy: int) -> bool:
@@ -486,6 +517,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             retreatReduction=_parse_tool_retreat_reduction(c),
             attackCostReduction=_parse_tool_attack_cost_reduction(c),
             holderNameFamily=_parse_tool_holder_family(c),
+            holderNoRuleBox=_parse_tool_holder_no_rule_box(c),
             retreatFreeAtHp=_parse_tool_retreat_free_at_hp(c),
             retreatFreeGrant=_parse_retreat_free_grant(c),
             stage2=bool(getattr(c, "stage2", False)),

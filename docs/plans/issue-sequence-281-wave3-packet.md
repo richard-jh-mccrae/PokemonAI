@@ -352,3 +352,124 @@ attacks it uses do 30 more damage …"*) carrying a holder gate `CardStat` has n
 `holderNameFamily` / `applies_to_holder` express an owner-NAME family, not a Rule Box. Not built
 inline: it needs a pool-swept predicate and a decision about where the second holder gate lives,
 which is a different subsystem from this issue's.
+---
+
+# Issue #345 — Brave Bangle's holder gate: a Rule Box, not a name
+
+## Flips
+
+**Zero on both gates.** Leaf: `1 unruled` — the same `81906755|1|decision|9` carried from
+Issue #280 and already ruled above; nothing new, and the shipped and pre-change reports are
+**byte-identical**. Decision Gate: **PASS, 0 picks moved, 0 rulings moved**. No row is added to the
+Flips table because this change produced none.
+
+## The zero is EXPLAINED, and the instrument was proved to read the changed path
+
+A clean baseline diff proves only *"no NEW unruled flip"*, and an A/B zero proves only *"nothing
+moved"* — neither says whether the lab could have seen a move. Issue #343's 0-of-277 turned out to be
+an instrument artifact, so this one carries both controls.
+
+**A/B.** Stash the tree, run both gates, unstash, diff the two reports. Byte-identical on both.
+Restore verified by `cmp` of the pre- and post-stash patches. Pre-change control: with the tree
+stashed, `EngineCardStatProvider` reports card 1175 `damageBoost = 0` and `CardStat` has no
+`holderNoRuleBox` attribute at all — so the "before" arm really was the before.
+
+**Sensitivity control — does the leaf lab read `CardStat.applies_to_holder`?** Severed it to
+`return False` (every holder gate refuses) and re-ran the leaf gate. It moved: the gated-frame count
+went 198 → 197 and 14 report lines changed, including `ep83661652 correct=[0]` flipping
+**`OK rank 1/8` → `MISS rank 5/8`** as its score fell `976.42 → −439.20`. The lab is therefore
+demonstrably sensitive to the exact function this issue modifies.
+
+**Exposure — why it nonetheless moved nothing.** Swept all 372 corpus frames for card ids, resolving
+each occurrence to the zone it sits in:
+
+| card | frames carrying the id | attached to a BENCH body | attached to an **ACTIVE** |
+|---|---|---|---|
+| 1175 Brave Bangle | 19 | 3 | **0** |
+| 1171 Hop's Choice Band | 4 | 0 | **1** |
+| 1158 Maximum Belt | 35 | 0 | 0 |
+| 678 Mega Lucario ex *(positive control)* | 140 | — | — |
+| 1031 Mega Starmie ex *(positive control)* | 256 | — | — |
+
+`_SideBase.damage_boosts` reads `active.tool_ids` and nothing else — a boost Tool on the Bench
+contributes zero by design, since only the Active attacks. Brave Bangle is attached to an Active in
+**no frame of the corpus**, so the change has no frame to move. The Hop's Choice Band row is the
+positive control *for this sweep specifically*: the same detector DOES find a boost Tool on an Active
+when one exists, so its zero for 1175 is a fact about the corpus, not a silent instrument. (The first
+version of this sweep returned 0 for **every** card including Mega Lucario ex — it globbed `*.json`
+where the corpus is `corrections.jsonl`. That is the control doing its job.)
+
+The corpus holds no `slowking` batch at all (54 `dragapult_ex`, 70 `mega_lucario`, 207
+`mega_starmie`, 41 unlabelled), and `slowking` is the only deck that ships the card — 1 copy,
+`src/agents/slowking/deck.csv` line 48. The 19 hits are the opponent's deck list and three benched
+copies.
+
+## What the SELF-FILED spec got wrong
+
+Issue #345 was filed minutes earlier by Issue #282's own implementer. Its central claim held: 1175
+parses to `damageBoost=0`, `CardStat` had no field for a Rule-Box gate, and `holderNameFamily` really
+is an owner-NAME family. Its framing did not, and three further claims were corrected during the
+build or by review.
+
+1. **It presents the zero as an unnoticed gap.** The tree calls it a RULING.
+   `tests/scouting/test_tool_holder_facts.py` shipped a dedicated test,
+   `test_a_RULE_BOX_GATED_boost_still_parses_to_zero`, whose docstring reads *"Deliberately
+   unmodelled"*, and the census generator hard-coded 1175 into `DELIBERATELY_UNMODELLED_TOOLS`. The
+   issue cited neither, quoting only the inventory test.
+2. **The ruling's REASON is what fails**, and it is why the ruling is overturned rather than merely
+   revisited: *"`CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test would fail
+   OPEN and over-credit."* That is a claim about the pool that was never measured against it. The
+   `Rule` column of `data/EN_Card_Data.csv` takes exactly four values over 1267 ids — `n/a` 1087,
+   `Pokémon ex` 121, `Mega Pokémon ex` 30, `ACE SPEC` 29 — with no Radiant, V, VMAX, VSTAR or
+   V-UNION anywhere, and its Rule-Box body set has **empty symmetric difference** with the engine's
+   `is_ex_body` (151 bodies). Exact, not fail-open. All 29 ACE SPEC cards are Trainers or Energy, so
+   none is ever a holder.
+3. **The refusal was also inconsistent with the tree**, which already reads the identical predicate
+   the identical way twice: `fetch_closure._pokemon_body_matches` (`no_rule_box`, for Poké Pad and
+   Lana's Aid) and `cgpy.chain._card_matches` (`noRuleBox`) — the engine twin's own answer.
+4. **Its quotation of the card is incomplete**, dropping the trailing *"(Pokémon {ex}, Pokémon {V},
+   etc. have Rule Boxes.)"* — the card naming the very Rule-Box categories the risk is about.
+5. **It says there are "two consumers" of the gate. There are four**: `_SideBase.damage_boosts`,
+   `Pilot._boost_lethal_tactical`, `doctrine_tool._tool_reaches` and
+   `planner._gamble_pump_ko_classes`. All four inherit the second gate untouched, which is the design
+   working — but the docstring asserting the count was itself wrong until review caught it.
+
+The attached-Tools ruled omission (Issue #278's ledger → Issue #260) is **not** re-litigated:
+`snapshot_coverage` already homes `Zone("attached_tools", …, HOMED, home="mine.active.tool_ids")` and
+Issue #282 homed `this_turn_damage_boosts`. This change is a parse strictly upstream of that
+plumbing, and `state_model.py` / `state_value.py` / `combat.py` / `snapshot_coverage.py` are all
+absent from the diff.
+
+## What `/code-review` changed
+
+The Spec axis re-derived the load-bearing claim with an instrument this build never used — the CSV's
+own `Rule` column rather than a card-name regex — and **confirmed** it, so the overturn stands. It
+then found that `fetch_closure._body_predicates_match`, cited four times as the prior art for that
+overturn, **does not exist**; the function is `_pokemon_body_matches`. The name had been inferred
+from the function's docstring rather than read off its `def` line — the Issue #319 failure mode,
+caught. All four citations are fixed. It also corrected a "four other Rule-Box texts" comment that
+then listed five.
+
+The Standards axis proved one new test **vacuous**:
+`test_the_amount_and_the_RULE_BOX_gate_cannot_be_read_apart` claimed to assert the shared-prefix
+guarantee and only round-tripped texts that satisfy both legs by construction, so it stayed GREEN
+under exactly the drift it names. It now asserts the property on the patterns themselves and goes red
+under that mutation. It further showed that the negative case's coin-gated leg parsed to 0 only by a
+capitalisation accident — `_BOOST_TOOL_RE`, shipped byte-compatible at Issue #306, has **no coin
+guard at all**, and *"Flip a coin. If heads, Attacks used by the Pokémon this card is attached to do
+30 more damage …"* parses to 30 today. That is latent (no card in the pool prints the shape) and
+belongs to a different sentence form, so it is **recorded in the test's docstring rather than fixed
+here** — a developer may wish to rule on it.
+
+## One follow-on filed
+
+**Issue #346** — Brave Bangle's `{ex}` DEFENDER gate is missing from its `cgpy` ChainDef.
+`chain_overrides.json` has `{"tool": {"attackBonus": {"n": 30, "holder": {"noRuleBox": true}}}}` with
+no `"defenderEx": true`, so `cgpy/damage.py` adds the +30 against **every** defending Active while
+the card restricts it to a Pokémon `{ex}`. Swept the whole `tool.attackBonus` inventory: three cards
+carry one, and the other two agree with their printed text in both directions (1158 Maximum Belt
+`{ex}`/True, 1171 Hop's Choice Band no-`{ex}`/False) — that agreement is the sweep's positive
+control, and it makes 1175 a defect rather than a convention the file does not follow. Not built
+inline: `cgpy` is the offline simulator the leaf gate runs on (`leaf_lab._cgpy_pilot_builder` sets
+`pilot._search_api = cgpy_api`), so bundling a damage change there would make any future flip
+unattributable. Queued immediately after Issue #345; nothing later depends on it.

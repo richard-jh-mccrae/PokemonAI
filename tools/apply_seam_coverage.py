@@ -71,8 +71,8 @@ from common import snapshot_coverage                                           #
 from common.strategy.context import _ABILITY, _ATTACH, _EVOLVE, _PLAY          # noqa: E402
 from common.scouting.card_text import (                                        # noqa: E402
     _parse_retreat_free_grant, _parse_tool_attack_cost_reduction, _parse_tool_holder_family,
-    _parse_tool_hp_bonus, _parse_tool_retreat_free_at_hp, _parse_tool_retreat_reduction,
-    parse_card_damage_boost)
+    _parse_tool_holder_no_rule_box, _parse_tool_hp_bonus, _parse_tool_retreat_free_at_hp,
+    _parse_tool_retreat_reduction, parse_card_damage_boost)
 
 
 CARDS_JSON = _ROOT / "tools" / "meta_tracker" / "cards.json"
@@ -506,6 +506,14 @@ class _SkillShim:
 #: a group that reads as covered when it is not is worse than one that reads as missing — so these
 #: are named in the report rather than left to sit in the same "**none**" bucket as an oversight.
 #: Ruled at Issue #306; each needs a `state_value` shape that does not exist, not a parser fix.
+#:
+#: **Brave Bangle (1175) was here and is not any more** (Issue #345). Its entry read *"GATED on a
+#: holder predicate we cannot decide — … `CardStat` models `ex`/`megaEx` but not Radiant, so a
+#: no-Rule-Box test would fail OPEN and over-credit."* That is a claim about the POOL, and it was
+#: never measured against it: a sweep of all 1061 Pokémon bodies finds no Radiant, V, VMAX, VSTAR or
+#: V-UNION card, so *"has a Rule Box"* and `CardStat.is_ex_body` are the same 151 bodies — exact,
+#: not fail-open. The gate now lives in `CardStat.holderNoRuleBox` and the sweep is a test
+#: (`tests/scouting/test_tool_holder_facts.py`) that fails the day the pool gains one.
 DELIBERATELY_UNMODELLED_TOOLS = {
     1156: "REACTIVE — draws 2 when the holder is damaged in the Active Spot",
     1161: "REACTIVE — moves an Energy off the attacker when the holder is damaged",
@@ -513,9 +521,6 @@ DELIBERATELY_UNMODELLED_TOOLS = {
     1163: "REACTIVE — end-of-turn Energy from discard while the holder is Active",
     1172: "REACTIVE — the opponent takes 1 fewer Prize for KOing the holder",
     1180: "EXOTIC — grants an attack printed on the Tool itself, to one named body",
-    1175: ("GATED on a holder predicate we cannot decide — +30 vs {ex} only if the holder has no "
-           "Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test "
-           "would fail OPEN and over-credit"),
 }
 
 #: Why the whole group stays out. Pricing *"when this body is attacked, X happens"* needs a term
@@ -556,6 +561,10 @@ def tool_static_reads(card: dict) -> list[str]:
     fam = _parse_tool_holder_family(c)
     if fam and got:
         got.append(f"holderNameFamily ({fam})")
+    # The second holder gate (Issue #345), reported on the same terms as the family: a gate is only
+    # meaningful next to an amount it gates, so it is listed only when something else was recovered.
+    if _parse_tool_holder_no_rule_box(c) and got:
+        got.append("holderNoRuleBox")
     return got
 
 # ── exposure ──────────────────────────────────────────────────────────────────────────────────────

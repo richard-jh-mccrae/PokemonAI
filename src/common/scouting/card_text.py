@@ -15,6 +15,19 @@ amount and its gate are parsed together and travel together. (2) The doctrine is
 for BENEFITS, and the safe direction INVERTS for a cost: missing a penalty (Gravity
 Gemstone's ``{C}`` MORE to retreat) makes a board look cheaper than it is, so a
 cost-parser errs by matching MORE readily, not less. Both are called out where they apply.
+
+**The line (1) actually draws is DECIDABILITY, not name-ness** (Issue #345). A holder condition may
+be carried when the pool lets us answer it exactly about a body already in play; Brave Bangle's *"if
+the Pokémon this card is attached to doesn't have a Rule Box"* qualifies (``CardStat.holderNoRuleBox``)
+and its predicate is pool-swept, not assumed. What stays refused is a condition about state the
+record cannot see — a coin, a hidden zone, or a board sweep.
+
+Two boost Tools stay at 0 under that line, and are named so neither reads as an oversight. **Binding
+Mochi** (1162) gates on *"the Poisoned Pokémon this card is attached to"* — a special condition, live
+board state a static ``CardStat`` does not carry at all, and Issue #260's ruled omission besides.
+**Light Ball** (1178) gates on *"the Pikachu {ex} this card is attached to"* — decidable in
+principle, but it is a named-CARD gate rather than an owner family, so carrying it means a third
+holder-gate vocabulary for a card no shipped deck runs. Neither is in any of the five agent decks.
 """
 from __future__ import annotations
 
@@ -669,6 +682,50 @@ _BOOST_TOOL_RE = re.compile(
     r"(?:cost (?:\{C\})+ less and )?do (\d+) more damage to your "
     r"opponent.s Active Pok.mon( \{ex\})?")
 
+# The SECOND holder gate (Issue #345): Brave Bangle (1175), the pool's only Tool whose boost is
+# conditioned on a property of the holder's own RULES TEXT rather than of its name — "If the Pokémon
+# this card is attached to doesn't have a Rule Box, the attacks it uses do 30 more damage to your
+# opponent's Active Pokémon {ex}". Two things about it are deliberate.
+#
+# (1) It is a THIRD sentence shape, not a near-miss on a character class: the subject is "the attacks
+# it uses" behind a leading conditional, so neither existing alternative can be widened onto it
+# without also swallowing conditions the parser must keep refusing.
+#
+# (2) The gate and the amount share ONE pattern string. `_NO_RULE_BOX_GATE` is concatenated into the
+# value regex rather than restated, so there is no text the amount can match while the gate does not
+# — the drift that would emit an ungated +30 and manufacture phantom lethals on every `ex` body in
+# the deck that ships this card. Issue #213's "one fact, one parse" rule, enforced structurally.
+#
+# The gate is DECIDABLE here, which is why it is carried rather than refused. Over this pool "has a
+# Rule Box" and `CardStat.is_ex_body` are the same set — swept and pinned by
+# tests/scouting/test_tool_holder_facts.py, which fails the day a Radiant / V / VSTAR body arrives —
+# and the repo already reads the predicate that way twice, at `fetch_closure._pokemon_body_matches`
+# (Poké Pad's `no_rule_box`) and `cgpy.chain._card_matches` (`noRuleBox`, the engine twin's answer).
+_NO_RULE_BOX_GATE = r"If the Pok.mon this card is attached to doesn.t have a Rule Box,"
+_HOLDER_NO_RULE_BOX_RE = re.compile(_NO_RULE_BOX_GATE)
+_BOOST_TOOL_NO_RULE_BOX_RE = re.compile(
+    _NO_RULE_BOX_GATE + r" the attacks it uses do (\d+) more damage to your "
+    r"opponent.s Active Pok.mon( \{ex\})?")
+
+
+def _parse_tool_holder_no_rule_box(card) -> bool:
+    """Does this Tool restrict its static modifiers to a holder with NO Rule Box
+    (``CardStat.holderNoRuleBox``)? True for Brave Bangle (1175), False for every other card.
+
+    The Rule-Box sibling of ``_parse_tool_holder_family``, and the same contract: ONE parse per card,
+    stored once, never re-read by a value parser. The consumer evaluates it through
+    ``CardStat.applies_to_holder``, so the two holder gates are asked in one place and cannot form
+    separate opinions about the same body.
+
+    A card that MENTIONS a Rule Box without gating its holder on one — Poké Pad's *"search your deck
+    for a Pokémon that doesn't have a Rule Box"* — does not match: the pattern requires the subject
+    to be *"the Pokémon this card is attached to"*."""
+    for text in _skill_texts(card):
+        if _HOLDER_NO_RULE_BOX_RE.search(text):
+            return True
+    return False
+
+
 # The Tool-granted ATTACK-COST discount (`CardStat.attackCostReduction`). Hop's Choice Band is the
 # only card in the pool that grants one and no CardStat field could express it before Issue #306 —
 # justified on its 0.80 meta-weighted copies (the single most-played Tool we face), not on
@@ -707,8 +764,14 @@ def parse_card_damage_boost(card) -> tuple[int, int | None, bool]:
 
     Returns:
         e.g. Premium Power Pro → ``(30, 6, False)``; Maximum Belt → ``(50, None, True)``;
-        Black Belt's Training → ``(40, None, True)``; anything else (incl. the multi-mode
-        Kieran) → ``(0, None, False)``.
+        Black Belt's Training → ``(40, None, True)``; Brave Bangle → ``(30, None, True)``, whose
+        HOLDER condition travels separately in ``CardStat.holderNoRuleBox``; anything else (incl.
+        the multi-mode Kieran) → ``(0, None, False)``.
+
+    Three sentence shapes, three alternatives — the turn-scoped Trainer, the plain Tool, and the
+    Rule-Box-gated Tool. A holder condition never suppresses the amount here; it is parsed alongside
+    it and evaluated by the consumer through ``CardStat.applies_to_holder``, exactly as the owner
+    name family is.
     """
     text = " ".join((s.text or "") for s in (getattr(card, "skills", None) or ())).replace("\n", " ")
     if not text or "Choose 1" in text:
@@ -718,6 +781,9 @@ def parse_card_damage_boost(card) -> tuple[int, int | None, bool]:
         return (int(m.group(2)), _TYPE_LETTER.get(m.group(1)) if m.group(1) else None,
                 bool(m.group(3)))
     m = _BOOST_TOOL_RE.search(text)
+    if m:
+        return (int(m.group(1)), None, bool(m.group(2)))
+    m = _BOOST_TOOL_NO_RULE_BOX_RE.search(text)
     if m:
         return (int(m.group(1)), None, bool(m.group(2)))
     return (0, None, False)

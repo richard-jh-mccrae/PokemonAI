@@ -71,7 +71,9 @@ LIGHTNING, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 4, 5, 6, 7, 9
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 MEGA_STARMIE, GOUGING_FIRE, CRUSTLE, BRAVIARY = 1031, 46, 345, 1008
 ALAKAZAM = 743
+SLOWKING, BRAVE_BANGLE = 163, 1175
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
+SUPER_PSY_BOLT = 214
 JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
 HEAT_BLAST, BLAZE_BLITZ, POWERFUL_HAND = 946, 947, 9743
 E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
@@ -110,6 +112,13 @@ _STATS = {
                        energyType=PSYCHIC, weakness=DARKNESS, resistance=FIGHTING,
                        maxDamage=0, maxDamageCost=1, minAttackCost=1, minCostDamage=0,
                        handSizeDamage=20, attacks=(POWERFUL_HAND,), cardType=0),
+    # ── Issue #345's cast: a boost that arrives ATTACHED, and a holder its gate can refuse ─────
+    SLOWKING: CardStat(SLOWKING, name="Slowking", hp=120, evolvesFrom="Slowpoke",
+                       energyType=PSYCHIC, weakness=DARKNESS, resistance=FIGHTING, retreatCost=3,
+                       maxDamage=120, maxDamageCost=3, minAttackCost=2, minCostDamage=0,
+                       attacks=(SUPER_PSY_BOLT,), cardType=0),
+    BRAVE_BANGLE: CardStat(BRAVE_BANGLE, name="Brave Bangle", cardType=2, damageBoost=30,
+                           damageBoostVsEx=True, holderNoRuleBox=True),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
@@ -136,6 +145,8 @@ _ATTACKS = {
     POWERFUL_HAND: AttackStat(POWERFUL_HAND, damage=0, cost=1, energyTypes=(PSYCHIC,),
                               scaleVar="atk_hand", scalePerUnit=20,
                               ignoresWeakness=True, ignoresResistance=True, ignoresEffects=True),
+    SUPER_PSY_BOLT: AttackStat(SUPER_PSY_BOLT, damage=120, cost=3,
+                               energyTypes=(PSYCHIC, PSYCHIC, COLORLESS)),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 
@@ -173,8 +184,15 @@ def _combat():
                       functions=CardFunctions({}), transients=None, effects=CardEffects({}))
 
 
-def _poke(cid, *, hp, energies=(), serial=1, damage=0):
-    return {"id": cid, "hp": hp - damage, "energies": list(energies), "serial": serial}
+def _poke(cid, *, hp, energies=(), serial=1, damage=0, tools=()):
+    """One in-play body. ``tools`` is the raw ``tools`` key `_SideBase.tool_ids` reads (Issue #260's
+    homed `attached_tools` zone) — the route by which a Tool's boost, unlike a Trainer's, reaches a
+    snapshot as BOARD state rather than through the turn tracker. Defaults to empty, so every
+    existing board in this file is byte-identical."""
+    body = {"id": cid, "hp": hp - damage, "energies": list(energies), "serial": serial}
+    if tools:
+        body["tools"] = [{"id": t} for t in tools]
+    return body
 
 
 def _player(*, active=None, bench=(), hand=(), discard=(), prize=4, deck_count=20):
@@ -1183,6 +1201,98 @@ def test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neit
     assert _boosts_of(plain_defender) == (BLACK_BELT,)
     assert _reach(plain_defender)[1] == 100, "130 − 30 Resistance, and the {ex} gate refuses the 40"
     assert _threat_of(plain_defender) == 0.0
+
+
+# ── an ATTACHED boost Tool, and the HOLDER gate that decides it (Issue #345) ──────────────────────
+#
+# Every case above supplies the boost through the turn tracker, which is how a Trainer PLAY reaches a
+# snapshot. A Tool's boost takes the other route — it is board state, read off the holder — and it
+# carries a condition the tracker's boosts never do: `applies_to_holder`. Brave Bangle (1175) is the
+# card that makes that route load-bearing, because `slowking` runs it alongside five Rule-Box bodies
+# it must NOT reach.
+#
+# Card text verified at `data/EN_Card_Data.csv`, Card ID 1175, WHT 80, Pokémon Tool: *"If the Pokémon
+# this card is attached to doesn't have a Rule Box, the attacks it uses do 30 more damage to your
+# opponent's Active Pokémon {ex} (before applying Weakness and Resistance). (Pokémon {ex}, Pokémon
+# {V}, etc. have Rule Boxes.)"* — TWO gates on one +30: a HOLDER gate (no Rule Box) and the same
+# defender-{ex} gate Black Belt's Training carries. Slowking (163, `slowking`'s own attacker, Stage 1
+# from Slowpoke, HP 120, {P}) has no Rule Box, and its Super Psy Bolt `{P}{P}●` prints 120.
+
+
+#: The two holders these cases straddle, each with the Energy that funds its own real attack —
+#: Slowking has no Rule Box (Super Psy Bolt `{P}{P}●`), Mega Lucario ex has one (Aura Jab `{F}`).
+#: Carried as data rather than branched on inside the board builder, so the only thing that differs
+#: between the two arms is the holder itself.
+_HOLDERS = {SLOWKING: (120, [E_P, E_P, E_P]), MEGA_LUC: (340, [E_F])}
+
+
+def _slowking_board(their_active, *, bangle=True, holder=SLOWKING):
+    """MY ``holder`` Active carrying Brave Bangle (or not) against ``their_active``, with the turn's
+    attach already spent so reachability is exactly what is on the board."""
+    hp, energies = _HOLDERS[holder]
+    return _model(
+        _player(active=_poke(holder, hp=hp, energies=energies,
+                             tools=(BRAVE_BANGLE,) if bangle else ()), prize=4),
+        _player(active=their_active, prize=4),
+        energy_attached=True)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_an_attached_boost_tool_crosses_the_breakpoint_its_holder_qualifies_for():
+    """The end-to-end claim: a Tool's +30 reaches `threat` by the same path a played Trainer's does.
+
+    120 is 30 short of a Mega Starmie ex chipped to 150 remaining HP (its printed HP is 330) and the
+    Bangle is exactly 30 — so the Knock Out is there or it is not, with nothing in between for a
+    partly-wired path to land on. The `{ex}` half of the gate is satisfied by `megaEx`
+    (`docs/rulebook.txt` L337), which is the same reading
+    `test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neither` pins for the
+    tracker-supplied boost — the two suppliers must not disagree about one card's scope."""
+    defender = _poke(MEGA_STARMIE, hp=150, serial=9)
+    bare = _slowking_board(defender)
+    bare_no_tool = _slowking_board(defender, bangle=False)
+    assert _boosts_of(bare_no_tool) == (), "no Tool attached, no boost in the context"
+    assert _boosts_of(bare) == ((30, None, True),), "the Tool's triple, gate included"
+    assert _reach(bare_no_tool)[1] == 120, "Super Psy Bolt alone is 30 short of 150"
+    assert _reach(bare)[1] == 150, "+30 before Weakness and Resistance"
+    assert _threat_of(bare_no_tool) == 0.0 < _threat_of(bare)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_the_HOLDER_gate_refuses_the_same_tool_on_a_body_that_has_a_Rule_Box():
+    """The gate this issue exists for, as a ONE-FACT control: same Tool, same defender, same board —
+    only whether the Bangle is attached changes — run on a holder that HAS a Rule Box.
+
+    Mega Lucario ex is `megaEx`, so the card's condition is not met and the +30 must not appear. An
+    ungated read would put a phantom 30 on precisely the deck's biggest attackers, which is a
+    strictly worse error than the silent zero this issue replaced: it manufactures lethals rather
+    than missing them — and this board is exactly that case, which is why it is the one chosen. With
+    one `{F}` attached only Aura Jab is affordable, so the reach is 130 against 150 remaining HP: no
+    Knock Out. Drop the holder gate and the Bangle lifts it to 160, claiming one that is not there."""
+    defender = _poke(MEGA_STARMIE, hp=150, serial=9)
+    ruled_out = _slowking_board(defender, holder=MEGA_LUC)
+    without = _slowking_board(defender, holder=MEGA_LUC, bangle=False)
+    assert _boosts_of(ruled_out) == (), "a Rule-Box holder gets nothing from this Tool"
+    assert _reach(ruled_out) == _reach(without), "attaching it must move no number at all"
+    assert sv.state_value(ruled_out) == sv.state_value(without)
+    # …and the docstring's arithmetic, asserted rather than described: the board really is one the
+    # gate decides. 130 falls short of 150, and the ungated 160 would not — so a build that dropped
+    # the gate fails the reach assertion above, it does not merely score differently.
+    assert _reach(ruled_out)[1] == 130 < 150 < 130 + 30
+    assert _threat_of(ruled_out) == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_the_attached_tools_defender_gate_is_read_too_so_both_conditions_must_hold():
+    """The second gate on the same +30. Against Larry's Braviary — not an `{ex}` — the boost is in
+    the context and still contributes nothing, so a build that honoured the holder gate while
+    dropping the defender gate fails here rather than passing on the first case alone.
+
+    Braviary's Resistance is {F} (`docs/rules.md` §5, a flat −30) and this attacker is {P}, so no
+    Weakness/Resistance leg is in play to confuse the reading: 120 is 120."""
+    plain = _slowking_board(_poke(BRAVIARY, hp=130, serial=9))
+    assert _boosts_of(plain) == ((30, None, True),), "the boost IS present — the gate is what refuses"
+    assert _reach(plain)[1] == 120, "the {ex} gate refuses the 30 against a non-{ex} defender"
+    assert _threat_of(plain) == 0.0
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")

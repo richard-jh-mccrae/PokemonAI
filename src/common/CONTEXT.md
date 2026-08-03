@@ -133,22 +133,37 @@ _Avoid_: provider (bare — say Stat Provider), card database, CardStat/AttackSt
 out, not the seam), Function Tag / Effect Clause (behavioral JSON tables — separate, offline-built feeds)
 
 **Holder Gate**:
-The condition a Pokémon Tool's static modifier places on the body it is attached to — carried as
-`CardStat.holderNameFamily` and evaluated, always, through `CardStat.applies_to_holder(holder)`.
-Today's only vocabulary is the **owner name family**: Cynthia's Power Weight grants +70 HP to *"the
-Cynthia's Pokémon this card is attached to"*, Hop's Choice Band its `{C}` discount and +30 to *"the
-Hop's Pokémon"*. That is decidable rather than a guess, because `docs/rules.md` §9 makes the owner
-prefix part of the printed card name (`Iono's Tadbulb` ≠ `Tadbulb`), so membership is a prefix test
-on a holder already in play — not the board-sweep predicate class the retreat-grant parsers refuse
-(N's Castle's "N's Pokémon **in play**", both players'). The amount and its gate are parsed once and
-travel together: a consumer that reads `hpBonus` / `damageBoost` / `attackCostReduction` must ask
-`applies_to_holder` for the candidate body, and None means *unconditional*, so an unrestricted Tool
-behaves exactly as it did before the concept existed. Fail-CLOSED on an unreadable holder.
-_(Issue #306, built 2026-08-02.)_
+The condition a Pokémon Tool's static modifier places on the body it is attached to — carried on
+`CardStat` and evaluated, always, through `CardStat.applies_to_holder(holder)`. **Two** conditions
+today, ANDed there, both decidable about a body already in play:
+* the **owner name family** (`holderNameFamily`) — Cynthia's Power Weight grants +70 HP to *"the
+  Cynthia's Pokémon this card is attached to"*, Hop's Choice Band its `{C}` discount and +30 to
+  *"the Hop's Pokémon"*. Decidable because `docs/rules.md` §9 makes the owner prefix part of the
+  printed card name (`Iono's Tadbulb` ≠ `Tadbulb`), so membership is a prefix test on a name we hold.
+* the **no-Rule-Box** condition (`holderNoRuleBox`) — Brave Bangle's +30 lands only if *"the Pokémon
+  this card is attached to doesn't have a Rule Box"*. A property of the holder's own rules text, not
+  of its name, which is why it could not ride the family field. Decidable because over THIS pool the
+  Rule-Box bodies are exactly the ex-rule ones: `docs/rulebook.txt` also names Radiant (L364) and
+  V / V-UNION (L391-392), and a sweep of all 1061 bodies finds none of them, so `is_ex_body` answers
+  it exactly — the same reading `fetch_closure` already uses for Poké Pad's `no_rule_box` and `cgpy`
+  for `noRuleBox`. Pinned by that sweep, so the day a Radiant card arrives the test fails rather than
+  the boost quietly over-crediting.
+
+What is NOT a Holder Gate is a condition about state the record cannot see: a coin, a hidden zone,
+the board-sweep predicate class the retreat-grant parsers refuse (N's Castle's "N's Pokémon **in
+play**", both players'), or a special condition on the holder (Binding Mochi's *"the Poisoned Pokémon
+this card is attached to"* — live board state, which a static `CardStat` does not carry). The line is
+**decidability**, not name-ness.
+
+The amount and its gate are parsed once and travel together: a consumer that reads `hpBonus` /
+`damageBoost` / `attackCostReduction` must ask `applies_to_holder` for the candidate body, and no
+gate means *unconditional*, so an unrestricted Tool behaves exactly as it did before the concept
+existed. Fail-CLOSED on an unreadable holder.
+_(Issue #306, built 2026-08-02; second condition Issue #345, 2026-08-03.)_
 _Avoid_: name match / substring (it is a prefix test on the printed name, and a substring would claim
 `Amulet of Hope` for the `Hop's` family), attacker-type gate (`damageBoostType` — a different
 condition, on the attacker's Energy type), `{ex}` gate (`damageBoostVsEx` — a condition on the
-DEFENDER, not the holder)
+DEFENDER, not the holder; Brave Bangle carries BOTH, and they are not the same gate)
 
 **Function Tag**:
 A coarse label for a *behavioral* function a card performs (`draw`, `search`, `energy_accel`,
@@ -173,7 +188,8 @@ opponent can bench the partner first). The card-tier sibling for Trainers is the
 fact** (`CardStat.damageBoost` — Premium Power Pro / Maximum Belt: this-turn plays tracked
 match-scoped by `TurnBoostTracker`, attached Tools read off the holder, both priced before W/R and
 crossing-checked by the boost-lethal tactical; a Tool whose boost carries a **Holder Gate** —
-Hop's Choice Band — contributes only on a holder inside its family). Both halves reach the
+Hop's Choice Band's owner family, Brave Bangle's no-Rule-Box condition — contributes only on a
+holder that satisfies it). Both halves reach the
 State Value scalar too, by the same route as every other Formula variable: `_SideBase.damage_boosts`
 → `SideFacts` → the context's `atk_boosts` key → `threat`'s reachability gate. These cards carry
 **no Effect Clause at all** — the whole effect is the parsed triple — so they are invisible to every
