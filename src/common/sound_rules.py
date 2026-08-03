@@ -167,6 +167,18 @@ WHITELIST: tuple[SoundRule, ...] = (
                "typed provisional and this one is not.",
     ),
     SoundRule(
+        id="prize-lethality",
+        entry="`state_value._predicted_loss` case 1 (`LOSS_PRIZES` prize lethality, ADR-0064 "
+              "Amendment B)",
+        type=STRUCTURAL,
+        fact="a body whose Knock Out gives the opponent their last prize",
+        reason="A SECOND win condition (`docs/rules.md` §7 case 1: *you win when you take your last "
+               "prize card*), guarded by the same term and the same clock as case 2 — a DIFFERENT "
+               "fact, which is why it is its own entry rather than a reworded one. Why it can only "
+               "live on the terminal term, and why consulting their prize count there is not a "
+               "disjointness breach, are ADR-0064 Amendment B's to argue. Binary for the POC.",
+    ),
+    SoundRule(
         id="information-before-commitment",
         entry="`_finish_turn_last` — the information-before-commitment boundary",
         type=STRUCTURAL,

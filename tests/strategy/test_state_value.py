@@ -40,9 +40,10 @@ from common.strategy.combat import CombatMath
 
 # ── the fixture board ─────────────────────────────────────────────────────────────────────────────
 
-COLORLESS, GRASS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 5, 6, 7, 9
-DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
+COLORLESS, GRASS, FIRE, WATER, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 3, 5, 6, 7, 9
+DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC, MEGA_STARMIE = 121, 112, 677, 678, 1031
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
+JETTING_BLOW, NEBULA_BEAM = 9131, 9132
 E_R, E_P, E_F, E_D = 2, 5, 6, 7
 #: The bench-GATED pair, and the ONE the shipped decks actually expose (Issue #287). Verified at
 #: source: Solrock (676) Basic HP 110 {F}, weak {G}, retreat 1 — Cosmic Beam ``{F}`` 70, *"If you
@@ -85,6 +86,17 @@ _STATS = {
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
+    #: Added for ADR-0064 Amendment B's BENCH leg (Issue #283) — the only opponent in this fixture
+    #: whose attack reaches my Bench at all. Verified at source, and carried WHOLE rather than
+    #: trimmed to the one attack the test needs: Mega Starmie ex (1031) Stage 1 HP 330, {W},
+    #: `Mega Pokémon ex` -> 3 prizes, evolvesFrom **Staryu**, Jetting Blow ``{W}`` 120 *"also does
+    #: 50 damage to 1 of your opponent's Benched Pokémon"* and Nebula Beam ``●●●`` 210. A fixture
+    #: that quietly drops the second attack would carry a `maxDamage` the real card contradicts.
+    #: Referenced by exactly one test, so no existing assertion moves.
+    MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
+                           energyType=WATER, evolvesFrom="Staryu", maxDamage=210, maxDamageCost=3,
+                           minAttackCost=1, minCostDamage=120,
+                           attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
@@ -100,6 +112,8 @@ _ATTACKS = {
     # through the oracle's "max" bound and must not be reachable through this read.
     CONJOINED_BEAMS: AttackStat(CONJOINED_BEAMS, damage=130, cost=2,
                                 energyTypes=(PSYCHIC, PSYCHIC), damageMax=280),
+    JETTING_BLOW: AttackStat(JETTING_BLOW, damage=120, cost=1, energyTypes=(WATER,), benchSnipe=50),
+    NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3, energyTypes=(COLORLESS,) * 3),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 #: `mega_lucario`'s single-prize core beside the Mega line — the deck the Solrock cases score
@@ -376,6 +390,167 @@ def test_a_predicted_loss_outscales_every_other_family_combined():
     merely_awful = sv.survival([sv.ExposedBody(3.0, 1)] * sv._MAX_BODIES)
     assert doomed < merely_awful
 
+    # …and end-to-end through the scalar on a board that is PRIZE-lethal rather than bench-empty
+    # (ADR-0064 Amendment B) — the second case must inherit the same dominance, not merely the same
+    # constant. Every positional family is free to be as favourable as this fixture allows; the
+    # scalar still has to rank the lethal board below the identical board they cannot yet win on.
+    lethal = _lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)], their_prizes=3)
+    survivable = _lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)], their_prizes=4)
+    assert sv.state_value(survivable) - sv.state_value(lethal) > sv.POSITIONAL_MAX
+
+
+# ── case 1: prize lethality (ADR-0064 Amendment B, Issue #283) ────────────────────────────────────
+#
+# `docs/rules.md` §7 case 1 — *they take their last prize card*. The positional families price "they
+# are at 3 and my Active is a 3-prize Mega" identically to "they are at 6": `survival` owns
+# `prize_at_risk`, `prize_race` owns the counts, and the double-counting rule forbids the two of
+# them to form the product between them. The terminal term is the one licensed to.
+#
+# Every board below carries a NON-EMPTY Bench, so case 2 is structurally out of the picture and only
+# case 1 can be moving the number. The doomed reading is the fixture's own: my Mega Lucario ex at 60
+# HP under a fully-funded Phantom Dive 200.
+
+
+#: Half of the terminal charge — the epsilon every assertion below uses to say *"this gap is the
+#: terminal term firing, not positional drift"*. Named rather than repeated inline because a bare
+#: `LOSS_PRIZES / 2.0` reads as arithmetic when what it means is a THRESHOLD, and the whole point of
+#: `LOSS_PRIZES` being DERIVED is that no positional sum can cross it.
+_TERMINAL_JUMP = sv.LOSS_PRIZES / 2.0
+
+
+def _survival_of(me, opp) -> float:
+    """The `survival` leg alone, off a full `state_value` evaluation of the two player dicts.
+
+    Read through `working` rather than by calling `sv.survival` directly, deliberately: the point of
+    every case below is what the SCALAR does with the board, and a test that composed the family by
+    hand could pass while `_terms` fed it something else."""
+    working: dict = {}
+    sv.state_value(_model(me, opp), working=working)
+    return working["survival"]
+
+
+def _bench_riolu(serial=2):
+    """A benched 1-prize soak — it removes case 2 from the picture and can never fire case 1."""
+    return _poke(RIOLU, hp=80, serial=serial)
+
+
+def _survival_at(**kw) -> float:
+    """`survival` on the `_lucario_board` fixture with a Bench, varied by `my_hp` / `their_prizes`."""
+    working: dict = {}
+    sv.state_value(_lucario_board(bench=[_bench_riolu()], **kw), working=working)
+    return working["survival"]
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_the_same_doomed_body_is_a_LOSS_at_three_prizes_and_merely_exposed_at_six():
+    """The headline: identical body, identical clock, only THEIR prize count differs.
+
+    My Mega Lucario ex is worth 3 prizes (`megaEx`, `docs/rules.md` §6) and is doomed at 60 HP. At 3
+    prizes remaining that Knock Out yields exactly the 3 they need and the match ends; at 6 it is an
+    expensive body and no more. Before this term the two scored the same."""
+    assert _survival_at(my_hp=60, their_prizes=3) < _survival_at(my_hp=60, their_prizes=6) - _TERMINAL_JUMP
+    # The boundary is `>=`, not `>`: 3 prizes for a 3-prize body ends it, 4 does not.
+    assert _survival_at(my_hp=60, their_prizes=4) == _survival_at(my_hp=60, their_prizes=6)
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_the_mega_lucario_prize_trade_shape_a_one_prize_body_is_not_a_loss():
+    """`mega_lucario`'s CRITICAL doctrine (its STRATEGY.md §4, user-ruled 2026-06-29): interleave a
+    1-prize body between Mega exposures, because *"Solrock → Lucario → Lucario"* hands them 7 and
+    loses while *"Solrock → Lucario → Hariyama → Lucario"* buys the turn that wins.
+
+    Same clock, same 3 prizes remaining: the 3-prize Mega Active is a predicted loss and a 1-prize
+    Riolu Active is not. **Exactly when** is the other half of the doctrine and is asserted too — at
+    6 prizes the separation vanishes, so the interleave is not a standing preference this term
+    manufactures. It appears only once their count makes the Mega's loss lethal."""
+    def _survival(active, their_prizes):
+        return _survival_of(
+            _player(active=active, bench=[_bench_riolu()], prize=4),
+            _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
+                    prize=their_prizes))
+
+    mega, riolu = _poke(MEGA_LUC, hp=60), _poke(RIOLU, hp=60, serial=3)
+    assert _survival(mega, 3) < _survival(riolu, 3) - _TERMINAL_JUMP
+    # …and the separation is a LETHALITY effect, not a preference: at 6 it is only the prize values.
+    assert _survival(mega, 6) - _survival(riolu, 6) > -_TERMINAL_JUMP
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_prize_lethality_is_BINARY_two_of_their_three_prizes_is_not_a_loss():
+    """Issue #283's explicit POC ruling, and the reason `_predicted_loss` returns a BOOL: a 2-prize
+    `ex` against 3 remaining is worse than the flat exposure above, but it is not a loss and the
+    terminal term must not claim it is. A graded form is the named post-POC question, recorded in
+    `survival`'s `blind_to` so the composer sees the margin as a named zero rather than an accident.
+
+    Dragapult ex is a real 2-prize body (`data/EN_Card_Data.csv` id 121, Rule "Pokémon ex", 320 HP)
+    — a fabricated prize value would contradict `docs/rules.md` §6 in the one test whose whole
+    subject is a prize value."""
+    def _survival(their_prizes):
+        return _survival_of(
+            _player(active=_poke(DRAGAPULT, hp=60), bench=[_bench_riolu()], prize=4),
+            _player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F], serial=9),
+                    prize=their_prizes))
+
+    stat = DictCardStatProvider(_STATS, attacks=_ATTACKS).get(DRAGAPULT)
+    assert stat.prize_value == 2                      # positive control: the body IS worth 2
+    assert _survival(3) == _survival(4)               # 2 < 3 — no terminal claim
+    assert _survival(2) < _survival(3) - _TERMINAL_JUMP     # 2 >= 2 ends the match
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_prize_lethality_needs_the_CLOCK_and_not_only_the_count():
+    """It is a predicted LOSS, not an exposure re-priced. At full 340 HP the same 3-prize Mega
+    out-lives Phantom Dive's 200, so their being at 3 prizes claims nothing — and the guard is
+    ADR-0064's own `evo_min_energy=1`, shared with case 2 verbatim rather than re-derived."""
+    assert _survival_at(my_hp=340, their_prizes=3) == _survival_at(my_hp=340, their_prizes=6)
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_prize_lethality_covers_a_BENCHED_body_through_the_snipe_rider():
+    """§7 case 1 is about a BODY, not the Active Spot. Their Mega Starmie ex's Jetting Blow carries a
+    50 bench-snipe rider (verified at source), so my chipped 3-prize Mega on the BENCH is reachable
+    and its Knock Out takes their last 3 prizes.
+
+    The area is declared to the clock (`my_benched=`), which is what keeps the read honest: the
+    printed 120 lands on the Active only, and the rider is what reaches the Bench. The control is
+    the same board one HP higher — 60 > the 50 rider, so nothing is reachable there and the count
+    alone must claim nothing.
+
+    Their attached ``{W}`` is the right type code for Jetting Blow but is NOT what makes the attack
+    reachable: the ceiling energy policy credits an attack a body can pay under ``attached + 1``
+    attach, and this one costs 1. Said here rather than implied, because a reader would otherwise
+    take the Energy for the load-bearing part and a later change to the policy would look like a
+    change to this test."""
+    def _survival(bench_hp):
+        return _survival_of(
+            _player(active=_poke(RIOLU, hp=80),       # 1 prize — the ACTIVE leg cannot fire
+                    bench=[_poke(MEGA_LUC, hp=bench_hp, serial=2)], prize=4),
+            _player(active=_poke(MEGA_STARMIE, hp=330, energies=[WATER], serial=9), prize=3))
+
+    assert _survival(50) < _survival(60) - _TERMINAL_JUMP
+
+
+@pytest.mark.req("REQ-LOSSRUNG-0001")
+def test_case_2_is_untouched_by_the_new_case_including_where_they_would_overlap():
+    """Issue #283's third test bullet — *"Case 2 (bench-empty) behaviour unchanged"* — asserted
+    rather than left to the pre-existing fixtures, because the two cases now share one function and
+    a caller cannot see which of them fired.
+
+    Three readings of the SAME bench-empty doomed board, at prize counts that respectively cannot
+    fire case 1 (6), sit exactly on its boundary (3) and are inside it (2). Case 2 already charges
+    `LOSS_PRIZES`, the charge is a bool, and so the board scores identically at all three — the new
+    case can neither double-charge nor mask the old one. The `>` control is the same board with a
+    Bench, which must NOT carry the charge at 6."""
+    def _bench_empty(their_prizes):
+        return _survival_of(_player(active=_poke(MEGA_LUC, hp=60), prize=4),
+                            _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
+                                    prize=their_prizes))
+
+    assert _bench_empty(6) == _bench_empty(3) == _bench_empty(2)
+    # positive control: the board IS carrying the case-2 charge, so the equality above is not
+    # three readings of an inert term.
+    assert _survival_at(my_hp=60, their_prizes=6) > _bench_empty(6) + _TERMINAL_JUMP
+
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
 def test_the_bench_slot_price_escalates_so_the_last_slot_is_the_expensive_one():
@@ -607,7 +782,7 @@ def test_benching_a_body_raises_development_and_lifts_the_bench_empty_doom():
     sv.state_value(_lucario_board(my_hp=60), working=alone)
     sv.state_value(_lucario_board(my_hp=60, bench=[_poke(RIOLU, hp=80, serial=2)]), working=benched)
     assert benched["development"] > alone["development"]
-    assert benched["survival"] > alone["survival"] + sv.LOSS_PRIZES / 2.0, (
+    assert benched["survival"] > alone["survival"] + _TERMINAL_JUMP, (
         "the bench-empty doom did not lift when a body arrived to soak the Knock Out")
 
 

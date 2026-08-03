@@ -418,7 +418,11 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("prize_at_risk", "opponent_target_value"),
         composition="Lead plus proximity over the two prize counts. The RACE only — what a body is "
                     "worth when it falls is `survival` (mine) or `threat` (theirs), so the prize "
-                    "VALUES of individual bodies are deliberately absent here.",
+                    "VALUES of individual bodies are deliberately absent here. One reader arrives "
+                    "from the other side and must not mistake it for a breach: `survival`'s "
+                    "terminal `_predicted_loss` ALSO reads `their_prizes_remaining`, as a "
+                    "win-condition TEST rather than as race value (ADR-0064 Amendment B, Issue "
+                    "#283). Lead-and-proximity stays this family's alone.",
         blind_to=(
             "deck_count / deck-out proximity — win condition 3 (`docs/rules.md` §7) is a second "
             "race and no family reads either side's deck count. A mill or a heavy-draw line moves "
@@ -432,14 +436,34 @@ REGISTRY: tuple[TermFamily, ...] = (
         reads=("prize_at_risk", "turns_to_ko_me", "bench_harvest", "predicted_loss"),
         does_not_read=("my_prizes_remaining", "readiness_odds"),
         composition="Sum over MY bodies, both areas, of prize_at_risk x halve(turns_to_ko_me - 1), "
-                    "Bench-Harvest-aware. `_predicted_loss` (-KO_SCORE bench-empty doom, ADR-0064) "
-                    "survives here as a TERMINAL term, outside the positional band by construction. "
-                    "The band is the SUM of the positional caps (readiness 300 + survival 50 + "
-                    "threat 100 + value 40 + line 100 = 590) against KO_SCORE 1000, of which "
-                    "`_LINE_CAP` is the line term's 100 (`strategy/planner.py`) — a loss-avoidance "
-                    "value cannot be both bounded under that band AND un-outbiddable, so it is "
-                    "neither.",
+                    "Bench-Harvest-aware. `_predicted_loss` (ADR-0064) survives here as a TERMINAL "
+                    "term at `LOSS_PRIZES`, outside the positional band by construction. The band "
+                    "is the SUM of the positional caps (readiness 300 + survival 50 + threat 100 + "
+                    "value 40 + line 100 = 590) against KO_SCORE 1000, of which `_LINE_CAP` is the "
+                    "line term's 100 (`strategy/planner.py`) — a loss-avoidance value cannot be "
+                    "both bounded under that band AND un-outbiddable, so it is neither. That "
+                    "terminal term prices BOTH loss conditions of `docs/rules.md` §7 a next-turn "
+                    "Knock Out can reach (ADR-0064 Amendment B, Issue #283): case 2, no Pokémon in "
+                    "play to promote, and case 1, the Knock Out takes their LAST prize. "
+                    "**Case 1 consults `their_prizes_remaining`, and that is not a disjointness "
+                    "breach**, which is stated here because it is the first thing a reader of the "
+                    "tuples will suspect. It is consulted as a WIN-CONDITION TEST and never as race "
+                    "value: does THIS body's prize yield cover what they still need? Lead and "
+                    "proximity stay `prize_race`'s alone and this family prices neither. The "
+                    "registry fact remains `predicted_loss` — already in `reads` — because what "
+                    "enters the scalar is the terminal verdict, not their count; the count is an "
+                    "input to that verdict the way `turns_to_ko_me`'s own inputs are. Splitting the "
+                    "count into a second fact string to make the read visible was considered and "
+                    "rejected: `sound_rules.SCHEDULED_PAIRS` records the same temptation and the "
+                    "same answer — a fact renamed to dodge a detector makes the detector pass "
+                    "VACUOUSLY. Which is exactly why this paragraph exists instead.",
         blind_to=(
+            "the MARGIN below the case-1 win-condition test — a body whose loss hands them 2 of "
+            "the 3 prizes they need is worse than the flat exposure above and prices identically "
+            "to one that hands them none, so moving a body across that margin is a genuine 0 "
+            "delta. BINARY is Issue #283's explicit POC ruling (a terminal term firing on a "
+            "non-terminal fact is the worse error), which makes this an OWNED zero rather than an "
+            "oversight: the graded form is the named post-POC question and nobody prices it today.",
             "special_conditions — Asleep/Paralyzed/Poisoned/Burned change what survives and what "
             "can act, and `snapshot_coverage` lists the zone as OWED (no snapshot home). Curing a "
             "condition therefore prices 0. Owned by T1 (Issue #260) via the completeness contract.",
@@ -781,17 +805,62 @@ def _exposed_bodies(model: "StateModel") -> tuple:
 
 
 def _predicted_loss(model: "StateModel") -> bool:
-    """The bench-empty doom (ADR-0064, whitelisted `predicted-loss`): my only Pokémon is a doomed
-    Active, so the Knock Out ends the match (`docs/rules.md` §7 case 2).
+    """Can the opponent WIN next turn? — the terminal-loss family (whitelisted `predicted-loss` and
+    `prize-lethality`), charged at :data:`LOSS_PRIZES` inside `survival`.
 
-    ``evo_min_energy=1`` is ADR-0064's bounded-pessimism guard carried over verbatim — an
-    evolution-based Knock Out counts only off a pre-evolution that ALREADY carries Energy, because a
-    bare 0-Energy pre-evo is not a credible next-turn game-ender. Dropping it would make this rung
-    fire on boards the incumbent leaves alone, which is a behaviour change disguised as a port."""
-    active = model.mine.active
-    if active is None or not active.hp_remaining or model.mine.bench:
-        return False
-    return model.theirs.reachable_incoming(active.body, evo_min_energy=1) >= active.hp_remaining
+    **Two cases of `docs/rules.md` §7, one clock.** Both are win conditions a next-turn Knock Out
+    reaches, and both fire only when the budgeted Incoming actually Knocks the body Out:
+
+    * **case 2** (ADR-0064) — my Bench is EMPTY under a doomed Active, so there is nothing to
+      promote and the Knock Out ends the match.
+    * **case 1** (ADR-0064 Amendment B, Issue #283) — a doomed body whose Knock Out yields at least
+      the prizes they still need, so the Knock Out takes their LAST prize.
+
+    **Why case 1 is here and could not be anywhere else.** *"They are at 3 prizes and my Active is a
+    3-prize Mega"* is a loss; *"they are at 6"* is an exposure. The fact separating them is the
+    PRODUCT of a body's prize yield and their remaining count, and the double-counting rule splits
+    those across `survival` (owns `prize_at_risk`) and `prize_race` (owns the counts) — so neither
+    positional family may form it, and :func:`registry_gaps` reported nothing because the fact was
+    *claimed*, just by families structurally unable to combine it. This term is the one already
+    licensed to price a game-ending fact outside the positional band. It reads their count as a
+    win-condition TEST and never as race value; both families' `blind_to` say so.
+
+    Case 1 spans BOTH areas, because §7 case 1 is about a BODY rather than the Active Spot: a
+    chipped multi-prize body on the Bench under a live snipe rider ends the game just as finally.
+    The area is declared to the clock (``my_benched=``), which confines a benched body's
+    reachability to the snipe/spread riders and honours Tera bench-immunity (`docs/rules.md` §11)
+    instead of crediting printed damage that cannot land there.
+
+    ``evo_min_energy=1`` is ADR-0064's bounded-pessimism guard carried over verbatim, and shared by
+    both cases — an evolution-based Knock Out counts only off a pre-evolution that ALREADY carries
+    Energy, because a bare 0-Energy pre-evo is not a credible next-turn game-ender. Dropping it for
+    the new case would make this rung fire on boards the incumbent leaves alone, which is a
+    behaviour change disguised as a port.
+
+    The answer is a BOOL rather than a magnitude, which is Issue #283's explicit POC ruling made
+    structural: a body whose loss hands them 2 of the 3 prizes they need is worse than the flat
+    exposure `survival` prices but is not a loss, and grading that is a post-POC question."""
+    mine, theirs = model.mine, model.theirs
+
+    def _doomed(body) -> bool:
+        return bool(body.hp_remaining) and theirs.reachable_incoming(
+            body.body, evo_min_energy=1, my_benched=not body.is_active) >= body.hp_remaining
+
+    # case 2 — the visible bench-empty fact gates the clock read, so a board with a Bench pays
+    # nothing for this leg (a bench body soaks: recoverable, not a loss).
+    active = mine.active
+    if active is not None and not mine.bench and _doomed(active):
+        return True
+
+    # case 1 — the CHEAP prize comparison gates the expensive clock read, and it is false on every
+    # board where they still need more prizes than my biggest body is worth (i.e. almost all of
+    # them), so the extra reads are paid only where the fact can actually fire.
+    #
+    # `prizes_remaining` reads an ABSENT `prize` zone as 0, and 0 is falsy here, which is the fail
+    # direction rather than an accident: a hand-built board that carries no zone makes no claim, and
+    # a board on which they have already taken their last prize has no next turn to predict.
+    left = model.prize_race.opp_prizes_remaining
+    return bool(left) and any(b.prize_value >= left and _doomed(b) for b in mine.bodies)
 
 
 def _reachable_target_values(model: "StateModel") -> tuple:
