@@ -382,6 +382,97 @@ def test_the_clause_KEY_audit_actually_bites_including_inside_a_nested_block():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_two_board_scaled_magnitudes_are_declared_and_stay_TWO_keys():
+    """**Issue #349.** A clause could say *how many* (`amount`) and *how many until* (`to_hand_size`),
+    but not *how many PER*. Two printed shapes were neither, and the issue left it open whether they
+    are one key or two — *"argued either way, but the argument is written down"*. They are two, and
+    this is the argument made executable.
+
+    Card text quoted from the engine dump `tools/meta_tracker/cards.json` (`all_card_data()`), never
+    recalled:
+
+    * `amount_per` — **AGGREGATE**. 1187 Morty's Conviction: *"Draw a card for each of your
+      opponent's Benched Pokémon."* One `amount`, multiplied by a count of bodies that are NOT the
+      clause's targets, landing in ONE destination (my hand). The counted set is not derivable from
+      anything else on the clause, so the key names it: a string.
+    * `each_of` — **DISTRIBUTE**. 1222 Fennel: *"Heal 40 damage from each of your Pokémon."* The FULL
+      `amount` to EVERY body the clause already targets. The set is `target`, which the clause
+      carries, so re-naming it here would be a second body-class namespace beside `target` and
+      `applies_to` — the drift `unknown_zones` exists to prevent, one axis over. A boolean.
+
+    **They cannot share a key, and the failure is not symmetric.** A consumer that read Fennel's
+    distribution as a multiplier would credit my Active `40 × 5 = 200` on a full board instead of 40
+    — an OVER-count on a survival read, which is the KO_SCORE-class phantom this codebase refuses.
+    Nothing on the clause could recover which was meant: `kind` does not decide it either, because
+    the same board set is counted aggregately by one card and distributed over by another (62
+    Koraidon: *"This attack does 30 damage for each of your Ancient Pokémon in play"* against 1085
+    Awakening Drum's draw over that identical set). Aggregate-vs-distribute is ORTHOGONAL to both
+    `kind` and the body set, so it needs its own key rather than a rule for inferring it.
+
+    **Both are PARAMETERS, not `VOCABULARY_KEYS`**, and `applies_to` is the standing precedent rather
+    than a judgement made here: it too is a string-valued body-class selector drawn from a closed set
+    and it too lives in `CLAUSE_PARAMETERS`, because the discriminator is *names a WRITE*, not *is a
+    string*. Neither of these writes anything — the write is still the clause `kind`'s."""
+    for key in ("amount_per", "each_of"):
+        assert key in sc.CLAUSE_PARAMETERS, key
+        assert sc.CLAUSE_PARAMETERS[key].strip(), key
+        assert key not in sc.VOCABULARY_KEYS, (
+            f"{key} names no write — it modifies a magnitude, and the write is still the kind's")
+        assert key not in sc.CLAUSE_WRITES, key
+    # Declared, and actually USED — a parameter no card carries would be untested prose.
+    payload = _compendium()
+    clauses = {cid: cls for cid, cls in sc.clause_lists(payload).items()}
+    carriers = {k: sorted(cid for cid, cls in clauses.items() if any(k in c for c in cls))
+                for k in ("amount_per", "each_of")}
+    assert carriers["amount_per"] == [1085, 1187], carriers["amount_per"]
+    assert carriers["each_of"] == [1089, 1222, 1242], carriers["each_of"]
+    # The shapes, off the artifact. `amount_per` names its set; `each_of` defers to `target`.
+    morty = next(c for c in clauses[1187] if "amount_per" in c)
+    assert morty["kind"] == "draw" and morty["amount"] == 1
+    assert morty["amount_per"] == "their_bench"
+    fennel = next(c for c in clauses[1222] if "each_of" in c)
+    assert fennel["kind"] == "heal" and fennel["amount"] == 40
+    assert fennel["each_of"] is True and fennel["target"] == "any_pokemon", (
+        "`each_of` is a boolean over the clause's OWN `target` — a second body-class namespace "
+        "beside `target` is exactly the drift this key was shaped to avoid")
+    for cid in carriers["each_of"]:
+        assert all(c.get("target") for c in clauses[cid] if c.get("each_of")), (
+            f"card {cid}: `each_of` with no `target` distributes over an unnamed set")
+    # `CLAUSE_PARAMETERS` declares the two MUTUALLY EXCLUSIVE. A declared invariant nothing checks is
+    # the toothless kind, and this one is cheap: a clause carrying both would be claiming its
+    # magnitude is simultaneously multiplied by one set and distributed over another, which is not a
+    # shape any card prints. (`to_hand_size` / `amount` carry the same declared exclusion, asserted
+    # in `tests/cards/test_card_effects.py` — this is that discipline on the new pair.)
+    both = [cid for cid, cls in clauses.items()
+            if any("amount_per" in c and "each_of" in c for c in cls)]
+    assert both == [], f"card(s) {both} carry BOTH board-scaled magnitudes"
+    for key in ("amount_per", "each_of"):
+        assert "utually exclusive" in sc.CLAUSE_PARAMETERS[key], (
+            f"{key} stopped declaring the exclusion the assertion above enforces")
+    # Both walk into the key audit off the real artifact, so a typo in either fails there.
+    keys = set(sc.clause_keys(payload))
+    assert {"amount_per", "each_of"} <= keys
+    assert sc.undeclared_clause_keys(sorted(keys)) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_a_board_scaled_magnitude_key_nobody_declared_is_caught_by_the_walk():
+    """The positive control for the pair above. Green on the real compendium proves nothing unless the
+    same walk goes red on a near-miss — and the near-miss that matters is a plausible MISSPELLING of
+    the two keys this issue mints, since those are the strings an author will next type by hand."""
+    fabricated = {"1": [{"kind": "draw", "amount": 1, "amount_pre": "their_bench"},
+                        {"kind": "heal", "amount": 40, "target": "any_pokemon", "each_off": True}]}
+    assert sc.undeclared_clause_keys(sc.clause_keys(fabricated)) == ["amount_pre", "each_off"]
+    # …and the same walk on the same payload finds the legitimate keys, so the result above is a
+    # measurement rather than a walk that reached nothing.
+    assert {"amount", "target", "kind"} <= set(sc.clause_keys(fabricated))
+    # The correctly-spelled pair must come back CLEAN through the same call — without this the
+    # assertion above is green whether or not the two keys were ever declared, which is the shape of
+    # control that proves nothing.
+    assert sc.undeclared_clause_keys(["amount_per", "each_of"]) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
     """One vocabulary, not two. A write-set naming an invented zone would look like coverage while
     corresponding to nothing the snapshot was ever checked for."""

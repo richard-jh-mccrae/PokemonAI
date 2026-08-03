@@ -312,6 +312,12 @@ N in hand"* is a REFILL, so it is mutually exclusive with `amount`), `amount_if`
 magnitude that REPLACES the first when a named board predicate holds — 17 Ignition Energy's
 `amount_on_evolution` generalised), and `cost_required` (failing to pay makes the card UNPLAYABLE,
 which is a different fact from the cost merely being expensive).
+It grew TWO more with Issue #349's board-scaled magnitudes: `amount_per` AGGREGATES (a string naming
+a board set whose COUNT multiplies `amount`, all of it landing in the clause's single destination —
+1187 Morty's Conviction draws one card per OPPONENT benched body into MY hand) and `each_of`
+DISTRIBUTES (a boolean: the FULL `amount` to EVERY body the clause's own `target` names — 1222 Fennel
+heals 40 from each of mine). They are two keys rather than one on purpose; `snapshot_coverage`'s
+module docstring carries that ruling and its grounds, as it does for `cost`.
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.

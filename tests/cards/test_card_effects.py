@@ -333,10 +333,12 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
                                   "cost": "bottom_2", "cost_required": True},)
     assert eff.clauses(1192) == ({"kind": "draw", "amount": 5, "cost": "discard_hand"},)   # Carmine
     assert "cost_required" not in eff.clauses(1121)[0]                                 # Ultra Ball
-    # Morty's Conviction states NO magnitude: one card per opponent BENCHED Pokemon is a board-scaled
-    # count no clause field expresses, and the fail-closed silence is the point — the flat 3 the
-    # probe measured was a number the card never prints.
-    assert eff.clauses(1187) == ({"kind": "draw", "cost": "discard_1", "cost_required": True},)
+    # Morty's Conviction stated NO magnitude until Issue #349, because "one card per opponent BENCHED
+    # Pokemon" is a board-scaled count no clause field expressed. The fail-closed silence has been
+    # REPLACED by the fact it stood in for — never by the flat 3 the probe measured, a number the card
+    # never prints: `amount: 1` multiplied by the count `amount_per` names.
+    assert eff.clauses(1187) == ({"kind": "draw", "amount": 1, "amount_per": "their_bench",
+                                  "cost": "discard_1", "cost_required": True},)
     # The coin pair — `kind: "draw"`, so the override replaces the measured draw rather than
     # doubling it, with the heads leg as the base and the tails leg as the replacement.
     assert eff.clauses(1223) == ({"kind": "draw", "amount": 5,                          # Harlequin
@@ -354,11 +356,13 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert eff.clauses(1080) == ({"kind": "draw", "amount": 5,                     # Unfair Stamp
                                   "condition": "pokemon_ko_last_turn",
                                   "rider": "shuffle_both_hands"},)
-    # Eight of the 14 now carry the whole printed card. The six that do not are RULED incomplete
-    # with the leg named: four for the SYMMETRIC opponent redraw (a `state_value` term the POC does
-    # not have), Naveen for its optional pre-discard, Morty's for the board-scaled count.
-    assert [eff.covers(c) for c in (1181, 1192, 1199, 1200, 1203, 1208, 1216, 1227)] == ["full"] * 8
-    for still_partial in (1080, 1187, 1213, 1223, 1237, 1239):
+    # NINE of the 14 now carry the whole printed card — Morty's Conviction joined the eight at Issue
+    # #349, when `amount_per` gave its board-scaled count a field. The five that remain are RULED
+    # incomplete with the leg named: four for the SYMMETRIC opponent redraw (a `state_value` term the
+    # POC does not have), and Naveen for its optional pre-discard.
+    assert [eff.covers(c) for c in (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1216, 1227)] == \
+        ["full"] * 9
+    for still_partial in (1080, 1213, 1223, 1237, 1239):
         assert eff.covers(still_partial) == "partial", still_partial
         assert eff.clauses_cover(still_partial) is False, still_partial
     # Two cards OUTSIDE the issue's 14 move with them, because one store cannot hold two verdicts

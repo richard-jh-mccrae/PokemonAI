@@ -387,6 +387,41 @@ def test_clause_heal_stabilizes_when_amount_and_rider_math_check_out():
 
 
 @pytest.mark.req("REQ-PLANNER-0024")
+def test_a_per_body_heal_credits_my_active_the_PRINTED_amount_not_amount_times_bodies():
+    """**Issue #349's live half.** `draw` magnitudes have no consumer; `heal` magnitudes have two —
+    `_heal_candidate` and `_heal_averts_doom` both read `clause["amount"]` and compare the result to
+    the incoming damage. So the board-scaled magnitude key had to land without moving a survival read.
+
+    `each_of` widens the SET a heal reaches, never the amount any one body receives: 1222 Fennel's
+    *"Heal 40 damage from each of your Pokémon"* gives my Active 40, exactly as a single-target
+    Potion-shaped 40 would. That is why the key is safe here — and why it had to be a separate key
+    from `amount_per`, which DOES multiply. Read as a multiplier on a 5-body board this clause would
+    credit 200 and manufacture a KO_SCORE-class phantom survival.
+
+    Asserted in both directions on one harness, so the green is a measurement rather than a line that
+    never fired: 40 does not clear the 210 Incoming from 160 HP and the planner stands down **whether
+    or not `each_of` is present**; the same board with the multiplied amount it would wrongly imply
+    (200 → 360, capped to 330) does fire. If `each_of` ever started scaling the Active's credit, the
+    first assertion would go green-to-red into the third's behaviour."""
+    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[POTION, WATER], prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(JETTING), opt(END)], current=board)
+    per_body = _pilot(effects=_effects({POTION: [
+        {"kind": "heal", "amount": 40, "target": "any_pokemon", "each_of": True}]}))
+    assert per_body._board(obs).active_doomed
+    assert per_body.explain(obs).planned is None          # 160 + 40 = 200 <= 210: no stabilise
+    plain = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 40}]}))
+    assert plain.explain(obs).planned is None             # …and `each_of` changed nothing
+    # The positive control: the credit `each_of` must NOT produce (40 x 5 bodies) does fire here, so
+    # the two stand-downs above are the key staying inert rather than the harness being unable to plan.
+    multiplied = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 200}]}))
+    planned = multiplied.explain(obs).planned
+    assert planned is not None and planned.goal == "stabilize_then_ko"
+
+
+@pytest.mark.req("REQ-PLANNER-0024")
 def test_clause_heal_stands_down_when_the_amount_cannot_stabilize():
     # Potion heals 30: 160+30=190 <= 210 Incoming — heal wouldn't save Active, don't spend it
     pilot = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 30}]}))

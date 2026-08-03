@@ -8,7 +8,11 @@
 clauses, a missing file degrades to empty, O(1) lookup per decision. Wired into the Pilot
 via `Pilot(effects=...)`. Clause kinds:
   - `heal`  (probe-measured + curated): amount/rider/restriction/condition — `planner._heal_candidate` (ADR-0032 4b).
-  - `draw`  (probe-measured): the top-deck draw count of a Trainer.
+  - `draw`  (probe-measured): the top-deck draw count of a Trainer. A magnitude may also be
+    BOARD-SCALED (Issue #349): `amount_per` multiplies `amount` by the COUNT of a named board set,
+    `each_of` applies the full `amount` to EVERY body the clause's `target` names. Why they are two
+    keys is ruled in `snapshot_coverage`'s module docstring; why `planner._heal_candidate` reads
+    NEITHER is ruled in its own.
   - `fetch` (curated override-only, `effect_overrides.json`): a tutor/recycle PREDICATE the boolean
     Function Tag can't carry — `{target, zone, energy_type?, no_rule_box?, hp_max?}` (Fighting Gong's
     {F}-lock is `energy_type: 6`). Read by the gamble fetch-closure (`planner._fetch_reaches_slot` /

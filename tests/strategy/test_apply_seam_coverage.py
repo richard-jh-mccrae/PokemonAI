@@ -184,20 +184,25 @@ def test_six_stadiums_reach_the_seam_closed_form_and_the_rest_stay_honestly_miss
 def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do_not(census):
     """**Issue #302's acceptance, as a measurement, in both directions.**
 
-    Eight of the 14 conditional draw Supporters now resolve MODELLED-FULL, and the exposure is
+    NINE of the 14 conditional draw Supporters now resolve MODELLED-FULL, and the exposure is
     concentrated in one of them: 1227 Lillie's Determination is 24 copies across our decks, named by
     three authored doctrines, and its clause stated the card's MAXIMUM (8) on every board where the
     real number is 6.
 
+    The ninth arrived at Issue #349: 1187 Morty's Conviction was one of Issue #302's declared errors
+    — *"the MAGNITUDE is one card per opponent BENCHED Pokemon, a board-scaled count no clause field
+    expresses"* — and `amount_per` is that field. It is the only one of the six that a later
+    sub-issue could close, because its missing leg was VOCABULARY rather than an accepted unknown.
+
     The other direction is the half that matters more, per *no silent caps*. The four SYMMETRIC
     refreshes — Judge, Unfair Stamp, Harlequin, Lucian — did **not** quietly become MODELLED. Each
-    now carries its own leg exactly and stays `partial` on the opponent's shuffle-and-redraw, which
-    needs a `state_value` term that prices their hand and which the seam already refuses as an
-    accepted POC unknown. Naveen keeps its optional pre-discard and Morty's Conviction its
-    board-scaled count. Six declared errors are the deliverable as much as the eight fixes are.
+    carries its own leg exactly and stays `partial` on the opponent's shuffle-and-redraw, which needs
+    a `state_value` term that prices their hand and which the seam already refuses as an accepted POC
+    unknown. Naveen keeps its optional pre-discard. Five declared errors are the deliverable as much
+    as the nine fixes are.
 
-    Both lists are read off the SAME census run through the same predicate, so "eight moved" cannot
-    be an artefact of a walk that reaches nothing — the six that stayed are the positive control."""
+    Both lists are read off the SAME census run through the same predicate, so "nine moved" cannot be
+    an artefact of a walk that reaches nothing — the five that stayed are the positive control."""
     mod, cards, effects, covers, pool = census
     from common.strategy.context import _PLAY
     sites, _aside = mod.census(pool, cards, effects, covers)
@@ -206,17 +211,17 @@ def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do
     assert sorted(draw) == sorted(the_14), sorted(draw)
     assert all(s.kind == _PLAY and s.clauses for s in draw.values())
 
-    fixed = (1181, 1192, 1199, 1200, 1203, 1208, 1216, 1227)
+    fixed = (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1216, 1227)
     for cid in fixed:
         assert draw[cid].fate == seam.MODELLED, (cid, draw[cid].fate)
         assert draw[cid].report_class == mod.FULL, (cid, draw[cid].report_class)
-    # The symmetric four, plus the two whose magnitude no clause field states. Still PARTIAL, still
-    # failing closed, each with the leg it misses quoted in its verdict.
-    for cid in (1213, 1080, 1223, 1237, 1239, 1187):
+    # The symmetric four, plus Naveen's optional pre-discard. Still PARTIAL, still failing closed,
+    # each with the leg it misses quoted in its verdict.
+    for cid in (1213, 1080, 1223, 1237, 1239):
         assert draw[cid].report_class == mod.PARTIAL, (cid, draw[cid].report_class)
         assert draw[cid].fate != seam.MODELLED, (cid, draw[cid].fate)
         assert draw[cid].note.strip(), cid
-    assert set(fixed) | {1213, 1080, 1223, 1237, 1239, 1187} == set(the_14)
+    assert set(fixed) | {1213, 1080, 1223, 1237, 1239} == set(the_14)
 
     # Where the exposure actually is: Lillie's alone is more copies than the whole residual partial
     # table. Read off the census's own deck load rather than restated, so a deck edit moves it.

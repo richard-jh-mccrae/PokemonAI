@@ -1474,7 +1474,17 @@ class PlannerMixin:
         as the fallback (full heal + bounce — Wally's) for a clause-blind Pilot. None when ``cid``
         heals nothing, a restriction excludes my Active (``mega_only`` on a non-Mega), or the
         clause carries a ``condition`` the closed form can't evaluate (fail-closed: don't plan on
-        an amount that might not materialise)."""
+        an amount that might not materialise).
+
+        **The two board-scaled magnitudes (Issue #349) are deliberately NOT read, and that is a
+        ruling rather than an omission** — this asks one question, *what does my ACTIVE end up on?*
+        ``each_of`` widens the SET a heal reaches and never the amount any one body receives, so 1222
+        Fennel's *"Heal 40 damage from each of your Pokémon"* leaves my Active on exactly the 40 a
+        single-target 40 would; reading it as a multiplier would credit 200 on a full board and
+        manufacture a KO_SCORE-class phantom survival. ``amount_per`` DOES multiply, and ignoring it
+        UNDER-credits — this method's own stated error direction, so it stands down from a line that
+        would have worked rather than committing to one that would not. No `heal` clause carries it
+        today; `_heal_averts_doom` carries the same ruling for the same reason."""
         max_hp = getattr(active_stat, "hp", 0) or 0
         attach = 0 if board.energy_attached else self._best_hand_attach_units(board.hand_ids, active_stat)
         for clause in (self.effects.clauses(cid) if self.effects else ()):
@@ -2578,7 +2588,13 @@ class PlannerMixin:
         """WP5 survival: True iff card ``cid`` has a HEAL clause (`card_effects.json`) that lifts my
         doomed Active from ``cur_hp`` ABOVE the ``incoming`` (so next turn's biggest attack no longer
         KOs it) — ``amount: all`` heals to max HP. Only heals whose restriction can target my Active
-        count (`_heal_restriction_ok`); a conditional heal (a `condition` gate) fails closed."""
+        count (`_heal_restriction_ok`); a conditional heal (a `condition` gate) fails closed.
+
+        Issue #349's `each_of` / `amount_per` are deliberately not read, for the reason
+        `_heal_candidate`'s docstring gives at length: this asks only what MY ACTIVE ends up on, and a
+        per-body distribution gives it the same `amount` a single-target heal would. Reading `each_of`
+        as a multiplier would promise a survival the board never delivers; ignoring `amount_per`
+        under-counts, which is the direction this method already says it errs in."""
         max_hp = getattr(astat, "hp", 0) or 0
         for cl in (self.effects.clauses(cid) if self.effects else ()):
             if cl.get("kind") != "heal" or cl.get("condition"):

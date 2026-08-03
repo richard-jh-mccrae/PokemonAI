@@ -497,3 +497,57 @@ This is the second self-filed issue in this batch to carry a claim verification 
 
 `data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json` are untouched by this issue's work
 as well. Verified with `git status`.
+
+## Issue #349 — the board-scaled magnitude: ZERO gate flips, proven against a BEFORE control
+
+**No rows were added to the Flips table, and that is a measurement rather than an omission.** The
+issue mints two clause PARAMETERS (`amount_per`, `each_of`) and re-authors five compendium entries;
+it changes no scoring code at all.
+
+### Gate arithmetic
+
+| gate | before | after |
+|---|---|---|
+| leaf (Discrimination) | 7 unruled, 59 held out, 4 voided; agree 182/249 -> 126/249, 82 picks moved | **identical**, frame for frame and rank for rank |
+| decider (Decision) | — | **PASS**, 0 unruled, 0 ruled; agree 250/347 -> 250/347, **0 picks moved** |
+
+The 7 unruled leaf flips are the batch's standing set and not one of them is this issue's: three are
+Issue #332's (`81904451|0|decision|9`, `83457493|1|decision|20`, `83661649|0|decision|54`), two are
+Issue #329's (`85785606|0|decision|19`, `|21`), one is Issue #351's (`85046350|0|decision|85`), and
+`81906755|1|decision|9` predates the batch entirely — `docs/plans/issue-sequence-339-wave3-packet.md`
+records it at that batch's base, and Issue #280 already ruled it REVERT.
+
+### How the BEFORE control was taken
+
+Not by `git stash`: that shares one stack across worktrees, so a "reverted" measurement can silently
+still be running the diff. Instead the four changed runtime files plus `CONTEXT.md` were checked out
+from the HEAD blobs (`git checkout -- src/...`), and the revert was **proved** by `git diff --stat --
+src/` printing nothing at all before the gate ran. The saved copies were restored afterwards and
+verified by SHA-256, with a CRLF count of 0 on each — this repo has no `.gitattributes` (Issue #367).
+
+### Why zero was the expected result, and what it would have taken to be wrong
+
+`src/common/card_effects.json` is the one live artifact this issue touches. **The Pilot's readers do
+reach some of these cards** — 1242 Community Center is in the census pool and now carries `each_of`
+on a `heal` clause, so `_heal_candidate` reaches it; the earlier phrasing "cards the readers provably
+cannot reach" was wrong and `/code-review`'s Spec axis caught it. The true statement is narrower and
+enough: on every edited card, the value the reader takes is **the correct one**, unchanged by the new
+field.
+
+* 1187 Morty's Conviction gains `amount: 1` on a `draw` clause. The compendium's ONLY `draw`-amount
+  consumer is `planner._draw_engine_window`, gated on `condition == "once_per_turn_ability"` **and**
+  an `evolvesFrom` body — a Supporter satisfies neither.
+* 1222 Fennel and 1242 Community Center gain `each_of` + `target`. `planner._heal_candidate` and
+  `_heal_averts_doom` read `kind` / `condition` / `restriction` / `amount` / `rider` and never
+  `target`, and `each_of` widens the SET rather than the per-body amount — so the Active's credit is
+  the SAME 40 (or 10) either way, and it is the right number, not a number that got lucky. Asserted
+  in both directions, with a positive control, in
+  `test_a_per_body_heal_credits_my_active_the_PRINTED_amount_not_amount_times_bodies`.
+* 1089 Reboot Pod gains an `accel` clause whose `target: "future"` is an unmodelled target class, and
+  `combat._accel_target_ok` returns `False` on exactly that — it funds no body rather than every one.
+* 1085 Awakening Drum is not in the census pool at all.
+
+## Neither baseline was recaptured (Issue #349)
+
+`data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json` are untouched by this issue's work
+as well. Verified with `git status`.

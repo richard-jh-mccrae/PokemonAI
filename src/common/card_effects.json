@@ -61,6 +61,10 @@
 "covers": "full",
 "reason": "fetch up to 3 Stage 1 Pokemon from deck"
 },
+"1085": {
+"covers": "partial",
+"reason": "the magnitude's SHAPE is carried — one card per body, `amount: 1` + `amount_per: my_ancient` (Issue #349) — but the ANCIENT trait the count ranges over has no structural field anywhere in the engine's own all_card_data dump (`stage`/`ex`/`megaEx`/`tera`/`aceSpec` and nothing of that family; the word occurs only inside printed TEXT), so `my_ancient` is recorded and UNDECIDED, exactly as `name_family` is on 1115/1134/1215/1220. A count nothing can evaluate reads as 0, which is the fail-CLOSED direction"
+},
 "1086": {
 "covers": "full",
 "reason": "fetch up to 2 Basics with 70 HP or less straight onto the Bench"
@@ -68,6 +72,10 @@
 "1088": {
 "covers": "full",
 "reason": "the pull AND the `self_switch` it triggers — \"If you do, switch your Active Pokemon with 1 of your Benched Pokemon\" — both legs carried"
+},
+"1089": {
+"covers": "partial",
+"reason": "the per-body attach is carried — one Basic Energy from my discard to EACH body in the set (`each_of` + `amount: 1`, Issue #349) — but the FUTURE trait naming that set has no structural field in the engine dump, exactly as 1085's Ancient does not, so `target: future` is recorded and UNDECIDED. `combat._accel_target_ok` fails CLOSED on an unmodelled target class, so the clause funds no body rather than every one"
 },
 "1092": {
 "covers": "full",
@@ -210,8 +218,8 @@
 "reason": "a top-6 dig taking 2, and `discard_remainder` — discarding the other 4 IS the rest of the card"
 },
 "1187": {
-"covers": "partial",
-"reason": "the discard-1 cost and its playability gate are carried (`cost_required`); the MAGNITUDE is one card per opponent BENCHED Pokemon, a board-scaled count no clause field expresses, so the clause deliberately states NO amount rather than the flat 3 the probe measured"
+"covers": "full",
+"reason": "the discard-1 cost, its playability gate (`cost_required`) and the MAGNITUDE — one card per opponent BENCHED Pokemon, now `amount: 1` scaled by `amount_per: their_bench` (Issue #349). The counted set is decidable: `theirs.bench` is homed and `bench_occupancy` reads its size, so nothing here is recorded-and-undecided"
 },
 "1189": {
 "covers": "full",
@@ -306,8 +314,8 @@
 "reason": "the Team Rocket's NAME family is recorded and UNDECIDED, so the clause deliberately reaches nothing; the go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry"
 },
 "1222": {
-"covers": "partial",
-"reason": "clause heals 40; the card heals EACH of your Pokemon, which a per-target amount does not carry"
+"covers": "full",
+"reason": "heal 40 from EACH of my Pokemon — the whole card. `each_of: true` over `target: any_pokemon` carries the distribution the bare per-target amount could not (Issue #349); `damage_counters` is homed on my Active AND my Bench, so the set it ranges over is fully represented"
 },
 "1223": {
 "covers": "partial",
@@ -363,7 +371,7 @@
 },
 "1242": {
 "covers": "partial",
-"reason": "clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried"
+"reason": "heal 10 gated on a Supporter played, now distributed over EACH of that player's Pokemon (`each_of` + `target: any_pokemon`, Issue #349) — the MAGNITUDE leg is closed. What stays uncarried is the OTHER leg: the card is usable once during EACH player's turn, each healing their OWN bodies, and `symmetric` cannot say that — on all six clauses that carry it (1244/1247/1251/1252/1255 `stadium_static` plus 1260 Risky Ruins' `stadium_trigger`) it means ONE modifier applying to both sides' bodies at once, so setting it here would claim a board-wide heal that also repairs my opponent's board, which the card never does. An alternating per-player grant needs its own field; declared rather than faked"
 },
 "1244": {
 "covers": "full",
@@ -527,6 +535,13 @@
 "amount": 3
 }
 ],
+"1085": [
+{
+"kind": "draw",
+"amount": 1,
+"amount_per": "my_ancient"
+}
+],
 "1086": [
 {
 "kind": "fetch",
@@ -542,6 +557,16 @@
 "kind": "gust",
 "target": "any",
 "rider": "self_switch"
+}
+],
+"1089": [
+{
+"kind": "accel",
+"amount": 1,
+"source": "discard",
+"energy": "basic",
+"target": "future",
+"each_of": true
 }
 ],
 "1092": [
@@ -884,6 +909,8 @@
 "1187": [
 {
 "kind": "draw",
+"amount": 1,
+"amount_per": "their_bench",
 "cost": "discard_1",
 "cost_required": true
 }
@@ -1114,7 +1141,9 @@
 "1222": [
 {
 "kind": "heal",
-"amount": 40
+"amount": 40,
+"target": "any_pokemon",
+"each_of": true
 }
 ],
 "1223": [
@@ -1254,6 +1283,8 @@
 {
 "kind": "heal",
 "amount": 10,
+"target": "any_pokemon",
+"each_of": true,
 "condition": "played_supporter_this_turn"
 }
 ],

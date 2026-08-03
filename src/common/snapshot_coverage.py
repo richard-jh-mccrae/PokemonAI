@@ -60,6 +60,48 @@ This module is the enumeration, as data:
   knows — a typo, or a shape authored ahead of the consumer that was meant to read it — sat in the
   store and priced exactly 0. :func:`undeclared_clause_keys` is its teeth.
 
+  **The board-scaled magnitudes are TWO keys, not one** (Issue #349), and the issue left that open —
+  *"two keys or one, argued either way, but the argument is written down"*. A clause could say how
+  many (`amount`) and how many UNTIL (`to_hand_size`); it could not say how many PER, and two printed
+  shapes are neither:
+
+  - ``amount_per`` **AGGREGATES**. 1187 Morty's Conviction — *"Draw a card for each of your
+    opponent's Benched Pokémon"* — is one `amount` times a count of bodies that are NOT the clause's
+    targets, landing in ONE destination. Nothing else on the clause names that set, so the key does:
+    a string.
+  - ``each_of`` **DISTRIBUTES**. 1222 Fennel — *"Heal 40 damage from each of your Pokémon"* — is the
+    full `amount` to EVERY body `target` already names. A boolean, because re-naming the set here
+    would open a second body-class namespace beside `target` and `applies_to`, which is the drift
+    :func:`unknown_zones` exists to prevent one axis over.
+
+  They cannot share a key. The magnitudes differ by a factor of N and the collapse fails in the
+  OVER-counting direction: read as a multiplier, Fennel credits my Active 200 on a full board instead
+  of 40, which is a KO_SCORE-class phantom survival in `planner._heal_candidate`. Nor can `kind`
+  decide it — the same board set is counted aggregately by one card and distributed over by another
+  (62 Koraidon's *"30 damage for each of your Ancient Pokémon in play"* against 1085 Awakening Drum's
+  draw over that identical set), so aggregate-vs-distribute is ORTHOGONAL to both `kind` and the set.
+
+  Both are PARAMETERS rather than :data:`VOCABULARY_KEYS`, and ``applies_to`` is the standing
+  precedent rather than a call made here: it too is a string-valued body-class selector from a closed
+  set and it too lives in this registry, because the discriminator is *names a WRITE*, not *is a
+  string*. A magnitude modifier writes nothing — the write is still the clause `kind`'s.
+
+  **The consequence is a known gap and it is recorded rather than left silent:** ``amount_per``'s
+  VALUES are unaudited. :func:`undeclared_clauses` walks only :data:`VOCABULARY_KEYS`, so a typo —
+  ``"their_bnech"`` — passes both audits and prices exactly 0, which is this module's own stated
+  failure mode one level down from the axis it just widened. That is not new and not specific to this
+  key: ``target``, ``applies_to``, ``restriction``, ``source`` and ``name_family`` are all
+  string-valued selectors in the same position — thirteen keys carrying 54 distinct values, none of
+  them audited — so a per-key registry for this one alone would be both new machinery and
+  inconsistent with twelve neighbours. Closing it properly means deciding whether ONE selector-value
+  registry serves all thirteen, which is its own ruling and is filed as **Issue #374**. That issue
+  also carries the live instance this gap has already produced: 1134 Team Rocket's Transceiver's
+  ``name_family`` is spelled ``"Team Rocket"`` where 1218 and 1220 spell it ``"Team Rocket's"``, and
+  `card_text.name_in_family`'s prefix test matches 0 of 6 Team Rocket's cards on the first spelling
+  and 6 of 6 on the second. Until it lands the guard here is narrow and real:
+  `test_snapshot_coverage.py` asserts each carrier's exact value off the committed artifact, so a
+  typo in 1085 or 1187 fails there.
+
 * :data:`COVERS_FULL` / :data:`COVERS_PARTIAL` — whether a card's clause SET covers its whole printed
   effect. A **partial** set is worse than none: §3b has no PARTIAL fate, so the seam models what the
   clauses say and the omitted leg differences to exactly 0 — the silent-zero failure this module
@@ -435,6 +477,23 @@ CLAUSE_PARAMETERS: dict[str, str] = {
                  "to a named predicate rather than one hard-coded branch)",
     "to_hand_size": "draw UNTIL the hand holds N — a refill, not a draw-N (Issue #302). Mutually "
                     "exclusive with `amount`: the count depends on the hand at resolution",
+    # ── the board-scaled magnitudes (Issue #349) ──────────────────────────────────────────────────
+    # `amount` says how many and `to_hand_size` says how many UNTIL; neither says how many PER. Two
+    # printed shapes are neither, and they are TWO keys rather than one because a consumer that read
+    # either as the other would be wrong by `amount x (N-1)` in the OVER-counting direction — on a
+    # heal, exactly the phantom survival the planner refuses to manufacture.
+    #
+    # The two differ in where the magnitude LANDS, and that is why one names a set and one does not.
+    "amount_per": "AGGREGATE: `amount` multiplied ONCE PER body in the named board set, landing in "
+                  "the clause's single destination (Issue #349). A STRING, because the counted set "
+                  "is not the clause's target and nothing else on the clause names it — 1187 "
+                  "Morty's Conviction draws one card per OPPONENT benched body into MY hand. "
+                  "Mutually exclusive with `each_of`",
+    "each_of": "DISTRIBUTE: the FULL `amount` to EVERY body the clause's `target` names, not to one "
+               "of them (Issue #349) — 1222 Fennel's *heal 40 from each of your Pokemon*. A "
+               "BOOLEAN, deliberately: `target` already carries the set, and a second body-class "
+               "namespace beside `target` and `applies_to` is the drift `unknown_zones` prevents "
+               "one axis over. Requires a `target`; mutually exclusive with `amount_per`",
     "window": "how many cards an ability's draw sees, when that differs from what it takes",
     "dig": "how deep a search looks",
     "hp_max": "an HP ceiling on what the clause may target",
@@ -528,9 +587,27 @@ COVERS_VERDICTS = frozenset({COVERS_FULL, COVERS_PARTIAL})
 #:   deliberately decides nothing rather than reading as an unrestricted switch.
 #:
 #: Neither is in a shipped deck; their combined meta weight is ~0.03 copies.
+#:
+#: **Issue #349's two additions are NEW EXPOSURE, ruled, not a downgrade** — the same shape as Issue
+#: #301's five and Issue #303's two: both cards had NO clauses and therefore no verdict, and both now
+#: carry an authored set that is honestly incomplete. Both scale over a printed body TRAIT — *Ancient*
+#: and *Future* — and that trait has **no structural field at all** in the engine's own
+#: `all_card_data()` dump (`tools/meta_tracker/cards.json` carries `stage` / `ex` / `megaEx` / `tera`
+#: / `aceSpec` and nothing else of that family; the words occur only inside printed TEXT). So the
+#: magnitude's SHAPE is now carried and the SET it ranges over is recorded and undecided, which is the
+#: `name_family` ruling verbatim.
+#:
+#: * 1085 Awakening Drum — *"Draw a card for each of your Ancient Pokémon in play."* `amount_per:
+#:   "my_ancient"`. Not in the census pool at all.
+#: * 1089 Reboot Pod — *"Attach a Basic Energy card from your discard pile to each of your Future
+#:   Pokémon."* `each_of` over `target: "future"`, which `combat._accel_target_ok` fails CLOSED on as
+#:   an unmodelled target class — so the clause funds no body rather than funding every one.
+#:
+#: Neither is in a shipped deck; their combined meta weight is ~0.001 copies.
 PARTIAL_CLAUSE_BASELINE: frozenset[int] = frozenset({
-    1080, 1086, 1100, 1110, 1115, 1118, 1120, 1124, 1134, 1153, 1181, 1187, 1192, 1199, 1200, 1203,
-    1206, 1207, 1208, 1213, 1214, 1215, 1216, 1218, 1220, 1222, 1223, 1227, 1237, 1239, 1242,
+    1080, 1085, 1086, 1089, 1100, 1110, 1115, 1118, 1120, 1124, 1134, 1153, 1181, 1187, 1192, 1199,
+    1200, 1203, 1206, 1207, 1208, 1213, 1214, 1215, 1216, 1218, 1220, 1222, 1223, 1227, 1237, 1239,
+    1242,
 })
 
 
