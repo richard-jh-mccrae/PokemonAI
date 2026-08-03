@@ -1224,3 +1224,28 @@ still passes unchanged.
   `unit_colours` treats as WILD (fail-open) rather than colourless-only. It is the same
   `energies`-is-not-cards confusion as L4, one seam over, in a **corpus-ruled** equation. It is
   recorded here as a packet line and nothing more.
+
+---
+
+## Post-merge — what arrived from `main` at the close of the run
+
+The ceremony merged `main` in after Issue #286 landed (`d716dfe5`), bringing Issues #283, #287 and
+#290. Both gates were re-run on the merged tree so this packet reports the state the developer will
+actually rule on, not the pre-merge one.
+
+**Neither gate verdict moved.** Discrimination Gate: still exactly **1 unruled** `OK → MISS`
+(`81906755|1|decision|9`, Issue #280's, ruled **REVERT** at the top of this packet), 65 held out,
+3 voided, 200 gated. Decision Gate: **PASS**, `agree 250/347 -> 250/347`, **0 picks moved, 0 rulings
+moved**. Neither baseline touched.
+
+**One windfall improvement was lost, and it is `main`'s, not this batch's.**
+`84890060|1|decision|11` read `IMPROVED MISS → OK` before the merge and reads plain `MISS` after —
+its ruled option falls from rank 1/9 to 6/9. It is **not a regression against the baseline** (the
+baseline already records it as `MISS`), which is why the unruled count did not move and the gate
+verdict is unchanged. The cause is on `main`: Issue #283's two-case `_predicted_loss` and Issue
+#287's conditional `attack_payoff` both re-price this frame. Recorded here rather than left for
+someone to rediscover as "the batch broke something".
+
+Leaf values moved on nine other frames for the same reason, none of them across an `OK`/`MISS`
+boundary; the aggregate SOLE-top rate went **33/249 → 34/249** — `main`'s changes are a net
+improvement on that measure.
