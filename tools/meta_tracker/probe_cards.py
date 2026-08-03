@@ -286,6 +286,7 @@ _SETUP_BENCH = 2    # SelectContext.SETUP_BENCH_POKEMON — seed the bench here
 _OPT_END = 14       # OptionType.END — end my turn
 _OPT_ATTACH = 8     # OptionType.ATTACH — manually attach a card to a Pokémon
 _OPT_ATTACK = 13    # OptionType.ATTACK
+_LOG_DRAW = 4       # LogType.DRAW — one log per drawn card
 _LOG_ATTACK = 15    # LogType.ATTACK — attack event (record keeps from here: drops energize/draws)
 _LOG_TURN_START = 2  # LogType.TURN_START — a turn boundary (capture must stop here)
 _LOG_TURN_END = 3    # LogType.TURN_END
@@ -296,6 +297,7 @@ _CTX_REMOVE_DMG = 16  # SelectContext.REMOVE_DAMAGE_COUNTER
 _CTX_HEAL = 17        # SelectContext.HEAL
 _CTX_ACTIVATE = 43    # SelectContext.ACTIVATE — YesNo: "Would you like to activate the effect?"
 _OPT_NO = 2           # OptionType.NO
+_DRAW_DRIVE_ATTEMPTS = 4
 
 
 def _attack_turn_logs(logs: list[dict]) -> list[dict]:
@@ -558,8 +560,33 @@ def _resolve_play(battle_select, obs, opt, actor, max_resolve=16):
     return rec
 
 
+def _deck_count(obs: dict, player: int) -> int | None:
+    players = (obs.get("current") or {}).get("players") or []
+    if player >= len(players):
+        return None
+    deck_count = players[player].get("deckCount")
+    return deck_count if isinstance(deck_count, int) else None
+
+
+def _draw_capture_is_deck_limited(rec: dict | None) -> bool:
+    """True when a DRAW capture exactly equals the pre-play deck size.
+
+    That shape is a measurement of deck exhaustion, not of the card's printed draw ceiling.
+    """
+    if not rec or "deck_count" not in rec:
+        return False
+    deck_count = rec.get("deck_count")
+    if not isinstance(deck_count, int):
+        return False
+    actor = rec.get("actor")
+    draws = sum(1 for lg in rec.get("logs") or []
+                if lg.get("playerIndex") == actor and lg.get("type") == _LOG_DRAW)
+    return draws > 0 and draws == deck_count
+
+
 def probe_card(target_id: int, cards: dict[int, dict], *, me: int = 0,
-               attack: bool = False, ko: bool = False, max_steps: int = 400) -> dict | None:
+               attack: bool = False, ko: bool = False, max_steps: int = 400,
+               drive_attempts: int = _DRAW_DRIVE_ATTEMPTS) -> dict | None:
     """Drive a real game until ``me`` can play ``target_id``; return its probe record (or None).
 
     Builds a legal probe deck, advances setup and turns, and on the actor's MAIN turn plays
@@ -572,7 +599,23 @@ def probe_card(target_id: int, cards: dict[int, dict], *, me: int = 0,
         Energy attached (→ ``energy_denial``).
     Returns None if the card never became playable within ``max_steps`` — such cards fall to a
     curated override. The builder probes every scenario and unions the tags.
+
+    A DRAW capture that exactly consumes the actor's whole deck is retried on a fresh shuffle:
+    that reading is deck-limited, not a clean measurement of the card.
     """
+    last = None
+    for _ in range(max(1, drive_attempts)):
+        last = _drive_probe_card(target_id, cards, me=me, attack=attack, ko=ko,
+                                 max_steps=max_steps)
+        if not _draw_capture_is_deck_limited(last):
+            return last
+    return last
+
+
+def _drive_probe_card(target_id: int, cards: dict[int, dict], *, me: int = 0,
+                      attack: bool = False, ko: bool = False,
+                      max_steps: int = 400) -> dict | None:
+    """One shuffle's worth of ``probe_card`` — see that function for the contract."""
     combat = attack or ko
     battle_start, battle_select, battle_finish = _engine()
     deck = build_probe_deck(target_id, cards, low_hp=ko, search_fodder=not combat)  # fodder stable-only
@@ -594,14 +637,15 @@ def probe_card(target_id: int, cards: dict[int, dict], *, me: int = 0,
                 # damaged for heal, discard stocked for recycle); stable plays as soon as legal.
                 ready = _my_discard_stocked(obs, me, cards) if ko else _my_active_damaged(obs, me)
                 if opt is not None and (not combat or ready):
-                    return _resolve_play(battle_select, obs, opt, me)
+                    rec = _resolve_play(battle_select, obs, opt, me)
+                    rec["deck_count"] = _deck_count(obs, me)
+                    return rec
                 obs = _develop(battle_select, obs, cards)                   # I build board, never attack
             else:
                 obs = _develop(battle_select, obs, cards, attack=combat, ko=ko)  # opponent chips/KOs
         return None
     finally:
         battle_finish()
-
 
 def probe_pokemon(target_id: int, cards: dict[int, dict], *, me: int = 0,
                   max_steps: int = 250) -> dict | None:
