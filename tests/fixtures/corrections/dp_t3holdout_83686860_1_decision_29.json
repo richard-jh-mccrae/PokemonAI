@@ -319,16 +319,16 @@
   ],
   "chosen_label": "Attach Basic {R} Energy → Dreepy (bench 2 · 70/70)",
   "correct_label": "Evolve Drakloak → Dreepy (bench 1 · 70/70 · 1⚡)",
-  "note": "POC-T3 held-out (Issue #262 wave 3). dragapult_ex / wasted_resource. Ruling unchanged; scope moved to #330.",
+  "note": "POC-T3 held-out (Issue #262 wave 3). dragapult_ex / wasted_resource. Ruling unchanged; scope moved to #330, then to #369 (2026-08-03).",
   "frame_key": "83686860|1|decision|29",
   "claims": {
     "decision": {
       "correct": [
         0
       ],
-      "owner": "#330",
+      "owner": "#369",
       "ruled": "2026-08-02",
-      "why": "`survival` is prize-denominated and UNCAPPED (`ko-score-band` binds only positional terms), while the terms opposing it are `threat` at <=0.1 saturated and `attack_ev` which has no production caller at all — the rollout leaf is end-board only. So retreat-or-pass outbids attacking, and on two frames outbids a banked prize. Measured by `tools/train/family_diag.py`. The ruling STANDS; Issue #330 owns it."
+      "why": "`survival` is prize-denominated and UNCAPPED (`ko-score-band` binds only positional terms), while the terms opposing it are `threat` at <=0.1 saturated and `attack_ev` which has no production caller at all — the rollout leaf is end-board only. So retreat-or-pass outbids attacking, and on two frames outbids a banked prize. Measured by `tools/train/family_diag.py`. The ruling STANDS; Issue #369 owns it (split from #330, 2026-08-03)."
     }
   }
 }

@@ -603,6 +603,14 @@ absolution.
 Each frame's owner is the family `tools/train/family_diag.py` attributes its flip to, not a
 category label — the attribution is in `data/leaf_lab/t3-term-diagnosis.md` and reproducible.
 
+> ⚠️ **The `Issue #330` row is stale as of 2026-08-03 — kept, not overwritten, per this document's
+> own convention above.** Issue #330 built its buildable half (two strict-xfail TARGET tests, the
+> `ko-score-band` whitelist repoint) and closed. The blocked remainder — including all 22 frames'
+> `owner` fields in `tests/fixtures/corrections/*_t3holdout_*.json` — moved to **Issue #369**. Five
+> of the 22 are additionally claimed by Issue #291's T3.5 closeout below; that collision is tracked
+> in **Issue #370**, not resolved by this repoint. The row above is correct about the state it
+> described on 2026-08-02 and is left as written.
+
 ### Why this is the PLANNED sequence rather than a workaround
 
 Issue #278 (POC-T3.5) is **"Blocked by #262 — T3 must merge first"**, and its whole purpose is to
