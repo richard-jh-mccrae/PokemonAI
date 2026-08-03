@@ -626,6 +626,125 @@ def test_a_predicted_loss_outscales_every_other_family_combined():
     assert sv.state_value(survivable) - sv.state_value(lethal) > sv.POSITIONAL_MAX
 
 
+# ── the band's OTHER half, owed and unbuilt: the prize-denominated pair (Issue #330) ──────────────
+#
+# The test directly above is `ko-score-band`'s terminal half, and it is ONE-SIDED: it asserts that
+# `LOSS_PRIZES` out-scales every other family, which is a bound on the term that is already derived
+# to dominate. Nothing above it — and nothing anywhere else in this file — asserts the band on the
+# pair the whitelist entry is actually owed a ruling about.
+#
+# `ko-score-band`'s `fact` reads *"a prize is worth more than any POSITIONAL term"*. `survival` is
+# prize-denominated and deliberately uncapped, so the entry does not bind it, and the two tests
+# below are that gap stated as the assertions that will pass the day it closes. Both use the
+# strict-xfail TARGET idiom already established in this file at
+# `test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit` — green while
+# the gap is open, and a red XPASS is the signal to delete the mark.
+
+
+@pytest.mark.req("REQ-STATEVALUE-0006")
+@pytest.mark.xfail(strict=True, reason="OPEN GAP (Issue #330), blocked on Issue #263's `attack_ev` "
+                                       "wiring — see the test body for why it is xfail rather than "
+                                       "a retune")
+def test_a_line_that_banks_a_prize_outscores_one_that_declines_it():
+    """**A banked prize is never declined** — `ko-score-band` made executable for the
+    prize-denominated pair (`prize_race` against `survival`), which is the half the whitelist entry
+    at `sound_rules.py` records as OWED A RULING.
+
+    Taking a prize moves `prize_race` by exactly 1.0 — the unit slope that makes the whole scalar
+    prize-denominated. Nothing bounds what `survival` may charge against the same line, so a line
+    that banks a real prize can be out-scored by one that banks nothing and merely keeps a body
+    safer. That is the defect Issue #330 measured, and Issue #190 named before `state_value` existed.
+
+    **Why this is `xfail` rather than a fix here.** Making it pass means bounding `survival` per-play
+    (Issue #330's option 2) or completing the composition the module header already claims — see
+    lines 63-66, *"converting their exposure into a prize takes an ATTACK, and `attack_ev` prices
+    that attack at the terminal action"* — which the developer ruled on 2026-08-02 belongs to
+    Issue #263, not here. Hand-tuning either constant against the 12 corpus frames that exposed this
+    would be fitting the equation to the corpus, which the post-POC learning phases exist to do
+    against a held-out set.
+
+    **The two paths are distinguishable, and that is deliberate.** This assertion is on the SHIPPED
+    CONSTANTS of the end-board pair, so Issue #263's terminal-action wiring does not by itself move
+    it: if `attack_ev` lands and this still xfails, that is the honest report that the wiring did not
+    discharge the pair invariant and the per-play bound is still owed. The companion test below is
+    the one the wiring moves directly."""
+    # The whole of what banking one prize can add, on the side of the line that takes it.
+    banked = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=6)
+              - sv.prize_race(my_prizes_remaining=4, their_prizes_remaining=6))
+    assert banked >= 1.0, "the lead leg has lost its unit slope — this test is measuring the wrong thing"
+
+    # The whole of what `survival` can charge against it. RANK-GRADED, so the bound is ~2x the worst
+    # single body rather than `_MAX_BODIES` x `_MAX_PRIZE_VALUE`; computed from the equation rather
+    # than transcribed, so moving the grading moves this test.
+    worst_survival_charge = -sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES)
+
+    assert banked > worst_survival_charge
+
+    # And in the shape a caller actually meets it: the line that banks the prize and exposes
+    # everything must still outrank the line that banks nothing and is perfectly safe.
+    takes_the_prize = (sv.prize_race(my_prizes_remaining=3, their_prizes_remaining=6)
+                       + sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES))
+    declines_it = (sv.prize_race(my_prizes_remaining=4, their_prizes_remaining=6)
+                   + sv.survival([]))
+    assert takes_the_prize > declines_it
+
+
+@pytest.mark.req("REQ-STATEVALUE-0006")
+@pytest.mark.xfail(strict=True, reason="OPEN GAP (Issue #330), blocked on Issue #263's `attack_ev` "
+                                       "wiring — the end board is the only thing scored today and "
+                                       "it prices a non-lethal attack at <= `_THREAT_CAP`")
+def test_landing_an_attack_can_outprice_the_one_retreat_a_turn_allows():
+    """**Attack vs retreat on an otherwise-equal board** — the leaf-picks-`Retreat` frames of
+    Issue #330's table, stated as the class rather than as fixtures.
+
+    **Scope, stated because it is narrower than the issue body's prose.** This asserts nothing about
+    the AGENT's committed decision. Issue #356 established that `family_diag` ranks the LEAF's argmax
+    and never reads `chosen`. Re-derived here rather than taken from that issue
+    (`family_diag.py --source decider`, at this commit): the agent retreated on **none** of these
+    frames — its picks are Play Harlequin, Jetting Blow, Nebula Beam, Play Lillie's Determination, an
+    Ignition Energy attach, and Jetting Blow. A decision-scoped version of this test would therefore
+    be vacuously green and would measure nothing the defect is about. What these frames genuinely
+    show is a property of the equations, and that is what is written here.
+
+    Two counts in the issue body do not survive that re-derivation, and are corrected here because a
+    docstring repeating them would be the same defect one layer down. The body's prose says *"on five
+    frames the leaf's pick is literally `Retreat`"*; its own table lists **six**
+    (`82225643|57`, `83037962|49`, `83038055|51`, `85164131|31`, `82227388|43`, `83053965|6`). And
+    `Δ prize_race` is `0.0000` on five of those six — **not** on `82225643|57`, which reads
+    **+1.2500** and whose ruled option is a Trainer card rather than an attack. That frame is the
+    banked-prize case and belongs to the test above; the five zero-delta frames are this one's.
+
+    The class, on those five: the ruled play deals damage (or develops) without banking a prize, so
+    the only end-board family that can credit it is `threat` — capped at `_THREAT_CAP` = 0.1 AND
+    saturated to `{0.0, 0.1}` (see the strict-xfail target for `threat` below). Measured, the
+    `Δ threat` column reads exactly `+0.1000` on five of the six and `+0.0000` on the last, never a
+    value between, which is that saturation visible in the corpus. Against it, one retreat lengthens
+    the clock on my most-exposed body and `survival` pays for it uncapped. A 210-damage Nebula Beam
+    is worth at most 0.1 prizes to the leaf; shuffling a body out of the front is worth over two.
+
+    Verified at source, because the "one retreat" bound is what makes this the whole of the defensive
+    side rather than an arbitrary comparison: `docs/rules.md` §3 — *Retreat (manual): 1 per turn*,
+    and *Attack: 1, and it ends the turn* (`[RULE: rulebook L105-148]`, `[ENGINE-LEGAL]`).
+
+    **This is the test Issue #263's wiring moves directly.** `attack_ev` prices the terminal attack,
+    which is exactly the credit missing on the left-hand side. Until it is wired, `threat` pays the
+    cap's price for a double-count that no shipped code path performs."""
+    # Offence, on the end board, for an attack that does NOT knock out: `threat` and nothing else.
+    # Taken at `_MAX_PRIZE_VALUE` — their biggest possible body — so this is the ceiling, not a case.
+    best_offence_the_end_board_prices = sv.threat([sv._MAX_PRIZE_VALUE])
+    assert best_offence_the_end_board_prices == pytest.approx(sv._THREAT_CAP), (
+        "the ceiling moved — re-derive it before trusting the comparison")
+
+    # Defence, for the one retreat a turn allows: my worst-exposed body stops being reachable now.
+    # Clock 1 -> 3 is the modest reading (a fresh Active in front of it), not the generous one.
+    exposed = sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)])
+    after_retreating = sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 3)])
+    one_retreat_buys = after_retreating - exposed
+    assert one_retreat_buys > 0.0, "the retreat is not moving `survival` — the comparison is void"
+
+    assert best_offence_the_end_board_prices > one_retreat_buys
+
+
 # ── case 1: prize lethality (ADR-0064 Amendment B, Issue #283) ────────────────────────────────────
 #
 # `docs/rules.md` §7 case 1 — *they take their last prize card*. The positional families price "they
