@@ -274,6 +274,12 @@ def test_a_body_with_nothing_expiring_is_returned_UNCHANGED():
     # every fixture board in this suite that predates Issue #286 is byte-identical under the strip.
     bare = {"id": MSTAR, "energies": [COLORLESS] * 3}
     assert c.without_expiring_energy(bare) is bare
+    # An unresolvable HOLDER is the same refusal, and it is not pedantry: the provision is
+    # stage-dependent, so an unknown stage cannot size the removal. Guessing "Basic" would strip 1
+    # of the 3 units and leave a body claiming two phantom ones — on MY clock, the direction that
+    # prices a line as armed sooner than it is.
+    unknown = _held(424242, [IGNITION], [COLORLESS] * 3)
+    assert c.without_expiring_energy(unknown) is unknown
 
 
 # REQ-TTR-0006 — the RIDER is read from the CLAUSE, not from the Function Tag. The tag is

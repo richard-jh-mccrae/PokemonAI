@@ -330,6 +330,12 @@ STATE_VALUE_PROFILE = frozenset({
     "theirs.bench.is_ex",
     "theirs.bench.is_stage2",
     "theirs.bench.stat",
+    # …and `bench_names`, the fourth thing that same walk reads, which the comment above names but
+    # the list omitted. Surfaced by Issue #286's merge with Issue #287 (`attack_payoff` keys on
+    # `bench_names`) on a frame whose opponent Bench is NOT empty — exactly the "latent failure that
+    # arrives the first time the drive benches an opposing body" the comment predicts. DECLARED for
+    # the same reason as its three siblings, on the same `<=` ceiling.
+    "theirs.bench_names",
     "theirs.active.damage_counters",
     "theirs.active.energy_count",
     "theirs.active.energy_key",
