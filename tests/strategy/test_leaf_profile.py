@@ -326,6 +326,27 @@ STATE_VALUE_PROFILE = frozenset({
     "theirs.damage_boosts",
     "theirs.discard_energy_total",
     "theirs.prizes_taken",
+
+    # ── POC-T3.5 / Issue #284: `threat` reads their BENCH as well as their Active ──────────────
+    # The loop returned at most one element, so chip standing on their bench between turns was
+    # invisible — `dragapult_ex`'s whole win plan. Widening it adds exactly TWO fields, measured
+    # with `_Probe` over a board that actually has an opponent Bench (the engine drive this file
+    # pins against reaches the leaf with an empty one, so the measurement had to be made on a
+    # constructed board and is DECLARED here on the same `<=` ceiling as the `theirs.bench.*` block
+    # above):
+    #
+    #   * `mine.best_reachable_bench_damage` — the bench route. NOT a second damage read: it is the
+    #     attack's printed snipe RIDER under the SAME `reachable_attach` Attach Budget the two
+    #     existing reachability reads use, so the added cost is one `max` over the attacker's
+    #     attacks, memoized per (attacker, defender) on the model. No `context` — a rider ignores
+    #     Weakness and Resistance by rule (ADR-0022), so no Damage Formula scaler reaches it and the
+    #     `damage_facts` gatherer above is not touched a third time.
+    #   * `theirs.bench.hp_remaining` — the counters themselves, the fact the issue exists for.
+    #
+    # `theirs.bench.prize_value` is read too and is deliberately NOT listed: `PER_DECISION_PROFILE`
+    # already carries it (the Prize Path's bench map), and `LEAF_PROFILE` is their union.
+    "mine.best_reachable_bench_damage",
+    "theirs.bench.hp_remaining",
 })
 
 LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE

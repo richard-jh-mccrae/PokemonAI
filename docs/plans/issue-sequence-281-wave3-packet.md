@@ -16,6 +16,9 @@ claim as *"this change moved nothing"*.
 
 Issue #281: **zero** flips on either gate.
 Issue #280: **one** leaf flip (above); Decision Gate **PASS, 0 picks moved, 0 rulings moved**.
+Issue #284: **zero NEW** flips — and the leaf A/B moved in the GOOD direction (two ruled
+regressions resolved, SOLE-top 32 → 33). Three lines owed to the developer all the same; see
+*Issue #284* below.
 Issue #343: **zero** flips on either gate — but read the section below before treating the leaf
 half of that as evidence, because on this surface the leaf gate is blind by construction.
 
@@ -625,3 +628,164 @@ neighbouring `ex` reads, `:172` `defenderExOnly` on `turn_markers` and the defen
 both directions, and rulebook L337 independently. Its one finding is claim 5 above. It also noted
 that its own first count of the "more damage" pool sweep came back 153 rather than 209 because of a
 dict-dedup bug in its instrument — caught by re-running, which is the point of the rule.
+
+---
+
+# Issue #284 — standing chip on their bench is an asset
+
+`_reachable_target_values` widened from their Active to `model.theirs.bodies`, with a damage route
+per SEAT: the Active through Issue #281's `best_reachable_damage_vs`, the Bench through the new
+`CombatMath.best_reachable_bench_damage` / `MySide.best_reachable_bench_damage` (the attack's
+single-target snipe rider, same Attach-Budget affordability filter, fail-closed on a bench-immune or
+unreadable body).
+
+## Gate result — no new unruled flip, and the leaf moved the right way
+
+Measured as an explicit before/after A/B against the **same committed baseline**, from HEAD
+`07ebc5ef`: run the gate with the working tree clean, apply the change, run it again, diff the two
+reports. Neither `data/leaf_lab/baseline.json` nor `data/decider_lab/baseline.json` was touched.
+
+**Discrimination Gate** — unruled count **unchanged at 1**. That one is Issue #280's
+`81906755|1|decision|9`, already tabled above; it is not this issue's.
+
+| | before | after |
+|---|---|---|
+| leaf picks `correct` (SOLE top) | 32/249 (13%) | **33/249 (13%)** |
+| shared-top | 130/249 (52%) | 131/249 (53%) |
+| avg top-tie | 2.0 | 2.1 |
+| gated on / ruled / voided | 198 / 67 / 3 | 200 / 65 / 3 |
+
+Three frames changed their standing against the baseline, and all three are accounted for:
+
+| frame | before | after | reading |
+|---|---|---|---|
+| `82229122\|0\|decision\|17` | `REGRESSED OK → MISS`, rank 1 → 2, `owner=#263` | **no longer regressed** — `OK`, rank 1/8 | a ruled regression this change RESOLVES |
+| `82525101\|1\|decision\|69` | `REGRESSED OK → MISS`, rank 1 → 2, `owner=#263` | **no longer regressed** — `OK`, rank 1/5 | a ruled regression this change RESOLVES |
+| `81903490\|0\|decision\|49` | `IMPROVED MISS → OK` | **no longer improved** — back to the baseline's `MISS` | a windfall improvement LOST. Not a regression *against the baseline*, which is why the unruled count did not move |
+
+`ruled` falls 67 → 65 and `gated on` rises 198 → 200 because the two resolved frames leave the
+held-out REGRESSED set and rejoin the gated population.
+
+**Decision Gate — PASS, and the two reports are byte-identical.** `agree 250/347 -> 250/347`,
+**0 picks moved, 0 rulings moved**, 24 voided. `diff` of the before/after reports is empty.
+
+## The positive control — because a clean diff is not by itself a result
+
+A cumulative baseline diff proves only *"no NEW unruled flip"*. It cannot show the changed path was
+reached at all, and this batch has already burned four instruments that were silently blind. So the
+bench leg was instrumented directly: `MySide.best_reachable_bench_damage` wrapped with a counter,
+and every frame in the corrections corpus scored through the same `state_value` the leaf scores.
+
+| | |
+|---|---|
+| corpus frames scored | **371** (0 errors) |
+| frames with a non-empty opponent Bench | 319 |
+| times the bench leg was **ASKED** | **904** |
+| …returning a **non-zero** reach | **338** |
+| frames where `threat` **moved** | **13** — all `mega_starmie`, every one `0.0 → 0.1` |
+
+So the instrument reaches the changed path 904 times and the path is live 338 times. The
+`0.0 → 0.1` shape of all 13 moves is itself the finding in **L2** below. Both runs of this control
+were re-run after the review fixes and are byte-identical.
+
+The same question was asked of the **tests**, since a test that passes with and without the code it
+claims to cover is vacuous. Three mutations, applied in-process against the seven new cases:
+
+| mutation | new tests failing |
+|---|---|
+| none (control) | 0 of 7 |
+| the bench leg always returns `0.0` | **6 of 7** |
+| the fail-CLOSED guard removed (immune / unreadable bodies credited) | **2 of 7** — exactly the two that assert it |
+| the leg reads `_bench_rider` (snipe **+** spread) instead of `rider_snipe` | 0 of 7 |
+
+The survivor under the first mutation is
+`test_the_bench_rider_never_leaks_into_the_ACTIVE_reachability_read`, which asserts the rider does
+**not** reach the Active — deleting the bench leg leaves it true by construction, which is the
+intended asymmetry rather than a gap.
+
+The last row is recorded because it is a **zero that means something**: the fixture boards cannot
+discriminate the snipe-vs-spread decision, because the fixture's only bench route (Jetting Blow)
+prints no spread. That decision is pinned one seam over instead, by the pool sweep
+`test_no_attack_in_the_pool_prints_both_a_bench_SNIPE_and_a_bench_SPREAD`, whose own positive control
+is that both inventories come back non-empty.
+
+## L1 — two `owner=#263` rulings may now be retirable
+
+`82229122|0|decision|17` and `82525101|1|decision|69` were both ruled regressions owned by
+Issue #263, and both now pass. **Recommendation: KEEP both rulings, re-check at Issue #291's
+closeout.** A ruling records a human's verdict about a frame, not a gate's current colour; a change
+that happens to make the frame pass does not retire the verdict, and Issue #291 is the pass that
+exists to reconcile exactly this.
+
+## L2 — the family now SEES their bench and still cannot GRADE it
+
+This is the ceiling on what Issue #284 could deliver, and it is worth stating plainly because the
+issue's symptom is only half-cured.
+
+`threat` is `min(_THREAT_CAP, sum)`, and its own `blind_to` already records the measurement: **the
+cap binds on every non-empty input** (0.0 on 20 of Issue #262's 22 gating frames and exactly the cap
+on 2, never a value between). So a second reachable body adds exactly **0**. The bench leg therefore
+moves the scalar only where the ACTIVE leg reads nothing — which is precisely the shape the control
+above measured: 338 live bench reaches, 13 frames moved, every one of them `0.0 → 0.1`.
+
+A chipped bench under an already-reachable Active still scores identically to a fresh one. That is
+the issue's own headline symptom surviving in the case where their Active is also reachable.
+
+**Recommendation: no action inside this track.** The unlock is not more reachability — it is the
+parked `_THREAT_CAP / _MAX_PRIZE_VALUE` scale anchor, which is already derived, already measured,
+and deliberately not applied because applying it alone measured as a corpus regression (65 → 68
+unruled, two `MISS → OK` improvements lost). Recorded in `threat.blind_to` as a named entry so the
+next reader meets it as a measurement rather than as a surprise. If the wave wants the bench chip
+graded rather than merely seen, the anchor and this widening should be measured **together**, which
+is a calibration decision this track was told not to make.
+
+## L3 — two defects in Issue #284's own spec, recorded for the epic's author
+
+Neither changed what was built; both would have if followed literally.
+
+**(a) The named instrument is the wrong one.** The issue says *"The instruments are
+`CardStat.benchSnipeDamage` (`provider.py:79`) and `snipe_relevance.py`."*
+
+`CardStat.benchSnipeDamage` is filled in `_build_cache` from `parse_attack_bench_snipe` **alone**,
+while `AttackStat.benchSnipe` is filled from that parser **or** `build_attack_stats`'
+`free_target_snipe` branch — the *"does N damage to 1 of your opponent's Pokémon"* phrasing. Verified
+against the real pool:
+
+| card | attack | `AttackStat.benchSnipe` | `CardStat.benchSnipeDamage` |
+|---|---|---|---|
+| Mega Starmie ex (1031) | Jetting Blow | 50 | **50** |
+| Fezandipiti ex (140) | Cruel Arrow | 100 | **0** |
+| Kyurem (144) | Trifrost | 110 | **0** |
+| Zeraora (377) | Thunder Raid | 0 | 0 |
+
+Cruel Arrow and Trifrost are the bench routes of `dragapult_ex` and `slowking` — two of the three
+decks the issue names as exposed. **Built on the card-level field, the fix would have been inert on
+both and live only on `mega_starmie`.** The read is `AttackStat.benchSnipe` through
+`CombatMath.rider_snipe`; `tests/scouting/test_attack_riders.py` pins the difference against the
+real 1556-record pool. The line reference is stale too — the field is at `provider.py:116`.
+
+`snipe_relevance.py` is deliberately not called: `target_relevance` answers *should I aim this
+turn's snipe here*, which is the CONVERSION decision the issue's own *"Respect the ruled boundary"*
+section forbids this term from re-pricing, and its inputs are Pilot plumbing no `StateModel`
+supplies. Recorded in `_reachable_target_values`' docstring.
+
+**(b) Test 4 asks for something Issue #281 already delivered.** The issue asks for *"`dragapult_ex`
+cross-turn shape: after a Phantom Dive, the follow-up gust-and-convert line outscores the same gust
+on a fresh board."* After the gust the chipped body is **Active**, and the Active leg has read its
+remaining HP since Issue #281 — so on the post-gust pair both boards are reachable and `threat` is
+equal. The half this issue adds is the **pre**-gust one, while the body is still benched. The test
+asserts both halves explicitly rather than substituting one for the other silently.
+
+**Recommendation: accept as built.** Worth correcting in Issue #285 if it inherits the same
+instrument pointer — its audit finding (F5) is the *valuation* half of the same family and the same
+per-body loop.
+
+## Scope boundary with Issue #263 — checked, not crossed
+
+The epic's ruled ledger gives *"The Stadium · Their board topology · Ability readiness · Who is
+Active"* to Issue #263. Widening `threat`'s TARGET set is not valuing their board topology, and the
+registry already drew that line itself: `development.blind_to` says *"their board topology —
+development is MY-side only … `threat` reads their bodies as targets, not as development."* This
+change stays inside `threat`'s declared subject (`opponent_target_value` over reachable Knock Outs)
+and adds no read of their line topology, their bench count, or their development. No ledger line is
+disputed.

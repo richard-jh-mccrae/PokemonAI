@@ -350,6 +350,53 @@ Zeraora ×1) — and it applies to a plain gust-and-KO too, which every deck has
 
 ### F6 — Standing chip on their bench is not an asset  ·  HIGH
 
+> **BUILT — Issue #284, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). `_reachable_target_values` now
+> loops `model.theirs.bodies` with a leg per SEAT: their Active through Issue #281's
+> `best_reachable_damage_vs`, their Bench through the new
+> `CombatMath.best_reachable_bench_damage` / `MySide.best_reachable_bench_damage` — the attack's
+> single-target snipe RIDER under the same Attach-Budget affordability filter. Bench-immune
+> (`docs/rules.md` §11) and unreadable bodies contribute nothing.
+>
+> **The audit's named instrument was the wrong one, and this is the correction of record.**
+> `CardStat.benchSnipeDamage` is filled by `parse_attack_bench_snipe` alone, so it reads **0** for
+> the free-target phrasing — *"does N damage to 1 of your opponent's Pokémon"* — which is precisely
+> Fezandipiti ex's Cruel Arrow (100) and Kyurem's Trifrost (110), the conversion routes of two of
+> the three decks this finding names. Built on the card summary, the fix would have been inert on
+> `dragapult_ex` and `slowking` and live only on `mega_starmie`. The read is
+> `AttackStat.benchSnipe` through `CombatMath.rider_snipe`;
+> `tests/scouting/test_attack_riders.py` pins the difference against the real 1556-record pool.
+>
+> Two deliberate narrowings, both on the fail-CLOSED side and both named in `threat.blind_to`: the
+> SPREAD rider is excluded (a shared counter budget across their whole Bench — `spread_ko_prizes`'
+> knapsack owns that subset question, and it does not compose into a per-body reach), and an
+> {ex}-restricted rider such as Zeraora's Thunder Raid still parses to 0 by the rider parser's own
+> documented doctrine. The residual OVER-read is the non-Tera bench-immunity set, which `CardStat`
+> cannot express at all (ADR-0020).
+>
+> **The audit's other named instrument, `snipe_relevance.py`, is deliberately NOT called**, and the
+> reason is the ruled boundary this same finding draws. `target_relevance` answers *should I aim
+> this turn's snipe here* — the CONVERSION decision, which belongs to `attack_ev` and to the Pilot's
+> snipe rung — and its inputs (`turns_to_ko_before/after`, `rider_damage`, `prizes_needed`, the
+> matched Brief priority) are Pilot plumbing that no `StateModel` supplies. Reading it here would
+> give `threat` a second opinion about a question another term already owns, which the
+> sole-supplier ruling forbids. What the finding actually needs from that module is its *subject* —
+> that a bench route exists — and that comes off `AttackStat.benchSnipe` directly.
+>
+> **What this fix does NOT reach, and it is the same wall the family already had.** `threat` is
+> `min(_THREAT_CAP, sum)` and its own `blind_to` records the measured saturation: the cap binds on
+> every non-empty input. So the bench leg moves the scalar exactly when the ACTIVE leg reads 0, and
+> a chipped bench under an already-reachable Active still scores identically to a fresh one.
+> Measured on the 371-frame corrections corpus: the bench leg is asked 904 times, returns a non-zero
+> reach 338 times, and `threat` moves on **13** frames — every one of them `0.0 → 0.1`. The
+> discrimination that would make the rest of them count is the parked `_THREAT_CAP /
+> _MAX_PRIZE_VALUE` scale anchor, which is derived, measured, and deliberately not applied. Carried
+> as a wave-3 packet line (`docs/plans/issue-sequence-281-wave3-packet.md`), not fixed here.
+>
+> Row 5 of the coverage matrix above and #6's footnote are **left as audited on purpose** — Issue
+> #291 owns reconciling the report, and every sibling in this track recorded its outcome the same
+> way, in the finding's own BUILT note rather than in the ledger.
+
 **Unread dimension.** Damage already on the **opponent's benched** bodies.
 
 `threat`'s only target is their **Active** (`_reachable_target_values` returns at most one element).

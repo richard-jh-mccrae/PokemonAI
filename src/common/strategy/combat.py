@@ -1295,6 +1295,54 @@ class CombatMath:
                           for aid in (stat.attacks or ())
                           if self.reachable_attach(my_body, aid, budget=budget)), default=0))
 
+    def best_reachable_bench_damage(self, my_body: dict | None, defender: dict | None, *,
+                                    budget: Budget) -> float:
+        """Biggest damage ``my_body`` can put on ONE of the opponent's **BENCHED** bodies this turn
+        — the bench sibling of :meth:`best_reachable_damage_vs` (Issue #284, POC-T3.5).
+
+        A THIRD method rather than an ``area`` flag on either sibling, because the bench is a
+        different damage ROUTE and not a different defender. An attack's printed damage lands on the
+        Active; a benched body is reachable only through the attack's snipe RIDER, which ignores
+        Weakness and Resistance by rule (ADR-0022) and therefore never routes through
+        :meth:`predicted_damage` — the oracle says so about this very attack: *"Jetting Blow is
+        zeroed (its bench rider is a separate path)"*. :meth:`_reach_form_damage` already draws the
+        same line for INCOMING damage onto my Bench; this is that line seen from the other side.
+
+        **The rider read is :meth:`rider_snipe`, NOT :meth:`_bench_rider`**, and the difference is
+        the direction. ``_bench_rider`` sums snipe and spread as a WORST CASE for a body of mine —
+        sound when over-reading their reach is the safe error. Here the same sum would over-read MY
+        reach, and a spread is a SHARED counter budget across their whole Bench (Phantom Dive: *"Put
+        6 damage counters on your opponent's Benched Pokémon in any way you like"*), so crediting
+        its full total against every body separately would claim three Knock Outs from one 60-counter
+        payload. The subset question has an owner already — :meth:`spread_ko_prizes`, whose
+        ``best_ko_subset`` knapsack answers it in PRIZES over a whole Bench — and it does not
+        compose into a per-body reach. Snipe riders are indivisible by construction (*"Each snipe
+        unit lands entirely on ONE body (single-target text)"*, :meth:`_harvest_residual`), so this
+        under-reads rather than over-reads. **No pool attack prints both riders** — swept over all
+        1556 attack records, `benchSnipe` and `benchSpread` are never both non-zero on one attack —
+        so on this set the choice costs the three spread attacks (Flutter Mane 20, Sinistcha 40,
+        Dragapult ex 60) and nothing else.
+
+        Affordability is :meth:`reachable_attach` under the same Attach ``budget`` as both siblings,
+        so this family keeps ONE opinion about what I can pay for.
+
+        Fail-CLOSED at 0.0 on **either** side being unreadable, which is stricter than
+        :meth:`is_tera` alone and deliberately so. That oracle fails OPEN on a missing stat (False =
+        not Tera) because its own consumers must never suppress a real Lethal; here an unresolvable
+        benched body could be an Antique Plume Fossil, a Misty's Magikarp or a Poltchageist — all
+        carry unconditional prevent-all-while-Benched and `CardStat` has no field for it
+        (`docs/rules.md` §11, ADR-0020) — and crediting a Knock Out against one would invent
+        pressure. So the defender's stat is checked BEFORE the oracle is asked, the same order
+        `MySide.active_famine` uses for the same reason."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        target_id = (defender or {}).get("id")
+        if self._card_stat(target_id) is None or self.is_tera(target_id):
+            return 0.0                                # unreadable, or immune while Benched (§11)
+        return float(max((self.rider_snipe(aid) for aid in (stat.attacks or ())
+                          if self.reachable_attach(my_body, aid, budget=budget)), default=0))
+
     def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
                     enabler_budget: Budget | None = None,
                     copies: int = 0, pool: int = 0, draws: int = 0, p_by_type=None) -> float:

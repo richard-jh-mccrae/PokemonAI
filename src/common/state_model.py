@@ -1214,6 +1214,35 @@ class MySide(_SideBase):
         return self._memoized(key, lambda: self._combat.best_reachable_damage_vs(
             body.body, target, budget=self.attach_budget(body), context=context))
 
+    def best_reachable_bench_damage(self, body: BodyView | None,
+                                    defender: BodyView | None) -> float:
+        """Biggest damage ``body`` can put on ONE of their **BENCHED** bodies this turn — the bench
+        route, which is the attack's snipe RIDER and not its printed damage (Issue #284, POC-T3.5).
+
+        The third member of the reachability family, beside :meth:`best_reachable_damage` (printed,
+        opponent-independent — `attach_value`'s counterfactual leg) and
+        :meth:`best_reachable_damage_vs` (the damage model against a defending ACTIVE). Three
+        questions, three methods; see :meth:`~common.strategy.combat.CombatMath.best_reachable_bench_damage`
+        for why a rider is a different route rather than a different defender, and why the read is
+        the single-target snipe rather than the snipe-plus-spread worst case.
+
+        **No ``context``, and that is not an omission.** The Damage Formula scales an attack's
+        damage; a rider is a printed constant that ignores Weakness and Resistance by rule
+        (ADR-0022), so no scaler reaches it and a context here would key a memo on a value nothing
+        consumes. `_exposed_bodies` records the mirror of this on the other side of the board.
+
+        Memoized by VALUE on the same components as the ``_vs`` sibling minus the context — card,
+        area, attached Energy, canonicalised defender. The defender is keyed rather than dropped
+        even though only its bench-immunity is read today: it is an input, and a memo that ignored
+        an input would be wrong the moment a later leg reads more of it."""
+        if body is None:
+            return 0.0
+        target = defender.body if defender is not None else None
+        key = ("best_reachable_bench_damage", body.card_id, body.is_active, body.energy_key,
+               self._key(target))
+        return self._memoized(key, lambda: self._combat.best_reachable_bench_damage(
+            body.body, target, budget=self.attach_budget(body)))
+
     def readiness_p(self, body: BodyView | None, attack_id=None, *, enabler_budget=None,
                     copies: int = 0, pool: int = 0, draws: int = 0, weighted: bool = True) -> float:
         """P(``body`` is ready to use the attack this turn) — the EV variant, and the ONLY place an

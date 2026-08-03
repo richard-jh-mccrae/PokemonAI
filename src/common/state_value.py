@@ -460,16 +460,64 @@ REGISTRY: tuple[TermFamily, ...] = (
         reads=("opponent_target_value", "my_reachable_kos"),
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
-                    "Outs I can reach. The mirror of `survival`, and the reason the two must not "
-                    "both read a clock — `turns_to_ko_me` is THEIR clock on MY bodies. Reach is "
-                    "`best_reachable_damage_vs` — the DAMAGE MODEL against the body actually in "
-                    "front of me (Weakness, Resistance, prevention, my live boosts), under the "
-                    "incumbent's Attach-Budget affordability filter (Issue #281).",
+                    "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
+                    "the two must not both read a clock — `turns_to_ko_me` is THEIR clock on MY "
+                    "bodies. Reach is one affordability filter (the Attach Budget) over two damage "
+                    "ROUTES: their Active through `best_reachable_damage_vs`, the DAMAGE MODEL "
+                    "against the body actually in front of me (Weakness, Resistance, prevention, my "
+                    "live boosts — Issue #281); their Bench through `best_reachable_bench_damage`, "
+                    "the attack's single-target snipe RIDER, which ignores Weakness and Resistance "
+                    "by rule and is zeroed on the Active path (Issue #284). What the bench leg "
+                    "prices is the STANDING position — chip already on their bench makes a body one "
+                    "rider from dead between turns — never the conversion, which stays `attack_ev`'s.",
         blind_to=(
-            "bench-reachable Knock Outs (snipe / spread riders) — reachability here is my Active's "
-            "best reachable damage against a body's remaining HP, which only ever reaches their "
-            "ACTIVE. A snipe line onto their benched wincon prices 0 in this family BY DESIGN: it "
-            "is an ATTACK's rider, and `attack_ev` prices it at the terminal action.",
+            "SPREAD riders as a bench route — `benchSpread` is a SHARED counter budget across their "
+            "whole Bench (Phantom Dive: *put 6 damage counters on your opponent's Benched Pokémon "
+            "in any way you like*), so crediting its full total against each body separately would "
+            "claim three Knock Outs from one 60-counter payload. The subset question has an owner "
+            "— `CombatMath.spread_ko_prizes`' `best_ko_subset` knapsack — and it answers in PRIZES "
+            "over a whole Bench, which does not compose into this family's per-body shape. So the "
+            "bench leg reads the indivisible single-target snipe only and UNDER-reads the three "
+            "spread attacks in the pool (Flutter Mane 20, Sinistcha 40, Dragapult ex 60). Under-"
+            "reading my own damage is the fail-closed direction; no attack in the set prints both "
+            "riders, so nothing is double-counted by the split.",
+            "a multi-target snipe's COUNT — `AttackStat.benchSnipe` holds the PER-BODY damage and "
+            "no multiplicity, so Kyurem's Trifrost (*110 damage to 3 of your opponent's Pokémon*) "
+            "and Greninja ex's 2-target rider read as reachable against a fourth and fifth body "
+            "they could not actually all fell. An over-read, and unrepresentable as a fix without a "
+            "new parsed field. It is absorbed by `_THREAT_CAP` today — but read the SATURATION "
+            "entry below before taking comfort from that: the cap binds on every non-empty input, "
+            "so an extra target is currently free in BOTH directions, and the day the parked scale "
+            "anchor lands this over-read starts costing something.",
+            "the BENCH LEG'S OWN REACH, whenever their Active is already reachable — the "
+            "saturation entry below is not a separate topic, it is the ceiling on what Issue #284 "
+            "could deliver. `min(_THREAT_CAP, sum)` binds on every non-empty input, so a second "
+            "reachable body adds exactly 0 and a chipped bench under a reachable Active scores "
+            "identically to a fresh one. Measured on the 371-frame corrections corpus: the bench "
+            "leg is ASKED 904 times, returns a non-zero reach 338 times, and `threat` moves on 13 "
+            "frames — every one of them 0.0 -> 0.1, i.e. exactly the boards where the Active leg "
+            "read nothing. So the family now SEES their bench and still cannot grade it, and the "
+            "unlock is the same parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, not more "
+            "reachability. Recorded rather than fixed: applying that anchor is a calibration change "
+            "this module has already measured as a corpus regression.",
+            "the non-Tera BENCH-IMMUNITY set — `docs/rules.md` §11's own warning: the immunity set "
+            "is BROADER than Tera ex (Antique Plume Fossil, Misty's Magikarp, Poltchageist all "
+            "carry unconditional prevent-all-while-Benched) and `CardStat` has no field for it "
+            "(ADR-0020). `tera` is read and fails closed; the rest read as reachable and are "
+            "over-credited. The residual gap, recorded rather than papered over — the fix is the "
+            "same one ADR-0020 names, threading the engine's benched-immunity ability into "
+            "`CardStat`.",
+            "an {ex}-RESTRICTED bench rider — Zeraora's Thunder Raid (*210 damage to 1 of your "
+            "opponent's Benched Pokémon {ex}*) parses to 0, so `slowking` gets no bench route from "
+            "it. That is `parse_attack_bench_snipe`'s documented fail-closed doctrine (match only "
+            "the clean unconditional phrasing; `tests/scouting/test_attack_riders.py` pins the "
+            "restricted case at 0 by name), not a defect here — under-reading my own reach is the "
+            "safe direction, and widening the parser is a card-fact change with its own blast "
+            "radius over the whole pool.",
+            "CONVERTING either seat's exposure into a prize — that is the attack's, and "
+            "`attack_ev` prices it at the terminal action. This family prices the exposure STANDING "
+            "on the board, capped at `_THREAT_CAP`, because `score(sequence) = state_value(end "
+            "board) + EV(terminal)` adds the two and would otherwise pay for one Knock Out twice.",
             "their Energy denial / resource strip — removing fuel lengthens their clock without "
             "removing a body, and `opponent_target_value` prices bodies. `deny_relevance` is the "
             "instrument and is still dark (T2 / Issue #228 arms it).",
@@ -507,10 +555,12 @@ REGISTRY: tuple[TermFamily, ...] = (
             "held-out set (Issues #146-#148); `test_state_value.py`'s strict-xfail TARGET is the "
             "standing record and turns red the day it lands.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
-            "STEP: `_reachable_target_values` returns nothing at all unless my Active's best "
-            "reachable damage AGAINST THAT DEFENDER already meets its remaining HP, so a Mega "
+            "STEP: `_reachable_target_values` credits nothing for a body unless my Active's best "
+            "reachable damage AGAINST THAT SEAT already meets its remaining HP, so a Mega "
             "Lucario chipped from 330 to 120 scores the same as one at full HP. Issue #281 made "
-            "the step's height honest; it is still a step. This family is `survival`'s mirror "
+            "the step's height honest and Issue #284 gave their BENCH a step of its own — both "
+            "legs are still steps, so bench chip that does not reach the rider still prices 0. "
+            "This family is `survival`'s mirror "
             "in name and NOT in form — survival grades continuously by a clock "
             "(`halve(turns_to_ko_me - 1)`), threat is on/off — and the asymmetry is exactly what "
             "the wave-3 ruling on `83116501|0|decision|60` objects to: *\"Our Starmie cannot KO the "
@@ -822,12 +872,20 @@ def _predicted_loss(model: "StateModel") -> bool:
 
 def _reachable_target_values(model: "StateModel") -> tuple:
     """Their bodies as `threat` reads them: `needs.opponent_target_value` over the Knock Outs I can
-    actually reach THIS turn.
+    actually reach THIS turn — **both seats**, each through its own damage route.
 
-    Reachability is `best_reachable_damage_vs` (my Active, under its full Attach Budget) against the
-    target's remaining HP — the shipped affordability oracle, not a second opinion about it. Only
-    their ACTIVE is reachable by damage at all; a benched body needs a snipe rider, which is an
-    attack's property and belongs to `attack_ev` (see `threat`'s `blind_to`).
+    Reachability is my Active's best affordable damage against the target's remaining HP, under the
+    full Attach Budget. The shipped affordability oracle, not a second opinion about it. What
+    changes with the seat is the DAMAGE, because a rider is a different route rather than a wider
+    read of the same one:
+
+    * their **Active** — `best_reachable_damage_vs`, the damage model against the body actually in
+      front of me (Issue #281).
+    * their **Bench** — `best_reachable_bench_damage`, the attack's single-target snipe RIDER
+      (Issue #284). Printed damage lands on the Active; a benched body is reachable only through a
+      rider, which ignores Weakness and Resistance by rule (ADR-0022) and is zeroed on the Active
+      path by `predicted_damage` itself. Bench-immune (`docs/rules.md` §11) and unreadable bodies
+      contribute nothing, failing closed.
 
     **Against THIS defender, not in the abstract** (Issue #281). The read used to be the
     opponent-INDEPENDENT `best_reachable_damage` — the biggest *printed* number my Active could
@@ -841,26 +899,52 @@ def _reachable_target_values(model: "StateModel") -> tuple:
     Solver's guarantee (``"min"``) nor a worst case (``"max"``). The incumbent is untouched, because
     it is `attach_value`'s counterfactual leg and that equation is corpus-ruled (ADR-0069 §2).
 
+    **Their BENCH, because chip standing on it is an asset** (Issue #284). The loop returned at most
+    one element, so damage already on their benched bodies was invisible: a board where six counters
+    sat there from last turn's Phantom Dive scored identically to a fresh one. `dragapult_ex`'s win
+    plan IS that asset — *"Phantom Dive pre-loads benched mons with softening chip you cash into
+    prizes on LATER turns"*, and *"Phantom Dive is the turn-ender, so Munkidori / Boss's / Cruel
+    Arrow resolve BEFORE it and convert prior-turn chip"*. What this prices is the STANDING position
+    (a body of theirs is one rider from dead, and that constrains what they can afford to bench),
+    exactly as the Active leg prices their Active's exposure. Converting either remains
+    `attack_ev`'s at the terminal action, which is what `_THREAT_CAP` and the module header's
+    two-band argument keep from being paid twice.
+
+    **`snipe_relevance.target_relevance` is deliberately NOT called here**, though it is the other
+    instrument the audit names. It answers *should I aim this turn's snipe at this body* — the
+    CONVERSION decision, which is `attack_ev`'s and the Pilot's snipe rung's — and its inputs
+    (`turns_to_ko_before`/`_after`, `rider_damage`, `prizes_needed`, the matched Brief priority) are
+    Pilot plumbing no `StateModel` supplies. Reading it would hand this family a second opinion
+    about a question another term owns, which the sole-supplier ruling forbids. What this leg needs
+    from that module is its SUBJECT — that a bench route exists at all — and that comes off
+    `AttackStat.benchSnipe` directly.
+
     ``attacker="mine"`` on the context is not boilerplate — the Damage Formula's variables are named
     relative to the attacker, so `survival`'s context and this one are different dicts and one
-    cannot answer both.
+    cannot answer both. It is read inside the Active branch only: the bench route is a printed rider
+    that no scaler reaches, so passing a context there would key a memo on a value nothing consumes.
 
     ``survival_shift=0`` is the fail-closed answer to a missing supplier, named in `blind_to` rather
     than hidden: the shift is a Δ of `turns_to_ko_me` under REMOVAL of the body and the model exposes
     no removal-delta route. `phase` is still threaded honestly, so the term sharpens with the race
     exactly as `phase_scale` says it should once the shift becomes readable."""
-    target = model.theirs.active
-    if target is None or not target.hp_remaining:
-        return ()
-    reach = model.mine.best_reachable_damage_vs(model.mine.active, target,
-                                                context=model.damage_context(attacker="mine"))
-    if reach < target.hp_remaining:
-        return ()
+    mine = model.mine.active
     race = model.prize_race
     phase = _needs.phase_scale(race_ahead=None,
                                opp_prizes_remaining=race.opp_prizes_remaining)
-    return (_needs.opponent_target_value(prize_advance=float(target.prize_value),
-                                         survival_shift=0, phase=phase),)
+    values = []
+    for target in model.theirs.bodies:
+        if not target.hp_remaining:
+            continue
+        reach = (model.mine.best_reachable_damage_vs(
+                     mine, target, context=model.damage_context(attacker="mine"))
+                 if target.is_active else
+                 model.mine.best_reachable_bench_damage(mine, target))
+        if reach < target.hp_remaining:
+            continue
+        values.append(_needs.opponent_target_value(prize_advance=float(target.prize_value),
+                                                   survival_shift=0, phase=phase))
+    return tuple(values)
 
 
 def _ready_bodies(model: "StateModel") -> tuple:
@@ -1145,9 +1229,10 @@ def threat(targets: Iterable[float]) -> float:
 
     A plain SUM rather than a max-with-discount, matching the frozen composition. The bound that
     keeps it from becoming a wish is the reachability FILTER the caller applies, not an arithmetic
-    one: in practice only their Active is reachable by damage at all, so the sum has one or two
-    terms — a benched body is reachable only through a snipe rider, which `attack_ev` prices at the
-    terminal action and this family deliberately does not (see its `blind_to`).
+    one: their Active is reachable by printed damage, and a benched body only through the attack's
+    snipe RIDER (Issue #284), so on most boards the sum has one term and it can never have more than
+    six. CONVERTING any of them is still `attack_ev`'s at the terminal action; what this family
+    prices is the exposure standing on the board (see its `blind_to`).
 
     **POSITIONAL, so capped** at :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 /
     `KO_SCORE`), which is where the my-side/their-side asymmetry described in the module header

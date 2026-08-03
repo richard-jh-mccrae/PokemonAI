@@ -22,7 +22,19 @@ Pilot and no engine boot. Card facts VERIFIED at source (`data/EN_Card_Data.csv`
     a SINGLE hop, with no intermediate Lucario in this set (`docs/rulebook.txt` Appendix 1).
     Aura Jab ``{F}`` 130 / Mega Brave ``{F}{F}`` 270.
   * Dragapult ex (121) Stage 2 HP 320, {N} — Jet Headbutt ``●`` 70 / Phantom Dive ``{R}{P}`` 200.
-  * Munkidori (112) Basic HP 70, {D}.
+    Its **Category** column reads ``Tera(Dragon)`` and it prints a ``[Tera]`` ability — *"As long as
+    this Pokémon is on your Bench, prevent all damage done to this Pokémon by attacks"* — so
+    `CardStat.tera` is True. Verified twice, at `data/EN_Card_Data.csv` Card ID 121 and against the
+    engine's own `CardData.tera` through `EngineCardStatProvider`. (The ``Rule`` column on that row
+    is ``Pokémon ex``; the two are different columns and Issue #284's first draft of this line cited
+    the wrong one.) Declared here from Issue #284, which is the first case that reads the flag: every
+    board in this file before then had Dragapult ex ACTIVE, where it says nothing — `docs/rules.md`
+    §11 scopes the immunity to a BENCHED body.
+  * Munkidori (112) Basic HP **110**, **{P}**, Weakness {D}, Resistance {F}, Retreat 1. Corrected by
+    Issue #284 from a fixture that had declared HP 70 / {D} — neither of which is what the row says,
+    and the module header claims these are verified. No board moved: every `_poke` sets `hp`
+    explicitly, so the stat's HP was never the number under test, and Munkidori declares no attacks
+    here for a Weakness or Resistance to apply to.
   * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and {F} is added here as 6 ({W} as 3).
   * Prize values: Mega ex 3, ex 2, else 1 (`docs/rules.md` §6).
 
@@ -81,9 +93,10 @@ E_R, E_P, E_F, E_D, E_W = 2, 5, 6, 7, 3
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
                         evolvesFrom="Drakloak", energyType=DRAGON, maxDamage=200, maxDamageCost=2,
-                        minAttackCost=1, minCostDamage=70,
+                        minAttackCost=1, minCostDamage=70, tera=True,
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
-    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=70, energyType=DARKNESS, cardType=0),
+    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC,
+                        weakness=DARKNESS, resistance=FIGHTING, retreatCost=1, cardType=0),
     RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, minAttackCost=2,
                     maxDamage=30, maxDamageCost=2, attacks=(), cardType=0),
     MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, energyType=FIGHTING,
@@ -1316,6 +1329,176 @@ def test_with_no_boost_in_play_the_context_is_EMPTY_and_the_scalar_is_unmoved():
     assert sv.state_value(no_tracker, working=without) == sv.state_value(empty_tracker,
                                                                         working=empty)
     assert without == empty
+
+
+# ── standing chip on THEIR bench is an asset (Issue #284) ─────────────────────────────────────────
+#
+# `_reachable_target_values` used to return AT MOST ONE element — their Active — so damage already
+# standing on their Bench was invisible between turns. `dragapult_ex`'s win plan is exactly that
+# asset: *"Phantom Dive pre-loads benched mons with softening chip you cash into prizes on LATER
+# turns"*, and the board carrying six counters scored identically to a fresh one.
+#
+# The bench leg is a DIFFERENT damage route from the Active leg and not a wider version of it. An
+# attack's printed damage lands on the Active; a benched body is reachable only through the attack's
+# snipe RIDER, which ignores Weakness and Resistance by rule (ADR-0022, and `damage.py`'s own module
+# note), so it never routes through `predicted_damage` — `combat.py`'s oracle says so outright:
+# *"Jetting Blow is zeroed (its bench rider is a separate path)"*.
+#
+# Card facts verified at `data/EN_Card_Data.csv`:
+#   * Mega Starmie ex (1031) Jetting Blow ``{W}`` 120 — *"This attack also does 50 damage to 1 of
+#     your opponent's Benched Pokémon."*  The fixture's only bench route.
+#   * Mega Lucario ex (678) Aura Jab / Mega Brave — no rider of any kind. The negative control.
+#   * Dragapult ex (121) is **Tera(Dragon)**: no attack damage while Benched (`docs/rules.md` §11).
+
+
+UNREADABLE_CARD = 909909          # deliberately absent from `_STATS` — the fail-closed case
+
+
+def _bench_board(their_bench, *, my_active=None, my_energies=(E_W,), their_active=None):
+    """MY Mega Starmie ex Active — the fixture's one bench rider — against THEIR chosen Bench.
+
+    Their Active defaults to a 320-HP Dragapult ex, which Jetting Blow's exact 120 cannot reach, so
+    the ACTIVE leg contributes nothing and every non-zero `threat` on these boards is the BENCH leg.
+    The turn's Energy is already spent (`energy_attached=True`), so the Attach Budget adds nothing
+    and reachability is a fact about the fixture rather than about the deck's colours."""
+    return _model(
+        _player(active=my_active or _poke(MEGA_STARMIE, hp=330, energies=list(my_energies)),
+                prize=4),
+        _player(active=their_active or _poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
+                bench=list(their_bench), prize=4),
+        energy_attached=True)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_counters_standing_on_their_benched_body_are_worth_something_to_me():
+    """The headline. Two boards identical but for the counters on ONE benched body, and the chipped
+    one must score better for me.
+
+    Six counters is Phantom Dive's payload exactly (*"Put 6 damage counters on your opponent's
+    Benched Pokémon in any way you like"* — 60 damage, `data/EN_Card_Data.csv` row 121), and a
+    70-HP Munkidori carrying them sits at 10 HP, inside Jetting Blow's 50. Fresh, it is not: 50 does
+    not reach 70, so the family reads exactly 0 and the whole scalar cannot tell the boards apart."""
+    fresh = _bench_board([_poke(MUNKIDORI, hp=70, serial=11)])
+    chipped = _bench_board([_poke(MUNKIDORI, hp=70, damage=60, serial=11)])
+
+    assert _threat_of(fresh) == 0.0, "50 of rider does not reach a fresh 70 HP"
+    assert _threat_of(chipped) > 0.0, "…and does reach the 10 HP the chip leaves"
+    assert sv.state_value(chipped) > sv.state_value(fresh)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_the_bench_leg_still_stops_short_of_a_prize():
+    """The cap, on the worst board the widened loop can be handed: every one of their six bodies
+    chipped to 10 HP and every one of them a 3-prize Mega Evolution Pokémon ex.
+
+    Six bodies is the maximum — *"Each player may have up to 5 Pokemon on the Bench at any one
+    time"* (`docs/rulebook.txt` L75) plus the Active — so this is the largest sum the family can be
+    asked for. It must stay under one prize: converting any of these takes an ATTACK, `attack_ev`
+    prices that at the terminal action, and `score = state_value(end) + EV(terminal)` adds the two.
+    Widening the loop is exactly the change that could have broken the two-band argument.
+
+    **The cap is asserted to BITE, not merely to hold.** ``threat`` is `min(_THREAT_CAP, sum)`, so
+    `threat <= _THREAT_CAP` is true of every board ever built and asserting it alone would be a
+    tautology — the test would pass against a bench leg that had been deleted. What has to be shown
+    is that the RAW sum this widening produces genuinely exceeds a prize, i.e. that the bound is what
+    stops it rather than the inputs being small. That is the `raw > 1.0` line."""
+    bench = [_poke(MEGA_STARMIE, hp=330, damage=320, serial=11 + i) for i in range(5)]
+    board = _bench_board(bench, their_active=_poke(MEGA_STARMIE, hp=330, damage=320, serial=9))
+
+    raw = sum(sv._reachable_target_values(board))
+    assert len(sv._reachable_target_values(board)) == 6, "all six bodies reachable — the worst case"
+    assert raw > 1.0, "…and their uncapped sum really does exceed one prize, so the cap is load-bearing"
+    assert 0.0 < _threat_of(board) <= sv._THREAT_CAP < 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_a_TERA_body_on_their_bench_contributes_nothing_however_damaged():
+    """Bench immunity, failing CLOSED. *"Tera Pokémon ex take NO attack damage while Benched"*
+    (`docs/rules.md` §11, `[RULE: Appendix 6]`), so a Dragapult ex one counter from death is not a
+    target at all — and the same card in the ACTIVE seat is, which is what makes this a fact about
+    the seat rather than about the card.
+
+    The control is a body at the SAME 10 HP that is not Tera. Without it, a bench leg that had
+    quietly stopped firing altogether would pass this test."""
+    tera = _bench_board([_poke(DRAGAPULT, hp=320, damage=310, serial=11)])
+    plain = _bench_board([_poke(MEGA_STARMIE, hp=330, damage=320, serial=11)])
+
+    assert _threat_of(tera) == 0.0
+    assert _threat_of(plain) > 0.0, "the control: a non-Tera body at the same 10 HP DOES price"
+
+    # …and the immunity is scoped to the BENCH. The same Tera body Active is reachable, through the
+    # Active leg's own damage read (Jetting Blow's exact 120 against 10 HP).
+    active = _bench_board([], their_active=_poke(DRAGAPULT, hp=320, damage=310, serial=9))
+    assert _threat_of(active) > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_an_UNREADABLE_benched_body_contributes_nothing():
+    """The other half of failing closed, and the one the rules cannot help with. `CardStat` has **no
+    immunity field** beyond `tera` (`docs/rules.md` §11's own ⚠️, ADR-0020), so a body whose card
+    does not resolve could be an Antique Plume Fossil or a Misty's Magikarp — both carry
+    unconditional prevent-all-while-Benched. A body that makes no claim is not credited.
+
+    Note the direction: an unknown card's `hp` is still on the board and `prize_value` fails open at
+    1, so WITHOUT the guard this board would price as a reachable 1-prize Knock Out."""
+    unknown = _bench_board([_poke(UNREADABLE_CARD, hp=10, serial=11)])
+    known = _bench_board([_poke(MUNKIDORI, hp=70, damage=60, serial=11)])
+
+    assert _threat_of(unknown) == 0.0
+    assert _threat_of(known) > 0.0, "the control: a resolvable body at the same reach DOES price"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_without_a_bench_RIDER_their_bench_prices_at_nothing_however_soft():
+    """The gate is a snipe ROUTE, not proximity to death. Mega Lucario ex prints no rider on either
+    attack, so a 10-HP body on their bench is untouchable by it this turn and the family must say
+    so — otherwise the widened loop would credit every deck with a bench route it does not have.
+
+    Both boards carry the identical bench; only my Active differs, and Mega Brave's 270 misses their
+    320-HP Active on both, so the Active leg is silent either way."""
+    bench = [_poke(MUNKIDORI, hp=70, damage=60, serial=11)]
+    riderless = _bench_board(bench, my_active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]))
+    rider = _bench_board(bench)
+
+    assert _threat_of(riderless) == 0.0
+    assert _threat_of(rider) > 0.0, "the control: the same bench under an attacker that CAN reach it"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_the_bench_rider_never_leaks_into_the_ACTIVE_reachability_read():
+    """The two legs stay separate. Their Active at 170 HP is out of Jetting Blow's exact 120 and
+    would be inside 120 + the 50 rider — but the rider does not land on the Active, and the oracle
+    that prices the Active already zeroes it (`combat.predicted_damage`).
+
+    A widening that reached for one damage number per body, rather than one per SEAT, fails here."""
+    board = _bench_board([], their_active=_poke(DRAGAPULT, hp=320, damage=150, serial=9))
+    assert board.theirs.active.hp_remaining == 170
+    assert _threat_of(board) == 0.0
+
+    # …and the control, so a bench leg that reached nothing at all cannot pass: at 120 it does.
+    reachable = _bench_board([], their_active=_poke(DRAGAPULT, hp=320, damage=200, serial=9))
+    assert _threat_of(reachable) > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_the_dragapult_cross_turn_shape_is_priced_BEFORE_the_gust_and_not_only_after():
+    """`dragapult_ex`'s doctrine, as two boards a turn apart: *"Phantom Dive is the turn-ender, so
+    Munkidori / Boss's / Cruel Arrow resolve BEFORE it and convert **prior-turn** chip."*
+
+    The AFTER half was never the gap — once the gust puts the chipped body in the Active seat, the
+    Active leg reads its remaining HP and has done since Issue #281. The BEFORE half is this issue:
+    while the body is still benched, the chip is an asset the board carries between turns, and
+    nothing priced it. Both halves are asserted so the distinction is executable rather than
+    argued."""
+    pre_fresh = _bench_board([_poke(MUNKIDORI, hp=70, serial=11)])
+    pre_chipped = _bench_board([_poke(MUNKIDORI, hp=70, damage=60, serial=11)])
+    post_fresh = _bench_board([], their_active=_poke(MUNKIDORI, hp=70, serial=9))
+    post_chipped = _bench_board([], their_active=_poke(MUNKIDORI, hp=70, damage=60, serial=9))
+
+    assert _threat_of(post_fresh) > 0.0 and _threat_of(post_chipped) > 0.0, (
+        "after the gust BOTH are reachable — Jetting Blow's 120 covers a fresh 70 HP")
+    assert _threat_of(pre_fresh) == 0.0
+    assert _threat_of(pre_chipped) > 0.0
 
 
 # ── inertness is over; the seam is not ────────────────────────────────────────────────────────────
