@@ -1,4 +1,6 @@
 """Deduplicating the Correction log: collapse exact duplicates, keep conflicts and patterns."""
+import pytest
+
 from train.blunder.correction import build_correction
 from train.blunder.decisions import Decision
 from train.blunder.store import (append_correction, dedup_corrections, find_conflicts,
@@ -53,12 +55,10 @@ def test_dedup_keys_a_turn_correction_by_its_turn_not_its_anchor_frame():
     assert len(dedup_corrections([_c(scope="turn", turn=4), _c(scope="turn", turn=6)])) == 2
 
 
-def test_dedup_keys_a_match_correction_by_episode_and_seat():
-    """A Match Correction has no subject: one per (episode, seat), regardless of where it was tagged."""
-    a = _c(scope="match", correct=(), frame=3, rationale="first")
-    b = _c(scope="match", correct=(), frame=40, rationale="refined")
-    assert len(dedup_corrections([a, b])) == 1
-    assert len(dedup_corrections([a, _c(scope="match", correct=(), seat=1)])) == 2   # other seat
+def test_match_scope_is_retired_before_dedup_can_key_it():
+    """Issue #353: match is no longer a legal writer scope, so dedup has no live match identity."""
+    with pytest.raises(ValueError, match="scope must be one of"):
+        _c(scope="match", correct=(), frame=3, rationale="first")
 
 
 def test_load_corrections_dedups_by_default_with_raw_opt_out(tmp_path):
