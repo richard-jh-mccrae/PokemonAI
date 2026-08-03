@@ -7,10 +7,10 @@ colorful viewer's perspective and auto-labels each saved blunder as own/peer (wi
 agent) from the frame's acting seat -- so blunders for BOTH players are taggable. HEROZ is
 cross-origin so its step can't be read; the step box is the bridge.
 
-A **Scope** selector says what the tag is *about* (ADR-0049): this decision, the whole turn, or the
-whole match. You always tag from a real Decision -- the **Anchor** -- but off decision scope the
-record is keyed by the Scope's subject, ``correct`` is optional (turn) or forbidden (match), and the
-server embeds the Span of covered Decisions. See ADR-0014 / ADR-0015 / ADR-0049.
+A **Scope** selector says what the tag is *about* (ADR-0049): this decision or the whole turn. You
+always tag from a real Decision -- the **Anchor** -- but off decision scope the record is keyed by
+the Scope's subject, ``correct`` is optional, and the server embeds the Span of covered Decisions.
+See ADR-0014 / ADR-0015 / ADR-0049.
 """
 from __future__ import annotations
 
@@ -147,7 +147,7 @@ class _Handler(BaseHTTPRequestHandler):
                 replace_id=form.get("editing_id") or None,
                 attribution=form.get("attribution") or None,
                 posture_mismatch=bool(form.get("posture_mismatch", False)),  # opp Read wrong (ADR-0041)
-                scope=form.get("scope", "decision"),   # decision | turn | match (ADR-0049); the Span
+                scope=form.get("scope", "decision"),   # decision | turn (ADR-0049); the Span
                 turn_plan=_turn_plan_from_form(form),   # develop-rung Phase 3: the ideal-line note
             )                                          # is assembled server-side from the Anchor
         except (KeyError, ValueError) as exc:
@@ -297,10 +297,10 @@ function openColorful(target){
   const inp=document.createElement('input'); inp.type='hidden'; inp.name='json'; inp.value=JSON.stringify(vl);
   f.appendChild(inp); document.body.appendChild(f); f.submit(); f.remove();
 }
-// A scoped tag (turn/match, ADR-0049) shares its Anchor step with the Decision tags inside it, so
+// A scoped tag (turn, ADR-0049) shares its Anchor step with the Decision tags inside it, so
 // the row states what it is ABOUT; a prescription-free one has no "→ correct" line to show.
 const scopeTag=it=>it.scope==='turn'?`turn ${it.subject} (${it.span_len} decisions)`
-  :it.scope==='match'?`whole match (${it.span_len} turns)`:'';
+  :'';
 async function refreshList(){
   LIST=await (await fetch('/corrections.json')).json();
   $('count').textContent=LIST.length;
@@ -332,32 +332,29 @@ function editItem(k){
   [...$('correct').options].forEach(o=>o.selected=it.correct.includes(+o.value));
   editingId=it.id; $('msg').className=''; $('msg').textContent='editing — Save to replace'; $('right').scrollTop=0;
 }
-// The Scope selector. `correct` is mandatory at decision scope, OPTIONAL at turn scope (giving it
-// asserts THIS Anchor is the first divergent Decision), and impossible at match scope — no single
-// select carries a whole-match verdict. Identity follows the scope's subject, not the frame.
+// The Scope selector. `correct` is mandatory at decision scope and OPTIONAL at turn scope (giving it
+// asserts THIS Anchor is the first divergent Decision). Identity follows the scope's subject, not
+// the frame.
 function fillScope(f){
   const keep=$('scope').value||'decision';             // sticky while stepping frames
   $('scope').innerHTML='';
   $('scope').add(new Option('this decision','decision'));
   $('scope').add(new Option('turn '+f.turn+' (this seat)','turn'));
-  $('scope').add(new Option('whole match','match'));
   $('scope').value=keep;
+  if(!$('scope').value) $('scope').value='decision';
   applyScope();
 }
 function applyScope(){
   const s=$('scope').value, sel=$('correct'), optional=FR[i].min_count===0;
-  if(s==='match'){ [...sel.options].forEach(o=>o.selected=false); }
-  sel.disabled=(s==='match')||!FR[i].taggable;
+  sel.disabled=!FR[i].taggable;
   // At decision scope on an OPTIONAL select, selecting nothing is itself the ruling — a decline.
   // Say so, or the affordance exists and no human knows it is there.
   $('correctlab').innerHTML=s==='decision'?(optional
       ?'Correct move(s) — the better legal option, or <i>none</i> to rule a <b>decline</b>'
       :'Correct move(s) — the better legal option')
-    :s==='turn'?'Correct move(s) — <i>optional</i>: the first divergent option at this anchor'
-    :'Correct move(s) — <i>n/a</i>: a whole-match verdict names no option';
+    :'Correct move(s) — <i>optional</i>: the first divergent option at this anchor';
   $('scopehint').textContent=s==='decision'?''
-    :s==='turn'?'keyed by the turn, not this frame — every decision of the turn travels with the tag'
-    :'keyed by (episode, seat) — the played line of every turn travels with the tag';
+    :'keyed by the turn, not this frame — every decision of the turn travels with the tag';
   $('turnplan').style.display=(s==='turn')?'block':'none';   // develop-rung Phase-3 ideal-line note
   if(s==='turn') updateFired();
 }
@@ -493,7 +490,7 @@ $('reload').onclick=()=>openColorful('viewer'); $('tab').onclick=()=>openColorfu
 $('plain').onclick=()=>{$('viewer').src='/viewer/';};
 $('save').onclick=async()=>{
   const f=FR[i], scope=$('scope').value, own=isOwn(f.seat);
-  const correct=scope==='match'?[]:[...$('correct').selectedOptions].map(o=>+o.value);
+  const correct=[...$('correct').selectedOptions].map(o=>+o.value);
   // An empty `correct` at decision scope is a DECLINE — "take none of these" — and is a real ruling
   // wherever the select is OPTIONAL (Issue #229). It is refused everywhere else, including where
   // `min_count` is unknown, which is exactly what `build_correction` does with the same number: the

@@ -42,10 +42,8 @@ def test_review_key_is_scope_aware():
     """ADR-0049: a scoped Correction is ledgered by its Scope's subject, so disposing of a Turn
     Correction never retires the Decision Corrections inside that Turn (and vice versa)."""
     turn = _Corr(81904451, 37, scope="turn", subject=12, seat=1)
-    match = _Corr(81904451, 37, scope="match", subject=None, seat=1)
     assert review_key(turn) == "81904451-t12s1"
-    assert review_key(match) == "81904451-m1"
-    assert len({review_key(turn), review_key(match), review_key(_Corr(81904451, 37))}) == 3
+    assert len({review_key(turn), review_key(_Corr(81904451, 37))}) == 2
 
 
 @pytest.mark.req("REQ-TUNE-0031")

@@ -11,8 +11,8 @@ option was right; it has failed to state anything, and grading a decider against
 decline into a REGRESSION (ep83661652 f3, whose rationale says the opposite of its fields).
 
 The scope guard is the half that only a SHARED predicate needs, and the corpus proves why: at
-`turn`/`match` scope `correct: []` is encodable and is a real DECLINE, which `satisfies_human`
-grades exactly. Unguarded, this predicate would swallow `86088989|0|turn|0`.
+`turn` scope `correct: []` is encodable and is a real DECLINE, which `satisfies_human` grades
+exactly. Unguarded, this predicate would swallow `86088989|0|turn|0`.
 
 **Issue #251 ruled what the predicate is FOR: it REPORTS, it never excludes** (ADR-0112). The
 second half of this module guards that ruling from both directions — the Decision Gate readout must
@@ -72,14 +72,13 @@ def test_ordering_does_not_defeat_the_comparison():
 
 
 @pytest.mark.req("REQ-GATE-0009")
-@pytest.mark.parametrize("scope", ["turn", "match"])
-def test_a_scoped_decline_is_statable_and_must_not_be_swallowed(scope):
+def test_a_turn_scope_decline_is_statable_and_must_not_be_swallowed():
     """THE guard the lift added, and the corpus is the reason. `86088989|0|turn|0` records
     `correct: []` on a `minCount 0` select — at turn scope that is an ENCODABLE decline and a real
     ruling, which `satisfies_human` grades exactly. `[] == []` makes the bare comparison true, so
     without the scope test this predicate would drop a live ruling out of grading. A guard that
     blinds a ruling is worse than the false REGRESSION it was written to prevent."""
-    assert unstatable(_Rec(chosen=[], correct=[], scope=scope), _obs(0)) is False
+    assert unstatable(_Rec(chosen=[], correct=[], scope="turn"), _obs(0)) is False
 
 
 @pytest.mark.req("REQ-GATE-0009")

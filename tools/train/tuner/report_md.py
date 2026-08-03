@@ -51,8 +51,6 @@ def _where(proposal) -> str:
     the Anchor frame is only where the human happened to be looking when they tagged it."""
     if proposal.scope == "turn":
         return f"ep {proposal.episode_id} turn {proposal.subject} (seat {proposal.seat})"
-    if proposal.scope == "match":
-        return f"ep {proposal.episode_id} whole match (seat {proposal.seat})"
     return f"ep {proposal.episode_id} f{proposal.frame}"
 
 

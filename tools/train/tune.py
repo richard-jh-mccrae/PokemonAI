@@ -76,12 +76,12 @@ def _posture_tag(mismatch: bool, archetype) -> str:
 
 def _scope_tag(scope, subject) -> str:
     """Line mark for a scoped Correction (ADR-0049): a Turn blunder is prima facie a Turn-Planner
-    (`plan_turn`) fix and a Match blunder a Match-Planner (`plan_match`) / doctrine one — never a
-    ranking constraint. A strong routing PRIOR for /blunder-buster, not an auto-route: a turn whose
-    `planned` is null throughout means the Planner never committed, and the gap is a Hypothesis."""
+    (`plan_turn`) fix, never a ranking constraint. A strong routing PRIOR for /blunder-buster, not
+    an auto-route: a turn whose `planned` is null throughout means the Planner never committed, and
+    the gap is a Hypothesis."""
     if scope == "turn":
         return f"[TURN {subject}] "
-    return "[MATCH] " if scope == "match" else ""
+    return ""
 
 
 def _live_posture(c) -> tuple[bool, object]:
@@ -192,9 +192,9 @@ def main(argv=None):
               f"(durable; /blunder-buster reads this)")
         n_scoped = sum(p.scope != "decision" for p in result.proposals)
         if n_scoped:
-            print(f"  *** {n_scoped} SCOPED correction(s) (turn/match, ADR-0049) — never a ranking "
-                  f"constraint: the fix is plan-layer code (plan_turn / plan_match), and a turn "
-                  f"blunder's gate is its Span re-drive, a match blunder's the ladder ***")
+            print(f"  *** {n_scoped} SCOPED correction(s) (turn, ADR-0049) — never a ranking "
+                  f"constraint: the fix is plan-layer code (plan_turn), and the blunder's gate "
+                  f"is its Span re-drive ***")
         for p in result.proposals:
             mark = ("[CRITICAL] " if p.critical else "") + _scope_tag(p.scope, p.subject) \
                 + _layer_tag(p.planner_committed, p.lethal_locked) \

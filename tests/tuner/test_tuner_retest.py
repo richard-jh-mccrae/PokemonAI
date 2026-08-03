@@ -160,16 +160,3 @@ def test_retest_span_re_drives_the_turn_and_stops_at_the_first_divergence():
     assert diverges["steps"][1] == {"frame": 1, "chosen_before": [0], "chosen_after": None,
                                     "diverged": False, "off_policy": True}
 
-
-def test_retest_span_of_a_match_correction_is_empty_because_it_carries_no_obs():
-    """A Match Correction is doctrine (`seed-ladder`), not a re-drivable line: its per-Turn headers
-    hold no `obs`, so there is nothing to re-drive and the walker says so rather than guessing."""
-    d = Decision(episode_id="t", frame=0, seat=0, turn=4, select_context="Main",
-                 select_type="Main", options=_span_obs()["select"]["option"], chosen=[0],
-                 current={}, obs=_span_obs())
-    match = build_correction(d, source="own", agent="x", correct=[], category="slow_setup",
-                             rationale="never set up", scope="match",
-                             span=[{"turn": 1, "seat": 0, "chosen_labels": ["Play A"]}])
-    walked = retest_span(match, _pilot())
-    assert walked["steps"] == [] and walked["first_divergence"] is None
-    assert walked["scope"] == "match" and walked["span_len"] == 1

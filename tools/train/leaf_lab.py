@@ -182,6 +182,8 @@ def is_leaf_frame(c) -> bool:
     MAIN-select pick correction that names a ``correct`` option — the human's intended first action,
     whatever the correction's scope. Non-MAIN / obs-less records are excluded: the offline sim reseeds
     ONLY from a MAIN-select board (the leaf-lab gotcha), so they could never be scored regardless."""
+    if getattr(c, "scope", None) == "match":
+        return False
     obs = getattr(c, "obs", None)
     if not obs:
         return False

@@ -15,7 +15,6 @@ dispositioned subject::
       "_note": "...",
       "81904451-37":     {"disposition": "refuted",  "reason": "forgoes a KO",   "round": "2026-06-27"},
       "81904451-t12s1":  {"disposition": "covered",  "reason": "plan_turn rung", "round": "2026-07-10"},
-      "81904451-m1":     {"disposition": "deferred", "reason": "multi-turn",     "round": "2026-07-10"}
     }
 
 Keys starting with ``_`` are comments. Append entries with ``tools/train/review_correction.py``.
@@ -76,15 +75,11 @@ def review_key(correction) -> str:
 
     - ``decision`` → ``"<episode_id>-<frame>"``   (unchanged; the pre-Scope key)
     - ``turn``     → ``"<episode_id>-t<turn>s<seat>"``  (seat needed: turn 0 is the shared setup phase)
-    - ``match``    → ``"<episode_id>-m<seat>"``   (both seats can be `own` in self-play)
-
     So disposing of a Turn Correction never retires the Decision Corrections inside that Turn.
     """
     scope = getattr(correction, "scope", "decision")
     if scope == "turn":
         return f"{correction.episode_id}-t{correction.subject}s{correction.seat}"
-    if scope == "match":
-        return f"{correction.episode_id}-m{correction.seat}"
     return anchor_form(correction)          # decision scope: the key IS the Anchor form
 
 

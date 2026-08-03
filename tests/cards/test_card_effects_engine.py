@@ -12,7 +12,8 @@ tags discard: an unambiguous draw trainer measures its printed count, unambiguou
 trainers measure their printed amounts. Card texts verified at source (cg.api
 ``all_card_data``), never memory:
 
-  * 1224 Cheren (Supporter): "Draw 3 cards." — deterministic on the stable pass.
+  * 1224 Cheren (Supporter): "Draw 3 cards." — stable pass, with bounded retry if
+    the probe deck itself caps the draw.
   * 1112 Super Potion (Item): "Heal 60 damage from 1 of your Pokémon. If you healed
     any damage in this way, discard an Energy from that Pokémon." — combat pass;
     also carries the measured ``discard_own_energy`` rider.
@@ -49,10 +50,10 @@ def cards():
 
 @pytest.mark.req("REQ-EFFECT-0009")
 def test_cheren_measures_draw_3(cards):
-    # "Draw 3 cards." — stable pass is deterministic (card plays as soon as
-    # drawn) -> hard assert: exactly 3 DRAW logs -> amount 3
+    # "Draw 3 cards." — stable pass, with bounded retry on measured deck exhaustion.
+    # Hard assert: exactly 3 DRAW logs -> amount 3.
     rec = probe_card(1224, cards, attack=False)
-    assert rec is not None, "Cheren never became playable — probe harness regression?"
+    assert rec is not None, "Cheren never became playable or every retry was deck-limited"
     clauses = classify_effect_clauses(cards[1224], probe=rec)
     assert {"kind": "draw", "amount": 3} in clauses
 

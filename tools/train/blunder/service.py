@@ -123,31 +123,10 @@ def _turn_span(replay: dict, *, seat: int, turn: int, live_records) -> list[dict
     ]
 
 
-def _match_span(replay: dict, *, own_seat: int, live_records) -> list[dict]:
-    """Per-Turn headers for BOTH seats, in film order — the played line of the whole Episode, with
-    the opponent's turns legible. No ``obs``: nothing plans across turns, so a Match Correction is
-    doctrine (`seed-ladder`), never re-driven. Our own turns carry the Match Planner's ``game_plan``
-    (ADR-0045) off the live trace, which is what a wrong-plan verdict is about."""
-    groups: dict = {}
-    for d in iter_decisions(replay):
-        group = groups.setdefault((d.turn, d.seat), {
-            "turn": d.turn, "seat": d.seat, "frames": [], "contexts": [], "chosen_labels": [],
-            "game_plan": None})
-        group["frames"].append(d.frame)
-        group["contexts"].append(d.select_context)
-        group["chosen_labels"].append(_labels_for(d, d.chosen))
-        if group["game_plan"] is None and d.seat == own_seat:      # first plan we see that turn
-            group["game_plan"] = (_live_for(replay, live_records, seat=d.seat,
-                                            frame=d.frame) or {}).get("game_plan")
-    return sorted(groups.values(), key=lambda g: g["frames"][0])
-
-
 def build_span(replay: dict, decision: Decision, *, scope: str, live_records) -> list[dict] | None:
     """The Span a Correction of ``scope`` embeds, anchored at ``decision`` (ADR-0049)."""
     if scope == "turn":
         return _turn_span(replay, seat=decision.seat, turn=decision.turn, live_records=live_records)
-    if scope == "match":
-        return _match_span(replay, own_seat=decision.seat, live_records=live_records)
     return None
 
 
@@ -213,7 +192,7 @@ def record_correction(
     existing = [c for c in load_corrections(store_path)
                 if identity_key(c) == key and c.id != replace_id]
     if existing:
-        where = {"decision": f"frame {frame}", "turn": f"turn {subject}"}.get(scope, "whole match")
+        where = {"decision": f"frame {frame}", "turn": f"turn {subject}"}.get(scope, "unknown scope")
         raise ValueError(
             f"a correction already exists at this {scope} (episode {decision.episode_id}, "
             f"seat {decision.seat}, {where}) - edit or remove it first")
