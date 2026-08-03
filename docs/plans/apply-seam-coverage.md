@@ -401,28 +401,39 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 - `unhomed()`: `{}`
 - `footprints_writing_unhomed()`: `{}`
 
-| clause kind/rider in pool | sites using it | has a write-set |
+| kind/rider/effect/cost in pool | sites using it | has a write-set |
 |---|---|---|
 | fetch | 57 | yes |
 | draw | 20 | yes |
-| gust | 6 | yes |
+| gust | 7 | yes |
 | heal | 5 | yes |
 | stadium_static | 5 | declared EMPTY |
 | accel | 4 | yes |
-| shuffle_both_hands | 3 | yes |
+| discard_3 | 4 | yes |
+| discard_hand | 4 | yes |
+| discard_1 | 3 | yes |
 | self_switch | 3 | yes |
-| energy_provide | 2 | yes |
+| shuffle_both_hands | 3 | yes |
 | coin | 2 | declared EMPTY |
+| energy_provide | 2 | yes |
+| hp_delta | 2 | yes |
 | shuffle_own_hand_in | 2 | yes |
-| discard_eot | 1 | yes |
-| shuffle_self_in | 1 | yes |
-| other_to_bottom | 1 | yes |
-| energy_recur | 1 | yes |
-| discard_basic_f_energy | 1 | yes |
-| discard_remainder | 1 | yes |
-| confuse_target | 1 | yes |
-| bounce_energy_to_hand | 1 | yes |
 | both_hands_to_bottom | 1 | yes |
+| bottom_2 | 1 | yes |
+| bounce_energy_to_hand | 1 | yes |
+| confuse_target | 1 | yes |
+| damage_boost | 1 | declared EMPTY |
+| damage_counters | 1 | yes |
+| damage_reduction | 1 | declared EMPTY |
+| discard_2 | 1 | yes |
+| discard_basic_f_energy | 1 | yes |
+| discard_eot | 1 | yes |
+| discard_opp_energy | 1 | yes |
+| discard_remainder | 1 | yes |
+| energy_recur | 1 | yes |
+| other_to_bottom | 1 | yes |
+| prevent_damage | 1 | declared EMPTY |
+| shuffle_self_in | 1 | yes |
 | stadium_trigger | 1 | declared EMPTY |
 
 <!-- END GENERATED -->
@@ -738,13 +749,31 @@ that `effect` field is a **second vocabulary that `undeclared_clauses()` never w
 and riders only). So the audit test passes while the card's actual write — the opponent's attached
 Energy and their discard — has no declared home. Eight copies across our decks.
 
-> **Fixed by Issue #300.** `effect` is audited vocabulary: `snapshot_coverage.VOCABULARY_KEYS` is
-> `("kind", "rider", "effect")`, the walk (`clause_vocabulary()`) moved out of the test and into the
+> **Fixed by Issue #300.** `effect` is audited vocabulary: `snapshot_coverage.VOCABULARY_KEYS` grew
+> it as a third key, the walk (`clause_vocabulary()`) moved out of the test and into the
 > module so no reader can under-walk it, and `discard_opp_energy` declares
 > `{attached_energy, their_discard_contents}`. `attached_energy` grew its their-side home in the same
 > change — a my-side-only home would have declared a write the snapshot could not show. The `coin`
 > entry keeps its empty write-set, correctly: the FLIP writes nothing, and the comment now says which
 > half of the clause it is talking about.
+>
+> **The same finding had a FOURTH axis, closed by Issue #350: `cost`.** `VOCABULARY_KEYS` is now
+> `("kind", "rider", "effect", "cost")`. A `cost` is a closed set of strings that moves cards between
+> zones — Ultra Ball's `discard_2` takes two cards from my hand to my discard, Kofu's `bottom_2` puts
+> two on the bottom of my deck — and none of the five committed values could fail the audit however
+> undeclared it was, because the walk did not visit the key. All five now declare a write-set, and
+> `bottom_2` is the sharp one: it is the only cost that discards nothing, writing `my_deck_count`,
+> `deck_odds` and `deck_order` instead, so the generalisation *"a cost discards from hand"* would
+> have been wrong about exactly the value Issue #302 added last. The ruling was that `cost` JOINS
+> `VOCABULARY_KEYS` rather than taking a registry of its own: a cost's zones UNION with its clause's,
+> which is what `apply_option.FOOTPRINTS` already committed to when it recorded that T4 builds a
+> per-option footprint *"by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses"*.
+>
+> The table above is a second beneficiary. It kept a hand-rolled `kind`-plus-`rider` walk, so a
+> section titled *Clause write-set health* had been reporting on two of the audit's axes ever since
+> `effect` was minted; it now goes through the same `snapshot_coverage.clause_values()` extractor the
+> audit does, which is why it gained the `effect` rows (7 values, 8 sites) and the `cost` rows
+> (5 values, 13 sites) in one run.
 
 **5. The registry itself is clean.** `clauses_writing_unhomed()`, `unknown_zones()`, `unhomed()` and
 `footprints_writing_unhomed()` are all empty after T1. The §3c contract is being kept; the exposure

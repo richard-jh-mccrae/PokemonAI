@@ -1023,16 +1023,20 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add(f"- `unhomed()`: `{snapshot_coverage.unhomed()}`")
     add(f"- `footprints_writing_unhomed()`: `{seam.footprints_writing_unhomed()}`")
     add("")
+    # Through `snapshot_coverage.clause_values`, NOT a hand-rolled `kind`-plus-`rider` walk. This
+    # table used to keep its own, so a section titled "Clause write-set health" reported on two of
+    # the audit's axes: `effect` had been outside it since Issue #300 minted it, and `cost` would
+    # have been outside it from Issue #350. One extractor, so the report cannot claim health over
+    # ground the audit walks and it does not (Issue #350).
     used = collections.Counter()
     for s in sites:
         for c in s.clauses:
-            used[c.get("kind")] += 1
-            if c.get("rider"):
-                used[c["rider"]] += 1
+            used.update(snapshot_coverage.clause_values(c))
     add(_table([[k, n, "yes" if snapshot_coverage.CLAUSE_WRITES.get(k) else
                  ("declared EMPTY" if k in snapshot_coverage.CLAUSE_WRITES else "**UNDECLARED**")]
-                for k, n in sorted(used.items(), key=lambda kv: -kv[1])],
-               ["clause kind/rider in pool", "sites using it", "has a write-set"]))
+                for k, n in sorted(used.items(), key=lambda kv: (-kv[1], kv[0]))],
+               ["/".join(snapshot_coverage.VOCABULARY_KEYS) + " in pool", "sites using it",
+                "has a write-set"]))
     add("")
     return "\n".join(L)
 

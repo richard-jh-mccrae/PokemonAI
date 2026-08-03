@@ -107,17 +107,27 @@ def test_every_clause_kind_rider_and_effect_in_the_compendium_declares_what_it_w
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
-def test_the_audit_walks_all_three_vocabularies_including_effect():
-    """**The Issue #300 hole, as a test.** The walk used to cover `kind` and `rider` only, so
-    Crushing Hammer's `{"kind": "coin", "effect": "discard_opp_energy"}` passed green while the write
-    it performs — the opponent's Energy, and their discard — had no declared home at all.
+def test_the_audit_walks_all_four_vocabularies_including_effect_and_cost():
+    """**The Issue #300 hole, as a test — and Issue #350's, which was the same hole one axis over.**
 
-    Asserted two ways, because either alone would rot: that the key list IS all three, and that the
-    value actually in the compendium comes back out of the walk. A walk that names `effect` but never
-    meets one would be an audit passing by absence."""
-    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect")
-    assert "discard_opp_energy" in sc.clause_vocabulary(_compendium())
+    The walk used to cover `kind` and `rider` only, so Crushing Hammer's
+    `{"kind": "coin", "effect": "discard_opp_energy"}` passed green while the write it performs —
+    the opponent's Energy, and their discard — had no declared home at all. `cost` was the fourth
+    such axis and went the same way: it is a closed set of strings that MOVES CARDS BETWEEN ZONES,
+    and no value of it could fail the audit however undeclared it was.
+
+    Asserted two ways per axis, because either alone would rot: that the key list IS all four, and
+    that a value actually in the compendium comes back out of the walk. A walk that names an axis
+    but never meets one of its values would be an audit passing by absence."""
+    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect", "cost")
+    vocab = sc.clause_vocabulary(_compendium())
+    assert "discard_opp_energy" in vocab
     assert sc.CLAUSE_WRITES["discard_opp_energy"] == {"attached_energy", "their_discard_contents"}
+    # The fourth axis, reached by the same walk: `undeclared_clauses` looks the string up, never the
+    # key position it came from, which is why one table serves all four (the `gust` precedent — one
+    # entry for a value that is a `kind` on Boss's Orders and an `effect` on Pokemon Catcher).
+    assert "discard_2" in vocab
+    assert sc.CLAUSE_WRITES["discard_2"] == {"my_hand_ids", "my_discard_contents"}
     # And the flip itself still writes nothing — `coin` is an RNG READ, which is the half of that
     # comment that was always true.
     assert sc.CLAUSE_WRITES["coin"] == frozenset()
@@ -131,6 +141,90 @@ def test_an_effect_value_nobody_declared_is_caught_by_the_walk():
     fabricated = {"1": [{"kind": "coin", "effect": "an_effect_that_does_not_exist"}]}
     assert sc.undeclared_clauses(sc.clause_vocabulary(fabricated)) == \
         ["an_effect_that_does_not_exist"]
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_every_cost_the_compendium_charges_declares_what_it_MOVES():
+    """**Issue #350's write-sets.** A `cost` is not a flavour note — every committed value moves real
+    cards out of my hand, and until this landed none of them said where the cards went.
+
+    Card text quoted from the engine dump `tools/meta_tracker/cards.json` (`all_card_data()`), never
+    recalled; which discard they land in is `docs/rulebook.txt` L78, *"Each player has their own
+    discard pile. Cards taken out of play go to the discard pile"* — MY discard, so a cost never
+    touches `their_discard_contents`.
+
+    * 1092 Secret Box    — *"discard 3 other cards from your hand"*  → `discard_3`
+    * 1121 Ultra Ball    — *"discard 2 other cards from your hand"*  → `discard_2`
+    * 1233 Canari / 1187 Morty's Conviction / 1208 Iris's Fighting Spirit
+                         — *"discard another card from your hand"*   → `discard_1`
+    * 1192 Carmine / 1206 Larry's Skill — *"Discard your hand…"*     → `discard_hand`
+    * 1200 Kofu — *"Put 2 cards from your hand on the bottom of your deck in any order."* →
+      `bottom_2`, **the one whose write-set differs**: nothing is discarded at all. Two cards leave
+      my hand and JOIN my deck, so the count goes UP, two known cards become unseen (`deck_odds`),
+      and where they land is `deck_order` — the registry's one `hidden` zone. A reader who assumed
+      "a cost discards from hand" would be wrong about exactly the value that was added last
+      (Issue #302), which is why it is pinned separately rather than folded into the four."""
+    discard_from_hand = {"my_hand_ids", "my_discard_contents"}
+    for value in ("discard_1", "discard_2", "discard_3", "discard_hand"):
+        assert sc.CLAUSE_WRITES[value] == discard_from_hand, value
+        assert "their_discard_contents" not in sc.CLAUSE_WRITES[value], value
+    assert sc.CLAUSE_WRITES["bottom_2"] == {"my_hand_ids", "my_deck_count", "deck_odds",
+                                            "deck_order"}
+    assert "my_discard_contents" not in sc.CLAUSE_WRITES["bottom_2"]
+    assert "deck_order" in sc.CLAUSE_WRITES["bottom_2"], \
+        "Kofu's cards go to a CHOSEN position in the deck — the zone no snapshot can hold"
+    assert sc.BY_ID["deck_order"].status == sc.HIDDEN
+    # Declared, and actually USED — a write-set for a cost no card charges would be untested prose.
+    vocab = set(sc.clause_vocabulary(_compendium()))
+    assert {"discard_1", "discard_2", "discard_3", "discard_hand", "bottom_2"} <= vocab
+    # **Deliberately NOT nondeterministic**, checked at source rather than inherited from the
+    # neighbouring `other_to_bottom` (which IS). Kofu names the cards and their order out of a hand
+    # I can see; `other_to_bottom` re-buries cards a `dig` pulled from an unknown deck, so simulating
+    # it is one sample. A cost consults no RNG, so none of the five defeats the determinism proof.
+    assert not ({"discard_1", "discard_2", "discard_3", "discard_hand", "bottom_2"}
+                & sc.NONDETERMINISTIC_CLAUSES)
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_a_cost_value_nobody_declared_is_caught_by_the_walk():
+    """**The positive control for the fourth axis**, and the one this issue turns on: before it
+    landed, `undeclared_clauses(["discard_2"])` already returned `["discard_2"]` — the table would
+    have bitten. What never happened was the WALK arriving, because `cost` was not in
+    `VOCABULARY_KEYS`, so `clause_vocabulary()` never yielded the value to be looked up.
+
+    So the bite is asserted through the walk, on a fabricated cost, on the same run as the green
+    assertion over the real compendium above — a red that only the table can produce would prove
+    nothing about whether the audit reaches `cost` at all."""
+    fabricated = {"1": [{"kind": "draw", "amount": 4, "cost": "a_cost_that_does_not_exist"}]}
+    assert sc.undeclared_clauses(sc.clause_vocabulary(fabricated)) == \
+        ["a_cost_that_does_not_exist"]
+    # …and the same walk on the same fabricated card still finds the legitimate `kind`, so the single
+    # result above is a measurement rather than a walk that reached nothing.
+    assert "draw" in sc.clause_vocabulary(fabricated)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_one_extractor_reads_a_clause_s_vocabulary_so_no_second_walk_can_drift():
+    """**Why `cost` was reachable to miss twice.** `VOCABULARY_KEYS` exists so *"which keys does the
+    audit walk?"* has ONE answer, but the census's write-set-health table
+    (`tools/apply_seam_coverage.py`) kept its own hand-rolled `kind`-plus-`rider` walk — so the
+    report titled *Clause write-set health* has been silently reporting on two axes since Issue #300
+    minted the third, and would have missed the fourth for the same reason.
+
+    :func:`snapshot_coverage.clause_values` is the single per-clause extractor both readers now go
+    through. Asserted here in the direction that matters: it yields every axis, in `VOCABULARY_KEYS`
+    order, and tolerates the list-valued rider `clause_vocabulary` always accepted — the shape a
+    hand-rolled `used[c["rider"]] += 1` would have raised `TypeError` on."""
+    clause = {"kind": "coin", "effect": "gust", "amount": 2, "cost": "discard_2"}
+    assert sc.clause_values(clause) == ["coin", "gust", "discard_2"]
+    assert sc.clause_values({"kind": "draw", "rider": ["shuffle_own_hand_in", "other_to_bottom"]}) \
+        == ["draw", "shuffle_own_hand_in", "other_to_bottom"]
+    assert sc.clause_values({"amount": 3}) == []
+    # The set walk is now this extractor, so the two can no longer disagree about the real artifact.
+    from_extractor = {v for cls in sc.clause_lists(_compendium()).values()
+                      for c in cls for v in sc.clause_values(c)}
+    assert sorted(from_extractor) == sc.clause_vocabulary(_compendium())
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
@@ -298,8 +392,19 @@ def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
 def test_no_clause_the_compendium_knows_writes_to_a_zone_with_no_home():
     """**The strong invariant.** Owed zones are a schedule; a clause that already writes to one makes
     them a defect — the seam would model that clause and the delta would silently omit part of what
-    it did. Non-empty here means the zone must be homed BEFORE that clause is modelled."""
+    it did. Non-empty here means the zone must be homed BEFORE that clause is modelled.
+
+    **It reads as a complete statement about what the compendium writes, so it must be told which
+    axes it is complete OVER** (Issue #350). It walks `CLAUSE_WRITES`, whose keys are the values of
+    all four :data:`snapshot_coverage.VOCABULARY_KEYS` — `kind`, `rider`, `effect` and, since this
+    issue, `cost`. Until Issue #300 it was three and `effect` was silently outside it; until Issue
+    #350 it was three-plus-`cost`-missing and Ultra Ball's two discarded cards were outside it. The
+    second assertion is what keeps the sentence honest: if a fifth axis is ever minted, this fails
+    rather than quietly narrowing what "no clause" means."""
     assert sc.clauses_writing_unhomed() == {}
+    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect", "cost"), (
+        "the invariant above is only as complete as the axes CLAUSE_WRITES is keyed on — a new "
+        "vocabulary key needs its values declared before this test may claim to cover them")
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")

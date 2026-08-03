@@ -24,8 +24,8 @@ This module is the enumeration, as data:
 
 * :data:`CLAUSE_WRITES` — the Effect Clause vocabulary (`card_effects.json`, ADR-0032) mapped to the
   zones each clause writes. The audit test walks the committed compendium and fails on a clause
-  ``kind``, ``rider`` **or** ``effect`` with **no declared write-set**, which is the "a new clause
-  kind must fail rather than silently price 0" requirement made executable.
+  ``kind``, ``rider``, ``effect`` **or** ``cost`` with **no declared write-set**, which is the "a new
+  clause kind must fail rather than silently price 0" requirement made executable.
 
   ``effect`` was the third of those and it was unaudited until Issue #300: :func:`clause_vocabulary`
   walked kinds and riders only, so Crushing Hammer's
@@ -33,6 +33,27 @@ This module is the enumeration, as data:
   actually performs — the opponent's attached Energy, and their discard — had no declared home at
   all. The walk lives in THIS module rather than in the test for exactly that reason: a vocabulary
   the audit forgets to visit is an audit that passes by not looking.
+
+  ``cost`` was the FOURTH and went the same way (Issue #350). Ultra Ball's ``"cost": "discard_2"``
+  moves two real cards from my hand to my discard and Kofu's ``"bottom_2"`` puts two on the bottom
+  of my deck; neither value could fail the audit however undeclared it was, because the walk did not
+  visit the key. **The ruling is that `cost` JOINS `VOCABULARY_KEYS` rather than taking a registry
+  of its own**, on three grounds, none of them "it is smaller":
+
+  - It matches :data:`VOCABULARY_KEYS`' own printed definition — *a value drawn from a closed set
+    that must have a declared write-set* — exactly as `kind` / `rider` / `effect` do.
+  - **Union, not nesting**, and that was already ruled elsewhere rather than decided here:
+    `apply_option.FOOTPRINTS` records that T4 supplies a played card's per-OPTION footprint *"by
+    unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses"*. A flat `value → zones`
+    table unions by construction, so a cost's zones join its clause's with no new machinery. The
+    `gust` entry is the standing precedent that position does not matter: one key serves it as a
+    `kind` (Boss's Orders) and as an `effect` (Pokemon Catcher), because
+    :func:`undeclared_clauses` looks the string up, never where it came from.
+  - A second registry would need its own :func:`undeclared_clauses`, :func:`unknown_zones` and
+    :func:`clauses_writing_unhomed` — four functions duplicated to hold five entries whose values
+    are zone ids from the same :data:`BY_ID` namespace. That is the "two vocabularies that drift"
+    :func:`unknown_zones` exists to prevent, and the drift that let `effect` go unaudited from the
+    day it was authored.
 
 * :data:`CLAUSE_PARAMETERS` — the same discipline on the OTHER axis of the same dict (Issue #302).
   `CLAUSE_WRITES` audits clause VALUES; nothing audited the clause KEYS, so a parameter no reader
@@ -196,10 +217,10 @@ WRITABLE: tuple[Zone, ...] = (
 BY_ID = {z.id: z for z in WRITABLE}
 
 #: The Effect Clause vocabulary (`card_effects.json`, ADR-0032) -> the zones each clause WRITES.
-#: Keys are the committed `kind`, `rider` **and** `effect` values — all three, because all three are
-#: vocabulary a card can be written in. The audit test walks the compendium (:func:`clause_vocabulary`)
-#: and fails on any of them absent here: that is the "a new clause kind fails rather than silently
-#: pricing 0" requirement, executable.
+#: Keys are the committed `kind`, `rider`, `effect` **and** `cost` values — all four, because all
+#: four are vocabulary a card can be written in. The audit test walks the compendium
+#: (:func:`clause_vocabulary`) and fails on any of them absent here: that is the "a new clause kind
+#: fails rather than silently pricing 0" requirement, executable.
 CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # kinds
     "accel": frozenset({"attached_energy", "my_discard_contents", "my_deck_count", "deck_odds"}),
@@ -313,6 +334,47 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # here; `unknown_zones` looks values up in `BY_ID`), but a reader meeting
     # `"damage_counters": {"damage_counters"}` cold deserves to be told which is which.
     "damage_counters": frozenset({"damage_counters"}),
+    # ── costs — the FOURTH axis (Issue #350) ──────────────────────────────────────────────────────
+    # What playing the card costs, paid out of my own resources. A `cost` is not a flavour note: every
+    # value here moves real cards out of my hand, and none of them was declared until this issue,
+    # because `cost` was not in `VOCABULARY_KEYS` and the walk never arrived. At T4 an undeclared
+    # cost prices at exactly 0 — Ultra Ball's two discarded cards would look free.
+    #
+    # The write-set is about ZONES, not magnitudes, which is why four values that differ only in how
+    # many cards they charge get four identical entries rather than one: `undeclared_clauses` looks
+    # up the exact string, so folding them would leave three of the four undeclared. The COUNT lives
+    # in the value's name today (a compendium shape this issue deliberately does not change).
+    #
+    # Printed text quoted from `tools/meta_tracker/cards.json` (engine `all_card_data()`), never
+    # recalled. Which discard they land in is `docs/rulebook.txt` L78: *"Each player has their own
+    # discard pile. Cards taken out of play go to the discard pile"* — mine, so no cost writes
+    # `their_discard_contents`.
+    #
+    #   discard_1     1233 Canari, 1187 Morty's Conviction, 1208 Iris's Fighting Spirit
+    #                 *"You can use this card only if you discard another card from your hand."*
+    #   discard_2     1121 Ultra Ball — *"…if you discard 2 other cards from your hand."*
+    #   discard_3     1092 Secret Box (×4 legs) — *"…if you discard 3 other cards from your hand."*
+    #   discard_hand  1192 Carmine, 1206 Larry's Skill (×3 legs) — *"Discard your hand…"*
+    "discard_1": frozenset({"my_hand_ids", "my_discard_contents"}),
+    "discard_2": frozenset({"my_hand_ids", "my_discard_contents"}),
+    "discard_3": frozenset({"my_hand_ids", "my_discard_contents"}),
+    "discard_hand": frozenset({"my_hand_ids", "my_discard_contents"}),
+    # **The sharp one, and the reason a reader must not generalise from the four above.** 1200 Kofu:
+    # *"Put 2 cards from your hand on the bottom of your deck in any order."* Nothing is discarded at
+    # all. Two cards leave my hand and JOIN my deck, so `my_deck_count` goes UP rather than down,
+    # two known cards become unseen (`deck_odds`), and where they land is `deck_order` — the
+    # registry's ONE `hidden` zone. `other_to_bottom` already declares the same three for the dig
+    # riders; this adds `my_hand_ids` because the material comes from the hand, not the deck.
+    #
+    # It is the value Issue #302 added LAST, so "a cost discards from hand" was exactly the wrong
+    # generalisation to reach for — which is the whole argument for declaring costs at all.
+    #
+    # **Deliberately NOT in `NONDETERMINISTIC_CLAUSES`**, and checked rather than inherited from its
+    # neighbour: `other_to_bottom` IS nondeterministic because it re-buries cards a `dig` pulled out
+    # of an unknown deck, so simulating it is one Monte-Carlo sample. Kofu charges cards I can see
+    # and lets me choose their order, so no RNG is consulted and the determinism proof survives. The
+    # `draw 4` this cost gates is a separate clause (`kind: "draw"`, a `REVEALING_CLAUSES` member).
+    "bottom_2": frozenset({"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}),
 }
 
 #: Clauses that consult RNG. **Never eligible for the ENGINE-RESOLVED route** — the gate there is
@@ -336,8 +398,16 @@ REVEALING_CLAUSES: frozenset[str] = frozenset({"draw", "fetch"})
 #: write-set — as opposed to a parameter (`amount`, `dig`, `hp_max`) or a gate (`restriction`,
 #: `condition`). :func:`clause_vocabulary` walks exactly these, and `CLAUSE_WRITES` keys exactly
 #: these. One list, so "which keys does the audit walk?" has a single answer rather than one per
-#: reader — the drift that let `effect` go unaudited from the day it was authored.
-VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect")
+#: reader — the drift that let `effect` go unaudited from the day it was authored, and `cost` after
+#: it.
+#:
+#: `cost` is the fourth (Issue #350) and it is here rather than in a registry of its own because it
+#: fits the definition above verbatim — a closed set of strings naming a board write — and because
+#: a cost's zones UNION with its clause's rather than nesting under them, which is what
+#: `apply_option.FOOTPRINTS` already committed to when it recorded that T4 builds a per-option
+#: footprint *"by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses"*. A flat
+#: `value -> zones` table unions by construction. See the module docstring for the full ruling.
+VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect", "cost")
 
 #: Every clause KEY the compendium is allowed to use, each with what it carries. The other half of
 #: the §3c audit, and the half that did not exist until Issue #302.
@@ -396,9 +466,12 @@ CLAUSE_PARAMETERS: dict[str, str] = {
     "name_family": "an owner name family gating the clause",
     "no_rule_box": "the target must have no Rule Box",
     "no_ability": "the target must have no Ability",
-    "cost": "what playing the card costs, paid from my own resources",
+    "cost": "what playing the card costs, paid from my own resources — a VOCABULARY key since "
+            "Issue #350, write-set in CLAUSE_WRITES. Listed beside its gate rather than up with "
+            "the other three because `cost` and `cost_required` are one fact in two halves",
     "cost_required": "TRUE when failing to pay `cost` makes the card UNPLAYABLE, which is a "
-                     "different fact from the cost merely being expensive (Issue #302)",
+                     "different fact from the cost merely being expensive (Issue #302). A "
+                     "PARAMETER, not vocabulary: its value is a boolean, so it names no write",
     # ── shape ─────────────────────────────────────────────────────────────────────────────────────
     "type": "the card type a clause names, where `target` would be ambiguous",
     "choice": "the clause is one alternative of a choose-one card",
@@ -497,22 +570,39 @@ def covers_table(payload: Mapping) -> dict[int, dict]:
             if is_card_key(k) and isinstance(v, Mapping)}
 
 
+def clause_values(clause: Mapping) -> list[str]:
+    """Every vocabulary value in ONE clause, in :data:`VOCABULARY_KEYS` order. Duplicates kept.
+
+    **The single per-clause extractor**, so no reader keeps its own idea of which keys are vocabulary
+    or how a list-valued rider is read. That drift is not hypothetical twice over: it is what let
+    ``effect`` go unaudited from the day it was authored (Issue #300) and ``cost`` after it (Issue
+    #350), and `tools/apply_seam_coverage.py`'s *Clause write-set health* table kept a hand-rolled
+    ``kind``-plus-``rider`` walk that reported on two axes while the audit walked three.
+
+    A list is accepted as well as a string because a `rider` may be either, and a hand-rolled
+    ``used[clause["rider"]] += 1`` raises `TypeError` on the list form rather than reading it."""
+    out: list[str] = []
+    for key in VOCABULARY_KEYS:
+        value: Any = clause.get(key)
+        if isinstance(value, str) and value:
+            out.append(value)
+        elif isinstance(value, (list, tuple)):
+            out.extend(v for v in value if isinstance(v, str) and v)
+    return out
+
+
 def clause_vocabulary(payload: Mapping) -> list[str]:
     """Every vocabulary value the committed compendium actually uses, sorted.
 
-    Walks :data:`VOCABULARY_KEYS` over every clause — ``kind``, ``rider`` and ``effect`` — and accepts
-    a list-valued rider as well as a string one. Read off the artifact rather than from a hand-kept
-    list, because a hand-kept list is precisely what a new clause value would not be added to."""
-    vocab: set[str] = set()
-    for clauses in clause_lists(payload).values():
-        for clause in clauses:
-            for key in VOCABULARY_KEYS:
-                value: Any = clause.get(key)
-                if isinstance(value, str) and value:
-                    vocab.add(value)
-                elif isinstance(value, (list, tuple)):
-                    vocab.update(v for v in value if isinstance(v, str) and v)
-    return sorted(vocab)
+    :func:`clause_values` over every clause — ``kind``, ``rider``, ``effect`` and ``cost``. Read off
+    the artifact rather than from a hand-kept list, because a hand-kept list is precisely what a new
+    clause value would not be added to.
+
+    **The values are one flat namespace, deliberately.** A string means the same write wherever it
+    appears, which is why `gust` needs one entry for a `kind` and an `effect` alike, and why a cost's
+    zones simply union into its clause's."""
+    return sorted({v for clauses in clause_lists(payload).values()
+                   for clause in clauses for v in clause_values(clause)})
 
 
 def clause_keys(payload: Mapping) -> list[str]:
@@ -640,8 +730,11 @@ def undeclared_clauses(kinds: Sequence[str]) -> list[str]:
     value lands here rather than silently writing to nothing and pricing its option at 0.
 
     Takes the values, not the compendium, so it can be bitten by a fabricated one; pair it with
-    :func:`clause_vocabulary` to walk the real artifact. That walk covers all three of
-    :data:`VOCABULARY_KEYS` — until Issue #300 it covered two, and `effect` was the third."""
+    :func:`clause_vocabulary` to walk the real artifact. **The pairing is the point**: this function
+    would already have bitten `discard_2` before Issue #350, because the table simply lacked the key
+    — what was missing was the WALK arriving, since `cost` was not in :data:`VOCABULARY_KEYS`. That
+    walk now covers all four — until Issue #300 it covered two and `effect` was the third; `cost` was
+    the fourth."""
     return sorted(k for k in set(kinds) if k not in CLAUSE_WRITES)
 
 
@@ -668,7 +761,8 @@ __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
     "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS", "CLAUSE_PARAMETERS",
     "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",
-    "is_card_key", "clause_lists", "covers_table", "clause_vocabulary", "clause_keys",
+    "is_card_key", "clause_lists", "covers_table", "clause_values", "clause_vocabulary",
+    "clause_keys",
     "clauses_cover", "partial_clause_cards",
     "covers_problems", "validate", "homes", "unhomed",
     "undeclared_clauses", "undeclared_clause_keys", "unknown_zones", "clauses_writing_unhomed",

@@ -292,12 +292,22 @@ body Active, the clause says *which* class it may pull (`target: any | basic`) a
 A clause kind may also delegate its write to an `effect` value instead of carrying one itself: `coin`
 does (the flip is an RNG read; `effect` names the leg it resolves into), and so do Issue #304's
 `stadium_static` / `stadium_trigger`, where `effect` is `hp_delta` / `damage_reduction` /
-`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all three of `kind`, `rider`
-and `effect` for exactly that reason — a kind whose write-set reads empty is not a kind that writes
-nothing.
+`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all four of `kind`, `rider`,
+`effect` and `cost` for exactly that reason — a kind whose write-set reads empty is not a kind that
+writes nothing.
+`cost` is the fourth (Issue #350) and it is VOCABULARY, not a parameter: its values are a closed set
+of strings that MOVE CARDS BETWEEN ZONES (`discard_1` / `discard_2` / `discard_3` / `discard_hand`
+take cards from my hand to my discard; `bottom_2` — Kofu — discards nothing and puts two on the
+bottom of my DECK, so it writes `my_deck_count`, `deck_odds` and `deck_order` instead). It joined
+`VOCABULARY_KEYS` rather than taking a registry of its own because a cost's zones **union** with its
+clause's, which is what `apply_option.FOOTPRINTS` already committed to — T4 builds a per-option
+footprint by unioning `CLAUSE_WRITES` over the card's clauses, and a flat `value → zones` table
+unions by construction. The values are ONE flat namespace across all four keys, which is why `gust`
+needs a single entry for a `kind` (Boss's Orders) and an `effect` (Pokemon Catcher) alike:
+`undeclared_clauses` looks the string up, never the key position it came from.
 A clause's KEYS are audited too (Issue #302, `snapshot_coverage.CLAUSE_PARAMETERS`), and they are a
 separate namespace from the values above: `undeclared_clauses` bites an unknown `kind`/`rider`/
-`effect` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared
+`effect`/`cost` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared
 is one nobody reads, and it prices its option at 0 as surely as an undeclared kind does. That axis
 grew three keys with Issue #302's conditional draw Supporters: `to_hand_size` (*"draw until you have
 N in hand"* is a REFILL, so it is mutually exclusive with `amount`), `amount_if` (the second
