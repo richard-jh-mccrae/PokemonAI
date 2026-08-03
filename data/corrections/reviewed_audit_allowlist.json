@@ -1,5 +1,5 @@
 {
-  "_note": "The covered-disposition WORKLIST (Issue #238, ADR-TEMP-238 decision 3). Every reviewed.json entry whose justification names a rung that no longer exists. This is an ALLOWLIST, not an exemption: a test asserts the audit's flagged set equals this file exactly, so a NEW stale closure is red immediately. Rule the frame (docs/plans/covered-disposition-audit.md says how), re-close it against a live rule, then DELETE its line here. Regenerate with `python tools/train/reviewed_audit.py --write-allowlist` only when re-seeding deliberately.",
+  "_note": "The covered-disposition WORKLIST (Issue #238, ADR-0114 decision 3). Every reviewed.json entry whose justification names a rung that no longer exists. This is an ALLOWLIST, not an exemption: a test asserts the audit's flagged set equals this file exactly, so a NEW stale closure is red immediately. Rule the frame (docs/plans/covered-disposition-audit.md says how), re-close it against a live rule, then DELETE its line here. Regenerate with `python tools/train/reviewed_audit.py --write-allowlist` only when re-seeding deliberately.",
   "entries": {
     "81785223-38": [
       "evolve-into-wincon"

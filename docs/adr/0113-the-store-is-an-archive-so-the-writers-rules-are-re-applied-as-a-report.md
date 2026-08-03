@@ -1,14 +1,12 @@
-# ADR-TEMP-256 — The store is an ARCHIVE, so the writer's rules are re-applied as a REPORT, never as a loader
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0113 — The store is an ARCHIVE, so the writer's rules are re-applied as a REPORT, never as a loader
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #256, batched issue-sequence run); decisions
 2 and 4 BUILT, decisions 1 and 3 RULED BUT NOT EXECUTED (they move a gate number — see
 `docs/plans/issue-sequence-230-wave3-packet.md`).
-**Sits beside [ADR-TEMP-251](temp-issue251-a-gate-reports-what-it-cannot-grade-it-never-stops-grading-it.md)**,
+**Sits beside [ADR-0112](0112-a-gate-reports-what-it-cannot-grade-it-never-stops-grading-it.md)**,
 whose ruling this repeats one layer down: that one reports a record that cannot *state* its ruling,
 this one reports a record the writer would not have *created*. Both report; neither excludes.
-**Builds on [ADR-TEMP-229](temp-issue229-a-decline-is-a-ruling-the-writer-must-accept.md)**, which
+**Builds on [ADR-0111](0111-a-decline-is-a-ruling-the-writer-must-accept.md)**, which
 made the `decision`-scope **Decline** writable and is why the audit's decline rule is narrow rather
 than absolute.
 **Amends nothing.** Neither gate verdict function changes; no frame starts or stops gating; both
@@ -252,6 +250,6 @@ change and the measured gate consequence for each, and states that 3 without 1 m
   the worst available: at a `minCount 1` select, `correct: []` is a decline no legal pick can satisfy.
 * **Record the finding on each capture row** (beside `voided` / `equiv`) instead of a second corpus
   pass — it would change the shape of a **ruling record**, which a reporting-only issue is not
-  entitled to do. Same call ADR-TEMP-251 made, same reason.
+  entitled to do. Same call ADR-0112 made, same reason.
 * **Carry the spec's "it grades as a DISAGREE" correction into the ADR** — it is false, and it would
   have put the wrong sign on every number the developer signs off.

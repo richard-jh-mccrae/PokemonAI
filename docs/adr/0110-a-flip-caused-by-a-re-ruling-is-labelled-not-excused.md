@@ -1,6 +1,4 @@
-# ADR-TEMP-230 — A gate flip caused by a re-ruling is LABELLED, never excused
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0110 — A gate flip caused by a re-ruling is LABELLED, never excused
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #230, batched issue-sequence run); BUILT.
 **Extends [ADR-0087](0087-a-corpus-reader-constructs-corrections-and-keys-by-identity.md) decision 7

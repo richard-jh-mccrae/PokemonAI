@@ -364,7 +364,7 @@ def leaf_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
             # move. The redness is right (a stale reference cannot speak) and the LABEL is what was
             # wrong. Excusing them instead was rejected: a gate getting quieter as a side effect is
             # the one direction a gate must never move, and it would let a real regression hide
-            # behind a same-commit re-ruling (ADR-TEMP-230 decisions 1-2).
+            # behind a same-commit re-ruling (ADR-0110 decisions 1-2).
             "stale_baseline": [f for f in ok_to_miss if f["key"] in moved_keys],
             "agree_delta": agree_delta(
                 before, after, keep=_scorable, voided=voided,
@@ -385,7 +385,7 @@ def discrimination_gate_verdict(diff: dict, *, held_out: dict, voided=()) -> boo
     different acts — one holds a STANDING ruling out of this gate's scope, the other says the ruling
     itself cannot grade — and the readout names them separately.
 
-    ``stale_baseline`` is deliberately NOT a third excuse (ADR-TEMP-230 decision 1). It reads
+    ``stale_baseline`` is deliberately NOT a third excuse (ADR-0110 decision 1). It reads
     ``ok_to_miss`` whole, so a re-ruled frame gates exactly as it did before that key existed: the
     partition is a LABEL on the readout, and this verdict cannot be made quieter by adding one.
     A same-commit re-ruling would otherwise become a place for a real regression to hide."""
@@ -739,7 +739,7 @@ def guarded_capture(out, fresh, *, index, diff_fn, fail_keys_fn, write) -> int:
     taken at ``HEAD`` bakes the change under test into its own reference, so the gate can never speak
     about that change again — the ruling-gated guard would pass such a capture without complaint. The
     rule is `CAPTURE_POINT`: *"re-capture at a commit carrying the ruling but NOT the change under
-    test."* Written down in `docs/ci.md` §"Where to re-capture FROM" (ADR-TEMP-230 decision 4)
+    test."* Written down in `docs/ci.md` §"Where to re-capture FROM" (ADR-0110 decision 4)
     because it was tribal knowledge, and cost this rule's own author one wrong answer first."""
     from pathlib import Path
     import json as _json
@@ -1305,7 +1305,7 @@ def shape_the_constructor_would_refuse(correction) -> list:
     **The store holds a shape its own writer forbids.** `build_correction` validates at *write* time
     and `Correction.from_dict` — THE loader, and so what the **Corpus Reader** inherits — performs no
     validation at all: it backfills `id`/`agent`/`scope`/`subject` and calls the dataclass. That
-    asymmetry is deliberate and stays (ADR-TEMP-256 decision 4): validating on load would reject
+    asymmetry is deliberate and stays (ADR-0113 decision 4): validating on load would reject
     committed records at read time and take *both* gates down over a record that has been sitting
     green for weeks. *Load anything committed, refuse to create new bad shapes* is the right contract
     for a store that is also an archive.
@@ -1469,7 +1469,7 @@ def print_ruling_moves(moves) -> None:
 
 #: The one actionable sentence a **Stale Baseline** frame is owed. Capturing at ``HEAD`` would bake
 #: the change under test into its own reference — the trap that makes this class of red incapable of
-#: correcting itself, and the reason ADR-TEMP-230 decision 3 rejected "a re-ruling must re-capture in
+#: correcting itself, and the reason ADR-0110 decision 3 rejected "a re-ruling must re-capture in
 #: the same change".
 #:
 #: **This is the one copy any CODE reads** — `print_stale_baseline` interpolates it, and a test locks

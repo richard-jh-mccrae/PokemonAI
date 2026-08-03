@@ -81,7 +81,7 @@ record, do not ungrade the frame.
 through — does not validate at all, so the store can hold a shape its own writer forbids. One does:
 `85709280|1|match|` is `match` scope carrying `correct: [0]`, which the constructor refuses outright,
 and it is *grading in both gates*. `gates.refused_shapes` re-applies the constructor's rules to every
-committed record and this section names what it finds. **The asymmetry stays** (ADR-TEMP-256): a
+committed record and this section names what it finds. **The asymmetry stays** (ADR-0113): a
 validating loader would reject committed records at read time and take both gates down over a record
 that has been green for weeks. Reported, never a verdict — the cure is to re-rule the record.
 
@@ -334,7 +334,7 @@ def print_refused_shape_readout(refused, rpt: dict) -> None:
             print(f"      recorded correct {row.get('correct')}; this build's agent picks "
                   f"{row.get('chosen')}")     # `correct None; picks None` would read as DATA
         print("      -> re-rule the record. `Correction.from_dict` does not validate, deliberately "
-              "(ADR-TEMP-256): a loader that refused this would take both gates down on load.")
+              "(ADR-0113): a loader that refused this would take both gates down on load.")
 
 
 def _print_summary(rpt: dict, equiv=None) -> None:

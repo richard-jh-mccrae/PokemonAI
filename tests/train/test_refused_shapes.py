@@ -1,5 +1,5 @@
 """`gates.shape_the_constructor_would_refuse` / `gates.refused_shapes` — the **Refused Shape** audit
-(Issue #256, ADR-TEMP-256 decision 4).
+(Issue #256, ADR-0113 decision 4).
 
 `build_correction` validates at *write* time. `Correction.from_dict` — THE loader, and so what the
 **Corpus Reader** inherits — validates nothing. That asymmetry is deliberate and stays: validating on

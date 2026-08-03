@@ -1,12 +1,10 @@
-# ADR-TEMP-238 — A coverage claim names a rule that EXISTS, and expiry is made loud
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0114 — A coverage claim names a rule that EXISTS, and expiry is made loud
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #238, batched issue-sequence run); decisions
 1-6 BUILT. Issue #238's items 1-3 — opening 27 frames and ruling each — are **handed back to the
 developer**, not built; see *Scope*.
-**Sits beside [ADR-TEMP-256](temp-issue256-the-store-is-an-archive-so-the-writers-rules-are-re-applied-as-a-report.md)**
-and [ADR-TEMP-251](temp-issue251-a-gate-reports-what-it-cannot-grade-it-never-stops-grading-it.md),
+**Sits beside [ADR-0113](0113-the-store-is-an-archive-so-the-writers-rules-are-re-applied-as-a-report.md)**
+and [ADR-0112](0112-a-gate-reports-what-it-cannot-grade-it-never-stops-grading-it.md),
 whose ruling this repeats one store over: those re-apply a rule to committed **Correction** records
 and REPORT; this re-applies one to the committed **review ledger** and reports. All three report;
 none excludes, and none moves a gate number.
@@ -142,7 +140,7 @@ store, keyed `<episode>-<frame>`, a third key shape carrying neither seat nor sc
 it through `blunder.reviewed.load_reviewed`, the store's own loader, and reports in the store's own
 key shape.
 
-`gates.shape_the_constructor_would_refuse` (ADR-TEMP-256) is the same *"re-apply a rule to committed
+`gates.shape_the_constructor_would_refuse` (ADR-0113) is the same *"re-apply a rule to committed
 records"* shape, and is deliberately NOT reused: it is `Correction`-keyed, and putting a ledger rule
 behind a record-schema function would conflate two stores whose keys do not agree.
 

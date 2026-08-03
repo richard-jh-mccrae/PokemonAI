@@ -6,7 +6,7 @@ recapture on its own recognisance.
 
 ## Pending rulings
 
-### R1 — a `match`-scope Correction should stop grading at its Anchor (Issue #256, ADR-TEMP-256 decision 1)
+### R1 — a `match`-scope Correction should stop grading at its Anchor (Issue #256, ADR-0113 decision 1)
 
 **Ruled by the agent, NOT executed.** It removes a frame from both gates, which is a developer act
 under ADR-0088's void-and-re-capture protocol.
@@ -59,7 +59,7 @@ so it is an OK on both sides and R1 removes an OK either way.
 ⚠️ **The agree rate goes DOWN, not up.** The frame currently grades as an **AGREE** — the Decision
 Gate scores the *fresh Pilot replay pick* (`[0]`) against `correct: [0]`, not the record's own
 historical `chosen` field (`[2]`). Issue #256's spec claimed the opposite and concluded that ungrading
-"raises the agree rate"; that is refuted (ADR-TEMP-256 *Claims verification refuted*). R1 removes a
+"raises the agree rate"; that is refuted (ADR-0113 *Claims verification refuted*). R1 removes a
 **false success** and costs one point of agree rate. It is still the right ruling, but it is not free.
 
 **A re-capture is owed after executing it** — both baselines, at a commit carrying the ruling but NOT
@@ -70,7 +70,7 @@ available with **no code** by voiding the frame in `data/corrections/reviewed.js
 cheaper today and wrong tomorrow: a void is a statement about *this ruling*, and R1 is a statement
 about the *scope*. A second `match` record would silently start grading again.
 
-### R2 — re-rule `85709280-m1` to the shape the constructor accepts (Issue #256, ADR-TEMP-256 decision 3)
+### R2 — re-rule `85709280-m1` to the shape the constructor accepts (Issue #256, ADR-0113 decision 3)
 
 **Ruled by the agent, NOT executed.** It edits a committed record and moves a gate number.
 

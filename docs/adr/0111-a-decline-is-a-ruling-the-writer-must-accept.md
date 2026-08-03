@@ -1,6 +1,4 @@
-# ADR-TEMP-229 — A DECLINE is a ruling, and the writer must accept the shape the reader already grades
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0111 — A DECLINE is a ruling, and the writer must accept the shape the reader already grades
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #229, batched issue-sequence run); BUILT.
 **Amends [ADR-0049](0049-corrections-carry-a-scope-decision-turn-or-match.md)** — the Scope contract

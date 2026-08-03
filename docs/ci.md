@@ -204,7 +204,7 @@ the re-capture gets owned rather than passing unseen.
 **A red caused by a RE-RULING says so.** `correct_is_top` is frozen into each capture and computed
 under that capture's own `correct`, so when the human re-rules a frame the diff grades its two
 halves under two different oracles and reports `REGRESSED ... OK → MISS` about a build that did not
-move. Those flips are printed under their own `⚠️ STALE BASELINE` heading (ADR-TEMP-230). The shape,
+move. Those flips are printed under their own `⚠️ STALE BASELINE` heading (ADR-0110). The shape,
 against the case that motivated the rule — `84071010|0|decision|15`, whose ruling moved to `[0]` and
 which the committed baseline has since absorbed, so this is a reconstruction, not a live red:
 
@@ -234,7 +234,7 @@ then never say anything about it — it will compare the change against itself a
 is precisely how the old Decision Gate died (`gates.decider_lab_diff`). The ruling-gated `capture`
 guard above does **not** catch this: it asks whether every fail-direction frame carries a *ruling*,
 not whether the tree carries the *change*. So the capture point stays a human decision, and it is
-written here rather than left tribal — it cost ADR-TEMP-230's own author one wrong answer first.
+written here rather than left tribal — it cost ADR-0110's own author one wrong answer first.
 
 The two operations this leaves are both cheap and both already exist: `restamp` when only the
 recorded revision is stale, and a ruling (`owner` on the fixture's Decision Claim) when the flip is

@@ -14,7 +14,7 @@ The scope guard is the half that only a SHARED predicate needs, and the corpus p
 `turn`/`match` scope `correct: []` is encodable and is a real DECLINE, which `satisfies_human`
 grades exactly. Unguarded, this predicate would swallow `86088989|0|turn|0`.
 
-**Issue #251 ruled what the predicate is FOR: it REPORTS, it never excludes** (ADR-TEMP-251). The
+**Issue #251 ruled what the predicate is FOR: it REPORTS, it never excludes** (ADR-0112). The
 second half of this module guards that ruling from both directions — the Decision Gate readout must
 NAME an exposed frame and keep counting it, and the gate verdict must give it no excuse.
 """

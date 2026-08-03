@@ -1,4 +1,4 @@
-"""`tools/train/reviewed_audit.py` — the **covered-disposition audit** (Issue #238, ADR-TEMP-238).
+"""`tools/train/reviewed_audit.py` — the **covered-disposition audit** (Issue #238, ADR-0114).
 
 A `reviewed.json` closure is a claim about the shipped agent. When the rule it names is deleted the
 claim expires — silently, because the ledger stores its justification as prose and nothing reads it
@@ -16,7 +16,7 @@ tree right now, and every name in the four decider sweeps' `RETIRED` lists.
 mentions it; the synthetic controls below assert it is not flagged while a real retired rung in the
 same note is.
 
-`test_the_flagged_set_equals_the_committed_allowlist` is the ratchet (ADR-TEMP-238 decision 3): the
+`test_the_flagged_set_equals_the_committed_allowlist` is the ratchet (ADR-0114 decision 3): the
 audit reports rather than gates, and the allowlist IS the developer's worklist, so a *new* stale
 closure goes red while the standing 60 do not.
 """
@@ -159,7 +159,7 @@ def test_issue_238s_thirteen_and_its_three_refuted_re_reads_are_all_flagged(voca
 
 @pytest.mark.req("REQ-LEDGER-0005")
 def test_the_flagged_keys_are_ledger_keys_not_frame_keys(vocab, reviewed):
-    """ADR-TEMP-238 decision 5: `reviewed.json` is the review LEDGER, keyed `<episode>-<frame>` — a
+    """ADR-0114 decision 5: `reviewed.json` is the review LEDGER, keyed `<episode>-<frame>` — a
     different store and key shape from the `Correction` record schema Issue #229 governs. The audit
     reads it through `blunder.reviewed.load_reviewed` and reports in that key shape."""
     for entry in stale_entries(reviewed, vocab):
@@ -169,7 +169,7 @@ def test_the_flagged_keys_are_ledger_keys_not_frame_keys(vocab, reviewed):
 
 @pytest.mark.req("REQ-LEDGER-0006")
 def test_the_flagged_set_equals_the_committed_allowlist(vocab, reviewed):
-    """THE RATCHET (ADR-TEMP-238 decision 3). The audit reports; this is what makes it hold.
+    """THE RATCHET (ADR-0114 decision 3). The audit reports; this is what makes it hold.
 
     Red here means one of two things and the diff says which: a NEW closure naming a dead rung (fix
     the closure, not this file), or a frame the developer has ruled and re-closed (delete its line
@@ -197,7 +197,7 @@ def test_a_new_stale_closure_makes_the_allowlist_red(vocab, reviewed):
 
 @pytest.mark.req("REQ-LEDGER-0007")
 def test_the_committed_worklist_covers_every_allowlisted_entry():
-    """ADR-TEMP-238 decision 4. Deliberately NOT a byte-compare against a fresh render: the *what it
+    """ADR-0114 decision 4. Deliberately NOT a byte-compare against a fresh render: the *what it
     became* column is read out of `src/` prose, so byte equality would red CI on an unrelated
     docstring edit. What has to hold is that the worklist actually lists the work."""
     report = DEFAULT_REPORT.read_text(encoding="utf-8")
@@ -226,7 +226,7 @@ def test_the_fold_map_target_comes_from_the_codes_own_fold_map():
 
 @pytest.mark.req("REQ-LEDGER-0008")
 def test_the_unresolved_tally_is_reported_not_suppressed(vocab, reviewed):
-    """ADR-TEMP-238 decision 2's honesty clause — the vocabulary's blind spot stays visible, and its
+    """ADR-0114 decision 2's honesty clause — the vocabulary's blind spot stays visible, and its
     largest member is the token that would have made a loose scan useless."""
     tally = unresolved_tally(reviewed, vocab)
     assert tally["attack-last"] > 40

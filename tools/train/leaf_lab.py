@@ -320,7 +320,7 @@ def _print_diff(diff, held_out, before_meta, voided=None) -> None:
     # BEFORE the gate block, matching `print_ruling_moves` above and the `CORPUS SHIFTED` line: the
     # verdict is the last thing printed, and everything that changes what it MEANS comes ahead of it.
     # These frames are still listed as `REGRESSED` inside that block — the label explains the line,
-    # it does not replace or excuse it (ADR-TEMP-230 decision 1).
+    # it does not replace or excuse it (ADR-0110 decision 1).
     print_stale_baseline(diff.get("stale_baseline") or [])
     voided = voided or {}
     gating, ruled, void_hits = split_excused(diff["ok_to_miss"], held_out, voided)
@@ -348,7 +348,7 @@ def main(argv=None) -> int:
         # WHERE you capture from is not checked by anything — `guarded_capture` asks whether every
         # fail-direction frame carries a ruling, never whether the tree carries the change under
         # test. So the one rule that cannot be enforced is the one `--help` has to state
-        # (ADR-TEMP-230 decision 4).
+        # (ADR-0110 decision 4).
         epilog=f"Capture point: {CAPTURE_POINT}. Capturing at HEAD bakes the change under test into "
                f"its own reference, and the gate can then never speak about that change again.")
     cap.add_argument("--out", type=Path, required=True)
@@ -420,7 +420,7 @@ def main(argv=None) -> int:
                 "ok_to_miss": [f["key"] for f in diff["ok_to_miss"]],
                 # A SUBSET of `ok_to_miss` above, never a subtraction from it: these flips still
                 # gate, and a machine consumer must be able to tell a reference that has gone stale
-                # from a build that regressed without re-deriving it (ADR-TEMP-230 decision 2).
+                # from a build that regressed without re-deriving it (ADR-0110 decision 2).
                 "stale_baseline": [f["key"] for f in diff["stale_baseline"]],
                 "miss_to_ok": [f["key"] for f in diff["miss_to_ok"]],
                 "added": diff["added"], "removed": diff["removed"],

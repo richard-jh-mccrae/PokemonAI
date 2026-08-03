@@ -48,7 +48,7 @@ prescription is sound — the first divergent Decision — and giving it *is* th
 Anchor is that Decision. Leave it empty and the intended line lives in the `rationale`.
 
 **A decision-scope decline**
-([ADR-TEMP-229](adr/temp-issue229-a-decline-is-a-ruling-the-writer-must-accept.md)):
+([ADR-0111](adr/0111-a-decline-is-a-ruling-the-writer-must-accept.md)):
 at `decision` scope an empty `correct` is
 still refused *except* on a select the agent `obs` proves **optional** (`minCount == 0`), where it
 records the ruling *"take none of these"* — the answer an optional select exists to allow. This adds

@@ -11,7 +11,7 @@ frame, so hold it off fresh work."* When the rule it names is later deleted, the
 it expires **silently**, because the ledger stores the justification as opaque prose and nothing ever
 reads it back. Issue #238 found 13 such closures by hand. This module is the mechanical version.
 
-## Why this REPORTS and does not gate (ADR-TEMP-238 decision 3)
+## Why this REPORTS and does not gate (ADR-0114 decision 3)
 
 It flags dozens of committed entries. A hard failure would red `main` on day one with no path to
 green except re-closing them in bulk — and a bulk re-close is exactly what Issue #238 forbids
@@ -20,7 +20,7 @@ flagged set must equal `data/corrections/reviewed_audit_allowlist.json`, which I
 worklist. Ruling a frame and re-closing it against a live rule removes it from both. A *new* stale
 closure is red immediately.
 
-## The vocabulary is CURATED, never a loose regex (ADR-TEMP-238 decision 2)
+## The vocabulary is CURATED, never a loose regex (ADR-0114 decision 2)
 
 A review note is prose. A bare `[a-z-]+` scan over these notes matches `attack-last` (46 times),
 `first-dev-differs`, `tier-2`, `hand-quality` — none of which is a rung. So a token becomes a rung
@@ -281,7 +281,7 @@ def build_vocabulary(repo: Path = REPO, src_root: Path | None = None) -> dict:
             f"{len(missing_sweep)} sweep-retired name(s) {missing_sweep[:5]}.")
     retired = sorted(historical - set(live) - set(sound))
     return {
-        "_note": ("Rung VOCABULARY for tools/train/reviewed_audit.py (Issue #238, ADR-TEMP-238). "
+        "_note": ("Rung VOCABULARY for tools/train/reviewed_audit.py (Issue #238, ADR-0114). "
                   "GENERATED — re-run `python tools/train/reviewed_audit.py --refresh-vocab`; do not "
                   "hand-edit. `retired` = ids that were a Hypothesis(id=) in git history and are not "
                   "one in src/ today. `live_at_capture` is kept so the audit can widen `retired` with "
@@ -547,7 +547,7 @@ def _target_phrase(block: str, hit: int, limit: int = 170) -> str:
 
 
 # ---------------------------------------------------------------------------
-# The generated worklist (ADR-TEMP-238 decision 4)
+# The generated worklist (ADR-0114 decision 4)
 # ---------------------------------------------------------------------------
 
 #: The frames Issue #238 named by hand, kept so the generated report can RECONCILE against them
@@ -589,7 +589,7 @@ def render_report(entries, vocab: Vocabulary, reviewed: dict, src_root: Path = D
         "# Covered-disposition audit — the worklist",
         "",
         "> **GENERATED — do not hand-edit.** `python tools/train/reviewed_audit.py --emit-report`.",
-        "> Issue #238, ADR-TEMP-238 decision 4. Regenerate after any ledger or rung change.",
+        "> Issue #238, ADR-0114 decision 4. Regenerate after any ledger or rung change.",
         "",
         "A `reviewed.json` closure is a claim about the shipped agent. When the rule it names is",
         "deleted the claim expires silently, because the ledger stores its justification as opaque",
@@ -636,7 +636,7 @@ def render_report(entries, vocab: Vocabulary, reviewed: dict, src_root: Path = D
         rows = by_disposition.get(disposition)
         if not rows:
             continue
-        out += [f"## `{disposition}` — {len(rows)}: flagged, but NOT blockers (ADR-TEMP-238 decision 6)",
+        out += [f"## `{disposition}` — {len(rows)}: flagged, but NOT blockers (ADR-0114 decision 6)",
                 "",
                 "A refuted ruling owes no fix either way, so a dead rung in its refutation note costs",
                 "nothing operationally. They are listed because the refutation rests on the same",
@@ -696,7 +696,7 @@ def _write_lf(path: Path, text: str) -> None:
 
     Not `gates.write_json_artifact` itself, for three reasons that each rule it out: this writer also
     emits Markdown, it keeps the trailing newline those files carry, and `gates` is the *gate* module
-    — ADR-TEMP-238 decision 5 is precisely that a ledger rule does not live behind a Correction-keyed
+    — ADR-0114 decision 5 is precisely that a ledger rule does not live behind a Correction-keyed
     gate function. It is the third LF writer in the repo and the duplication is real; what it must
     never become is a writer that frames newlines differently from the other two."""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -732,7 +732,7 @@ def main(argv=None) -> int:
     current = allowlist_form(entries)
 
     if args.write_allowlist:
-        doc = {"_note": ("The covered-disposition WORKLIST (Issue #238, ADR-TEMP-238 decision 3). "
+        doc = {"_note": ("The covered-disposition WORKLIST (Issue #238, ADR-0114 decision 3). "
                          "Every reviewed.json entry whose justification names a rung that no longer "
                          "exists. This is an ALLOWLIST, not an exemption: a test asserts the audit's "
                          "flagged set equals this file exactly, so a NEW stale closure is red "

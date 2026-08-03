@@ -1081,7 +1081,7 @@ def test_a_flip_whose_ruling_moved_is_in_BOTH_ok_to_miss_and_stale_baseline():
     that capture's own `correct`, so when a ruling moves the leaf diff grades its two halves under
     two different oracles — and prints ``REGRESSED ... OK -> MISS`` about a build that did not move.
 
-    The frame stays in `ok_to_miss` (it still gates, ADR-TEMP-230 decision 1) and gains a LABEL
+    The frame stays in `ok_to_miss` (it still gates, ADR-0110 decision 1) and gains a LABEL
     saying the reference, not the code, is what changed."""
     before = _report([{**_row("reruled", "OK"), "correct": [1]}])
     after = _report([{**_row("reruled", "MISS"), "correct": [2]}])
@@ -1113,7 +1113,7 @@ def test_a_ruling_move_that_did_not_flip_the_verdict_is_not_a_stale_baseline():
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_the_stale_label_NEVER_changes_the_verdict():
-    """ADR-TEMP-230 decision 1, asserted structurally rather than by convention. A gate getting
+    """ADR-0110 decision 1, asserted structurally rather than by convention. A gate getting
     quieter as a side effect is the one direction a gate must never move (ADR-0085 Amendment I):
     excusing these would let a real regression hide behind a same-commit re-ruling.
 
@@ -1147,7 +1147,7 @@ def test_stale_baseline_is_drawn_from_the_same_scorable_population_as_ruling_mov
 
 @pytest.mark.req("REQ-GATE-0013")
 def test_the_decision_gate_is_deliberately_NOT_given_a_stale_baseline_partition():
-    """The asymmetry, asserted rather than asserted-about (ADR-TEMP-230 decision 5).
+    """The asymmetry, asserted rather than asserted-about (ADR-0110 decision 5).
 
     `decider_lab_diff` resolves ``correct`` from the AFTER capture alone and grades BOTH sides
     through it, so it never runs two oracles: a re-ruling with an unchanged pick emits no verdict row
@@ -1189,7 +1189,7 @@ def test_the_json_artifact_reports_stale_baseline_as_a_SUBSET_of_ok_to_miss():
     `leaf_lab --diff --out` is consumed by `leaf-gate-main.yml`, so `stale_baseline` is a public
     contract, not an internal field. The property that must hold is **subset**, never difference: a
     consumer that saw a shrunken `ok_to_miss` would conclude the gate had excused these frames, which
-    is the precise misreading ADR-TEMP-230 decision 1 exists to prevent. Asserted on the artifact
+    is the precise misreading ADR-0110 decision 1 exists to prevent. Asserted on the artifact
     dict rather than on `leaf_lab_diff`, because the artifact is what leaves the process."""
     before = _report([_row("clean", "OK"), {**_row("reruled", "OK"), "correct": [1]}])
     after = _report([_row("clean", "MISS"), {**_row("reruled", "MISS"), "correct": [2]}])

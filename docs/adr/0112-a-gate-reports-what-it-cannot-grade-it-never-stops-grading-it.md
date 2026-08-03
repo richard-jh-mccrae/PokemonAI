@@ -1,12 +1,10 @@
-# ADR-TEMP-251 — A gate REPORTS what it cannot grade properly; it never quietly stops grading it
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0112 — A gate REPORTS what it cannot grade properly; it never quietly stops grading it
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #251, batched issue-sequence run); BUILT.
 **Closes the question [ADR-0089](0089-a-corpus-reading-probe-is-a-gate-a-ruling-or-a-routed-diagnostic.md)
 left open** — it lifted `records_a_decline_it_cannot_state` to `gates.py` UNWIRED and named
 Issue #251 as the owner of *"which frames stop gating"*. The answer is **none of them**.
-**Builds on [ADR-TEMP-229](temp-issue229-a-decline-is-a-ruling-the-writer-must-accept.md)**, which
+**Builds on [ADR-0111](0111-a-decline-is-a-ruling-the-writer-must-accept.md)**, which
 made the record repairable and is the reason this ruling can go the way it does.
 **Amends nothing.** Neither gate verdict function changes; no frame starts or stops gating.
 

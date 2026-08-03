@@ -1,5 +1,5 @@
 {
-  "_note": "Rung VOCABULARY for tools/train/reviewed_audit.py (Issue #238, ADR-TEMP-238). GENERATED — re-run `python tools/train/reviewed_audit.py --refresh-vocab`; do not hand-edit. `retired` = ids that were a Hypothesis(id=) in git history and are not one in src/ today. `live_at_capture` is kept so the audit can widen `retired` with rungs deleted SINCE this capture without needing git — CI checks out shallow. `sweep_retired` is the POSITIVE CONTROL, not the vocabulary: every name in it must appear in the historical harvest or the harvest is broken.",
+  "_note": "Rung VOCABULARY for tools/train/reviewed_audit.py (Issue #238, ADR-0114). GENERATED — re-run `python tools/train/reviewed_audit.py --refresh-vocab`; do not hand-edit. `retired` = ids that were a Hypothesis(id=) in git history and are not one in src/ today. `live_at_capture` is kept so the audit can widen `retired` with rungs deleted SINCE this capture without needing git — CI checks out shallow. `sweep_retired` is the POSITIVE CONTROL, not the vocabulary: every name in it must appear in the historical harvest or the harvest is broken.",
   "head": "d38270208cbac025355117683dd0abdf92ae59f6",
   "live_at_capture": [
     "attach-before-hand-shuffle",
