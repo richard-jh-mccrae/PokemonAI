@@ -147,6 +147,25 @@ _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condi
                MUNKIDORI: ROLE_TIER["engine"], DRAGAPULT: ROLE_TIER["primary_attacker"],
                MEGA_STARMIE: ROLE_TIER["win_condition"]}
 
+#: Issue #282's two boost cards, as the ``(amount, attackerEnergyType|None, vsExOnly)`` triple
+#: `CardStat.damageBoost` / `damageBoostType` / `damageBoostVsEx` carries and `strategy/damage.py`
+#: consumes. Written as the triple rather than as a `CardStat` row because the boost reaches a
+#: snapshot through the tracker, never through a card in a zone — and the triples themselves are
+#: pinned against the REAL 1267-card pool one seam over
+#: (`tests/scouting/test_tool_holder_facts.py`: `carriers("damageBoost") == {1141: 30, 1158: 50,
+#: 1171: 30, 1211: 40}`), so these are a restatement of a parsed fact, not a second opinion about it.
+#:
+#: Premium Power Pro (1141, **Item**), verified at `data/EN_Card_Data.csv`: *"During this turn,
+#: attacks used by your {F} Pokémon do 30 more damage to your opponent's Active Pokémon (before
+#: applying Weakness and Resistance)."* — amount 30, attacker-type gate {F}, no defender gate.
+POWER_PRO = (30, FIGHTING, False)
+#: Black Belt's Training (1211, **Supporter**), same source: *"During this turn, attacks used by your
+#: Pokémon do 40 more damage to your opponent's Active Pokémon {ex} (before applying Weakness and
+#: Resistance)."* — amount 40, no attacker-type gate, defender-{ex} gate. The {ex} scope INCLUDES a
+#: Mega Evolution Pokémon ex (`docs/rulebook.txt` L337: *"Mega Evolution Pokémon ex are considered to
+#: be Pokémon ex, so any card effects that affect Pokémon ex also affect Mega Evolution Pokémon ex"*).
+BLACK_BELT = (40, None, True)
+
 
 def _combat():
     return CombatMath(DictCardStatProvider(_STATS, attacks=_ATTACKS),
@@ -166,16 +185,31 @@ def _player(*, active=None, bench=(), hand=(), discard=(), prize=4, deck_count=2
             "confused": False}
 
 
-def _model(me, opp, *, energy_attached=False, turn=5, needs=None):
+class _Boosts:
+    """`TurnBoostTracker`'s one duck-typed method — the shape `StateModel.build` resolves per seat.
+
+    A this-turn Trainer boost is a LOG fact, not a board one ("During this turn, attacks used by
+    your … Pokémon do N more damage" leaves no trace in any zone once the card reaches the discard),
+    so the tracker is how it reaches a snapshot at all. Side 0 is mine on every board in this file."""
+
+    def __init__(self, boosts=()):
+        self._boosts = tuple(boosts)
+
+    def boosts_for(self, side):
+        return self._boosts if side == 0 else ()
+
+
+def _model(me, opp, *, energy_attached=False, turn=5, needs=None, boosts=None):
     obs = {"current": {"players": [me, opp], "yourIndex": 0, "turn": turn,
                        "energyAttached": energy_attached, "supporterPlayed": False,
                        "stadium": []}, "logs": []}
     return StateModel.build(obs, combat=_combat(), deck=DECK, needs=needs,
-                            role_worth=_ROLE_WORTH.get)
+                            role_worth=_ROLE_WORTH.get,
+                            turn_boosts=None if boosts is None else _Boosts(boosts))
 
 
 def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_prizes=4,
-                   their_active=None, hand=(), energy_attached=False):
+                   their_active=None, hand=(), energy_attached=False, boosts=None):
     """MY Mega Lucario ex Active against THEIR Dragapult ex — the fixture every monotonicity case
     perturbs by exactly one fact."""
     return _model(
@@ -183,17 +217,17 @@ def _lucario_board(*, my_energies=(), my_hp=340, bench=(), my_prizes=4, their_pr
                 hand=list(hand), prize=my_prizes),
         _player(active=their_active or _poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
                 prize=their_prizes),
-        energy_attached=energy_attached)
+        energy_attached=energy_attached, boosts=boosts)
 
 
-def _starmie_board(their_active, *, my_energies=(E_W,)):
+def _starmie_board(their_active, *, my_energies=(E_W,), boosts=None):
     """MY Mega Starmie ex Active against a chosen defender, with the turn's Energy already spent so
     the Attach Budget adds nothing — the board is exactly what is attached, and reachability is
     therefore a fact about the fixture rather than about the deck's colours."""
     return _model(
         _player(active=_poke(MEGA_STARMIE, hp=330, energies=list(my_energies)), prize=4),
         _player(active=their_active, prize=4),
-        energy_attached=True)
+        energy_attached=True, boosts=boosts)
 
 
 def _alakazam_board(their_hand: int, *, my_active=None, my_hand=()):
@@ -973,6 +1007,149 @@ def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_
     assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_CAP)
     assert sv.threat([3.0, 3.0]) == pytest.approx(sv._THREAT_CAP)
     assert sv.threat(()) == 0.0
+
+
+# ── a live Trainer damage-BOOST reaches the scalar, gates and all (Issue #282) ────────────────────
+#
+# The class this guards is the epic's headline: *an unpriced effect is worse than a no-op*. `_PLAY`
+# is modelled as "the card leaves hand" (`apply_option.KIND_COVERAGE`), so a boost card whose effect
+# no term reads prices at MINUS the hand value of the card spent — playing Premium Power Pro would
+# score as a mistake. The path that stops that is `_SideBase.damage_boosts` -> `SideFacts` ->
+# `damage_context`'s `atk_boosts` -> `strategy/damage.py` -> #281's `best_reachable_damage_vs` ->
+# `threat`, and every link of it shipped with Issues #279 and #281 rather than with this one.
+#
+# What did NOT ship is any assertion that the whole path holds END TO END, at the scalar. Each link
+# is pinned in isolation — `test_damage_context.py` pins the context key, `test_tool_holder_facts.py`
+# pins the parsed triples against the real pool, `test_damage_oracle.py` pins the oracle's gates —
+# and a chain of separately-green links is exactly the shape that breaks silently in the middle. So
+# these assert on `state_value` itself, and each one is built so that the GATE is the only thing
+# standing between the fixture and a crossing: a broken gate is a failure here, not a plausible
+# number.
+
+
+def _boosts_of(model) -> tuple:
+    return model.damage_context(attacker="mine")["atk_boosts"]
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
+    """Premium Power Pro's +30 turns Mega Brave's 270 into the 300 that reaches a 300 HP Dragapult ex.
+
+    The card leaving my hand is the only thing `_PLAY` structurally models, so without this the play
+    is priced at a hand loss and nothing else. With it the boost enters through exactly ONE family —
+    `threat`, whose reachability gate is #281's `best_reachable_damage_vs` — which is asserted here
+    as well as the total, because a fact that moved two families would be double-counted.
+
+    Mega Lucario ex is {F} (`data/EN_Card_Data.csv`), so Power Pro's attacker-type gate is met;
+    Dragapult ex carries no Weakness to {F} in this fixture, so 270 and 300 are the raw numbers with
+    no W/R leg to disentangle."""
+    plain = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
+                           their_active=_poke(DRAGAPULT, hp=300, serial=9))
+    boosted = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
+                             their_active=_poke(DRAGAPULT, hp=300, serial=9), boosts=[POWER_PRO])
+
+    assert _boosts_of(plain) == () and _boosts_of(boosted) == (POWER_PRO,)
+    assert _reach(plain)[1] == 270, "Mega Brave's own damage — the breakpoint is 30 short"
+    assert _reach(boosted)[1] == 300, "+30 before Weakness and Resistance"
+
+    before, after = {}, {}
+    total_before = sv.state_value(plain, working=before)
+    total_after = sv.state_value(boosted, working=after)
+    assert after["threat"] > before["threat"] == 0.0
+    assert total_after > total_before
+    moved = {k for k in before if after[k] != before[k]}
+    assert moved == {"threat"}, f"a boost must enter through ONE family, moved: {sorted(moved)}"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_a_live_boost_that_crosses_nothing_leaves_the_scalar_untouched():
+    """The other half of the same claim, and the one that keeps `threat` a GATE rather than a slope.
+
+    Against a 260 HP Dragapult ex, Mega Brave's 270 already reaches, so the boost buys nothing that
+    this family prices — the extra damage above lethal is overkill, and converting the exposure is
+    `attack_ev`'s job at the terminal action. The scalar must therefore be BIT-identical, not merely
+    close: a boost that nudged the board value would be pricing overkill as position."""
+    plain = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
+                           their_active=_poke(DRAGAPULT, hp=260, serial=9))
+    boosted = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
+                             their_active=_poke(DRAGAPULT, hp=260, serial=9), boosts=[POWER_PRO])
+    assert _reach(boosted)[1] == _reach(plain)[1] + 30, "the boost IS reaching the damage read"
+    assert sv.state_value(boosted) == sv.state_value(plain)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_the_attacker_TYPE_gate_refuses_a_boost_the_attacker_does_not_qualify_for():
+    """*"attacks used by your {F} Pokémon"* — Premium Power Pro pays a {F} attacker and nobody else.
+
+    The fixture is one gate away from a crossing on purpose: Mega Starmie ex reaches Jetting Blow's
+    120 against Larry's Braviary's 130 HP, and 120 + 30 = 150 would cross. The control is the SAME
+    amount on the SAME board with the gate re-pointed at the attacker's own {W} — a synthetic probe,
+    not a card, and labelled as one — so the only difference between passing and failing is the gate
+    itself rather than two different boards being compared."""
+    unqualified = _starmie_board(_poke(BRAVIARY, hp=130, serial=9), boosts=[POWER_PRO])
+    assert _boosts_of(unqualified) == (POWER_PRO,), "the boost IS in the context — it is the gate "\
+                                                    "that must refuse it, not a missing supplier"
+    assert _reach(unqualified)[1] == 120, "Jetting Blow, unlifted: Mega Starmie ex is {W}, not {F}"
+    assert _threat_of(unqualified) == 0.0
+
+    requalified = _starmie_board(_poke(BRAVIARY, hp=130, serial=9), boosts=[(30, WATER, False)])
+    assert _reach(requalified)[1] == 150, "the same 30, gated on {W} — the fixture does cross"
+    assert _threat_of(requalified) > 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neither():
+    """*"do 40 more damage to your opponent's Active Pokémon {ex}"* — Black Belt's Training, and the
+    rulebook-337 case the `{ex}` scope exists to get right.
+
+    `docs/rulebook.txt` L337: *"Mega Evolution Pokémon ex are considered to be Pokémon ex, so any
+    card effects that affect Pokémon ex also affect Mega Evolution Pokémon ex."* Mega Starmie ex
+    carries `megaEx` and not `ex`, so a gate written as `stat.ex` would read it as an ordinary
+    Pokémon and silently drop 40 damage against the single biggest target in the format — which is
+    asserted below rather than assumed, because that is the whole content of the case.
+
+    The non-ex control is the same attacker, the same boost, and a defender the boost WOULD have
+    crossed: Aura Jab's 130 against Larry's Braviary is 100 after its flat −30 {F} Resistance
+    (`docs/rules.md` §5), and 130 + 40 − 30 = 140 reaches its 130 HP. It stays at 100 because
+    Braviary is not an {ex}."""
+    from common.scouting.provider import CardStat as _CardStat
+    starmie = _STATS[MEGA_STARMIE]
+    assert (starmie.megaEx, starmie.ex) == (True, False), "the fixture must BE the rulebook-337 case"
+    assert _CardStat(MEGA_STARMIE, megaEx=True).is_ex_body, "a Mega ex IS an {ex} for a card effect"
+
+    mega_ex_defender = _lucario_board(my_energies=[E_F], energy_attached=True,
+                                      their_active=_poke(MEGA_STARMIE, hp=170, serial=9),
+                                      boosts=[BLACK_BELT])
+    unboosted = _lucario_board(my_energies=[E_F], energy_attached=True,
+                               their_active=_poke(MEGA_STARMIE, hp=170, serial=9))
+    assert _reach(unboosted)[1] == 130, "Aura Jab alone is 40 short of 170"
+    assert _reach(mega_ex_defender)[1] == 170, "+40 against a Mega Evolution Pokémon ex"
+    assert _threat_of(unboosted) == 0.0 < _threat_of(mega_ex_defender)
+
+    plain_defender = _lucario_board(my_energies=[E_F], energy_attached=True,
+                                    their_active=_poke(BRAVIARY, hp=130, serial=9),
+                                    boosts=[BLACK_BELT])
+    assert _boosts_of(plain_defender) == (BLACK_BELT,)
+    assert _reach(plain_defender)[1] == 100, "130 − 30 Resistance, and the {ex} gate refuses the 40"
+    assert _threat_of(plain_defender) == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
+def test_with_no_boost_in_play_the_context_is_EMPTY_and_the_scalar_is_unmoved():
+    """The regression half: a board with no live boost must score exactly as it did before any of
+    this, and an EMPTY tracker must be indistinguishable from no tracker at all.
+
+    Bit-identical rather than approximate, and over the whole per-family breakdown rather than the
+    total, because the failure being guarded is a term that quietly gained a boost-shaped leg — which
+    a total could hide by cancellation."""
+    no_tracker = _lucario_board(my_energies=[E_F, E_F], energy_attached=True)
+    empty_tracker = _lucario_board(my_energies=[E_F, E_F], energy_attached=True, boosts=[])
+    assert _boosts_of(no_tracker) == () == _boosts_of(empty_tracker)
+
+    without, empty = {}, {}
+    assert sv.state_value(no_tracker, working=without) == sv.state_value(empty_tracker,
+                                                                        working=empty)
+    assert without == empty
 
 
 # ── inertness is over; the seam is not ────────────────────────────────────────────────────────────

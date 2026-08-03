@@ -173,7 +173,12 @@ opponent can bench the partner first). The card-tier sibling for Trainers is the
 fact** (`CardStat.damageBoost` — Premium Power Pro / Maximum Belt: this-turn plays tracked
 match-scoped by `TurnBoostTracker`, attached Tools read off the holder, both priced before W/R and
 crossing-checked by the boost-lethal tactical; a Tool whose boost carries a **Holder Gate** —
-Hop's Choice Band — contributes only on a holder inside its family). **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
+Hop's Choice Band — contributes only on a holder inside its family). Both halves reach the
+State Value scalar too, by the same route as every other Formula variable: `_SideBase.damage_boosts`
+→ `SideFacts` → the context's `atk_boosts` key → `threat`'s reachability gate. These cards carry
+**no Effect Clause at all** — the whole effect is the parsed triple — so they are invisible to every
+clause-keyed audit, which is why `snapshot_coverage` enumerates `this_turn_damage_boosts` as a zone
+in its own right (Issue #282). **Attack-keyed** (by `attackId`) — the attack-tier counterpart to the
 card-tier structural stats (`CardStat`) and the behavioral, card-level `Function Tag`. Consumed by the
 closed-form (**Tier-0**) combat math so the agent picks the right attack *before* paying the Engine
 Search sim budget — e.g. Mega Starmie ex's Nebula Beam lands through Crustle's ex-damage immunity

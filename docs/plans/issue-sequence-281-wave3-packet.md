@@ -185,3 +185,113 @@ the ledger entry's premise has decayed: **Issue #228 is CLOSED** (`status:4-done
 is the issue that ARMED both switches — `src/common/runtime.py` ships `deny_relevance: True` and
 `deny_strip_delta: True`. Nothing here is dark, there is no live ruling to re-litigate, and this
 change adds no term to `state_value` (which is what that ledger entry governs). Both halves shipped.
+
+## Issue #282 — the premise did not survive, and the fix was already in the tree
+
+**No flip on either gate, and no line in the table above, because this issue changed no executable
+scoring path at all.** That needs saying plainly rather than reported as a quiet zero.
+
+### The claim, and what HEAD says
+
+Issue #282's body asserts that `CardStat.damageBoost` is *"consumed by `damage.py:114-125` via
+`context["atk_boosts"]` as `(amount, atype, vs_ex)` triples — **a context no family builds**"*, and
+prescribes the fix as *"populate `atk_boosts` in #279's context from the homed `transient_grants`
+zone"*. Re-checked against `HEAD` before any code moved, three of its premises are stale:
+
+1. **`atk_boosts` IS built, by both suppliers.** Issue #279 shipped `_SideBase.damage_boosts`
+   (`src/common/state_model.py`) — the tracker's this-turn Trainer plays plus the boost Tools
+   attached to that side's Active — carried on `SideFacts.damage_boosts` and turned into the
+   `atk_boosts` key by the one builder (`strategy/damage_context.py`).
+2. **`transient_grants` is HOMED, not owed.** `snapshot_coverage.py` homes it at
+   `mine.active.grant`, and it holds the ADR-0033 *attack* grants (`self_lock` / `same_lock` /
+   `self_bonus` / `prevent_all` / `reduction`) — not the flat Trainer boosts. The prescribed route
+   would have read the wrong zone.
+3. **Gravity Mountain (1252) is not a damage modifier.** `data/EN_Card_Data.csv`: *"Each Stage 2
+   Pokémon in play (both yours and your opponent's) gets **-30 HP**."* Its parsed `damageBoost` is
+   `0`, and the shipped whole-pool inventory pin agrees —
+   `tests/scouting/test_tool_holder_facts.py`: `carriers("damageBoost") == {1141: 30, 1158: 50,
+   1171: 30, 1211: 40}`. So the issue's *"Gravity Mountain is two facts, not one … this issue covers
+   the damage half only"* section has no damage half to cover. Its HP half remains genuinely
+   unmodelled and stays with the Stadium ruling and Issue #263.
+
+### Measured, on the plumbing the issue says does not exist
+
+Board: my Mega Lucario ex with `{F}{F}` attached and the turn's attach spent, against Dragapult ex.
+
+| live boost | `atk_boosts` | reach | `threat` | `state_value` |
+|---|---|---|---|---|
+| none | `()` | 270 | 0.0 | −1.13 |
+| Premium Power Pro `(30, {F}, False)` | 1 triple | 300 | 0.0 | −1.13 |
+| Power Pro x2 | 2 triples | 330 | 0.10 | **−1.03** |
+| Black Belt's `(40, None, True)` | 1 triple | 310 | 0.0 | −1.13 |
+| a `{W}`-gated 30, same amount | 1 triple | **270** | 0.0 | −1.13 |
+
+Both gates the issue asks to be carried through are already carried: the attacker-type gate refuses
+the `{W}`-gated copy on a `{F}` attacker, and the defender-`{ex}` gate pays Black Belt's 40 against
+Dragapult **ex**. Against a 320 HP defender two Power Pros cross the breakpoint and the scalar moves
+by the whole `threat` term. There was nothing to build.
+
+### What this issue therefore shipped instead
+
+Only the parts of its own body that were genuinely unbuilt, plus the enumeration gap the symptom
+was really about:
+
+* **The four acceptance tests from the issue's own `## Tests` section**, at the scalar
+  (`tests/strategy/test_state_value.py`). Every link of the chain was pinned in isolation and the
+  chain end-to-end was pinned nowhere, which is exactly the shape that breaks silently in the
+  middle. Instrument verified in both directions: severing `damage_facts`' boost leg turns 4 of the
+  5 red (the regression test correctly stays green), and deleting both gates in `strategy/damage.py`
+  turns the two gate tests red.
+* **`snapshot_coverage.WRITABLE` gains `this_turn_damage_boosts`**, homed at
+  `mine.damage_boosts,theirs.damage_boosts`. The zone was **absent**, which is a worse status than
+  `owed`: an owed zone is a scheduled gap with an owner, an unenumerated one is invisible to every
+  assertion in the module. That absence is the real mechanism behind the issue's symptom.
+* **The limitation the issue asks to be recorded**, in `apply_option.footprints_writing_unhomed()` —
+  which was ALSO carrying a stale finding (*"Not empty, and that is the finding"*; T1/Issue #260
+  homed both zones and `test_snapshot_coverage.py` has pinned it EMPTY since). Both guards are
+  keyed on declared write-sets, and Premium Power Pro (1141), Black Belt's Training (1211) and Brave
+  Bangle (1175) return `None` from `card_effects.json` — no clauses at all, so the union is empty and
+  neither guard can ever see them. Now asserted as a test, not only a docstring.
+* **`planner._leaf_state_model`'s omission of `turn_boosts` is documented as DELIBERATE**
+  (scope note). `_simulate_line` stops when the select passes to the opponent, so its board is my
+  END-OF-TURN board and a *"During this turn"* boost has expired by then; threading the live tracker
+  there would inject a dead boost into `threat` and over-claim a Knock Out I could not take. The
+  boost's value is already on that board — the sim cashed it, so the prize is in `prize_race`. The
+  next reader who greps `turn_boosts` will find that call site missing the kwarg, and this is what
+  stops them "fixing" it.
+
+### A/B against the pre-change tree
+
+Both gates, stashed and re-run against the committed baselines:
+
+| | pre-change | post-change |
+|---|---|---|
+| Discrimination (leaf) | FAIL — 1 unruled, 67 ruled, 3 voided | FAIL — **1 unruled**, 67 ruled, 3 voided |
+| Decision | PASS — agree 250/347, 0 picks moved | PASS — agree **250/347**, **0 picks moved** |
+
+Both reports are **byte-identical** pre vs post — the leaf report is 384 lines carrying 339
+per-frame rows, so byte-identity is zero movement on every scored row rather than an empty report.
+The one unruled leaf flip is Issue #280's `81906755|1|decision|9`, ruled above. Neither baseline was
+touched.
+
+**And that zero is not evidence of correctness — it is evidence there was nothing to measure**,
+which is the distinction Issue #343's section above exists to draw. Proven rather than asserted:
+parse each changed `src/*.py` at `HEAD` and in the worktree, strip docstrings, compare the ASTs —
+`apply_option.py` and `strategy/planner.py` come out **identical** (docstring-only), and
+`snapshot_coverage.py` is the single code change, one `Zone(...)` entry in a registry whose readers
+(`homes()`, `unhomed()`) are the audit test and nothing else. The comparator's own control: it
+returns False for `return 1` vs `return 2` under two different docstrings.
+
+The measurements that ARE evidence are the two above: the table showing the path live and moving,
+and the new tests going red when either the supplier or either gate is severed. The lab's ability to
+see a `state_value` change on this corpus is separately controlled by Issue #280, which moved 21 of
+277 rows one commit earlier in this same batch.
+
+### One follow-on filed
+
+**Issue #345** — Brave Bangle (1175), which `slowking` ships, parses to `damageBoost=0`: its text is
+a third sentence form (*"If the Pokémon this card is attached to doesn't have a Rule Box, the
+attacks it uses do 30 more damage …"*) carrying a holder gate `CardStat` has no field for.
+`holderNameFamily` / `applies_to_holder` express an owner-NAME family, not a Rule Box. Not built
+inline: it needs a pool-swept predicate and a decision about where the second holder gate lives,
+which is a different subsystem from this issue's.
