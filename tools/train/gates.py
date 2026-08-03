@@ -1313,7 +1313,9 @@ def shape_the_constructor_would_refuse(correction) -> list:
     But **unvalidated must not mean unobserved**, and it was: nothing re-applied the constructor's
     rules to what is already on disk, which is how `85709280|1|match|` — `match` scope carrying
     `correct: [0]`, hand-edited past the writer on 2026-07-29 — got in and stayed, *grading in both
-    gates*. This is the missing half. It reports; it changes no verdict.
+    gates*, until the developer reviewed this audit's finding and repaired it (ADR-0113 Amendment A):
+    re-scoped to `decision`/subject 51, its key today. This is the missing half. It reports; it
+    changes no verdict.
 
     **Which rules, and why not the others.** Re-applied are the rules whose truth is a property of
     the record *itself* against vocabularies fixed in `correction.py` and never grown: `source`,

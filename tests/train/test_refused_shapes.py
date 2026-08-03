@@ -7,7 +7,10 @@ load would reject committed records at read time and take *both* gates down over
 been sitting green for weeks. But unvalidated must not mean unobserved, and until this audit nothing
 re-applied the writer's rules to what was already on disk — which is how `85709280|1|match|`
 (`match` scope carrying `correct: [0]`, hand-edited past the constructor on 2026-07-29) got in, and
-stayed, *grading in both gates*.
+stayed, *grading in both gates*, until the developer reviewed the finding and repaired it (ADR-0113
+Amendment A): re-scoped to `decision`/subject 51, where `correct: [0]` is a legal shape. The corpus
+is clean today — the census below asserts that, not "exactly one" — and the repaired record's key,
+`85709280|1|decision|51`, is what `THE_RECORD` now names.
 
 The census here is worthless without the controls, and this repo has a named failure mode for exactly
 that (`CLAUDE.md`): an instrument that finds nothing and a broken instrument return the same empty
@@ -29,8 +32,14 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from train.gates import (REFUSED_SHAPE_RULES, refused_shapes,  # noqa: E402
                          shape_the_constructor_would_refuse as refuses)
 
-#: The one committed record the audit exists for.
-THE_RECORD = "85709280|1|match|"
+#: The record this whole audit was built to find, and its two keys. It shipped `match` scope
+#: carrying a `correct` the constructor forbids (hand-edited past it on 2026-07-29) until the
+#: developer reviewed the wave-3 packet and ruled: the rationale was always about ONE select, never
+#: a whole-match note, so re-scoping to `decision`/subject 51 invents nothing and costs nothing — the
+#: record's `span` (a genuine turn-by-turn Game Plan trace, ADR-0045) survives untouched (ADR-0113
+#: Amendment A). `THE_RECORD_WAS` no longer resolves; kept so a test can assert exactly that.
+THE_RECORD = "85709280|1|decision|51"
+THE_RECORD_WAS = "85709280|1|match|"
 
 
 @dataclass
@@ -193,68 +202,87 @@ def test_the_constructor_accepts_the_shape_the_audit_calls_clean():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.req("REQ-GATE-0009")
-def test_the_committed_corpus_holds_exactly_one_refused_shape():
+def test_the_committed_corpus_holds_no_refused_shapes():
     """**The census.** Measured through the Corpus Reader, never raw JSONL: 23 records carry no
     explicit `scope` key and only default to `decision` inside `Correction.from_dict`, and every rule
     here dispatches on scope.
 
-    It goes red when a SECOND bad shape lands — which is the property the store lacked entirely, and
-    the whole deliverable of Issue #256. It also goes red when this one is repaired, which is the
-    moment a human is looking (decision D3, packet).
-    """
+    Was ``== [THE_RECORD_WAS]`` — the corpus held exactly the one violation this audit was built to
+    find, `85709280|1|match|`. The developer reviewed it (the wave-3 packet this issue produced) and
+    repaired it rather than excluding it: re-scoped to `decision`/subject 51, where a non-empty
+    `correct` is legal (ADR-0113 Amendment A). This assertion is the record of that repair landing —
+    it goes red again the moment a SECOND bad shape appears, which is the property the store lacked
+    entirely and the whole deliverable of Issue #256."""
     found = refused_shapes(REPO / "data" / "corrections")
-    assert [f["key"] for f in found] == [THE_RECORD]
-    assert found[0]["id"] == "ee3191f7c3d6"
-    assert found[0]["scope"] == "match"
-    assert found[0]["violations"] == ["match_names_a_correct"]
+    assert found == []
 
 
 @pytest.mark.req("REQ-GATE-0009")
 def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
-    """**The control the census is worthless without.** An empty corpus, a broken reader or a
-    mis-typed field would all satisfy the assertion above while proving nothing. So: the reader finds
-    all 372 records, 371 of them are clean, and the audit's own rules DO fire when a bad record is
-    put in front of them."""
+    """**The control the census is worthless without.** An empty corpus, a broken reader, or a
+    predicate that only ever returns ``[]`` would all satisfy "0 refused shapes" while proving
+    nothing. So: the reader finds all 372 records, every one is clean — including the repaired
+    record, checked by name — and the synthetic + differential tests above already established the
+    predicate really does fire (`test_a_match_scope_correct_is_caught`,
+    `test_the_constructor_really_refuses_each_shape_the_audit_names`), so "0 here" reads as "clean",
+    not as "broken"."""
     from train.gates import keyed_corrections
     recs = keyed_corrections(REPO / "data" / "corrections")
     assert len(recs) == 372
-    assert sum(1 for _k, c in recs if not refuses(c)) == 371
-    # The predicate is not a function that only ever returns [] — proved against a real committed
-    # record, not only a synthetic one.
+    assert sum(1 for _k, c in recs if not refuses(c)) == 372
     the_record = next(c for k, c in recs if k == THE_RECORD)
-    assert refuses(the_record) == ["match_names_a_correct"]
-    assert the_record.scope == "match" and the_record.correct == [0]
+    assert refuses(the_record) == []
+    assert the_record.scope == "decision" and the_record.correct == [0]
+    assert not any(k == THE_RECORD_WAS for k, _c in recs), "the old key must no longer resolve"
 
 
 @pytest.mark.req("REQ-GATE-0009")
-def test_the_one_match_scope_record_is_the_only_one_and_is_still_grading():
-    """Why the finding matters, stated as the two facts a reader needs.
+def test_the_corpus_now_holds_no_match_scope_records_at_all():
+    """Decision **D1** — *a match-scope Correction should not grade at its Anchor* — was written
+    about a corpus that held exactly ONE `match`-scope record (353 decision / 18 turn / 1 match):
+    this one. The developer reviewed the wave-3 packet and repaired it rather than ruling D1: the
+    record's Anchor rationale was always about ONE select (never a whole-match note), so re-scoping
+    to `decision`/subject 51 invents nothing (ADR-0113 Amendment A). D1 therefore has no live
+    instance to apply to — `scope="match"` is theoretical vocabulary today, not dead code; a future
+    tag can still use it.
 
-    It is the ONLY `match`-scope record repo-wide (353 decision / 18 turn / 1 match), so **decision
-    D1** — *a match-scope Correction should not grade at its Anchor* — is a ruling about exactly this
-    record today. And it is not inert: it sits in the committed Decision Gate baseline, labelled on
-    both sides, inside the gradeable denominator.
+    This is the corpus-composition half of that repair. `test_the_repaired_record_still_grades_the_
+    same_way` below is the grading half — the fix must be a pure re-label, not a value change."""
+    from collections import Counter
+
+    from train.gates import keyed_corrections
+    recs = keyed_corrections(REPO / "data" / "corrections")
+    assert Counter(c.scope for _k, c in recs) == {"decision": 354, "turn": 18}
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_the_repaired_record_still_grades_the_same_way():
+    """The repair must be a re-label, not a re-ruling: `correct`/`chosen`/`span` are untouched, so
+    whatever the gate concluded about this frame before must still hold after.
 
     ⚠️ **The gate grades the PILOT's fresh replay pick, not the record's own `chosen` field.** The
-    record's historical `chosen` is `[2]`; the baseline row's `chosen` is `[0]` — what the Pilot
-    picks on replay — against a recorded `correct: [0]`, so the frame reads **AGREE**. Confusing the
-    two inverts D1's consequence, and the spec for this issue did exactly that."""
+    record's historical `chosen` is `[2]`; the committed baseline row's `chosen` is `[0]` — what the
+    Pilot picked on replay — against a recorded `correct: [0]`, so the frame reads **AGREE**.
+    Confusing the two inverts the consequence, and the spec for Issue #256 did exactly that.
+
+    The baseline row is still keyed `THE_RECORD_WAS` (captured before the repair, byte-identical
+    since — neither gate baseline is ever re-captured without a developer act) — this is the OTHER
+    face of "corpus shape moved: +1/-1" both gates now report."""
     import json
-    from collections import Counter
 
     from train.decider_lab import gradeable_rows
     from train.gates import keyed_corrections, satisfies_human
     recs = keyed_corrections(REPO / "data" / "corrections")
-    assert Counter(c.scope for _k, c in recs) == {"decision": 353, "turn": 18, "match": 1}
-
     rec = next(c for k, c in recs if k == THE_RECORD)
+    assert rec.scope == "decision" and rec.subject == 51 and rec.span is not None
+
     baseline = json.loads((REPO / "data" / "decider_lab" / "baseline.json")
                           .read_text(encoding="utf-8"))
-    row = next(r for r in baseline["rows"] if r["key"] == THE_RECORD)
-    assert rec.chosen == [2], "the record's historical pick"
+    row = next(r for r in baseline["rows"] if r["key"] == THE_RECORD_WAS)
+    assert rec.chosen == [2], "the record's historical pick, unchanged by the repair"
     assert row["chosen"] == [0] and row["correct"] == [0], "the gate's replay pick vs the ruling"
-    assert satisfies_human(row["chosen"], row["correct"]) is True, "it grades as an AGREE"
-    assert THE_RECORD in {r["key"] for r in gradeable_rows(baseline["rows"])}
+    assert satisfies_human(row["chosen"], row["correct"]) is True, "still grades as an AGREE"
+    assert THE_RECORD_WAS in {r["key"] for r in gradeable_rows(baseline["rows"])}
 
 
 @pytest.mark.req("REQ-GATE-0009")
@@ -274,18 +302,22 @@ def test_a_refused_shape_gets_no_excuse_from_either_gate():
 
 
 @pytest.mark.req("REQ-GATE-0009")
-def test_from_dict_still_loads_the_refused_record_without_complaint():
+def test_from_dict_still_loads_a_refused_shape_without_complaint():
     """**Decision D4, asserted directly.** The loader must NOT validate: it is what the Corpus Reader
     runs, so a validating `from_dict` would reject committed records at read time and take both gates
     down. The audit is the reporting half of that contract, and this is the half it must not become.
 
-    Positive control that the two halves really disagree: the same payload through the *constructor*
-    raises."""
+    Was asserted against the real corpus's one refused shape (`85709280|1|match|`); repaired since
+    (ADR-0113 Amendment A). Reproduced here the way the real one actually got in: a record the
+    constructor accepted, hand-edited past it afterwards — every OTHER field stays whatever the
+    constructor produced, so only `scope`/`correct` are the corruption under test. Positive control
+    that the two halves really disagree: the same payload through the *constructor* raises."""
     from train.blunder.correction import Correction
-    from train.gates import keyed_corrections
-    rec = next(c for k, c in keyed_corrections(REPO / "data" / "corrections") if k == THE_RECORD)
-    assert Correction.from_dict(rec.to_dict()) == rec         # loads, silently, as it must
-    assert refuses(rec) == ["match_names_a_correct"]          # and the audit says so out loud
+    valid = _build(correct=[2])
+    tampered = {**valid.to_dict(), "scope": "match", "correct": [0]}
+    loaded = Correction.from_dict(tampered)
+    assert loaded.scope == "match" and loaded.correct == [0]   # loads, silently, as it must
+    assert refuses(loaded) == ["match_names_a_correct"]        # and the audit says so out loud
     with pytest.raises(ValueError):
         _build(scope="match", correct=[0])
 

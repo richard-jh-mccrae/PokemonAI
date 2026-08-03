@@ -78,12 +78,15 @@ record, do not ungrade the frame.
 ## Reading the `refused shape` section
 
 `build_correction` validates at write time; `Correction.from_dict` — what the **Corpus Reader** loads
-through — does not validate at all, so the store can hold a shape its own writer forbids. One does:
-`85709280|1|match|` is `match` scope carrying `correct: [0]`, which the constructor refuses outright,
-and it is *grading in both gates*. `gates.refused_shapes` re-applies the constructor's rules to every
-committed record and this section names what it finds. **The asymmetry stays** (ADR-0113): a
-validating loader would reject committed records at read time and take both gates down over a record
-that has been green for weeks. Reported, never a verdict — the cure is to re-rule the record.
+through — does not validate at all, so the store can hold a shape its own writer forbids. One did:
+`85709280|1|match|` was `match` scope carrying `correct: [0]`, which the constructor refuses outright,
+grading in both gates until the developer repaired it (ADR-0113 Amendment A: re-scoped to
+`decision`/subject 51 — `85709280|1|decision|51` today). `gates.refused_shapes` re-applies the
+constructor's rules to every committed record and this section names what it finds — empty on the
+current corpus, and the property it was built for is that it stops being empty the moment a NEW bad
+shape lands. **The asymmetry stays** (ADR-0113): a validating loader would reject committed records
+at read time and take both gates down over a record that has been green for weeks. Reported, never a
+verdict — the cure is to re-rule the record.
 
 **The baseline is a RULING RECORD, never auto-recaptured** — the same discipline `data/leaf_lab/`
 carries. Re-capture only once a build's flips have been ruled with the user, or the gate becomes a

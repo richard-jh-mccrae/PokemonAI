@@ -90,10 +90,11 @@ refuse to create new bad shapes* is the contract for a store that is also an **a
 `gates.refused_shapes` walks the corpus with it; the **Decision Gate** readout's `refused shape`
 section names every hit. **REPORTED, never excluded** — the same ruling the **Unstatable Decline**
 carries, for the same reason: ungrading a frame outlives the record shape that caused it. One record
-carries it today, `85709280|1|match|` (`ee3191f7c3d6`) — `match` scope naming `correct: [0]`, hand-edited
-past the writer on 2026-07-29 — and it is *grading in both gates*. The `category` vocabulary is
-deliberately NOT re-applied: it is extensible, so refusing an old record over it would report a
-vocabulary edit as a corpus defect.
+carried it until 2026-08-03, `85709280|1|match|` (`ee3191f7c3d6`) — `match` scope naming `correct: [0]`,
+hand-edited past the writer on 2026-07-29 — grading in both gates until the developer repaired it
+(re-scoped to `decision`/subject 51, ADR-0113 Amendment A; the corpus holds zero refused shapes
+today). The `category` vocabulary is deliberately NOT re-applied: it is extensible, so refusing an old
+record over it would report a vocabulary edit as a corpus defect.
 _Avoid_: invalid / corrupt (the record loads, round-trips and grades — it is well-formed as *data*),
 malformed (nearer, but says nothing about *whose* rule it breaks), schema violation (there is no schema
 layer; there is a constructor), unstatable (a different defect — that record's shape is legal, its

@@ -1,8 +1,8 @@
 # ADR-0113 — The store is an ARCHIVE, so the writer's rules are re-applied as a REPORT, never as a loader
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #256, batched issue-sequence run); decisions
-2 and 4 BUILT, decisions 1 and 3 RULED BUT NOT EXECUTED (they move a gate number — see
-`docs/plans/issue-sequence-230-wave3-packet.md`).
+2 and 4 BUILT, decision 1 now zero-instance (Amendment A), decision 3 SUPERSEDED by Amendment A's
+developer ruling rather than executed as written.
 **Sits beside [ADR-0112](0112-a-gate-reports-what-it-cannot-grade-it-never-stops-grading-it.md)**,
 whose ruling this repeats one layer down: that one reports a record that cannot *state* its ruling,
 this one reports a record the writer would not have *created*. Both report; neither excludes.
@@ -253,3 +253,102 @@ change and the measured gate consequence for each, and states that 3 without 1 m
   entitled to do. Same call ADR-0112 made, same reason.
 * **Carry the spec's "it grades as a DISAGREE" correction into the ADR** — it is false, and it would
   have put the wrong sign on every number the developer signs off.
+
+## Amendment A (2026-08-03) — the developer reviewed the packet and chose a fourth option
+
+**This issue should have cited [ADR-0087](0087-a-corpus-reader-constructs-corrections-and-keys-by-identity.md)
+and did not.** That ADR — Issue #241's Corpus Reader work, which predates Issue #256 — already
+diagnosed this exact record and its Consequences section already names the fix: *"One corpus record
+needs a scope re-tag (`85709280`, `match` → `decision|51`), which is a ruling-record edit and stays
+outside this PR per decision 5"* — deliberately deferred to the developer as their own act, with the
+`match|` key flagged, in ADR-0087's own words, as one *"no fixture or ledger entry can usefully join
+against"* — the exact orphaned-fixture and `reviewed.json`-mismatch problems this amendment hits
+below. Issue #256 rediscovered the record independently and reasoned to a worse interim answer (R2)
+before this amendment corrected it. A search of the ADR index at filing time would have found this
+directly; it did not happen, which is the same failure class `docs/agents/issue-tracker.md`'s
+prior-art discipline exists to catch, one step later than usual.
+
+Reviewing the wave-3 packet, the developer read `85709280-m1`'s rationale directly and pushed back on
+decision 3's framing before either R1 or R2 was executed. Two more spec claims did not survive that
+review, on top of the one *Claims verification refuted* already caught:
+
+**Decision 3's stated reason for rejecting a `decision`-scope re-tag was itself false.** It said
+re-scoping to `decision`/subject 51 *"invents a ruling the human never made (the rationale is a
+whole-match note)."* Read in full, the rationale is entirely and specifically about ONE Main
+select — bench a 2nd Solrock, or play Lillie's Determination to keep the last bench slot for
+Makuhita — with no whole-match language anywhere in it. Nothing is invented by naming that select as
+the record's subject.
+
+**But the record's `span` genuinely is match-level content**, independent of the rationale: a full
+16-turn `game_plan` trace (SETUP → RACE → STABILIZE → CLOSE — ADR-0045's Match Planner vocabulary),
+which no `decision`-scope record in the corpus otherwise carries. So the record was never a simple
+mis-tag; it carried two genuinely different things — a specific ruling and a whole-game trace — under
+one scope value, and fixing the ruling half by simply changing scope required knowing what would
+happen to the trace half.
+
+**A hoped-for safety net turned out to be orphaned.** Before ruling, the record's `tests/fixtures/
+corrections/ml_dont_bench_redundant_solrock_f51.json` companion — created in the SAME 2026-07-29
+commit (`b6d7483a`) that hand-patched the raw record's `correct` — looked like it might already
+capture this exact ruling cleanly, as a proper ADR-0072 Decision Claim (`claims.decision`, no
+`owner`, so per that commit's own message *"it GATES rather than sitting held-out"*). Checked
+directly: it carries no `frame_key`, which `gates.iter_keyed_fixtures` requires to opt a fixture into
+the Held-out Ledger or Claim Agreement, and no test in the repo references it by filename. It is
+orphaned — built with real care and never wired to anything. It does **not** back up whatever happens
+to the raw record.
+
+### Ruling: re-scope to `decision`, subject 51. Keep `correct: [0]`. Keep `span` as-is.
+
+Nothing in `build_correction` forbids a `decision`-scope record from carrying a `span` — this is
+simply the first one that does. This is a strict improvement over BOTH original options: better than
+decision 1 (R1), which would have permanently ungraded a ruling that is still live and correct;
+better than decision 3 as written (R2), which would have thrown the one machine-checkable copy of
+this ruling away, since the orphaned fixture does not preserve it. Executed the same day.
+
+### The exact edit
+
+`data/corrections/mega_lucario_20260713_896ad45-dirty/corrections.jsonl`, record `ee3191f7c3d6`
+(byte-verified — every other field, and every other byte in the file, unchanged; CRLF preserved):
+
+```
+"scope": "match",   "subject": null,
+"scope": "decision", "subject": 51,
+```
+
+### The repair this required that neither original option anticipated
+
+`data/corrections/reviewed.json` keys this record's `covered` disposition as `85709280-m1` — the
+match-scope `review_key` (`tools/train/blunder/reviewed.py:review_key`, `f"{ep}-m{seat}"`).
+Re-scoping orphaned that entry: `gates.orphan_rulings()`, whose emptiness a real test
+(`tests/train/test_gates.py::test_no_committed_ledger_entry_rules_on_nothing`) asserts, started
+returning it. Re-keyed to `85709280-51` — the `decision`-scope `review_key`/`anchor_form` — value
+untouched. The disposition is still live and correct: the rule it cites,
+`dont-bench-a-redundant-engine-piece`, is a shipped `Hypothesis` in
+`src/agents/mega_lucario/strategy.py:196` today. A pure re-key, not a re-review.
+
+### Measured gate consequence — verdict-neutral, confirmed by stashing the edit and re-diffing
+
+| gate | before | after |
+|---|---|---|
+| Discrimination Gate | PASS, 0 unruled OK→MISS, 67 ruled, 3 voided, **198 gated** | PASS, 0 unruled OK→MISS, 67 ruled, 3 voided, **197 gated**; `CORPUS SHIFTED: +1 added, -1 removed` |
+| Decision Gate | PASS, agree **250/347**, 0 picks moved, 0 rulings moved, 24 voided | PASS, agree **250/347** (unchanged), 0 picks moved, 0 rulings moved, 24 voided; `corpus shape moved: +1/-1` |
+
+Both `added`/`removed` pairs are this one record's identity change and nothing else — verified by
+re-running both diffs with the edit stashed and confirming the numbers match exactly but for that one
+key. Neither baseline was re-captured (`git status --porcelain data/leaf_lab/ data/decider_lab/`
+empty both before and after).
+
+Decision 1 is consequently **zero-instance**: the corpus holds no `match`-scope records at all today.
+It remains a live, general policy question for a future tag, not a ruling this repair needed —
+preserved verbatim in the packet for that reason.
+
+### Amended consequences
+
+`tests/train/test_refused_shapes.py`'s three real-corpus tests were rewritten, not just re-pointed —
+the census now asserts **zero** refused shapes (was: exactly one, this one), the scope-composition
+test now asserts **zero** `match`-scope records (was: exactly one), and the "does `from_dict` load a
+refused shape silently" test now drives a synthetic record built by tampering with a real
+`build_correction` output (the general property D4 states, since the corpus no longer has a live
+example). All three docstrings a future reader as "why did this test's assertion change" — that WAS
+the intended, anticipated red the original test docstrings named. The census test result: 24/25
+tests unchanged in shape, one split in two (composition vs. grading, so a future scope change and a
+future value change fail independently).
