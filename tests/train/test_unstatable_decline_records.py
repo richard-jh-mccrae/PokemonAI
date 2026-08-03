@@ -120,3 +120,39 @@ def test_the_corpus_shape_census_is_what_the_scope_guard_was_sized_against():
     excluded = [k for k, c in hits if unstatable(c, c.obs)]
     assert sorted(excluded) == ["83661652|0|decision|3", "85785609|0|decision|4"]
     assert [k for k, _c in hits if k not in excluded] == ["86088989|0|turn|0"]
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_the_decline_census_the_writer_relaxation_was_sized_against():
+    """Issue #229's measurement, asserted so the NEXT drift is loud rather than inferred.
+
+    Measured through the Corpus Reader (`keyed_corrections`), never by walking raw JSONL: 23 records
+    carry no explicit `scope` key and only default to `decision` in `Correction.from_dict`, so a raw
+    walk mis-scopes them and under-counts. The issue body's own table said *three* degenerate records
+    and it is **two** — the third is `86088989|0|turn|0`, a turn-scope decline that was always legal.
+
+    What each number is load-bearing for:
+
+    * **10 declines, every one `turn` scope** — the writer's refusal is why, not the humans' rulings.
+      When a `decision`-scope decline is first recorded this fails, and that is the shape working.
+    * **28 decision-scope optional selects, 2 exposed** — the other 26 name a `correct` that differs
+      from `chosen`, i.e. state a real preference. The gap was never "every optional select".
+    """
+    from train.gates import keyed_corrections
+    recs = keyed_corrections()
+    assert len(recs) == 372
+
+    declines = [(k, c) for k, c in recs if c.correct == []]
+    assert len(declines) == 10
+    assert {c.scope for _k, c in declines} == {"turn"}
+
+    optional = [(k, c) for k, c in recs if c.scope == "decision" and c.obs
+                and int(((c.obs.get("select") or {}).get("minCount") or 0)) == 0]
+    assert len(optional) == 28
+    assert sorted(k for k, c in optional if unstatable(c, c.obs)) == [
+        "83661652|0|decision|3", "85785609|0|decision|4"]
+
+    # POSITIVE CONTROL. Every assertion above is a shape that must NOT be found; an empty corpus, a
+    # broken reader or a mis-typed field would satisfy all of them at once. A reader that finds no
+    # ruling at all is a broken instrument, not a clean corpus.
+    assert sum(1 for _k, c in recs if c.correct) == 362

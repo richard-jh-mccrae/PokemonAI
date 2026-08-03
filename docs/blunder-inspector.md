@@ -33,7 +33,7 @@ Decisions played in the wrong order; a match can be lost to a wrong Game Plan th
 
 | Scope | Subject (its identity) | `correct` | Span embedded | Verified by |
 |---|---|---|---|---|
-| `decision` (default) | the Anchor frame | mandatory | — | `retest` — the blunder is `fixed` or not |
+| `decision` (default) | the Anchor frame | mandatory, **except a decline** | — | `retest` — the blunder is `fixed` or not |
 | `turn` | the turn number + seat | **optional** | every Decision of that turn, with its `obs` | `retest_span` — re-drive to the **first divergence** |
 | `match` | the seat | forbidden | per-turn headers for both seats, + `game_plan` | the ladder (`seed-ladder`) — nothing plans across turns |
 
@@ -46,6 +46,17 @@ expressed as option indices: prescribing a different pick at the Anchor invalida
 frame's `select.option`, which only exists because the original pick was made. So at most one
 prescription is sound — the first divergent Decision — and giving it *is* the claim that this
 Anchor is that Decision. Leave it empty and the intended line lives in the `rationale`.
+
+**A decision-scope decline**
+([ADR-TEMP-229](adr/temp-issue229-a-decline-is-a-ruling-the-writer-must-accept.md)):
+at `decision` scope an empty `correct` is
+still refused *except* on a select the agent `obs` proves **optional** (`minCount == 0`), where it
+records the ruling *"take none of these"* — the answer an optional select exists to allow. This adds
+no vocabulary: `gates.satisfies_human` has always read an empty `correct` as a decline, matched
+exactly and never by subset, at every scope. Only the writer refused it, so the corpus could not
+hold the shape its own grader grades. The pane says so in the **Correct move(s)** label on such a
+frame, and saves with nothing selected. Where `minCount` cannot be read (no `obs`) the old refusal
+stands — an unverifiable decline is indistinguishable from a record that simply failed to state one.
 
 Turn 0 is the shared **setup phase** — both seats act in it — which is why a turn's identity
 carries the seat and not just the number.

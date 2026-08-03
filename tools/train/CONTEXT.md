@@ -50,6 +50,18 @@ option, that option indexes the **Anchor**'s `select.option` (asserting the Anch
 by its Scope's subject, so the same Turn tagged from two frames is one Correction.
 _Avoid_: pivot, mark, point, frame (the film index, not the Decision)
 
+**Decline**:
+A Correction whose `correct` is **empty on purpose** — the ruling *"take none of these"*, which is
+the answer an OPTIONAL select (`minCount == 0`) exists to allow. It is an ordinary ruling, not a
+third state and not silence: `gates.satisfies_human` grades it EXACTLY (see *Satisfying a
+Correction*), so an agent that also declines is satisfied and one that takes an option is not.
+Writable at `turn`/`match` scope from the start and, since **ADR-TEMP-229** (Issue #229), at
+`decision` scope too — but only where the record's `obs` PROVES the select optional
+(`correction.select_min_count`); where `minCount` cannot be read the writer still refuses, because an
+unverifiable decline cannot be told apart from a record that failed to state one.
+_Avoid_: pass, skip, no-op, "empty correction" (an absent ruling is `correct: None`, a different
+thing entirely — callers report those as UNLABELLED)
+
 **Category**:
 The **human** axis of a Correction — *what kind* of mistake the blunder is, picked from a
 closed, extensible vocabulary (`missed_win`, `overextension`, `misattachment`, …).
