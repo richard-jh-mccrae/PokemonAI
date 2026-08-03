@@ -278,6 +278,95 @@ STATE_VALUE_PROFILE = frozenset({
     "theirs.active.hp_remaining",
     "theirs.reachable_incoming",
     "theirs.turns_to_ko_me",
+
+    # ── POC-T3.5 / Issue #281: `threat`'s reachability gate asks the DAMAGE MODEL ──────────────
+    # The gate used to read `mine.best_reachable_damage` — the biggest PRINTED number, which is
+    # opponent-independent and therefore wrong in both directions (it missed every Weakness Knock
+    # Out and claimed every prevented one). It now reads the sibling against their actual Active,
+    # which drags in the Damage Formula's scaler context and, with it, the `damage_facts` gatherer
+    # on BOTH sides — that is the whole of the growth below.
+    #
+    # **Measured before re-pinning**, as this pin's own note demands. On the 40-frame corrections
+    # corpus, against a `state_value` whose fresh-model median on those (much richer) boards is
+    # ~6.7 ms: `damage_context(attacker="mine")` costs **111 us median / 149 us p95 on a FRESH
+    # model** and is memoized per direction for the model's lifetime, so every later reader pays a
+    # dict lookup. The damage read itself is not new cost: it is the same per-attack loop under the
+    # same Budget filter, one closed-form call (`predicted_damage`) where there used to be one field
+    # read (`attack_damage`).
+    #
+    # **Issue #280 added the SECOND direction** (`survival`'s clocks read `attacker="theirs"`) and
+    # re-measured, because the sentence above originally predicted it would cost a dict lookup and
+    # that was the one number worth checking rather than inheriting. Same 40 frames, same method:
+    # one direction on a fresh model 102 us median, BOTH directions on a fresh model **107 us
+    # median** — the second direction is ~5 us, not another 100. The reason is structural rather
+    # than lucky: the cost is `_SideBase.damage_facts`, one `@lazy` per SIDE that both directions
+    # share, and `damage_context` itself only decides which side's record becomes `atk_`/`def_`.
+    # So the profile below does not grow at all for Issue #280 — the second direction reads no
+    # field the first did not.
+    "mine.best_reachable_damage_vs",
+    "model.damage_context",
+    # the gatherer, and the per-side countables it walks (`_SideBase.damage_facts`). Both sides,
+    # because the Formula's variables are `atk_`/`def_`-relative and one direction needs both.
+    "mine.damage_facts",
+    "theirs.damage_facts",
+    "mine.active.damage_counters",
+    "mine.active.is_ex",
+    "mine.active.tool_ids",
+    "mine.bench.damage_counters",
+    "mine.bench.is_ex",
+    "mine.bench.is_stage2",
+    "mine.damage_boosts",
+    "mine.discard_energy_total",
+    "mine.discard_ids",
+    "mine.prizes_taken",
+    # The `theirs.bench.*` half of the SAME gatherer. `damage_facts` is one un-overridden method on
+    # `_SideBase` — it walks `bodies` and `bench` for `counters_in_play`, `bench_stage2`,
+    # `ex_in_play` and `bench_names` — so these are read on any frame where their Bench is not
+    # empty. They are DECLARED rather than measured: the engine-driven frame this ceiling is
+    # asserted against happens to reach the leaf with an empty opponent Bench. Safe to declare on a
+    # `<=` bound (it is a ceiling, not an equality), and the alternative is a latent failure that
+    # arrives the first time the drive benches an opposing body.
+    "theirs.bench.damage_counters",
+    "theirs.bench.is_ex",
+    "theirs.bench.is_stage2",
+    "theirs.bench.stat",
+    # …and `bench_names`, the fourth thing that same walk reads, which the comment above names but
+    # the list omitted. Surfaced by Issue #286's merge with Issue #287 (`attack_payoff` keys on
+    # `bench_names`) on a frame whose opponent Bench is NOT empty — exactly the "latent failure that
+    # arrives the first time the drive benches an opposing body" the comment predicts. DECLARED for
+    # the same reason as its three siblings, on the same `<=` ceiling.
+    "theirs.bench_names",
+    "theirs.active.damage_counters",
+    "theirs.active.energy_count",
+    "theirs.active.energy_key",
+    "theirs.active.is_ex",
+    "theirs.active.stat",
+    "theirs.active.tool_ids",
+    "theirs.bench_count",
+    "theirs.damage_boosts",
+    "theirs.discard_energy_total",
+    "theirs.prizes_taken",
+
+    # ── POC-T3.5 / Issue #284: `threat` reads their BENCH as well as their Active ──────────────
+    # The loop returned at most one element, so chip standing on their bench between turns was
+    # invisible — `dragapult_ex`'s whole win plan. Widening it adds exactly TWO fields, measured
+    # with `_Probe` over a board that actually has an opponent Bench (the engine drive this file
+    # pins against reaches the leaf with an empty one, so the measurement had to be made on a
+    # constructed board and is DECLARED here on the same `<=` ceiling as the `theirs.bench.*` block
+    # above):
+    #
+    #   * `mine.best_reachable_bench_damage` — the bench route. NOT a second damage read: it is the
+    #     attack's printed snipe RIDER under the SAME `reachable_attach` Attach Budget the two
+    #     existing reachability reads use, so the added cost is one `max` over the attacker's
+    #     attacks, memoized per (attacker, defender) on the model. No `context` — a rider ignores
+    #     Weakness and Resistance by rule (ADR-0022), so no Damage Formula scaler reaches it and the
+    #     `damage_facts` gatherer above is not touched a third time.
+    #   * `theirs.bench.hp_remaining` — the counters themselves, the fact the issue exists for.
+    #
+    # `theirs.bench.prize_value` is read too and is deliberately NOT listed: `PER_DECISION_PROFILE`
+    # already carries it (the Prize Path's bench map), and `LEAF_PROFILE` is their union.
+    "mine.best_reachable_bench_damage",
+    "theirs.bench.hp_remaining",
 })
 
 LEAF_PROFILE = (PER_DECISION_PROFILE | ATTACH_DECIDER_PROFILE | PROMOTE_DECIDER_PROFILE

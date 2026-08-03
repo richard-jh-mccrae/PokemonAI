@@ -31,6 +31,9 @@ import pytest
 from common import apply_option as ao
 from common import snapshot_coverage as sc
 from common import state_model as sm
+# The engine's own `OptionType.PLAY`, taken from the DLL-free mirror `apply_option` itself reads it
+# from — a second transcription of the number here is the drift ADR-0087 charges for one store over.
+from common.strategy.context import _PLAY as _PLAY_KIND
 
 _EFFECTS = Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json"
 
@@ -351,6 +354,63 @@ def test_the_owed_list_is_empty_because_T1_carried_it():
     assert sc.unhomed() == {}
     for owner in sc.unhomed().values():          # vacuous today; the rule outlives the emptiness
         assert "Issue #" in owner
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0003")
+def test_a_this_turn_damage_boost_is_ENUMERATED_and_homed_on_both_sides():
+    """The zone Issue #282 added, and the reason absence is worse than `owed`.
+
+    A this-turn flat damage boost IS state a card effect writes — Premium Power Pro's *"During this
+    turn, attacks used by your {F} Pokémon do 30 more damage"* — and the registry did not name it at
+    all. Nothing here could then be about it: an `owed` zone is a scheduled gap with an owner, while
+    an unenumerated one is invisible to every assertion in this module.
+
+    It is homed on BOTH sides deliberately. A boost is open information in either direction (the play
+    is in the log both players see, an attached boost Tool is on the board), so `survival` reading
+    THEIR boosted attack needs `theirs.damage_boosts` exactly as `threat` needs mine — and a
+    my-side-only home would declare a write the snapshot could only half show, which is the same
+    silent zero one level down that `attached_energy` already carries a two-sided home for."""
+    zone = sc.BY_ID["this_turn_damage_boosts"]
+    assert zone.status == sc.HOMED
+    assert sorted(sc.homes()["this_turn_damage_boosts"]) == ["mine.damage_boosts",
+                                                             "theirs.damage_boosts"]
+    assert hasattr(sm.MySide, "damage_boosts") and hasattr(sm.TheirSide, "damage_boosts")
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0003")
+def test_the_unhomed_guard_cannot_see_a_card_with_no_clauses_at_all():
+    """**The limitation Issue #282 asks to be recorded, as a test rather than only a docstring.**
+
+    Both `unhomed` guards work off DECLARED write-sets: `clauses_writing_unhomed()` walks the
+    compendium, and `footprints_writing_unhomed()` walks the per-KIND footprints. A card with NO
+    clauses unions to the empty set, so neither guard can ever report it, however much state it
+    writes. The three boost cards are exactly that shape, which is asserted here against the
+    committed compendium so the claim cannot rot into an anecdote.
+
+    The control is the second assertion: the same lookup DOES return clauses for a card that has
+    them, so an empty answer above is evidence about those cards rather than about a broken read.
+
+    **Restated 2026-08-03, when Issue #298's batch gave `_PLAY` a footprint.** This test previously
+    asserted `_PLAY` was ABSENT from :data:`apply_option.FOOTPRINTS` — that was the mechanism, not
+    the finding, and asserting the mechanism made the test fail on a change that did not touch the
+    limitation at all. `_PLAY` now carries a footprint of the STRUCTURAL zones every play moves (the
+    card leaves hand, a Stadium swaps, an allowance is spent, a Basic reaches the Bench), and every
+    one of them is HOMED. It is `complete=False` precisely because the card's own EFFECT is still
+    not covered — that comes from its clauses, to be unioned at T4. So the guard still reports
+    nothing for a clause-less card, and the limitation Issue #282 asked to be recorded is untouched.
+    The assertions below now pin THAT, which is the thing that must not silently change."""
+    compendium = _compendium()
+    for cid in ("1141", "1211", "1175"):             # Power Pro, Black Belt's Training, Brave Bangle
+        assert compendium.get(cid) is None, cid
+    assert compendium.get("1086"), "the positive control — this card DOES carry clauses"
+
+    play = ao.FOOTPRINTS[_PLAY_KIND]
+    assert not play.complete, "`_PLAY`'s footprint is structural only — the card's effect is not in it"
+    homes = sc.homes()
+    assert sorted(z for z in play.writes if not homes.get(z)) == [], \
+        "every zone `_PLAY` declares is HOMED, so the footprint guard can never report a play"
+    assert ao.footprints_writing_unhomed() == {}
+    assert "no clauses unions to the empty set" in (ao.footprints_writing_unhomed.__doc__ or "")
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")

@@ -363,7 +363,7 @@ A Tool attach is structurally MODELLED: it writes `attached_tools`, which is hom
 | 1174 | Air Balloon | 3 | 0.05 | retreatReduction |
 | 1159 | Hero’s Cape | 1 | 0.35 | hpBonus |
 | 1156 | Lucky Helmet | 1 | 0.07 | none — DELIBERATE: REACTIVE — draws 2 when the holder is damaged in the Active Spot |
-| 1175 | Brave Bangle | 1 | 0.03 | none — DELIBERATE: GATED on a holder predicate we cannot decide — +30 vs {ex} only if the holder has no Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test would fail OPEN and over-credit |
+| 1175 | Brave Bangle | 1 | 0.03 | damageBoost, holderNoRuleBox |
 | 1171 | Hop’s Choice Band | 0 | 0.80 | attackCostReduction, damageBoost, holderNameFamily (Hop’s) |
 | 1173 | Cynthia's Power Weight | 0 | 0.04 | hpBonus, holderNameFamily (Cynthia’s) |
 | 1158 | Maximum Belt | 0 | 0.03 | damageBoost |
@@ -375,7 +375,7 @@ A Tool attach is structurally MODELLED: it writes `attached_tools`, which is hom
 | 1163 | Powerglass | 0 | 0.00 | none — DELIBERATE: REACTIVE — end-of-turn Energy from discard while the holder is Active |
 | 1180 | Core Memory | 0 | 0.00 | none — DELIBERATE: EXOTIC — grants an attack printed on the Tool itself, to one named body |
 
-7 of 14 recover nothing, and **7 of those are DELIBERATE**, each named with its reason above — the reactive family needs a term that prices a conditional FUTURE event on a body, which `state_value` has no shape for (adjacent to Issue #278's survival work) — a design question, not a parser gap. None is left unexplained.
+6 of 14 recover nothing, and **6 of those are DELIBERATE**, each named with its reason above — the reactive family needs a term that prices a conditional FUTURE event on a body, which `state_value` has no shape for (adjacent to Issue #278's survival work) — a design question, not a parser gap. None is left unexplained.
 
 Two rows that DO recover a field are still only partly modelled, and say so here rather than reading as covered. **Gravity Gemstone** carries the holder's surcharge as a negative `retreatReduction`, which is exact (a body only ever pays a Retreat Cost from the Active Spot, precisely when the clause is live) — but its SYMMETRIC leg, the opponent's Active paying `{C}` more too, has no per-card field on my Tool that could hold a fact about their body. **Hop's Choice Band** recovers both its legs, but see the next paragraph on the cost one.
 
@@ -543,15 +543,24 @@ those** and named the rest:
   and consult no Tool at all, and are enumerated with their fail directions in
   `tests/scouting/test_retreat_cost_grants.py`'s KNOWN DIVERGENCE. None is KO_SCORE-class and three
   are fail-open against the opponent by design, so that is a recorded boundary, not a live bug.
-- **The seven that stay unmodelled are named as such in the table above, each with its reason** —
+- **The six that stay unmodelled are named as such in the table above, each with its reason** —
   per "no silent caps", a group that reads as covered when it is not is worse than one that reads as
   missing. Five are REACTIVE (Lucky Helmet, Handheld Fan, Deluxe Bomb, Powerglass, Lillie's Pearl):
   they fire on the holder being *attacked*, so pricing them needs a term that values a conditional
   FUTURE event on a body — a `state_value` design question adjacent to Issue #278, not a parser gap,
   and inventing a `CardStat` shape for it here would be guessing at the term that has to consume it.
-  Core Memory grants an attack printed on the Tool itself. **Brave Bangle**'s +30 is gated on the
-  holder having no Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so that test would
-  fail OPEN and over-credit.
+  Core Memory grants an attack printed on the Tool itself.
+
+  **Brave Bangle was the seventh, and Issue #345 removed it from this list by refuting its reason.**
+  The row read *"`CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test would fail
+  OPEN and over-credit"*. That is a claim about the POOL, and it was never measured against it: a
+  sweep of all 1061 Pokémon bodies finds no Radiant, V, VMAX, VSTAR or V-UNION card at all, so over
+  these cards *"has a Rule Box"* and `CardStat.is_ex_body` are the same 151 bodies — exact, not
+  fail-open. The tree already agreed twice over, at `fetch_closure._pokemon_body_matches` (Poké
+  Pad's `no_rule_box`) and `cgpy.chain._card_matches` (`noRuleBox`), so the refusal was also
+  *inconsistent*: one predicate, read one way for a fetch clause and refused for a boost. The gate
+  now lives in `CardStat.holderNoRuleBox`, is evaluated by `applies_to_holder` alongside the owner
+  family, and the sweep is a test that fails the day the pool gains a Radiant Pokémon.
 
 Two caveats the table states rather than hiding: Gravity Gemstone's **symmetric** leg (the opponent's
 Active also pays `{C}` more) has no per-card field on my Tool that could carry a fact about their

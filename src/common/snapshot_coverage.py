@@ -155,6 +155,26 @@ WRITABLE: tuple[Zone, ...] = (
     Zone("allowance_stadium_played", "the one-Stadium-per-turn allowance", HOMED,
          home="stadium_played"),
 
+    # ── enumerated by POC-T3.5 (Issue #282). It was ABSENT, not owed — the worse status. ──────────
+    #
+    # A zone marked `owed` is a scheduled gap with an owner; a zone nobody enumerated is one nobody
+    # decided about, and no assertion in this module can be about it. That is how a whole class of
+    # card slipped past the §3c audit: Premium Power Pro (1141), Black Belt's Training (1211) and
+    # Brave Bangle (1175) have NO Effect Clauses at all — `card_effects.json` returns nothing for any
+    # of them — so `clauses_writing_unhomed()` walks past them by construction, and every per-card
+    # write-set is a union over clauses that unions to the empty set. Their effect lives entirely in
+    # the parsed `CardStat.damageBoost` / `damageBoostType` / `damageBoostVsEx` triple.
+    #
+    # The READ existed before this entry did (`_SideBase.damage_boosts`, Issue #279) — this is an
+    # enumeration catching up with a shipped home, not a new capability. Which is exactly why it was
+    # easy to miss: the code was right and the contract could not say so.
+    Zone("this_turn_damage_boosts",
+         "the flat damage boosts live for a side's attacks this turn — a played Premium Power "
+         "Pro / Black Belt's Training, and a boost Tool attached to that side's Active. "
+         "((amount, attackerEnergyType|None, vsExOnly), ...), the shape `strategy/damage.py` "
+         "consumes off the Damage Formula context's `atk_boosts` key", HOMED,
+         home="mine.damage_boosts,theirs.damage_boosts"),
+
     # ── hidden: no field can hold it. Recorded so nobody 'fixes' it. ──────────────────────────────
     Zone("deck_order", "the ORDER of cards in a deck — what a shuffle and a to-bottom rider change",
          HIDDEN,

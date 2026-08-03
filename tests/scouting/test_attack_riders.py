@@ -156,3 +156,79 @@ def test_parse_attack_ignores_active_effects(text, expected):
 def test_parse_attack_energy_recover_both_zones(text, expected):
     from common.scouting.card_text import parse_attack_energy_recover
     assert parse_attack_energy_recover(text) == expected
+
+
+# ---- WHICH record a bench-reach consumer must read (Issue #284) -----------------------------------
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_the_bench_reach_instrument_is_the_ATTACK_record_and_not_the_card_summary():
+    """`CardStat.benchSnipeDamage` and `AttackStat.benchSnipe` are NOT two names for one fact, and a
+    consumer that picks the wrong one is inert on most of the pool's bench routes.
+
+    `_build_cache` fills the card-level field from `parse_attack_bench_snipe` **alone**, while
+    `build_attack_stats` fills the attack-level one from that parser **or** the `free_target_snipe`
+    branch — the *"does N damage to 1 of your opponent's Pokémon"* form, which can hit any body
+    including a benched one. Everything printed that way therefore has a `benchSnipe` and a
+    `benchSnipeDamage` of 0. The card summary also predates the audit-override pass, so an override
+    would move one and not the other.
+
+    Measured over the whole pool (1556 attack records, 1061 cards) rather than argued: of the pool's
+    bench-snipe attacks, only the *"Benched Pokémon"* phrasings reach the card field, and the two
+    routes that carry `dragapult_ex` and `slowking` — Fezandipiti ex's Cruel Arrow and Kyurem's
+    Trifrost — are not among them. `state_value._reachable_target_values` reads the ATTACK record
+    through `CombatMath.rider_snipe`, and this is why."""
+    from common.scouting.provider import EngineCardStatProvider
+    stats = EngineCardStatProvider()
+    stats.warm()
+
+    # Verified at `data/EN_Card_Data.csv`: Mega Starmie ex (1031) Jetting Blow — "This attack also
+    # does 50 damage to 1 of your opponent's Benched Pokémon." The phrasing BOTH records read, and
+    # the positive control that proves this instrument is not simply returning zeros.
+    starmie = stats.get(1031)
+    assert starmie.benchSnipeDamage == 50
+    assert max(stats.attack(aid).benchSnipe for aid in starmie.attacks) == 50
+
+    # Fezandipiti ex (140) Cruel Arrow — "This attack does 100 damage to 1 of your opponent's
+    # Pokémon." — and Kyurem (144) Trifrost — "…110 damage to 3 of your opponent's Pokémon."
+    # Both print zero damage, so the free-target branch is the only thing that sees them.
+    for cid, rider in ((140, 100), (144, 110)):
+        card = stats.get(cid)
+        assert card.benchSnipeDamage == 0, f"{card.name}: the CARD summary misses this route"
+        assert max(stats.attack(aid).benchSnipe for aid in card.attacks) == rider
+
+    # And the fail-closed doctrine still holds where it should: Zeraora (377) Thunder Raid is
+    # restricted to a benched Pokémon {ex} ("…210 damage to 1 of your opponent's Benched Pokémon
+    # {ex}"), which `parse_attack_bench_snipe` declines by design, so NEITHER record claims it.
+    zeraora = stats.get(377)
+    assert zeraora.benchSnipeDamage == 0
+    assert max(stats.attack(aid).benchSnipe for aid in zeraora.attacks) == 0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_no_attack_in_the_pool_prints_both_a_bench_SNIPE_and_a_bench_SPREAD():
+    """The sweep behind `CombatMath.best_reachable_bench_damage`'s decision to read the snipe rider
+    alone (Issue #284).
+
+    `_bench_rider` SUMS the two as a worst case for a body of mine; an outgoing read cannot, because
+    a spread is one shared counter budget across their whole Bench. The split costs nothing on this
+    set only if no attack carries both — asserted here, with the two inventories printed alongside so
+    a later set that breaks the premise fails loudly rather than silently over-reading.
+
+    Both inventories are non-empty, which is the positive control: a sweep that had stopped seeing
+    riders at all would report the same empty intersection."""
+    from common.scouting.provider import EngineCardStatProvider
+    stats = EngineCardStatProvider()
+    stats.warm()
+    # The provider exposes `attack(aid)` but no iteration over the table, so a POOL sweep has to
+    # reach for the cache — the same way `test_tool_holder_facts.py` reaches for `stats._cache` to
+    # pin its card-level inventories. A private reach in a test, and the alternative is no sweep.
+    table = stats._attack_stats
+
+    snipes = {aid for aid, a in table.items() if a.benchSnipe}
+    spreads = {aid for aid, a in table.items() if a.benchSpread}
+    assert snipes and spreads, "the instrument reads nothing — a broken sweep, not a clean pool"
+    assert not (snipes & spreads), sorted(snipes & spreads)
+
+    # The three spread attacks the bench leg deliberately does not read, by amount:
+    assert sorted(table[aid].benchSpread for aid in spreads) == [20, 40, 60]

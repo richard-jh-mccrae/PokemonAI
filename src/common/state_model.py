@@ -295,7 +295,12 @@ class CarriedState:
 # ── body views ────────────────────────────────────────────────────────────────────────────────
 
 class ForwardPayoff(NamedTuple):
-    """What a body's evolution line still OWES it — :meth:`MySide.forward_payoff`'s answer.
+    """What a body's evolution line still OWES it — the answer of BOTH sides' ``forward_payoff``.
+
+    Two suppliers since Issue #285: :meth:`MySide.forward_payoff` computes all three legs from my
+    decklist and my zones; :meth:`TheirSide.forward_payoff` computes the first two from card
+    knowledge and fails OPEN on the third, because their deck is untracked. The shape is shared so
+    the two sides price one line the same way; the divergence is argued at the their-side method.
 
     NAMED rather than a bare 3-tuple for the reason `state_value.ExposedBody` gives one field over:
     three positional values of three different kinds invite a transposed unpack that still runs and
@@ -1260,6 +1265,73 @@ class MySide(_SideBase):
                 raw, budget=self.attach_budget(body, manual_spent=manual_spent))
         return self._memoized(key, _make)
 
+    def best_reachable_damage_vs(self, body: BodyView | None, defender: BodyView | None, *,
+                                 context: dict | None = None) -> float:
+        """Biggest damage ``body`` can reach this turn AGAINST ``defender`` — the sibling of
+        :meth:`best_reachable_damage` that asks the damage model instead of the printed number, so
+        Weakness, Resistance, a prevention Ability and a live damage boost all reach the answer
+        (Issue #281, POC-T3.5).
+
+        The two are NOT interchangeable and the incumbent is not the poorer one. `attach_value`'s
+        counterfactual wants the opponent-independent printed read by construction (ADR-0069 §2);
+        an offensive reachability GATE — *can I actually take this Knock Out* — wants this one. The
+        printed read said yes to a Knock Out a Crustle prevents outright and no to the Weakness
+        Knock Out `mega_starmie`'s whole doctrine is built on, so the gap was live in both
+        directions.
+
+        ``context`` is the Damage Formula's scaler context for the direction being priced —
+        :meth:`StateModel.damage_context` at ``attacker="mine"``, since the attacker here is MINE.
+        Omitting it is sound but weak: a scaling attack's variable contributes 0
+        (`strategy/damage.py`), which under-reads my own damage rather than inventing it.
+
+        Memoized by VALUE on the components the incumbent keys on and that vary here — card, area,
+        attached Energy — plus the two that are new: the DEFENDER and the context. The incumbent's
+        ``extra_energy_ids`` and ``manual_spent`` legs are deliberately NOT carried: both exist for
+        `attach_value`'s counterfactual PAIR (the same body with and without an option's provision,
+        at the same residual capacity), a comparison this read is not part of. A keyword no caller
+        passes is a surface that can only drift, so the Budget here is always the body's own and
+        residual capacity is constant rather than keyed.
+
+        The defender is canonicalised rather than keyed by ``id()`` for :meth:`_Lazily._key`'s
+        reason: a counterfactual caller may hand this a temporary body, and a freed temporary's
+        address is free to be reallocated."""
+        if body is None:
+            return 0.0
+        target = defender.body if defender is not None else None
+        key = ("best_reachable_damage_vs", body.card_id, body.is_active, body.energy_key,
+               self._key(target), self._key(context))
+        return self._memoized(key, lambda: self._combat.best_reachable_damage_vs(
+            body.body, target, budget=self.attach_budget(body), context=context))
+
+    def best_reachable_bench_damage(self, body: BodyView | None,
+                                    defender: BodyView | None) -> float:
+        """Biggest damage ``body`` can put on ONE of their **BENCHED** bodies this turn — the bench
+        route, which is the attack's snipe RIDER and not its printed damage (Issue #284, POC-T3.5).
+
+        The third member of the reachability family, beside :meth:`best_reachable_damage` (printed,
+        opponent-independent — `attach_value`'s counterfactual leg) and
+        :meth:`best_reachable_damage_vs` (the damage model against a defending ACTIVE). Three
+        questions, three methods; see :meth:`~common.strategy.combat.CombatMath.best_reachable_bench_damage`
+        for why a rider is a different route rather than a different defender, and why the read is
+        the single-target snipe rather than the snipe-plus-spread worst case.
+
+        **No ``context``, and that is not an omission.** The Damage Formula scales an attack's
+        damage; a rider is a printed constant that ignores Weakness and Resistance by rule
+        (ADR-0022), so no scaler reaches it and a context here would key a memo on a value nothing
+        consumes. `_exposed_bodies` records the mirror of this on the other side of the board.
+
+        Memoized by VALUE on the same components as the ``_vs`` sibling minus the context — card,
+        area, attached Energy, canonicalised defender. The defender is keyed rather than dropped
+        even though only its bench-immunity is read today: it is an input, and a memo that ignored
+        an input would be wrong the moment a later leg reads more of it."""
+        if body is None:
+            return 0.0
+        target = defender.body if defender is not None else None
+        key = ("best_reachable_bench_damage", body.card_id, body.is_active, body.energy_key,
+               self._key(target))
+        return self._memoized(key, lambda: self._combat.best_reachable_bench_damage(
+            body.body, target, budget=self.attach_budget(body)))
+
     def readiness_p(self, body: BodyView | None, attack_id=None, *, enabler_budget=None,
                     copies: int = 0, pool: int = 0, draws: int = 0, weighted: bool = True) -> float:
         """P(``body`` is ready to use the attack this turn) — the EV variant, and the ONLY place an
@@ -1276,7 +1348,8 @@ class MySide(_SideBase):
                                         pool=pool, draws=draws,
                                         p_by_type=self.deck_energy_p if weighted else None)
 
-    def turns_to_afford(self, body, *, attaches_per_turn: int = 1) -> int | None:
+    def turns_to_afford(self, body, *, attaches_per_turn: int = 1,
+                        exclude_expiring: bool = False) -> int | None:
         """**The Two Clocks**, my half (ADR-0070 §6): the earliest future turn ``body``'s line is
         ARMED — the MAX of the energy-deficit leg and the FORWARD-HOP leg, never the sum.
 
@@ -1292,13 +1365,32 @@ class MySide(_SideBase):
         here, unlike the their-side twin: ``discard_energy_recur`` is a fact about the OPPONENT's
         clock in every consumer that reads it, and neither shipped line sits in one of our decks — so
         crediting my own reload would be an unexercised code path, and an unexercised credit on MY
-        clock fails in the unsafe direction (it would price a line as armed sooner than it is)."""
+        clock fails in the unsafe direction (it would price a line as armed sooner than it is).
+
+        ``exclude_expiring`` (Issue #286, POC-T3.5) asks the same clock about the board this body
+        will actually stand on NEXT turn: Energy the rules discard at the END of this turn
+        (Ignition's ``discard_eot`` rider) is removed first, through
+        :meth:`~common.strategy.combat.CombatMath.without_expiring_energy`. A FORWARD clock counting
+        an Energy that will not be there is not conservative, it is wrong — Mega Starmie ex holding
+        one Ignition reads *armed now* and is three attaches from Nebula Beam the moment the turn
+        ends.
+
+        It is a SIBLING reading and the incumbent is deliberately untouched, because
+        :meth:`~common.strategy.combat.CombatMath.turns_to_afford` is shared with the deny clock for
+        THEIR bodies (`pilot._opp_turns_to_ready` *"DELEGATES here (byte-identical)"*) and
+        `attach_value`'s ADR-0069 counterfactual reads its own leg beside it. Teaching the oracle the
+        rider would move corpus-ruled decisions on the other side of the board; a flag nobody else
+        passes cannot. Keyed into the memo, and keyed on the REAL body — the hypothetical is derived
+        inside, so two callers asking different questions about one body never collide."""
         view = self.view_of(body)
         if view is None:
             return None
-        return self._memoized(("mine_turns_to_afford", self._key(view.body), attaches_per_turn),
+        return self._memoized(("mine_turns_to_afford", self._key(view.body), attaches_per_turn,
+                               bool(exclude_expiring)),
                               lambda: self._combat.turns_to_afford(
-                                  view.body, attaches_per_turn=attaches_per_turn, typed=True))
+                                  self._combat.without_expiring_energy(view.body)
+                                  if exclude_expiring else view.body,
+                                  attaches_per_turn=attaches_per_turn, typed=True))
 
     # `famine` was DELETED by POC-T1 (Issue #260). It was `active_famine` MINUS the rule leg — the
     # affordability half alone — so a consumer taking it would have missed Asleep, Paralyzed and the
@@ -1678,6 +1770,41 @@ class TheirSide(_SideBase):
                               lambda: self._combat.discard_recur_fuel(
                                   view.body, self.discard_energy_counts,
                                   forward_ids=self._forward_ids))
+
+    # -- evolution topology (the forward closure over the POOL) ---------------------------------
+    def forward_payoff(self, card_id) -> "ForwardPayoff":
+        """:class:`ForwardPayoff` for one of THEIR bodies — what its line still OWES it, so that
+        removing the body can be priced for what it DENIES (Issue #285, POC-T3.5).
+
+        The mirror of :meth:`MySide.forward_payoff`, and **the mirror is not a copy** — one of the
+        three legs cannot be computed for a side whose deck is hidden, and it degrades in the
+        OPPOSITE direction from mine, deliberately:
+
+        * ``owed_damage`` / ``hops`` — **computed**, by `CombatMath.forward_payoff_terms` over the
+          threaded ``forward_ids`` availability gate (the same callable :meth:`turns_to_afford`
+          passes, defaulting to the pool-level index). Card knowledge only: `evolvesFrom` chains and
+          printed damage, both of which the stat cache already holds for every card in the set.
+        * ``reachable`` — **NOT computable, and therefore always True.** My side reads `hand_ids`
+          plus `unseen_counts` to ask *"is a copy of that form still gettable"*; their hand is a
+          COUNT (:attr:`hand_size`) and their deck is untracked, so the question has no sound answer
+          here. It **fails OPEN**: we cannot prove their line is dead, and claiming so would cancel a
+          denial credit against a threat that is perfectly real. That is the opposite fail direction
+          from `MySide.forward_payoff`, whose `line_topology` leg CANCELS the credit for a line it
+          can prove dead — and the asymmetry is the point, because over-crediting a live opponent
+          line is the safe error where under-crediting one is not.
+
+        Consequence worth stating plainly rather than leaving to be discovered: a Staryu on their
+        board carries the Mega Starmie ex credit whether or not they run Mega Starmie ex, because the
+        pool index is deck-agnostic. `MySide.forward_index` narrows to MY decklist precisely because
+        it can; nothing narrows this one. `TheirSide.read` (the archetype Read) is the eventual
+        supplier of that narrowing and is not consumed here — it is a matched-Brief probability, not
+        a decklist, and threading it would give this a second opinion about the Read.
+        """
+        return self._memoized(("their_forward_payoff", card_id),
+                              lambda: ForwardPayoff(
+                                  *self._combat.forward_payoff_terms(
+                                      card_id, forward_ids=self._forward_ids),
+                                  True))
 
 
 # ── the model ─────────────────────────────────────────────────────────────────────────────────

@@ -24,14 +24,32 @@ The three:
   * 1166 Gravity Gemstone: "As long as the Pokemon this card is attached to is in the Active Spot,
     the Retreat Cost of both Active Pokemon is {C} more."  — the pool's only Tool whose static
     effect is a COST.
+
+**Issue #345 adds a fourth, and it was previously this file's NEGATIVE case**, refused with a
+reason that has not survived re-measurement:
+
+  * 1175 Brave Bangle: "If the Pokemon this card is attached to doesn't have a Rule Box, the attacks
+    it uses do 30 more damage to your opponent's Active Pokemon {ex} (before applying Weakness and
+    Resistance)."  — a SECOND holder gate, on a property of the holder's own rules text rather than
+    of its name, so it cannot ride `holderNameFamily`.
+
+The old refusal read *"`CardStat` models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test would
+fail OPEN and over-credit."* Swept over the pool that is simply not true here: there is no Radiant,
+V, VSTAR or V-UNION body among the 1061 — `test_the_rule_box_predicate_is_a_POOL_SWEEP…` below is
+that sweep, and it is written to FAIL the day one arrives. Two shipped call sites already read the
+predicate this way (`fetch_closure._pokemon_body_matches` for Poké Pad's `no_rule_box`, and
+`cgpy.chain._card_matches` for `noRuleBox` — the engine twin's own answer), so the refusal was also
+inconsistent with the rest of the tree.
 """
 import pytest
 
 from common.cards import CardFunctions
 from common.pilot import Pilot
-from common.scouting.card_text import (_parse_tool_attack_cost_reduction, _parse_tool_holder_family,
-                                       _parse_tool_hp_bonus, _parse_tool_retreat_reduction,
-                                       name_in_family, parse_card_damage_boost)
+from common.scouting.card_text import (_BOOST_TOOL_NO_RULE_BOX_RE, _HOLDER_NO_RULE_BOX_RE,
+                                       _parse_tool_attack_cost_reduction, _parse_tool_holder_family,
+                                       _parse_tool_holder_no_rule_box, _parse_tool_hp_bonus,
+                                       _parse_tool_retreat_reduction, name_in_family,
+                                       parse_card_damage_boost)
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
@@ -40,6 +58,10 @@ from pilot_helpers import ACTIVE, ATTACH, HAND, MAIN, make_select, opt, poke, st
 POWER_WEIGHT, CHOICE_BAND, GEMSTONE = 1173, 1171, 1166
 CAPE, AIR_BALLOON, MAXIMUM_BELT = 1159, 1174, 1158
 GARCHOMP_EX, ZACIAN_EX, PHANTUMP = 381, 299, 878     # real family members, real card ids
+#: Issue #345's cast, all real ids — Brave Bangle and four `slowking` bodies that straddle its gate:
+#: Slowking (Stage 1, no Rule Box), Metagross (Stage 2, no Rule Box), Latias ex (`ex`) and Mega
+#: Kangaskhan ex (`megaEx`, and NOT `ex` — the case a gate written as `stat.ex` alone waves through).
+BRAVE_BANGLE, SLOWKING, METAGROSS, LATIAS_EX, MEGA_KANGASKHAN = 1175, 163, 276, 184, 756
 
 # synthetic ids for the consumer boards
 FAM_BODY, PLAIN_BODY, OPP = 7100, 7101, 7102
@@ -145,16 +167,83 @@ def test_maximum_belts_boost_is_unchanged_by_the_widening():
     assert _parse_tool_holder_family(card) is None
 
 
-def test_a_RULE_BOX_GATED_boost_still_parses_to_zero():
-    """THE NEGATIVE CASE for the boost widening — Brave Bangle (1175), verbatim. Its +30 depends on
-    the holder having no Rule Box, and `CardStat` models `ex`/`megaEx` but not Radiant, so a
-    no-Rule-Box test would fail OPEN and over-credit. Deliberately unmodelled: it must read 0, and
-    the census report names it as such rather than letting it look like an oversight."""
+def test_brave_bangles_boost_reads_its_amount_and_carries_its_RULE_BOX_gate():
+    """Brave Bangle (1175), verbatim — the SECOND holder gate (Issue #345).
+
+    Until now this card was the file's negative case, refused on the stated ground that *"`CardStat`
+    models `ex`/`megaEx` but not Radiant, so a no-Rule-Box test would fail OPEN"*. That ground does
+    not survive the pool sweep below (`test_the_rule_box_predicate_is_a_POOL_SWEEP…`): over these
+    1061 bodies there is no Radiant, V, VSTAR or V-UNION card at all, so the predicate is EXACT, not
+    fail-open — and the repo already ships it twice under that reading, at
+    `fetch_closure._pokemon_body_matches` (Poké Pad's `no_rule_box`) and `cgpy.chain._card_matches`
+    (`noRuleBox`), which is the engine twin's own answer.
+
+    Same doctrine as the owner family: the gate is not a condition the parser must refuse, it is one
+    it CARRIES. The amount and its gate are read from ONE pattern built on one shared prefix, so a
+    match cannot produce an ungated +30 — the failure that would credit the boost on the five `ex`
+    bodies `slowking` also runs."""
     card = _Card("If the Pokémon this card is attached to doesn’t have a Rule Box, the attacks it "
                  "uses do 30 more damage to your opponent’s Active Pokémon {ex} (before applying "
-                 "Weakness and Resistance).")
-    assert parse_card_damage_boost(card) == (0, None, False)
+                 "Weakness and Resistance). (Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)")
+    assert parse_card_damage_boost(card) == (30, None, True)
+    assert _parse_tool_holder_no_rule_box(card) is True
+    assert _parse_tool_holder_family(card) is None      # a Rule Box is not an owner NAME
     assert _parse_tool_attack_cost_reduction(card) == 0
+
+
+def test_the_amount_and_the_RULE_BOX_gate_cannot_be_read_apart():
+    """The structural guarantee, asserted **on the patterns themselves** rather than sampled.
+
+    `_BOOST_TOOL_NO_RULE_BOX_RE` is built by concatenating the very string `_HOLDER_NO_RULE_BOX_RE`
+    compiles, so no text can match the amount without also matching the gate. Round-tripping a
+    handful of texts through both parsers does NOT prove that — every such text satisfies both legs
+    by construction, so the assertion survives a build in which the two patterns have been allowed
+    to diverge. The prefix identity is the property, so the prefix identity is what is asserted.
+
+    Two parsers for one fact is how a gate and its amount drift apart (Issue #213), and here the
+    drift would be catastrophic rather than merely wrong: an ungated +30 manufactures phantom
+    lethals on the deck's biggest attackers."""
+    assert _BOOST_TOOL_NO_RULE_BOX_RE.pattern.startswith(_HOLDER_NO_RULE_BOX_RE.pattern), (
+        "the boost pattern must BEGIN with the gate pattern, or an amount can outrun its condition")
+    # …and the property is live, not merely textual: both amounts below are recovered, and the gate
+    # answers True for each, so the shared prefix is doing real work on real shapes.
+    for text in ("If the Pokémon this card is attached to doesn’t have a Rule Box, the attacks it "
+                 "uses do 30 more damage to your opponent’s Active Pokémon {ex}.",
+                 "If the Pokémon this card is attached to doesn’t have a Rule Box, the attacks it "
+                 "uses do 60 more damage to your opponent’s Active Pokémon."):
+        card = _Card(text)
+        assert parse_card_damage_boost(card)[0] > 0
+        assert _parse_tool_holder_no_rule_box(card) is True
+
+
+def test_an_UNEVALUABLE_conditional_boost_still_parses_to_zero():
+    """THE NEGATIVE CASE the widening must not cost: accepting ONE decidable leading condition must
+    not admit conditions the parser cannot evaluate. Both cases below are ones the NEW alternative
+    could plausibly have swallowed and does not — the gate inverted, and the gate aimed at the wrong
+    body. Each is a benefit, so the fail direction is under-credit: 0.
+
+    A coin-gated Tool boost is deliberately NOT asserted here, and the omission is the honest one.
+    `_BOOST_TOOL_RE` — the incumbent, shipped byte-compatible at Issue #306 — carries no coin guard
+    at all; "Flip a coin. If heads, Attacks used by the Pokémon this card is attached to do 30 more
+    damage …" parses to 30 today, and only the lower-case "attacks" of a hand-typed variant makes it
+    read 0. Asserting that zero would have recorded a guard that does not exist. It is latent rather
+    than live — no card in the pool prints that shape — so it is named here rather than fixed under
+    an issue about a different sentence form."""
+    assert parse_card_damage_boost(_Card(
+        "If the Pokémon this card is attached to has a Rule Box, the attacks it uses do 30 more "
+        "damage to your opponent’s Active Pokémon.")) == (0, None, False)
+    assert parse_card_damage_boost(_Card(
+        "If your opponent’s Active Pokémon doesn’t have a Rule Box, the attacks it uses do 30 more "
+        "damage to your opponent’s Active Pokémon.")) == (0, None, False)
+    # …and the gate itself never fires on either, nor on a card that merely MENTIONS a Rule Box
+    # without gating its holder on one, so no field records a condition with no amount behind it
+    # that a later consumer could mistake for a live one.
+    assert _parse_tool_holder_no_rule_box(_Card(
+        "If the Pokémon this card is attached to has a Rule Box, the attacks it uses do 30 more "
+        "damage to your opponent’s Active Pokémon.")) is False
+    assert _parse_tool_holder_no_rule_box(_Card(
+        "Search your deck for a Pokémon that doesn’t have a Rule Box, reveal it, and put it into "
+        "your hand.")) is False
 
 
 def test_a_CONDITIONAL_attack_cost_discount_still_parses_to_zero():
@@ -257,9 +346,67 @@ def test_the_widening_moved_exactly_three_facts_across_the_whole_pool():
     # of the blast radius whether or not its regex changed.
     assert carriers("retreatFreeGrant") == {170: "metal_attached", 184: "basic"}
     assert carriers("attackCostReduction") == {1171: 1}
-    assert carriers("damageBoost") == {1141: 30, 1158: 50, 1171: 30, 1211: 40}
+    assert carriers("damageBoost") == {1141: 30, 1158: 50, 1171: 30, 1175: 30, 1211: 40}
     assert carriers("holderNameFamily") == {1154: "Team Rocket’s", 1171: "Hop’s",
                                             1172: "Lillie’s", 1173: "Cynthia’s"}
+    # Issue #345's widening moved exactly ONE card: 1175 joined `damageBoost` (30) and is the sole
+    # carrier of the new gate. Swept over the same 1267 cards — six cards print "Rule Box" and the
+    # five that are not 1175 (37 Iron Thorns ex, 343 Shaymin, 1152 Poké Pad, 1184 Lana's Aid, 1247
+    # Neutralization Zone) are Abilities / fetch clauses, not attached-Tool boosts, so none matches.
+    assert carriers("holderNoRuleBox") == {1175: True}
+
+
+def test_the_rule_box_predicate_is_a_POOL_SWEEP_not_a_hand_listed_set():
+    """WHY `is_ex_body` is allowed to answer *"does this holder have a Rule Box?"* over THIS pool.
+
+    `docs/rulebook.txt` names three Rule-Box categories beyond Pokémon ex — Radiant Pokémon (L364),
+    Pokémon V and V-UNION (L391-392) — and if any of them were here, `ex or megaEx` would answer
+    "no Rule Box" for a body that has one and the boost would be credited where the card refuses it.
+    So the claim is not *"ex is the definition"*; it is *"over these cards the two sets coincide"*,
+    and that is a sweep, not a belief.
+
+    The instrument is the printed NAME, which the rulebook itself makes load-bearing: *"The ex is
+    part of a Pokémon ex's name"* (L351), and V / VMAX / VSTAR / V-UNION / Radiant are name markers
+    the same way. **Its positive control is inside the assertion**: the marker set must equal the
+    engine-flag set, so an instrument that found nothing would fail here rather than pass quietly —
+    and it earned that guard, because a first pass anchored on `\\bex\\b` missed three real
+    multi-prize bodies printed WITHOUT a space (`PalossandEX`, `XerneasEX`, `LugiaEX`, the XY-era
+    Pokémon-EX the rulebook distinguishes at L353). A card id is never listed: the day the pool
+    gains a Radiant Pokémon, this test fails and the gate is re-decided."""
+    import re
+    from common.scouting.provider import EngineCardStatProvider
+    stats = EngineCardStatProvider()
+    stats.warm()
+    marker = re.compile(r"\b(?:ex|EX|V|VMAX|VSTAR|GX)\b|EX$|\bV-UNION\b|\bRadiant\b")
+    bodies = {cid: st for cid, st in stats._cache.items() if st.is_pokemon}
+    assert len(bodies) == 1061                       # the sweep really walked the pool
+    by_name = {cid for cid, st in bodies.items() if marker.search(st.name or "")}
+    by_flag = {cid for cid, st in bodies.items() if st.is_ex_body}
+    assert by_flag, "positive control: the flag read must find SOMETHING"
+    assert by_name == by_flag, (
+        "a Rule-Box category the engine flags do not model: "
+        f"{sorted(by_name ^ by_flag)}")
+
+
+def test_the_rule_box_gate_refuses_every_ex_body_and_fails_closed_on_an_unknown_one():
+    """The gate on real records, in all three directions. `slowking` runs Brave Bangle alongside
+    five Rule-Box bodies, so "credit it anyway" is not a theoretical error on this deck — it would
+    put a phantom +30 on Mega Kangaskhan ex, the biggest attacker in the list.
+
+    Mega Kangaskhan ex is the case worth naming: it is `megaEx`, NOT `ex`, so a gate written as
+    `stat.ex` alone would wave it through. `is_ex_body` is `ex or megaEx` for exactly this reason
+    (`docs/rulebook.txt` L337)."""
+    from common.scouting.provider import EngineCardStatProvider
+    stats = EngineCardStatProvider()
+    stats.warm()
+    bangle = stats.get(BRAVE_BANGLE)
+    assert bangle.applies_to_holder(stats.get(SLOWKING))          # no Rule Box — the boost lands
+    assert bangle.applies_to_holder(stats.get(METAGROSS))
+    assert not bangle.applies_to_holder(stats.get(LATIAS_EX))     # ex
+    assert not bangle.applies_to_holder(stats.get(MEGA_KANGASKHAN))  # megaEx, not ex
+    assert not bangle.applies_to_holder(None)                     # unknown holder — fail-CLOSED
+    # …and the gate is the Bangle's alone: an ungated Tool still reaches an ex body unchanged.
+    assert stats.get(MAXIMUM_BELT).applies_to_holder(stats.get(LATIAS_EX))
 
 
 def test_the_gate_resolves_against_the_real_family_members():
@@ -392,6 +539,65 @@ def test_the_attached_boost_is_gated_at_the_damage_context_too():
 
     assert boosts(FAM_BODY) == ((30, None, False),)
     assert boosts(PLAIN_BODY) == ()
+
+
+def _bangle_pilot():
+    """A Pilot holding Brave Bangle, with one Rule-Box holder and one without — the SAME two
+    consumers the owner family is tested against, so the second gate cannot be honoured by one
+    consumer and ignored by the other. The opponent is an `{ex}` at 150 HP: Slowking's real Super
+    Psy Bolt (120) is 30 short, which is exactly the Bangle."""
+    stats = DictCardStatProvider({
+        BRAVE_BANGLE: CardStat(BRAVE_BANGLE, name="Brave Bangle", cardType=2, damageBoost=30,
+                               damageBoostVsEx=True, holderNoRuleBox=True),
+        PLAIN_BODY: CardStat(PLAIN_BODY, name="Slowking", hp=120, stage="Stage 1",
+                             maxDamage=120, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
+        FAM_BODY: CardStat(FAM_BODY, name="Mega Kangaskhan ex", hp=300, megaEx=True, stage="Basic",
+                           maxDamage=120, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
+        OPP: CardStat(OPP, name="Opponent ex", hp=150, ex=True, stage="Basic"),
+    }, attacks={A_HIT: AttackStat(A_HIT, damage=120, cost=1, damageMax=120)})
+    return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
+                 functions=CardFunctions({BRAVE_BANGLE: ["tool"]}))
+
+
+def test_the_rule_box_gate_reaches_the_damage_context_consumer():
+    """`_SideBase.damage_boosts` sums the Tools attached to this side's Active, and it asks the
+    Tool's own `applies_to_holder` — so the second gate arrives there without that site learning a
+    new condition. The `megaEx` holder contributes NOTHING: an ungated read here is what would put a
+    phantom +30 on the biggest attacker in the deck that ships this card."""
+    from common.state_model import StateModel
+    from common.strategy.combat import CombatMath
+    pilot = _bangle_pilot()
+
+    def boosts(active_id):
+        body = poke(active_id, hp=300, energy=1)
+        body["tools"] = [{"id": BRAVE_BANGLE}]
+        obs = make_select([opt(END)], context=MAIN,
+                          current=state(active=body, opp_active=poke(OPP, hp=150), turn=4))
+        combat = CombatMath(pilot.stats, functions=None, transients=None)
+        return StateModel.build(obs, combat=combat).mine.damage_boosts
+
+    assert boosts(PLAIN_BODY) == ((30, None, True),)
+    assert boosts(FAM_BODY) == ()
+
+
+def test_the_rule_box_gate_reaches_the_boost_lethal_consumer():
+    """The other consumer, `Pilot._boost_lethal_tactical`, which sizes a KO_SCORE-class claim off
+    the same amount. 120 is 30 short of a 150-HP `{ex}` and the Bangle crosses it — but only when
+    attached to a body with no Rule Box. On the `megaEx` holder the identical attach must claim
+    nothing, because a lethal claimed on a boost the card does not grant is the single worst error
+    this gate exists to prevent."""
+    pilot = _bangle_pilot()
+
+    def score(active_id):
+        obs = make_select([opt(ATTACH, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0),
+                           opt(END)], context=MAIN,
+                          current=state(active=poke(active_id, hp=300, energy=1),
+                                        hand=[BRAVE_BANGLE], opp_active=poke(OPP, hp=150, energy=1),
+                                        turn=4, prizes=6))
+        return pilot.explain(obs).options[0].score
+
+    assert score(PLAIN_BODY) > 900, "the Rule-Box-less holder's boost must cross the KO"
+    assert score(FAM_BODY) < 100, "a Rule-Box holder must claim no lethal"
 
 
 # ---- the SIGN, on a live board -------------------------------------------------------------------

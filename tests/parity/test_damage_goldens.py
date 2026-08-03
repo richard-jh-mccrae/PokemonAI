@@ -1,17 +1,28 @@
-"""ADR-0032 damage goldens re-asserted on cgpy (ADR-0059 M2 close-out).
+"""ADR-0032 damage goldens re-asserted on cgpy (ADR-0059 M2 close-out), plus the
+attached-Tool `attackBonus` gates that ride the same `attack_damage` path.
 
 Weakness x2, Resistance -30, Jetting Blow's 120-base + flat-50 bench snipe, Nebula
 Beam's 210 ignoring W/R, and the benched-Tera zero — each trace-pinned during the M2
 burn-down. The Crustle-immunity variants (Nebula Beam 210 THROUGH Crustle / Jetting
 Blow 0 into Crustle) need the defender-side effect seam, which no parity trace
 exercises yet — they land with the pool-wide fan-out (M4). REQ-CGPY-0002.
+
+Not every assertion here is trace-pinned: `test_resistance_reduces_30` sweeps the pool
+for a matching pair, and Issue #346's Tool block below is derived from printed card
+text. This module is the one home for hand-built `attack_damage` assertions — it owns
+`make_state`, the suite's only hand-built cgpy `GameState` — so text-derived damage
+gates live here rather than in a second builder somewhere else.
 """
 from __future__ import annotations
+
+import csv
+from collections.abc import Sequence
+from pathlib import Path
 
 import pytest
 
 from cgpy.cards import CardDB
-from cgpy.chain import def_for, start_program
+from cgpy.chain import def_for, load_chain_defs, start_program
 from cgpy.damage import attack_damage
 from cgpy.state import CardInstance, GameState, PokemonInPlay
 from cgpy.turn import apply_answer
@@ -27,7 +38,8 @@ NEBULA_BEAM = 1488
 
 
 def make_state(attacker_cid: int, defender_cid: int,
-               defender_bench: list[int] = ()) -> GameState:
+               defender_bench: Sequence[int] = (),
+               attacker_tools: Sequence[int] = ()) -> GameState:
     cards: dict[int, CardInstance] = {}
     serial = iter(range(3, 200))
 
@@ -43,6 +55,10 @@ def make_state(attacker_cid: int, defender_cid: int,
     b0.active = mon(attacker_cid, 0)
     b1.active = mon(defender_cid, 1)
     b1.bench = [mon(c, 1) for c in defender_bench]
+    for cid in attacker_tools:                 # attached Pokémon Tool (owner = attacker)
+        s = next(serial)
+        cards[s] = CardInstance(serial=s, card_id=cid, owner=0)
+        b0.active.tools.append(s)
     gs.players = [b0, b1]
     gs.turn = 3
     gs.phase = "TURN"
@@ -121,3 +137,127 @@ def test_benched_tera_takes_zero():
     before = gs.players[1].bench[0].hp
     _run_rider(gs, rider, pick=0)
     assert gs.players[1].bench[0].hp == before
+
+
+# --------------------------------------------------------------- attached-Tool bonuses
+# Issue #346. `damage.attack_damage` adds an attached Tool's `tool.attackBonus["n"]` to the
+# opposing Active, pre-W/R, subject to TWO independent gates read off the ChainDef:
+# `defenderEx` (the defending Active must be a Pokémon {ex}) and `holder` (a `_card_matches`
+# filter on the attacker). Brave Bangle prints BOTH and its def carried only the holder half,
+# so the twin credited +30 against every Active. The cast is `src/agents/slowking/deck.csv` —
+# the one shipped deck that runs Brave Bangle — and every pair below is W/R-neutral
+# (attacker energyType {P}=5 matches no listed weakness or resistance), so the printed
+# attack damage is the whole baseline and any delta is the Tool.
+
+BRAVE_BANGLE = 1175        # +30, holder must have no Rule Box, defender must be {ex}
+MAXIMUM_BELT = 1158        # +50, defender must be {ex}, no holder gate — the control
+SLOWKING = 163             # no Rule Box; Super Psy Bolt (214) = vanilla 120
+SUPER_PSY_BOLT = 214
+LATIAS_EX = 184            # Rule Box (`ex`); Eon Blade (243) = 200, no damage rider
+EON_BLADE = 243
+METAGROSS = 276            # no Rule Box — the non-{ex} defender
+MEGA_KANGASKHAN_EX = 756   # `megaEx`, NOT `ex` — the Mega leg of the defender gate
+
+
+def _tool_damage(holder: int, attack_id: int, defender: int, *tools: int) -> int:
+    gs = make_state(holder, defender, attacker_tools=list(tools))
+    return attack_damage(gs, gs.players[0].active, DB.attacks[attack_id],
+                         gs.players[1].active)
+
+
+@pytest.mark.parametrize("holder,attack_id,defender,expected,why", [
+    (SLOWKING, SUPER_PSY_BOLT, LATIAS_EX, 150,
+     "no Rule Box AND defender {ex} — the one combination the card pays out"),
+    (SLOWKING, SUPER_PSY_BOLT, METAGROSS, 120,
+     "no Rule Box but defender is not {ex} — the gate this issue restores"),
+    (LATIAS_EX, EON_BLADE, MEGA_KANGASKHAN_EX, 200,
+     "defender {ex} but the holder HAS a Rule Box"),
+    (LATIAS_EX, EON_BLADE, METAGROSS, 200,
+     "neither gate holds"),
+])
+def test_brave_bangle_pays_out_only_when_BOTH_of_its_gates_hold(
+        holder, attack_id, defender, expected, why):
+    """Brave Bangle (1175), verbatim from `data/EN_Card_Data.csv`:
+
+        "If the Pokémon this card is attached to doesn't have a Rule Box, the attacks it
+        uses do 30 more damage to your opponent's Active Pokémon {ex} (before applying
+        Weakness and Resistance). (Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)"
+
+    Two gates, so four combinations and exactly one payout. Row 2 is the regression: with
+    `defenderEx` absent from the ChainDef it read 150, a phantom +30 against every Active.
+    """
+    assert _tool_damage(holder, attack_id, defender, BRAVE_BANGLE) == expected, why
+
+
+def test_a_Mega_Evolution_Pokemon_ex_counts_as_a_Pokemon_ex_for_the_defender_gate():
+    """`docs/rulebook.txt` Appendix 1: "Mega Evolution Pokémon ex are considered to be
+    Pokémon ex, so any card effects that affect Pokémon ex also affect Mega Evolution
+    Pokémon ex." Mega Kangaskhan ex carries `megaEx` and NOT `ex`, so a gate testing only
+    `ex` would silently exclude the 300-HP bodies the boost matters most against."""
+    assert DB.card(MEGA_KANGASKHAN_EX).megaEx and not DB.card(MEGA_KANGASKHAN_EX).ex
+    assert _tool_damage(SLOWKING, SUPER_PSY_BOLT, MEGA_KANGASKHAN_EX, BRAVE_BANGLE) == 150
+
+
+def test_maximum_belt_proves_the_defenderEx_gate_is_LIVE_on_this_path():
+    """The positive control for the instrument, not for the card. If `defenderEx` were dead
+    code — read from a def that `def_for` never returns, or short-circuited before the tool
+    loop — the four assertions above could go green on a change that does nothing. Maximum
+    Belt (1158) prints the identical `{ex}` restriction with no holder gate and its def has
+    always carried the flag, so it must swing 50/0 across the SAME two defenders through the
+    SAME helper. A silent instrument fails here first."""
+    assert _tool_damage(SLOWKING, SUPER_PSY_BOLT, LATIAS_EX, MAXIMUM_BELT) == 170
+    assert _tool_damage(SLOWKING, SUPER_PSY_BOLT, METAGROSS, MAXIMUM_BELT) == 120
+
+
+def test_every_attackBonus_Tool_agrees_with_its_printed_ex_restriction():
+    """The whole `tool.attackBonus` inventory, both directions — a one-card fix that leaves a
+    sibling wrong is the same bug filed twice.
+
+    The card table is the authority: a def carries `defenderEx` if and only if its text prints
+    "Active Pokémon {ex}". Three tools qualify today — Maximum Belt (True/True), Hop's Choice
+    Band (False/False) and Brave Bangle, the row this issue moved from False/True.
+
+    Reads the inventory through `chain.load_chain_defs()` itself, NOT through a local re-merge
+    of the two JSON files. A copy of the merge order would leave the sweep blind to the one
+    drift it most needs to see: overrides ceasing to win over `generated_chains.json` would
+    silently restore the unflagged seed def while this test stayed green.
+
+    The sweep also carries a positive control in the assertion: BOTH directions must be
+    populated. An instrument that silently matched nothing — wrong path, a text probe defeated
+    by the table's U+00A0 and U+2019 — would report a vacuous all-clear, so
+    `agree_true`/`agree_false` being non-empty is asserted, not assumed.
+
+    NOT in this inventory, and deliberately: Light Ball (1178) prints the same `{ex}` clause
+    but its def carries `"deferred": "tool passive unpinned"` (plus the raw `_seed` text) and no
+    `attackBonus` at all, so there is no flag to disagree with. It is a modelling gap, not a
+    gate mismatch — no shipped deck runs it and `deferred` is the file's own record of that.
+    The turn-marker family (Kieran 1191, Black Belt's Training 1211) spells the same restriction
+    `defenderExOnly` under `play`, a different key on a different mechanism; `damage.py` reads
+    both.
+    """
+    printed: dict[str, str] = {}
+    csv_path = Path(__file__).resolve().parents[2] / "data" / "EN_Card_Data.csv"
+    with csv_path.open(newline="", encoding="utf-8") as fh:
+        for row in csv.DictReader(fh):     # one row per ATTACK — 723 ids repeat, so ACCUMULATE
+            cid = row["Card ID"]           # rather than let the last row win and drop the rest
+            printed[cid] = printed.get(cid, "") + (row["Effect Explanation"] or "")
+
+    agree_true, agree_false, mismatched = [], [], []
+    for cid, cdef in load_chain_defs().items():
+        if not isinstance(cdef, dict):
+            continue
+        bonus = (cdef.get("tool") or {}).get("attackBonus")
+        if not bonus:
+            continue
+        prints_ex = "Active Pokémon {ex}" in printed.get(cid, "")
+        flagged = bool(bonus.get("defenderEx"))
+        if flagged != prints_ex:
+            mismatched.append((cid, cdef.get("name"), flagged, prints_ex))
+        elif prints_ex:
+            agree_true.append(cid)
+        else:
+            agree_false.append(cid)
+
+    assert agree_true, "sweep found no {ex}-restricted attackBonus Tool — instrument is broken"
+    assert agree_false, "sweep found no unrestricted attackBonus Tool — instrument is broken"
+    assert not mismatched, f"ChainDef disagrees with printed card text: {mismatched}"

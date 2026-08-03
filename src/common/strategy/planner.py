@@ -2509,9 +2509,14 @@ class PlannerMixin:
             if bst.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
                 return False                                  # defender {ex} gate
             if not bst.applies_to_holder(stat):
-                return False                                  # owner-family HOLDER gate, Issue #306: a Tool
-                                                              # boost reaches only "the Hop's Pokémon
-                                                              # this card is attached to"
+                return False                                  # the HOLDER gate(s): an owner family
+                                                              # ("the Hop's Pokémon this card is
+                                                              # attached to", Issue #306) or a
+                                                              # no-Rule-Box condition (Brave Bangle,
+                                                              # Issue #345). Asked as one test, so a
+                                                              # gate added later reaches this site
+                                                              # without it being edited — which is
+                                                              # exactly what happened at Issue #345.
             return best_dmg < hp <= best_dmg + bst.damageBoost   # short by ≤ this one boost
         if any(_crosses(self.stats.get(cid) if self.stats else None) for cid in hand_ids):
             return []                                         # held boost crosses -> deterministic line
@@ -3383,7 +3388,20 @@ class PlannerMixin:
 
         ``my_index`` is passed explicitly rather than left to ``yourIndex``: the simulated board is
         handed back from whichever seat the sim ended on, and reading the wrong side would score the
-        opponent's position and rank every candidate backwards."""
+        opponent's position and rank every candidate backwards.
+
+        ``turn_boosts`` is DELIBERATELY not threaded, and this says so because the omission looks
+        exactly like the bug it is not (Issue #282). `StateModel.build` takes the match-scoped
+        `TurnBoostTracker` and the Pilot's live per-decision snapshot passes it; this board is
+        different in kind. `_simulate_line` stops when the select passes to the opponent, so ``end``
+        is MY END-OF-TURN board — and a flat Trainer boost is *"During this turn"*
+        (`data/EN_Card_Data.csv`, Premium Power Pro / Black Belt's Training), so by then it has
+        expired. Handing the live tracker over would inject a dead boost into the context that
+        `state_value`'s `threat` reads, over-claiming a Knock Out I could not actually take next
+        turn — the one direction an offensive gate must not fail in. The boost's real value is
+        already in this board: the sim CASHED it, so the prize it bought is in ``prize_race``. The
+        Tool half is different again and needs no thread — an attached Tool is visible board state
+        and `_SideBase.damage_boosts` reads it straight off the holder."""
         return StateModel.build(
             end, combat=self.combat, my_index=my_index, deck=self.deck,
             role_worth=self._role_value,

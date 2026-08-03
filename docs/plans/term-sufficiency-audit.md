@@ -117,6 +117,13 @@ gap on a 1-of tech card is noise; a gap on a wincon line is a blocker.
 
 ### F1 — `threat`'s reachability gate is weakness-blind, and blind in **both directions**  ·  BLOCKER
 
+> **BUILT — Issue #281, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). `CombatMath.best_reachable_damage_vs`
+> is the sibling, `MySide.best_reachable_damage_vs` the accessor, and `_reachable_target_values`
+> reads it against their actual Active at `bound="exact"` with `damage_context(attacker="mine")`.
+> The incumbent `best_reachable_damage` is byte-for-byte untouched, which is what keeps
+> `attach_value` (ADR-0069 §2) where its corpus rulings put it.
+
 **Unread dimension.** Damage as the defender actually takes it. `threat`'s gate is
 `model.mine.best_reachable_damage(active) >= target.hp_remaining`, and `best_reachable_damage` is
 documented as *"the biggest **PRINTED** damage … **Opponent-independent**"* (`combat.py:1136-1143`).
@@ -166,7 +173,35 @@ somebody already typed into a `does_not_read`.
 
 ### F2 — `survival` drops the hand-size damage scaler by omitting one kwarg  ·  BLOCKER
 
-**Unread dimension.** The opponent's hand size, where their attack scales on it.
+> **BUILT — Issue #280, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). Both call sites now read
+> `model.damage_context(attacker="theirs")` — `_exposed_bodies` on `turns_to_ko_me` and
+> `_predicted_loss` on `reachable_incoming`. Measured on the 371-frame corrections corpus: **20 body
+> clocks move and 5 bench-empty doom reads move.**
+>
+> The audit's "cheapest fix" is named for `atk_hand`, but the shared context (Issue #279) is what
+> was actually threaded, so **eight** Damage Formula variables arrive at once, not one. The
+> opponent scaling attacks present in that corpus: Alakazam (`atk_hand`), Kyogre
+> (`atk_discard_energy`), Lillie's Clefairy ex (`both_bench`), Duraludon and N's Reshiram
+> (`atk_self_counters`), Teal Mask Ogerpon ex (`both_active_energy`), Terapagos ex and Dipplin
+> (`atk_bench`), Iono's Voltorb (`atk_active_energy`), and Mega Froslass ex (`def_hand` — MY hand,
+> read off the DEFENDER's side of the same dict, which is the concrete reason one dict cannot serve
+> both directions). Mega Abomasnow ex's hidden deck scaler is in the corpus too and is deliberately
+> NOT in that count: for a hidden deck the oracle's `bound="max"` leg already assumed every sampled
+> card fuels, with or without a context.
+>
+> **The invariant quoted below no longer reads as quoted — Issue #343.** The quote *"all six
+> Incoming call sites thread the per-decision context"* was **not wrong about its own count**: six
+> consumer calls are spelled `incoming` or `doomed`, and all six thread. It was read HERE as a claim
+> about the whole family that funnels into `incoming` — which is the reading the next sentence,
+> *"`state_value` is the seventh, and it does not"*, depends on — and under that wider reading the
+> census stood at **twenty** consumer call sites with **four** threading nothing. So `state_value`
+> was not the lone exception this finding takes it for: `pilot._opponent_target_rows` and
+> `pilot._strip_delta_terms` were blind on the very axis this finding is about, in the module the
+> sentence pointed at as healthy. Issue #343 threaded both and restated the invariant in
+> `combat.doomed_incoming` as a **property** rather than a number, asserted by
+> `tests/strategy/test_target_rows_damage_context.py` so it cannot rot a third time. This finding's
+> own body is left in its as-audited present tense, as above.
 
 `_exposed_bodies` calls `model.theirs.turns_to_ko_me(b.body, my_benched=…, my_bench=…,
 opp_active=…)` and passes **no `context`**. The hand-size leg reads the hand straight from that
@@ -284,6 +319,53 @@ limitation of that guard, not only of this term.
 
 ### F5 — Denying a forward payoff prices at the target's current worth only  ·  HIGH
 
+> **BUILT — Issue #285, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). `TheirSide.forward_payoff` mirrors
+> `MySide.forward_payoff` onto their bodies, and `_reachable_target_values` adds the denied payoff to
+> `opponent_target_value`'s `prize_advance` through `state_value._denied_forward_payoff` —
+> `development.evolve_marginal`'s own expression, `_READINESS_W x (owed_damage / PRIZE_DAMAGE_RATE) x
+> halve(hops)`, with **no new constant**.
+>
+> **The mirror is not a copy, and the audit's "cheapest fix" understates what it costs.** The line
+> *"reuses the shipped forward index (ADR-0020's provider primitive); no new oracle"* is right about
+> `owed_damage` and wrong about `hops`: `_ForwardIndex.forward_card_ids` is a FLAT all-descendants
+> frozenset (`_descendant_names` discards depth by construction), so the hop count the discount needs
+> is not in it. The only shipped walk that computes depth lived INSIDE
+> `CombatMath.turns_to_afford`, which folds it into a `max` with the energy leg and returns neither
+> separately. So the build extracted `CombatMath._forward_hop_depths` — `turns_to_afford` now takes
+> the `max` of its values and is otherwise byte-identical — and added
+> `CombatMath.forward_payoff_terms` as the one caller-facing read. That is still "a new caller of
+> existing math", but the extraction was owed and the finding did not name it.
+>
+> **Two legs of the mirror could not be mirrored, and both fail OPEN.** `reachable` is hardcoded
+> True: my side proves a line dead from `unseen_counts` + `hand_ids` and `development.line_topology`
+> then cancels the credit, while their deck is untracked and their hand is a COUNT, so claiming the
+> same proof would zero a denial against a threat that is perfectly real. And the pool-level index is
+> deck-agnostic, so a Staryu carries the Mega Starmie ex credit whether or not they run one. Both are
+> over-reads, both named in `threat.blind_to` rather than papered over.
+>
+> **What this fix does NOT reach, and it is the same wall F6 hit — harder.** Every appended target
+> carries `prize_advance >= 1.0` (`prize_value` is 1, 2 or 3 and never less), so `min(_THREAT_CAP,
+> sum)` with `_THREAT_CAP` 0.1 binds on **every** frame the loop touches, and the credit's measured
+> range is 0.0045-0.054 prizes — the maximum being Riolu (30) → Mega Lucario ex (270), owed 240,
+> while the doctrine's headline Staryu (20) → Mega Starmie ex (210) is owed 190 and scores 0.043.
+> It also answers in DAMAGE where the doctrine's *"trade 1 prize for a denied 3"* is about PRIZES:
+> `owed_damage` is the only leg read, so two forward forms of equal printed damage and unequal prize
+> value price the same. Named in `threat.blind_to`, not left implied.
+> The credit is therefore invisible in `state_value` on 100% of boards
+> rather than merely on already-firing ones. Measured on the 371-frame corrections corpus:
+> `_denied_forward_payoff` is ASKED **270** times, returns a non-zero credit **110** times, moves
+> `_reachable_target_values` on **51 frames** (49 `mega_starmie`, 1 `dragapult_ex`, 1
+> `mega_lucario`) — and moves `threat` on **0**. Control C, same harness with the reachability read
+> severed instead, moves `threat` on **114** frames, so the zero is the cap and not the instrument.
+> Carried as a wave-3 packet line (`docs/plans/issue-sequence-281-wave3-packet.md`); the unlock is the
+> parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, which must be measured TOGETHER with this credit and
+> F6's widening rather than one at a time.
+>
+> Coverage-matrix **row 5** and **row 6**'s footnote are **left as audited on purpose** — Issue #291
+> owns reconciling the report, and every sibling in this track recorded its outcome the same way, in
+> the finding's own BUILT note rather than in the ledger.
+
 **Unread dimension.** Their board's **topology** — that the 70-HP body I can reach is the base of a
 330-HP, 3-prize payoff.
 
@@ -314,6 +396,53 @@ Zeraora ×1) — and it applies to a plain gust-and-KO too, which every deck has
 ---
 
 ### F6 — Standing chip on their bench is not an asset  ·  HIGH
+
+> **BUILT — Issue #284, POC-T3.5** (this section is kept in its as-audited present tense as the
+> finding record; what follows describes the code before the fix). `_reachable_target_values` now
+> loops `model.theirs.bodies` with a leg per SEAT: their Active through Issue #281's
+> `best_reachable_damage_vs`, their Bench through the new
+> `CombatMath.best_reachable_bench_damage` / `MySide.best_reachable_bench_damage` — the attack's
+> single-target snipe RIDER under the same Attach-Budget affordability filter. Bench-immune
+> (`docs/rules.md` §11) and unreadable bodies contribute nothing.
+>
+> **The audit's named instrument was the wrong one, and this is the correction of record.**
+> `CardStat.benchSnipeDamage` is filled by `parse_attack_bench_snipe` alone, so it reads **0** for
+> the free-target phrasing — *"does N damage to 1 of your opponent's Pokémon"* — which is precisely
+> Fezandipiti ex's Cruel Arrow (100) and Kyurem's Trifrost (110), the conversion routes of two of
+> the three decks this finding names. Built on the card summary, the fix would have been inert on
+> `dragapult_ex` and `slowking` and live only on `mega_starmie`. The read is
+> `AttackStat.benchSnipe` through `CombatMath.rider_snipe`;
+> `tests/scouting/test_attack_riders.py` pins the difference against the real 1556-record pool.
+>
+> Two deliberate narrowings, both on the fail-CLOSED side and both named in `threat.blind_to`: the
+> SPREAD rider is excluded (a shared counter budget across their whole Bench — `spread_ko_prizes`'
+> knapsack owns that subset question, and it does not compose into a per-body reach), and an
+> {ex}-restricted rider such as Zeraora's Thunder Raid still parses to 0 by the rider parser's own
+> documented doctrine. The residual OVER-read is the non-Tera bench-immunity set, which `CardStat`
+> cannot express at all (ADR-0020).
+>
+> **The audit's other named instrument, `snipe_relevance.py`, is deliberately NOT called**, and the
+> reason is the ruled boundary this same finding draws. `target_relevance` answers *should I aim
+> this turn's snipe here* — the CONVERSION decision, which belongs to `attack_ev` and to the Pilot's
+> snipe rung — and its inputs (`turns_to_ko_before/after`, `rider_damage`, `prizes_needed`, the
+> matched Brief priority) are Pilot plumbing that no `StateModel` supplies. Reading it here would
+> give `threat` a second opinion about a question another term already owns, which the
+> sole-supplier ruling forbids. What the finding actually needs from that module is its *subject* —
+> that a bench route exists — and that comes off `AttackStat.benchSnipe` directly.
+>
+> **What this fix does NOT reach, and it is the same wall the family already had.** `threat` is
+> `min(_THREAT_CAP, sum)` and its own `blind_to` records the measured saturation: the cap binds on
+> every non-empty input. So the bench leg moves the scalar exactly when the ACTIVE leg reads 0, and
+> a chipped bench under an already-reachable Active still scores identically to a fresh one.
+> Measured on the 371-frame corrections corpus: the bench leg is asked 904 times, returns a non-zero
+> reach 338 times, and `threat` moves on **13** frames — every one of them `0.0 → 0.1`. The
+> discrimination that would make the rest of them count is the parked `_THREAT_CAP /
+> _MAX_PRIZE_VALUE` scale anchor, which is derived, measured, and deliberately not applied. Carried
+> as a wave-3 packet line (`docs/plans/issue-sequence-281-wave3-packet.md`), not fixed here.
+>
+> Row 5 of the coverage matrix above and #6's footnote are **left as audited on purpose** — Issue
+> #291 owns reconciling the report, and every sibling in this track recorded its outcome the same
+> way, in the finding's own BUILT note rather than in the ledger.
 
 **Unread dimension.** Damage already on the **opponent's benched** bodies.
 

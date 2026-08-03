@@ -436,7 +436,12 @@ REGISTRY: tuple[TermFamily, ...] = (
         reads=("prize_at_risk", "turns_to_ko_me", "bench_harvest", "predicted_loss"),
         does_not_read=("my_prizes_remaining", "readiness_odds"),
         composition="Sum over MY bodies, both areas, of prize_at_risk x halve(turns_to_ko_me - 1), "
-                    "Bench-Harvest-aware. `_predicted_loss` (ADR-0064) survives here as a TERMINAL "
+                    "Bench-Harvest-aware. Both of this family's damage reads — the "
+                    "`turns_to_ko_me` clock and `_predicted_loss`'s Incoming — are taken at "
+                    "`damage_context(attacker='theirs')`, so a scaling attack of theirs prices its "
+                    "actual damage rather than its printed 0 (Issue #280); the direction is the "
+                    "attacker's, and on a survival read the attacker is them. "
+                    "`_predicted_loss` (ADR-0064) survives here as a TERMINAL "
                     "term at `LOSS_PRIZES`, outside the positional band by construction. The band "
                     "is the SUM of the positional caps (readiness 300 + survival 50 + threat 100 + "
                     "value 40 + line 100 = 590) against KO_SCORE 1000, of which `_LINE_CAP` is the "
@@ -476,22 +481,138 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="threat",
-        reads=("opponent_target_value", "my_reachable_kos"),
+        reads=("opponent_target_value", "my_reachable_kos", "denied_forward_payoff"),
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
-                    "Outs I can reach. The mirror of `survival`, and the reason the two must not "
-                    "both read a clock — `turns_to_ko_me` is THEIR clock on MY bodies.",
+                    "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
+                    "the two must not both read a clock — `turns_to_ko_me` is THEIR clock on MY "
+                    "bodies. Reach is one affordability filter (the Attach Budget) over two damage "
+                    "ROUTES: their Active through `best_reachable_damage_vs`, the DAMAGE MODEL "
+                    "against the body actually in front of me (Weakness, Resistance, prevention, my "
+                    "live boosts — Issue #281); their Bench through `best_reachable_bench_damage`, "
+                    "the attack's single-target snipe RIDER, which ignores Weakness and Resistance "
+                    "by rule and is zeroed on the Active path (Issue #284). What the bench leg "
+                    "prices is the STANDING position — chip already on their bench makes a body one "
+                    "rider from dead between turns — never the conversion, which stays `attack_ev`'s. "
+                    "`prize_advance` then carries the forward payoff the removal DENIES "
+                    "(`TheirSide.forward_payoff`, Issue #285), on `development.evolve_marginal`'s own "
+                    "`_READINESS_W` / `PRIZE_DAMAGE_RATE` / `halve(hops)` expression — the same "
+                    "anchors, because forward payoff is printed damage held as POTENTIAL on either "
+                    "side of the board. Not a second reading of `development`, which is MY-side only "
+                    "by its own `blind_to`: this prices ONE reachable Knock Out more precisely, from "
+                    "card knowledge about that body, and reads nothing about their board.",
         blind_to=(
-            "bench-reachable Knock Outs (snipe / spread riders) — reachability here is my Active's "
-            "best reachable damage against a body's remaining HP, which only ever reaches their "
-            "ACTIVE. A snipe line onto their benched wincon prices 0 in this family BY DESIGN: it "
-            "is an ATTACK's rider, and `attack_ev` prices it at the terminal action.",
+            "SPREAD riders as a bench route — `benchSpread` is a SHARED counter budget across their "
+            "whole Bench (Phantom Dive: *put 6 damage counters on your opponent's Benched Pokémon "
+            "in any way you like*), so crediting its full total against each body separately would "
+            "claim three Knock Outs from one 60-counter payload. The subset question has an owner "
+            "— `CombatMath.spread_ko_prizes`' `best_ko_subset` knapsack — and it answers in PRIZES "
+            "over a whole Bench, which does not compose into this family's per-body shape. So the "
+            "bench leg reads the indivisible single-target snipe only and UNDER-reads the three "
+            "spread attacks in the pool (Flutter Mane 20, Sinistcha 40, Dragapult ex 60). Under-"
+            "reading my own damage is the fail-closed direction; no attack in the set prints both "
+            "riders, so nothing is double-counted by the split.",
+            "a multi-target snipe's COUNT — `AttackStat.benchSnipe` holds the PER-BODY damage and "
+            "no multiplicity, so Kyurem's Trifrost (*110 damage to 3 of your opponent's Pokémon*) "
+            "and Greninja ex's 2-target rider read as reachable against a fourth and fifth body "
+            "they could not actually all fell. An over-read, and unrepresentable as a fix without a "
+            "new parsed field. It is absorbed by `_THREAT_CAP` today — but read the SATURATION "
+            "entry below before taking comfort from that: the cap binds on every non-empty input, "
+            "so an extra target is currently free in BOTH directions, and the day the parked scale "
+            "anchor lands this over-read starts costing something.",
+            "the BENCH LEG'S OWN REACH, whenever their Active is already reachable — the "
+            "saturation entry below is not a separate topic, it is the ceiling on what Issue #284 "
+            "could deliver. `min(_THREAT_CAP, sum)` binds on every non-empty input, so a second "
+            "reachable body adds exactly 0 and a chipped bench under a reachable Active scores "
+            "identically to a fresh one. Measured on the 371-frame corrections corpus: the bench "
+            "leg is ASKED 904 times, returns a non-zero reach 338 times, and `threat` moves on 13 "
+            "frames — every one of them 0.0 -> 0.1, i.e. exactly the boards where the Active leg "
+            "read nothing. So the family now SEES their bench and still cannot grade it, and the "
+            "unlock is the same parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, not more "
+            "reachability. Recorded rather than fixed: applying that anchor is a calibration change "
+            "this module has already measured as a corpus regression.",
+            "THE DENIAL CREDIT'S OWN MAGNITUDE, for the same reason and to a stricter degree "
+            "(Issue #285). Every appended target contributes `prize_advance >= 1.0` — "
+            "`CombatMath.prize_value` returns 1, 2 or 3 and never less — so `min(_THREAT_CAP, sum)` "
+            "with `_THREAT_CAP` 0.1 binds on EVERY frame where the loop appends anything at all, "
+            "while the largest credit measured anywhere on the corrections corpus is 0.054 prizes "
+            "(Riolu 30 → Mega Lucario ex 270: 0.045 x 240/100 x halve(1); the doctrine's headline "
+            "Staryu 20 → Mega Starmie ex 210 is smaller still at 0.043). The credit is therefore "
+            "invisible in `state_value` on 100% of boards, not merely on already-firing ones. It is "
+            "nonetheless correct where it is READ, and that is where it is measured: "
+            "`_reachable_target_values` is module-private with exactly one caller — `state_value` "
+            "itself, one line below — so *no consumer outside this module sees it today*, and the "
+            "claim being made is about the extractor's arithmetic, not about a downstream reader. "
+            "Same unlock as the entry above and the same refusal: `_THREAT_CAP / _MAX_PRIZE_VALUE` "
+            "is a calibration change this track was told not to make, and it must be measured "
+            "TOGETHER with this credit and Issue #284's widening rather than one at a time.",
+            "THE PRIZE a denied line would have YIELDED — the credit reads `owed_damage` only, so a "
+            "pre-evolution whose forward form is a 3-prize Mega ex and one whose forward form is a "
+            "1-prize body of the same printed damage price IDENTICALLY. That is a real gap against "
+            "the doctrine's own headline, *\"trade 1 prize for a denied 3\"* — the sentence is about "
+            "PRIZES and this term answers in DAMAGE. It is not an oversight: `ForwardPayoff` carries "
+            "no prize leg, `development.evolve_marginal` prices its my-side mirror the same way, and "
+            "adding one here would price a forward form's prize value in a family whose `blind_to` "
+            "for the SAME quantity on the current form is `_MAX_PRIZE_VALUE`-capped and saturated. "
+            "Closing it means the parked scale anchor first; recorded so the damage-only reading is "
+            "read as measured rather than as complete.",
+            "THEIR DECKLIST, when crediting a denied forward payoff — `TheirSide.forward_payoff` "
+            "reads the POOL-level forward index, so a Staryu on their board carries the Mega Starmie "
+            "ex credit whether or not they run one, and the `reachable` leg is hardcoded True "
+            "because their hand is a COUNT and their deck is untracked. Both are OVER-reads, both "
+            "deliberate: `MySide.forward_payoff` can prove a line dead from `unseen_counts` and "
+            "CANCELS the credit (`development.line_topology`), and claiming the same proof about a "
+            "hidden deck would zero a denial against a threat that is perfectly real. The eventual "
+            "narrowing supplier is the archetype Read (`TheirSide.read` / the matched Brief), which "
+            "is a probability rather than a decklist — consuming it here would hand this family a "
+            "second opinion about the Read, which the sole-supplier ruling forbids.",
+            "BACKWARD topology on the denial credit — whether they can actually EVOLVE the body this "
+            "turn. The credit prices what the line owes, not what they hold: an evolution card in "
+            "hand, a Rare Candy skipping the Stage 1 (`data/EN_Card_Data.csv` id 1079), the "
+            "played-this-turn gate (`docs/rules.md` §4) and their remaining hops are all unread, so "
+            "a Dreepy they can never grow and one holding Drakloak price identically. `hand`'s "
+            "mirror of this question is Issue #288's playability gate on MY side; there is no "
+            "opponent-side equivalent and there cannot be one without their hand.",
+            "the SCALING half of a denied payoff — the credit reads printed `maxDamage`, mirroring "
+            "`MySide.forward_payoff` exactly so one card prices the same from either side. That "
+            "makes it blind the way the printed forward index is blind: Alakazam's whole threat is a "
+            "scaling term and its printed damage is 10, so denying an Abra credits almost nothing. "
+            "`CombatMath.forward_threat_ceiling` is the board-priced instrument and is deliberately "
+            "NOT substituted — using it on one side only would give the same card two valuation "
+            "bases, and using it on both would retune `development.evolve_marginal`, which ADR-0070 "
+            "rules.",
+            "the non-Tera BENCH-IMMUNITY set — `docs/rules.md` §11's own warning: the immunity set "
+            "is BROADER than Tera ex (Antique Plume Fossil, Misty's Magikarp, Poltchageist all "
+            "carry unconditional prevent-all-while-Benched) and `CardStat` has no field for it "
+            "(ADR-0020). `tera` is read and fails closed; the rest read as reachable and are "
+            "over-credited. The residual gap, recorded rather than papered over — the fix is the "
+            "same one ADR-0020 names, threading the engine's benched-immunity ability into "
+            "`CardStat`.",
+            "an {ex}-RESTRICTED bench rider — Zeraora's Thunder Raid (*210 damage to 1 of your "
+            "opponent's Benched Pokémon {ex}*) parses to 0, so `slowking` gets no bench route from "
+            "it. That is `parse_attack_bench_snipe`'s documented fail-closed doctrine (match only "
+            "the clean unconditional phrasing; `tests/scouting/test_attack_riders.py` pins the "
+            "restricted case at 0 by name), not a defect here — under-reading my own reach is the "
+            "safe direction, and widening the parser is a card-fact change with its own blast "
+            "radius over the whole pool.",
+            "CONVERTING either seat's exposure into a prize — that is the attack's, and "
+            "`attack_ev` prices it at the terminal action. This family prices the exposure STANDING "
+            "on the board, capped at `_THREAT_CAP`, because `score(sequence) = state_value(end "
+            "board) + EV(terminal)` adds the two and would otherwise pay for one Knock Out twice.",
             "their Energy denial / resource strip — removing fuel lengthens their clock without "
             "removing a body, and `opponent_target_value` prices bodies. `deny_relevance` is the "
             "instrument and is still dark (T2 / Issue #228 arms it).",
-            "their hand and deck — `theirs.hand_size` and `theirs.deck_count` have suppliers and "
-            "no reader, so hand disruption (a Judge, a discard effect) prices exactly 0. This is "
-            "the single largest uncovered family; T4 must always-expand disruption plays.",
+            "their hand and deck AS A RESOURCE — hand disruption (a Judge, a discard effect) still "
+            "prices exactly 0 in THIS family: `opponent_target_value` prices bodies, and cards in "
+            "hand are options rather than a body. Issue #280 closed the other half — `survival`'s "
+            "clocks now read `theirs.hand_size` through the Damage Formula, so shrinking the hand "
+            "of a scaling attacker IS priced, as the lengthened clock it buys. What remains dark is "
+            "the resource reading (the Supporter they no longer hold, the search they cannot make) "
+            "and `theirs.deck_count`, which still has a supplier and no reader — the Formula's "
+            "hidden-deck pair is OMITTED for a side whose deck is not exactly known, and the "
+            "opponent's never is (`_SideBase._deck_facts` claims `(None, None)`), so threading the "
+            "context did NOT quietly give the deck count a reader the way it gave the hand size "
+            "one. Narrowed, not closed; T4 must always-expand disruption plays.",
             "SATURATION INTO ONE BIT — this family cannot tell a 1-prize Basic from a 3-prize Mega "
             "ex. `needs.opponent_target_value` returns `prize_advance` essentially unscaled at the "
             "``survival_shift=0`` this module passes, so `min(_THREAT_CAP, sum)` binds on EVERY "
@@ -515,9 +636,12 @@ REGISTRY: tuple[TermFamily, ...] = (
             "held-out set (Issues #146-#148); `test_state_value.py`'s strict-xfail TARGET is the "
             "standing record and turns red the day it lands.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
-            "STEP: `_reachable_target_values` returns nothing at all unless my Active's best "
-            "reachable damage already meets the target's remaining HP, so a Mega Lucario chipped "
-            "from 330 to 120 scores the same as one at full HP. This family is `survival`'s mirror "
+            "STEP: `_reachable_target_values` credits nothing for a body unless my Active's best "
+            "reachable damage AGAINST THAT SEAT already meets its remaining HP, so a Mega "
+            "Lucario chipped from 330 to 120 scores the same as one at full HP. Issue #281 made "
+            "the step's height honest and Issue #284 gave their BENCH a step of its own — both "
+            "legs are still steps, so bench chip that does not reach the rider still prices 0. "
+            "This family is `survival`'s mirror "
             "in name and NOT in form — survival grades continuously by a clock "
             "(`halve(turns_to_ko_me - 1)`), threat is on/off — and the asymmetry is exactly what "
             "the wave-3 ruling on `83116501|0|decision|60` objects to: *\"Our Starmie cannot KO the "
@@ -577,6 +701,20 @@ REGISTRY: tuple[TermFamily, ...] = (
             "supplies an Ability payoff, so an evolve whose whole point is switching an engine "
             "Ability on prices only its attack payoff. The largest single regression risk in this "
             "swap, and named here so T4 reads it as a gap rather than a verdict.",
+            "an Energy that EVAPORATES, on the now-leg — and the blindness is what hides most of "
+            "Issue #286's forward-leg fix. `_readiness_odds` is `max(readiness_p, "
+            "halve(turns_to_afford))`; the forward clock now drops `discard_eot` Energy "
+            "(`MySide.turns_to_afford(exclude_expiring=True)`) but `readiness_p` keeps it, and the "
+            "two legs read the same attachment through the same matcher, so an Energy that FULLY "
+            "arms the body zeroes the clock and pins the now-leg at 1.0 together. MEASURED over "
+            "the committed corpus (2026-08-03): 25 of 1015 of my bodies hold one, the clock moves "
+            "on all 25, this family moves on none — every one sits on an Evolution, where "
+            "Ignition's {C}{C}{C} pays the payoff outright. A PARTIAL loan is still priced right "
+            "(a Staryu holding one Ignition), so the fix is live on the deck and invisible on the "
+            "corpus. What stays wrong is the extreme case: a BENCHED Mega Starmie ex that cannot "
+            "attack at all still reads `readiness_p == 1.0`. Unmasking it means teaching the "
+            "now-leg whether the body may attack THIS turn, which is *who is ACTIVE* above; "
+            "specced as Issue #351, ledgered to Issue #263.",
         ),
     ),
     TermFamily(
@@ -793,14 +931,39 @@ def _exposed_bodies(model: "StateModel") -> tuple:
     The harvest kwargs are the point of T0's widened `turns_to_ko_me` signature: a benched body's
     clock is a different question from the Active's (`my_benched`), and a shared rider budget is a
     fact about the whole bench that one body cannot express (`my_bench`). Passing the defaults would
-    silently ask the solo-body question for six bodies."""
+    silently ask the solo-body question for six bodies.
+
+    ``context`` is the same argument one level further out (Issue #280). The clock prices THEIR
+    attacks through the Damage Formula, whose scaling attacks read their counts off a context dict —
+    and a variable absent from that dict contributes 0 (`strategy/damage.py`). Passing none meant
+    every scaler read 0, so an opponent holding twelve cards and one holding two produced the SAME
+    clock: `docs/matchups/alakazam.md` is the second-most-played archetype in the tracked meta and
+    its damage *is* its hand size (Powerful Hand, 20 per card, no floor). Measured on the 371-frame
+    corrections corpus, threading it moves 20 body clocks.
+
+    ``attacker="theirs"`` is the whole of the correctness here and is not boilerplate. The Formula's
+    variables are named relative to the attacker (`atk_*`/`def_*`) and the attacker on a SURVIVAL
+    read is the opponent; handing this `mine` would read my own hand as their damage scaler, which is
+    silently plausible and wrong in the one direction a survival estimate may never fail in. The
+    board's other half is not lost by choosing — a Mega Froslass ex scaling off `def_hand` (my hand)
+    is in the same dict, on the defender's side of it, which is exactly why one dict cannot serve
+    both directions.
+
+    It is passed for BENCHED bodies too, where the oracle currently has nothing to do with it: the
+    bench leg is the Bench Harvest, whose payloads are the printed snipe/spread riders, and riders
+    ignore Weakness/Resistance by rule (ADR-0022) so they never route through the damage model. The
+    call site states the DIRECTION of the read and leaves which leg consumes it to the oracle;
+    branching here would encode the oracle's internals in `state_value` and would go stale the day a
+    rider learns to scale. The cost is nil — the context is memoized per direction and
+    identity-stable, so it canonicalises once into the clock's memo key."""
     bench_raws = model.mine.bench_raws
     opp_active = model.theirs.active_raw
+    context = model.damage_context(attacker="theirs")
     return tuple(
         ExposedBody(prize_at_risk=float(b.prize_value),
                     turns_to_ko_me=int(model.theirs.turns_to_ko_me(
                         b.body, my_benched=not b.is_active, my_bench=bench_raws,
-                        opp_active=opp_active)))
+                        opp_active=opp_active, context=context)))
         for b in model.mine.bodies)
 
 
@@ -837,6 +1000,18 @@ def _predicted_loss(model: "StateModel") -> bool:
     the new case would make this rung fire on boards the incumbent leaves alone, which is a
     behaviour change disguised as a port.
 
+    ``context`` is the THEIRS-direction Damage Formula dict (Issue #280), threaded into the clock
+    both cases share. The rung this is a port OF — `planner.Planner._predicted_loss` — makes the same
+    `reachable_incoming(evo_min_energy=1)` call WITH ``context=self._opp_attack_context``, the
+    Pilot's own *"OPPONENT-as-attacker context"*, so the direction here is the incumbent's rather
+    than a fresh judgement about which side attacks; this call site was simply the one that dropped
+    it. Omitting it did not make the rung conservative, it made it BLIND: every Damage Formula
+    scaler contributed 0, so a Powerful Hand at 21 cards read as 0 damage rather than 420 and a
+    doomed board with an empty Bench scored as a healthy one. Measured on the corrections corpus,
+    five bench-empty frames read a different Incoming once the context is threaded; on
+    `82226759|64` it is 30 → 420 against a 330 HP Active. Under-reading incoming damage is the one
+    direction a survival estimate may never fail in, and a terminal rung is where it costs most.
+
     The answer is a BOOL rather than a magnitude, which is Issue #283's explicit POC ruling made
     structural: a body whose loss hands them 2 of the 3 prizes they need is worse than the flat
     exposure `survival` prices but is not a loss, and grading that is a post-POC question."""
@@ -844,7 +1019,8 @@ def _predicted_loss(model: "StateModel") -> bool:
 
     def _doomed(body) -> bool:
         return bool(body.hp_remaining) and theirs.reachable_incoming(
-            body.body, evo_min_energy=1, my_benched=not body.is_active) >= body.hp_remaining
+            body.body, evo_min_energy=1, my_benched=not body.is_active,
+            context=model.damage_context(attacker="theirs")) >= body.hp_remaining
 
     # case 2 — the visible bench-empty fact gates the clock read, so a board with a Bench pays
     # nothing for this leg (a bench body soaks: recoverable, not a loss).
@@ -865,27 +1041,152 @@ def _predicted_loss(model: "StateModel") -> bool:
 
 def _reachable_target_values(model: "StateModel") -> tuple:
     """Their bodies as `threat` reads them: `needs.opponent_target_value` over the Knock Outs I can
-    actually reach THIS turn.
+    actually reach THIS turn — **both seats**, each through its own damage route.
 
-    Reachability is `best_reachable_damage` (my Active, under its full Attach Budget) against the
-    target's remaining HP — the shipped affordability oracle, not a second opinion about it. Only
-    their ACTIVE is reachable by damage at all; a benched body needs a snipe rider, which is an
-    attack's property and belongs to `attack_ev` (see `threat`'s `blind_to`).
+    Reachability is my Active's best affordable damage against the target's remaining HP, under the
+    full Attach Budget. The shipped affordability oracle, not a second opinion about it. What
+    changes with the seat is the DAMAGE, because a rider is a different route rather than a wider
+    read of the same one:
+
+    * their **Active** — `best_reachable_damage_vs`, the damage model against the body actually in
+      front of me (Issue #281).
+    * their **Bench** — `best_reachable_bench_damage`, the attack's single-target snipe RIDER
+      (Issue #284). Printed damage lands on the Active; a benched body is reachable only through a
+      rider, which ignores Weakness and Resistance by rule (ADR-0022) and is zeroed on the Active
+      path by `predicted_damage` itself. Bench-immune (`docs/rules.md` §11) and unreadable bodies
+      contribute nothing, failing closed.
+
+    **Against THIS defender, not in the abstract** (Issue #281). The read used to be the
+    opponent-INDEPENDENT `best_reachable_damage` — the biggest *printed* number my Active could
+    afford — and a printed number is wrong in both directions at once. It under-claimed every
+    Weakness Knock Out (`mega_starmie`'s doctrine is *lead Jetting Blow when the Active is
+    Water-weak with ≤240 HP*: printed 120, doubled 240, and the gate said unreachable), and it
+    over-claimed every prevented one (`docs/matchups/crustle.md` Seam 1 — *a pure-ex deck cannot
+    damage an active Crustle at all*, while the printed gate priced the Knock Out as pressure). The
+    sibling applies Weakness/Resistance, the defender's prevention Ability and my live damage
+    boosts, at the oracle's default ``bound="exact"`` — an offensive gate is neither the Lethal
+    Solver's guarantee (``"min"``) nor a worst case (``"max"``). The incumbent is untouched, because
+    it is `attach_value`'s counterfactual leg and that equation is corpus-ruled (ADR-0069 §2).
+
+    **Their BENCH, because chip standing on it is an asset** (Issue #284). The loop returned at most
+    one element, so damage already on their benched bodies was invisible: a board where six counters
+    sat there from last turn's Phantom Dive scored identically to a fresh one. `dragapult_ex`'s win
+    plan IS that asset — *"Phantom Dive pre-loads benched mons with softening chip you cash into
+    prizes on LATER turns"*, and *"Phantom Dive is the turn-ender, so Munkidori / Boss's / Cruel
+    Arrow resolve BEFORE it and convert prior-turn chip"*. What this prices is the STANDING position
+    (a body of theirs is one rider from dead, and that constrains what they can afford to bench),
+    exactly as the Active leg prices their Active's exposure. Converting either remains
+    `attack_ev`'s at the terminal action, which is what `_THREAT_CAP` and the module header's
+    two-band argument keep from being paid twice.
+
+    **`snipe_relevance.target_relevance` is deliberately NOT called here**, though it is the other
+    instrument the audit names. It answers *should I aim this turn's snipe at this body* — the
+    CONVERSION decision, which is `attack_ev`'s and the Pilot's snipe rung's — and its inputs
+    (`turns_to_ko_before`/`_after`, `rider_damage`, `prizes_needed`, the matched Brief priority) are
+    Pilot plumbing no `StateModel` supplies. Reading it would hand this family a second opinion
+    about a question another term owns, which the sole-supplier ruling forbids. What this leg needs
+    from that module is its SUBJECT — that a bench route exists at all — and that comes off
+    `AttackStat.benchSnipe` directly.
+
+    ``attacker="mine"`` on the context is not boilerplate — the Damage Formula's variables are named
+    relative to the attacker, so `survival`'s context and this one are different dicts and one
+    cannot answer both. It is read inside the Active branch only: the bench route is a printed rider
+    that no scaler reaches, so passing a context there would key a memo on a value nothing consumes.
+
+    **The DENIAL credit, because a pre-evolution is worth what it becomes** (Issue #285). A target's
+    `prize_value` is what the body yields NOW, so killing a Staryu priced exactly as much as killing
+    any other 1-prize body — while the doctrine's whole point is that it erases three. *"Snipe/gust a
+    Staryu before it rush-evolves … to trade 1 prize for a denied 3"*; *"prioritise sniping Snover
+    pre-evolution — a 1-prize cost erases a 3-prize wincon"*; *"race the fragile pre-evos — KO Dreepy
+    (70) / Drakloak (90) before they become the wall"* — **seven of the eight matchup docs** make this
+    their primary or secondary lever, and it applies to a plain gust-and-Knock-Out too. So
+    `prize_advance` now carries the forward payoff the removal DENIES, from
+    :meth:`TheirSide.forward_payoff`.
+
+    The credit is `development.evolve_marginal`'s expression, term for term — `_READINESS_W x
+    (owed_damage / PRIZE_DAMAGE_RATE) x halve(hops)` — and reusing it rather than choosing a scale is
+    the point: forward payoff is printed damage held as POTENTIAL on both sides of the board, so the
+    same anchor prices it, and a re-tier moves both together. `halve(hops)` is `EvolveBody.p_arrive`'s
+    shipped convention (ADR-0070 §6), which is what keeps a body three hops from its payoff from
+    pricing as though it were one. **No new constant** enters here.
+
+    Two legs of that expression are deliberately NOT mirrored. `relevance` is `MySide.role_worth` —
+    the deck's own DECLARED opinion about what a body is for, which no opponent supplies — so the
+    opponent leg carries none and reads at full weight. And the `line_topology` CANCELLATION cannot
+    apply, because `TheirSide.forward_payoff` fails OPEN on reachability (their deck is untracked);
+    the fail direction is argued at that method. Both make this an OVER-read rather than an
+    under-read, which is the safe direction for a threat term and is recorded in `blind_to`.
+
+    **This is not a read of their board TOPOLOGY**, which the epic's ledger routes to Issue #263 and
+    `development.blind_to` rules out (*"their bench filling up, or their line completing, moves
+    nothing here"*). Nothing here reads their bench count, their development, or what they hold: the
+    credit is CARD KNOWLEDGE about one target body — its `evolvesFrom` chain and printed damage —
+    exactly the class of fact `prize_value` already is. What `development` is blind to is valuing
+    THEIR development as a positional term; this values one reachable Knock Out more precisely, which
+    is `threat`'s own declared subject.
 
     ``survival_shift=0`` is the fail-closed answer to a missing supplier, named in `blind_to` rather
     than hidden: the shift is a Δ of `turns_to_ko_me` under REMOVAL of the body and the model exposes
     no removal-delta route. `phase` is still threaded honestly, so the term sharpens with the race
     exactly as `phase_scale` says it should once the shift becomes readable."""
-    target = model.theirs.active
-    if target is None or not target.hp_remaining:
-        return ()
-    if model.mine.best_reachable_damage(model.mine.active) < target.hp_remaining:
-        return ()
+    mine = model.mine.active
     race = model.prize_race
     phase = _needs.phase_scale(race_ahead=None,
                                opp_prizes_remaining=race.opp_prizes_remaining)
-    return (_needs.opponent_target_value(prize_advance=float(target.prize_value),
-                                         survival_shift=0, phase=phase),)
+    values = []
+    for target in model.theirs.bodies:
+        if not target.hp_remaining:
+            continue
+        reach = (model.mine.best_reachable_damage_vs(
+                     mine, target, context=model.damage_context(attacker="mine"))
+                 if target.is_active else
+                 model.mine.best_reachable_bench_damage(mine, target))
+        if reach < target.hp_remaining:
+            continue
+        advance = float(target.prize_value) + _denied_forward_payoff(model, target)
+        values.append(_needs.opponent_target_value(prize_advance=advance,
+                                                   survival_shift=0, phase=phase))
+    return tuple(values)
+
+
+def _forward_credit(forward, *, relevance: float = 1.0) -> float:
+    """What a line's UNPAID forward payoff is worth, in prizes — the ONE expression, both sides.
+
+    `_development_legs` prices MY body's owed payoff with it and :func:`_denied_forward_payoff`
+    prices the DENIAL of theirs, and they are the same quantity read from opposite ends of the
+    board: printed damage held as POTENTIAL, crossed on `PRIZE_DAMAGE_RATE`, carried at the
+    positional `_READINESS_W` band, hop-discounted by `EvolveBody.p_arrive`'s shipped `halve`
+    convention (ADR-0070 §6). Two copies would let a re-tier land on one side and not the other,
+    which is the divergence `CombatMath._forward_hop_depths` was extracted to prevent one module
+    over — the same discipline, applied to the expression rather than to the walk.
+
+    ``relevance`` is the my-side leg only: `MySide.role_worth` is the deck's DECLARED opinion about
+    what a body is for, and no opponent supplies one. It defaults to 1.0 rather than to 0.0 so the
+    opponent reading carries the payoff at full weight, which is an OVER-read and the safe direction
+    for a threat term (`threat.blind_to`).
+
+    **The guard is defensive, not load-bearing, and mutation testing says so** — deleting it changes
+    no result, because `forward_payoff_terms` and `MySide.forward_payoff` both return owed damage 0
+    exactly when hops is 0, and `_READINESS_W x 0 x halve(0)` is already 0. It is kept because that
+    coupling is a property of those two oracles' current shape rather than an invariant: a future
+    reading returning owed damage at 0 hops would be priced UNDISCOUNTED, since `halve(0)` is 1.0.
+    Recorded rather than left to look tested.
+    """
+    if forward.hops <= 0 or forward.owed_damage <= 0.0:
+        return 0.0
+    return (_READINESS_W * (forward.owed_damage / currency.PRIZE_DAMAGE_RATE)
+            * halve(forward.hops) * relevance)
+
+
+def _denied_forward_payoff(model: "StateModel", target) -> float:
+    """The forward payoff removing ``target`` DENIES, in prizes — `threat`'s denial credit.
+
+    :func:`_forward_credit` against THEIR body, minus the two legs that have no opponent-side
+    supplier: `relevance` (defaulted, see above) and the `line_topology` CANCELLATION, which cannot
+    apply because `TheirSide.forward_payoff` fails OPEN on reachability. Both are argued at
+    :func:`_reachable_target_values` and named in `threat.blind_to`.
+    """
+    return _forward_credit(model.theirs.forward_payoff(target.card_id))
 
 
 def _ready_bodies(model: "StateModel") -> tuple:
@@ -972,9 +1273,37 @@ def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     reused rather than re-derived, over MY half of the Two Clocks (ADR-0070 §6). Armed now grades
     1.0, next turn 0.5, unknown 0.0 (fail closed, no claim). Taking the MAX rather than adding keeps
     the result a probability and keeps it monotone in both inputs: attaching Energy can only shorten
-    the clock or raise the odds, so it can only raise this."""
+    the clock or raise the odds, so it can only raise this.
+
+    **The forward leg excludes EVAPORATING Energy** (`exclude_expiring`, Issue #286): Ignition
+    Energy is discarded at the end of the turn it is attached, so a clock that counts it is not
+    reading the board this body will stand on next turn. The now-leg deliberately keeps it — the
+    Energy genuinely is there this turn, and that is a fact, not the error. `docs/rules.md` names
+    the misplay the rider causes as its worked example of a reason-only rule (*"don't attach
+    Ignition T1-going-first — you can't attack, so it's discarded for nothing"*, correction
+    ep81903490 f5), and `mega_starmie` runs four of them in thirteen Energy.
+
+    **Measured caveat, recorded because it is half the result** (2026-08-03, swept over the
+    committed corrections corpus): the ``max`` MASKS the correction wherever the expiring Energy
+    FULLY arms the body. Both legs read the same attached Energy through the same matcher —
+    `matched_slots` is *"the matcher `reachable_attach` uses"* — so an Energy that zeroes the clock
+    also pins `readiness_p` at 1.0, and the ``max`` then discards the forward leg. 25 of my 1015
+    corpus bodies hold a `discard_eot` Energy; the clock moves on all 25 and this function on none,
+    because every one of them sits on an EVOLUTION, where Ignition's ``{C}{C}{C}`` pays both shipped
+    payoffs outright.
+
+    It is live on a PARTIAL loan, and `mega_starmie` prints one: Ignition on a **Basic** provides
+    only ``{C}``, so a Staryu holding one is still two attaches from its line's ``{C}{C}{C}`` payoff
+    and `readiness_p` reads 0.0 (a colourless unit cannot pay Water Gun's ``{W}``). Measured on the
+    real pilot: `readiness` 0.000750 → **0.000375**, which is exactly the bare-Staryu value. An
+    Ignition on a Staryu now buys nothing forward, which is the correction.
+
+    Unmasking the rest means teaching the now-leg whether the body may attack THIS turn — it does
+    not ask, and a BENCHED body reads 1.0 — which is *who is ACTIVE* (`readiness.blind_to`), Issue
+    #263's ledger. Specced as **Issue #351**; the correct half is built here and the masking is a
+    packet line rather than a second, unruled retune."""
     now = model.mine.readiness_p(body, attack_id)
-    arm = model.mine.turns_to_afford(body)
+    arm = model.mine.turns_to_afford(body, exclude_expiring=True)
     forward = 0.0 if arm is None else halve(arm)
     return max(0.0, min(1.0, max(now, forward)))
 
@@ -1037,9 +1366,11 @@ def _development_legs(model: "StateModel") -> dict:
       relevance through `currency.deploy_relevance_to_damage`, the deploy marginal's own bridge,
       then across `PRIZE_DAMAGE_RATE`. Benching a body raises it, which is what makes a deploy
       price above zero under differencing.
-    * ``evolve_marginal`` — the FORWARD payoff a line still OWES, hop-discounted by `grading.halve`
-      (the convention `EvolveBody.p_arrive` already uses) and crossed on :data:`_READINESS_W`, the
-      same positional anchor `readiness` uses. The anchor is not decoration: forward payoff is
+    * ``evolve_marginal`` — the FORWARD payoff a line still OWES, through :func:`_forward_credit`:
+      hop-discounted by `grading.halve` (the convention `EvolveBody.p_arrive` already uses) and
+      crossed on :data:`_READINESS_W`, the same positional anchor `readiness` uses. That helper is
+      shared with `threat`'s denial credit (Issue #285), which prices the SAME quantity from the
+      other end of the board. The anchor is not decoration: forward payoff is
       printed damage held as POTENTIAL, exactly like readiness's, and pricing it at raw prize scale
       instead made this leg alone reach 0.5 prizes per Stage-2 line and saturate the family's guard
       on an ordinary board. Evolving raises it by consuming a hop; it reads the forward CLOSURE and
@@ -1065,9 +1396,8 @@ def _development_legs(model: "StateModel") -> dict:
         relevance = _body_relevance(model, b.card_id, seen)
         deploy += currency.deploy_relevance_to_damage(relevance) / currency.PRIZE_DAMAGE_RATE
         forward = mine.forward_payoff(b.card_id)
-        if forward.hops > 0 and forward.owed_damage > 0.0:
-            credit = (_READINESS_W * (forward.owed_damage / currency.PRIZE_DAMAGE_RATE)
-                      * halve(forward.hops) * relevance)
+        credit = _forward_credit(forward, relevance=relevance)
+        if credit:
             evolve += credit
             if not forward.reachable:
                 topology -= credit
@@ -1182,9 +1512,10 @@ def threat(targets: Iterable[float]) -> float:
 
     A plain SUM rather than a max-with-discount, matching the frozen composition. The bound that
     keeps it from becoming a wish is the reachability FILTER the caller applies, not an arithmetic
-    one: in practice only their Active is reachable by damage at all, so the sum has one or two
-    terms — a benched body is reachable only through a snipe rider, which `attack_ev` prices at the
-    terminal action and this family deliberately does not (see its `blind_to`).
+    one: their Active is reachable by printed damage, and a benched body only through the attack's
+    snipe RIDER (Issue #284), so on most boards the sum has one term and it can never have more than
+    six. CONVERTING any of them is still `attack_ev`'s at the terminal action; what this family
+    prices is the exposure standing on the board (see its `blind_to`).
 
     **POSITIONAL, so capped** at :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 /
     `KO_SCORE`), which is where the my-side/their-side asymmetry described in the module header

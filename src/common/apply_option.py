@@ -437,15 +437,34 @@ def footprint(kind: int) -> Footprint:
 def footprints_writing_unhomed() -> dict:
     """``{kind: [owed zone ids]}`` — kinds whose transition writes state the snapshot cannot hold.
 
-    **Empty since T1 (Issue #260), and that is what the finding turned into.** It was NOT empty at
+    **EMPTY since T1 (Issue #260), and that is what the finding turned into.** It was NOT empty at
     T0: `_EVOLVE` and `_RETREAT` both clear Special Conditions (`docs/rules.md` §4 and §8) and
     `special_conditions` had no snapshot home, and `_RETREAT` read and wrote a retreat allowance
     that had none either. Under differencing that is the exact §3c failure — part of what the
     transition did is invisible, so the delta under-reports, and at ordering time an under-reported
-    delta is a pruned option. T1 homed all three, so the work list this generated is done; the
-    function survives as the standing check that a NEW footprint zone does not re-open it.
+    delta is a PRUNED option.
 
-    Surfaced as a function rather than a comment so T1 (Issue #260) has a generated work list and
+    T1 homed both zones, so the work list this generated is done and the function survives as the
+    standing check that a NEW footprint zone does not re-open it. `test_snapshot_coverage.py`
+    asserts the set EMPTY, in the direction that matters: it may only ever SHRINK.
+
+    ⚠️ **What this guard cannot reach, so no later reader trusts it further than it goes**
+    (Issue #282). It is keyed on :data:`FOOTPRINTS`, which is per-KIND, and the one kind whose whole
+    content is a card effect — `_PLAY` — is deliberately absent from that table, with T4 to supply a
+    per-OPTION footprint by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses. **A
+    card with no clauses unions to the empty set**, so a `_PLAY` whose effect the compendium has
+    never heard of reads as writing NOTHING and passes here in silence. That is not hypothetical:
+    Premium Power Pro (1141), Black Belt's Training (1211) and Brave Bangle (1175) all return `None`
+    from `card_effects.json`, and their whole effect is the parsed `CardStat.damageBoost` triple.
+    `snapshot_coverage.clauses_writing_unhomed()` has the same blind spot for the same reason — it
+    walks the compendium, and these cards are not in it.
+
+    So this function answers *"does a declared write-set name a zone with no home?"*, never *"is the
+    write-set declared at all?"*. The second question belongs to the ENUMERATION
+    (`snapshot_coverage.WRITABLE`, whose `this_turn_damage_boosts` entry exists because of exactly
+    this gap), and a zone nobody enumerated cannot be reported by any assertion here.
+
+    Surfaced as a function rather than a comment so T1 (Issue #260) had a generated work list and
     `test_snapshot_coverage.py` can assert the set only ever SHRINKS."""
     owed = set(snapshot_coverage.unhomed())
     out = {}

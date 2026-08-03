@@ -407,6 +407,13 @@ recorded rationale.
   attach 3rd of 5.
 - `82229122|0|decision|17` — "as correction rationale says: *'Too eager to attack. could have filled
   up bench with buddy-buddy poffin AND attached energy AND evolved Staryu to main attacker.'*"
+- `81906755|1|decision|9` (Batch 8, 2026-08-03) — "do not retreat. retreating staryu to staryu solves
+  nothing. Orgepon with its ability can attach 1 grass energy to itself in a single turn, which will
+  do 90dmg. so our active energies do not protect us. however, if we assume our active is doomed,
+  which we such assume that it is, best to attach energy to a benched staryu if we haven't used up
+  our attach already"
+  ⚠️ **the 90 does not reconcile with the printed text** — see Batch 8's *Open discrepancy*; the
+  sequence stands at any of 90/120/150, all lethal on a 70 HP Staryu.
 
 **`82225138|0|decision|82` is worth T4's attention specifically.** *"play buddy-buddy, the pokegear,
 redecide on new info"* is not an ordering preference — it asks the planner to **re-plan mid-turn on
@@ -618,3 +625,71 @@ Each of the five issues carries its frame list, and each must re-measure: a held
 FIXED should be returned to gating (delete its `owner`) rather than left excused, or the ledger
 becomes the wallpaper its own doctrine warns about. Issue #291 (T3.5 closeout) is the natural place
 to check the whole set.
+
+## Batch 8 (2026-08-03) — the T3.5 remediation track's one flip
+
+The wave above closed on 2026-08-02. This batch is a **new** flip, from a different packet:
+`docs/plans/issue-sequence-281-wave3-packet.md`, produced by the Issue #278 (POC-T3.5) run that
+landed Issues #281, #280, #343, #282, #345, #346, #284, #285 and #286 on PR #340. It is recorded
+here because this file — not the run-scoped packet — is where the Discrimination Gate's red frames
+get a name attached to them.
+
+| frame | packet rec | verdict | developer's line |
+|---|---|---|---|
+| `81906755\|1\|decision\|9` | REVERT | **REVERT** | do not retreat — retreating Staryu to Staryu solves nothing, and our Active's Energy is not what is protecting us |
+
+**Nothing on disk changes.** Per this file's own vocabulary a `REVERT` leaves the recorded label
+standing and needs no ledger entry; the frame keeps failing the gate. Neither
+`data/leaf_lab/baseline.json` nor `data/decider_lab/baseline.json` was touched at any point in that
+run.
+
+### The ruling refutes the packet's *reasoning*, not just its ranking
+
+The packet recommended REVERT on a **tempo** argument: that Ogerpon is three turns from being able
+to attack at all, so dumping turn 1's only attach buys 30 damage of relief too far away to be worth
+it. The developer's ruling rejects the premise underneath that argument — the relief is not merely
+distant, it is **illusory**, because our Active's Energy is not the term that decides whether the
+Staryu lives.
+
+Verified at source, `data/EN_Card_Data.csv` Card ID 96, Teal Mask Ogerpon ex (TWM 25) — the packet
+quoted the attack but **not the Ability on the same card**:
+
+> `[Ability] Teal Dance` — "Once during your turn, you may attach a Basic {G} Energy card from your
+> hand to this Pokémon. If you attached Energy to a Pokémon in this way, draw a card."
+
+That is an attach *in addition to* the turn's normal one, so Ogerpon charges at up to **2 Energy per
+turn**, not 1. The packet's clock table (30 at t=3, 60 at t=4, 90 at t=5 printed; 60 at t=3, 120 at
+t=4 with the damage context) is derived from a one-attach-per-turn ceiling and is therefore **wrong
+in the direction that matters** — it under-states how fast `{G}{G}{G}` comes online. Whatever
+`turns_to_ko_me` returned on this frame, it was not reading Teal Dance.
+
+This does not disturb Issue #280's fix, which is about threading the damage context and is
+unaffected; it disturbs the packet's *narrative* about why the frame is close. It also sits squarely
+on the epic's own ruled-omission line — **ability readiness → Issue #263** — so the gap is already
+owned and is not re-litigated here.
+
+### What the developer said the play actually is
+
+Recorded as an ideal turn sequence, not a veto: the Active is to be treated as **doomed**, and the
+turn's attach spent on a body that will still be there.
+
+- Retreating Staryu → Staryu changes nothing about the matchup; both are the same 70 HP body.
+- Ogerpon's own attach makes our Active's Energy irrelevant as protection.
+- So if the attach for the turn is unspent, put it on a **Benched** Staryu.
+
+That is a `readiness`-on-the-successor play, and it is the same shape as the `owner=Issue #332`
+diagnosis already in this file — *"`readiness` funds a doomed Active over the successor"* — read from
+the other side. Worth checking against that frame set when Issue #332 lands.
+
+### Open discrepancy — flagged, NOT resolved
+
+The developer's line says Teal Dance "will do 90dmg". I could not reconcile 90 from the printed
+text and am recording that rather than quietly adopting or quietly correcting it. Myriad Leaf Shower
+is `{G}{G}{G}` for 30, +30 **per Energy attached to both Active Pokémon**; paying the cost puts 3
+Energy on their Active, which reads 30 + 3×30 = **120** with our Active bare, or 150 with our one
+{W} still attached. 90 corresponds to `both_active_energy == 2`, which cannot pay the attack's cost.
+
+**The ruling does not depend on the number.** 90, 120 and 150 are all lethal on a 70 HP Staryu, and
+the developer's point — that our attached Energy is not what protects us — holds at every one of
+them. Flagged in the same spirit as Batch 1's invalid snipe target: the sequence stands, the
+arithmetic is queried.

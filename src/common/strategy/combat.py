@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from itertools import combinations
 
 from common.board_cards import body_unit_codes   # the ONE read of a body's attached Energy UNITS
+from common.board_cards import card_id as body_card_id   # …and the ONE read of a card ENTRY's id
 from common.deck_odds import draw_hit_probability
 from common.strategy.context import KO_SCORE
 from common.strategy.damage import compute_active_damage, wr_adjust
@@ -891,9 +892,28 @@ class CombatMath:
         A second divergence used to be claimed here — that the curve omits the
         ``hand_size_attacker`` forward counter. It was never true on a production path (Issue
         #213): the hand-size attack carries the Damage Formula's ``atk_hand`` scaler like any other
-        scaling attack, and all six Incoming call sites thread the per-decision damage context, so
-        both reads price it — the curve in fact reads HIGHER, because the generic term prices a
-        forward form at the full hand where the retired branch spent the evolving card.
+        scaling attack, and the scaler rides the ``context`` kwarg that **every live Incoming
+        consumer threads**, so both reads price it — the curve in fact reads HIGHER, because the
+        generic term prices a forward form at the full hand where the retired branch spent the
+        evolving card.
+
+        That clause used to state a COUNT — *"all six Incoming call sites thread the per-decision
+        damage context"* — and Issue #343 replaced it, **not because the arithmetic was wrong**.
+        Re-taken at that issue's base, the number was exactly right under the reading it was written
+        in: six consumer calls spelled ``incoming`` or ``doomed``, every one of them threading. The
+        sentence still misled, and the ambiguity is the reason. "Incoming" names a FAMILY here —
+        :meth:`reachable_incoming` and :meth:`turns_to_ko_me` funnel into :meth:`incoming` and carry
+        the same ``context`` — and under that wider reading the census stood at twenty consumer call
+        sites with four threading nothing (``pilot._opponent_target_rows`` and
+        ``pilot._strip_delta_terms``, two clock legs each). ``docs/plans/term-sufficiency-audit.md``
+        F2 read it the wide way, cited this very sentence as an invariant, and concluded
+        ``state_value`` was the lone exception; it was not.
+
+        So a defensible number still rotted into a false reassurance, which is the argument for a
+        PROPERTY — and for asserting it rather than asserting it in prose:
+        ``tests/strategy/test_target_rows_damage_context.py`` walks the consumer modules, fails on
+        any call site that prices no context, keeps an allowlist that is empty today, and carries a
+        positive control so the sweep cannot go quietly blind.
 
         ``charged`` selects the policy — ``None`` = ceiling, the survival read's worst-case."""
         if not oa:
@@ -1242,6 +1262,88 @@ class CombatMath:
         return float(max((self.attack_damage(aid) for aid in (stat.attacks or ())
                           if self.reachable_attach(my_body, aid, budget=budget)), default=0))
 
+    def best_reachable_damage_vs(self, my_body: dict | None, defender: dict | None, *,
+                                 budget: Budget, context: dict | None = None) -> float:
+        """Biggest damage ``my_body`` can reach this turn AGAINST ``defender`` — the same
+        Budget-affordability filter as :meth:`best_reachable_damage`, read through the damage
+        oracle instead of the printed number, so Weakness / Resistance / prevention / boosts apply
+        (Issue #281, POC-T3.5).
+
+        A SIBLING, not a replacement, and the split is load-bearing rather than tidy. The incumbent
+        is the counterfactual leg of the attach marginal (ADR-0069 §2) and is deliberately
+        opponent-INDEPENDENT — *"the overkill cap, not this read, owns 'a bigger attack buys
+        nothing'"* — so teaching it about the defender would move `attach_value`, which is
+        corpus-ruled. Two questions, two methods.
+
+        Everything except the damage read is the incumbent's, deliberately: `reachable_attach`
+        under the same Attach ``budget`` stays the ONE opinion about affordability this family
+        holds. (:meth:`can_ko_affordable` also scans through :meth:`predicted_damage` and was
+        considered for the same job — it asks affordability of the *attached* Energy, a strictly
+        different and weaker question than the Budget, and a family holding two opinions about
+        affordability is what the sole-supplier ruling forbids.)
+
+        ``bound`` is the oracle's default ``"exact"`` and is not a parameter. An OFFENSIVE
+        reachability read is neither a lethal guarantee nor a worst case — the two readings that
+        own ``"min"`` and ``"max"`` (`Lethal reads "min", Incoming "max"`, :meth:`predicted_damage`)
+        — so there is one right answer here and no caller to give a choice to.
+
+        Fail-CLOSED at 0.0, like the incumbent: no ``CardStat``, no Budget, no claim."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        return float(max((self.predicted_damage((my_body or {}).get("id"), aid, defender,
+                                                context=context)
+                          for aid in (stat.attacks or ())
+                          if self.reachable_attach(my_body, aid, budget=budget)), default=0))
+
+    def best_reachable_bench_damage(self, my_body: dict | None, defender: dict | None, *,
+                                    budget: Budget) -> float:
+        """Biggest damage ``my_body`` can put on ONE of the opponent's **BENCHED** bodies this turn
+        — the bench sibling of :meth:`best_reachable_damage_vs` (Issue #284, POC-T3.5).
+
+        A THIRD method rather than an ``area`` flag on either sibling, because the bench is a
+        different damage ROUTE and not a different defender. An attack's printed damage lands on the
+        Active; a benched body is reachable only through the attack's snipe RIDER, which ignores
+        Weakness and Resistance by rule (ADR-0022) and therefore never routes through
+        :meth:`predicted_damage` — the oracle says so about this very attack: *"Jetting Blow is
+        zeroed (its bench rider is a separate path)"*. :meth:`_reach_form_damage` already draws the
+        same line for INCOMING damage onto my Bench; this is that line seen from the other side.
+
+        **The rider read is :meth:`rider_snipe`, NOT :meth:`_bench_rider`**, and the difference is
+        the direction. ``_bench_rider`` sums snipe and spread as a WORST CASE for a body of mine —
+        sound when over-reading their reach is the safe error. Here the same sum would over-read MY
+        reach, and a spread is a SHARED counter budget across their whole Bench (Phantom Dive: *"Put
+        6 damage counters on your opponent's Benched Pokémon in any way you like"*), so crediting
+        its full total against every body separately would claim three Knock Outs from one 60-counter
+        payload. The subset question has an owner already — :meth:`spread_ko_prizes`, whose
+        ``best_ko_subset`` knapsack answers it in PRIZES over a whole Bench — and it does not
+        compose into a per-body reach. Snipe riders are indivisible by construction (*"Each snipe
+        unit lands entirely on ONE body (single-target text)"*, :meth:`_harvest_residual`), so this
+        under-reads rather than over-reads. **No pool attack prints both riders** — swept over all
+        1556 attack records, `benchSnipe` and `benchSpread` are never both non-zero on one attack —
+        so on this set the choice costs the three spread attacks (Flutter Mane 20, Sinistcha 40,
+        Dragapult ex 60) and nothing else.
+
+        Affordability is :meth:`reachable_attach` under the same Attach ``budget`` as both siblings,
+        so this family keeps ONE opinion about what I can pay for.
+
+        Fail-CLOSED at 0.0 on **either** side being unreadable, which is stricter than
+        :meth:`is_tera` alone and deliberately so. That oracle fails OPEN on a missing stat (False =
+        not Tera) because its own consumers must never suppress a real Lethal; here an unresolvable
+        benched body could be an Antique Plume Fossil, a Misty's Magikarp or a Poltchageist — all
+        carry unconditional prevent-all-while-Benched and `CardStat` has no field for it
+        (`docs/rules.md` §11, ADR-0020) — and crediting a Knock Out against one would invent
+        pressure. So the defender's stat is checked BEFORE the oracle is asked, the same order
+        `MySide.active_famine` uses for the same reason."""
+        stat = self._card_stat((my_body or {}).get("id"))
+        if stat is None or budget is None:
+            return 0.0
+        target_id = (defender or {}).get("id")
+        if self._card_stat(target_id) is None or self.is_tera(target_id):
+            return 0.0                                # unreadable, or immune while Benched (§11)
+        return float(max((self.rider_snipe(aid) for aid in (stat.attacks or ())
+                          if self.reachable_attach(my_body, aid, budget=budget)), default=0))
+
     def readiness_p(self, my_body: dict | None, attack_id=None, *, budget: Budget,
                     enabler_budget: Budget | None = None,
                     copies: int = 0, pool: int = 0, draws: int = 0, p_by_type=None) -> float:
@@ -1532,17 +1634,149 @@ class CombatMath:
                 matched, slots = self.matched_slots(body, aid)
                 if slots:
                     deficit = slots - matched
-        parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd_stats
-                  if s is not None and s.name}
-        hops = 0
-        for name in parent:
-            d, n = 0, name
-            while n and n != st.name and d <= max_hops:
-                d, n = d + 1, parent.get(n)
-            if n == st.name:
-                hops = max(hops, d)
+        hops = max(self._forward_hop_depths(st, fwd_stats, max_hops=max_hops).values(), default=0)
         return needs.turns_to_ready(energy_deficit=deficit, evolve_hops=hops,
                                     attaches_per_turn=attaches_per_turn)
+
+    def without_expiring_energy(self, body: dict | None) -> dict | None:
+        """``body`` as it will stand once the rules discard its EVAPORATING Energy — the hypothetical
+        a FORWARD clock must be asked about (Issue #286, POC-T3.5).
+
+        The subtractive mirror of `MySide.best_reachable_damage`'s ``extra_energy_ids``: that one
+        asks *what if this body also held X*, this one asks *what does it hold once X is gone*. Both
+        return a plain raw body, so every oracle below is asked the ordinary question about an
+        ordinary board and nothing learns a second vocabulary.
+
+        **Card identity comes from ``energyCards``, never from ``energies``**, and that is the whole
+        difficulty rather than a detail. ``energies`` is a list of ``EnergyType`` UNITS, not cards
+        (`common/board_cards.py`): one Ignition Energy is card **17** on ``energyCards`` and renders
+        as ``[0, 0, 0]`` — three COLORLESS units — on ``energies``. Filtering ``energies`` for card
+        17 therefore matches nothing at all and the strip would be silently inert, which is exactly
+        the shape this codebase has been bitten by before (Issue #297).
+
+        Three committed sources, each answering the part only it can:
+
+        * **which cards expire** — the Effect Clause's ``rider == "discard_eot"``. The behavioural
+          Function Tag of the same name exists too, and is deliberately NOT the instrument: the tag
+          says *that* a card evaporates, the clause is the parametric record (ADR-0032/ADR-0067).
+        * **how many units each provides** — `CardFunctions.energy_provision`, the same accessor
+          :meth:`_special_energy_groups` sizes a hand attach with. It takes the HOLDER's stage,
+          because Ignition provides ``{C}`` on a Basic and ``{C}{C}{C}`` on an Evolution. It is NOT
+          the codebase's only reading of that quantity — `pilot._attach_provision` (ADR-0069 §5, and
+          corpus-ruled), `pilot._attach_lethal_tactical` and `planner._attach_provided` each hardcode
+          ``3 if discard_eot and evolution else 1``. Composing the accessor here adds no fourth;
+          folding those three into it would move `attach_value`, which is not this issue's to move.
+        * **which units** — the card's ``CardStat.energyType``, the colour :meth:`_attached_units`
+          gives those units, so only matching codes are removed and a Basic Energy beside them
+          survives.
+
+        Fail-CLOSED at every step, and per CARD as well as per body: no clause compendium, no
+        clause, no resolvable HOLDER (the provision is stage-dependent, so an unknown stage cannot
+        size it), no provision tag, no matching unit, or no ``energyCards`` key at all, and that card
+        is left exactly where it was. When nothing at all was removed the body is returned **by
+        identity**, so the overwhelmingly common case (no expiring Energy anywhere on the board)
+        costs one walk and no allocation, and a caller may use ``is`` to detect it."""
+        entries = tuple((body or {}).get("energyCards") or ())
+        holder = self._card_stat((body or {}).get("id"))
+        if not entries or self.effects is None or self.functions is None or holder is None:
+            return body
+        evolution = getattr(holder, "evolvesFrom", None) is not None
+        units, keep, dropped = list(body_unit_codes(body)), [], 0
+        for entry in entries:
+            cid = body_card_id(entry)
+            clauses = self.effects.clauses(cid) if cid is not None else ()
+            removed = 0
+            if any(cl.get("rider") == "discard_eot" for cl in (clauses or ())):
+                code = getattr(self._card_stat(cid), "energyType", None)
+                for _ in range(self.functions.energy_provision(cid, evolution=evolution)):
+                    if code in units:
+                        units.remove(code)
+                        removed += 1
+            # The card STAYS unless its units actually left. Dropping it while its units survive
+            # would hand the caller a body whose two Energy keys disagree — the exact cards-vs-units
+            # split `common/board_cards.py` exists to keep straight — and the guard is per-CARD
+            # because the whole-body `dropped` check below cannot see one card's silent no-op.
+            if not removed:
+                keep.append(entry)
+            dropped += removed
+        if not dropped:
+            return body                       # identity: nothing expires, nothing is re-keyed
+        return dict(body, energies=units, energyCards=keep)
+
+    @staticmethod
+    def _forward_hop_depths(st, fwd_stats, *, max_hops: int = 3) -> dict:
+        """``{forward form NAME: how many evolutions it is above ``st``}`` — the ``evolvesFrom``
+        name-chain depth, over the forward closure ``fwd_stats``.
+
+        Extracted from :meth:`turns_to_afford`, which still takes the ``max`` of these values as its
+        forward-hop leg, so the rule that reads *"how far is that form"* has ONE home. Issue #285
+        needed the same walk to answer a DIFFERENT aggregation — the hops to the best-DAMAGE form,
+        not to the deepest one — and re-deriving it there would have left two copies of a depth rule
+        free to drift, which is the failure :meth:`card_level_damage` was extracted to end.
+
+        Keyed by NAME rather than by card id because evolution in this set is BY NAME (`docs/rules.md`
+        §4 — the card names its previous stage), which is also why the pool-level forward index is
+        name-keyed (`scouting/forward_index.py`). Every printing of a name therefore shares one depth.
+
+        ``max_hops`` guards a malformed chain rather than a real evolution cycle — the rules cannot
+        produce one — and a form whose chain does not ground out on ``st`` within it is OMITTED, which
+        is the fail-closed direction: no depth claimed for a line we cannot walk."""
+        parent = {s.name: getattr(s, "evolvesFrom", None) for s in fwd_stats
+                  if s is not None and s.name}
+        own = getattr(st, "name", None)
+        depths: dict = {}
+        for name in parent:
+            d, n = 0, name
+            while n and n != own and d <= max_hops:
+                d, n = d + 1, parent.get(n)
+            if n == own:
+                depths[name] = d
+        return depths
+
+    def forward_payoff_terms(self, card_id, *, forward_ids=None, max_hops: int = 3) -> tuple:
+        """``(owed_damage, hops)`` — the two legs of a :class:`state_model.ForwardPayoff` that are
+        computable from CARD KNOWLEDGE alone, for **either** side's body (Issue #285, POC-T3.5).
+
+        ``owed_damage`` is the best printed damage anywhere in ``card_id``'s forward closure MINUS the
+        card's own, floored at 0 (a forward form that hits softer owes nothing); ``hops`` is how many
+        evolutions away that best form is. ``(0.0, 0)`` for an unknown card or a dead-end line — no
+        claim, and no phantom credit.
+
+        **The third leg, ``reachable``, is deliberately absent**, because it is not card knowledge:
+        it asks whether a copy of that form is still gettable, which needs a decklist plus the zones.
+        `MySide.forward_payoff` answers it from `unseen_counts` + `hand_ids`; `TheirSide` cannot and
+        fails OPEN. Returning a two-tuple keeps that asymmetry at the seam where it is decided rather
+        than letting this oracle invent an answer for a side that has none.
+
+        ``forward_ids`` is the same availability-gate callable :meth:`turns_to_afford` takes, so a
+        caller that has narrowed the closure (a matched-Read rep list, `CURRENT_FORMS_ONLY`) gets the
+        narrowed reading here too. None → :meth:`forward_card_ids`, the pool-level index (ADR-0020).
+
+        The damage read is the PRINTED ``maxDamage``, matching `MySide.forward_payoff` exactly so the
+        two sides price one line the same way. It is therefore blind in the way the printed index is
+        blind — Alakazam's whole threat is a scaling term and reads 10 — and the board-priced
+        alternative (:meth:`forward_threat_ceiling`) is deliberately NOT substituted here: it would
+        give the opponent's line a different valuation basis from my own for the same card."""
+        st = self._card_stat(card_id) if card_id is not None else None
+        if st is None:
+            return (0.0, 0)
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        # SORTED because the closure is a frozenset and the scan below breaks ties on `>`: with two
+        # forward forms owing the same damage at different depths, set-iteration order would pick the
+        # hops. Swept the pool — 457 cards have a non-empty closure and NONE ties — so this is
+        # insurance rather than a fix, and it is here rather than in `turns_to_afford` because that
+        # oracle is ADR-0070's and must stay byte-identical.
+        fwd_stats = [self._card_stat(f) for f in sorted(fwd(card_id) or ())]
+        depths = self._forward_hop_depths(st, fwd_stats, max_hops=max_hops)
+        own = float(getattr(st, "maxDamage", 0) or 0)
+        best_owed, best_hops = 0.0, 0
+        for s in fwd_stats:
+            if s is None or not s.name or s.name not in depths:
+                continue
+            owed = max(0.0, float(getattr(s, "maxDamage", 0) or 0) - own)
+            if owed > best_owed:
+                best_owed, best_hops = owed, depths[s.name]
+        return (best_owed, best_hops)
 
     def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None,
                              switch_enabler: bool = False) -> set:

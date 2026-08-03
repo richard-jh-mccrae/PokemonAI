@@ -13,12 +13,31 @@ ruling 2).
 ``discard_energy_recur`` line's own discard reload at the ``self_arming`` scope — Effect-Clause
 quantified, so it distinguishes Assemble Alloy (an Ability firing on the evolve hop, reloading the
 evolved body) from Aura Jab (an attack reloading the BENCH, never the attacker).
+
+**Issue #286 (POC-T3.5)** adds the EXPIRING-Energy strip — `CombatMath.without_expiring_energy` and
+the `exclude_expiring` leg of `MySide.turns_to_afford`. The oracle itself is untouched, deliberately:
+`pilot._opp_turns_to_ready` delegates to it byte-identically, so a change there would move
+corpus-ruled deny decisions. The strip is a SIBLING at the model accessor.
 """
+from common.cards import CardFunctions
+from common.effects import CardEffects
 from common.strategy.combat import CombatMath
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 
 RIOLU = 677
 MLUC = 678          # Mega Lucario ex — one hop from Riolu (rulebook Appendix 1)
+
+#: **Ignition Energy**, Card ID 17 — verified at `data/EN_Card_Data.csv`: a *Special Energy* whose
+#: text reads *"If this card is attached to 1 of your Pokémon, discard it at the end of your turn. …
+#: it provides {C} Energy. If this card is attached to an Evolution Pokémon, it provides {C}{C}{C}
+#: Energy instead."* That sentence is carried in TWO committed stores and they must agree:
+#: `card_effects.json` holds the parametric clause
+#: ``{"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3, "type": "colorless",
+#: "rider": "discard_eot"}`` and `card_functions.json` holds ``provides:1`` / ``provides_evo:3``
+#: beside the behavioural ``discard_eot`` tag. It is the ONLY card in the 1267-card pool carrying
+#: either (swept 2026-08-03), which is why the strip's coverage question is a one-card question.
+IGNITION = 17
+COLORLESS, FIGHTING = 0, 6
 
 
 def _combat():
@@ -171,3 +190,176 @@ def test_the_arming_scope_fails_closed_without_a_clause():
     body = {"id": UNKNOWN, "energies": []}
     assert combat.discard_recur_fuel(body, {FIGHTING: 3}) == 3
     assert combat.discard_recur_fuel(body, {FIGHTING: 3}, scope="self_arming") == 0
+
+
+# ── Issue #286 — the EXPIRING-Energy strip ───────────────────────────────────────────────────────
+#
+# `readiness`'s forward leg asks "how many turns until this line is armed?", and an Energy the rules
+# discard at the end of THIS turn is not there to answer it. The strip is opt-in at the model
+# accessor and the oracle below it never learns about it — see the module docstring.
+
+STARYU, MSTAR = 1030, 1031      # Staryu → Mega Starmie ex: ONE hop, no "Starmie" in this line
+WATER_GUN, JETTING_BLOW, NEBULA_BEAM = 1486, 1487, 1488
+WATER = 3
+
+
+def _ignition_combat():
+    """A Staryu → Mega Starmie ex line, plus the two Energy cards the strip must tell apart.
+
+    Every field verified at `data/EN_Card_Data.csv`: Staryu (1030) Basic HP 70 {W}, Water Gun ``{W}``
+    20; Mega Starmie ex (1031) Stage 1 *Mega Pokémon ex*, ``Previous stage`` **Staryu**, HP 330,
+    Jetting Blow ``{W}`` 120 / **Nebula Beam ``{C}{C}{C}`` 210** — the colourless payoff an Ignition
+    can pay outright, which is the whole reason this deck runs the card.
+    """
+    stats = DictCardStatProvider({
+        STARYU: CardStat(STARYU, name="Staryu", hp=70, energyType=WATER, maxDamageCost=1,
+                         maxDamage=20, attacks=(WATER_GUN,)),
+        MSTAR: CardStat(MSTAR, name="Mega Starmie ex", hp=330, megaEx=True, evolvesFrom="Staryu",
+                        energyType=WATER, maxDamageCost=3, maxDamage=210,
+                        attacks=(JETTING_BLOW, NEBULA_BEAM)),
+        IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
+        WATER: CardStat(WATER, name="Basic {W} Energy", cardType=5, energyType=WATER),
+    }, attacks={WATER_GUN: AttackStat(WATER_GUN, damage=20, cost=1, energyTypes=(WATER,)),
+                JETTING_BLOW: AttackStat(JETTING_BLOW, damage=120, cost=1, energyTypes=(WATER,)),
+                NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3,
+                                        energyTypes=(COLORLESS, COLORLESS, COLORLESS))})
+    return CombatMath(stats,
+                      functions=CardFunctions({IGNITION: ["discard_eot", "provides:1",
+                                                         "provides_evo:3"]}),
+                      transients=None,
+                      effects=CardEffects({IGNITION: [{"kind": "energy_provide", "amount": 1,
+                                                       "amount_on_evolution": 3,
+                                                       "type": "colorless",
+                                                       "rider": "discard_eot"}]}))
+
+
+def _held(cid, cards, units):
+    """A body holding ``cards`` (the CARD ids on ``energyCards``) providing ``units`` (the
+    ``EnergyType`` codes on ``energies``).
+
+    The two keys are given separately because they are separately real: ``energies`` is NOT a card
+    list (`common/board_cards.py`), so one Ignition on an Evolution is ONE entry in ``energyCards``
+    and THREE in ``energies``. A fixture that derived one from the other would be testing the
+    derivation rather than the strip."""
+    return {"id": cid, "energies": list(units), "energyCards": [{"id": c} for c in cards]}
+
+
+# REQ-TTR-0006 (Issue #286) — the strip removes the UNITS a `discard_eot` card provides, sized by
+# the holder's stage, and leaves everything else exactly where it was.
+def test_the_strip_removes_an_expiring_cards_units_and_nothing_else():
+    c = _ignition_combat()
+    # On an EVOLUTION Ignition provides {C}{C}{C}: three units leave, the card leaves, nothing stays.
+    evo = _held(MSTAR, [IGNITION], [COLORLESS] * 3)
+    assert c.without_expiring_energy(evo) == {"id": MSTAR, "energies": [], "energyCards": []}
+    # On a BASIC it provides {C}: one unit leaves. Same card, different holder, different size — the
+    # provision is a function of the HOLDER's stage, which is why the strip may not assume a count.
+    basic = _held(STARYU, [IGNITION], [COLORLESS])
+    assert c.without_expiring_energy(basic) == {"id": STARYU, "energies": [], "energyCards": []}
+    # A Basic Energy beside it SURVIVES — the regression the issue names.
+    mixed = _held(MSTAR, [WATER, IGNITION], [WATER, COLORLESS, COLORLESS, COLORLESS])
+    assert c.without_expiring_energy(mixed) == {"id": MSTAR, "energies": [WATER],
+                                               "energyCards": [{"id": WATER}]}
+
+
+# REQ-TTR-0006 — a body with nothing expiring is returned UNCHANGED, by identity. The strip runs on
+# every `readiness` call for every body on the board, so "unchanged" has to mean no allocation and no
+# re-keying, not merely an equal dict.
+def test_a_body_with_nothing_expiring_is_returned_UNCHANGED():
+    c = _ignition_combat()
+    plain = _held(MSTAR, [WATER, WATER], [WATER, WATER])
+    assert c.without_expiring_energy(plain) is plain
+    assert c.without_expiring_energy(None) is None
+    # A hand-built body with no `energyCards` key at all makes NO claim — card identity is what the
+    # rider is read from, so without it nothing is provably expiring. Fail-closed, and it is why
+    # every fixture board in this suite that predates Issue #286 is byte-identical under the strip.
+    bare = {"id": MSTAR, "energies": [COLORLESS] * 3}
+    assert c.without_expiring_energy(bare) is bare
+    # An unresolvable HOLDER is the same refusal, and it is not pedantry: the provision is
+    # stage-dependent, so an unknown stage cannot size the removal. Guessing "Basic" would strip 1
+    # of the 3 units and leave a body claiming two phantom ones — on MY clock, the direction that
+    # prices a line as armed sooner than it is.
+    unknown = _held(424242, [IGNITION], [COLORLESS] * 3)
+    assert c.without_expiring_energy(unknown) is unknown
+
+
+# REQ-TTR-0006 — the RIDER is read from the CLAUSE, not from the Function Tag. The tag is
+# behavioural-only ("this card evaporates"); the clause is the parametric record, and ADR-0032's
+# split is that the tag ROUTES while the clause QUANTIFIES.
+def test_the_strip_reads_the_CLAUSE_not_the_TAG():
+    stats = DictCardStatProvider({
+        MSTAR: CardStat(MSTAR, name="Mega Starmie ex", hp=330, evolvesFrom="Staryu",
+                        maxDamageCost=3, maxDamage=210, attacks=(NEBULA_BEAM,)),
+        IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
+    }, attacks={NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3,
+                                        energyTypes=(COLORLESS,) * 3)})
+    body = _held(MSTAR, [IGNITION], [COLORLESS] * 3)
+    tags = CardFunctions({IGNITION: ["discard_eot", "provides_evo:3"]})
+    tag_only = CombatMath(stats, functions=tags, transients=None, effects=CardEffects({}))
+    assert tag_only.without_expiring_energy(body) is body, "the TAG alone must not strip"
+    # ...and with no clause compendium at all the strip makes no claim either (fail-CLOSED, ADR-0067).
+    blind = CombatMath(stats, functions=tags, transients=None, effects=None)
+    assert blind.without_expiring_energy(body) is body
+
+
+# REQ-TTR-0006 — the two committed stores that BOTH describe Ignition's provision must agree, over
+# the real pool. The strip DETECTS through `card_effects.json` and SIZES through
+# `card_functions.json`, so a drift between them would silently strip the wrong number of units.
+def test_the_clause_and_the_tag_agree_about_every_expiring_cards_provision():
+    functions, effects = CardFunctions.load(), CardEffects.load()
+    checked = 0
+    for cid in range(1, 1300):
+        for clause in (effects.clauses(cid) or ()):
+            if clause.get("rider") != "discard_eot":
+                continue
+            checked += 1
+            assert functions.energy_provision(cid, evolution=False) == clause["amount"]
+            assert functions.energy_provision(cid, evolution=True) == clause["amount_on_evolution"]
+    assert checked == 1, ("the pool's discard_eot population changed — re-read the new card and "
+                          "re-check the strip, do not just bump this number")
+
+
+def _starmie_model(units, cards, *, cid=MSTAR):
+    from common.state_model import StateModel
+    body = _held(cid, cards, units)
+    obs = {"current": {"yourIndex": 0, "energyAttached": True, "players": [
+        {"active": [body], "bench": [], "hand": [], "handCount": 0, "discard": [],
+         "prize": [None] * 4, "deckCount": 20},
+        {"active": [], "bench": [], "prize": [None] * 4, "deckCount": 20},
+    ]}}
+    return StateModel.build(obs, combat=_ignition_combat()), body
+
+
+# REQ-TTR-0007 (Issue #286) — the INCUMBENT read did not move. The epic's rule made executable: this
+# issue adds a SIBLING reading, it does not retune the incumbent, and `pilot._opp_turns_to_ready`
+# delegates to the same oracle byte-identically.
+def test_the_incumbent_turns_to_afford_read_is_BYTE_IDENTICAL():
+    oracle = _ignition_combat()
+    for units, cards in (([COLORLESS] * 3, [IGNITION]),          # armed by an evaporating Energy
+                         ([WATER, COLORLESS], [WATER, IGNITION]),
+                         ([WATER, WATER], [WATER, WATER]),       # nothing expiring
+                         ([], [])):
+        model, body = _starmie_model(units, cards)
+        assert model.mine.turns_to_afford(model.mine.active) == oracle.turns_to_afford(
+            body, attaches_per_turn=1, typed=True), (units, cards)
+        # explicitly False is the same read as omitting it — no hidden default drift
+        assert (model.mine.turns_to_afford(model.mine.active, exclude_expiring=False)
+                == model.mine.turns_to_afford(model.mine.active))
+
+
+# REQ-TTR-0007 — and the flagged read is a DIFFERENT number exactly where something expires.
+def test_exclude_expiring_lengthens_the_clock_only_where_something_expires():
+    # Mega Starmie ex armed for Nebula Beam by ONE Ignition: armed NOW on the incumbent read, three
+    # attaches away once the card that armed it is priced as the loan it is.
+    model, _ = _starmie_model([COLORLESS] * 3, [IGNITION])
+    assert model.mine.turns_to_afford(model.mine.active) == 0
+    assert model.mine.turns_to_afford(model.mine.active, exclude_expiring=True) == 3
+    # The same body funded by real Water: nothing expires, so the two readings are the same number.
+    plain, _ = _starmie_model([WATER, WATER, WATER], [WATER, WATER, WATER])
+    assert plain.mine.turns_to_afford(plain.mine.active) == 0
+    assert plain.mine.turns_to_afford(plain.mine.active, exclude_expiring=True) == 0
+    # A PARTIAL loan: Staryu holds one Ignition ({C} on a Basic) toward its line's deepest attack,
+    # Nebula Beam {C}{C}{C}. The unit matches a colourless slot, so the incumbent counts it and reads
+    # two attaches; without it the deficit is the full three, and the ONE evolve hop runs in parallel.
+    staryu, _ = _starmie_model([COLORLESS], [IGNITION], cid=STARYU)
+    assert staryu.mine.turns_to_afford(staryu.mine.active) == 2
+    assert staryu.mine.turns_to_afford(staryu.mine.active, exclude_expiring=True) == 3
