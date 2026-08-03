@@ -163,7 +163,7 @@ def test_every_cost_the_compendium_charges_declares_what_it_MOVES():
       my hand and JOIN my deck, so the count goes UP, two known cards become unseen (`deck_odds`),
       and where they land is `deck_order` — the registry's one `hidden` zone. A reader who assumed
       "a cost discards from hand" would be wrong about exactly the value that was added last
-      (Issue #302), which is why it is pinned separately rather than folded into the four."""
+      (Issue #302), which is why it is asserted separately rather than folded into the four."""
     discard_from_hand = {"my_hand_ids", "my_discard_contents"}
     for value in ("discard_1", "discard_2", "discard_3", "discard_hand"):
         assert sc.CLAUSE_WRITES[value] == discard_from_hand, value
@@ -399,12 +399,14 @@ def test_no_clause_the_compendium_knows_writes_to_a_zone_with_no_home():
     all four :data:`snapshot_coverage.VOCABULARY_KEYS` — `kind`, `rider`, `effect` and, since this
     issue, `cost`. Until Issue #300 it was three and `effect` was silently outside it; until Issue
     #350 it was three-plus-`cost`-missing and Ultra Ball's two discarded cards were outside it. The
-    second assertion is what keeps the sentence honest: if a fifth axis is ever minted, this fails
-    rather than quietly narrowing what "no clause" means."""
+    second assertion is what keeps the sentence honest, and it is a SUBSET rather than the equality
+    `test_the_audit_walks_all_four_vocabularies_including_effect_and_cost` owns: a FIFTH axis is that
+    test's business and must not redden this one too, but NARROWING the list back would make this
+    docstring a lie, and that is what fails here."""
     assert sc.clauses_writing_unhomed() == {}
-    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect", "cost"), (
-        "the invariant above is only as complete as the axes CLAUSE_WRITES is keyed on — a new "
-        "vocabulary key needs its values declared before this test may claim to cover them")
+    assert {"kind", "rider", "effect", "cost"} <= set(sc.VOCABULARY_KEYS), (
+        "the invariant above is only as complete as the axes CLAUSE_WRITES is keyed on — dropping "
+        "one silently narrows what 'no clause the compendium knows' means")
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")

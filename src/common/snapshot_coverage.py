@@ -335,15 +335,14 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # `"damage_counters": {"damage_counters"}` cold deserves to be told which is which.
     "damage_counters": frozenset({"damage_counters"}),
     # ── costs — the FOURTH axis (Issue #350) ──────────────────────────────────────────────────────
-    # What playing the card costs, paid out of my own resources. A `cost` is not a flavour note: every
-    # value here moves real cards out of my hand, and none of them was declared until this issue,
-    # because `cost` was not in `VOCABULARY_KEYS` and the walk never arrived. At T4 an undeclared
-    # cost prices at exactly 0 — Ultra Ball's two discarded cards would look free.
+    # What playing the card costs, paid out of my own resources. A `cost` is not a flavour note:
+    # every value here moves real cards out of my hand, and at T4 an undeclared one prices at exactly
+    # 0 — Ultra Ball's two discarded cards would look free.
     #
-    # The write-set is about ZONES, not magnitudes, which is why four values that differ only in how
-    # many cards they charge get four identical entries rather than one: `undeclared_clauses` looks
-    # up the exact string, so folding them would leave three of the four undeclared. The COUNT lives
-    # in the value's name today (a compendium shape this issue deliberately does not change).
+    # Four identical entries rather than one, because the write-set is about ZONES and
+    # `undeclared_clauses` looks up the exact string: folding them would leave three of the four
+    # undeclared. The COUNT lives in the value's name today, a compendium shape this issue does not
+    # change.
     #
     # Printed text quoted from `tools/meta_tracker/cards.json` (engine `all_card_data()`), never
     # recalled. Which discard they land in is `docs/rulebook.txt` L78: *"Each player has their own
@@ -364,16 +363,17 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # all. Two cards leave my hand and JOIN my deck, so `my_deck_count` goes UP rather than down,
     # two known cards become unseen (`deck_odds`), and where they land is `deck_order` — the
     # registry's ONE `hidden` zone. `other_to_bottom` already declares the same three for the dig
-    # riders; this adds `my_hand_ids` because the material comes from the hand, not the deck.
-    #
-    # It is the value Issue #302 added LAST, so "a cost discards from hand" was exactly the wrong
-    # generalisation to reach for — which is the whole argument for declaring costs at all.
+    # riders; this adds `my_hand_ids` because the material comes from the hand, not the deck. It is
+    # the value Issue #302 added LAST, so "a cost discards from hand" was exactly the wrong
+    # generalisation to reach for — the whole argument for declaring costs at all.
     #
     # **Deliberately NOT in `NONDETERMINISTIC_CLAUSES`**, and checked rather than inherited from its
     # neighbour: `other_to_bottom` IS nondeterministic because it re-buries cards a `dig` pulled out
     # of an unknown deck, so simulating it is one Monte-Carlo sample. Kofu charges cards I can see
     # and lets me choose their order, so no RNG is consulted and the determinism proof survives. The
-    # `draw 4` this cost gates is a separate clause (`kind: "draw"`, a `REVEALING_CLAUSES` member).
+    # `draw 4` it gates is NOT a separate clause — Kofu's whole entry is the single clause
+    # `{"kind": "draw", "amount": 4, "cost": "bottom_2", "cost_required": true}`, so the draw is this
+    # same clause's own `kind`, and `draw` carries the determinism story for that half.
     "bottom_2": frozenset({"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}),
 }
 
@@ -399,14 +399,7 @@ REVEALING_CLAUSES: frozenset[str] = frozenset({"draw", "fetch"})
 #: `condition`). :func:`clause_vocabulary` walks exactly these, and `CLAUSE_WRITES` keys exactly
 #: these. One list, so "which keys does the audit walk?" has a single answer rather than one per
 #: reader — the drift that let `effect` go unaudited from the day it was authored, and `cost` after
-#: it.
-#:
-#: `cost` is the fourth (Issue #350) and it is here rather than in a registry of its own because it
-#: fits the definition above verbatim — a closed set of strings naming a board write — and because
-#: a cost's zones UNION with its clause's rather than nesting under them, which is what
-#: `apply_option.FOOTPRINTS` already committed to when it recorded that T4 builds a per-option
-#: footprint *"by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses"*. A flat
-#: `value -> zones` table unions by construction. See the module docstring for the full ruling.
+#: it. `cost` joined as the fourth at Issue #350; the module docstring carries that ruling.
 VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect", "cost")
 
 #: Every clause KEY the compendium is allowed to use, each with what it carries. The other half of

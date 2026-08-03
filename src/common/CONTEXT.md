@@ -298,13 +298,11 @@ writes nothing.
 `cost` is the fourth (Issue #350) and it is VOCABULARY, not a parameter: its values are a closed set
 of strings that MOVE CARDS BETWEEN ZONES (`discard_1` / `discard_2` / `discard_3` / `discard_hand`
 take cards from my hand to my discard; `bottom_2` — Kofu — discards nothing and puts two on the
-bottom of my DECK, so it writes `my_deck_count`, `deck_odds` and `deck_order` instead). It joined
-`VOCABULARY_KEYS` rather than taking a registry of its own because a cost's zones **union** with its
-clause's, which is what `apply_option.FOOTPRINTS` already committed to — T4 builds a per-option
-footprint by unioning `CLAUSE_WRITES` over the card's clauses, and a flat `value → zones` table
-unions by construction. The values are ONE flat namespace across all four keys, which is why `gust`
-needs a single entry for a `kind` (Boss's Orders) and an `effect` (Pokemon Catcher) alike:
-`undeclared_clauses` looks the string up, never the key position it came from.
+bottom of my DECK, so it writes `my_deck_count`, `deck_odds` and `deck_order` instead). The values
+are ONE flat namespace across all four keys, which is why `gust` needs a single entry for a `kind`
+(Boss's Orders) and an `effect` (Pokemon Catcher) alike: `undeclared_clauses` looks the string up,
+never the key position it came from — and why a cost's zones union into its clause's rather than
+nesting. `snapshot_coverage`'s module docstring carries the ruling and its three grounds.
 A clause's KEYS are audited too (Issue #302, `snapshot_coverage.CLAUSE_PARAMETERS`), and they are a
 separate namespace from the values above: `undeclared_clauses` bites an unknown `kind`/`rider`/
 `effect`/`cost` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared

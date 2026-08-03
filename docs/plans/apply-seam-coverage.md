@@ -765,15 +765,16 @@ Energy and their discard — has no declared home. Eight copies across our decks
 > `bottom_2` is the sharp one: it is the only cost that discards nothing, writing `my_deck_count`,
 > `deck_odds` and `deck_order` instead, so the generalisation *"a cost discards from hand"* would
 > have been wrong about exactly the value Issue #302 added last. The ruling was that `cost` JOINS
-> `VOCABULARY_KEYS` rather than taking a registry of its own: a cost's zones UNION with its clause's,
-> which is what `apply_option.FOOTPRINTS` already committed to when it recorded that T4 builds a
-> per-option footprint *"by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses"*.
+> `VOCABULARY_KEYS` rather than taking a registry of its own; `snapshot_coverage`'s module docstring
+> carries it and its three grounds.
 >
 > The table above is a second beneficiary. It kept a hand-rolled `kind`-plus-`rider` walk, so a
 > section titled *Clause write-set health* had been reporting on two of the audit's axes ever since
 > `effect` was minted; it now goes through the same `snapshot_coverage.clause_values()` extractor the
-> audit does, which is why it gained the `effect` rows (7 values, 8 sites) and the `cost` rows
-> (5 values, 13 sites) in one run.
+> audit does. That took it from **21 rows to 32**: +5 `cost` values over 13 sites and +6 `effect`
+> values over 8 sites (`gust` is both a `kind` and an `effect`, so it gains a site rather than a
+> row). Every one of the 13 cost sites now reads `yes`; before this issue all 13 would have read
+> `**UNDECLARED**`, had the table been able to see them at all.
 
 **5. The registry itself is clean.** `clauses_writing_unhomed()`, `unknown_zones()`, `unhomed()` and
 `footprints_writing_unhomed()` are all empty after T1. The §3c contract is being kept; the exposure

@@ -1028,6 +1028,13 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     # the audit's axes: `effect` had been outside it since Issue #300 minted it, and `cost` would
     # have been outside it from Issue #350. One extractor, so the report cannot claim health over
     # ground the audit walks and it does not (Issue #350).
+    #
+    # Two deliberate consequences, both measured against the committed compendium. The old
+    # `used[c.get("kind")] += 1` counted a literal `None` for a clause with no `kind` and rendered it
+    # as an UNDECLARED row; the extractor skips it, so that signal moves to the audit test, which is
+    # the real gate — 0 of the 116 committed clauses lack a `kind`, so no row changed. And a value
+    # carried on two keys of one clause now counts twice (only `gust` is multi-key today), which is
+    # what "sites using it" already meant for a `kind`-plus-`rider` clause.
     used = collections.Counter()
     for s in sites:
         for c in s.clauses:
