@@ -90,11 +90,35 @@ def _defender(cid=1):
 # ── the shipped table ─────────────────────────────────────────────────────────────────────────────
 @pytest.mark.req("REQ-SCALER-0001")
 def test_all_four_families_are_shipped_with_their_printed_per_unit():
+    """The last line of defence for four HUMAN RULINGS, and the failure message has to say so.
+
+    Each of these four was read off one card's own printed sentence and cross-checked against
+    `data/EN_Card_Data.csv` and `src/cgpy/defs/attack_data.json`. Two of them — 120 and 425 — are
+    provably unfittable on the audit's current axes and a regeneration DERIVES a different, wrong
+    variable for each (Issue #355): the panel's vanilla defender is a Mega Pokemon ex, making
+    `def_ex_in_play` collinear with `def_bench`, and it holds no Energy, making
+    `both_active_energy` indistinguishable from `atk_active_energy`.
+
+    So if this goes red, the fix is essentially never to update `SHIPPED`. `merge_provenance`'s
+    REQ-PROV-0008 guard exists to stop a contradicting fit reaching the table at all; a red here
+    means either that guard was bypassed (`--rule`) or the table was hand-edited, and in both cases
+    the question to answer is which reading of the card is right — not which number makes the test
+    green again.
+    """
     overrides = json.loads((REPO / "src" / "common" / "attack_overrides.json").read_text(
         encoding="utf-8"))
     for aid, (var, per_unit) in SHIPPED.items():
         entry = overrides[str(aid)]
-        assert entry["scaleVar"] == var and entry["scalePerUnit"] == per_unit, aid
+        assert (entry["scaleVar"], entry["scalePerUnit"]) == (var, per_unit), (
+            f"attack {aid}: the shipped table says {entry['scaleVar']}/{entry['scalePerUnit']}, "
+            f"this ruling says {var}/{per_unit}.\n"
+            f"Do NOT conform this test to the table. These four are human rulings read off the "
+            f"printed card; 120 and 425 are UNFITTABLE on the audit's current axes and a "
+            f"regeneration derives a wrong variable for each (Issue #355 — `def_ex_in_play` is "
+            f"collinear with `def_bench` on the audit panel, `both_active_energy` with "
+            f"`atk_active_energy`). Re-read the card, then fix whatever wrote the table: "
+            f"`merge_provenance`'s REQ-PROV-0008 contradiction guard in "
+            f"tools/sim/generate_attack_overrides.py is what should have stopped this.")
 
 
 @pytest.mark.req("REQ-SCALER-0001")

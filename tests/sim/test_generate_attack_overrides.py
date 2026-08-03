@@ -8,14 +8,18 @@ BOARD-SCOPED per ADR-0083 Amendment A: one board or several AGREEING boards emit
 emit nothing, one board answering twice emits nothing — and a bound never ships for an attack that
 HAS a scaler, parser-named or fitted, because the bound replaces the base term the scaler adds to),
 REQ-AUDIT-0015 (a printed-0 attack dealing one CONSTANT across >=2 modifier scenarios -> a fixed
-`damage` override; any cross-scenario disagreement rejects), REQ-AUDIT-0016 (sweep points fitting
+`damage` override; any cross-scenario disagreement rejects, and a printed-0 attack whose own
+sentence says "for each" is refused outright — the panel is one board, so its agreement measures
+that board's COUNT, not the attack), REQ-AUDIT-0016 (sweep points fitting
 dealt = base + k x var EXACTLY (integer residuals 0, k>0) -> scaleVar/scalePerUnit; noisy fits
 reject), REQ-AUDIT-0017 (never emit a field the parser already got right — overrides are deltas),
 REQ-AUDIT-0019 (the bench family is named by JOINING two single-variable sweeps; one axis alone,
 a drifted pinned seat, a noisy axis, or unequal positive slopes all emit nothing),
 REQ-PROV-0002 (a derivation carries the measurement rows that establish it, the rejected/flat axes
 included), REQ-PROV-0006 (table and sidecar are emitted in ONE pass, so they cannot desync),
-REQ-PROV-0007 (the generator may retract what it authored; never what a human ruled).
+REQ-PROV-0007 (the generator may retract what it authored; never what a human ruled),
+REQ-PROV-0008 (a fit CONTRADICTING a text_verified ruling is not written: the ruling is kept, both
+readings are named, the run exits non-zero; `--rule` opts in).
 """
 import json
 from pathlib import Path
@@ -187,6 +191,40 @@ def test_constant_effect_damage_needs_cross_scenario_agreement():
     assert 850 not in derive_overrides(recs2, parsed)
     # single scenario isn't agreement -> reject
     assert 850 not in derive_overrides([_m(850, "vanilla", 70)], parsed)
+
+
+@pytest.mark.req("REQ-AUDIT-0015")
+def test_a_printed_0_PER_UNIT_attack_is_never_frozen_at_one_boards_constant():
+    """Issue #355's adjacent hazard, on the same write path as the merge defect.
+
+    A printed-0 attack whose own printed sentence says "for each" deals a COUNT times a per-unit
+    number, and the modifier panel is one board — so "the same number in every scenario" measures
+    that board's count, not the attack. Freezing it as a flat `damage` ships an over-prediction
+    the moment the count is lower, which is the soundness class `ci_audit_gate.py` exists to fail.
+
+    425 Tenacious Tail is the live case and it is averted only by ACCIDENT. Its attacker is
+    colourless, so `pick_panel` finds no weakness or resistance body and the whole panel is
+    {vanilla, prevent_ex} — two points. `prevent_ex` zeroes the attack (measured vanilla 120,
+    `prevent_ex` 0), so those two disagree and the constant rule rejects on its own. Take that one
+    accident away — the two-point panel below agrees at 120 — and the pre-guard generator shipped
+    `{"damage": 120}` for an attack that deals 60 x (opponent's Pokemon ex in play).
+
+    The refusal reads the printed text, the idiom `derive_entries` already uses to exclude a
+    copy-attack. "for each" is the WHOLE per-unit vocabulary in this pool, verified at source: of
+    381 printed-0 attacks carrying text, 124 announce a per-unit count and every one of them says
+    "for each" — no "for every", no "times the number".
+    """
+    parsed = {425: AttackStat(attackId=425, damage=0)}
+    texts = {425: "This attack does 60 damage for each of your opponent’s Pokémon {ex} in play."}
+    agreeing = [_m(425, "vanilla", 120), _m(425, "prevent_ex", 120)]
+    assert 425 not in derive_overrides(agreeing, parsed, texts)
+    # ...and the guard is TEXT-shaped, not attack-shaped: Telekinesis's printed-0 constant, whose
+    # sentence names no count, still ships. A guard that refused every printed-0 attack would pass
+    # the assertion above while deleting the rule it is guarding.
+    plain = {850: AttackStat(attackId=850, damage=0)}
+    recs = [_m(850, "vanilla", 70), _m(850, "weak", 70)]
+    flat = {850: "This attack does 70 damage."}
+    assert derive_overrides(recs, plain, flat)[850] == {"damage": 70}
 
 
 @pytest.mark.req("REQ-AUDIT-0016")
@@ -399,7 +437,7 @@ def test_a_fit_the_fresh_measurements_no_longer_support_is_dropped():
     """Exactly the 274 outcome: a stale `atk_hand` fit today's fitter would not emit. The generator
     authored it, so the generator may take it back."""
     existing = {274: _prov(METHOD_ENGINE_FIT, {"scaleVar": "atk_hand", "scalePerUnit": 5})}
-    entries, notes = merge_provenance({}, existing, measured={274})
+    entries, notes, _ = merge_provenance({}, existing, measured={274})
     assert 274 not in entries
     assert any("DROPPED" in n for n in notes)
 
@@ -410,7 +448,7 @@ def test_an_attack_this_run_never_measured_keeps_its_entry():
     blow away the other 116."""
     existing = {6: _prov(METHOD_UNAUDITED, {"damageMin": 0, "damageMax": 120}),
                 274: _prov(METHOD_ENGINE_FIT, {"scaleVar": "atk_hand", "scalePerUnit": 5})}
-    entries, _ = merge_provenance({}, existing, measured={274})
+    entries, _, _ = merge_provenance({}, existing, measured={274})
     assert entries[6] == existing[6] and 274 not in entries
 
 
@@ -422,12 +460,68 @@ def test_a_human_ruling_survives_a_measurement_that_establishes_nothing():
     ZERO damage, a blind spot rather than an under-read. Kept, and REPORTED."""
     existing = {425: _prov(METHOD_TEXT_VERIFIED, {"scaleVar": "def_ex_in_play",
                                                   "scalePerUnit": 60}, owner="#275")}
-    entries, notes = merge_provenance({}, existing, measured={425})
+    entries, notes, _ = merge_provenance({}, existing, measured={425})
     assert entries[425] == existing[425]
     assert any("KEPT" in n and "--prune" in n for n in notes)
     # ...unless the operator explicitly opts in
-    pruned, notes = merge_provenance({}, existing, measured={425}, prune=True)
+    pruned, notes, _ = merge_provenance({}, existing, measured={425}, prune=True)
     assert pruned == {} and any("PRUNED" in n for n in notes)
+
+
+@pytest.mark.req("REQ-PROV-0008")
+def test_a_human_ruling_survives_a_CONTRADICTING_engine_fit():
+    """The sibling above's blind spot, and the whole of Issue #355.
+
+    `..._establishes_nothing` covers `derived == {}`. It structurally CANNOT cover `derived != {}`:
+    the `KEPT`/`--prune` branch that protects a ruling lives in the second loop, which opens
+    `if aid in entries: continue`, and a derived attack is always already in `entries`. So the one
+    case where a measurement actively DISAGREES with a human ruling ran straight past the guard —
+    the fit was written unconditionally and the disagreement was demoted to a line of stdout.
+
+    Not hypothetical: driven against the committed engine during the Issue #275 verification pass,
+    the fitter names `def_bench` for 425. `pick_panel` gives that attacker (306 Dudunsparce ex) card
+    1056 Mega Zygarde ex as its vanilla defender — `megaEx=True`, and a Mega Evolution Pokemon ex IS
+    a Pokemon ex (`docs/rulebook.txt` L337, why `cgpy/damage.py:56-58` counts `ex or megaEx`) — so
+    `def_ex_in_play` and `def_bench` move together at every point the sweep can reach. Against a
+    bench of plain Basics that invents 60 damage per body, straight into `state_value`'s `threat`
+    and `survival` terms.
+    """
+    ruling = {"scaleVar": "def_ex_in_play", "scalePerUnit": 60}
+    fit = {"scaleVar": "def_bench", "scalePerUnit": 60}
+    evidence = [{"scenario": "vanilla", "sweep": "def_bench", "step": 2, "coin": None,
+                 "atkBench": 1, "defBench": 2, "energies": 1, "hand": 6, "dealt": 180}]
+    existing = {425: _prov(METHOD_TEXT_VERIFIED, ruling, owner="#275")}
+    derived = {425: Derivation(fit, evidence)}
+
+    entries, notes, contradicted = merge_provenance(derived, existing, measured={425})
+    assert entries[425] == existing[425], "the RULING must survive, evidence and owner intact"
+    assert contradicted == [425]
+    named = [n for n in notes if "CONTRADICTION" in n and "def_ex_in_play" in n and "def_bench" in n]
+    assert named, "the note must name BOTH readings, or a reader cannot tell which to go and check"
+
+    # ...unless the operator explicitly opts in, exactly as `--prune` works one branch down.
+    ruled, notes, contradicted = merge_provenance(derived, existing, measured={425}, rule=True)
+    assert ruled[425]["fields"] == fit and ruled[425]["method"] == METHOD_ENGINE_FIT
+    assert ruled[425]["evidence"] == evidence and contradicted == []
+    assert any("RULING" in n and "--rule" in n for n in notes), \
+        "accepting a ruling-overwrite must still be logged — that is the only durable trace of it"
+
+
+@pytest.mark.req("REQ-PROV-0008")
+def test_a_measurement_that_CONFIRMS_a_ruling_is_not_a_contradiction():
+    """The guard's other edge, and the reason it tests `fields` rather than `method`: paying a
+    `text_verified` debt off by measuring it is the INTENDED outcome (REQ-PROV-0004), and a guard
+    that halted on every fit over a ruling would make the debt unpayable without `--rule` — which
+    would then be the routine flag, i.e. no guard at all."""
+    fields = {"scaleVar": "def_ex_in_play", "scalePerUnit": 60}
+    evidence = [{"scenario": "vanilla", "sweep": "def_bench", "step": 2, "coin": None,
+                 "atkBench": 1, "defBench": 2, "energies": 1, "hand": 6, "dealt": 180}]
+    existing = {425: _prov(METHOD_TEXT_VERIFIED, fields, owner="#275")}
+    entries, notes, contradicted = merge_provenance({425: Derivation(fields, evidence)},
+                                                    existing, measured={425})
+    assert contradicted == []
+    assert entries[425]["method"] == METHOD_ENGINE_FIT and entries[425]["evidence"] == evidence
+    assert any("now measured" in n for n in notes)
 
 
 @pytest.mark.req("REQ-PROV-0007")
@@ -438,7 +532,8 @@ def test_a_recapture_backfills_an_unaudited_entry_into_a_fit():
     evidence = [{"scenario": "vanilla", "sweep": "atk_bench", "step": 0, "coin": None,
                  "atkBench": 0, "defBench": 1, "energies": 1, "hand": 6, "dealt": 80}]
     existing = {274: _prov(METHOD_UNAUDITED, fields)}
-    entries, notes = merge_provenance({274: Derivation(fields, evidence)}, existing, measured={274})
+    entries, notes, _ = merge_provenance({274: Derivation(fields, evidence)}, existing,
+                                         measured={274})
     assert entries[274]["method"] == METHOD_ENGINE_FIT
     assert entries[274]["evidence"] == evidence
     assert any("now measured" in n for n in notes)
@@ -474,3 +569,77 @@ def test_a_regenerate_with_nothing_measured_reproduces_both_committed_files_byte
     assert main(["--measurements", str(empty), "--out", str(out), "--provenance", str(prov)]) == 0
     assert out.read_bytes() == committed_table.read_bytes()
     assert prov.read_bytes() == committed_prov.read_bytes()
+
+
+def _measured_120_and_425() -> list[dict]:
+    """The Issue #355 measurement pass, RECONSTRUCTED from its recorded rows.
+
+    Driving the native engine costs ~20 min for these two attacks and establishes nothing this test
+    needs: the defect is in the merge, and what the merge sees is the derived fields. So the rows
+    below are the shapes `audit_attacks` emits, carrying the damage numbers the verification pass
+    recorded, and the assertion that they are faithful is that `derive_entries` reproduces the two
+    fits the issue quotes EXACTLY — a wrong reconstruction cannot do that by accident.
+
+    * 425 Tenacious Tail (printed 0, "60 damage for each of your opponent's Pokemon {ex} in play").
+      Its attacker is colourless, so `pick_panel` finds no weakness or resistance body and the panel
+      is {vanilla, prevent_ex} — the two points below, not four. The recorded vanilla number is 120,
+      i.e. two {ex} in play with both benches pinned at 1; `prevent_ex` reads 0. Moving the
+      DEFENDER's bench moves the {ex} count with it (60/120/180) while the attacker's bench axis
+      stays flat -> `def_bench`/60, the collinear wrong variable.
+    * 120 Myriad Leaf Shower (printed 30, "30 more damage for each Energy attached to BOTH Active
+      Pokemon"). The defender holds no Energy, so every point is the attacker's alone: 60/90/120
+      over 1/2/3 -> `atk_active_energy`/30, indistinguishable from the ruled variable on this panel.
+    """
+    recs = [_m(425, "vanilla", 120), _m(425, "prevent_ex", 0)]
+    for n, dealt in ((0, 120), (1, 120), (2, 120)):                  # attacker bench: FLAT
+        recs.append(_m(425, "vanilla", dealt, atk_bench=n, sweep={"var": "atk_bench", "step": n}))
+    for n, dealt in ((0, 60), (1, 120), (2, 180)):                   # defender bench: 60 per body
+        recs.append(_m(425, "vanilla", dealt, def_bench=n, sweep={"var": "def_bench", "step": n}))
+    recs += [_m(120, "vanilla", 60, printed=30)]
+    for n, dealt in ((1, 60), (2, 90), (3, 120)):
+        recs.append(_m(120, "vanilla", dealt, printed=30, energies=n,
+                       sweep={"var": "energy", "step": n}))
+    return recs
+
+
+@pytest.mark.req("REQ-PROV-0008")
+def test_the_generator_HALTS_on_the_pool_as_it_stands_today(tmp_path):
+    """Issue #355's end-to-end acceptance, against the REAL parsed table and the REAL committed
+    sidecar: a run that measures attacks 120 and 425 must halt on both rather than rewrite them.
+
+    Three things are asserted at once, and all three are the issue:
+      * the derivation really does contradict both rulings (so the guard is not guarding nothing);
+      * both committed stores come back BYTE-IDENTICAL — the guard ships a halt, not a number;
+      * the run exits NON-ZERO, so a scripted regeneration stops instead of committing the diff.
+    """
+    from cg.api import all_attack
+    from common.scouting.provider import build_attack_stats
+
+    attacks = all_attack()
+    records = _measured_120_and_425()
+    fits = derive_overrides(records, build_attack_stats(attacks),
+                            texts={a.attackId: a.text or "" for a in attacks})
+    assert fits == {120: {"scaleVar": "atk_active_energy", "scalePerUnit": 30},
+                    425: {"scaleVar": "def_bench", "scalePerUnit": 60}}
+
+    committed_table = REPO / "src" / "common" / "attack_overrides.json"
+    committed_prov = REPO / "src" / "common" / "attack_overrides.provenance.json"
+    src = tmp_path / "measurements.json"
+    src.write_text(json.dumps({"measurements": records}), encoding="utf-8")
+    out, prov = tmp_path / "table.json", tmp_path / "prov.json"
+    prov.write_bytes(committed_prov.read_bytes())
+    rc = main(["--measurements", str(src), "--out", str(out), "--provenance", str(prov)])
+    assert rc != 0, "an un-opted-in contradiction must fail a scripted regeneration loudly"
+    assert out.read_bytes() == committed_table.read_bytes()
+    assert prov.read_bytes() == committed_prov.read_bytes()
+
+    # The files are still WRITTEN — the ruling is protected, so the write is safe by construction,
+    # and every other attack's legitimate re-measurement survives the run. Suppressing the write
+    # would make `--rule` (the dangerous flag) the only way to get any output at all.
+    assert out.exists() and prov.exists()
+
+    # `--rule` is the explicit opt-in, and it is what a wrong number needs in the diff to land.
+    assert main(["--measurements", str(src), "--out", str(out), "--provenance", str(prov),
+                 "--rule"]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["425"] == {"scaleVar": "def_bench",
+                                                                 "scalePerUnit": 60}

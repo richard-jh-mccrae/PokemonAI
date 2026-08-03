@@ -27,10 +27,14 @@ The merge rule: **the generator may retract what it authored; it may not retract
 ruled.** A previously `engine_fit` entry the fresh measurements no longer support is dropped (that
 is exactly the 274 outcome); an unmeasured attack, a `text_verified` ruling, and an `unaudited`
 legacy value are preserved and REPORTED, so a partial recapture can never silently regress the
-shipped table. `--prune` opts into dropping the last of those.
+shipped table. `--prune` opts into dropping the last of those. A measurement that CONTRADICTS a
+ruling is a HALT, not a note (REQ-PROV-0008): the ruling is kept, the run exits non-zero, and
+`--rule` is the explicit opt-in — see `merge_provenance` for the two shipped entries this was
+measured on.
 
     python tools/sim/generate_attack_overrides.py             # writes the table + the sidecar
     python tools/sim/generate_attack_overrides.py --dry-run   # print, don't write
+    python tools/sim/generate_attack_overrides.py --rule      # accept a fit OVER a human ruling
 
 Requirements:
     REQ-PROV-0001  Table and sidecar cover exactly the same attacks; every row declares a `method`
@@ -45,6 +49,8 @@ Requirements:
                    cannot describe different derivations.
     REQ-PROV-0007  The generator may retract what it AUTHORED (a fit the fresh measurements no
                    longer support is dropped); never what a human RULED (`--prune` opts in).
+    REQ-PROV-0008  A fit that CONTRADICTS a `text_verified` ruling is not written: the ruling is
+                   kept, both readings are named, and the run exits non-zero (`--rule` opts in).
 """
 from __future__ import annotations
 
@@ -249,12 +255,38 @@ def _coin_bounds(recs: list[dict], st) -> tuple[dict, list[dict]]:
     return {"damageMin": lo, "damageMax": hi}, on_panel
 
 
-def _fixed_damage(recs: list[dict], st) -> tuple[dict, list[dict]]:
+#: The per-unit signature in a printed-0 attack's own sentence. `for each` is the WHOLE vocabulary
+#: in this pool, read at source rather than recalled: of 381 printed-0 attacks carrying text, 124
+#: announce a per-unit count and every one of them says "for each" — no "for every", no "times the
+#: number of". Widen this only against the card data, never against memory.
+_PER_UNIT_TEXT = "for each"
+
+
+def _fixed_damage(recs: list[dict], st, text: str = "") -> tuple[dict, list[dict]]:
     """Fixed effect damage — printed 0, one CONSTANT across >=2 modifier scenarios
     (REQ-AUDIT-0015). The whole panel is the evidence: cross-scenario agreement is the claim, so
-    a record that disagreed is exactly what a reader needs to see it did not happen."""
+    a record that disagreed is exactly what a reader needs to see it did not happen.
+
+    **A printed-0 attack whose own sentence says "for each" is refused outright** (Issue #355). Its
+    damage is a COUNT times a per-unit number, and the modifier panel is ONE board — so agreement
+    across the panel measures that board's count, not the attack. Freezing it as a flat `damage`
+    ships an over-prediction the moment the count is lower, which is the soundness class
+    `ci_audit_gate.py` exists to fail; and it ships it with no `scaleVar` at all, so nothing
+    downstream can tell it is board-dependent. 425 Tenacious Tail escapes this only by ACCIDENT —
+    `prevent_ex` zeroes it (vanilla 120, `prevent_ex` 0), so its panel disagrees and the constant
+    rule rejects on its own. The shipped `unaudited` entries 651 (`damage` 80, printed "40 damage
+    for each Pokemon in play that has 'Koffing' or 'Weezing' in its name") and 708 are what this
+    class looks like once it is in the table: one board's answer, frozen, unmarked.
+
+    Reading the printed text to suppress a derivation is this module's established idiom, not a new
+    one — `derive_entries` already excludes a copy-attack on ``"use it as this attack" in text``.
+    The conservative direction is silence: an over-refused constant lands on the gap ledger, where
+    a measurement that established nothing belongs.
+    """
     plain = _plain_panel(recs)
     vals = {int(r["dealtActive"]) for r in plain}
+    if _PER_UNIT_TEXT in (text or "").lower():
+        return {}, []                        # per-unit by its own sentence: one board names nothing
     if not (st.damage == 0 and not st.scaleVar and len(plain) >= 2 and len(vals) == 1
             and vals != {0}):
         return {}, []
@@ -305,7 +337,7 @@ def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
     return {}, []
 
 
-def _apply_rules(recs: list[dict], st) -> tuple[dict, list[dict]]:
+def _apply_rules(recs: list[dict], st, text: str = "") -> tuple[dict, list[dict]]:
     """Every derivation rule against one attack -> ``(delta, records that establish it)``.
 
     Each rule is ``(records, AttackStat) -> (fields, used)``: the override delta it establishes AND
@@ -340,7 +372,7 @@ def _apply_rules(recs: list[dict], st) -> tuple[dict, list[dict]]:
     (`diff_attack_audit.py`) is where a measurement that established nothing belongs.
     """
     bound, bound_ev = _coin_bounds(recs, st)
-    fixed, fixed_ev = _fixed_damage(recs, st)
+    fixed, fixed_ev = _fixed_damage(recs, st, text)
     scaler, scaler_ev = _scaler(recs, st)
     if bound and (scaler or st.scaleVar):
         bound, bound_ev = {}, []
@@ -399,9 +431,10 @@ def derive_entries(records: list[dict], parsed: dict,
         st = parsed.get(aid)
         if st is None:
             continue
-        if texts and "use it as this attack" in (texts.get(aid) or ""):
+        text = (texts or {}).get(aid) or ""
+        if "use it as this attack" in text:
             continue                                     # copy-attack: measurements don't transfer
-        delta, used = _apply_rules(recs, st)
+        delta, used = _apply_rules(recs, st, text)
         if delta:
             out[aid] = Derivation(delta, _evidence(used))
     return out
@@ -420,7 +453,8 @@ def measured_attacks(records: list[dict]) -> set[int]:
 
 
 def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
-                     measured: set[int], *, prune: bool = False) -> tuple[dict, list[str]]:
+                     measured: set[int], *, prune: bool = False,
+                     rule: bool = False) -> tuple[dict, list[str], list[int]]:
     """Fold a derivation run into the committed provenance, without regressing an unmeasured fact.
 
     **The generator may retract what it authored; it may not retract what a human ruled.** A
@@ -431,26 +465,68 @@ def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
     reverts to dealing ZERO, which is a blind spot rather than an under-read), and the harness
     provably cannot fit some of them on today's axes. ``prune`` opts into dropping them anyway.
 
+    **A measurement that CONTRADICTS a ruling halts** (REQ-PROV-0008, Issue #355). The rule above
+    used to have a hole exactly the size of the case it was written for: the write happened
+    unconditionally and the disagreement became a `notes.append`, while the protective ``KEPT`` /
+    ``--prune`` branch below opens ``if aid in entries: continue`` — so it could never see an attack
+    the run had derived something for. It fired only when the run derived NOTHING, which is the one
+    situation in which no ruling is under threat. Measured, on two shipped entries. `pick_panel`
+    takes the highest-HP ability-free basic, which for 425's attacker (306 Dudunsparce ex) is card
+    1056 Mega Zygarde ex — ``megaEx=True``, and a Mega Evolution Pokemon ex IS a Pokemon ex
+    (`docs/rulebook.txt` L337, which is why `cgpy/damage.py:56-58` counts ``ex or megaEx``). So
+    every body the panel puts on that bench is an {ex}, `def_ex_in_play` is perfectly collinear with
+    `def_bench`, and 425's ruling was overwritten with `def_bench`/60 — 60 damage per plain Basic on
+    the opponent's bench, invented, and straight into `state_value`'s `threat` and `survival` terms.
+    120's `both_active_energy` went the same way to `atk_active_energy`, because its own panel's
+    defender holds no Energy and the two variables are then indistinguishable at every point.
+
+    The ruling therefore WINS by default and the fit is not written; ``rule`` (the ``--rule`` flag,
+    mirroring ``--prune``'s "the human has looked at this") opts into accepting it. The test is the
+    VALUE, not the method: a fit that reproduces the ruling is the debt being paid off as intended
+    (REQ-PROV-0004), and halting on that too would make ``--rule`` the routine flag — i.e. no guard.
+
+    A contradiction is deliberately NOT recorded in the sidecar. That file's contract is that its
+    evidence justifies what SHIPPED, and a refused derivation did not ship — the same ruling
+    `_apply_rules` already states for a refused coin bound, whose trace belongs on
+    `diff_attack_audit.py`'s gap ledger rather than here. What makes a contradiction impossible to
+    absorb silently is the returned id list and the non-zero exit it drives, not a durable row.
+
     Args:
         derived: this run's :func:`derive_entries` output.
         existing: the committed ``{attackId: entry}`` provenance rows.
         measured: :func:`measured_attacks` — what this run can speak about at all.
         prune: drop a measured, human-ruled entry the run could not reproduce.
+        rule: accept a fit that contradicts a ``text_verified`` ruling, overwriting it.
 
     Returns:
-        ``(entries, notes)`` — the merged provenance rows, and the human-readable log of every
-        entry that changed, was dropped, or was kept despite a measurement that did not confirm it.
+        ``(entries, notes, contradicted)`` — the merged provenance rows, the human-readable log of
+        every entry that changed, was dropped, or was kept, and the sorted attack ids whose ruling
+        the run contradicted and did NOT overwrite. The ids are returned rather than re-derived by
+        the caller for the reason the evidence rides along with the value elsewhere in this module:
+        a second, separate description of the same traversal is a description that can drift.
     """
     entries: dict[int, dict] = {}
     notes: list[str] = []
+    contradicted: list[int] = []
     for aid, d in sorted(derived.items()):
         prev = existing.get(aid)
+        ruled_over = prev is not None and prev.get("method") == METHOD_TEXT_VERIFIED \
+            and prev.get("fields") != d.fields
+        if ruled_over and not rule:
+            contradicted.append(aid)
+            entries[aid] = prev
+            notes.append(f"{aid}: CONTRADICTION — human ruling {prev.get('fields')} vs engine fit "
+                         f"{d.fields}; the RULING is KEPT and the fit was NOT written. Re-read the "
+                         f"card's printed sentence against the measurement, or rerun with --rule "
+                         f"to accept the fit.")
+            continue
         entries[aid] = {"method": METHOD_ENGINE_FIT, "fields": d.fields, "evidence": d.evidence}
         if prev is None:
             notes.append(f"{aid}: NEW engine_fit {d.fields}")
         elif prev.get("fields") != d.fields:
+            accepted = " — a human RULING accepted over (--rule)" if ruled_over else ""
             notes.append(f"{aid}: {prev.get('method')} {prev.get('fields')} "
-                         f"-> engine_fit {d.fields}")
+                         f"-> engine_fit {d.fields}{accepted}")
         elif prev.get("method") != METHOD_ENGINE_FIT:
             notes.append(f"{aid}: {prev.get('method')} -> engine_fit (value unchanged, now measured)")
     for aid, prev in sorted(existing.items()):
@@ -471,7 +547,7 @@ def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
         notes.append(f"{aid}: KEPT — {method} entry the measurements do not establish; re-rule it "
                      f"or rerun with --prune")
         entries[aid] = prev
-    return entries, notes
+    return entries, notes, sorted(contradicted)
 
 
 ABOUT = ("Provenance for attack_overrides.json (ADR-0108 / Issue #224): what established each "
@@ -544,6 +620,9 @@ def main(argv=None) -> int:
     ap.add_argument("--prune", action="store_true",
                     help="drop a measured human-ruled entry the measurements do not establish "
                          "(default: keep it and report it)")
+    ap.add_argument("--rule", "--accept-contradiction", dest="rule", action="store_true",
+                    help="accept an engine fit that CONTRADICTS a text_verified ruling, "
+                         "overwriting it (default: keep the ruling, report it, exit non-zero)")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     payload = json.loads(args.measurements.read_text(encoding="utf-8"))
@@ -556,8 +635,9 @@ def main(argv=None) -> int:
                              texts={a.attackId: a.text or "" for a in attacks})
 
     prov = load_provenance(args.provenance)
-    entries, notes = merge_provenance(derived, prov["entries"], measured_attacks(records),
-                                      prune=args.prune)
+    entries, notes, contradicted = merge_provenance(derived, prov["entries"],
+                                                    measured_attacks(records),
+                                                    prune=args.prune, rule=args.rule)
     counts = {m: sum(1 for e in entries.values() if e.get("method") == m) for m in METHODS}
     print(f"{len(derived)} attacks fitted this run; table holds {len(entries)} "
           f"({', '.join(f'{n} {m}' for m, n in counts.items())})")
@@ -565,13 +645,23 @@ def main(argv=None) -> int:
         print(f"  {note}")
     if not notes:
         print("  (no change to any shipped override)")
-    if args.dry_run:
-        return 0
-    _write_json(args.out, {str(k): e["fields"] for k, e in sorted(entries.items())})
-    _write_json(args.provenance, {"version": PROVENANCE_VERSION, "about": ABOUT,
-                                  "methods": dict(METHOD_DOC),
-                                  "entries": {str(k): e for k, e in sorted(entries.items())}})
-    print(f"-> {args.out}\n-> {args.provenance}")
+    # The files are still WRITTEN on a contradiction. The ruling is kept, so what lands is correct
+    # by construction, and every other attack's legitimate re-measurement survives the run —
+    # whereas refusing to write would leave `--rule`, the flag that accepts the wrong number, as
+    # the only way to get any output at all. The signal is the EXIT CODE: informative, per ADR-0032
+    # (96.6% of 9.5k measurements predict exactly, so a disagreement is ~1 in 30 and worth a human),
+    # and non-zero so a scripted regeneration stops before it commits rather than after.
+    if not args.dry_run:
+        _write_json(args.out, {str(k): e["fields"] for k, e in sorted(entries.items())})
+        _write_json(args.provenance, {"version": PROVENANCE_VERSION, "about": ABOUT,
+                                      "methods": dict(METHOD_DOC),
+                                      "entries": {str(k): e for k, e in sorted(entries.items())}})
+        print(f"-> {args.out}\n-> {args.provenance}")
+    if contradicted:
+        print(f"FAIL: {len(contradicted)} human ruling(s) contradicted by this run's measurements "
+              f"and KEPT: {contradicted}. Re-read each card's printed sentence against the "
+              f"evidence above; rerun with --rule only to accept the fit over the ruling.")
+        return 1
     return 0
 
 
