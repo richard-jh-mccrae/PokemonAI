@@ -4,7 +4,7 @@ Assisted, *not* automatic: the proposal carries the human rationale, a seed weig
 normal band (docs/weights.md), and a human-readable trigger *sketch*. A human writes the
 executable ``when()`` and commits it to the deck/general Strategy.
 
-A **scoped** Correction (turn/match, ADR-0049) also lands here — it is an *open blunder* for
+A **scoped** Correction (turn, ADR-0049) also lands here — it is an *open blunder* for
 ``/blunder-buster`` to route, not a proposed Hypothesis: it never became a ranking constraint, and
 its fix lives in ``planner.py`` / ``objectives.py``, so it carries ``seed_weight = 0``.
 """
@@ -51,10 +51,10 @@ class ProposedHypothesis:
     # blunder is prima facie planner-code) but never an auto-route — a Turn whose `planned` is null
     # throughout means the Planner never committed, and the gap is a general Hypothesis after all.
     scope: str = "decision"
-    subject: object = None            # the Turn number (turn scope); None for decision/match... see `key`
+    subject: object = None            # the Turn number (turn scope); frame for decision... see `key`
     seat: object = None
     key: str = ""                     # the ledger/report id — scope-aware (`reviewed.review_key`)
-    span_len: int = 0                 # Decisions (turn) / Turns (match) the Span covers
+    span_len: int = 0                 # Decisions (turn) the Span covers
     attribution: str | None = None    # scoped only: the Anchor's fired-Hypothesis diff, as INFORMATION
 
 
@@ -72,12 +72,10 @@ def believed_archetype(correction) -> str | None:
 
 
 def _proposal_id(correction) -> str:
-    """Stable per-subject id: the frame (decision), the Turn (turn), or the seat (match)."""
+    """Stable per-subject id: the frame (decision) or the Turn (turn)."""
     slug, ep = _slug(correction.category), correction.episode_id
     if correction.scope == "turn":
         return f"{slug}-{ep}-t{correction.subject}"
-    if correction.scope == "match":
-        return f"{slug}-{ep}-m{correction.seat}"
     return f"{slug}-{ep}-{correction.decision.get('frame')}"
 
 
@@ -93,9 +91,6 @@ def _sketch(correction) -> str:
             sketch += (f"; first divergence at frame {dec.get('frame')}: prefer "
                        f"'{correction.correct_label}' over '{correction.chosen_label}'")
         return sketch
-    if correction.scope == "match":
-        return (f"whole match (seat {correction.seat}, {len(span)} turns): the played line / Game "
-                f"Plan was wrong — the intended line is in the rationale")
     return (f"fire at SelectContext={dec.get('select_context')!r} (turn {dec.get('turn')}) to prefer "
             f"'{correction.correct_label}' over '{correction.chosen_label}'")
 

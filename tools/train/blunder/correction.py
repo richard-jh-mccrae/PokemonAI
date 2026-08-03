@@ -7,11 +7,10 @@ option at the *first divergent* Decision (Tier-1; the rest of the line goes in
 ``rationale``). See ``tools/train/CONTEXT.md``.
 
 **Scope** (ADR-0049) says how many Decisions the record is *about* -- one (``decision``, the
-default and the shape ADR-0015 fixed), a whole ply (``turn``), or the whole Episode from one seat
-(``match``). Off ``decision`` scope the record is keyed by its Scope's ``subject`` rather than the
-Anchor frame, ``correct`` is optional (and, when given, indexes the **Anchor** -- asserting it is
-the first divergent Decision), and the ``span`` of covered Decisions rides along so the record
-stays self-contained.
+default and the shape ADR-0015 fixed), or a whole ply (``turn``). Off ``decision`` scope the record
+is keyed by its Scope's ``subject`` rather than the Anchor frame, ``correct`` is optional (and,
+when given, indexes the **Anchor** -- asserting it is the first divergent Decision), and the
+``span`` of covered Decisions rides along so the record stays self-contained.
 
 At ``decision`` scope ``correct`` is mandatory with ONE exception (Issue #229): an empty ``correct``
 on a **provably optional** select (``minCount == 0``) is a recorded **DECLINE** -- the ruling *"take
@@ -34,7 +33,7 @@ from .categories import is_valid_category
 from .decisions import Decision
 
 SOURCES = ("own", "peer")
-SCOPES = ("decision", "turn", "match")           # what the Correction is *about* (ADR-0049)
+SCOPES = ("decision", "turn")                    # what the Correction is *about* (ADR-0049)
 
 CRITICAL_MARKER = "CRITICAL"                     # uppercase token in rationale = must-fix-first
 _CRITICAL_RE = re.compile(rf"\b{CRITICAL_MARKER}\b")
@@ -50,8 +49,7 @@ def is_critical(rationale: str | None) -> bool:
 def subject_of(scope: str, decision: dict) -> int | None:
     """What a Correction of ``scope`` is *about* — the identity the record is keyed by (ADR-0049).
 
-    ``decision`` (the Anchor snapshot) → its ``frame``; ``turn`` → the Anchor's ``turn`` number;
-    ``match`` → nothing (the Episode+seat already identify it).
+    ``decision`` (the Anchor snapshot) → its ``frame``; ``turn`` → the Anchor's ``turn`` number.
     """
     if scope == "decision":
         return decision.get("frame")
@@ -145,11 +143,11 @@ class Correction:
                                     # Brief / recognition, not a generic weight. The believed archetype
                                     # lives in `live_trace["posture"]`; the intended line in `rationale`.
     # --- Scope (ADR-0049) ---
-    scope: str = "decision"         # decision (one Decision) | turn (one ply) | match (one Episode)
+    scope: str = "decision"         # decision (one Decision) | turn (one ply)
     subject: int | None = None      # what the Scope is about: the Anchor frame (decision), the turn
-                                    # number (turn), or None (match). THE identity, not `frame`.
+                                    # number (turn). THE identity, not `frame`.
     span: list[dict] | None = None  # the Decisions the Scope covers. turn: per-Decision obs +
-                                    # live_trace (re-drivable). match: per-Turn headers + game_plan.
+                                    # live_trace (re-drivable).
     turn_plan: dict | None = None   # develop-rung Phase 3 (turn scope): the human's ideal-line note —
                                     # {intended_line, expected_end_board}. Sparse (None off turn-plan
                                     # tags), so legacy records are unchanged. `leans_on_rule` is NOT
@@ -218,7 +216,6 @@ def build_correction(
       is admitted only where the optional select is proved, never where it is merely assumed.
     - ``turn`` — ``correct`` is optional; when given it indexes the Anchor's options and must
       differ from ``chosen``, since giving it asserts the Anchor is the first divergent Decision.
-    - ``match`` — ``correct`` must be empty: no single ``select`` carries a whole-match verdict.
     """
     if source not in SOURCES:
         raise ValueError(f"source must be one of {SOURCES}, got {source!r}")
@@ -231,11 +228,7 @@ def build_correction(
     # while storing an override would admit a record on evidence it does not carry.
     obs = obs if obs is not None else getattr(decision, "obs", None)
     n_options = len(decision.options)
-    if scope == "match":
-        if correct:
-            raise ValueError("a match-scope Correction cannot name a correct option; "
-                             "the intended line belongs in the rationale")
-    elif not correct:                        # turn scope may simply stay silent; decision must PROVE
+    if not correct:                          # turn scope may simply stay silent; decision must PROVE
         if scope == "decision" and select_min_count(obs) != 0:
             raise ValueError(
                 f"correct {correct!r} must index legal options 0..{n_options - 1} — an empty "

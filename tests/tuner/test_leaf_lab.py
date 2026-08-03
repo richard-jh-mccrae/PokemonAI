@@ -47,6 +47,14 @@ def test_is_leaf_frame_rejects_unreseedable_and_targetless_frames():
     assert is_leaf_frame(_frame(obs=None, correct=[2])) is False                  # no obs
 
 
+@pytest.mark.req("REQ-TUNER-0019")
+def test_is_leaf_frame_rejects_retired_match_scope_even_with_a_turn_plan():
+    """Issue #353: a whole-game note is never one scored leaf move, even if hand-written data
+    bypasses the writer and carries fields that would otherwise qualify."""
+    assert is_leaf_frame(_frame(scope="match", obs=_obs(4), correct=[2])) is False
+    assert is_leaf_frame(_frame(scope="match", obs=_obs(4), turn_plan={"intended_line": "x"})) is False
+
+
 def _pilot(values):
     p = SimpleNamespace(_planning=False)
     p._engine_leaf_value = lambda obs, step: values.get(step[0])

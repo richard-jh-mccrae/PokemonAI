@@ -142,7 +142,8 @@ def _records(store: Path, agent: str | None):
 
     Sorted by key so a capture's row order is stable across runs and machines."""
     def keep(c):
-        return bool(c.obs and c.agent) and (not agent or c.agent == agent)
+        return getattr(c, "scope", None) != "match" and bool(c.obs and c.agent) and (
+            not agent or c.agent == agent)
 
     return sorted(keyed_corrections(store, predicate=keep), key=lambda kc: kc[0])
 

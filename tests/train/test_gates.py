@@ -1215,10 +1215,19 @@ def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
     capture would redden `main` on every new tag."""
     from train.blunder.store import DEFAULT_ROOT
     from train.decider_lab import _records
-    want = {k for k, _c in gates.keyed_corrections(predicate=lambda c: c.obs and c.agent)}
+    want = {k for k, _c in gates.keyed_corrections(
+        predicate=lambda c: c.scope != "match" and c.obs and c.agent)}
     got = {k for k, _c in _records(DEFAULT_ROOT, None)}
     assert got == want
     assert len(got) == len(want) > 300              # a plausible corpus, not an empty walk
+
+
+@pytest.mark.req("REQ-GATE-0007")
+def test_decider_lab_reader_ignores_retired_match_scope_records(tmp_path):
+    """Issue #353: even a hand-written legacy match row must not enter the one-move Decision Gate."""
+    from train.decider_lab import _records
+    root = _store(tmp_path, [_rec(1, 3), _rec(2, 4, scope="match", subject=None)])
+    assert [k for k, _c in _records(root, None)] == ["1|0|decision|3"]
 
 
 # ── the Ruling Index — one query over every store a ruling can live in (ADR-0088, Issue #239) ──

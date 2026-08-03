@@ -82,10 +82,9 @@ def test_a_record_the_constructor_would_accept_is_clean():
 
 
 @pytest.mark.req("REQ-GATE-0009")
-def test_a_match_scope_correct_is_caught():
-    """THE committed shape, as a synthetic record: `match` scope may name no `correct`, because no
-    single select carries a whole-match verdict."""
-    assert refuses(_Rec(scope="match", correct=[0], chosen=[2])) == ["match_names_a_correct"]
+def test_a_match_scope_record_is_caught_as_unknown_scope():
+    """Issue #353: `match` is retired, so a hand-edited match record is an unknown scope."""
+    assert refuses(_Rec(scope="match", correct=[0], chosen=[2])) == ["unknown_scope"]
 
 
 @pytest.mark.req("REQ-GATE-0009")
@@ -158,7 +157,7 @@ def test_the_category_vocabulary_is_deliberately_NOT_re_applied():
 def test_every_slug_the_predicate_can_emit_has_a_printable_sentence():
     """`REFUSED_SHAPE_RULES` is the one source both the predicate and the readout read, so a slug with no
     sentence would print as a bare identifier in an operator's report."""
-    emitted = {"unknown_source", "unknown_scope", "match_names_a_correct", "correct_off_the_menu",
+    emitted = {"unknown_source", "unknown_scope", "correct_off_the_menu",
                "turn_correct_equals_chosen", "unprovable_decline"}
     assert emitted == set(REFUSED_SHAPE_RULES)
     assert all(REFUSED_SHAPE_RULES[s] and isinstance(REFUSED_SHAPE_RULES[s], str) for s in emitted)
@@ -170,7 +169,7 @@ def test_every_slug_the_predicate_can_emit_has_a_printable_sentence():
 
 @pytest.mark.req("REQ-GATE-0009")
 @pytest.mark.parametrize("kw,slug", [
-    (dict(scope="match", correct=[0]), "match_names_a_correct"),
+    (dict(scope="match", correct=[0]), "unknown_scope"),
     (dict(scope="turn", correct=[1]), "turn_correct_equals_chosen"),   # `_decision` chose [1]
     (dict(correct=[9]), "correct_off_the_menu"),
     (dict(correct=[]), "unprovable_decline"),                          # minCount 1
@@ -317,7 +316,7 @@ def test_from_dict_still_loads_a_refused_shape_without_complaint():
     tampered = {**valid.to_dict(), "scope": "match", "correct": [0]}
     loaded = Correction.from_dict(tampered)
     assert loaded.scope == "match" and loaded.correct == [0]   # loads, silently, as it must
-    assert refuses(loaded) == ["match_names_a_correct"]        # and the audit says so out loud
+    assert refuses(loaded) == ["unknown_scope"]                # and the audit says so out loud
     with pytest.raises(ValueError):
         _build(scope="match", correct=[0])
 
@@ -347,12 +346,12 @@ def test_the_readout_names_a_synthetic_refused_record_and_says_it_is_still_gradi
     from train.decider_lab import print_refused_shape_readout
     key = "99999999|0|match|"
     rows = [_row(key, chosen=[0], correct=[0]), _row("other|0|decision|1", chosen=[1], correct=[1])]
-    print_refused_shape_readout([_finding(key, "match_names_a_correct")], _rpt(rows))
+    print_refused_shape_readout([_finding(key, "unknown_scope")], _rpt(rows))
     out = capsys.readouterr().out
 
     assert key in out, "the refused record must be NAMED"
     assert "refused shape (1)" in out
-    assert "match_names_a_correct" in out and "whole-match verdict" in out, "name the SHAPE violated"
+    assert "unknown_scope" in out and "decision / turn" in out, "name the SHAPE violated"
     assert "GRADING anyway" in out
     assert "re-rule the record" in out, "the line must say what to DO about it"
 
@@ -373,7 +372,7 @@ def test_the_readout_says_so_when_a_refused_record_is_in_no_capture(capsys):
     that printed "GRADING anyway" regardless would be decoration."""
     from train.decider_lab import print_refused_shape_readout
     key = "99999999|0|match|"
-    print_refused_shape_readout([_finding(key, "match_names_a_correct")], _rpt([]))
+    print_refused_shape_readout([_finding(key, "unknown_scope")], _rpt([]))
     out = capsys.readouterr().out
     assert key in out and "GRADING anyway" not in out
     assert "not in this capture's gradeable population" in out

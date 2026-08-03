@@ -1,4 +1,4 @@
-"""Correction Scope (ADR-0049): a Correction is about a Decision, a Turn, or a Match.
+"""Correction Scope (ADR-0049): a Correction is about a Decision or a Turn.
 
 Scope is orthogonal to Category. Off `decision` scope the record is keyed by its Scope's
 subject (not the Anchor frame), `correct` is optional and Anchor-indexed, and the Span of
@@ -32,7 +32,7 @@ def _decision(*, frame=9, turn=12, seat=0, episode=100, min_count=None):
 def test_scope_vocabulary_and_decision_is_the_default():
     """A Correction without a scope is a decision Correction, and its subject is the Anchor frame —
     so all 290 pre-ADR-0049 records load with their identity unchanged."""
-    assert SCOPES == ("decision", "turn", "match")
+    assert SCOPES == ("decision", "turn")
     corr = build_correction(_decision(), source="own", agent="x", correct=[1],
                             category="bad_target", rationale="r")
     assert corr.scope == "decision"
@@ -76,16 +76,12 @@ def test_turn_scope_correct_indexes_the_anchor_and_must_diverge():
 
 
 @pytest.mark.req("REQ-BLUNDER-0017")
-def test_match_scope_has_no_subject_and_forbids_correct():
-    """A Match Correction is keyed by (episode, seat) alone, and cannot name a `correct` option:
-    no single `select` carries a whole-match verdict. The intended line is `rationale` prose."""
-    corr = build_correction(_decision(), source="own", agent="x", correct=[],
-                            category="slow_setup", rationale="never developed the Ignition line",
-                            scope="match")
-    assert corr.scope == "match" and corr.subject is None
-    with pytest.raises(ValueError, match="match-scope"):
-        build_correction(_decision(), source="own", agent="x", correct=[1],
-                         category="slow_setup", rationale="r", scope="match")
+def test_match_scope_is_retired_and_refused_by_the_writer():
+    """Issue #353: a whole-game note is not a legal one-move Correction scope."""
+    with pytest.raises(ValueError, match="scope must be one of"):
+        build_correction(_decision(), source="own", agent="x", correct=[],
+                         category="slow_setup", rationale="never developed the Ignition line",
+                         scope="match")
 
 
 @pytest.mark.req("REQ-BLUNDER-0017")
@@ -172,15 +168,12 @@ def test_a_decision_scope_decline_round_trips_and_grades_exactly():
 
 
 @pytest.mark.req("REQ-BLUNDER-0021")
-def test_the_other_two_scopes_contracts_are_untouched():
-    """Acceptance 2 + 3. The relaxation is `decision`-only: `turn` still refuses a `correct` equal to
-    `chosen`, and `match` still forbids a non-empty `correct` outright."""
+def test_turn_scope_contract_is_untouched():
+    """Acceptance 2. The relaxation is `decision`-only: `turn` still refuses a `correct` equal to
+    `chosen`."""
     with pytest.raises(ValueError, match="first DIVERGENT"):
         build_correction(_decision(min_count=0), source="own", agent="x", correct=[0],
                          category="sequencing_error", rationale="r", scope="turn")
-    with pytest.raises(ValueError, match="match-scope"):
-        build_correction(_decision(min_count=0), source="own", agent="x", correct=[1],
-                         category="slow_setup", rationale="r", scope="match")
     silent = build_correction(_decision(), source="own", agent="x", correct=[],
                               category="sequencing_error", rationale="r", scope="turn")
     assert silent.correct == []            # turn-scope silence never needed a readable `minCount`
@@ -204,21 +197,6 @@ def test_turn_span_is_the_turns_decisions_carrying_obs_and_no_board(tmp_path):
     assert corr.decision["current"]["players"]                   # ...the Anchor still carries one
 
 
-@pytest.mark.req("REQ-BLUNDER-0018")
-def test_match_span_is_per_turn_headers_for_both_seats_without_obs(tmp_path):
-    """A Match Correction is doctrine, not a re-drivable line: its Span is per-Turn headers — both
-    seats, so the opponent's turns are legible — and carries no `obs`."""
-    corr = record_correction(load_replay(REPLAY), frame=ANCHOR, correct=[], scope="match",
-                             category="slow_setup", rationale="never developed the wincon",
-                             source="own", agent="mega_starmie", store_path=tmp_path / "c.jsonl")
-    assert corr.scope == "match" and corr.subject is None
-    assert [(s["seat"], s["turn"]) for s in corr.span] == [(0, 0), (1, 0), (0, 1), (1, 2), (0, 3)]
-    assert all("obs" not in s for s in corr.span)
-    own = next(s for s in corr.span if s["seat"] == SEAT and s["turn"] == TURN)
-    assert len(own["chosen_labels"]) == SPAN_LEN and own["frames"][0] == ANCHOR
-    assert "game_plan" in own                                    # None here: no live trace supplied
-
-
 @pytest.mark.req("REQ-BLUNDER-0019")
 def test_one_correction_per_subject_not_per_frame(tmp_path):
     """The guard keys on the Scope's subject: a second Turn Correction on the same Turn is refused
@@ -233,11 +211,6 @@ def test_one_correction_per_subject_not_per_frame(tmp_path):
 
     record_correction(replay, frame=ANCHOR, correct=[4], category="missed_win",  # decision scope
                       rationale="inside the same turn", **kw)
-    record_correction(replay, frame=ANCHOR, correct=[], scope="match",
-                      category="slow_setup", rationale="whole match", **kw)
-    with pytest.raises(ValueError, match="already exists at this match"):
-        record_correction(replay, frame=ANCHOR + 1, correct=[], scope="match",
-                          category="overextension", rationale="again", **kw)
 
 
 @pytest.mark.req("REQ-BLUNDER-0020")
@@ -281,5 +254,5 @@ def test_shell_ui_offers_the_scope_selector_and_a_12px_pane():
     from train.blunder.shell import _SHELL_HTML
     assert "#right{width:400px;padding:14px;overflow:auto;font-size:12px}" in _SHELL_HTML
     assert 'id="scope"' in _SHELL_HTML
-    assert "this decision" in _SHELL_HTML and "whole match" in _SHELL_HTML
+    assert "this decision" in _SHELL_HTML and "whole match" not in _SHELL_HTML
     assert "scope:$('scope').value" in _SHELL_HTML          # posted with the tag

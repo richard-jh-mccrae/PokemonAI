@@ -1213,7 +1213,7 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
       the pick was right — and a decider that flips away from one is a genuine regression worth
       failing on. Only `minCount == 0` carries the encoding gap.
     * The scope must be **`decision`**. This is the guard the deploy sweep never needed and a shared
-      predicate does: at `turn`/`match` scope `correct: []` IS encodable and IS a statable ruling — a
+      predicate does: at `turn` scope `correct: []` IS encodable and IS a statable ruling — a
       recorded DECLINE that `satisfies_human` grades exactly. Measured on the committed corpus, three
       records carry the `chosen == correct` shape on an optional select, and one of them
       (``86088989|0|turn|0``, `correct: []`) is a real turn-scope decline. Without the scope guard
@@ -1287,9 +1287,7 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
 #: own `ValueError` text and are free to be re-worded.
 REFUSED_SHAPE_RULES = {
     "unknown_source": "`source` is not one of the two recorded sources",
-    "unknown_scope": "`scope` is not one of decision / turn / match",
-    "match_names_a_correct": "a match-scope Correction cannot name a `correct` option — no single "
-                             "select carries a whole-match verdict",
+    "unknown_scope": "`scope` is not one of decision / turn",
     "correct_off_the_menu": "`correct` does not index the Anchor's own options",
     "turn_correct_equals_chosen": "a turn-scope `correct` equal to `chosen` asserts nothing — it "
                                   "must name the first DIVERGENT option at the Anchor",
@@ -1350,10 +1348,7 @@ def shape_the_constructor_would_refuse(correction) -> list:
     correct = getattr(correction, "correct", None) or []
     chosen = getattr(correction, "chosen", None) or []
     n_options = len(((getattr(correction, "decision", None) or {}).get("options")) or [])
-    if scope == "match":
-        if correct:
-            broken.append("match_names_a_correct")
-    elif not correct:
+    if not correct:
         if scope == "decision" and select_min_count(getattr(correction, "obs", None)) != 0:
             broken.append("unprovable_decline")
     else:
