@@ -120,9 +120,9 @@ no decision changed"*. Reverting it is −1, symmetrically.
 | frame | gate | issue | old | new | recommendation |
 |---|---|---|---|---|---|
 
-*(No gate flip has occurred in this batch. Issues #230, #299, #229, #251, #256, #238, #303 and #304
-have all landed gate-neutral: both baselines byte-identical, Decision Gate PASS at agree 250/347 with
-0 picks moved and 0 rulings moved, Discrimination Gate PASS with 0 unruled OK→MISS, 67 ruled, 3
+*(No gate flip has occurred in this batch. Issues #230, #299, #229, #251, #256, #238, #303, #304 and
+#302 have all landed gate-neutral: both baselines byte-identical, Decision Gate PASS at agree 250/347
+with 0 picks moved and 0 rulings moved, Discrimination Gate PASS with 0 unruled OK→MISS, 67 ruled, 3
 voided, 198 frames gated. The table is kept so a later issue in the run has somewhere to put one.)*
 
 *Worth recording because the parent epic #298 predicted otherwise: it warned that A2.1/2, /3, /5 and
@@ -133,3 +133,33 @@ live `effects.clauses(...)` consumer filters on a specific `kind` string (`fetch
 unrecognised kind falls straight through. The prediction is right about the FILE and wrong about which
 kinds are wired; a sub-issue that adds a NEW kind is inert until T4, while one that edits an existing
 kind's clauses is not. #302 edits `draw`, which IS wired.*
+
+### The `draw` half of that prediction is refuted too (Issue #302) — no ruling owed, recorded as a finding
+
+The sentence above ends *"#302 edits `draw`, which IS wired."* Written before #302 was built, and
+**wrong in the way that matters**. #302 rewrote the clause of 16 cards on the `draw` kind and both
+gates stayed byte-identical. Three measurements, each with a positive control:
+
+1. **There is exactly ONE `kind == "draw"` consumer in `src/`,** `planner._gamble_draw_engines`
+   (`planner.py:2308`), and it additionally requires `condition: "once_per_turn_ability"` — the
+   draw-ENGINE Abilities (Dudunsparce, Drakloak, Fezandipiti, Lunatone). No Trainer among the 16
+   carries that condition, so none of them reaches it. An AST sweep of all 14 `effects.clauses(...)`
+   call sites in `src/` (excluding `src/cg/`) resolves the kind filter in each: `fetch` 6, `heal` 2,
+   `accel` 1, `energy_recur` 1, `draw` 1, and 3 whose filter sits one call deeper
+   (`combat._attach_contribution` → `accel`/`fetch`; `planner._closure_clauses_of` → `fetch_closure`,
+   `fetch`; `planner._supporter_energy_tutor_reaches`, an `if kind == "fetch" … elif kind == "accel"`
+   cascade). The sweep finding those five kinds is the positive control for it finding nothing else.
+2. **The live hand-refresh scorer never read the compendium.** The epic and Issue #302 both named
+   `pilot.py`'s `_refresh_cycle` as a `draw`-clause consumer. It calls
+   `common.strategy.refresh.net_change`, which reads that module's OWN hand-keyed `_REFRESH` table —
+   and that table already carried the correct conditional counts and opponent legs for all five
+   refreshes it covers (Judge 4/4, Harlequin's coin, Unfair Stamp 5/2, Lillie's 6-or-8-at-six-prizes,
+   Lacey 4-or-8). **That is why four years of a wrong compendium never reached a decision**: the fact
+   was stated twice and the live copy was the right one. `tests/strategy/test_refresh_swing.py`
+   now asserts the two stores agree, so the next divergence fails a test instead of hiding.
+3. **`apply_option()` raises `NotImplementedError`** (T0 freezes the contract, Issue #263 builds it),
+   so the `_covers` verdicts this issue moved have no runtime consumer at all today — only the census.
+
+**Nothing here needs a developer verdict.** It is filed in the packet because the epic's standing
+prediction is now refuted on all four of its named sub-issues, and a later reader planning A2.1 work
+should cost it as inert-until-T4 rather than as hot-path.

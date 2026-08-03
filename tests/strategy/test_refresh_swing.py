@@ -193,3 +193,49 @@ def test_refills_opponent_is_false_for_a_self_only_refresh():
 def test_refills_opponent_is_false_for_an_unknown_card():
     """Fail toward NOT taxing: an unknown card makes no gift claim (never over-suppress a strip)."""
     assert refills_opponent(9999, opp_hand=1, my_prizes_remaining=6, opp_prizes_remaining=6) is False
+
+
+# --- one fact, two stores (Issue #302) -----------------------------------------------------------
+
+def test_the_compendium_and_this_oracle_state_the_same_draw_counts():
+    """**Two stores hold the refresh draw counts and they must agree.**
+
+    This module's `_REFRESH` table is the ADR-0060 oracle the live scorer reads
+    (`pilot._refresh_cycle` → `net_change`). `card_effects.json` is the compendium the apply seam
+    reads. Until Issue #302 they disagreed on four of these five cards — the compendium stated
+    Lillie's maximum (8) as its base and Lacey's likewise, and carried no coin branch at all for
+    Harlequin — and nothing checked, because the two are read by different consumers on different
+    tracks. This is that check.
+
+    The comparison is deliberately over the OWN-side count only: the compendium's clause set is
+    ruled `partial` for exactly the opponent leg on the three symmetric cards, so asserting the
+    opponent's number would assert a fact one of the two stores honestly does not claim."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+
+    def compendium_own_draw(cid, my_prizes, opp_prizes, tails):
+        """The own-side count the compendium states, on this board and this coin face."""
+        clause, = eff.clauses(cid)
+        branch = clause.get("amount_if") or {}
+        fires = {"exactly_6_prizes_remaining": my_prizes == 6,
+                 "opp_3_or_fewer_prizes": 0 < opp_prizes <= 3,
+                 "coin_tails": tails}[branch["condition"]] if branch else False
+        return branch["amount"] if fires else clause["amount"]
+
+    boards = [(6, 6), (5, 6), (6, 3), (4, 2), (1, 1)]
+    for cid in (1213, 1080, 1227, 1199):                       # the four with no coin
+        for mp, op in boards:
+            assert compendium_own_draw(cid, mp, op, tails=False) == \
+                own_draw_count(cid, mp, op), (cid, mp, op)
+    # Harlequin's two coin faces average to the oracle's EV — 5 heads / 3 tails is 4, which is what
+    # `own_draw_count` returns after averaging its equally-likely branches.
+    faces = [compendium_own_draw(1223, 6, 6, tails=t) for t in (False, True)]
+    assert faces == [5, 3]
+    assert sum(faces) / 2 == own_draw_count(1223, 6, 6)
+    # Positive control: the helper is reading the compendium, not echoing the oracle. A card the
+    # oracle has never heard of still yields a number here — Billy & O'Nare draws 2, and its own
+    # `amount_if` predicate is one this board-reader deliberately does not evaluate (the hand size
+    # is not a refresh input), so the base is the honest answer.
+    billy, = eff.clauses(1181)
+    assert billy["amount"] == 2 and own_draw_count(1181, 6, 6) is None

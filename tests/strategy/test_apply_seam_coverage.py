@@ -181,6 +181,51 @@ def test_six_stadiums_reach_the_seam_closed_form_and_the_rest_stay_honestly_miss
     assert set(minted) | set(unmodelled) | {1242} == set(stadium)
 
 
+def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do_not(census):
+    """**Issue #302's acceptance, as a measurement, in both directions.**
+
+    Eight of the 14 conditional draw Supporters now resolve MODELLED-FULL, and the exposure is
+    concentrated in one of them: 1227 Lillie's Determination is 24 copies across our decks, named by
+    three authored doctrines, and its clause stated the card's MAXIMUM (8) on every board where the
+    real number is 6.
+
+    The other direction is the half that matters more, per *no silent caps*. The four SYMMETRIC
+    refreshes — Judge, Unfair Stamp, Harlequin, Lucian — did **not** quietly become MODELLED. Each
+    now carries its own leg exactly and stays `partial` on the opponent's shuffle-and-redraw, which
+    needs a `state_value` term that prices their hand and which the seam already refuses as an
+    accepted POC unknown. Naveen keeps its optional pre-discard and Morty's Conviction its
+    board-scaled count. Six declared errors are the deliverable as much as the eight fixes are.
+
+    Both lists are read off the SAME census run through the same predicate, so "eight moved" cannot
+    be an artefact of a walk that reaches nothing — the six that stayed are the positive control."""
+    mod, cards, effects, covers, pool = census
+    from common.strategy.context import _PLAY
+    sites, _aside = mod.census(pool, cards, effects, covers)
+    the_14 = (1227, 1213, 1080, 1223, 1239, 1192, 1216, 1187, 1208, 1199, 1200, 1181, 1237, 1203)
+    draw = {s.card_id: s for s in sites if s.card_id in the_14}
+    assert sorted(draw) == sorted(the_14), sorted(draw)
+    assert all(s.kind == _PLAY and s.clauses for s in draw.values())
+
+    fixed = (1181, 1192, 1199, 1200, 1203, 1208, 1216, 1227)
+    for cid in fixed:
+        assert draw[cid].fate == seam.MODELLED, (cid, draw[cid].fate)
+        assert draw[cid].report_class == mod.FULL, (cid, draw[cid].report_class)
+    # The symmetric four, plus the two whose magnitude no clause field states. Still PARTIAL, still
+    # failing closed, each with the leg it misses quoted in its verdict.
+    for cid in (1213, 1080, 1223, 1237, 1239, 1187):
+        assert draw[cid].report_class == mod.PARTIAL, (cid, draw[cid].report_class)
+        assert draw[cid].fate != seam.MODELLED, (cid, draw[cid].fate)
+        assert draw[cid].note.strip(), cid
+    assert set(fixed) | {1213, 1080, 1223, 1237, 1239, 1187} == set(the_14)
+
+    # Where the exposure actually is: Lillie's alone is more copies than the whole residual partial
+    # table. Read off the census's own deck load rather than restated, so a deck edit moves it.
+    ours = mod.our_copies(mod.load_our_decks())
+    assert ours[1227] == 24, ours[1227]
+    residue = [s for s in sites if s.report_class == mod.PARTIAL]
+    assert sum(ours.get(s.card_id, 0) for s in residue) < ours[1227]
+
+
 def test_the_census_asks_the_seam_for_the_fate_rather_than_re_deriving_it(census):
     """One store for the resolution order (Issue #299). The census used to mirror `fate`'s cascade by
     hand, because `fate` demanded two inputs nothing produces; now it supplies those judgements and

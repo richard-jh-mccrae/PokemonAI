@@ -34,6 +34,11 @@ This module is the enumeration, as data:
   all. The walk lives in THIS module rather than in the test for exactly that reason: a vocabulary
   the audit forgets to visit is an audit that passes by not looking.
 
+* :data:`CLAUSE_PARAMETERS` — the same discipline on the OTHER axis of the same dict (Issue #302).
+  `CLAUSE_WRITES` audits clause VALUES; nothing audited the clause KEYS, so a parameter no reader
+  knows — a typo, or a shape authored ahead of the consumer that was meant to read it — sat in the
+  store and priced exactly 0. :func:`undeclared_clause_keys` is its teeth.
+
 * :data:`COVERS_FULL` / :data:`COVERS_PARTIAL` — whether a card's clause SET covers its whole printed
   effect. A **partial** set is worse than none: §3b has no PARTIAL fate, so the seam models what the
   clauses say and the omitted leg differences to exactly 0 — the silent-zero failure this module
@@ -246,6 +251,19 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "self_switch": frozenset({"bodies_in_play", "special_conditions", "transient_grants"}),
     "shuffle_both_hands": frozenset({"my_hand_ids", "their_hand_size", "my_deck_count",
                                      "their_deck_count", "deck_odds", "deck_order"}),
+    # Issue #302: the ONE-SIDED refresh. *"Shuffle your hand into your deck"* — Lillie's
+    # Determination (24 copies, our highest-exposure partial) and Lacey. `shuffle_both_hands` minus
+    # the two opponent legs, and a separate key rather than a reuse because the difference IS the
+    # card: `refresh.py`'s ADR-0060 oracle splits exactly on it (`opp_shuffles`), and a one-sided
+    # refresh that declared `their_hand_size` would claim a strip the card never performs.
+    "shuffle_own_hand_in": frozenset({"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}),
+    # Issue #302, Lucian: *"Each player shuffles their hand and puts it on the bottom of their
+    # deck."* The same six zones as `shuffle_both_hands` — a hand leaving for the deck is the same
+    # set of writes wherever in the deck it lands — but a distinct key, because to-BOTTOM and
+    # shuffled-IN are different facts about `deck_order` and `other_to_bottom` already keeps that
+    # distinction for the dig riders.
+    "both_hands_to_bottom": frozenset({"my_hand_ids", "their_hand_size", "my_deck_count",
+                                       "their_deck_count", "deck_odds", "deck_order"}),
     "shuffle_self_in": frozenset({"bodies_in_play", "my_deck_count", "deck_odds", "deck_order"}),
     # effects — the leg a `coin` (or a `stadium_static` / `stadium_trigger`) RESOLVES INTO.
     "discard_opp_energy": frozenset({"attached_energy", "their_discard_contents"}),
@@ -283,6 +301,10 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
 #: deterministic replay both gates depend on.
 NONDETERMINISTIC_CLAUSES: frozenset[str] = frozenset({
     "coin", "other_to_bottom", "shuffle_both_hands", "shuffle_self_in",
+    # Issue #302's two refresh riders. Both shuffle, so both defeat the determinism proof for the
+    # same reason `shuffle_both_hands` does — and both are the RIDER on a `draw`, which is already
+    # a `REVEALING_CLAUSES` member, so the two lists agree about these cards from either direction.
+    "shuffle_own_hand_in", "both_hands_to_bottom",
 })
 
 #: Clauses that REVEAL information — they change the option set itself, not only the board. Issue
@@ -296,6 +318,73 @@ REVEALING_CLAUSES: frozenset[str] = frozenset({"draw", "fetch"})
 #: these. One list, so "which keys does the audit walk?" has a single answer rather than one per
 #: reader — the drift that let `effect` go unaudited from the day it was authored.
 VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect")
+
+#: Every clause KEY the compendium is allowed to use, each with what it carries. The other half of
+#: the §3c audit, and the half that did not exist until Issue #302.
+#:
+#: :data:`CLAUSE_WRITES` audits the VALUES of :data:`VOCABULARY_KEYS`; nothing audited the keys, so a
+#: parameter nobody reads — a typo (``to_hand_sizes``), or a shape authored for a consumer that was
+#: never built — rode in the store silently and priced exactly 0. That is the same silent zero this
+#: module exists to prevent, arriving through the other axis of the same dict.
+#:
+#: Issue #302's acceptance asked for its three new shapes to be *"declared in `CLAUSE_WRITES` and
+#: pass `undeclared_clauses()`"*. They cannot be, and the reason is the distinction this module
+#: already draws two paragraphs up: `to_hand_size` / `amount_if` / `cost_required` are PARAMETERS —
+#: their values are ints, dicts and booleans, not strings drawn from a closed set — so
+#: `clause_vocabulary` never yields them and `undeclared_clauses` could never see them. Putting a KEY
+#: name into a table of VALUE names would also collide the two namespaces `CLAUSE_WRITES`'s own
+#: `damage_counters` comment warns about. This registry is that acceptance criterion in the form the
+#: registry can actually hold: the keys are declared, and :func:`undeclared_clause_keys` is the audit
+#: that bites when a new one is not.
+#:
+#: Nested keys count: `amount_if` carries a `condition` plus whichever magnitude it replaces, and
+#: :func:`clause_keys` walks into it, so a typo inside the block fails exactly as one outside it.
+CLAUSE_PARAMETERS: dict[str, str] = {
+    # ── identity ──────────────────────────────────────────────────────────────────────────────────
+    "kind": "the clause's family — a VOCABULARY key, write-set in CLAUSE_WRITES",
+    "rider": "a secondary effect riding the clause — a VOCABULARY key",
+    "effect": "the leg a `coin` / `stadium_*` clause resolves into — a VOCABULARY key",
+    # ── magnitude ─────────────────────────────────────────────────────────────────────────────────
+    "amount": "how many / how much, an int or \"all\"",
+    "amount_on_evolution": "`energy_provide`'s second magnitude, on the evolution branch",
+    "amount_if": "{condition, amount|to_hand_size} — the magnitude that REPLACES the base one when "
+                 "the board predicate holds (Issue #302; `amount_on_evolution`'s shape, generalised "
+                 "to a named predicate rather than one hard-coded branch)",
+    "to_hand_size": "draw UNTIL the hand holds N — a refill, not a draw-N (Issue #302). Mutually "
+                    "exclusive with `amount`: the count depends on the hand at resolution",
+    "window": "how many cards an ability's draw sees, when that differs from what it takes",
+    "dig": "how deep a search looks",
+    "hp_max": "an HP ceiling on what the clause may target",
+    # ── target and source ─────────────────────────────────────────────────────────────────────────
+    "target": "the card class or body the clause acts on",
+    "target_type": "an energy-type narrowing of `target`",
+    "applies_to": "the body class a Stadium modifier is ABOUT",
+    "zone": "where a fetch looks (deck / discard)",
+    "dest": "where a fetch puts what it finds",
+    "source": "the zone a clause draws its material from",
+    "source_class": "the card class the modifier's SOURCE must belong to",
+    "energy": "the Energy class an accel attaches (basic / special)",
+    "energy_type": "an EnergyType lock on the Energy a clause moves",
+    "dig_from": "which end of the deck a dig reads",
+    "to_hand": "how many of an accel's units go to HAND instead of being attached",
+    # ── gates ─────────────────────────────────────────────────────────────────────────────────────
+    "condition": "a DYNAMIC board-state gate — the clause whiffs unless it holds",
+    "restriction": "a STATIC target-class gate — which cards are eligible at all",
+    "trigger": "which OPTION the clause rides (on_evolve / on_bench_play / on_attach / on_attack)",
+    "on": "a Stadium trigger's EVENT — deliberately not `trigger`, which routes to a site",
+    "timing": "where in the damage pipeline a modifier applies",
+    "name_family": "an owner name family gating the clause",
+    "no_rule_box": "the target must have no Rule Box",
+    "no_ability": "the target must have no Ability",
+    "cost": "what playing the card costs, paid from my own resources",
+    "cost_required": "TRUE when failing to pay `cost` makes the card UNPLAYABLE, which is a "
+                     "different fact from the cost merely being expensive (Issue #302)",
+    # ── shape ─────────────────────────────────────────────────────────────────────────────────────
+    "type": "the card type a clause names, where `target` would be ambiguous",
+    "choice": "the clause is one alternative of a choose-one card",
+    "distinct_types": "the fetched cards must differ in Energy type",
+    "symmetric": "the effect applies to BOTH players, not only the one who played it",
+}
 
 # ── the compendium's audited shape ────────────────────────────────────────────────────────────────
 # `card_effects.json` is `{cardId: [clauses]}` plus ONE reserved non-numeric key, mirroring the
@@ -404,6 +493,36 @@ def clause_vocabulary(payload: Mapping) -> list[str]:
                 elif isinstance(value, (list, tuple)):
                     vocab.update(v for v in value if isinstance(v, str) and v)
     return sorted(vocab)
+
+
+def clause_keys(payload: Mapping) -> list[str]:
+    """Every clause KEY the committed compendium actually uses, sorted — nested blocks included.
+
+    The key-side twin of :func:`clause_vocabulary`, and read off the artifact for the same reason: a
+    hand-kept list is precisely what a new key would not be added to. It descends into a nested
+    mapping (`amount_if`) so a typo one level down is as visible as one at the top."""
+    keys: set[str] = set()
+
+    def walk(block: Mapping) -> None:
+        for key, value in block.items():
+            keys.add(str(key))
+            if isinstance(value, Mapping):
+                walk(value)
+
+    for clauses in clause_lists(payload).values():
+        for clause in clauses:
+            walk(clause)
+    return sorted(keys)
+
+
+def undeclared_clause_keys(keys: Sequence[str]) -> list[str]:
+    """Clause keys with no entry in :data:`CLAUSE_PARAMETERS`. Empty is the contract.
+
+    The teeth on the key axis, exactly as :func:`undeclared_clauses` is on the value axis: a
+    parameter nobody declared is a parameter nobody reads, and it prices its option at 0 as surely as
+    an undeclared clause kind does. Takes the keys rather than the compendium so it can be bitten by
+    a fabricated one; pair it with :func:`clause_keys` to walk the real artifact."""
+    return sorted(k for k in set(keys) if k not in CLAUSE_PARAMETERS)
 
 
 def clauses_cover(covers: str | None) -> bool | None:
@@ -527,10 +646,10 @@ def clauses_writing_unhomed() -> dict:
 
 __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
-    "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS",
+    "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS", "CLAUSE_PARAMETERS",
     "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",
-    "is_card_key", "clause_lists", "covers_table", "clause_vocabulary", "clauses_cover",
-    "partial_clause_cards",
+    "is_card_key", "clause_lists", "covers_table", "clause_vocabulary", "clause_keys",
+    "clauses_cover", "partial_clause_cards",
     "covers_problems", "validate", "homes", "unhomed",
-    "undeclared_clauses", "unknown_zones", "clauses_writing_unhomed",
+    "undeclared_clauses", "undeclared_clause_keys", "unknown_zones", "clauses_writing_unhomed",
 )

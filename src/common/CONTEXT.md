@@ -255,6 +255,15 @@ does (the flip is an RNG read; `effect` names the leg it resolves into), and so 
 `damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all three of `kind`, `rider`
 and `effect` for exactly that reason — a kind whose write-set reads empty is not a kind that writes
 nothing.
+A clause's KEYS are audited too (Issue #302, `snapshot_coverage.CLAUSE_PARAMETERS`), and they are a
+separate namespace from the values above: `undeclared_clauses` bites an unknown `kind`/`rider`/
+`effect` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared
+is one nobody reads, and it prices its option at 0 as surely as an undeclared kind does. That axis
+grew three keys with Issue #302's conditional draw Supporters: `to_hand_size` (*"draw until you have
+N in hand"* is a REFILL, so it is mutually exclusive with `amount`), `amount_if` (the second
+magnitude that REPLACES the first when a named board predicate holds — 17 Ignition Energy's
+`amount_on_evolution` generalised), and `cost_required` (failing to pay makes the card UNPLAYABLE,
+which is a different fact from the cost merely being expensive).
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.
@@ -264,8 +273,10 @@ a Clause is the measured, structured fact), effect (unqualified — say which ti
 **Clause-Set Completeness** (`covers`):
 The per-CARD verdict on whether that card's whole list of **Effect Clauses** carries its whole
 printed effect — `full` or `partial` — each verdict quoting the leg the clauses carry or miss. A
-property of the SET, never of one clause: *Surfer* carries `draw 1` and the printed card switches
-your Active first, so no single clause is wrong and the set is still incomplete. It is a hand
+property of the SET, never of one clause: *Judge* carries `draw 4`, which is exactly what it draws
+for me, and the printed card also shuffles the OPPONENT's hand away and redraws it — so no single
+clause is wrong and the set is still incomplete. (*Surfer* was this entry's example until Issue #302
+closed it, which is what a shrink-only owed list looks like from the inside.) It is a hand
 ruling, not a measurement (no parser reads "and then switch"), authored in
 `tools/meta_tracker/effect_overrides.json` under `_covers` and re-stamped verbatim into
 `card_effects.json`. Read two ways: `snapshot_coverage.partial_clause_cards()` reports the owed list

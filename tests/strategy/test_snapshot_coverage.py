@@ -222,6 +222,69 @@ def test_damage_counters_is_homed_on_BOTH_sides_and_on_the_bench():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_two_refresh_riders_declare_exactly_the_hands_they_move():
+    """**Issue #302's write-sets.** Two new riders, and the reason each is its own key rather than a
+    reuse of `shuffle_both_hands` is the same both times: the difference between them IS the card.
+
+    `shuffle_own_hand_in` is the ONE-SIDED refresh — Lillie's Determination (24 copies, our largest
+    partial exposure) and Lacey shuffle only MY hand away. It is `shuffle_both_hands` minus
+    `their_hand_size` and `their_deck_count`, and declaring those two would claim a strip the card
+    never performs. `common/strategy/refresh.py`'s ADR-0060 oracle already splits on exactly this
+    (`opponent_shuffles`), so the compendium agreeing with it is one fact stated once.
+
+    `both_hands_to_bottom` writes the SAME six zones as `shuffle_both_hands` — a hand leaving for the
+    deck is the same set of writes wherever in the deck it lands — and is still a distinct key,
+    because to-BOTTOM and shuffled-IN are different facts about `deck_order`, a distinction
+    `other_to_bottom` already keeps for the dig riders.
+
+    Both are NONDETERMINISTIC: both shuffle, so both defeat the determinism proof the engine route
+    needs, exactly as `shuffle_both_hands` does."""
+    own, both = sc.CLAUSE_WRITES["shuffle_own_hand_in"], sc.CLAUSE_WRITES["both_hands_to_bottom"]
+    assert own == {"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}
+    assert not (own & {"their_hand_size", "their_deck_count"})
+    assert both == sc.CLAUSE_WRITES["shuffle_both_hands"]
+    assert both == own | {"their_hand_size", "their_deck_count"}
+    assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= sc.NONDETERMINISTIC_CLAUSES
+    # Declared, and actually USED — a write-set for a rider no card carries would be untested prose.
+    assert {"shuffle_own_hand_in", "both_hands_to_bottom"} <= set(sc.clause_vocabulary(_compendium()))
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_every_clause_KEY_in_the_compendium_is_a_declared_parameter():
+    """**Issue #302's other axis.** `CLAUSE_WRITES` audits the VALUES of `kind` / `rider` / `effect`;
+    until now nothing audited the KEYS, so a parameter no reader knows — a typo, or a shape authored
+    ahead of the consumer meant to read it — sat in the store and priced exactly 0. That is the same
+    silent zero the module exists to prevent, arriving through the other axis of the same dict.
+
+    The walk descends into `amount_if`, so a typo one level down is as visible as one at the top."""
+    keys = sc.clause_keys(_compendium())
+    assert sc.undeclared_clause_keys(keys) == [], (
+        "clause keys with no CLAUSE_PARAMETERS entry: %s" % sc.undeclared_clause_keys(keys))
+    # The three shapes Issue #302 minted, and the nested block they live beside.
+    assert {"to_hand_size", "amount_if", "cost_required", "condition"} <= set(keys)
+    # Every VOCABULARY key is also a parameter key — one dict, two axes, not two vocabularies.
+    assert set(sc.VOCABULARY_KEYS) <= set(sc.CLAUSE_PARAMETERS)
+    # Every declared parameter says what it carries; an undescribed key is an undocumented one.
+    assert [k for k, v in sc.CLAUSE_PARAMETERS.items() if not str(v).strip()] == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_clause_KEY_audit_actually_bites_including_inside_a_nested_block():
+    """The positive control for the walk above. A green key audit means nothing unless the check can
+    go red, and it must go red for a typo NESTED inside `amount_if` as well as for a top-level one —
+    the nested case is the one a shallow walk would pass by not looking."""
+    assert sc.undeclared_clause_keys(["a_parameter_nobody_declared"]) == \
+        ["a_parameter_nobody_declared"]
+    fabricated = {"999": [{"kind": "draw", "amount": 2,
+                           "amount_if": {"condition": "x", "amonut": 4}}]}
+    assert sc.undeclared_clause_keys(sc.clause_keys(fabricated)) == ["amonut"]
+    # …and the same walk on the same fabricated card finds the legitimate nested key too, so the
+    # single result above is a measurement rather than a walk that reached nothing.
+    assert "condition" in sc.clause_keys(fabricated)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
     """One vocabulary, not two. A write-set naming an invented zone would look like coverage while
     corresponding to nothing the snapshot was ever checked for."""
@@ -335,12 +398,17 @@ def test_the_completeness_audit_bites():
 
 @pytest.mark.req("REQ-SNAPSHOT-0004")
 def test_the_partial_clause_cards_are_real_and_carry_the_leg_they_miss():
-    """The owed list, generated off the artifact rather than re-derived. *Surfer* is the worked
-    example the census led with: it carries `draw 1`, and the printed card SWITCHES the Active first
-    — the reason it is played at all."""
+    """The owed list, generated off the artifact rather than re-derived.
+
+    *Surfer* used to be the worked example here — `draw 1` on a card that SWITCHES the Active first —
+    and Issue #302 closed it (the switch is now the `self_switch` rider), which is what a shrinking
+    owed list is supposed to look like. The example moved to *Judge*, whose leg cannot be closed the
+    same way: the card is SYMMETRIC, and pricing the opponent's shuffled-away hand needs a
+    `state_value` term the POC does not have, so it is a declared unknown rather than unfinished
+    work."""
     partial = sc.partial_clause_cards(_compendium())
     assert partial, "no card is declared partial — the audit would be reporting on nothing"
-    assert 1203 in partial and "switch" in partial[1203].lower()
+    assert 1213 in partial and "symmetric" in partial[1213].lower()
     assert all(reason.strip() for reason in partial.values())
     # Declared partial ⇒ actually clause-bearing. A verdict about an absent clause set is a comment.
     clauses = sc.clause_lists(_compendium())
