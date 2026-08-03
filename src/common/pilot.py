@@ -356,6 +356,7 @@ class Board:
     my_active_energy: int = 0
     my_active_hp: int = 0
     opp_bench: tuple = ()          # ((cardId, hp), …) of the opponent's benched Pokémon
+    known_top: tuple = ()          # ((serial, cardId), ...) known ordered top of my deck; head first
     turn: int = 0
     energy_attached: bool = False  # already attached Energy this turn?
     supporter_played: bool = False # the one-per-turn Supporter is already spent (`current.supporterPlayed`)
@@ -1262,7 +1263,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, leaf_option_equivalence=False):
+                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1416,6 +1417,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # split on three byte-identical Riolu, caused by an
                                                         # index-order-dependent greedy rollout (Issue #254).
                                                         # OFF = byte-identical to the pre-#247 rung.
+        self.copy_top_value = copy_top_value            # Issue #289: Slowking's Seek Inspiration is valued
+                                                        # only from a self-verified known top card.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -1576,6 +1579,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if select is None:                       # initial deck-submission step
             return Decision(chosen=list(self.deck))
         if not self._planning:                   # ADR-0033: consume the REAL log stream only —
+            self._observe_known_top(obs)         # Issue #289: live, self-verifying top-deck belief
             self._transients.observe(obs)        # engine-sim future must never mutate match state
             self._turn_boosts.observe(obs)
         options = select.get("option") or []
@@ -2153,6 +2157,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._hand_size_relief_tactical(obs, board, ctx)   # ADR-0102: the SURVIVAL leg
                     + self._grab_refresh_draw_tactical(board, ctx)       # of the same refresh, summed
                                                                          # ACROSS axes (cards vs damage)
+                    + self._top_deck_tactical(obs, select, board, option)
                     + self._denial_play_tactical(obs, board, ctx)
                     + self._denial_target_tactical(obs, select, board, option)
                     + self._snipe_relevance_tactical(obs, select, board, option, ctx)
@@ -2990,6 +2995,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # Damage oracle (ADR-0032): prevention/W/R pierced by the attack's own ignore flags; a
         # prevented ACTIVE hit (0) no longer hides bench-snipe credit below. Context scores scalers exactly.
         dmg_ctx = self._my_damage_context(obs)
+        if self.copy_top_value and self._is_seek_inspiration(obs, attack_id):
+            copied = self._copy_top_tactical(obs, board, dmg_ctx)
+            return copied if copied is not None else -KO_SCORE
         dmg = self.predicted_damage(self._my_active_id(obs), attack_id, opp, context=dmg_ctx)
         eff = _EFFICIENCY * self._attack_cost(attack_id, 0)   # cheaper of equal outcomes wins
         recover = self._recover_units(attack_id, dmg_ctx, board, obs)  # usable re-attachable fuel (Aura Jab)
@@ -3026,6 +3034,84 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 - (_RECOIL_DOOM if self._recoil_flips_doom(attack_id, obs, board) else 0)
                 + self._bench_spread_bonus(board, attack_id)     # a non-KO spread still chips the Bench (pre-load)
                 + self._self_return_escape_credit(attack_id, board))
+
+    def _is_seek_inspiration(self, obs: dict, attack_id) -> bool:
+        active_id = self._my_active_id(obs)
+        st = self.stats.get(active_id) if (active_id is not None and self.stats) else None
+        if not st:
+            return False
+        attacks = tuple(getattr(st, "attacks", ()) or ())
+        return ((active_id == 163 or getattr(st, "name", "") == "Slowking")
+                and bool(attacks)
+                and attack_id == attacks[0]
+                and self._attack_damage(attack_id) == 0)
+
+    def _active_has_seek_inspiration(self, obs: dict) -> bool:
+        active_id = self._my_active_id(obs)
+        st = self.stats.get(active_id) if (active_id is not None and self.stats) else None
+        return any(self._is_seek_inspiration(obs, aid) for aid in (getattr(st, "attacks", ()) or ()))
+
+    @staticmethod
+    def _known_top_card_id(board: Board) -> int | None:
+        if not board.known_top:
+            return None
+        head = board.known_top[0]
+        if isinstance(head, dict):
+            cid = head.get("cardId", head.get("id"))
+            return int(cid) if cid is not None else None
+        if isinstance(head, (tuple, list)) and len(head) >= 2:
+            return int(head[1])
+        if isinstance(head, int):
+            return head
+        return None
+
+    def _copy_top_qualifies(self, card_id: int | None) -> bool:
+        st = self.stats.get(card_id) if (card_id is not None and self.stats) else None
+        return bool(st is not None and getattr(st, "is_pokemon", False)
+                    and not getattr(st, "is_ex_body", False))
+
+    def _copy_top_tactical(self, obs: dict, board: Board, dmg_ctx) -> float | None:
+        card_id = self._known_top_card_id(board)
+        if card_id is None or not self._copy_top_qualifies(card_id):
+            return None
+        st = self.stats.get(card_id) if self.stats else None
+        attacks = tuple(getattr(st, "attacks", ()) or ())
+        if not attacks:
+            return 0
+        return max(self._copied_attack_tactical(obs, board, card_id, aid, dmg_ctx) for aid in attacks)
+
+    def _copied_attack_tactical(self, obs: dict, board: Board, attacker_id: int, attack_id, dmg_ctx) -> float:
+        opp = self._opp_active(obs)
+        hp = (opp or {}).get("hp", 0)
+        dmg = self.predicted_damage(attacker_id, attack_id, opp, context=dmg_ctx)
+        recover = self._recover_units(attack_id, dmg_ctx, board, obs)
+        lock_cost = self._lock_sequence_cost(attack_id, board)
+        snipe_ko = self._snipe_ko_prizes(board.opp_bench, self.combat.rider_snipe(attack_id))
+        spread_ko = self._spread_ko_prizes(board.opp_bench, self.combat.rider_spread(attack_id))
+        bench_ko = snipe_ko + spread_ko
+        if hp and dmg >= hp:
+            bonus = bench_ko or (self._bench_snipe_bonus(board, attack_id)
+                                 + self._bench_spread_bonus(board, attack_id))
+            bonus += min(_RECOVER_KO_CAP, _RECOVER_KO * recover)
+            bonus -= _LOCK_KO if lock_cost > 0 else 0
+            return KO_SCORE + self._prize_value(opp) + bonus
+        if bench_ko:
+            return KO_SCORE + bench_ko
+        return (dmg + ENERGY_RECOVER * recover - lock_cost
+                + self._bench_spread_bonus(board, attack_id))
+
+    def _top_deck_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        if (not self.copy_top_value or select.get("context") != _TO_DECK or option.get("type") != _CARD
+                or not self._active_has_seek_inspiration(obs)):
+            return 0
+        cid = self._option_card_id(obs, select, option)
+        if cid is None:
+            return -KO_SCORE
+        card = self._option_pokemon(obs, select, option) or {}
+        serial = card.get("serial", option.get("index", 0))
+        probe = replace(board, known_top=((serial, cid),))
+        copied = self._copy_top_tactical(obs, probe, self._my_damage_context(obs))
+        return copied if copied is not None else -KO_SCORE
 
     # --- KO-oracle delegates (ADR-0052): combat judgment lives in CombatMath; these wrappers
     # keep the Pilot-side signatures the mixins/doctrines call via `self`.
@@ -7048,6 +7134,78 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             hand = len(opp.get("hand") or [])
         return per_card * (hand or 0)
 
+    @staticmethod
+    def _known_top_log_key(log: dict) -> tuple | None:
+        cid, serial = log.get("cardId"), log.get("serial")
+        if cid is None or serial is None:
+            return None
+        return (int(serial), int(cid))
+
+    @staticmethod
+    def _known_top_reconcile(known: list, log: dict) -> list:
+        key = Pilot._known_top_log_key(log)
+        if key is None or not known:
+            return []
+        return known[1:] if tuple(known[0]) == key else []
+
+    def _observe_known_top(self, obs: dict) -> None:
+        """Consume real logs into the self-verifying known-top deck belief."""
+        logs = obs.get("logs") or []
+        if not logs:
+            return
+        state = obs.get("current") or {}
+        yi = state.get("yourIndex", 0)
+        known = [tuple(x) for x in (getattr(self, "_known_top", None) or ())]
+        placed_top = []
+
+        def flush_top():
+            nonlocal known, placed_top
+            if placed_top:
+                known = placed_top + known
+                placed_top = []
+
+        for lg in logs:
+            if lg.get("playerIndex") != yi:
+                continue
+            typ = lg.get("type")
+            if typ == _SHUFFLE:
+                known = []
+                placed_top = []
+                continue
+            if typ == _DRAW:
+                flush_top()
+                known = self._known_top_reconcile(known, lg)
+                continue
+            if typ == _DRAW_REVERSE:
+                known = []
+                placed_top = []
+                continue
+            if typ == _MOVE_CARD_REVERSE:
+                if lg.get("fromArea") == _DECK or lg.get("toArea") == _DECK:
+                    known = []
+                    placed_top = []
+                continue
+            if typ != _MOVE_CARD:
+                if lg.get("fromArea") == _DECK or lg.get("toArea") == _DECK:
+                    known = []
+                    placed_top = []
+                continue
+            fr, to = lg.get("fromArea"), lg.get("toArea")
+            if to == _DECK:
+                key = self._known_top_log_key(lg)
+                if key is None:
+                    known = []
+                    placed_top = []
+                else:
+                    placed_top.append(key)
+                continue
+            if fr == _DECK:
+                flush_top()
+                known = self._known_top_reconcile(known, lg)
+
+        flush_top()
+        self._known_top = tuple(known) or None
+
     def carried(self):
         """A frozen :class:`~common.state_model.CarriedState` snapshot of the facts that persist
         ACROSS decision points (ADR-0068 decision 2).
@@ -7064,7 +7222,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         remembered to add one."""
         from common.state_model import CarriedState
         return CarriedState.of(phase_prev=getattr(self, "_phase_prev", None),
-                               my_path_prev=getattr(self, "_my_path_prev", None))
+                               my_path_prev=getattr(self, "_my_path_prev", None),
+                               known_top=getattr(self, "_known_top", None))
 
     def _snapshot(self, obs: dict, *, my_index=None, deck_empty=None,
                   read=None, brief=None, matchup_plan=None, gamma: float = 0.0,
@@ -7225,6 +7384,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                               if model.mine.active is not None else 0),  #   UNITS, not typed count
             my_active_hp=(ma or {}).get("hp", 0),
             opp_bench=tuple((b.card_id, b.body.get("hp", 0)) for b in model.theirs.bench),
+            known_top=tuple(model.carried.get("known_top") or ()),
             turn=model.mine.turn,                               # ← StateModel: the turn/allowance
             energy_attached=model.energy_attached,              #   facts, off their one home
             supporter_played=model.supporter_played,

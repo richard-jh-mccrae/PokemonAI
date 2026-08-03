@@ -35,6 +35,7 @@ _TO_ACTIVE = 4    # promote a benched Pokémon to Active Spot
 _TO_BENCH = 5     # fetch a Pokémon straight onto Bench (Buddy-Buddy Poffin)
 _TO_HAND = 7      # search: pick which card to add to hand
 _DISCARD = 8      # pick which card(s) to discard (e.g. Ultra Ball's cost)
+_TO_DECK = 9      # pick which card to put on top of the deck (Ciphermaniac / Academy at Night)
 _DAMAGE = 15      # pick which Pokémon an attack damages (bench snipe)
 _DISCARD_ENERGY = 30      # pick which Energy to discard from an opponent's Pokémon (Crushing Hammer,
                           # post-heads). Options are OptionType.ENERGY over their ACTIVE **and** BENCH
@@ -79,7 +80,11 @@ _LOOKING = 12  # AreaType.LOOKING — a face-up reveal (Pokégear/search top-N) 
 _ZONE = {2: "hand", 3: "discard", 4: "active", 5: "bench"}  # AreaType -> player-dict zone key
 
 # ── LogType (cg/api.py) ──
+_SHUFFLE = 0
+_DRAW = 4
+_DRAW_REVERSE = 5
 _MOVE_CARD = 6  # LogType.MOVE_CARD — a card moved face-up (the pregame Active/Bench placement logs)
+_MOVE_CARD_REVERSE = 7
 
 # ── the rules' own constants ──
 #: Prize cards each player sets aside at Set Up — 6 (`docs/rulebook.txt` L57: *"Prize cards are 6
@@ -171,9 +176,10 @@ __all__ = [
     "_PLAY", "_ATTACH", "_EVOLVE", "_RETREAT", "_CARD", "_YES", "_NO", "_ATTACK", "_END",
     "_ENERGY", "_DISCARD_ENERGY",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
-    "_DISCARD", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
+    "_DISCARD", "_TO_DECK", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
-    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_MOVE_CARD",
+    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_SHUFFLE", "_DRAW", "_DRAW_REVERSE",
+    "_MOVE_CARD", "_MOVE_CARD_REVERSE",
     "KO_SCORE", "ENERGY_RECOVER", "_METAL",
     "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",

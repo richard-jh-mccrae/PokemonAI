@@ -104,6 +104,9 @@ PROFILE = {
                                     # plus the human flip review, not a win-rate run. Also narrows #178's
                                     # all-or-nothing defer to the sims the rung actually consults, so it
                                     # defers LESS often. Root cause (the order-dependent rollout) = #254.
+    "copy_top_value": True,         # Issue #289: known-top carry + Slowking copy-top pricing ships ON.
+                                    # Unknown top remains fail-closed, so the feature is silent unless
+                                    # the log stream has self-verified the top card.
     "evolve_value": True,           # the EVOLVE DECIDER, shipped ON 2026-07-25 (ADR-0070, #140): the body-substituted
                                     # deploy delta + the odds-priced income. The sweep's 10 flips were
                                     # user-ruled (6 FIX, 0 regression) and the rungs it replaced are
