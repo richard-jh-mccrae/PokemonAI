@@ -125,7 +125,15 @@ def test_the_key_set_is_exactly_the_shipped_vocabulary():
     `hidden_units` is deliberately ABSENT though the oracle reads it (`strategy/damage.py`): it is a
     caller's direct OVERRIDE of the hidden-scaler count, which this builder answers instead with the
     deck facts the oracle turns into a pigeonhole floor / hypergeometric mean. Emitting both would
-    be two answers to one question, and the override wins — so the builder must not offer one."""
+    be two answers to one question, and the override wins — so the builder must not offer one.
+
+    **The last two are RAW MATERIAL, not variable names** (ADR-TEMP-361, Issue #361). The open
+    filtered-count family — 651's "each Pokémon in play that has 'Koffing' or 'Weezing' in its name",
+    708's "each of your Pokémon in play that has the Round attack" — takes an argument that lives on
+    the ATTACK (`AttackStat.scaleFilter`), so this builder cannot pre-reduce it to an integer: it has
+    never seen the attack. It supplies the material and the oracle reduces it, exactly as
+    `atk_discard_energy_total` / `atk_discard_basic_by_type` already serve `atk_discard_energy`. Two
+    keys, one per family, so the collision that would follow from a key per FILTER cannot arise."""
     assert set(damage_context(_facts(), _facts())) == {
         "atk_hand", "def_hand",
         "atk_active_energy", "def_active_energy", "both_active_energy",
@@ -135,6 +143,7 @@ def test_the_key_set_is_exactly_the_shipped_vocabulary():
         "atk_self_counters", "def_counters", "def_counters_all",
         "atk_prizes_taken", "def_prizes_taken",
         "atk_bench_stage2", "def_ex_in_play",
+        "both_in_play_names", "atk_in_play_attack_names",
     }
 
 

@@ -135,6 +135,16 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
             units = sum(1 for p in gs.in_play(seat)
                         for aid in gs.stat(p.top).attacks
                         if gs.db.attacks[aid].name == scale["attackName"])
+        elif scale["var"] == "both_in_play_named":   # Explode Together Now: "each Pokemon in play
+            subs = scale["nameContains"]             # that has 'Koffing' or 'Weezing' in its name
+            units = sum(1 for s in (seat, 1 - seat)  # (both yours and your opponent's)" — SUBSTRING
+                        for p in gs.in_play(s)       # over the printed name, so the owner prefix in
+                        if any(t in gs.stat(p.top).name for t in subs))   # "Team Rocket's Koffing"
+                                                     # matches: rules.md §9 makes the prefix PART of
+                                                     # the name, so only containment counts it.
+                                                     # Both seats, so the count is seat-symmetric —
+                                                     # the engine mirror of the agent's
+                                                     # `both_in_play_named` (ADR-TEMP-361).
         elif scale["var"] == "milled_basic_energy":   # Hammer-lanche: "for each Basic
             from .schema import CardType                # {W} Energy you discarded this way"
             et = scale.get("energyType")

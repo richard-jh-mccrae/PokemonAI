@@ -140,10 +140,16 @@ def test_all_four_families_are_shipped_with_their_printed_per_unit():
 
 @pytest.mark.req("REQ-SCALER-0001")
 def test_the_oracle_reads_each_variable_as_a_plain_context_key():
-    """ADR-0083 §4's rule, held: every variable name IS a context key, so the oracle stays one dict
-    lookup per scaler. The `atk_discard_energy` two-key special case is the ONE exception in the
-    vocabulary and none of these four joins it — which is the whole reason the two FILTERED counts
-    take flat names instead of growing a filtered-count form (see `src/common/CONTEXT.md`)."""
+    """ADR-0083 §4's rule, held for these four: every variable name IS a context key, so the oracle
+    stays one dict lookup per scaler.
+
+    The vocabulary HAS since grown a filtered-count form (ADR-TEMP-361, Issue #361 — see
+    `tests/strategy/test_filtered_count_scalers.py`), and this test is what says these four did not
+    move onto it. The split is CLOSED vs OPEN predicates: a stage, a rule box and a damage counter
+    are finite engine-known facts that a flat name states in full, while "has 'Koffing' in its name"
+    takes an arbitrary argument that a name could only state by hardcoding a card list. Migrating
+    these four is explicitly out of scope of that ruling — they work, they are corpus-ruled, and
+    moving them would move the damage oracle for attacks Issue #361 was not about."""
     dfn = _defender()
     for aid, (var, per_unit) in SHIPPED.items():
         stat = AttackStat(aid, damage=0, cost=2, scaleVar=var, scalePerUnit=per_unit)
