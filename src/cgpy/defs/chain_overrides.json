@@ -2031,7 +2031,7 @@
   },
   "attack:651": {
     "name": "Explode Together Now",
-    "_provenance": "Issue #361 / ADR-TEMP-361. The generated layer DEFERS this attack (\"unparsed effect text\"), so cgpy raised UnsupportedCard on it while the agent-side oracle shipped a frozen {\"damage\": 80} for the same card. Printed: \"This attack does 40 damage for each Pokemon in play that has 'Koffing' or 'Weezing' in its name (both yours and your opponent's).\" (data/EN_Card_Data.csv 462, src/cgpy/defs/attack_data.json 651: damage 0). Substring over the printed name, both seats, Active AND Bench (gs.in_play) - the engine mirror of the agent's both_in_play_named, pinned equal in tests/parity/test_damage_goldens.py.",
+    "_provenance": "Issue #361 / ADR-0115. The generated layer DEFERS this attack (\"unparsed effect text\"), so cgpy raised UnsupportedCard on it while the agent-side oracle shipped a frozen {\"damage\": 80} for the same card. Printed: \"This attack does 40 damage for each Pokemon in play that has 'Koffing' or 'Weezing' in its name (both yours and your opponent's).\" (data/EN_Card_Data.csv 462, src/cgpy/defs/attack_data.json 651: damage 0). Substring over the printed name, both seats, Active AND Bench (gs.in_play) - the engine mirror of the agent's both_in_play_named, pinned equal in tests/parity/test_damage_goldens.py.",
     "scale": {
       "var": "both_in_play_named",
       "nameContains": [

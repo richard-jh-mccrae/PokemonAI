@@ -1220,7 +1220,7 @@
     ]
    },
    "owner": "#364",
-   "note": "462 Team Rocket's Weezing, Explode Together Now: \"This attack does 40 damage for each Pokemon in play that has 'Koffing' or 'Weezing' in its name (both yours and your opponent's).\" Printed damage is 0, so the override is the ONLY source of the number, and the previous {\"damage\": 80} was one board's count frozen -- a 2x over-prediction on any board with a single matching Pokemon in play. Developer-ruled on Issue #361: GROW THE VOCABULARY (ADR-TEMP-361) rather than drop to the printed 0. The harness cannot fit this: no sweep axis varies WHICH cards are in play, only how many, so the count is constant at 1 across every point it can produce.",
+   "note": "462 Team Rocket's Weezing, Explode Together Now: \"This attack does 40 damage for each Pokemon in play that has 'Koffing' or 'Weezing' in its name (both yours and your opponent's).\" Printed damage is 0, so the override is the ONLY source of the number, and the previous {\"damage\": 80} was one board's count frozen -- a 2x over-prediction on any board with a single matching Pokemon in play. Developer-ruled on Issue #361: GROW THE VOCABULARY (ADR-0115) rather than drop to the printed 0. The harness cannot fit this: no sweep axis varies WHICH cards are in play, only how many, so the count is constant at 1 across every point it can produce.",
    "evidence": []
   },
   "657": {
@@ -1289,7 +1289,7 @@
     ]
    },
    "owner": "#364",
-   "note": "501 Palpitoad, Round: \"This attack does 40 damage for each of your Pokemon in play that has the Round attack.\" Printed damage is 0, so the override is the ONLY source of the number, and the previous {\"damage\": 80} was one board's count frozen -- a 2x over-prediction whenever Palpitoad is the only Round-haver in play. Developer-ruled on Issue #361: GROW THE VOCABULARY (ADR-TEMP-361). The engine's own ChainDef already prices it this way (src/cgpy/defs/generated_chains.json attack:708, scale atk_named_attack/40), which corroborates the reading; the harness still cannot FIT it, because no sweep axis places a named card on a chosen bench.",
+   "note": "501 Palpitoad, Round: \"This attack does 40 damage for each of your Pokemon in play that has the Round attack.\" Printed damage is 0, so the override is the ONLY source of the number, and the previous {\"damage\": 80} was one board's count frozen -- a 2x over-prediction whenever Palpitoad is the only Round-haver in play. Developer-ruled on Issue #361: GROW THE VOCABULARY (ADR-0115). The engine's own ChainDef already prices it this way (src/cgpy/defs/generated_chains.json attack:708, scale atk_named_attack/40), which corroborates the reading; the harness still cannot FIT it, because no sweep axis places a named card on a chosen bench.",
    "evidence": []
   },
   "717": {

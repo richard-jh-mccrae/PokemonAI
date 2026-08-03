@@ -17,7 +17,7 @@ attack is on its `_GATE_ATTACKS` list.
 entries to the printed 0. So the vocabulary gains a *filtered-count FORM*: a family name in
 `scaleVar` plus the predicate's argument in a new `AttackStat.scaleFilter`, resolved against raw
 material the context supplies (`both_in_play_names`, `atk_in_play_attack_names`) rather than a
-pre-reduced integer. `ADR-TEMP-361` records why Issue #225's decision to flatten its three filtered
+pre-reduced integer. `ADR-0115` records why Issue #225's decision to flatten its three filtered
 counts into atoms does not govern here: those predicates are CLOSED (a stage, a rule box, a damage
 counter), these are OPEN (an arbitrary name substring, an arbitrary attack name), and flattening an
 open predicate means hardcoding card names into the vocabulary.

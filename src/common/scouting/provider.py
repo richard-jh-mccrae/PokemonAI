@@ -338,7 +338,7 @@ class AttackStat:
                                        # atk_discard_energy — EXACT (all visible incl. both discards)
     scaleEnergyType: int | None = None  # atk_discard_energy's type filter (Riptide Basic {W} -> 3);
                                        # None = count EVERY Energy card in attacker's discard
-    scaleFilter: tuple | None = None   # the FILTERED-COUNT family's predicate ARGUMENT (ADR-TEMP-361,
+    scaleFilter: tuple | None = None   # the FILTERED-COUNT family's predicate ARGUMENT (ADR-0115,
                                        # Issue #361): the name substrings `both_in_play_named` looks
                                        # for ("Koffing"/"Weezing"), the attack names
                                        # `atk_in_play_with_attack` looks for ("Round"). The scaler

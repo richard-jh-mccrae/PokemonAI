@@ -18,7 +18,7 @@ from __future__ import annotations
 _RESISTANCE = 30       # flat S&V Resistance reduction — engine-verified (tools/sim/probe_resistance.py)
 _PREVENT_EX_TAG = "prevent_ex_damage"
 
-#: The OPEN filtered-count family (ADR-TEMP-361, Issue #361), family -> the context key holding its
+#: The OPEN filtered-count family (ADR-0115, Issue #361), family -> the context key holding its
 #: RAW MATERIAL. ``scaleVar`` names the FAMILY and ``AttackStat.scaleFilter`` carries the predicate's
 #: argument, because the argument is an arbitrary name substring or attack name and cannot be
 #: flattened into a variable name without hardcoding a card list into the vocabulary. A pre-reduced

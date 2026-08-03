@@ -1,4 +1,4 @@
-# ADR-TEMP-361 — A scaler predicate that is OPEN takes an argument; one that is CLOSED keeps its flat name
+# ADR-0115 — A scaler predicate that is OPEN takes an argument; one that is CLOSED keeps its flat name
 
 **Status:** Accepted (developer-ruled 2026-08-03 on Issue #361 — *"GROW THE VOCABULARY: a
 filtered-count family"*). Build: Issue #361. **Extends ADR-0083 §4 and supersedes, for open
@@ -7,7 +7,7 @@ predicates only, the flat-names-only reading that Issue #225 / POC-T1 recorded i
 (`base + per_unit × count(variable)`), ADR-0083 §2's measurement rule, or ADR-0108's provenance
 contract — all three are honoured below.
 
-**Number is a rebase artifact.** Drafted as `ADR-TEMP-361` per `docs/adr/README.md`'s "claim nothing,
+**Number is a rebase artifact.** Drafted as `ADR-0115` per `docs/adr/README.md`'s "claim nothing,
 cite the issue, renumber at rebase"; `/open-pr` finalizes it. **Cite it as Issue #361.**
 
 **Context issues:** Issue #361 (this ruling and build), Issue #225 / POC-T1 (the flattening decision

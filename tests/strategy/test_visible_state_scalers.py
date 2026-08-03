@@ -143,7 +143,7 @@ def test_the_oracle_reads_each_variable_as_a_plain_context_key():
     """ADR-0083 §4's rule, held for these four: every variable name IS a context key, so the oracle
     stays one dict lookup per scaler.
 
-    The vocabulary HAS since grown a filtered-count form (ADR-TEMP-361, Issue #361 — see
+    The vocabulary HAS since grown a filtered-count form (ADR-0115, Issue #361 — see
     `tests/strategy/test_filtered_count_scalers.py`), and this test is what says these four did not
     move onto it. The split is CLOSED vs OPEN predicates: a stage, a rule box and a damage counter
     are finite engine-known facts that a flat name states in full, while "has 'Koffing' in its name"

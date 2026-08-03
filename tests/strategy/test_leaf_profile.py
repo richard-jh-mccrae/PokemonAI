@@ -303,7 +303,7 @@ STATE_VALUE_PROFILE = frozenset({
     # share, and `damage_context` itself only decides which side's record becomes `atk_`/`def_`.
     # So the profile below does not grow at all for Issue #280 — the second direction reads no
     # field the first did not.
-    # ── ADR-TEMP-361 / Issue #361: the gatherer walks two MORE per-side facts ──────────────────
+    # ── ADR-0115 / Issue #361: the gatherer walks two MORE per-side facts ──────────────────
     # The open filtered-count family reads RAW MATERIAL rather than a pre-reduced count, because its
     # predicate's argument lives on the ATTACK (`AttackStat.scaleFilter`) and the context builder has
     # never seen the attack. So `damage_facts` gained `in_play_names` (a name per in-play body) and

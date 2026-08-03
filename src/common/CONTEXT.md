@@ -213,7 +213,7 @@ your opponent's)". A `both_` variable is the sum of its two per-side halves and 
 direction-SYMMETRIC: one value is correct whichever side is attacking (ADR-0083, Issue #213).
 A variable may also be a **filtered count** — a predicate over a zone rather than the zone's size —
 and the vocabulary now holds **two kinds of them**, split on whether the predicate is CLOSED or OPEN
-(ADR-TEMP-361, Issue #361; this supersedes the flat-names-only rule ruled with Issue #225, POC-T1).
+(ADR-0115, Issue #361; this supersedes the flat-names-only rule ruled with Issue #225, POC-T1).
 
   * A **closed** predicate takes a **flat name**, exactly as before: `atk_bench_stage2` (Stage 2
     Pokémon on my Bench), `def_ex_in_play` (their `{ex}` in play), `def_counters_all` (damage

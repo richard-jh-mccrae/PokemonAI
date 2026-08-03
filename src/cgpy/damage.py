@@ -144,7 +144,7 @@ def attack_damage(gs: GameState, attacker: PokemonInPlay, attack: Attack,
                                                      # the name, so only containment counts it.
                                                      # Both seats, so the count is seat-symmetric —
                                                      # the engine mirror of the agent's
-                                                     # `both_in_play_named` (ADR-TEMP-361).
+                                                     # `both_in_play_named` (ADR-0115).
         elif scale["var"] == "milled_basic_energy":   # Hammer-lanche: "for each Basic
             from .schema import CardType                # {W} Energy you discarded this way"
             et = scale.get("energyType")

@@ -266,7 +266,7 @@ def test_every_attackBonus_Tool_agrees_with_its_printed_ex_restriction():
 
 
 # ------------------------------------------------- the open FILTERED-COUNT family (Issue #361)
-# ADR-TEMP-361 grew the agent-side scaler vocabulary a filtered-count FORM: `scaleVar` names the
+# ADR-0115 grew the agent-side scaler vocabulary a filtered-count FORM: `scaleVar` names the
 # family and `AttackStat.scaleFilter` carries the predicate's argument. Two implementations of one
 # predicate now exist — `cgpy.damage.attack_damage`'s `scale` leg and
 # `common.strategy.damage.compute_active_damage` — and two implementations of one fact are the thing

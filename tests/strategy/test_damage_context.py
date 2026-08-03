@@ -127,7 +127,7 @@ def test_the_key_set_is_exactly_the_shipped_vocabulary():
     deck facts the oracle turns into a pigeonhole floor / hypergeometric mean. Emitting both would
     be two answers to one question, and the override wins — so the builder must not offer one.
 
-    **The last two are RAW MATERIAL, not variable names** (ADR-TEMP-361, Issue #361). The open
+    **The last two are RAW MATERIAL, not variable names** (ADR-0115, Issue #361). The open
     filtered-count family — 651's "each Pokémon in play that has 'Koffing' or 'Weezing' in its name",
     708's "each of your Pokémon in play that has the Round attack" — takes an argument that lives on
     the ATTACK (`AttackStat.scaleFilter`), so this builder cannot pre-reduce it to an integer: it has

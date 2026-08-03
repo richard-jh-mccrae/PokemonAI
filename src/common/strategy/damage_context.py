@@ -130,7 +130,7 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
       (``common/attack_overrides.json``);
     * the **filtered-count raw material** — ``atk_discard_energy_total`` /
       ``atk_discard_basic_by_type`` for ``atk_discard_energy``, and ``both_in_play_names`` /
-      ``atk_in_play_attack_names`` for the open filtered-count family (ADR-TEMP-361). These keys are
+      ``atk_in_play_attack_names`` for the open filtered-count family (ADR-0115). These keys are
       NOT variable names: the attack's own ``scaleFilter`` reduces them at lookup time, which is what
       lets one key serve every attack in a family whose argument differs per card;
     * the **attacker's private riders** the oracle reads off the same dict — ``atk_bench_names``
@@ -179,11 +179,11 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
         # a damage counter), so the name says the whole fact and the value can be pre-reduced to an
         # integer here. They are deliberately NOT migrated onto the open form below — they work,
         # they are corpus-ruled, and moving them would move the damage oracle for attacks
-        # ADR-TEMP-361 is not about (`src/common/CONTEXT.md`).
+        # ADR-0115 is not about (`src/common/CONTEXT.md`).
         "atk_bench_stage2": attacker.bench_stage2,
         "def_counters_all": defender.counters_in_play,
         "def_ex_in_play": defender.ex_in_play,
-        # the OPEN filtered counts (ADR-TEMP-361, Issue #361) — the predicate's argument is an
+        # the OPEN filtered counts (ADR-0115, Issue #361) — the predicate's argument is an
         # arbitrary name substring or attack name, so it cannot be flattened into the variable's
         # NAME without hardcoding a card list into the vocabulary. These two keys therefore carry
         # RAW MATERIAL rather than a count, and the oracle reduces it with the filter the attack
