@@ -75,6 +75,7 @@ EXPECTED_SHIPPED = {
                                     # decision — sim one representative per class, fan the class MAX out.
                                     # Not a new leaf term awaiting ladder evidence; it deletes an
                                     # inconsistency the simulator itself disproved (1167.0 vs 95.4).
+    "copy_top_value": True,         # Issue #289 ON: known-top carry + Slowking copy-top value.
     "evolve_value": True,           # the EVOLVE DECIDER, shipped ON 2026-07-25 (ADR-0070, #140). The swap
                                     # protocol's batched review is closed (6 FIX, 0 regression) and the
                                     # four baseline_evolution rungs it replaced are DELETED, so OFF is

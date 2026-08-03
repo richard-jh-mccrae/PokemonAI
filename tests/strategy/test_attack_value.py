@@ -6,7 +6,7 @@ import pytest
 from common.pilot import KO_SCORE, Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
-from pilot_helpers import ACTIVE, BENCH, attack_opt, card_opt, make_select, opt, poke, state
+from pilot_helpers import ACTIVE, BENCH, HAND, attack_opt, card_opt, make_select, opt, poke, state
 
 MY_ATK = 920        # my Active attacker (two equal-cost KO attacks, one with a bench rider)
 MY_EX = 921         # my Active: a 2-prize ex (its self-KO hands opponent 2 prizes)
@@ -19,6 +19,12 @@ OPP_BENCH = 700     # opp benched Pokémon — a snipe target
 OPP_BENCH2 = 701    # a second opp benched Pokémon (multi-KO spread test)
 EX_BENCHIE = 702    # a benched 2-prize ex (spread-placement prize-preference test)
 A_PLAIN, A_SNIPE, A_RECOIL, A_FLAT, A_SPREAD = 101, 102, 110, 103, 104   # attack ids
+SLOWKING = 163
+COPY_BODY = 750
+COPY_RULEBOX = 751
+COPY_TRAINER = 752
+COPY_WEAK = 753
+SEEK, SUPER_PSY_BOLT, COPY_HIT, COPY_WEAK_HIT = 1201, 1202, 1203, 1204
 WATER, FIGHTING = 3, 6
 
 _CARDS = {
@@ -32,6 +38,11 @@ _CARDS = {
     OPP_BENCH: CardStat(OPP_BENCH, hp=60),
     OPP_BENCH2: CardStat(OPP_BENCH2, hp=60),
     EX_BENCHIE: CardStat(EX_BENCHIE, hp=200, ex=True),   # 2-prize benched ex
+    SLOWKING: CardStat(SLOWKING, name="Slowking", hp=120, attacks=(SEEK, SUPER_PSY_BOLT)),
+    COPY_BODY: CardStat(COPY_BODY, hp=120, attacks=(COPY_HIT,)),
+    COPY_RULEBOX: CardStat(COPY_RULEBOX, hp=220, ex=True, attacks=(COPY_HIT,)),
+    COPY_TRAINER: CardStat(COPY_TRAINER, name="Trainer", cardType=3),
+    COPY_WEAK: CardStat(COPY_WEAK, hp=120, attacks=(COPY_WEAK_HIT,)),
 }
 
 
@@ -47,6 +58,191 @@ def _gpilot(**kw):
     from common.strategy.general_strategy import GENERAL_STRATEGY
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                  stats=DictCardStatProvider(_CARDS), **kw)
+
+
+# --- Issue #289: known top-of-deck copy attack --------------------------------------------------
+
+def _seek_obs():
+    return make_select([attack_opt(SEEK), opt(14)],
+                       current=state(active=poke(SLOWKING, energy=1),
+                                     opp_active=poke(OPP, hp=100)))
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_seek_inspiration_is_not_live_without_a_known_top_card():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+
+    decision = p.explain(_seek_obs())
+
+    assert decision.options[0].tactical < 0
+    assert p.decide(_seek_obs()) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_slowkings_printed_second_attack_is_not_treated_as_seek_inspiration():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                SUPER_PSY_BOLT: AttackStat(SUPER_PSY_BOLT, damage=120, cost=3)},
+               copy_top_value=True)
+    obs = make_select([attack_opt(SUPER_PSY_BOLT), opt(14)],
+                      current=state(active=poke(SLOWKING, energy=3),
+                                    opp_active=poke(OPP, hp=100)))
+
+    assert p.explain(obs).options[0].tactical >= KO_SCORE
+    assert p.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_seek_inspiration_prices_a_known_non_rulebox_pokemon_attack():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+
+    decision = p.explain(_seek_obs())
+
+    assert decision.options[0].tactical >= KO_SCORE + 1
+    assert p.decide(_seek_obs()) == [0]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_seek_inspiration_known_rulebox_top_whiffs():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_RULEBOX),)
+
+    decision = p.explain(_seek_obs())
+
+    assert decision.options[0].tactical < 0
+    assert p.decide(_seek_obs()) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_seek_inspiration_does_not_charge_the_copied_attacks_energy_cost():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=99)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+
+    decision = p.explain(_seek_obs())
+
+    assert decision.options[0].tactical >= KO_SCORE + 1
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_face_up_move_to_my_deck_creates_known_top_for_the_same_decision():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 6, "playerIndex": 0, "cardId": COPY_BODY, "serial": 77,
+                    "fromArea": 2, "toArea": 1}]
+
+    assert p.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_known_top_draw_mismatch_clears_the_whole_belief():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 4, "playerIndex": 0, "cardId": COPY_BODY, "serial": 78}]
+
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_known_top_matching_draw_advances_to_the_tail():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4),
+                COPY_WEAK_HIT: AttackStat(COPY_WEAK_HIT, damage=20, cost=1)},
+               copy_top_value=True)
+    p._known_top = ((76, COPY_WEAK), (77, COPY_BODY))
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 4, "playerIndex": 0, "cardId": COPY_WEAK, "serial": 76}]
+
+    assert p.decide(obs) == [0]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_shuffle_clears_known_top():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 0, "playerIndex": 0}]
+
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_face_down_deck_movement_clears_known_top():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 7, "playerIndex": 0, "fromArea": 2, "toArea": 1}]
+
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_unknown_deck_movement_clears_known_top():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    p._known_top = ((77, COPY_BODY),)
+    obs = _seek_obs()
+    obs["logs"] = [{"type": 99, "playerIndex": 0, "fromArea": 1, "toArea": 2}]
+
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_top_deck_select_prefers_the_best_copy_attack_body():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4),
+                COPY_WEAK_HIT: AttackStat(COPY_WEAK_HIT, damage=20, cost=1)},
+               copy_top_value=True)
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=9,
+                      current=state(active=poke(SLOWKING, energy=1),
+                                    hand=[COPY_WEAK, COPY_BODY],
+                                    opp_active=poke(OPP, hp=100)))
+
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_top_deck_select_demotes_a_known_whiff_card():
+    p = _pilot({SEEK: AttackStat(SEEK, damage=0, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=9,
+                      current=state(active=poke(SLOWKING, energy=1),
+                                    hand=[COPY_TRAINER, COPY_BODY],
+                                    opp_active=poke(OPP, hp=100)))
+
+    assert p.decide(obs) == [1]
+
+
+@pytest.mark.req("REQ-KNOWN-TOP-0001")
+def test_top_deck_select_is_silent_without_active_seek_inspiration():
+    p = _pilot({A_PLAIN: AttackStat(A_PLAIN, damage=20, cost=1),
+                COPY_HIT: AttackStat(COPY_HIT, damage=200, cost=4)},
+               copy_top_value=True)
+    obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=9,
+                      current=state(active=poke(MY_ATK, energy=1),
+                                    hand=[COPY_WEAK, COPY_BODY],
+                                    opp_active=poke(OPP, hp=100)))
+
+    opts = p.explain(obs).options
+    assert opts[0].tactical == opts[1].tactical == 0
 
 
 # --- #14 bench-snipe bonus: prefer the equal-cost KO that also snipes a benched target -------------
