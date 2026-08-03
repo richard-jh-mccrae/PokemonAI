@@ -1,4 +1,4 @@
-# Wave-3 packet — issue-sequence run (281, 280, 282, 284, 285, 286)
+# Wave-3 packet — issue-sequence run (Issues #281, #280, #343, #282, #345, #346, #284, #285, #286)
 
 Gate flips from this batch, pending developer ruling. None conformed into either baseline.json —
 a baseline is a ruling record, not something a sub-issue may recapture on its own recognisance.
@@ -473,3 +473,155 @@ control, and it makes 1175 a defect rather than a convention the file does not f
 inline: `cgpy` is the offline simulator the leaf gate runs on (`leaf_lab._cgpy_pilot_builder` sets
 `pilot._search_api = cgpy_api`), so bundling a damage change there would make any future flip
 unattributable. Queued immediately after Issue #345; nothing later depends on it.
+
+---
+
+# Issue #346 — Brave Bangle's `{ex}` defender gate in the cgpy twin
+
+## Flips
+
+**Zero on both gates.** Leaf: `1 unruled` — still `81906755|1|decision|9`, carried from Issue #280
+and already ruled above; the pre-change and post-change reports are **byte-identical** (198 gated,
+67 held out, 3 voided in both). Decision Gate: **PASS, 0 picks moved, 0 rulings moved**, `agree
+250/347 -> 250/347`, also byte-identical. No row is added to the Flips table.
+
+## Read this one differently: the change is to the MEASURING INSTRUMENT, not the measured code
+
+Every other sub-issue in this run changed scoring code and asked the leaf lab whether the *decision*
+moved. This one changes `src/cgpy/defs/chain_overrides.json` — a card definition inside **cgpy**,
+which `leaf_lab._cgpy_pilot_builder` installs as `pilot._search_api`. cgpy *is* the rollout simulator
+the Discrimination Gate runs on. So a flip here would not mean "the agent now prefers a different
+option"; it would mean "the ruler changed length". A zero is therefore the *expected and desired*
+result, and the interesting question is not "did it move" but "**could** it have moved" — which is
+what the controls below answer.
+
+## The zero is EXPLAINED, and the explanation is measured rather than inferred
+
+Three layered controls, each pointed one step closer to the changed line.
+
+| control | mutation | leaf gate |
+|---|---|---|
+| **C — is the host block reached?** | `dmg += 3000` unconditionally inside the same `if defender_is_active:` block that hosts the tool loop, `cgpy/damage.py` | **MOVED**: `1 unruled, 67 ruled, 3 voided` → `21 unruled, 55 ruled, 5 voided` |
+| **A — is the tool-loop payload reached?** | every attached-tool `attackBonus` inflated: `dmg += ab["n"] + 3000` | **no movement** |
+| **B — is card 1175 reached?** | Brave Bangle's own `"n": 30` → `3000` | **no movement** |
+
+Control C is the positive control proper: the leaf lab demonstrably executes the exact region of
+`attack_damage` this issue's data feeds, and reports a 20-frame swing when it changes. A and B are
+the explanation of the zero, and they are consistent with each other — the payload is never reached,
+so no per-card value inside it can matter.
+
+**Direct measurement rather than inference.** Instrumented the loop itself (counter installed,
+one leaf pass, `git checkout` to revert):
+
+```
+tools_seen=281  bonus_reached=0  tool_ids=[1159, 1174]
+```
+
+The loop over `attacker.tools` runs **281 times** in a full pass, on exactly two distinct Tools —
+**1159 Hero's Cape** (`{"tool": {"hpBonus": 100}}`) and **1174 Air Balloon**
+(`{"tool": {"retreatBonus": -2}}`). Neither carries an `attackBonus`, so the `if not ab: continue`
+fires every single time and the bonus payload executes **zero** times. No `attackBonus` Tool is ever
+attached to an attacking Active anywhere in a leaf-lab rollout. **No** ChainDef edit to
+`tool.attackBonus` — this one or any other — can move this gate today, which is a fact about the
+corpus, not about the fix.
+
+This composes with Issue #345's corpus sweep from the other side of the seam: Brave Bangle appears in
+19 of 372 corpus frames, on a Bench in 3 and on an **Active in 0**. The Pilot never sees it on an
+Active; the twin never sees any boost Tool on an attacker.
+
+## The self-filed spec, independently re-verified
+
+Issue #346 was filed minutes earlier by Issue #345's own implementer, from inside this same batch
+run. Per `CLAUDE.md` a self-filed issue is the implementer's reading, not a spec, so every claim was
+re-run at source before any edit. **All four load-bearing claims held** — the first time in this run
+that a self-filed issue's central argument survived verification intact. One *supporting* claim did
+not; it is claim 5 below and it does not change the decision.
+
+1. **Card text (`data/EN_Card_Data.csv` id 1175).** Verbatim, including the parenthetical the issue
+   quoted in full: *"If the Pokémon this card is attached to doesn't have a Rule Box, the attacks it
+   uses do 30 more damage to your opponent's Active Pokémon {ex} (before applying Weakness and
+   Resistance). (Pokémon {ex}, Pokémon {V}, etc. have Rule Boxes.)"* Two gates: holder = no Rule Box,
+   defender = Active Pokémon `{ex}`. **Supported.**
+2. **The ChainDef.** `src/cgpy/defs/chain_overrides.json` lines 1852-1862 carried
+   `{"n": 30, "holder": {"noRuleBox": true}}` and no `defenderEx`. The issue quoted it compacted onto
+   one line; the file is pretty-printed, so the quote is a paraphrase of the literal bytes but
+   semantically exact. **Supported.**
+3. **The schema key is live, not invented.** `src/cgpy/damage.py:185` reads
+   `if ab.get("defenderEx") and not (dstat.ex or dstat.megaEx): continue`. The issue's ten-line quote
+   matches lines 181-190 verbatim. So this really is a one-key data fix and not an unmodelled
+   mechanism. **Supported.**
+4. **The 3-Tool sweep, re-run.** Merging `generated_chains.json` under `chain_overrides.json` in
+   `load_chain_defs`'s own order gives 2823 entries, of which exactly **three** carry a
+   `tool.attackBonus`: 1158 Maximum Belt (`defenderEx` True, text prints `{ex}` True), 1171 Hop's
+   Choice Band (False / False), 1175 Brave Bangle (**False / True**). Count and both agreement
+   directions reproduce exactly. **Supported.**
+5. **Dependencies — "Independent of Issue #345, which changes only `src/common/scouting/` and is
+   already merged on PR #340."** **CONTRADICTED, in both clauses**, found by the Spec axis. PR #340
+   is `open` and `merged: false`; Issue #345 is commit `4fb1bf0a`, the unmerged HEAD of this very
+   branch. And Issue #345 did not change only `src/common/scouting/` — `git show --stat 4fb1bf0a`
+   also lists `src/common/strategy/planner.py`, `tools/apply_seam_coverage.py` and
+   `src/common/CONTEXT.md`. The *conclusion* survives on its own evidence — the two changes share no
+   file, and neither reads the other's output — but the stated grounds for it were wrong, and the
+   phrase "already merged" would have been read by a later agent as a fact about `main`. Nothing was
+   built on this claim, so nothing changes; recorded because a self-filed issue's supporting claims
+   are exactly what nobody re-checks.
+
+**One thing the issue's sweep did not surface, found by widening it.** Sweeping all 209 pool cards
+whose text contains *"more damage"* rather than only those with an `attackBonus` turns up a fourth
+Tool printing the same `{ex}` clause: **1178 Light Ball** — *"Attacks used by the Pikachu {ex} this
+card is attached to do 50 more damage to your opponent's Active Pokémon {ex}"*. It is **not** a
+`defenderEx` mismatch: its def carries `"deferred": "tool passive unpinned"` (plus the raw `_seed`
+text) and no `attackBonus` at all, so there is no flag to disagree with. `deferred` is the file's own
+record of a known-unmodelled
+chain (`chain.is_deferred`), no shipped deck runs the card, and the omission under-credits rather
+than over-credits. **Recorded here and in the sweep test's docstring rather than filed** — same call
+Issue #345 made on the missing coin guard. The turn-marker family (Kieran 1191, Black Belt's Training
+1211) spells the same restriction under a *different* key, `defenderExOnly` (`damage.py:172`), and
+both carry it correctly; Premium Power Pro 1141, whose text has no `{ex}`, correctly omits it. That
+is a second, independent instance of the convention holding.
+
+## Exposure
+
+`slowking` runs 1× Brave Bangle (`src/agents/slowking/deck.csv` line 48) and is the only deck that
+ships it. The over-credit was one-sided — it only ever ADDED 30 — so in a rollout it could turn a
+non-lethal line lethal but never the reverse, which is precisely the phantom-KO class the Turn
+Planner's soundness guard exists to distrust. The corpus holds no `slowking` batch, so nothing
+measured today was affected; the fix is for the shipped agent, not for the lab.
+
+## Rulebook check
+
+`docs/rulebook.txt` L337: *"Mega Evolution Pokémon ex are considered to be Pokémon ex, so any card
+effects that affect Pokémon ex also affect Mega Evolution Pokémon ex."* `damage.py` already tested
+`(dstat.ex or dstat.megaEx)`, so the Mega leg needed no code change — but it was untested, and
+`Mega Kangaskhan ex` (756, in `slowking`'s own deck) carries `megaEx` and **not** `ex`, so a gate
+written against `ex` alone would silently exclude the 300-HP bodies the boost matters most against.
+Now asserted, and the assertion goes red under exactly that mutation.
+
+## What `/code-review` changed
+
+**Standards** proved the sweep test **vacuous along the axis it advertised**. It had re-implemented
+`chain.load_chain_defs`'s merge inline (`_merged_chain_defs`), justified by a docstring claiming the
+local copy was needed "so the sweep sees the shipped files" — which is **false**: `load_chain_defs`
+also reads those exact files from disk. Demonstrated by mutation: with `chain.load_chain_defs`
+monkeypatched to `{}` the sweep stayed **green**. So the test named "wrong merge order" among the
+failures its positive control would catch while being structurally incapable of catching it. It now
+calls `load_chain_defs()` directly, and three mutations were re-run to prove the guard is live:
+loader returns `{}` → **RED**; the merge inverted so `generated_chains.json` wins over
+`chain_overrides.json` → **RED**; the card-text reader returning no rows → **RED**. That second one
+is the drift that matters: it is the exact way the unflagged seed def could come back.
+
+Standards also caught the CSV read being `last-row-wins` over a table where **723 of 1267 Card IDs
+occupy more than one row** (one row per attack; 2022 rows total) — harmless for these three
+single-row Trainers, latent for anything else — now accumulated per id. Its report said "1478 rows",
+which re-measurement does not support: `csv.DictReader` yields **2022**. The 723 figure it named,
+which is the one the fix rests on, does reproduce. And the `list[int] = ()` type lie on `make_state`'s
+parameters, now `Sequence[int]` on both the new parameter and the pre-existing `defender_bench`
+beside it.
+
+**Spec** confirmed the load-bearing claim at source in both halves — the pre-change entry via
+`git show HEAD:src/cgpy/defs/chain_overrides.json`, and `damage.py:185` as the *only* hook (the two
+neighbouring `ex` reads, `:172` `defenderExOnly` on `turn_markers` and the defender-side
+`preventDamageFromEx`, are different mechanisms). It reproduced the card text, the 3-Tool sweep in
+both directions, and rulebook L337 independently. Its one finding is claim 5 above. It also noted
+that its own first count of the "more damage" pool sweep came back 153 rather than 209 because of a
+dict-dedup bug in its instrument — caught by re-running, which is the point of the rule.
