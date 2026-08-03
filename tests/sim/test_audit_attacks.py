@@ -6,9 +6,10 @@ Lib-free — the engine drive-shell is covered by ``tests/test_audit_attacks_eng
 import pytest
 
 from sim.audit_attacks import (
-    CRUSTLE, _BENCH_REF, _fodder_copies, _missing_typed, _sub_select, attack_window, bench_fodder,
-    board_snapshot, build_side_deck, damage_from_window, error_record, evolution_chain,
-    merge_records, pick_panel, plan_scenarios, record_key, shape_record,
+    CRUSTLE, PLAIN_SCENARIO, _BENCH_REF, _def_energy_ready, _fodder_copies, _missing_typed,
+    _sub_select, attack_window, bench_fodder, bench_stage2_count, board_snapshot, build_side_deck,
+    damage_from_window, error_record, evolution_chain, in_play_ids, merge_records, not_rule_box,
+    pick_panel, plain_vanilla_pred, plan_scenarios, record_key, rule_box_count, shape_record,
 )
 
 # Synthetic pool: plain dicts, same as drive-shell builds from all_card_data().
@@ -157,17 +158,127 @@ def test_plan_keeps_unmeasurable_scenarios_with_no_defender():
 @pytest.mark.req("REQ-AUDIT-0008")
 def test_sweep_adds_single_variable_points_on_vanilla_only():
     plans = plan_scenarios(_pool()[10], _pool(), sweep=True)
-    sweeps = [p for p in plans if p["sweep"]]
+    sweeps = [p for p in plans if p["sweep"] and p["scenario"] == "vanilla"]
     assert {(p["sweep"]["var"], p["sweep"]["step"]) for p in sweeps} == {
         ("energy", 1), ("energy", 2), ("hand", 2), ("hand", 4),
         ("atk_bench", 0), ("atk_bench", 1), ("atk_bench", 2),
-        ("def_bench", 0), ("def_bench", 1), ("def_bench", 2)}
-    assert all(p["scenario"] == "vanilla" for p in sweeps)
+        ("def_bench", 0), ("def_bench", 1), ("def_bench", 2),
+        ("def_energy", 1), ("def_energy", 2)}
     assert all(p["defender"] == 20 for p in sweeps)
+    # every sweep point is on `vanilla` or on its MATCHED control, never on weak/resist/prevent_ex:
+    # a modifier bakes itself into the dealt number, so a fit taken there is not the attack's own.
+    assert {p["scenario"] for p in plans if p["sweep"]} == {"vanilla", PLAIN_SCENARIO}
     e1 = next(p for p in sweeps if p["sweep"] == {"var": "energy", "step": 1})
     assert e1["extra_energy"] == 1 and e1["delay_turns"] == 0
     h2 = next(p for p in sweeps if p["sweep"] == {"var": "hand", "step": 2})
     assert h2["delay_turns"] == 2 and h2["extra_energy"] == 0
+
+
+# --- defender-side attach axis (REQ-AUDIT-0020) ------------------------------------------
+# The defender never attached anything, so `atk_active_energy` and `both_active_energy` were the
+# SAME number at every point the harness could produce — attack 120 measured 120 at three attacker
+# Energy (30 + 30x3) with the defender on zero, which both readings predict exactly.
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_a_defender_energy_sweep_moves_the_defender_and_pins_the_attacker():
+    sweeps = [p for p in plan_scenarios(_pool()[10], _pool(), sweep=True) if p["sweep"]]
+    pts = [p for p in sweeps if p["sweep"]["var"] == "def_energy"]
+    assert {p["def_extra_energy"] for p in pts} == {1, 2}      # step 0 IS the panel point
+    assert {p["extra_energy"] for p in pts} == {0}             # the attacker's own count is pinned
+    assert {(p["atk_bench"], p["def_bench"]) for p in pts} == {(_BENCH_REF, _BENCH_REF)}
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_every_other_plan_pins_the_defender_at_zero_attachments():
+    """The pin is what makes the attacker's own energy axis single-variable — and it is also the
+    historical value, since the defender never attached at all before this axis existed."""
+    plans = plan_scenarios(_pool()[10], _pool(), sweep=True)
+    for p in plans:
+        if (p["sweep"] or {}).get("var") != "def_energy":
+            assert p["def_extra_energy"] == 0, p
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_the_defender_energy_gate_reads_the_defenders_active_not_the_attackers():
+    obs = {"current": {"players": [{"active": [{"serial": 1, "hp": 10, "energies": [0, 0, 0]}]},
+                                   {"active": [{"serial": 2, "hp": 10, "energies": [0]}]}]}}
+    assert _def_energy_ready(obs, 0) is True          # no target: nothing to wait for
+    assert _def_energy_ready(obs, 1) is True
+    assert _def_energy_ready(obs, 2) is False         # the attacker's 3 must not satisfy it
+    assert _def_energy_ready({"current": {"players": [{}, {}]}}, 1) is False
+
+
+# --- rule-box composition, with a MATCHED control (REQ-AUDIT-0021) ------------------------
+# The default panel is not {ex}-BLIND, it is {ex}-SATURATED: `_panel_body` and `bench_fodder` both
+# rank by highest HP, and the top eight panel-eligible basics in the real pool are all Mega
+# Pokemon ex — which ARE Pokemon ex (docs/rulebook.txt Appendix 1). So `def_ex_in_play` moved in
+# lockstep with `def_bench` and a fit named the wrong variable with full confidence.
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_bench_fodder_takes_a_predicate_and_defaults_to_todays_behaviour():
+    pool = dict(_pool())
+    pool[22] = _mon(320, weak=G, ex=True, name="BigEx")        # out-HPs every plain body
+    assert bench_fodder(pool, exclude=set(), n=2) == [22, 20]  # unfiltered: {ex} wins on HP
+    assert bench_fodder(pool, exclude=set(), n=2, pred=not_rule_box) == [20, 30]
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_not_rule_box_excludes_MEGA_ex_as_well_as_plain_ex():
+    """A Mega Evolution Pokemon ex IS a Pokemon ex (docs/rulebook.txt Appendix 1), which is why the
+    oracle counts `stat.ex or stat.megaEx`. A control that tested only `ex` would bench Mega ex
+    bodies and reproduce the very confound it exists to break — every default fodder body in the
+    real pool is a Mega ex, not a plain one."""
+    assert not_rule_box(_mon(100)) is True
+    assert not_rule_box(_mon(100, ex=True)) is False
+    assert not_rule_box(_mon(100, mega=True)) is False
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_pick_panel_takes_extra_predicate_scenarios():
+    pool = _pool()
+    panel = pick_panel(pool[10], pool, extra={PLAIN_SCENARIO: plain_vanilla_pred(pool[10])})
+    assert panel["vanilla"] == 20 and panel[PLAIN_SCENARIO] == 20   # nothing ex-flagged in _pool()
+    pool[22] = _mon(320, weak=G, mega=True, name="BigMegaEx")
+    panel = pick_panel(pool[10], pool, extra={PLAIN_SCENARIO: plain_vanilla_pred(pool[10])})
+    assert panel["vanilla"] == 22                                  # highest HP, and it is an {ex}
+    assert panel[PLAIN_SCENARIO] == 20                             # the matched non-{ex} control
+    # an unmatchable predicate is None, like every other unmeasurable scenario — never a guess
+    assert pick_panel(pool[10], pool, extra={"nope": lambda c: False})["nope"] is None
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_the_control_plans_pair_each_defender_bench_step_at_the_same_count():
+    plans = plan_scenarios(_pool()[10], _pool(), sweep=True)
+    ex_pts = {p["def_bench"]: p for p in plans
+              if p["scenario"] == "vanilla" and (p["sweep"] or {}).get("var") == "def_bench"}
+    plain_pts = {p["def_bench"]: p for p in plans if p["scenario"] == PLAIN_SCENARIO}
+    assert set(plain_pts) == set(ex_pts) == {0, 1, 2}, "same bench counts, or nothing is matched"
+    for n in (0, 1, 2):
+        assert plain_pts[n]["rule_box"] == "plain" and ex_pts[n]["rule_box"] == "ex"
+        # everything EXCEPT the rule box is identical, or the pair varies more than one variable
+        ignore = ("rule_box", "scenario", "defender")
+        differs = {k for k in ex_pts[n]
+                   if k not in ignore and ex_pts[n][k] != plain_pts[n][k]}
+        assert differs == set(), differs
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_rule_box_and_stage2_counts_read_the_board_the_oracle_reads():
+    cards = {1: {"ex": True}, 2: {"megaEx": True}, 3: {}, 4: {"stage2": True}}
+    obs = {"current": {"players": [
+        {"active": [{"id": 4, "serial": 1}], "bench": [{"id": 4, "serial": 2},
+                                                       {"id": 3, "serial": 3}]},
+        {"active": [{"id": 1, "serial": 4}], "bench": [{"id": 2, "serial": 5},
+                                                       {"id": 3, "serial": 6}]}]}}
+    assert in_play_ids(obs, 1) == [1, 2, 3]              # Active FIRST, then bench
+    assert rule_box_count(obs, 1, cards) == 2            # the Active counts; Mega ex counts
+    assert rule_box_count(obs, 0, cards) == 0
+    assert bench_stage2_count(obs, 0, cards) == 1        # bench only: the Active is not "on your Bench"
+    assert rule_box_count(obs, 1, {}) == 0               # an unknown id claims nothing
+    empty = {"current": {"players": [{}, {}]}}
+    assert in_play_ids(empty, 1) == [] and rule_box_count(empty, 1, cards) == 0
 
 
 # --- per-seat bench control (REQ-AUDIT-0018) ---------------------------------------------

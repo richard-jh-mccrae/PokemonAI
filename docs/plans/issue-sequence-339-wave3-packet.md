@@ -42,3 +42,30 @@ The sibling **Decision Gate is clean**: `GATE: PASS (0 unruled, 0 ruled, 0 voide
 opened it is *about* the record of those baselines and its own "Out of scope" section forbids
 touching them. Auto-recapture is how the old Decision Gate died; it would make this gate vacuous the
 same way.
+
+## End-of-batch re-verification (after Issue #275, the last item)
+
+Both gates were re-run on the complete batch tree — all seven issues applied — and the picture is
+unchanged. Recorded here rather than only in the PR body, because this packet is what goes to the
+developer:
+
+```
+Decision Gate:        PASS  (0 unruled, 0 ruled, 0 voided);  agree 250/347 -> 250/347
+Discrimination Gate:  FAIL  (1 unruled, 65 ruled, 3 voided); gated on 199, held out 65, voided 3
+  the single unruled flip is `81906755|1|decision|9`, the SAME frame as at the batch base
+```
+
+**No new flip was introduced by any of the seven issues, and neither baseline moved.** Byte-identity
+was proven with `md5sum -c`, not by eye:
+
+```
+ed12a86760d42c9178a51ff2b0fc260d  data/leaf_lab/baseline.json      : OK
+bcc5c07433d733333155d4a5f0e51d5e  data/decider_lab/baseline.json   : OK
+```
+
+Issue #275 is the item that could most plausibly have moved a gate — it regenerates
+`src/common/attack_overrides.json`, which feeds the damage oracle and therefore `state_value`'s
+`threat` and `survival` terms. It did not, and that is measured rather than assumed: the regenerated
+table came back **byte-identical** (`md5 5daa38a9fed7c2b74ab94220f11a9e7b`, unchanged), because both
+engine fits REPRODUCED the human ruling they were owed against. Only
+`attack_overrides.provenance.json` changed, and provenance is not on any scoring path.

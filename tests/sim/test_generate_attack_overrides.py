@@ -15,11 +15,19 @@ dealt = base + k x var EXACTLY (integer residuals 0, k>0) -> scaleVar/scalePerUn
 reject), REQ-AUDIT-0017 (never emit a field the parser already got right — overrides are deltas),
 REQ-AUDIT-0019 (the bench family is named by JOINING two single-variable sweeps; one axis alone,
 a drifted pinned seat, a noisy axis, or unequal positive slopes all emit nothing),
+REQ-AUDIT-0020 (the active-Energy family joins the SAME way — attacker slope with the defender flat
+-> `atk_active_energy`, flat with the defender moving -> `def_active_energy`, equal positive slopes
+-> `both_active_energy`; and once a record set carries `defenderEnergies` at all, the one-sided
+attacker fit is retired because the join is available),
+REQ-AUDIT-0021 (a defender-bench slope is separated from the bench's RULE-BOX composition by a
+matched non-{ex} control at the same bench counts; without the control both readings fit and the
+bench count wins by accident, with it the rule-box fit must hold AND the bench fit must fail),
 REQ-PROV-0002 (a derivation carries the measurement rows that establish it, the rejected/flat axes
 included), REQ-PROV-0006 (table and sidecar are emitted in ONE pass, so they cannot desync),
 REQ-PROV-0007 (the generator may retract what it authored; never what a human ruled),
 REQ-PROV-0008 (a fit CONTRADICTING a text_verified ruling is not written: the ruling is kept, both
-readings are named, the run exits non-zero; `--rule` opts in).
+readings are named, the run exits non-zero; `--rule` opts in — and the same halt covers an existing
+engine_fit that a NARROWER run, one covering fewer (scenario, axis) points, would overwrite).
 """
 import json
 from pathlib import Path
@@ -36,14 +44,65 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 def _m(aid, scenario, dealt, *, printed=0, coin=None, sweep=None, energies=1, hand=6,
-       atk_bench=1, def_bench=1, error=None):
+       atk_bench=1, def_bench=1, error=None, def_energies=None, def_ex=None, atk_stage2=None):
+    """One measurement record.
+
+    The three defender-side fields default to **None**, which is a real state and not a shortcut:
+    it is what every measurement taken before Issue #275's axes existed looks like, and several
+    tests below turn on exactly that difference — `_records_defender_energy` retires the one-sided
+    energy fit only once the harness actually records the field.
+    """
     r = {"attackId": aid, "attackerCardId": 1, "scenario": scenario, "printed": printed,
          "dealtActive": dealt, "coin": coin, "sweep": sweep, "attackerEnergies": energies,
          "myHandSize": hand, "attackerBench": atk_bench, "defenderBench": def_bench,
-         "koed": False}
+         "defenderEnergies": def_energies, "defenderExInPlay": def_ex,
+         "attackerBenchStage2": atk_stage2, "koed": False}
     if error:
         r["error"] = error
     return r
+
+
+def _energy_axes(aid, printed, per_atk, per_def, *, cost=3):
+    """Both energy sweeps for one attack: dealt = printed + per_atk*atkEnergy + per_def*defEnergy.
+
+    Mirrors the harness exactly (REQ-AUDIT-0020): the attacker's axis walks ``cost``..``cost+2``
+    with the defender pinned at 0, the defender's walks 0..2 with the attacker pinned at ``cost``,
+    and the un-swept panel point is the shared origin of both.
+    """
+    def dealt(atk_e, def_e):
+        return printed + per_atk * atk_e + per_def * def_e
+
+    recs = [_m(aid, "vanilla", dealt(cost, 0), printed=printed, energies=cost, def_energies=0)]
+    for n in (1, 2):
+        recs.append(_m(aid, "vanilla", dealt(cost + n, 0), printed=printed, energies=cost + n,
+                       def_energies=0, sweep={"var": "energy", "step": n}))
+        recs.append(_m(aid, "vanilla", dealt(cost, n), printed=printed, energies=cost,
+                       def_energies=n, sweep={"var": "def_energy", "step": n}))
+    return recs
+
+
+def _rulebox_axes(aid, printed, per_ex, per_bench, *, control=True):
+    """The defender-bench sweep AND its matched non-{ex} control (REQ-AUDIT-0021).
+
+    The {ex} half is the harness's default panel, which is {ex}-SATURATED: the defender's Active
+    and every fodder body it benches are Mega Pokemon ex, so `defenderExInPlay` is always
+    ``defenderBench + 1``. The control re-runs the same bench counts against an all-non-{ex}
+    defender, where it is always 0. ``control=False`` reproduces the pre-Issue-#275 measurement
+    set, in which the two variables are indistinguishable.
+    """
+    def dealt(ex, bench):
+        return printed + per_ex * ex + per_bench * bench
+
+    recs = [_m(aid, "vanilla", dealt(2, 1), printed=printed, def_bench=1, def_ex=2)]
+    for n in (0, 1, 2):
+        recs.append(_m(aid, "vanilla", dealt(n + 1, n), printed=printed, def_bench=n,
+                       def_ex=n + 1, sweep={"var": "def_bench", "step": n}))
+        recs.append(_m(aid, "vanilla", dealt(2, 1), printed=printed, atk_bench=n, def_bench=1,
+                       def_ex=2, sweep={"var": "atk_bench", "step": n}))
+        if control:
+            recs.append(_m(aid, "vanilla_plain", dealt(0, n), printed=printed, def_bench=n,
+                           def_ex=0, sweep={"var": "def_bench", "step": n}))
+    return recs
 
 
 def _bench_axis(aid, printed, per_atk, per_def, *, base=None, pinned=1):
@@ -643,3 +702,272 @@ def test_the_generator_HALTS_on_the_pool_as_it_stands_today(tmp_path):
                  "--rule"]) == 0
     assert json.loads(out.read_text(encoding="utf-8"))["425"] == {"scaleVar": "def_bench",
                                                                  "scalePerUnit": 60}
+
+
+# --- the ENERGY family is joined, never named off one side (REQ-AUDIT-0020, Issue #275) ----
+# With the defender holding no Energy, `atk_active_energy` and `both_active_energy` predict the
+# SAME number at every point the harness could produce. Attack 120's vanilla point measured 120 at
+# three attacker Energy — 30 + 30x3 — which both readings reproduce exactly. The defender-attach
+# axis is what makes them different measurements rather than one measurement with two names.
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_equal_slopes_on_BOTH_actives_name_the_both_variable():
+    """Attack 120's real shape. This is the assertion the whole axis exists for: without the
+    defender's axis the same records name `atk_active_energy`, and the two differ by 30 damage per
+    Energy the OPPONENT has attached — straight into `threat` and `survival`."""
+    parsed = {120: AttackStat(attackId=120, damage=30)}
+    recs = _energy_axes(120, 30, per_atk=30, per_def=30)
+    assert derive_overrides(recs, parsed)[120] == {"scaleVar": "both_active_energy",
+                                                  "scalePerUnit": 30}
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_a_flat_defender_axis_names_the_attacker_variable():
+    parsed = {201: AttackStat(attackId=201, damage=0)}
+    recs = _energy_axes(201, 0, per_atk=40, per_def=0)
+    assert derive_overrides(recs, parsed)[201] == {"scaleVar": "atk_active_energy",
+                                                  "scalePerUnit": 40}
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_a_flat_attacker_axis_names_the_defender_variable():
+    """The reading the harness could not produce AT ALL before the defender attached anything: a
+    scaler on the opponent's own Energy read as a constant, because the count was always zero."""
+    parsed = {202: AttackStat(attackId=202, damage=20)}
+    recs = _energy_axes(202, 20, per_atk=0, per_def=50)
+    assert derive_overrides(recs, parsed)[202] == {"scaleVar": "def_active_energy",
+                                                  "scalePerUnit": 50}
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_unequal_positive_energy_slopes_name_nothing():
+    """`both_` is a SUM of two equal halves. Two different per-unit numbers are not a family the
+    override table can express, and the conservative answer is the gap ledger."""
+    parsed = {203: AttackStat(attackId=203, damage=0)}
+    assert 203 not in derive_overrides(_energy_axes(203, 0, per_atk=30, per_def=10), parsed)
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_a_noisy_defender_axis_names_nothing_rather_than_falling_back_to_one_side():
+    parsed = {204: AttackStat(attackId=204, damage=0)}
+    recs = _energy_axes(204, 0, per_atk=30, per_def=30)
+    noisy = next(r for r in recs if (r["sweep"] or {}).get("var") == "def_energy")
+    noisy["dealtActive"] += 7                       # neither flat nor an exact fit
+    assert 204 not in derive_overrides(recs, parsed)
+
+
+@pytest.mark.req("REQ-AUDIT-0020")
+def test_the_one_sided_energy_fit_survives_only_for_measurements_that_predate_the_axis():
+    """The switch, both ways. A pre-Issue-#275 record set carries no `defenderEnergies` at all, and
+    `atk_active_energy` is genuinely the only reading it can name — that is the era the seven
+    shipped `unaudited` energy overrides come from, and retroactively refusing it would retract
+    facts rather than measure them. The moment the field IS recorded, one side names a guess."""
+    parsed = {205: AttackStat(attackId=205, damage=0)}
+    legacy = [_m(205, "vanilla", 120, energies=3),
+              _m(205, "vanilla", 160, energies=4, sweep={"var": "energy", "step": 1}),
+              _m(205, "vanilla", 200, energies=5, sweep={"var": "energy", "step": 2})]
+    assert derive_overrides(legacy, parsed)[205] == {"scaleVar": "atk_active_energy",
+                                                     "scalePerUnit": 40}
+    # same three points, now RECORDED as defender-zero, with the defender axis simply not run
+    recorded = [dict(r, defenderEnergies=0) for r in legacy]
+    assert 205 not in derive_overrides(recorded, parsed)
+
+
+# --- the RULE-BOX family needs a MATCHED control (REQ-AUDIT-0021, Issue #275) ---------------
+# The audit panel is not {ex}-BLIND, it is {ex}-SATURATED: `_panel_body` and `bench_fodder` rank by
+# HP and the eight highest-HP eligible basics in the pool are all Mega Pokemon ex, which ARE Pokemon
+# ex (docs/rulebook.txt Appendix 1). So `def_ex_in_play` and `def_bench` were the same measurement
+# wearing two names, and a fit picked whichever the code tried first — with full confidence.
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_the_matched_control_names_def_ex_in_play_instead_of_the_collinear_bench_count():
+    """Attack 425's real shape. 60 per {ex} in play against an {ex}-saturated bench is 60 per
+    BENCHED BODY to any reading that never saw a plain body — and `def_bench`/60 invents 60 damage
+    per ordinary Basic on the opponent's bench."""
+    parsed = {425: AttackStat(attackId=425, damage=0)}
+    recs = _rulebox_axes(425, 0, per_ex=60, per_bench=0)
+    assert derive_overrides(recs, parsed)[425] == {"scaleVar": "def_ex_in_play",
+                                                  "scalePerUnit": 60}
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_without_the_control_the_same_records_still_name_the_bench_count():
+    """The positive control for the test above: drop ONLY the paired non-{ex} plans and the fit
+    flips to `def_bench`. That is what the harness shipped before this axis, so if this stopped
+    reproducing it the axis would be proving nothing."""
+    parsed = {425: AttackStat(attackId=425, damage=0)}
+    recs = _rulebox_axes(425, 0, per_ex=60, per_bench=0, control=False)
+    assert derive_overrides(recs, parsed)[425] == {"scaleVar": "def_bench", "scalePerUnit": 60}
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_a_GENUINE_defender_bench_scaler_still_names_the_bench_with_the_control_present():
+    """The guard must not simply refuse every defender-bench fit. When the damage really does track
+    the bench SIZE, the non-{ex} control moves with it and the bench reading survives the pooling
+    — the control separates two variables, it does not veto one of them."""
+    parsed = {206: AttackStat(attackId=206, damage=20)}
+    recs = _rulebox_axes(206, 20, per_ex=0, per_bench=30)
+    assert derive_overrides(recs, parsed)[206] == {"scaleVar": "def_bench", "scalePerUnit": 30}
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_a_control_that_neither_reading_fits_names_nothing():
+    """Composition and count both move, and not by one consistent rule. Two readings, neither
+    exact — the gap ledger, not the tidier of the two."""
+    parsed = {207: AttackStat(attackId=207, damage=0)}
+    recs = _rulebox_axes(207, 0, per_ex=60, per_bench=0)
+    plain = next(r for r in recs if r["scenario"] == "vanilla_plain")
+    plain["dealtActive"] = 25                       # the control moved, but on no shared slope
+    assert 207 not in derive_overrides(recs, parsed)
+
+
+@pytest.mark.req("REQ-PROV-0002")
+def test_the_matched_control_rows_are_kept_as_evidence_for_the_fit_they_justify():
+    """A `def_ex_in_play` row whose evidence held only the {ex} axis would read EXACTLY like the
+    `def_bench` row it was written to rule out. The pair is the argument, so the pair is the
+    record."""
+    parsed = {425: AttackStat(attackId=425, damage=0)}
+    entry = derive_entries(_rulebox_axes(425, 0, per_ex=60, per_bench=0), parsed)[425]
+    assert entry.fields == {"scaleVar": "def_ex_in_play", "scalePerUnit": 60}
+    plain = [r for r in entry.evidence if r["scenario"] == "vanilla_plain"]
+    assert {r["defBench"] for r in plain} == {0, 1, 2}
+    assert {r["defEx"] for r in plain} == {0}
+    assert {r["dealt"] for r in plain} == {0}       # the bench filled and nothing happened
+
+
+@pytest.mark.req("REQ-PROV-0002")
+def test_the_evidence_row_carries_the_defender_state_the_new_axes_control():
+    """ADR-0083 §2 wants controls AND records. The sidecar is where the record has to land: a
+    reader with `reports/attack_audit/` gitignored has nothing else to check a fit against."""
+    parsed = {425: AttackStat(attackId=425, damage=0)}
+    entry = derive_entries(_rulebox_axes(425, 0, per_ex=60, per_bench=0), parsed)[425]
+    for row in entry.evidence:
+        assert {"defEx", "defEnergies", "atkBenchStage2"} <= set(row)
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_the_widened_axes_reproduce_BOTH_shipped_rulings_against_the_real_parsed_table(tmp_path):
+    """The acceptance, end to end and against the REAL table: the two axes turn the two fits that
+    contradicted their rulings into fits that CONFIRM them, so `merge_provenance` has nothing to
+    halt on and the debt is paid rather than overwritten.
+
+    The reconstruction is the one Issue #355's own halt test uses, widened by the two axes:
+    425 Tenacious Tail is "60 damage for each of your opponent's Pokemon {ex} in play" and 120
+    Myriad Leaf Shower is "30 more damage for each Energy attached to both Active Pokemon"
+    (printed 30). Both are read off the cards, and the assertion that the reconstruction is faithful
+    is that it reproduces the RULED variables exactly — a wrong reconstruction cannot do that by
+    accident.
+    """
+    from cg.api import all_attack
+    from common.scouting.provider import build_attack_stats
+
+    attacks = all_attack()
+    records = (_rulebox_axes(425, 0, per_ex=60, per_bench=0)
+               + [_m(425, "prevent_ex", 0, def_bench=1, def_ex=2)]
+               + _energy_axes(120, 30, per_atk=30, per_def=30, cost=3))
+    parsed = build_attack_stats(attacks)
+    fits = derive_overrides(records, parsed, texts={a.attackId: a.text or "" for a in attacks})
+    assert fits == {425: {"scaleVar": "def_ex_in_play", "scalePerUnit": 60},
+                    120: {"scaleVar": "both_active_energy", "scalePerUnit": 30}}
+
+    committed_prov = REPO / "src" / "common" / "attack_overrides.provenance.json"
+    committed_table = REPO / "src" / "common" / "attack_overrides.json"
+    src = tmp_path / "measurements.json"
+    src.write_text(json.dumps({"measurements": records}), encoding="utf-8")
+    out, prov = tmp_path / "table.json", tmp_path / "prov.json"
+    prov.write_bytes(committed_prov.read_bytes())
+    rc = main(["--measurements", str(src), "--out", str(out), "--provenance", str(prov)])
+    assert rc == 0, "a fit that REPRODUCES the ruling is the debt paid, not a contradiction"
+    # the shipped values do not move: the axes measured what the human read off the card
+    assert out.read_bytes() == committed_table.read_bytes()
+    entries = json.loads(prov.read_text(encoding="utf-8"))["entries"]
+    for aid in ("120", "425"):
+        assert entries[aid]["method"] == METHOD_ENGINE_FIT
+        assert entries[aid]["evidence"], "a fit with no evidence is the pre-Issue-#224 state"
+    for still_owed in ("292", "390"):
+        assert entries[still_owed]["method"] == METHOD_TEXT_VERIFIED
+
+
+@pytest.mark.req("REQ-AUDIT-0021")
+def test_the_rulebox_join_refuses_when_the_control_is_still_collinear_with_the_bench():
+    """The join's second, defensive half — asserted directly, because the bench family answers
+    first on the records that reach `_scaler`.
+
+    A "control" that is itself {ex}-saturated separates nothing: this is what a predicate testing
+    only `ex` and letting Mega Pokemon ex through would produce, and every default fodder body in
+    the real pool is a Mega ex rather than a plain one. Both readings fit those rows exactly, so
+    naming either is the 274 defect with a different variable in it.
+    """
+    from sim.generate_attack_overrides import _rulebox_family
+
+    good = _rulebox_axes(425, 0, per_ex=60, per_bench=0)
+    assert _rulebox_family(good) == ("def_ex_in_play", 60)
+    leaky = [dict(r, defenderExInPlay=r["defenderBench"] + 1) if r["scenario"] == "vanilla_plain"
+             else r for r in good]
+    leaky = [dict(r, dealtActive=60 * (r["defenderBench"] + 1))
+             if r["scenario"] == "vanilla_plain" else r for r in leaky]
+    assert _rulebox_family(leaky) is None
+
+
+@pytest.mark.req("REQ-PROV-0008")
+def test_a_NARROWER_run_may_not_overwrite_a_wider_measured_fit():
+    """Issue #275's own consequence, guarded.
+
+    Paying the debt on 120 and 425 flipped both rows from `text_verified` to `engine_fit` — the
+    right outcome, and it removed them from the reach of the guard directly above, which tests the
+    METHOD. Re-running the pre-#275 sweep would then have replaced `def_ex_in_play` with the
+    collinear `def_bench` in silence: the very overwrite Issue #355 was written to stop, one method
+    later.
+
+    The test is COVERAGE, not method: the narrow run never measured the `vanilla_plain` control, so
+    it cannot have learned that the bench count is not the variable. It has measured less, not more.
+    """
+    wide = [{"scenario": "vanilla", "sweep": "def_bench"},
+            {"scenario": "vanilla_plain", "sweep": "def_bench"},
+            {"scenario": "vanilla", "sweep": "atk_bench"}]
+    narrow = [r for r in wide if r["scenario"] != "vanilla_plain"]
+    existing = {425: {"method": METHOD_ENGINE_FIT,
+                      "fields": {"scaleVar": "def_ex_in_play", "scalePerUnit": 60},
+                      "evidence": wide}}
+    derived = {425: Derivation({"scaleVar": "def_bench", "scalePerUnit": 60}, narrow)}
+
+    entries, notes, contradicted = merge_provenance(derived, existing, measured={425})
+    assert entries[425] == existing[425] and contradicted == [425]
+    assert any("CONTRADICTION" in n and "vanilla_plain" in n for n in notes), (
+        "the note must name the coverage the run is MISSING, or a reader cannot tell what to rerun")
+    # ...and `--rule` is still the one explicit way through, exactly as for a human ruling
+    ruled, _, contradicted = merge_provenance(derived, existing, measured={425}, rule=True)
+    assert ruled[425]["fields"] == {"scaleVar": "def_bench", "scalePerUnit": 60}
+    assert contradicted == []
+
+
+@pytest.mark.req("REQ-PROV-0007")
+def test_an_EQUALLY_WIDE_re_measurement_still_overwrites_a_fit_without_a_halt():
+    """The other half, and the half that keeps REQ-PROV-0007 intact: the generator may still correct
+    what it authored. A halt here would freeze every engine fit forever and make `--rule` the
+    routine flag — which is no guard at all, and is exactly how the old Decision Gate died."""
+    cover = [{"scenario": "vanilla", "sweep": "def_bench"},
+             {"scenario": "vanilla_plain", "sweep": "def_bench"}]
+    existing = {425: {"method": METHOD_ENGINE_FIT,
+                      "fields": {"scaleVar": "def_bench", "scalePerUnit": 60}, "evidence": cover}}
+    wider = cover + [{"scenario": "vanilla", "sweep": "def_energy"}]
+    derived = {425: Derivation({"scaleVar": "def_ex_in_play", "scalePerUnit": 60}, wider)}
+    entries, notes, contradicted = merge_provenance(derived, existing, measured={425})
+    assert contradicted == []
+    assert entries[425]["fields"] == {"scaleVar": "def_ex_in_play", "scalePerUnit": 60}
+    assert any("-> engine_fit" in n for n in notes)
+
+
+@pytest.mark.req("REQ-PROV-0007")
+def test_RETRACTION_is_untouched_by_the_narrowing_guard():
+    """Dropping a fit the fresh measurements no longer support is the 274 outcome and stays free:
+    the guard is about a narrow run OVERWRITING with a different value, not about a run that
+    derived nothing at all."""
+    existing = {274: {"method": METHOD_ENGINE_FIT,
+                      "fields": {"scaleVar": "atk_hand", "scalePerUnit": 5},
+                      "evidence": [{"scenario": "vanilla", "sweep": "hand"}]}}
+    entries, notes, contradicted = merge_provenance({}, existing, measured={274})
+    assert 274 not in entries and contradicted == []
+    assert any("DROPPED" in n for n in notes)

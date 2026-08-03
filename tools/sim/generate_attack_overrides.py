@@ -14,6 +14,14 @@ and a fit may only claim a variable the harness actually controls. 274 Torcherto
 case — a combined-bench scaler that shipped an exact-looking `atk_hand`/5 fit purely because bench
 was the one variable the harness neither swept nor recorded.
 
+Two more families join the same way (Issue #275). The **active-Energy** family needs the defender's
+own attach axis, because with the defender on zero Energy `atk_active_energy` and
+`both_active_energy` are the same number at every point (REQ-AUDIT-0020). The **rule-box** family
+needs a matched non-{ex} control at the same bench counts, because the audit's defender panel is
+{ex}-SATURATED — it ranks bodies by HP and the highest-HP eligible basics are all Mega Pokemon ex,
+which ARE Pokemon ex — so `def_ex_in_play` is perfectly collinear with `def_bench` and a fit names
+whichever the code tried first, with full confidence (REQ-AUDIT-0021).
+
 **Every entry carries its provenance** (ADR-0108, Issue #224). `reports/attack_audit/` is
 gitignored, so a shipped override used to be uncheckable against its own evidence — which is
 precisely how 274 sat wrong and unseen. The generator therefore emits a committed SIDECAR,
@@ -51,6 +59,9 @@ Requirements:
                    longer support is dropped); never what a human RULED (`--prune` opts in).
     REQ-PROV-0008  A fit that CONTRADICTS a `text_verified` ruling is not written: the ruling is
                    kept, both readings are named, and the run exits non-zero (`--rule` opts in).
+                   The same halt covers an existing `engine_fit` that a NARROWER run — one whose
+                   evidence covers fewer (scenario, axis) points — would overwrite with a different
+                   value: a run that measured less has not learned more.
 """
 from __future__ import annotations
 
@@ -68,10 +79,22 @@ _OUT = _REPO / "src" / "common" / "attack_overrides.json"
 _PROVENANCE = _REPO / "src" / "common" / "attack_overrides.provenance.json"
 _SWEEP_VARS = {"hand": ("atk_hand", "myHandSize"), "energy": ("atk_active_energy", "attackerEnergies")}
 _PANEL = ("vanilla", "weak", "resist", "prevent_ex")
+#: The matched non-{ex} control (REQ-AUDIT-0021) — `audit_attacks.PLAIN_SCENARIO`. Deliberately NOT
+#: in `_PANEL`: it is not a modifier scenario, so it must not feed the fixed-damage constant or the
+#: single-variable scaler paths. It IS part of a scaler's evidence, because the whole argument for a
+#: rule-box fit is the control that sat beside it and did not move.
+_PLAIN_SCENARIO = "vanilla_plain"
+_EVIDENCE_SCENARIOS = (*_PANEL, _PLAIN_SCENARIO)
 # The bench family is named by JOINING two single-variable sweeps, never by one (REQ-AUDIT-0019):
 # (sweep var, the seat it moves, the seat it pins).
 _BENCH_AXES = (("atk_bench", "attackerBench", "defenderBench"),
                ("def_bench", "defenderBench", "attackerBench"))
+#: The energy family joins the same way and for the same reason (REQ-AUDIT-0020, Issue #275): one
+#: sweep cannot separate `atk_active_energy` from `both_active_energy`, because with the defender
+#: holding no Energy the two are the SAME number at every point. Measured on attack 120, whose
+#: vanilla point read 120 at three attacker Energy — exactly what both readings predict.
+_ENERGY_AXES = (("energy", "attackerEnergies", "defenderEnergies"),
+                ("def_energy", "defenderEnergies", "attackerEnergies"))
 
 #: How a shipped override's value was established (REQ-PROV-0001). A closed vocabulary, because the
 #: whole point is that "measured" and "read off the card" and "nobody knows any more" must not look
@@ -82,7 +105,14 @@ METHOD_UNAUDITED = "unaudited"
 METHODS = (METHOD_ENGINE_FIT, METHOD_TEXT_VERIFIED, METHOD_UNAUDITED)
 
 #: Bumped only when an entry's SHAPE changes; the reader fails loudly rather than mis-parsing.
-PROVENANCE_VERSION = 1
+#:
+#: v2 (Issue #275) widened the evidence row with the defender-side state the harness now records —
+#: `defEx`, `atkBenchStage2`, `defEnergies`. The two `engine_fit` rows already committed were
+#: migrated in place with those keys set to ``null``, which is the honest value: those measurements
+#: predate the axes and did not record the fields. Migrating rather than regenerating is forced —
+#: `reports/attack_audit/` is gitignored, so the capture behind 274 and 371 cannot be re-derived
+#: without re-driving the engine, and re-deriving would change values rather than document them.
+PROVENANCE_VERSION = 2
 
 #: The evidence row, as ``(field, reader)`` — the issue's own list (swept variable, swept value,
 #: pinned values, dealtActive, scenario) plus `coin`, without which a bound entry's fork pair is two
@@ -96,7 +126,10 @@ _EVIDENCE_FIELDS = (
     ("coin", lambda r: r.get("coin")),
     ("atkBench", lambda r: r.get("attackerBench")),
     ("defBench", lambda r: r.get("defenderBench")),
+    ("defEx", lambda r: r.get("defenderExInPlay")),
+    ("atkBenchStage2", lambda r: r.get("attackerBenchStage2")),
     ("energies", lambda r: r.get("attackerEnergies")),
+    ("defEnergies", lambda r: r.get("defenderEnergies")),
     ("hand", lambda r: r.get("myHandSize")),
     ("dealt", lambda r: r.get("dealtActive")),
 )
@@ -164,6 +197,66 @@ def _axis_slope(pts) -> int | None:
     return fit[1] if fit else None
 
 
+def _rulebox_points(recs: list[dict]) -> list[tuple[int, int, int]] | None:
+    """``(defExInPlay, defenderBench, dealt)`` over the {ex} defender-bench axis AND its MATCHED
+    non-{ex} control, or None when the pairing that separates them was not measured.
+
+    This is the only shape that can tell `def_ex_in_play` from `def_bench`. The audit's default
+    panel is {ex}-SATURATED — `_panel_body` and `bench_fodder` rank by HP, and the eight
+    highest-HP eligible basics in the pool are all Mega Pokemon ex, which ARE Pokemon ex
+    (`docs/rulebook.txt` Appendix 1) — so on the {ex} axis alone the two variables take the same
+    value at every point, offset by a constant. The control re-runs the same bench counts against
+    a defender whose whole board is non-{ex}: same count, different composition.
+    """
+    def _on_def_bench_axis(r):
+        return (r.get("sweep") or {}).get("var", "def_bench") == "def_bench"
+
+    sel = [r for r in recs
+           if r.get("scenario") in ("vanilla", _PLAIN_SCENARIO)
+           and not r.get("coin") and not r.get("coinLogs") and _on_def_bench_axis(r)]
+    if len({r.get("scenario") for r in sel}) != 2:
+        return None                     # no matched control -> the confound is not broken
+    if len({r.get("attackerBench") for r in sel}) != 1:
+        return None                     # the attacker seat drifted -> not single-variable
+    pts = [(int(r["defenderExInPlay"]), int(r["defenderBench"]), int(r["dealtActive"]))
+           for r in sel
+           if r.get("defenderExInPlay") is not None and r.get("defenderBench") is not None]
+    return pts or None
+
+
+def _rulebox_family(recs: list[dict]) -> tuple[str, int] | None:
+    """Name `def_ex_in_play` — but only when the matched control SEPARATES it from `def_bench`.
+
+    The test is deliberately two-sided: the pooled points must fit the rule-box count exactly AND
+    must NOT fit the bench count. One-sided would be no better than today — on the {ex} axis alone
+    both readings fit, and naming the one we happened to try first is the 274 defect with a
+    different variable in it.
+    """
+    pts = _rulebox_points(recs)
+    if not pts:
+        return None
+    fit = _fit_linear([(ex, dealt) for ex, _, dealt in pts])
+    if not fit:
+        return None
+    if _fit_linear([(bench, dealt) for _, bench, dealt in pts]):
+        return None                 # both readings still survive -> collinear, so name nothing
+    return "def_ex_in_play", fit[1]
+
+
+def _bench_control_refutes(recs: list[dict]) -> bool:
+    """True when a matched non-{ex} control was measured beside the defender-bench axis and the
+    two together no longer support a BENCH-COUNT reading at all.
+
+    Guarded on the damage actually moving somewhere: a family in which nothing moved refutes
+    nothing, and treating "flat" as a refutation would block a legitimate `atk_bench` fit whose
+    defender axis is flat by construction.
+    """
+    pts = _rulebox_points(recs)
+    if not pts or len({dealt for _, _, dealt in pts}) == 1:
+        return False
+    return _fit_linear([(bench, dealt) for _, bench, dealt in pts]) is None
+
+
 def _bench_family(recs: list[dict]) -> tuple[str, int] | None:
     """Name the bench-scaling family from the two joined sweeps, or None (REQ-AUDIT-0019).
 
@@ -171,6 +264,12 @@ def _bench_family(recs: list[dict]) -> tuple[str, int] | None:
     attacker-bench scaler and a combined-bench one, and a defender-bench scaler produces none.
     So both axes must be measured before anything is named — one axis alone is a guess, and the
     conservative answer is silence.
+
+    A defender-bench slope is additionally REFUSED when the matched non-{ex} control refutes it
+    (REQ-AUDIT-0021). Two sweeps are enough to separate the two SEATS; they are not enough to
+    separate a seat's bench SIZE from its rule-box composition, because the audit benches Mega
+    Pokemon ex by construction. 425 Tenacious Tail is the measured case: `def_bench` fitted 60 per
+    body exactly, on a bench where every body was an {ex}.
     """
     axes = {var: _axis_points(recs, var, swept, pinned) for var, swept, pinned in _BENCH_AXES}
     if any(pts is None for pts in axes.values()):
@@ -178,11 +277,46 @@ def _bench_family(recs: list[dict]) -> tuple[str, int] | None:
     a, d = _axis_slope(axes["atk_bench"]), _axis_slope(axes["def_bench"])
     if a is None or d is None:
         return None                                  # noisy -> gap ledger
+    if d and _bench_control_refutes(recs):
+        return None                                  # the count is not the variable that moved
     if a and d:
         return ("both_bench", a) if a == d else None  # unequal: not a family we can express
     if a:
         return "atk_bench", a
     return ("def_bench", d) if d else None
+
+
+def _records_defender_energy(recs: list[dict]) -> bool:
+    """True once the harness RECORDS the defender's attached Energy (REQ-AUDIT-0020).
+
+    The switch that retires the one-sided energy fit. Before the defender-attach axis existed no
+    record carried the field, `atk_active_energy` was the only reading a measurement could name,
+    and seven shipped `unaudited` entries plus 274's cautionary tale are what that era produced.
+    Once the field IS recorded, naming a variable off the attacker's axis alone is a guess, and the
+    join below is required — the same rule `_bench_family` has always applied to the two seats.
+    """
+    return any(r.get("defenderEnergies") is not None for r in recs)
+
+
+def _energy_family(recs: list[dict]) -> tuple[str, int] | None:
+    """Name the active-Energy family from the two joined sweeps, or None (REQ-AUDIT-0020).
+
+    Mirrors :func:`_bench_family` exactly, including the third outcome the bench family already
+    has: **equal positive slopes on both sides name the `both_` variable**. That is the join
+    attack 120 needs — "30 more damage for each Energy attached to both Active Pokemon" is
+    numerically identical to an attacker-only reading until the defender attaches something.
+    """
+    axes = {var: _axis_points(recs, var, swept, pinned) for var, swept, pinned in _ENERGY_AXES}
+    if any(pts is None for pts in axes.values()):
+        return None                                  # an unmeasured axis names nothing
+    a, d = _axis_slope(axes["energy"]), _axis_slope(axes["def_energy"])
+    if a is None or d is None:
+        return None                                  # noisy -> gap ledger
+    if a and d:
+        return ("both_active_energy", a) if a == d else None
+    if a:
+        return "atk_active_energy", a
+    return ("def_active_energy", d) if d else None
 
 
 def _plain_panel(recs: list[dict]) -> list[dict]:
@@ -308,24 +442,39 @@ def _scaler_evidence(recs: list[dict]) -> list[dict]:
       (274's weak row reads 200 = (60+40)x2; prevent_ex zeroes 371 as an ex vs Crustle). Issue #224
       preserved them as part of "the evidence for the two entries that changed", so dropping them
       would lose part of the last surviving copy.
+    * The matched non-{ex} **control** (`vanilla_plain`, REQ-AUDIT-0021). It is not a modifier
+      scenario and establishes nothing on its own — it is the second half of a PAIR, and the pair
+      is the whole argument that a rule-box fit is not just the bench count wearing a different
+      name. Dropping it would leave a `def_ex_in_play` row whose evidence reads exactly like the
+      `def_bench` row it was written to rule out.
     """
-    return [r for r in recs if not r.get("coin") and r.get("scenario") in _PANEL]
+    return [r for r in recs if not r.get("coin") and r.get("scenario") in _EVIDENCE_SCENARIOS]
 
 
 def _scaler(recs: list[dict], st) -> tuple[dict, list[dict]]:
     """Sweep-fitted visible-state scaler — an exact linear fit the parser missed (REQ-AUDIT-0016).
 
-    The BENCH family goes first: it is the only one whose variable takes two sweeps to name, and
-    trying it ahead of the single-variable families keeps a bench scaler from being mis-named off a
-    historical (bench-unpinned) hand or energy sweep.
+    The JOINED families go first — bench, then rule box, then energy — because each names a
+    variable a single sweep provably cannot, and trying a single-variable family ahead of them is
+    how a scaler gets mis-named off whatever axis happened to move. The order among them is
+    least-ambiguous-first: `_bench_family` already refuses when the rule-box control refutes it, so
+    a bench answer that survives that guard is the stronger claim; the rule-box join then gets its
+    turn, and the energy join last.
+
+    The one-sided energy path survives only for measurement sets taken BEFORE the defender-attach
+    axis existed (:func:`_records_defender_energy`). Once the field is recorded, naming
+    `atk_active_energy` off the attacker's axis alone is exactly the guess ADR-0083 §3 forbids.
     """
     if st.scaleVar:
         return {}, []                                    # parser already named it
-    bench = _bench_family(recs)
-    if bench:
-        return {"scaleVar": bench[0], "scalePerUnit": bench[1]}, _scaler_evidence(recs)
+    for family in (_bench_family, _rulebox_family, _energy_family):
+        named = family(recs)
+        if named:
+            return {"scaleVar": named[0], "scalePerUnit": named[1]}, _scaler_evidence(recs)
     plain = _plain_panel(recs)
     for var, (scale_var, rec_key) in _SWEEP_VARS.items():
+        if var == "energy" and _records_defender_energy(recs):
+            continue                                     # the join is available -> it is required
         pts = [(int(r.get(rec_key, 0)), int(r["dealtActive"])) for r in plain
                if r.get("scenario") == "vanilla"]
         pts += [(int(r.get(rec_key, 0)), int(r["dealtActive"])) for r in recs
@@ -452,6 +601,17 @@ def measured_attacks(records: list[dict]) -> set[int]:
     return {r.get("attackId") for r in records if not r.get("error")}
 
 
+def _coverage(evidence: list[dict] | None) -> set[tuple]:
+    """What a fit's evidence actually COVERS: the ``(scenario, sweep axis)`` pairs it measured.
+
+    The unit a "narrower run" is measured in (REQ-PROV-0008). A sweep axis alone is not enough —
+    the matched non-{ex} control shares the `def_bench` axis with the measurement it separates
+    (REQ-AUDIT-0021) and differs only by scenario, so keying on the axis would call a run that
+    dropped the control exactly as wide as one that kept it.
+    """
+    return {(row.get("scenario"), row.get("sweep")) for row in (evidence or [])}
+
+
 def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
                      measured: set[int], *, prune: bool = False,
                      rule: bool = False) -> tuple[dict, list[str], list[int]]:
@@ -485,6 +645,17 @@ def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
     VALUE, not the method: a fit that reproduces the ruling is the debt being paid off as intended
     (REQ-PROV-0004), and halting on that too would make ``--rule`` the routine flag — i.e. no guard.
 
+    **The same halt covers an existing ``engine_fit`` a NARROWER run would overwrite** (Issue #275).
+    Once the widened axes measured 120 and 425 they stopped being ``text_verified`` — the debt was
+    paid, correctly — and the guard above stopped applying to precisely the two entries it was
+    written for. Re-running the old, narrow sweep would then have overwritten `both_active_energy`
+    with `atk_active_energy` and `def_ex_in_play` with `def_bench` in silence. The test is
+    :func:`_coverage`: a run that measured FEWER ``(scenario, axis)`` points than the fit it would
+    replace has not learned anything the fit did not already know, so a DISAGREEMENT between them is
+    the narrow run's blind spot rather than a correction. This does not touch REQ-PROV-0007 —
+    RETRACTION (the run derived nothing, so the entry is dropped) is the branch below and is
+    unchanged, and a re-measurement with equal or wider coverage still overwrites freely.
+
     A contradiction is deliberately NOT recorded in the sidecar. That file's contract is that its
     evidence justifies what SHIPPED, and a refused derivation did not ship — the same ruling
     `_apply_rules` already states for a refused coin bound, whose trace belongs on
@@ -510,15 +681,22 @@ def merge_provenance(derived: dict[int, Derivation], existing: dict[int, dict],
     contradicted: list[int] = []
     for aid, d in sorted(derived.items()):
         prev = existing.get(aid)
-        ruled_over = prev is not None and prev.get("method") == METHOD_TEXT_VERIFIED \
-            and prev.get("fields") != d.fields
-        if ruled_over and not rule:
+        changed = prev is not None and prev.get("fields") != d.fields
+        ruled_over = changed and prev.get("method") == METHOD_TEXT_VERIFIED
+        narrowed = changed and prev.get("method") == METHOD_ENGINE_FIT \
+            and not _coverage(prev.get("evidence")) <= _coverage(d.evidence)
+        if (ruled_over or narrowed) and not rule:
             contradicted.append(aid)
             entries[aid] = prev
-            notes.append(f"{aid}: CONTRADICTION — human ruling {prev.get('fields')} vs engine fit "
-                         f"{d.fields}; the RULING is KEPT and the fit was NOT written. Re-read the "
-                         f"card's printed sentence against the measurement, or rerun with --rule "
-                         f"to accept the fit.")
+            held = "human ruling" if ruled_over else "measured fit"
+            why = ("Re-read the card's printed sentence against the measurement"
+                   if ruled_over else
+                   "This run measured FEWER (scenario, axis) points than the fit it would replace, "
+                   f"so it cannot have learned anything new — missing "
+                   f"{sorted(_coverage(prev.get('evidence')) - _coverage(d.evidence))}")
+            notes.append(f"{aid}: CONTRADICTION — {held} {prev.get('fields')} vs engine fit "
+                         f"{d.fields}; the EXISTING entry is KEPT and the fit was NOT written. "
+                         f"{why}, or rerun with --rule to accept the fit.")
             continue
         entries[aid] = {"method": METHOD_ENGINE_FIT, "fields": d.fields, "evidence": d.evidence}
         if prev is None:

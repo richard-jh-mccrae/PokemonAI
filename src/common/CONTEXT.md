@@ -238,25 +238,44 @@ thereby *exact* (Alakazam's hand-size counters, Kyogre's discard count); a **hid
 estimated via Deck-Content Odds; only **true randomness** (coin flips) is carried as measured
 `min`/`max` bounds — my Lethal math reads the floor (sound), Incoming reads the ceiling (worst-case).
 Fitted by sweep-probing the engine (varying one state variable and regressing the dealt damage),
-never text-parsed — with one recorded exception. Issue #225's four families
-(`both_active_energy`, `atk_bench_stage2`, `def_counters_all`, `def_ex_in_play`) ship as
-**text-verified** per-`attackId` override entries, because each needed a sweep capability the harness
-does not have (a defender-side attach driver, stage-filtered fodder, ex-only fodder, a board-spread
-driver) and one of them — Dudunsparce ex's `60×` Tenacious Tail — was computing to literal ZERO
-meanwhile. The rule they bend is about a *fitter* inventing a plausible variable name from a regex;
-one human reading one card's printed sentence into one attackId is not that mechanism. The
-measurement debt is **owned by Issue #275** (ratified 2026-08-01), which builds the two sweep axes
-that can separate these variables and scopes them to the two cards a corpus could ever see — 283
-Mamoswine ex and 217 Azelf are provably absent from every deck, dossier, Brief and correction frame,
-so measuring them would verify a number nothing consumes. See
-`tests/strategy/test_visible_state_scalers.py`, which asserts that absence so the claim cannot rot.
+never text-parsed — with two recorded exceptions, down from four. Issue #225 shipped four families
+(`both_active_energy`, `atk_bench_stage2`, `def_counters_all`, `def_ex_in_play`) as **text-verified**
+per-`attackId` override entries, because each needed a sweep capability the harness did not have and
+one of them — Dudunsparce ex's `60×` Tenacious Tail — was computing to literal ZERO meanwhile. The
+rule they bend is about a *fitter* inventing a plausible variable name from a regex; one human
+reading one card's printed sentence into one attackId is not that mechanism.
+**Issue #275 built the two owed axes and paid off half the debt:**
+
+  * **`120` Myriad Leaf Shower → `both_active_energy`/30 and `425` Tenacious Tail →
+    `def_ex_in_play`/60 are now ENGINE-FITTED.** Both were measured and both fits REPRODUCED the
+    human reading exactly, so no shipped value moved. The axes are a **defender-attach sweep**
+    (REQ-AUDIT-0020 — the defender never attached anything, so `atk_active_energy` and
+    `both_active_energy` were numerically identical at every point the harness could produce) and a
+    **matched non-`{ex}` fodder control** (REQ-AUDIT-0021). The second corrects a claim recorded in
+    Issue #225 and worth keeping straight: the audit's defender panel is not `{ex}`-*blind*, it is
+    `{ex}`-**saturated** — `_panel_body` and `bench_fodder` rank by HP and the eight highest-HP
+    eligible basics are all Mega Pokémon ex, which ARE Pokémon ex (`docs/rulebook.txt` Appendix 1) —
+    so `def_ex_in_play` was perfectly COLLINEAR with `def_bench` and a fit named the wrong variable
+    with full confidence. The control re-runs the same bench counts against an all-non-`{ex}`
+    defender; both readings can no longer survive together.
+  * **`390` Rumbling March (`atk_bench_stage2`) and `292` Neurokinesis (`def_counters_all`) remain
+    TEXT-VERIFIED**, still owed by Issue #275's two deferred axes (a bench-evolution driver and a
+    board-spread pre-damage driver). Deliberately, not for lack of trying: 283 Mamoswine ex and 217
+    Azelf are provably absent from every shipped deck, dossier, Brief and correction frame, so
+    measuring them would verify a number nothing consumes. See
+    `tests/strategy/test_visible_state_scalers.py`, which asserts that absence — over all four
+    stores, each with its own positive control — so the claim cannot rot.
 **How each shipped fact was established is itself recorded** (ADR-0108, Issue #224):
 `attack_overrides.provenance.json` is a committed sidecar, emitted by the generator in the same pass
 as the table, carrying one row per `attackId` — `engine_fit` (with the fitted rows *and the rejected,
 flat axes* that prove a variable was measured rather than missing), `text_verified` (with the owning
 issue), or `unaudited` (the 111 entries whose capture no longer exists, frozen at their shipped
 values). `reports/attack_audit/` is gitignored, so before that sidecar an override could be
-re-derived but never checked — which is how 274's `atk_hand` fit sat wrong and unseen.
+re-derived but never checked — which is how 274's `atk_hand` fit sat wrong and unseen. A fit that
+CONTRADICTS a `text_verified` ruling **halts** the generator (`--rule` opts in, Issue #355), and so
+does one that would overwrite an existing `engine_fit` from **narrower** evidence — fewer
+`(scenario, axis)` points than the fit it replaces, i.e. a run that measured less rather than
+learning more (Issue #275; retraction, where the run derives nothing at all, is untouched).
 _Avoid_: expected value (a probability blend — breaks soundness in both directions), printed damage
 (the base term only), bounds (the coin-RNG fallback, not the general shape)
 

@@ -11,7 +11,7 @@ attack the oracle says deals nothing is an attack no line ever considers.
 | 292 | 217 Azelf | "does 10 more damage for each damage counter on **all** of your opponent's Pokémon" | `def_counters_all` |
 | 425 | 306 Dudunsparce ex | "does **60 damage for each** of your opponent's Pokémon {ex} in play" (printed `60×`, base 0) | `def_ex_in_play` |
 
-**Provenance, stated plainly.** These four entries are TEXT-VERIFIED, not engine-fitted. ADR-0083 §2
+**Provenance, stated plainly.** All four SHIPPED as TEXT-VERIFIED, not engine-fitted. ADR-0083 §2
 requires that a *fit* may only claim a variable the sweep controls and records, and its Consequences
 priced these four at "a sweep capability each"; the defect that rule exists to prevent is a REGEX
 naming a plausible variable no measurement supports (Skeledirge's bench scaler fitted as `atk_hand`).
@@ -20,19 +20,32 @@ printed sentence into one `attackId`, which is the same seam and the same discip
 `effect_overrides.json` already uses for clauses the probe cannot reach. What is NOT tolerable is
 leaving 425 priced at zero while waiting for a defender-side sweep driver.
 
+**Two of the four are now ENGINE-FITTED** (Issue #275): 120 and 425 were measured on the widened
+axes and both fits REPRODUCED the human reading exactly, so no shipped value moved — the debt was
+paid, not overruled. `SHIPPED` below is unchanged for that reason, and `attack_overrides.json` came
+back byte-identical from the regeneration. 390 and 292 remain text-verified, still owed by the two
+DEFERRED axes; see the corpus-status note at the bottom for why measuring them buys nothing today.
+
 **The debt has an OWNER: Issue #275** (ratified by the user 2026-08-01 — ship these, file the
 measurement). It is not a TODO in a docstring: #275 builds the two axes that can actually separate
-these variables, and it scopes them to the two cards a corpus could ever see. Two findings from
-POC-T1 that shape it, recorded here because they are the reason the gap existed rather than an
-oversight:
+these variables, and it scopes them to the two cards a corpus could ever see. Two findings shape it,
+recorded here because they are the reason the gap existed rather than an oversight:
 
-  * **The harness as it stands would CONFIRM the wrong answer for 425.** `audit_attacks.py` pins both
-    seats' bench at `_BENCH_REF = 1` and fills them with whatever basics the drive drew, so
-    `def_ex_in_play` measures 0, the attack deals 0, and a fit concludes "no scaler" from data that
-    could not have shown one.
+  * **The harness as it stood would CONFIRM the wrong answer for 425 — but not the way POC-T1 wrote
+    it down.** Its recorded claim was that the defender panel is `{ex}`-BLIND, so the attack
+    measures 0 and fits nothing. Driving the engine says the opposite, and the real situation is
+    worse: the panel is `{ex}`-**SATURATED**. `_panel_body` and `bench_fodder` both rank by highest HP, and the
+    eight highest-HP eligible basics in the pool are all Mega Pokemon ex — which ARE Pokemon ex
+    (`docs/rulebook.txt` Appendix 1, which is why `src/cgpy/damage.py` counts `ex or megaEx`). So
+    `audit_attack(425)` deals **120**, not 0, against card 1056 Mega Zygarde ex, `def_ex_in_play` is
+    perfectly COLLINEAR with `def_bench`, and a fit names `def_bench`/60 — 60 damage per ordinary
+    Basic on the opponent's bench, invented. Separating them needs a MATCHED non-`{ex}` control at
+    the same bench count (Issue #275, REQ-AUDIT-0021); the best non-`{ex}` eligible basic is 251
+    Regigigas at 160 HP.
   * **120 is unfittable on the current axes at all.** With the defender holding no Energy,
     `both_active_energy` and `atk_active_energy` are indistinguishable under every point the sweep
-    can produce; separating them needs the defender-attach axis ADR-0083 §3's joining rule assumes.
+    can produce; separating them needs the defender-attach axis ADR-0083 §3's joining rule assumes
+    (REQ-AUDIT-0020).
 
 **Corpus status** (the issue's own bar — a corpus example or a recorded absence):
   * **96 Teal Mask Ogerpon ex** — live meta. 12 `artifact.json` dossiers at inclusion 1.0, and 32
@@ -93,17 +106,21 @@ def test_all_four_families_are_shipped_with_their_printed_per_unit():
     """The last line of defence for four HUMAN RULINGS, and the failure message has to say so.
 
     Each of these four was read off one card's own printed sentence and cross-checked against
-    `data/EN_Card_Data.csv` and `src/cgpy/defs/attack_data.json`. Two of them — 120 and 425 — are
-    provably unfittable on the audit's current axes and a regeneration DERIVES a different, wrong
-    variable for each (Issue #355): the panel's vanilla defender is a Mega Pokemon ex, making
-    `def_ex_in_play` collinear with `def_bench`, and it holds no Energy, making
-    `both_active_energy` indistinguishable from `atk_active_energy`.
+    `data/EN_Card_Data.csv` and `src/cgpy/defs/attack_data.json`. Two of them — 120 and 425 — have
+    since been MEASURED on Issue #275's widened axes and the engine agreed with the reading, so the
+    values here are now corroborated twice rather than once.
+
+    That does NOT relax this test, because both are still unfittable on the NARROW axes: the panel's
+    vanilla defender is a Mega Pokemon ex, making `def_ex_in_play` collinear with `def_bench`, and it
+    holds no Energy, making `both_active_energy` indistinguishable from `atk_active_energy`. A run
+    that drops the matched non-{ex} control or the defender-attach sweep still derives the wrong
+    variable for each.
 
     So if this goes red, the fix is essentially never to update `SHIPPED`. `merge_provenance`'s
-    REQ-PROV-0008 guard exists to stop a contradicting fit reaching the table at all; a red here
-    means either that guard was bypassed (`--rule`) or the table was hand-edited, and in both cases
-    the question to answer is which reading of the card is right — not which number makes the test
-    green again.
+    REQ-PROV-0008 guard exists to stop a contradicting fit — or a NARROWER run's overwrite — reaching
+    the table at all; a red here means either that guard was bypassed (`--rule`) or the table was
+    hand-edited, and in both cases the question to answer is which reading of the card is right — not
+    which number makes the test green again.
     """
     overrides = json.loads((REPO / "src" / "common" / "attack_overrides.json").read_text(
         encoding="utf-8"))
@@ -250,34 +267,136 @@ def test_the_filtered_counts_fail_closed_on_an_unresolvable_body(pilot):
 
 
 # ── corpus status, recorded rather than assumed ───────────────────────────────────────────────────
-@pytest.mark.req("REQ-SCALER-0007")
-def test_the_corpus_status_of_each_card_is_what_the_issue_recorded():
-    """The issue's bar is "a corpus example OR a recorded absence", so the absence is ASSERTED — a
-    claim nobody re-checks is a claim that rots. If 283 or 217 ever enters a shipped deck or a
-    dossier this fails, which is exactly when "no gate can see it" stops being true."""
-    artifact = (REPO / "src" / "common" / "scouting" / "artifact.json").read_text(encoding="utf-8")
-    dossiers = json.loads(artifact)
-    in_artifact = set()
+def _card_ids_in(payload) -> set[int]:
+    """Every `cardId`/`id` integer anywhere in a decoded JSON tree."""
+    found: set[int] = set()
 
     def _walk(node):
         if isinstance(node, dict):
             for k, v in node.items():
                 if k in ("cardId", "id") and isinstance(v, int):
-                    in_artifact.add(v)
+                    found.add(v)
                 _walk(v)
         elif isinstance(node, list):
             for v in node:
                 _walk(v)
-    _walk(dossiers)
+    _walk(payload)
+    return found
 
-    deck_ids = set()
-    for deck in (REPO / "src" / "agents").glob("*/deck.csv"):
-        deck_ids.update(int(line.strip()) for line in deck.read_text(encoding="utf-8").splitlines()
-                        if line.strip().isdigit())
 
-    assert OGERPON in in_artifact, "96 was recorded as live meta — re-check the ruling"
-    assert DUDUNSPARCE in in_artifact, "306 was recorded as meta-real — re-check the ruling"
+def _ids_in_json(paths) -> set[int]:
+    return set().union(set(), *(_card_ids_in(json.loads(p.read_text(encoding="utf-8")))
+                                for p in paths))
+
+
+def _ids_in_corrections(_paths=()) -> set[int]:
+    """Card ids across every committed correction FRAME.
+
+    Read through `tests/corpus_helpers.corpus_index()` — THE Corpus Reader — never by globbing
+    `data/corrections/*/corrections.jsonl` (ADR-0087 decision 1 / ADR-0089; enforced by
+    `tests/train/test_corpus_readers.py`). Verified equivalent to the raw walk it replaces: both
+    reach 372 records and the same 273 distinct card ids, including both positive controls.
+
+    Both halves of a record are walked. `obs` is the board and `decision` is what the agent was
+    offered, and a card that appears only in the offered options is still a card the corpus can see.
+    """
+    from corpus_helpers import corpus_index
+
+    found: set[int] = set()
+    for c in corpus_index().values():
+        found |= _card_ids_in(c.obs) | _card_ids_in(c.decision)
+    return found
+
+
+def _deck_ids(paths) -> set[int]:
+    """A shipped `deck.csv` is one card id per line."""
+    found: set[int] = set()
+    for p in paths:
+        found.update(int(line.strip()) for line in p.read_text(encoding="utf-8").splitlines()
+                     if line.strip().isdigit())
+    return found
+
+
+def _briefs_naming(paths, name: str) -> list[str]:
+    """Brief filenames whose text mentions ``name``.
+
+    Briefs reference cards in PROSE, never by id — read at source rather than assumed:
+    `src/common/scouting/briefs/*.json` carry `slug`, `covers`, `summary` and `threats[].card`, and
+    every card reference in them is a printed NAME. An id walk over a Brief returns the EMPTY SET,
+    so reusing the id search here would have made this half of the assertion vacuous while looking
+    exactly like the half that works.
+    """
+    return [p.name for p in paths if name.lower() in p.read_text(encoding="utf-8").lower()]
+
+
+#: Every store this test reads, as ``(label, paths, loader, controls)``: the loader turns the files
+#: into whatever the store keys cards BY, and `controls` are the cards that MUST be found in it.
+#: Stated as data so the docstring's claim and the assertion cannot drift apart again — the test
+#: used to check `artifact.json` and `deck.csv` only while claiming "every Brief and every
+#: correction frame" too (Issue #275). Every store carries its own positive control, because a
+#: negative result read off an instrument nobody proved was working is not a negative result.
+_BRIEFS = tuple(sorted((REPO / "src" / "common" / "scouting" / "briefs").glob("*.json")))
+_ID_STORES = (
+    ("artifact.json", (REPO / "src" / "common" / "scouting" / "artifact.json",), _ids_in_json,
+     (OGERPON, DUDUNSPARCE)),
+    ("deck.csv", tuple(sorted((REPO / "src" / "agents").glob("*/deck.csv"))), _deck_ids,
+     (OGERPON,)),
+    # `paths` is a sentinel here, not a glob: the Corpus Reader owns the walk, so this store's
+    # "did anything match" guard is the record count the reader returns, asserted below.
+    ("correction frames", (REPO / "data" / "corrections",), _ids_in_corrections,
+     (OGERPON, DUDUNSPARCE)),
+)
+#: The Brief store, keyed by printed NAME. 96 Teal Mask Ogerpon ex is deliberately NOT the control
+#: here: it appears in no Brief, so using it would be a control that cannot fire. 306 Dudunsparce ex
+#: does (2 Briefs), which is what proves the search works before its silence is believed.
+_BRIEF_NAMES = {OGERPON: "Teal Mask Ogerpon", DUDUNSPARCE: "Dudunsparce",
+                MAMOSWINE: "Mamoswine", AZELF: "Azelf"}
+
+
+@pytest.mark.req("REQ-SCALER-0007")
+def test_the_corpus_status_of_each_card_is_what_the_issue_recorded():
+    """The issue's bar is "a corpus example OR a recorded absence", so the absence is ASSERTED — a
+    claim nobody re-checks is a claim that rots. If 283 or 217 ever enters a shipped deck, a
+    dossier, a Brief or a correction frame this fails, which is exactly when "no gate can see it"
+    stops being true.
+
+    **Widened to match its own docstring** (Issue #275). It asserted `artifact.json` and `deck.csv`
+    while claiming "every Brief and every correction frame" too: both halves were true, but only one
+    was protected from rot — and the unprotected half is the one a meta shift moves first.
+
+    The correction-frame half goes through `tests/corpus_helpers.corpus_index()` rather than a glob
+    (ADR-0087 decision 1) — eleven near-identical private corpus walkers is the defect that contract
+    exists to prevent, and `tests/train/test_corpus_readers.py` fails on a twelfth.
+
+    Each store is checked with a POSITIVE CONTROL, and the controls are not interchangeable: the id
+    stores are keyed on `cardId`/`id` while Briefs name cards in prose, so the same search over both
+    would come back empty from the Brief half and read as a clean absence. 306 Dudunsparce ex is the
+    Brief control precisely because 96 Teal Mask Ogerpon ex appears in NO Brief and so cannot fire
+    one.
+    """
+    found: dict[str, set[int]] = {}
+    for label, paths, load, controls in _ID_STORES:
+        assert controls, f"{label}: declares no positive control, so its silence proves nothing"
+        assert paths, f"{label}: no files matched — this store would then assert nothing"
+        ids = load(paths)
+        assert ids, f"{label}: matched {len(paths)} file(s) but read no card ids"
+        for control in controls:
+            assert control in ids, (
+                f"{label}: positive control {control} is missing, so this store's silence about "
+                f"283/217 proves nothing — fix the search before trusting the absence")
+        found[label] = ids
+
+    assert _BRIEFS, "no Brief matched — the Brief half would assert nothing"
+    assert _briefs_naming(_BRIEFS, _BRIEF_NAMES[DUDUNSPARCE]), (
+        "Briefs: positive control 'Dudunsparce' matched nothing, so the name search is broken and "
+        "its silence about Mamoswine/Azelf proves nothing")
+
+    assert OGERPON in found["artifact.json"], "96 was recorded as live meta — re-check the ruling"
+    assert DUDUNSPARCE in found["artifact.json"], "306 was recorded as meta-real — re-check it"
+
     for absent in (MAMOSWINE, AZELF):
-        assert absent not in in_artifact and absent not in deck_ids, (
-            f"{absent} was recorded PROVABLY ABSENT from the pool as exercised; it no longer is, so "
-            "its text-verified pricing now HAS a corpus that can check it — re-rule it")
+        hits = sorted(label for label, ids in found.items() if absent in ids)
+        hits += [f"Briefs ({b})" for b in _briefs_naming(_BRIEFS, _BRIEF_NAMES[absent])]
+        assert hits == [], (
+            f"{absent} was recorded PROVABLY ABSENT from the pool as exercised; it now appears in "
+            f"{hits}, so its text-verified pricing HAS a corpus that can check it — re-rule it")
