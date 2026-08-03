@@ -182,6 +182,43 @@ def test_shipped_supporter_trainer_coin_and_energy_provide_clauses():
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_gust_clauses_carry_the_target_the_trigger_and_the_riders():
+    """Issue #303: the `gust` kind — *"Switch in 1 of your opponent's Benched Pokemon to the Active
+    Spot"* — the highest-exposure family the POC-A2 census refused. All 7 pool sites round-trip
+    override -> build -> `card_effects.json` with the fields the printed cards need, so the mechanic
+    lives in the representation rather than in a text parse or the 5-rung weight ladder it dissolves.
+
+    The load-bearing distinctions, each pinned because dropping one silently under-declares a card:
+    `target` tells Lisia's Appeal (Benched **Basic** only) from the other six; `trigger: on_evolve`
+    is what routes Hariyama's and Hop's Dubwool's clause onto the `_EVOLVE` site the engine actually
+    poses (Issue #305 measured that a triggered Ability rides that option and poses no `_ABILITY` of
+    its own); and a coin-gated gust composes as 1120 Crushing Hammer already does — a `coin` clause
+    whose `effect` NAMES the gust, never a `probability` field on `gust` itself."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.clauses(1182) == ({"kind": "gust", "target": "any"},)             # Boss's Orders
+    assert eff.clauses(674) == ({"kind": "gust", "target": "any", "trigger": "on_evolve",
+                                 "condition": "once_per_turn_ability"},)         # Hariyama
+    assert eff.clauses(310) == ({"kind": "gust", "target": "any",
+                                 "trigger": "on_evolve"},)                       # Hop's Dubwool
+    assert eff.clauses(1088) == ({"kind": "gust", "target": "any",
+                                  "rider": "self_switch"},)                      # Prime Catcher
+    assert eff.clauses(1204) == ({"kind": "gust", "target": "basic",
+                                  "rider": "confuse_target"},)                   # Lisia's Appeal
+    assert eff.clauses(1218) == ({"kind": "gust", "target": "any", "rider": "self_switch",
+                                  "name_family": "Team Rocket's"},)              # TR Giovanni
+    assert eff.clauses(1124) == ({"kind": "coin", "effect": "gust",
+                                  "target": "any"},)                             # Pokemon Catcher
+    # The completeness verdicts ride with them. Five carry the whole printed card; the two that do
+    # not are RULED incomplete rather than left unruled — the undecided `Team Rocket's` name family
+    # (the 1115 / 1134 / 1215 / 1220 ruling) and the coin stating a 50/50 as a certainty (1120's).
+    assert [eff.covers(c) for c in (1182, 674, 310, 1088, 1204)] == ["full"] * 5
+    assert eff.covers(1218) == "partial" and eff.clauses_cover(1218) is False
+    assert eff.covers(1124) == "partial" and eff.clauses_cover(1124) is False
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
 def test_override_only_card_needs_no_probe():
     ovr = [{"kind": "heal", "amount": 150}]
     assert classify_effect_clauses({}, overrides=ovr) == ovr

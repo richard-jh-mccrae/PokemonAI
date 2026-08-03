@@ -120,25 +120,25 @@ Pool: **385 distinct cards** — 6 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 6 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 295 | 71.3% | 282 | 78.3% | 43.5 |
-| **engine-resolved** | 57 | 13.8% | 40 | 11.1% | 9.8 |
+| **modelled** | 300 | 72.5% | 295 | 81.9% | 46.0 |
+| **engine-resolved** | 52 | 12.6% | 27 | 7.5% | 7.2 |
 | **refused** | 62 | 15.0% | 63 | 17.5% | 9.2 |
 
 The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is `clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its uncovered leg at 0:
 
 | class | sites | % sites | fate now |
 |---|---|---|---|
-| **modelled-full** | 295 | 71.3% | modelled 295 |
-| **modelled-partial** | 21 | 5.1% | engine-resolved 1, refused 20 |
+| **modelled-full** | 300 | 72.5% | modelled 300 |
+| **modelled-partial** | 23 | 5.6% | engine-resolved 2, refused 21 |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 6 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 266 | 69.1% | 257 | 71.4% | 41.1 | 68.5% |
-| **engine-resolved** | 56 | 14.5% | 40 | 11.1% | 9.8 | 16.3% |
-| **modelled-partial** | 21 | 5.5% | 42 | 11.7% | 5.9 | 9.9% |
-| **refused** | 42 | 10.9% | 21 | 5.8% | 3.3 | 5.4% |
+| **modelled-full** | 271 | 70.4% | 270 | 75.0% | 43.6 | 72.7% |
+| **engine-resolved** | 50 | 13.0% | 27 | 7.5% | 7.2 | 12.0% |
+| **modelled-partial** | 23 | 6.0% | 42 | 11.7% | 5.9 | 9.9% |
+| **refused** | 41 | 10.6% | 21 | 5.8% | 3.2 | 5.4% |
 
 ### Headline — effect-bearing sites only
 
@@ -146,14 +146,14 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 51 | 30.0% |
-| **engine-resolved** | 57 | 33.5% |
+| **modelled** | 56 | 32.9% |
+| **engine-resolved** | 52 | 30.6% |
 | **refused** | 62 | 36.5% |
 
 | clause-completeness split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 51 | 30.0% |
-| **modelled-partial** | 21 | 12.4% |
+| **modelled-full** | 56 | 32.9% |
+| **modelled-partial** | 23 | 13.5% |
 
 ### REFUSED, grouped by cause and ranked by exposure
 
@@ -185,7 +185,7 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 | 1215 | Ethan's Adventure | play | 0 | 0.06 | fetch / search / recover |  | the Basic {R} Energy leg is exact; the Ethan's NAME family on the Pokemon leg is recorded and UNDECIDED, so that leg deliberately reaches nothing |
 | 1217 | Team Rocket's Archer | play | 0 | 0.05 | hand disruption — their hand |  |  |
 | 1257 | Team Rocket's Factory | play | 0 | 0.04 | hand disruption — their hand |  |  |
-| 1124 | Pokémon Catcher | play | 0 | 0.01 | gust — pull a benched opponent body Active |  |  |
+| 1124 | Pokémon Catcher | play | 0 | 0.01 | gust — pull a benched opponent body Active |  | the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts) |
 | 1187 | Morty’s Conviction | play | 0 | 0.01 | draw |  | clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and costs a hand discard — neither is carried |
 | 1114 | Redeemable Ticket | play | 0 | 0.01 | prize manipulation |  |  |
 | 1267 | Lumiose City | play | 0 | 0.00 | Stadium static board modifier |  |  |
@@ -276,13 +276,11 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | id | card | site | class | named by | our copies |
 |---|---|---|---|---|---|
 | 1227 | Lillie's Determination | play | modelled-partial | dragapult_ex, mega_lucario, mega_starmie | 24 |
-| 1182 | Boss’s Orders | play | engine-resolved | dragapult_ex, mega_lucario, mega_starmie | 11 |
 | 1120 | Crushing Hammer | play | modelled-partial | dragapult_ex, mega_starmie | 8 |
 | 112 | Munkidori | ability: Adrena-Brain | engine-resolved | dragapult_ex | 6 |
 | 1141 | Premium Power Pro | play | engine-resolved | mega_lucario | 4 |
 | 1080 | Unfair Stamp | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
 | 1213 | Judge | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
-| 674 | Hariyama | evolve | engine-resolved | mega_lucario | 2 |
 | 1123 | Switch | play | engine-resolved | mega_lucario | 2 |
 | 1223 | Harlequin | play | modelled-partial | mega_starmie | 2 |
 | 1252 | Gravity Mountain | play | engine-resolved | mega_lucario | 2 |
@@ -291,18 +289,16 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 
 ### ENGINE-RESOLVED — the modelling backlog
 
-57 sites, 40 copies across our 6 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
+52 sites, 27 copies across our 6 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
 
 | id | card | site | our copies | meta copies |
 |---|---|---|---|---|
-| 1182 | Boss’s Orders | play | 11 | 2.10 |
 | 112 | Munkidori | ability: Adrena-Brain | 6 | 0.01 |
 | 1141 | Premium Power Pro | play | 4 | 0.88 |
 | 1261 | Forest of Vitality | play | 4 | 0.02 |
 | 9 | Boomerang Energy | attach | 3 | 0.00 |
 | 1123 | Switch | play | 2 | 0.55 |
 | 1252 | Gravity Mountain | play | 2 | 0.46 |
-| 674 | Hariyama | evolve | 2 | 0.41 |
 | 1260 | Risky Ruins | play | 2 | 0.02 |
 | 150 | Hydrapple ex | ability: Ripening Charge | 2 | 0.00 |
 | 1079 | Rare Candy | play | 1 | 1.08 |
@@ -330,12 +326,9 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 1137 | Tool Scrapper | play | 0 | 0.01 |
 | 1116 | Energy Switch | play | 0 | 0.01 |
 | 1191 | Kieran | play | 0 | 0.01 |
-| 1204 | Lisia’s Appeal | play | 0 | 0.01 |
 | 1242 | Community Center | play | 0 | 0.01 |
 | 133 | Dusknoir | ability: Cursed Blast | 0 | 0.01 |
 | 1250 | Area Zero Underdepths | play | 0 | 0.00 |
-| 310 | Hop’s Dubwool | evolve | 0 | 0.00 |
-| 1088 | Prime Catcher | play | 0 | 0.00 |
 | 1246 | Jamming Tower | play | 0 | 0.00 |
 | 1266 | Nighttime Mine | play | 0 | 0.00 |
 | 1089 | Reboot Pod | play | 0 | 0.00 |
@@ -355,7 +348,7 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 
 ### MODELLED-PARTIAL — clause sets that cover only part of the card
 
-21 sites, 42 copies across our 6 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (1), **refused** (20). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
+23 sites, 42 copies across our 6 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (2), **refused** (21). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
 
 | id | card | fate now | our copies | meta copies | what the clauses miss |
 |---|---|---|---|---|---|
@@ -371,6 +364,8 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 1216 | Team Rocket's Ariana | refused | 0 | 0.06 | clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team Rocket board |
 | 1220 | Team Rocket's Proton | refused | 0 | 0.06 | the Team Rocket's NAME family is recorded and UNDECIDED, so the clause deliberately reaches nothing; the go-first-turn-1 sentence is a PERMISSION widening rules.md's first-turn Supporter ban, not a restriction to carry |
 | 1215 | Ethan's Adventure | refused | 0 | 0.06 | the Basic {R} Energy leg is exact; the Ethan's NAME family on the Pokemon leg is recorded and UNDECIDED, so that leg deliberately reaches nothing |
+| 1218 | Team Rocket's Giovanni | engine-resolved | 0 | 0.02 | both legs are carried — the `self_switch` first, then the pull it gates ("If you do") — but the Team Rocket's NAME family restricting BOTH of my bodies is recorded and UNDECIDED, so it deliberately decides nothing rather than reading as an unrestricted switch (the 1115 / 1134 / 1215 / 1220 ruling) |
+| 1124 | Pokémon Catcher | refused | 0 | 0.01 | the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts) |
 | 1187 | Morty’s Conviction | refused | 0 | 0.01 | clause draws a flat 3; the card draws one per opponent BENCHED Pokemon and costs a hand discard — neither is carried |
 | 1242 | Community Center | engine-resolved | 0 | 0.01 | clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried |
 | 1208 | Iris’s Fighting Spirit | refused | 0 | 0.00 | clause draws a flat 4; the card draws UP TO A 6-CARD HAND and costs a discard |
@@ -414,11 +409,11 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 | deck | modelled-full | modelled-partial | engine-resolved | refused | % at-risk (partial+refused) |
 |---|---|---|---|---|---|
-| dragapult_ex | 43 | 10 | 7 | 0 | 16.7% |
-| grimmsnarl_ex | 41 | 6 | 8 | 5 | 18.3% |
-| hydrapple | 42 | 5 | 8 | 5 | 16.7% |
-| mega_lucario | 41 | 7 | 12 | 0 | 11.7% |
-| mega_starmie | 49 | 10 | 1 | 0 | 16.7% |
+| dragapult_ex | 46 | 10 | 4 | 0 | 16.7% |
+| grimmsnarl_ex | 44 | 6 | 5 | 5 | 18.3% |
+| hydrapple | 44 | 5 | 6 | 5 | 16.7% |
+| mega_lucario | 45 | 7 | 8 | 0 | 11.7% |
+| mega_starmie | 50 | 10 | 0 | 0 | 16.7% |
 | slowking | 41 | 4 | 4 | 11 | 25.0% |
 
 ### Clause write-set health (`snapshot_coverage`)
@@ -432,17 +427,20 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 |---|---|---|
 | fetch | 57 | yes |
 | draw | 20 | yes |
+| gust | 6 | yes |
 | heal | 5 | yes |
 | accel | 4 | yes |
 | energy_provide | 2 | yes |
+| self_switch | 2 | yes |
+| coin | 2 | declared EMPTY |
 | discard_eot | 1 | yes |
 | shuffle_self_in | 1 | yes |
 | other_to_bottom | 1 | yes |
 | energy_recur | 1 | yes |
 | discard_basic_f_energy | 1 | yes |
 | shuffle_both_hands | 1 | yes |
-| coin | 1 | declared EMPTY |
 | discard_remainder | 1 | yes |
+| confuse_target | 1 | yes |
 | bounce_energy_to_hand | 1 | yes |
 
 <!-- END GENERATED -->
@@ -565,22 +563,41 @@ clause kind for what a Stadium *does*, so `state_value` has nothing to read and 
 to ~0. Playing a Stadium, and more importantly **displacing the opponent's**, is unpriceable on day
 one.
 
-**gust-whether — the headline failure.** 7 sites, 13 copies across our decks, 2.55 copies in the
-meta-weighted opposing deck, and *Boss's Orders* is named by all three authored doctrines. There is
-no `gust` clause kind, so pulling a benched body Active — the canonical *"is this worth the Supporter
-slot?"* question, and the one the differencing system was built to answer — cannot be modelled
-closed-form. Everything the composer would do with a gust it must do by expansion, at full width,
-with no local ordering signal.
+**gust-whether — MINTED (Issue #303).** It was the headline failure: 7 sites, 13 copies across our
+decks, 2.55 copies in the meta-weighted opposing deck, *Boss's Orders* named by all three authored
+doctrines, and **no `gust` clause kind at all** — so pulling a benched body Active, the canonical
+*"is this worth the Supporter slot?"* question the differencing system was built to answer, could
+not be modelled closed-form and every gust had to be expanded at full width with no local ordering
+signal.
 
-> **What Issue #299's ruling did and did not change for these two families.** Both were REFUSED
-> entirely when this was written; most of their sites are now ENGINE-RESOLVED *candidates* (the gust
-> family keeps 1 refused site of 7, Stadium 2 of 14), because the printed text carries no RNG,
-> hidden-zone or opponent-choice marker and the engine route is no longer closed to `_PLAY`. **That
-> is not the same as being priced.** A candidate needs a `deterministic=True` proof and a wired
-> `search_api`, and nothing produces either; and even resolved through the engine it would be a
-> 1-ply bridge, not the closed-form clause the composer wants. So the vocabulary work below is
-> unchanged in scope and unchanged in priority — the ruling moved where these sit in the tables, not
-> what they cost. Issue #303 (gust) and Issue #304 (Stadium) own it.
+The kind now exists — `{"kind": "gust", "target": "any" | "basic"}` plus the `self_switch` and
+`confuse_target` riders, each with a declared write-set in `snapshot_coverage.CLAUSE_WRITES` — and
+all 7 sites carry it. **Five of them, carrying all 13 of the copies we actually shuffle, resolve
+MODELLED-FULL** instead of sitting as engine-route candidates: Boss's Orders (11), Hariyama (2),
+Hop's Dubwool, Prime Catcher, Lisia's Appeal. The other two are RULED rather than missing —
+*Team Rocket's Giovanni* is `partial` on the undecided *Team Rocket's* name family (the same ruling
+1115 / 1134 / 1215 / 1220 carry), and *Pokemon Catcher* is `partial` on the coin, because a
+`{"kind": "coin", "effect": "gust"}` set states a 50/50 as a certainty. That last one is 1120
+Crushing Hammer's ruling verbatim, and it is why the gust row in the gap table above still reads
+**1 site — 0 of our copies, 0.01 meta**: the family's whole live exposure moved, and what stayed is
+one 0-copy card waiting on the `Expectation` shape both coin cards need.
+
+Two things the mint deliberately did **not** do. It is *whether*-to-gust, never *whom*: the
+deck-agnostic gust-targeting equation is untouched and stays the authority on which body is worth
+pulling. And the two on-evolve gusts (Hariyama, Hop's Dubwool) reach a clause through the existing
+`trigger: on_evolve` routing rather than a new `_ABILITY` site — the shape Issue #305's measurement
+forced, recorded below.
+
+> **What Issue #299's ruling did and did not change for the Stadium family.** It was REFUSED
+> entirely when this was written; most of its sites are now ENGINE-RESOLVED *candidates* (2 refused
+> of 14), because the printed text carries no RNG, hidden-zone or opponent-choice marker and the
+> engine route is no longer closed to `_PLAY`. **That is not the same as being priced.** A candidate
+> needs a `deterministic=True` proof and a wired `search_api`, and nothing produces either; and even
+> resolved through the engine it would be a 1-ply bridge, not the closed-form clause the composer
+> wants. So the vocabulary work below is unchanged in scope and unchanged in priority — the ruling
+> moved where these sit in the tables, not what they cost. Issue #304 owns it. Gust sat in exactly
+> the same place until Issue #303 minted the kind, which is what taking a family from *candidate* to
+> *closed-form* actually costs and actually buys.
 
 ## The findings that are not about coverage percentages
 
@@ -719,12 +736,15 @@ Issue #263.
    detail.
 2. ~~**Rule AMBIGUOUS #1**~~ — **DONE (Issue #299, ruled YES with AMBIGUOUS #2).** It moved the 46
    deterministic-shaped sites out of REFUSED as promised, and its opposite leg moved the 21 partial
-   sites out of MODELLED. Note what it did **not** buy: *Boss's Orders* is shuffle-free and now an
-   engine-route candidate, but a candidate is not a proof — nothing produces `deterministic=True` or
-   a wired `search_api` yet, so a composer today still expands every gust. Follow-up 3 is unchanged
-   and is still the way to ORDER one.
-3. **Mint a `gust` clause kind** — highest single-family exposure (11 of our copies), named by all
-   three authored doctrines, and the family the differencing system exists to price.
+   sites out of MODELLED. Note what it did **not** buy: *Boss's Orders* was shuffle-free and became
+   an engine-route candidate, but a candidate is not a proof — nothing produces `deterministic=True`
+   or a wired `search_api` yet, so a composer would still have expanded every gust. Follow-up 3 is
+   what actually bought the ordering, and it has since landed.
+3. ~~**Mint a `gust` clause kind**~~ — **DONE (Issue #303).** Was the highest single-family exposure
+   (11 of our copies), named by all three authored doctrines, and the family the differencing system
+   exists to price. The kind, its two riders and their write-sets shipped; 5 of the 7 sites and all
+   13 of our copies moved from engine-route candidate to MODELLED-FULL, and the two that did not are
+   ruled `partial` rather than left unbuilt. *gust-whether* above carries the detail.
 4. **Fix the 14 partial draw clauses** — 42 copies across our decks counting all 21 partial sites,
    and the family the 1-ply ordering amendment was written to rescue. Since Issue #299 these are
    no longer *silently* wrong — a partial set refuses and the composer always-expands it — so the
@@ -784,7 +804,10 @@ or a wired `search_api` yet.
 Heave-Ho Catcher and Hop's Dubwool's Defiant Horn. Had the answer been *own `_ABILITY` option* they
 would have been engine-route eligible and the new clause kind could have skipped them. It was not, so
 the `gust` vocabulary has to reach a clause that is **triggered by an evolve** and not only one played
-off a Trainer — a shape requirement that follow-up 3 now inherits.
+off a Trainer. **Issue #303 honoured it**: both carry `trigger: "on_evolve"`, the same routing key
+190 Archaludon ex and 648 Marnie's Grimmsnarl ex already use, so `_clauses_for` files the clause on
+the `_EVOLVE` site this measurement put them on rather than on an `_ABILITY` option that does not
+exist.
 
 **Erratum.** An earlier draft of AMBIGUOUS #3 and of follow-up 5 said *"12 sites"* and listed **Iono's
 Bellibolt ex** among them. That was wrong: Electric Streamer reads *"As often as you like during your

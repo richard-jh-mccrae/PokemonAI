@@ -98,6 +98,43 @@ def test_a_partial_clause_set_no_longer_resolves_to_MODELLED(census):
         [(s.card_id, s.name) for s in partial if s.fate == seam.MODELLED])
 
 
+def test_the_gust_family_reaches_the_seam_as_a_closed_form_transition(census):
+    """**Issue #303's acceptance, as a measurement.** Before the mint, all 7 gust sites in the pool
+    carried no clause at all: the two with RNG or no determinism proof were REFUSED and the rest sat
+    as engine-route *candidates*, which is not the same as priced — a candidate needs a
+    `deterministic=True` proof and a wired `search_api`, and nothing produces either.
+
+    Five now resolve MODELLED-FULL, and they carry every copy of the family we actually shuffle
+    (Boss's Orders 11, Hariyama 2). The two that do not are RULED `partial`, not left unbuilt, so
+    they fail CLOSED rather than pricing an undeclared leg at 0 — and the coin one is the whole
+    residue of the family's gap row, asserted here so "the row dropped to its 0-copy tail" is a
+    check rather than a claim in the prose.
+
+    Also pinned: the two on-evolve gusts land on the `_EVOLVE` site. That is the shape requirement
+    Issue #305's measurement forced — a triggered Ability rides the option that played the card and
+    poses no `_ABILITY` of its own — and it is carried by the clause's `trigger`, so a routing
+    regression fails here instead of silently filing the clause on a site the engine never poses."""
+    mod, cards, effects, covers, pool = census
+    from common.strategy.context import _EVOLVE, _PLAY
+    sites, _aside = mod.census(pool, cards, effects, covers)
+    gust = {s.card_id: s for s in sites
+            if s.card_id in (1182, 674, 310, 1088, 1204, 1218, 1124) and s.clauses}
+    assert sorted(gust) == [310, 674, 1088, 1124, 1182, 1204, 1218], sorted(gust)
+    for cid in (1182, 310, 1088, 1204, 674):
+        assert gust[cid].fate == seam.MODELLED, (cid, gust[cid].fate)
+        assert gust[cid].report_class == mod.FULL, (cid, gust[cid].report_class)
+    for cid in (1218, 1124):
+        assert gust[cid].report_class == mod.PARTIAL, (cid, gust[cid].report_class)
+        assert gust[cid].fate != seam.MODELLED, (cid, gust[cid].fate)
+    assert gust[674].kind == _EVOLVE and gust[310].kind == _EVOLVE
+    assert gust[1182].kind == _PLAY
+    # What is left of the family's clause-vocabulary gap: the coin card alone, 0 of our copies. The
+    # `Expectation` it waits on is 1120 Crushing Hammer's, not a gust-shaped hole.
+    residue = [s.card_id for s in sites if s.fate == seam.REFUSED and s.cause == mod.GAP
+               and s.family.startswith("gust")]
+    assert residue == [1124], residue
+
+
 def test_the_census_asks_the_seam_for_the_fate_rather_than_re_deriving_it(census):
     """One store for the resolution order (Issue #299). The census used to mirror `fate`'s cascade by
     hand, because `fate` demanded two inputs nothing produces; now it supplies those judgements and

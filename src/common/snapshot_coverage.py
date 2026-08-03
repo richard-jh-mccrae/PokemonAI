@@ -125,8 +125,13 @@ WRITABLE: tuple[Zone, ...] = (
          home="mine.conditions,theirs.conditions"),
     Zone("allowance_retreat_used", "whether the one-Retreat-per-turn allowance is spent", HOMED,
          home="retreated"),
-    Zone("transient_grants", "ADR-0033 transient grants and locks in force this turn", HOMED,
-         home="mine.active.grant"),
+    # BOTH sides, for the same reason `attached_energy` is. A `gust` (Issue #303) pulls the
+    # OPPONENT's Active to their Bench, and `docs/rulebook.txt` L143 says what that does to it:
+    # *"When your Active Pokémon goes to your Bench (whether it retreated or got there some other
+    # way), some things do go away—Special Conditions and any effects from attacks."* A my-side-only
+    # home would declare a write the snapshot could not show — the silent zero one level down.
+    Zone("transient_grants", "ADR-0033 transient grants and locks in force this turn, either side",
+         HOMED, home="mine.active.grant,theirs.active.grant"),
     Zone("bench_occupancy", "how many bodies each Bench holds, and whether it is full — the loss "
                             "condition's own state (`docs/rules.md` §7 case 2)", HOMED,
          home="mine.bench_count,theirs.bench_count"),
@@ -173,9 +178,26 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # is why the clock may read it soundly rather than through the odds machinery.
     "energy_recur": frozenset({"attached_energy", "my_discard_contents"}),
     "fetch": frozenset({"my_hand_ids", "bodies_in_play", "my_deck_count", "deck_odds"}),
+    # Issue #303: *"Switch in 1 of your opponent's Benched Pokemon to the Active Spot."* — Boss's
+    # Orders and six siblings, the highest-exposure family the POC-A2 census refused. Three writes,
+    # not one: the pull rewrites who is Active on THEIR side (`bodies_in_play`), and moving a body
+    # out of the Active Spot ENDS what it was carrying — `docs/rulebook.txt` L143, *"whether it
+    # retreated or got there some other way … Special Conditions and any effects from attacks"* go
+    # away. Declaring only the move would price the condition/grant clear at exactly 0, which is the
+    # silent zero this module exists to prevent.
+    #
+    # `gust` is also the `effect` value of Pokemon Catcher's coin clause (1124), and one key serves
+    # both: :func:`undeclared_clauses` looks the string up, not the position it came from.
+    "gust": frozenset({"bodies_in_play", "special_conditions", "transient_grants"}),
     "heal": frozenset({"damage_counters"}),
     # riders
     "bounce_energy_to_hand": frozenset({"attached_energy", "my_hand_ids"}),
+    # Issue #303, Lisia's Appeal: *"If you do, the new Active Pokemon is now Confused."* The
+    # condition lands on the body the gust just pulled — the OPPONENT's new Active — and
+    # `special_conditions` is homed on both sides (`mine.conditions,theirs.conditions`) for exactly
+    # that. Only the Active can carry one (`docs/rules.md` §8), which is why the rider is meaningful
+    # solely on a clause that just made a body Active.
+    "confuse_target": frozenset({"special_conditions"}),
     "discard_basic_f_energy": frozenset({"my_hand_ids", "my_discard_contents"}),
     "discard_eot": frozenset({"attached_energy", "my_discard_contents"}),
     "discard_own_energy": frozenset({"attached_energy", "my_discard_contents"}),
@@ -185,6 +207,20 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # `deck_order` is NOT among them — nothing is shuffled, the remainder simply leaves the deck.
     "discard_remainder": frozenset({"my_discard_contents", "my_deck_count", "deck_odds"}),
     "other_to_bottom": frozenset({"my_deck_count", "deck_odds", "deck_order"}),
+    # Issue #303: the gust rider that also moves MY OWN Active — Prime Catcher's *"If you do, switch
+    # your Active Pokemon with 1 of your Benched Pokemon"* and Team Rocket's Giovanni's opening leg.
+    # Same three writes as `gust`, on my side of the board instead of theirs.
+    #
+    # **`allowance_retreat_used` is deliberately ABSENT, checked at source before this was written.**
+    # An effect-driven switch is NOT a retreat: `docs/rules.md` §3 prints the manual limit as *"1
+    # (pay the Retreat cost in Energy; **card effects can switch for free**)"*, and
+    # `docs/rulebook.txt` L618 defines retreating as discarding Energy equal to the printed Retreat
+    # Cost, once per turn (L142 the same). Both cards say *"switch"*, never *"retreat"*, so neither
+    # pays the cost nor spends the once-per-turn allowance — and declaring the allowance would make
+    # every effect-switch read as having burned the turn's retreat, blocking a real one that is still
+    # available. L143 is the same sentence read the other way: a body reaching the Bench *"some other
+    # way"* still drops its Special Conditions, which is why those two zones ARE here.
+    "self_switch": frozenset({"bodies_in_play", "special_conditions", "transient_grants"}),
     "shuffle_both_hands": frozenset({"my_hand_ids", "their_hand_size", "my_deck_count",
                                      "their_deck_count", "deck_odds", "deck_order"}),
     "shuffle_self_in": frozenset({"bodies_in_play", "my_deck_count", "deck_odds", "deck_order"}),
@@ -254,9 +290,25 @@ COVERS_VERDICTS = frozenset({COVERS_FULL, COVERS_PARTIAL})
 #:   cost and no clause field carries it (the same ruling 1192 already carries).
 #:
 #: None of the five is in a shipped deck; their combined meta weight is ~0.4 copies.
+#:
+#: **Issue #303's two additions are NEW EXPOSURE, ruled, not a downgrade** — same shape as Issue
+#: #301's five: both cards had NO clauses and therefore no verdict, and both now carry an authored
+#: `gust` set that is honestly incomplete.
+#:
+#: * 1124 Pokemon Catcher — a COIN-gated gust. The flip is carried and its `effect` names the gust,
+#:   but the clause set states the 50/50 as a certainty, which needs an `Expectation` rather than a
+#:   scalar transition. That is 1120 Crushing Hammer's ruling verbatim, and the two must agree: they
+#:   are the same `{"kind": "coin", "effect": …}` shape, so ruling this one `full` would put two
+#:   opposite verdicts on one shape in the same store.
+#: * 1218 Team Rocket's Giovanni — both legs authored (the self-switch, then the pull it gates), but
+#:   the *Team Rocket's* NAME family on the self-switch is recorded and UNDECIDED, exactly as it is
+#:   for 1115 / 1134 / 1215 / 1220: no build-time family index over the pool exists, so the clause
+#:   deliberately decides nothing rather than reading as an unrestricted switch.
+#:
+#: Neither is in a shipped deck; their combined meta weight is ~0.03 copies.
 PARTIAL_CLAUSE_BASELINE: frozenset[int] = frozenset({
-    1080, 1086, 1100, 1110, 1115, 1118, 1120, 1134, 1153, 1181, 1187, 1192, 1199, 1200, 1203,
-    1206, 1207, 1208, 1213, 1214, 1215, 1216, 1220, 1222, 1223, 1227, 1237, 1239, 1242,
+    1080, 1086, 1100, 1110, 1115, 1118, 1120, 1124, 1134, 1153, 1181, 1187, 1192, 1199, 1200, 1203,
+    1206, 1207, 1208, 1213, 1214, 1215, 1216, 1218, 1220, 1222, 1223, 1227, 1237, 1239, 1242,
 })
 
 

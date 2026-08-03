@@ -131,6 +131,40 @@ def test_an_effect_value_nobody_declared_is_caught_by_the_walk():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_gust_family_declares_the_pull_AND_what_leaving_the_active_spot_clears():
+    """**Issue #303's write-set, and the rules check it rests on.**
+
+    A gust is three writes, not one. The pull rewrites who is Active (`bodies_in_play`), and
+    `docs/rulebook.txt` L143 says what moving a body out of the Active Spot does to it: *"When your
+    Active Pokémon goes to your Bench (whether it retreated or got there some other way), some
+    things do go away—Special Conditions and any effects from attacks."* Declaring only the move
+    would price the clear at exactly 0, which is the silent zero this module exists to prevent.
+
+    **`allowance_retreat_used` is deliberately absent**, and that is the question the issue owed at
+    source: `docs/rules.md` §3 prints the manual limit as *"1 (pay the Retreat cost in Energy; card
+    effects can switch for free)"*, and `docs/rulebook.txt` L618 defines retreating as discarding
+    Energy equal to the printed Retreat Cost, once per turn. Prime Catcher and Team Rocket's
+    Giovanni both say *switch*, never *retreat* — so an effect switch neither pays the cost nor
+    spends the allowance, and declaring it would make every gust look like it burned the turn's
+    retreat."""
+    vocab = sc.clause_vocabulary(_compendium())
+    assert {"gust", "self_switch", "confuse_target"} <= set(vocab)
+    both = {"bodies_in_play", "special_conditions", "transient_grants"}
+    assert sc.CLAUSE_WRITES["gust"] == both
+    assert sc.CLAUSE_WRITES["self_switch"] == both
+    assert "allowance_retreat_used" not in sc.CLAUSE_WRITES["self_switch"]
+    assert sc.CLAUSE_WRITES["confuse_target"] == {"special_conditions"}
+    # `transient_grants` is homed on BOTH sides for the same reason `attached_energy` is: a gust
+    # clears the OPPONENT's Active's attack effects, and a my-side-only home would declare a write
+    # the snapshot could not show.
+    assert sc.homes()["transient_grants"] == ["mine.active.grant", "theirs.active.grant"]
+    # The pull itself is deterministic — I choose the target off a public Bench. Only the COIN in
+    # front of Pokemon Catcher's copy is not, and that is `coin`'s entry, not this one.
+    assert "gust" not in sc.NONDETERMINISTIC_CLAUSES
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
     """One vocabulary, not two. A write-set naming an invented zone would look like coverage while
     corresponding to nothing the snapshot was ever checked for."""

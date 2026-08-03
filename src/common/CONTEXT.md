@@ -244,7 +244,11 @@ One machine-readable clause of a Trainer's or Ability's effect — `{kind, amoun
 rider}` — so a multi-clause card is a LIST of clauses (Wally's Compassion = heal(all, Mega-only) +
 bounce-Energy(→hand)). The parametric card-tier counterpart of the attack-tier **Attack Effect**:
 the **Function Tag** stays the coarse boolean *routing trigger* (`heal`), the Effect Clause carries
-the *quantities the math reads* (150 vs 60 vs all; the Energy-discard cost; the Mega-only gate).
+the *quantities the math reads* (150 vs 60 vs all; the Energy-discard cost; the Mega-only gate). The
+two vocabularies **share names on purpose** — `heal`, `draw` and (since Issue #303) `gust` are a tag
+and a clause kind alike — and the split is always that one: the tag says the card pulls a benched
+body Active, the clause says *which* class it may pull (`target: any | basic`) and what rides along
+(`self_switch`, `confuse_target`).
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.

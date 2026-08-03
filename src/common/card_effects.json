@@ -25,9 +25,17 @@
 "covers": "full",
 "reason": "energy_recur 2 x {M} from discard on evolve — the whole Ability"
 },
+"310": {
+"covers": "full",
+"reason": "the on-evolve gust is the whole Ability; \"you may\" is an optional gate, exactly as it is on the 190 / 648 on-evolve clauses"
+},
 "648": {
 "covers": "full",
 "reason": "accel 5 x Basic {D} from deck on evolve — the whole Ability"
+},
+"674": {
+"covers": "full",
+"reason": "the on-evolve gust is the whole Ability; the once-per-turn cap is a condition, not a leg (the 140 precedent), and it is vacuous on an on-evolve trigger anyway"
 },
 "675": {
 "covers": "full",
@@ -56,6 +64,10 @@
 "1086": {
 "covers": "full",
 "reason": "fetch up to 2 Basics with 70 HP or less straight onto the Bench"
+},
+"1088": {
+"covers": "full",
+"reason": "the pull AND the `self_switch` it triggers — \"If you do, switch your Active Pokemon with 1 of your Benched Pokemon\" — both legs carried"
 },
 "1092": {
 "covers": "full",
@@ -129,6 +141,10 @@
 "covers": "full",
 "reason": "fetch a Supporter with `dig: 7`"
 },
+"1124": {
+"covers": "partial",
+"reason": "the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts)"
+},
 "1125": {
 "covers": "full",
 "reason": "fetch a Pokemon from deck"
@@ -181,6 +197,10 @@
 "covers": "partial",
 "reason": "clause draws a flat 4; the card draws 2 and only draws 2 more at 10+ cards in hand, so the clause OVER-states on every normal board"
 },
+"1182": {
+"covers": "full",
+"reason": "the pull IS the whole card — \"Switch in 1 of your opponent's Benched Pokemon to the Active Spot\", no rider, no restriction"
+},
 "1184": {
 "covers": "full",
 "reason": "up to 3 in any combination of no-Rule-Box Pokemon and Basic Energy from the discard — both legs, sharing the one cap (`choice`)"
@@ -229,6 +249,10 @@
 "covers": "partial",
 "reason": "clause draws 1; the card SWITCHES the Active and then draws up to a 5-card hand. The switch is the reason the card is played"
 },
+"1204": {
+"covers": "full",
+"reason": "the Basic-only pull AND the `confuse_target` rider — \"If you do, the new Active Pokemon is now Confused\" — both legs carried"
+},
 "1205": {
 "covers": "full",
 "reason": "fetch up to 3 Pokemon {ex} from deck"
@@ -268,6 +292,10 @@
 "1216": {
 "covers": "partial",
 "reason": "clause draws a flat 2; the card draws UP TO a 5-card hand, or 8 on an all-Team Rocket board"
+},
+"1218": {
+"covers": "partial",
+"reason": "both legs are carried — the `self_switch` first, then the pull it gates (\"If you do\") — but the Team Rocket's NAME family restricting BOTH of my bodies is recorded and UNDECIDED, so it deliberately decides nothing rather than reading as an unrestricted switch (the 1115 / 1134 / 1215 / 1220 ruling)"
 },
 "1219": {
 "covers": "full",
@@ -398,6 +426,13 @@
 "target": "own_type"
 }
 ],
+"310": [
+{
+"kind": "gust",
+"target": "any",
+"trigger": "on_evolve"
+}
+],
 "648": [
 {
 "kind": "accel",
@@ -407,6 +442,14 @@
 "energy": "basic",
 "energy_type": 7,
 "trigger": "on_evolve"
+}
+],
+"674": [
+{
+"kind": "gust",
+"target": "any",
+"trigger": "on_evolve",
+"condition": "once_per_turn_ability"
 }
 ],
 "675": [
@@ -468,6 +511,13 @@
 "hp_max": 70,
 "amount": 2,
 "dest": "bench"
+}
+],
+"1088": [
+{
+"kind": "gust",
+"target": "any",
+"rider": "self_switch"
 }
 ],
 "1092": [
@@ -652,6 +702,13 @@
 "dig": 7
 }
 ],
+"1124": [
+{
+"kind": "coin",
+"effect": "gust",
+"target": "any"
+}
+],
 "1125": [
 {
 "kind": "fetch",
@@ -763,6 +820,12 @@
 "amount": 4
 }
 ],
+"1182": [
+{
+"kind": "gust",
+"target": "any"
+}
+],
 "1184": [
 {
 "kind": "fetch",
@@ -869,6 +932,13 @@
 "amount": 1
 }
 ],
+"1204": [
+{
+"kind": "gust",
+"target": "basic",
+"rider": "confuse_target"
+}
+],
 "1205": [
 {
 "kind": "fetch",
@@ -963,6 +1033,14 @@
 {
 "kind": "draw",
 "amount": 2
+}
+],
+"1218": [
+{
+"kind": "gust",
+"target": "any",
+"rider": "self_switch",
+"name_family": "Team Rocket's"
 }
 ],
 "1219": [
