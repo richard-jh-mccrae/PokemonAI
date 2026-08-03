@@ -2441,6 +2441,135 @@ def test_on_real_frames_healing_my_active_never_lowers_survival(corpus_models):
     assert strict, "no corpus frame moved at all — the class would pass on a constant term"
 
 
+# ── the LEAF PATH's `hand` zero, asserted as RULED rather than merely documented (Issue #331) ──────
+#
+# `test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is` above already asserts a
+# `hand` zero, but a DIFFERENT one: it scores a hand-built model with no Needs resolution passed in,
+# at the `state_value` layer. The zero below is the LEAF PATH's, and its cause lives one module over
+# in `planner`. The two propositions are independent, and until Issue #331 only the first was tested.
+
+
+def _leaf_end_boards(want_blind: int = 20, want_live: int = 2):
+    """``(key, pilot, my_index, end)`` for corpus frames FORWARD-SIMULATED to my end-of-turn board,
+    split into the two shapes the sim actually produces: ``blind`` (my turn passed to the opponent)
+    and ``live`` (the line ENDED THE GAME, so the board never changed perspective).
+
+    Driven through the leaf lab's own offline seam rather than a second harness — `_search_api` +
+    `train.leaf_lab._PLACEHOLDER_SBI` are exactly what `leaf_lab.board_leaf_values` injects to
+    re-score a correction board without the native engine, so this reads the same leaf the
+    Discrimination Gate grades. cgpy is deterministic (`SeededRng(0)`), so the split is stable.
+
+    Stops as soon as both shapes are stocked (measured: ~4 s, against ~11 s for the whole corpus);
+    the caps are floors on the sample, not an assumption about where in the corpus each shape sits."""
+    from cgpy.compat import api as cgpy_api
+    from corpus_helpers import corpus_index
+    from train.leaf_lab import _PLACEHOLDER_SBI
+    from train.tune import _build_pilot
+    blind, live, built = [], [], {}
+    for (episode, frame), rec in sorted(corpus_index().items()):
+        if len(blind) >= want_blind and len(live) >= want_live:
+            break
+        if not ((rec.obs or {}).get("select") or {}).get("option"):
+            continue                                # nothing to take as a first step
+        if rec.agent not in built:
+            try:
+                pilot, _ = _build_pilot(rec.agent)
+                pilot._search_api = cgpy_api        # the seam: simulate offline via cgpy, not native
+                built[rec.agent] = pilot
+            except Exception:                       # an unbuildable agent is skipped, never fatal
+                built[rec.agent] = None
+        pilot = built[rec.agent]
+        if pilot is None:
+            continue
+        obs = {**rec.obs,
+               "search_begin_input": rec.obs.get("search_begin_input") or _PLACEHOLDER_SBI}
+        try:
+            sim = pilot._simulate_line(obs, [0])
+        except Exception:                           # a board cgpy cannot reseed is skipped, counted
+            sim = None
+        if sim is None:
+            continue
+        end, my_index, result = sim[0], sim[1], sim[3]
+        (live if result != -1 else blind).append((f"{episode}|{frame}", pilot, my_index, end))
+    return blind, live
+
+
+@pytest.fixture(scope="module")
+def leaf_end_boards():
+    blind, live = _leaf_end_boards()
+    if not blind or not live:
+        pytest.skip("no offline-simulatable corpus frame of both shapes in this checkout")
+    return blind, live
+
+
+def _my_side(end, my_index):
+    players = (end.get("current") or {}).get("players") or []
+    return players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_leaf_paths_hand_zero_is_the_RULED_one_and_says_so_when_it_stops_being(leaf_end_boards):
+    """The leaf path prices `hand` at exactly 0.0, and that is **RULED, not broken** — Issue #331,
+    developer ruling 2026-08-02 (option 1 of three: leave the ruling, let Issue #263 absorb it).
+
+    The chain, asserted link by link rather than assumed, because each link is the one a future
+    change would break silently:
+
+      1. `_simulate_line` stops when the select passes to the opponent, so the end observation is
+         **opponent-perspective** and my hand is hidden — `handCount` survives, the `hand` list does
+         not. That is the substrate fact `planner._simulate_line`'s comment block records, and it is
+         why `leaf_hand_value` (the capture that works around it) stays off in every production path.
+      2. `planner._leaf_needs_resolution` therefore returns **None** (`if not me.get("hand")`).
+      3. `_hand_legs` returns all zeros for a `None` resolution, so the family prices `0.0` — the
+         REAL zero `state_value.REGISTRY`'s `hand.blind_to` names in as many words: *"MY HAND on a
+         simulated end board — the whole family prices 0 there."*
+
+    **Why this test exists.** Issue #331 is held open for a re-measurement once Issue #263's 1-ply
+    ordering scores boards where `hand` is expected to be live, and 15 gate frames are held out
+    against exactly that expectation. Until now the ruled zero was documented in three places
+    (`planner.py`'s comment block, `hand.blind_to`, the hold-out ledger's `why` strings) and asserted
+    in none — and documentation is not a regression guard. If Issue #263 makes `hand` live on this
+    path, or a change flips `leaf_hand_value`'s default, or `_leaf_needs_resolution` starts returning
+    a resolution, this test fails LOUDLY and names the ruling instead of letting the 15 held-out
+    frames quietly stop measuring what they were held out to measure.
+
+    The `handCount` assertion is what stops the zero from being read off an empty hand — a hand with
+    no cards in it prices zero for a reason that has nothing to do with this ruling. And the second
+    loop is the positive control the negative claim needs (CLAUDE.md): a line that ENDS THE GAME never
+    hands the select over, so its end board stays MY perspective, carries a real `hand`, resolves, and
+    prices strictly above zero. Same instrument, same leaf-built model, non-zero answer — so the zeros
+    above are a measurement rather than a broken reader. Measured on the full corpus: 282 frames blind
+    and 19 game-over, and the two sets partition exactly on `result != -1`."""
+    blind, live = leaf_end_boards
+
+    for key, pilot, my_index, end in blind:
+        me = _my_side(end, my_index)
+        assert not me.get("hand"), (
+            f"{key}: the simulated end board carries MY hand. The leaf is no longer hand-blind — "
+            f"re-read Issue #331's ruling and re-measure its 15 held-out frames before changing "
+            f"this test")
+        if not me.get("handCount"):
+            continue                                # an emptied hand prices zero for another reason
+        assert pilot._leaf_needs_resolution(end, my_index) is None, (
+            f"{key}: `_leaf_needs_resolution` resolved a hand the end observation does not carry")
+        working: dict = {}
+        sv.state_value(pilot._leaf_state_model(end, my_index), working=working)
+        assert working["hand"] == 0.0, (
+            f"{key}: the leaf priced `hand` at {working['hand']}, not the structural 0.0 that "
+            f"`hand.blind_to` records and Issue #331 ruled")
+
+    for key, pilot, my_index, end in live:
+        me = _my_side(end, my_index)
+        assert me.get("hand"), f"{key}: a game-ending line's board should still be my perspective"
+        assert pilot._leaf_needs_resolution(end, my_index) is not None, (
+            f"{key}: a board WITH my hand resolved no Needs — the instrument is broken, not the leaf")
+        working = {}
+        sv.state_value(pilot._leaf_state_model(end, my_index), working=working)
+        assert working["hand"] > 0.0, (
+            f"{key}: positive control FAILED — `hand` read {working['hand']} on a board that DOES "
+            f"carry my hand, so the zeros above prove nothing about the ruling")
+
+
 # ── a companion-GATED payoff (Issue #287) ─────────────────────────────────────────────────────────
 #
 # `readiness` prices *what this body achieves once it is online*. Read off `CardStat.maxDamage` that
