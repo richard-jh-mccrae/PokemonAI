@@ -96,6 +96,20 @@ Issue #275), **2 `engine_fit`** (274 and 371, transcribed from Issue #224's pres
 | REQ-PROV-0005 | A `text_verified` row names the issue that owes its measurement. |
 | REQ-PROV-0006 | Table and sidecar are emitted in one pass; a regenerate over an empty measurement set reproduces both byte-for-byte. |
 | REQ-PROV-0007 | The generator may retract what it authored (a fit that no longer holds is dropped); never what a human ruled (`--prune` opts in). |
+| REQ-PROV-0008 | A fit that CONTRADICTS a `text_verified` ruling is not written: the ruling is kept, both readings are named on stdout, and the run exits non-zero (`--rule` opts in). |
+
+**A contradiction halts; it is not recorded** (REQ-PROV-0008, Issue #355). REQ-PROV-0007's protective
+`KEPT`/`--prune` branch sits in `merge_provenance`'s *second* loop, behind `if aid in entries:
+continue` — so it could never see an attack the run had derived something for, which is exactly the
+case where a ruling is under threat. Measured on two shipped entries: the audit panel's vanilla
+defender is a *Mega Pokémon ex* and holds no Energy, so `def_ex_in_play` is collinear with
+`def_bench` (425) and `both_active_energy` with `atk_active_energy` (120), and both rulings were
+being overwritten with a wrong variable that flows into `state_value`'s `threat`/`survival` terms.
+The refused fit leaves **no row in the sidecar**, on the same ruling `_apply_rules` already makes for
+a refused coin bound: that file's evidence justifies what SHIPPED, and a measurement that established
+nothing belongs on `diff_attack_audit.py`'s gap ledger. The non-zero exit is what makes it impossible
+to absorb silently — ADR-0032 records 96.6 % of 9.5 k measurements predicting exactly, so a
+disagreement is roughly 1 in 30 and worth a human reading the card again.
 
 **A measured coin bound is board-scoped** (REQ-AUDIT-0014, ADR-0083 Amendment A). `--sweep` leaves
 several vanilla `coin="max"` records — one per board — so the fork pairs are grouped by the
