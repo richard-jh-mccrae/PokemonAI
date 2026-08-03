@@ -380,13 +380,19 @@ LOSS_PRIZES = (
 #: :data:`LOSS_PRIZES`, and the one the T3 swap forgot.
 #:
 #: `planner._engine_leaf_value` short-circuits a coin-free simulated win to a dominant terminal value.
-#: Its magnitude was `KO_SCORE * (start_prizes + 1)` — prizes ALREADY BANKED when the line began,
-#: plus one. Against the retired hand-composed leaf that genuinely was dominant: the whole positional
-#: band summed to 590 against `KO_SCORE` 1000. Against THIS module it is not. `prize_race`'s lead leg
-#: has unit slope and is deliberately uncapped, so a merely-WINNING position out-scores a won GAME:
-#: measured over the committed corpus, 26 frames reach a coin-free simulated win and on **4** of them
-#: a non-winning option scored higher — worst `82749168|1|decision|88`, a won 2000 against a non-win
-#: 6789.9, on a frame whose own winning board scores 6.909985 prizes.
+#: Its magnitude was `KO_SCORE * (start_prizes + 1)`, and that term is **prizes still REMAINING when
+#: the line began** — `_simulate_line` reads `len(me["prize"])`, the same expression
+#: `state_model.prizes_remaining` is ("Prizes this side still needs to take"), never `prizes_taken`.
+#: So the old magnitude ran BACKWARDS: it paid a win the most (7000) when six prizes were still to
+#: take and the least (1000-2000) when the win was about to land. Against the retired hand-composed
+#: leaf even the floor was dominant — the whole positional band summed to 590 against `KO_SCORE`
+#: 1000. Against THIS module it is not. `prize_race`'s lead leg has unit slope and is deliberately
+#: uncapped, so a merely-WINNING position out-scores a won GAME: measured over the committed corpus,
+#: 26 frames reach a coin-free simulated win and on **4** of them a non-winning option scored higher —
+#: worst `82749168|1|decision|88`, a won 2000 against a non-win 6789.9, on a frame whose own winning
+#: board scores 6.909985 prizes. That worst case is the inversion's signature: one prize remaining is
+#: the position closest to victory and drew the second-smallest payout the formula could produce.
+#: `tools/train/probes/win_band_sweep.py` re-runs the measurement.
 #:
 #: Derived the same way its mirror is, from the largest sum the families can express on any legal
 #: board, plus one strict prize of headroom:

@@ -3341,19 +3341,16 @@ class PlannerMixin:
         (Issue #263) deletes them with the rollout.
 
         **A line that finishes the game in my favour scores above any BOARD, and that is what Issue
-        #362 fixed rather than what it always did.** The short-circuit's magnitude was
-        ``KO_SCORE * (start_prizes + 1)`` — prizes already BANKED when the line began, plus one — so
-        it topped out at 7 prizes and was commonly 2000-5000. That was dominant against the retired
-        hand-composed leaf, whose positional band summed to 590. It is not dominant against
-        `state_value`, whose `prize_race` lead leg has unit slope and is deliberately uncapped, and
-        nothing re-checked the comparison at the swap: measured over the committed corpus, 26 frames
-        reach a coin-free simulated win and on 4 of them a non-winning option out-scored it, worst
-        `82749168|1|decision|88` at a won 2000 against a non-win 6789.9 — a frame the human ruled
-        "could have just attacked for the win". The magnitude is now
-        :data:`~common.state_value.WIN_PRIZES`, DERIVED to exceed the largest sum the families can
-        express plus a prize of headroom, which also covers the `_LINE_CAP` this function adds outside
-        the scalar. The mirror constant `LOSS_PRIZES` got that treatment at the swap; the win side did
-        not.
+        #362 fixed rather than what it always did.** The magnitude was ``KO_SCORE * (start_prizes +
+        1)``, and ``start_prizes`` counts prizes still REMAINING (`_simulate_line` below reads
+        ``len(me["prize"])``), so it paid a win MOST when six prizes were still to take and LEAST when
+        the win was about to land. That was dominant against the retired hand-composed leaf, whose
+        positional band summed to 590; against `state_value`, whose `prize_race` lead leg has unit
+        slope and is deliberately uncapped, it is not, and nothing re-checked the comparison at the
+        swap. The magnitude is now :data:`~common.state_value.WIN_PRIZES`, which carries the
+        derivation and the corpus measurement; this side owns only the leaf's own axis, where the
+        band's prize of headroom also has to cover the `_LINE_CAP` added outside the scalar. The
+        mirror constant `LOSS_PRIZES` got that treatment at the swap; the win side did not.
 
         **Every winning line still prices IDENTICALLY, and that is an OWNED zero.** So did the old
         formula — `_simulate_line` reads `start_prizes` off the ROOT observation, so it is one number
@@ -3375,7 +3372,14 @@ class PlannerMixin:
         sim = self._simulate_line(obs, first_step)
         if sim is None:
             return (None, False) if with_stream else None
-        end, my_index, start_prizes, result, line_val, coins, stream = sim
+        end, my_index, _start_prizes, result, line_val, coins, stream = sim   # `_`: the win branch was
+                                                                             # this element's only
+                                                                             # reader until Issue #362
+                                                                             # replaced it with a
+                                                                             # DERIVED band, and the
+                                                                             # board branch never read
+                                                                             # it (`prize_race` takes
+                                                                             # the END board's counts)
 
         def _out(val):
             return (val, stream) if with_stream else val
@@ -3386,9 +3390,7 @@ class PlannerMixin:
         if result == my_index and not coins:              # line wins outright, COIN-FREE — dominant,
             return _out(KO_SCORE * WIN_PRIZES)            # and since Issue #362 that word is true: the
                                                           # band is DERIVED to exceed every board the
-                                                          # families can express, where the old
-                                                          # `start_prizes + 1` topped out at 7 prizes
-                                                          # and lost to a merely-winning position.
+                                                          # families can express (see the constant).
                                                           # A win through auto-resolved coins is one
                                                           # lucky RNG stream, not a guarantee — it falls
                                                           # through to ordinary board ranking (prizes

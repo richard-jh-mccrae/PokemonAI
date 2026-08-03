@@ -793,19 +793,13 @@ def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeyp
 @pytest.mark.req("REQ-PLANNER-0037")
 def test_a_coin_free_simmed_WIN_outranks_every_board_the_leaf_can_score(monkeypatch):
     """Issue #362: the short-circuit's comment said *"dominant"* and its arithmetic no longer was.
+    The defect, its corpus measurement and the derivation all live on
+    :data:`~common.state_value.WIN_PRIZES`; this asserts the half that module cannot.
 
-    `KO_SCORE * (start_prizes + 1)` tops out at 7 prizes — 7000 — and is commonly 2000-5000, because
-    `start_prizes` counts prizes ALREADY BANKED when the line began. It was written against the
-    retired hand-composed leaf, whose whole positional band summed to 590. Since the POC-T3 swap
-    (Issue #262) the other branch is `KO_SCORE * state_value(board)`, whose `prize_race` lead leg has
-    UNIT SLOPE and is deliberately UNCAPPED — so a merely-winning POSITION routinely out-scored a won
-    GAME. Measured over the committed corpus at the parent commit: 26 frames reach a coin-free simmed
-    win, 4 of them are out-scored by a non-win, worst by 4789.9 leaf points.
-
-    The bound is asserted on the LEAF's axis rather than `state_value`'s, because the leaf adds
+    The bound belongs on the LEAF's axis rather than `state_value`'s, because the leaf adds
     `min(_LINE_CAP, line_val)` OUTSIDE the scalar and the win has to clear that too. `WIN_PRIZES`'
     one prize of headroom (1000) covers `_LINE_CAP` (100) ten times over, which is why the derivation
-    lives in `state_value` and only this assertion knows about the line account."""
+    lives over there and only this assertion knows about the line account."""
     import common.state_value as sv
     from common.strategy.context import KO_SCORE
     from common.strategy.planner import _LINE_CAP
@@ -818,18 +812,23 @@ def test_a_coin_free_simmed_WIN_outranks_every_board_the_leaf_can_score(monkeypa
     pilot = _pilot()
     me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None]}
     opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 5}
+    start_prizes = len(me["prize"])                  # 1 prize REMAINING — a win one turn away
 
     def sim(result):
         end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": result}}
-        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 1, result, 0.0, False, False)
+        return lambda obs, first_step, max_steps=40, **kw: (
+            end, 0, start_prizes, result, 0.0, False, False)
 
     monkeypatch.setattr(pilot, "_simulate_line", sim(0))
     won = pilot._engine_leaf_value({}, [0])
     monkeypatch.setattr(pilot, "_simulate_line", sim(-1))
     unfinished = pilot._engine_leaf_value({}, [0])
-    assert unfinished > KO_SCORE, (
-        "non-vacuity: this board's ordinary branch must clear a prize, or the comparison below "
-        "would pass against a board the old formula also beat")
+    # NON-VACUITY, and it reproduces the defect in a unit test rather than only in prose: this
+    # ordinary UNFINISHED board out-scores what the retired formula would have paid the WIN on this
+    # very frame — and it clears the formula's absolute ceiling of 7 prizes on a real corpus board
+    # (`82749168|1|decision|88`: won 2000, non-win 6789.9). Without this the comparison below would
+    # pass against a board the old magnitude also beat, which would test nothing.
+    assert unfinished > KO_SCORE * (start_prizes + 1)
     assert won > unfinished
 
 
@@ -841,9 +840,9 @@ def test_the_win_value_is_FLAT_and_that_costs_the_ranking_nothing(monkeypatch):
     Every winning line in a frame now prices identically. So did the old formula: `start_prizes` is
     read off the **root observation** inside `_simulate_line`, before the first step, so it is one
     number per FRAME and every option of that frame carries it. It could never separate two winning
-    lines; all it ever did was scale the flat value differently per frame (2000 here, 5000 there),
-    which is a magnitude no ranking can use because rankings are within-frame. Measured on
-    `82749168|1|decision|88`: eight winning options, all `start_prizes 1`, all 2000.
+    lines; all it ever did was scale the flat value differently per frame, which is a magnitude no
+    ranking can use because rankings are within-frame. Measured on `82749168|1|decision|88`: eight
+    winning options, all `start_prizes 1`, all 2000.
 
     So the tie is not a regression this change introduced and there is nothing here to distinguish:
     `_simulate_line` stops at MY turn end, so every one of these lines wins THIS turn — there is no

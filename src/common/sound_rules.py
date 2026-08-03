@@ -139,7 +139,14 @@ WHITELIST: tuple[SoundRule, ...] = (
                "play's MOVE, and the per-body bounds hold that under 1.0. That restatement is a "
                "change to a ratified structural entry and is filed in the wave-3 packet; it is "
                "recorded here rather than left as a docstring claim, because a whitelist that "
-               "describes a band the code abandoned is worse than one that says so.",
+               "describes a band the code abandoned is worse than one that says so. "
+               "**The band has TWO terminal constants, not one (Issue #362).** `LOSS_PRIZES` was "
+               "derived at the T3 swap; the mirror `WIN_PRIZES` was not, and until Issue #362 the "
+               "planner's coin-free-win short-circuit paid a transcribed `KO_SCORE x (start_prizes "
+               "+ 1)` that a merely-WINNING position out-scored on 4 of the 26 corpus frames that "
+               "reach a simulated win. Both are now derived from the same summands, both live in "
+               "`state_value.py`, and the leaf's own `_LINE_CAP` is covered by the win band's prize "
+               "of headroom rather than by a second constant.",
     ),
     SoundRule(
         id="setup-never-bench",

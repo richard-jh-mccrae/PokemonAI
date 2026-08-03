@@ -299,6 +299,10 @@ columns have been grading a leaf the agent stopped using at the POC-T3 swap; the
 rather than letting the import imply otherwise. Not fixed here — a different subsystem, not this
 issue's, and bundling it would have made this gate diff unattributable.
 
+`sound_rules.py`'s ratified `ko-score-band` entry gained the win half. Its own closing sentence —
+*"a whitelist that describes a band the code abandoned is worse than one that says so"* — is why:
+the band now has TWO terminal constants and the entry named one.
+
 ### Gate arithmetic — attributed against a BEFORE control on the same tree
 
 The before column is a real `leaf_lab diff` run at `5f44bd86` (Issue #332's end state), not a
@@ -332,9 +336,29 @@ than trusted. Re-implementing both branches of `_engine_leaf_value` around the r
 | **361** frames swept | **did NOT reproduce — the number is 371** (372 corrections carry an obs; one agent, `SkiChu`, has no `strategy.py`). Off by 10; changes no conclusion, since both numerators reproduce. |
 | *"tied at exactly 2000 with **eight other** options"* | **off by one — there are 8 winning options, so 7 others.** The `8` is the BASELINE row's `top_tie`, not the current count. |
 | *"the leaf ranks it 10th of 11"* | reproduces only under an index-tiebreak read (3 options score above 2000; the ruled option is the 7th of the 8 tied at 2000). `leaf_lab`'s own `correct_rank` is **4**. |
+| *"`start_prizes` is prizes **already banked** when the line began"* | **FALSE, and it is the one error that reached shipped prose.** See below. |
 
 Positive control on every sweep: the win-frame count is asserted non-zero, because a sweep that never
-reached the win branch would report "0 of N out-scored" and be indistinguishable from a fix.
+reached the win branch would report "0 of N out-scored" and be indistinguishable from a fix. The
+sweep is now a committed instrument — `tools/train/probes/win_band_sweep.py`, which carries that
+assertion in code and whose `--legacy` mode re-derives all four failures by name, so the headline
+numbers are re-runnable rather than remembered.
+
+### The one FALSE claim in the self-filed issue, and what it changes
+
+Caught by `/code-review`'s Spec axis on the brief this repo's self-filed-issue rule requires. Issue
+#362 asserts *"`start_prizes` is prizes **already banked** when the line began"*, and the first draft
+of this build copied it into four shipped docstrings. It is backwards. `_simulate_line` computes
+`start_prizes = len(me.get("prize") or [])` — the face-down zone — which is the identical expression
+`state_model.prizes_remaining` uses (*"Prizes this side still needs to take"*); `prizes_taken` is a
+separate accessor with a different formula, and both probes' own `taken = start_prizes - len(end
+prize)` only type-checks under the REMAINING reading.
+
+So the retired magnitude was not merely too small, it ran **BACKWARDS**: it paid a win 7000 with six
+prizes still to take and 1000-2000 with the win one turn from landing. That is why the worst frame in
+the table is `82749168|1|decision|88` — one prize remaining, the position closest to victory, drawing
+the second-smallest payout the formula could produce. The verdict is unchanged and the fix is
+unchanged; the shipped REASON was stating the reverse of the code and now does not.
 
 ### The magnitude decision, MEASURED rather than argued
 

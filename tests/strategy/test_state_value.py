@@ -751,10 +751,12 @@ def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
 
     The loss side was derived at the T3 swap precisely because a transcribed magnitude stopped
     dominating once two families went uncapped. The WIN side kept the leaf's hand-composed
-    `KO_SCORE * (start_prizes + 1)`, which tops out at 7 prizes and is commonly 2-5 — so a merely
-    WINNING position out-scored a won GAME. Measured on the committed corpus at the fix's parent
-    commit: 26 frames reach a coin-free simulated win and on **4** of them a non-winning option
-    scored higher, worst `82749168|1|decision|88` at a won 2000 against a non-win 6789.9.
+    `KO_SCORE * (start_prizes + 1)` — and `start_prizes` counts prizes still REMAINING, so the old
+    magnitude ran BACKWARDS as well as small: most generous six prizes from home, stingiest with the
+    win one turn away. Either way a merely WINNING position out-scored a won GAME. Measured on the
+    committed corpus at the fix's parent commit: 26 frames reach a coin-free simulated win and on
+    **4** of them a non-winning option scored higher, worst `82749168|1|decision|88` at a won 2000
+    against a non-win 6789.9. Re-runnable: `tools/train/probes/win_band_sweep.py`.
 
     Same construction as the loss side, and asserted the same way — from the constants the equations
     use, so moving any of them moves this test rather than silently breaking the invariant. Two of the
@@ -770,14 +772,20 @@ def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
     worst_race = sv._PRIZES_START + sv._PROXIMITY_W
     assert sv.WIN_PRIZES > worst_race + sv.POSITIONAL_MAX
 
-    # The dropped summand, asserted rather than argued: `survival` cannot contribute on the UP side,
-    # whatever the board. A non-empty exposure only ever subtracts, and the empty board scores 0.
+    # The dropped summand, asserted rather than argued, and SWEPT rather than sampled — three lucky
+    # examples would not carry the words "by construction". Every prize yield the set can print,
+    # against every clock a body can read, at every legal body count: `survival` never returns a
+    # positive number, so it can never push a board UP toward the win band.
     assert sv.survival([]) == 0.0
-    assert sv.survival([sv.ExposedBody(3.0, 1)] * sv._MAX_BODIES) < 0.0
-    assert sv.survival([sv.ExposedBody(0.0, 9)]) <= 0.0
+    for prize in (0.0, 1.0, 2.0, sv._MAX_PRIZE_VALUE):
+        for clock in range(1, sv.HORIZON + 3):
+            for count in range(1, sv._MAX_BODIES + 1):
+                assert sv.survival([sv.ExposedBody(prize, clock)] * count) <= 0.0
+    assert sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES) < 0.0, (
+        "non-vacuity: the sweep must contain a board the family actually charges for")
 
-    # …and the literal, pinned the way Issue #329 pinned the band it moved: legible failure beats a
-    # tautology, and every summand here is a constant somebody could later move.
+    # …and the literal, asserted the way Issue #329 asserted the band it moved: legible failure beats
+    # a tautology, and every summand here is a constant somebody could later move.
     assert sv.WIN_PRIZES == 10.9
     assert sv.WIN_PRIZES == pytest.approx(sv.LOSS_PRIZES - sv._MAX_BODIES * sv._MAX_PRIZE_VALUE), (
         "the two terminal constants are ONE construction differing by exactly the survival summand")
