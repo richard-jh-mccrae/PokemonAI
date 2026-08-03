@@ -242,35 +242,61 @@ real and owned. Re-capture is the last resort, not the first.
 
 ### Baseline provenance
 
-`data/leaf_lab/baseline.json` is currently pinned at **`a8da62d` (2026-07-31)**. Nine deliberate
-re-captures, each taken only with **zero unruled `OK → MISS`** outstanding — the ADR-0072 decision 2
-precondition, *"only when a swap's flips have been ruled"*, verified across the whole history by the
-full-history replay described above and, since Issue #259, enforced by `capture` itself:
+`data/leaf_lab/baseline.json` is currently pinned at **`d8ef7a0` (2026-08-02)**, **277 frames**
+(247 gradeable — 21 carry a **Voided Ruling**, ADR-0088). Eleven deliberate re-captures and four
+metadata-only `restamp`s. Each **capture** was taken only with **zero unruled `OK → MISS`**
+outstanding — the ADR-0072 decision 2 precondition, *"only when a swap's flips have been ruled"*,
+verified across the whole history by the full-history replay described above and, since Issue #259,
+enforced by `capture` itself:
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
 | 2026-07-28 | `38ca76f` | 6 × `MISS → OK`, 3 × `OK → MISS` | move off the long-stale `81eac82` pin (details below) |
 | 2026-07-29 | `fa86dcb` | 1 × `MISS → OK` (`85046350\|0\|decision\|21`) | the user re-ruling of that frame's `correct` (`[2] → [1]`) |
 | 2026-07-29 | `e4c46ca` | 1 × `MISS → OK` (`82752604\|0\|decision\|88`) | rebase onto `96da320`; the gain is **main's** (Issue #172's `ENERGY_RECOVER` work), absorbed so it is protected |
-| 2026-07-31 | `e138881` | **nothing — a field relabel (`graded` → `gradeable`) + `git_rev`, zero row changes** | the code review settled one word for one concept across both labs (Issue #239) |
+| 2026-07-30 | `ac5b5b9` | **corpus 276 → 277** (`85709280\|1\|match\|` enters) + 1 × `OK → MISS` (`84071010\|0\|decision\|15`) which is a **Ruling Move, not a regression**: `correct [1] → [0]` | Issue #197's code-review pass. This is the exact frame the `⚠️ STALE BASELINE` reconstruction above names — *"whose ruling moved to `[0]` and which the committed baseline has since absorbed"* — and **this row is where it was absorbed**. Backfilled 2026-08-03 (Issue #339): a plain `git log -- data/leaf_lab/baseline.json` stops at the commit that introduced the path and hides this movement; `--full-history` shows it |
 | 2026-07-31 | `e834272` | **19 frames VOIDED out of the rates** + 1 × `MISS → OK` (`83686860\|1\|decision\|13`) + 1 × ruled `OK → MISS` (`86091435\|0\|decision\|35`, owner `#165`) | Issue #239: a **Voided Ruling** leaves the agree rate. The two flips are **main's**, not this issue's — the baseline was stale by 32 rows of `values` drift, the `OK → MISS` was already held out, and zero unruled `OK → MISS` were outstanding |
+| 2026-07-31 | `e138881` | **nothing — a field relabel (`graded` → `gradeable`) + `git_rev`, zero row changes** | the code review settled one word for one concept across both labs (Issue #239) |
 | 2026-07-31 | `ff05403` | **1 more frame VOIDED (`86091435\|0\|turn\|14`), and it was an `OK`; zero unruled `OK → MISS`** | Issue #250: the same repaired refutation as the Decision Gate's last row. `leaf_correct 183/249 → 182/248`, voided `19 → 20`, rate 73.49% → **73.39%**. The leaf did not get worse — a frame it was scoring correctly is no longer a frame a human stands behind, so it stops counting. This is the honest half of the pair: one repair, one rate up, one rate down |
 | 2026-07-31 | `31b1c28` | **nothing — `git_rev` only, zero row changes** | Issue #250: rebasing onto `main` (Issue #243's PR #252, plus an ADR renumber) orphaned the capture's SHA. Re-measured against the new base first: **zero** row changes, so #243's corpus-reader refactor is confirmed behaviour-preserving for this instrument as its PR claimed |
-| 2026-07-31 | `aceb433` | **nothing — zero row changes** | Issue #247 (Option Equivalence, ADR-0091): re-measured against the new base, zero rows moved |
-| 2026-07-31 | `a8da62d` | **nothing — zero row changes** | Issue #247: the rebase moved the base again after the ADR renumber. Both of these last two are `restamp` cases in hindsight — the subcommand did not exist yet, so they went through `capture` and re-read the build to achieve a metadata edit (Issue #259) |
+| 2026-07-31 | `aceb433` | **49 rows moved** — ADR-0091 Option Equivalence reaches the leaf: `top_tie` collapses on 44 frames, `class_asymmetry` appears on 4, `correct_is_unique_top` moves on 5, and **1 frame UN-VOIDED** (`86091435\|0\|turn\|14`). `gradeable 248 → 249`, voided `20 → 19`, `leaf_correct 182 → 183`, `avg_top_tie 3.012 → 2.751` | Issue #247 (Option Equivalence, ADR-0091). **This row read "nothing — zero row changes" until 2026-08-03 and that was false** — the commit's numstat is 108/61. Corrected under Issue #339 by re-measuring the two captures against each other, not by re-reading the commit subject |
+| 2026-07-31 | `a8da62d` | **1 row moved** — `86091435\|0\|turn\|14` re-VOIDED, the frame `aceb433` had just un-voided. `gradeable 249 → 248`, voided `19 → 20`, `leaf_correct 183 → 182`. numstat 9/8 | Issue #247: the rebase moved the base again after the ADR renumber. **Also read "nothing — zero row changes" until 2026-08-03, also false** — and this is the very commit ADR-0094's first draft reasoned wrongly about, so the failure that ADR exists to prevent had been sitting inside this table. Neither this nor `aceb433` is a `restamp` case after all: the subcommand did not exist yet so both went through `capture`, but both moved rows, so neither was metadata-only (Issue #259, Issue #339) |
+| 2026-08-02 | `f47a3ef` | **21 rows moved**: 2 × ruled `OK → MISS` (`85045840\|0\|decision\|10`, `85045840\|0\|decision\|12`) + 1 × `MISS → OK` (`86091435\|0\|decision\|35`) + **1 more frame VOIDED** (`86089120\|0\|decision\|14`) + `class_asymmetry 4 → 0`. `gradeable 248 → 247`, voided `20 → 21`, `leaf_correct 182 → 180` | Issue #261 wave-2 ruling, items 2e + 2h — **user verdict 2026-08-02: ACCEPT**. Both `OK → MISS` frames carry a `fixed` disposition in `data/corrections/reviewed.json`, which is **not** in `VOIDING_DISPOSITIONS` (`refuted`, `transposition`), so both still gate; the capture went through **`guarded_capture`**, so ADR-0094's precondition was enforced rather than asserted. The fourth movement is invisible to an `OK`/`MISS`-only reading and is what actually drives the three rate figures: `86089120-14` was ruled a **`transposition`**, which voids. `class_asymmetry 4 → 0` is the ADR-0103 tie-break landing |
+| 2026-08-02 | `deec14a` | **nothing — `git_rev` only, zero row changes** | `restamp` after the rebase orphaned the capture's SHA (Issue #261) |
+| 2026-08-02 | `36c736d` | **nothing — `git_rev` only, zero row changes** | `restamp` after the item-2d rebase (Issue #261) |
+| 2026-08-02 | `beae831` | **nothing — `git_rev` only, zero row changes** | `restamp` after the second rebase (Issue #261) |
+| 2026-08-02 | `d8ef7a0` | **nothing — `git_rev` only, zero row changes** | `restamp` after the commit re-author (Issue #261). **Mind the collision:** this is the revision recorded *inside* the file, written by commit `4e03c4d`; the commit whose SHA is `d8ef7a0` is the previous row, which recorded `beae831`. The `rev` column is always the captured-at revision, never the committing SHA |
 
-Note the third absorbs an improvement this branch did not produce. That is deliberate and follows the
+**Two conventions this table follows**, stated because the two gate tables used to disagree about
+them and a reader could not tell which was the rule (Issue #339):
+
+1. **The `rev` column is the revision the capture was taken AT** — the `git_rev` written inside
+   `baseline.json` — not the SHA of the commit that wrote the file. The two are almost never equal.
+2. **A `restamp` gets its own row.** It is *not* folded into the preceding capture's row with that
+   row's `rev` rewritten. Folding edits a historical row, and a historical row is a ruling record;
+   appending one is the only operation that adds information without destroying any. This costs the
+   four near-identical rows above and is worth it — `tests/test_baseline_provenance.py` relies on it
+   to check that the pinned revision has a row at all.
+
+`38ca76f`, `fa86dcb` and `e4c46ca` are older than this table's ability to check itself: `38ca76f` and
+`fa86dcb` name capture points that **no reachable commit ever recorded** — rebases rewrote them away
+before the work reached `main`, and `git log -1` cannot resolve either today. `e4c46ca` *is*
+recoverable, but only with `git log --full-history`, because the file entered `main`'s first-parent
+history through merge `ab55ff6` (PR #218). Their `absorbed` columns are therefore the one part of
+this table that cannot be re-measured; every row from `ac5b5b9` down can be, and was, on 2026-08-03.
+
+`e4c46ca` absorbs an improvement its branch did not produce. That is deliberate and follows the
 same rule as the others — an un-baselined `OK` is unprotected, since a later regression back to
 `MISS` would compare `MISS → MISS` and pass silently. Absorbing an *improvement* needs no ruling;
 only an `OK → MISS` does, and there were none.
 
-The second is the smaller story: re-ruling `85046350-21`'s `correct` to the Active Dreepy changed
+`fa86dcb` is the smaller story: re-ruling `85046350-21`'s `correct` to the Active Dreepy changed
 what `leaf_lab` scores that frame against, so its verdict became `OK`. Aggregates moved with it —
 shared-top 191 → 192, SOLE-top 35 → 36. Note what that is and is not: the leaf did not improve, the
 **label** moved to match what the leaf already preferred. Baselining it protects the frame, since an
 un-baselined `OK` would let a later regression back to `MISS` pass as a silent `MISS → MISS`.
 
-The first re-capture's reasoning follows.
+`38ca76f`, the first re-capture, and its reasoning follow.
 
 Why re-capture rather than leave it: six frames had improved `MISS → OK` since `81eac82`, and an
 improvement is **not protected until it is baselined** — with the old pin still recording them as
@@ -365,7 +391,10 @@ correction rounds (Issue #146), not by this job.
 ### Baseline provenance
 
 `data/decider_lab/baseline.json` is currently pinned at **`b3d6421` (2026-08-02)**, **372 frames**
-(345 gradeable — 26 carry a **Voided Ruling**, ADR-0088).
+(345 gradeable — 26 carry a **Voided Ruling**, ADR-0088). Thirteen movements — eleven captures and
+two `git_rev`-only re-stamps — and every one now has a row. It follows the same two conventions the
+Discrimination Gate's table states above; until 2026-08-03 it followed neither, which is how it came
+to look current while two captures had no row at all (Issue #339).
 
 | capture | rev | absorbed | why |
 |---|---|---|---|
@@ -378,7 +407,10 @@ correction rounds (Issue #146), not by this job.
 | 2026-07-31 | `e834272` | **25 frames VOIDED out of the rate; zero `chosen` moves, zero Ruling Moves** | Issue #239: a ruling the human took back can no longer grade, so it leaves the denominator and stops gating. Agree `253/371 → 248/346` — **5 of the 25 had been scored as agreements**, so this is not a one-way flatter of the number |
 | 2026-07-31 | `ff05403` | **1 more frame VOIDED (`86091435\|0\|turn\|14`); zero `chosen` moves, zero Ruling Moves** | Issue #250: a **refutation that had been ruling on nothing** since 2026-07-19 finally reaches its record. Agree `248/346 → 248/345`, voided `25 → 26`. The frame was a **disagreement**, so the rate rises 71.68% → 71.88% — read that as the repair working, not the metric being flattered; see the sibling entry, where the same ruling costs the Leaf Gate an `OK` |
 | 2026-07-31 | `31b1c28` | **nothing — `git_rev` only, zero row changes** | Issue #250: same rebase as the sibling entry. Re-measured before re-capturing — `248/345` unchanged, 0 picks moved, 0 Ruling Moves |
-| 2026-08-02 | `b3d6421` | **11 `chosen` moves — 1 ruled REGRESSION, 5 FIX, 2 NEUTRAL, 3 non-reported; plus the 2 standing HELD-OUT regressions.** Agree `249/345 → 251/345` | Issue #261 item 2f, at the **user ruling** on `82225643\|0\|decision\|12` (`fixed`, non-voiding — the ADR-0095 boundary orders the dig ahead of the Hammer across two actions of one turn; the same frame the Leaf Gate reports `MISS → OK`). **What else it absorbed is named rather than left to the `HELD OUT` block**, because a re-capture takes the whole file and this one silently baselines two frames that were regressions under a *prior* ruling: `83117367\|0\|decision\|34` (owner Issue #262) and `83661649\|0\|decision\|30` (owner Issue #272) now read as the baseline rather than as held-out regressions. Both owners stand and their fixtures keep their `owner` field, so deleting it still returns each to gating — but the comparison they return to is this file, not the pre-item-2f one |
+| 2026-07-31 | `4fcca7d` | **102 rows moved**: the `equiv` field enters the schema on 101 rows, and **2 frames UN-VOIDED** (`81905522\|0\|decision\|75`, `86091435\|0\|turn\|14`). **Zero `chosen` moves, zero Ruling Moves.** Agree `248/345 → 250/347`, voided `26 → 24` | Issue #247 (Option Equivalence, ADR-0091) — the sibling landing of the leaf's `aceb433` row. Both un-voidings are the equivalence collapse making a previously ungradeable ruling gradeable again; no decision moved. Backfilled 2026-08-03 (Issue #339) |
+| 2026-07-31 | `a8da62d` | **1 row moved** — `86091435\|0\|turn\|14` re-VOIDED. Agree `250/347 → 250/346`, voided `24 → 25` | Issue #247: the rebase moved the base again after the ADR renumber — the same commit as the leaf's `a8da62d` row, and it moves the same one frame in both labs. Backfilled 2026-08-03 (Issue #339) |
+| 2026-08-02 | `1c90fcc` | **11 `chosen` moves — 1 ruled REGRESSION, 5 FIX, 2 NEUTRAL, 3 non-reported; plus the 2 standing HELD-OUT regressions** — and **1 more frame VOIDED** (`86089120\|0\|decision\|14`, ruled a `transposition`). Agree `250/346 → 251/345`, voided `25 → 26` | Issue #261 item 2f, at the **user ruling** on `82225643\|1\|decision\|12` (`fixed`, non-voiding — the ADR-0095 boundary orders the dig ahead of the Hammer across two actions of one turn). **What else it absorbed is named rather than left to the `HELD OUT` block**, because a re-capture takes the whole file and this one silently baselines two frames that were regressions under a *prior* ruling: `83117367\|0\|decision\|34` (owner Issue #262) and `83661649\|0\|decision\|30` (owner Issue #272) now read as the baseline rather than as held-out regressions. Both owners stand and their fixtures keep their `owner` field, so deleting it still returns each to gating — but the comparison they return to is this file, not the pre-item-2f one. Three corrections on 2026-08-03 (Issue #339), each re-measured from the two captures: the frame is seat **1**, not seat 0; the agree figures were `249/345 → 251/345` and the measured pair is `250/346 → 251/345`; and the claim that the Leaf Gate reports `MISS → OK` on this frame is false — its `correct_is_top` is `False` in **both** leaf captures, so the leaf reports no flip on it at all. The voided frame is the same one the leaf's `f47a3ef` row records |
+| 2026-08-02 | `b3d6421` | **nothing — `git_rev` only, zero row changes** | `restamp` after the rebase onto `main`. Split out of the row above on 2026-08-03 (Issue #339): it had been folded into that row with that row's `rev` rewritten to `b3d6421`, which is the convention this table now rejects — see the Discrimination Gate section's convention 2. Folding is why this table looked current while two movements above had no row at all |
 
 The 2026-07-31 pair is the shape ADR-0087 decision 5 prescribes, and the reason it is two
 entries rather than one. The Decision Gate's keys had been built by hand, reading `seat` off a
@@ -402,14 +434,14 @@ Neither `chosen` move is caused by the widening. 24 commits touched `src/` betwe
 the widening capture (Issue #197's Deploy Marginal build), and `_build_pilot` is uncached, so the
 reader's new key ordering cannot move a decision.
 
-The fourth entry is the *other* shape of bookkeeping re-capture, and worth distinguishing from the
-second. Rebasing this branch onto `main` rewrote the capture's own commit, leaving `git_rev` naming
+`7d0a97f` is the *other* shape of bookkeeping re-capture, and worth distinguishing from
+`e50735a`. Rebasing this branch onto `main` rewrote the capture's own commit, leaving `git_rev` naming
 a SHA `git show` could no longer resolve — a provenance pointer into nothing. The re-capture moved
 **exactly one field** and **zero rows**, verified before committing. `main` had meanwhile changed
 `src/common/pilot.py` and `src/common/snipe_relevance.py` (PR #242) and the gate ran silent against
 them, so there was nothing to rule.
 
-The second re-capture is the one worth reading, because it is what a *bookkeeping* re-capture looks
+`e50735a` is the one worth reading, because it is what a *bookkeeping* re-capture looks
 like and the contrast is the point. The first pin, `6328ab7`, was a commit on the Issue #188 feature
 branch — a reference that could not be reasoned about from `main`. Re-running `capture` at `main`'s
 tip changed exactly **two fields**:
