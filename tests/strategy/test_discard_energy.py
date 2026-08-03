@@ -21,7 +21,7 @@ def _pilot():
     stats = DictCardStatProvider({
         3: CardStat(cardId=3, hp=0, energyType=3),        # Basic {W} Energy -> reusable
         17: CardStat(cardId=17, hp=0, energyType=0),      # Ignition (special, colourless) -> not
-        1182: CardStat(cardId=1182, hp=0, energyType=0),  # a Trainer -> not (energyType 0, NOT None)
+        1182: CardStat(synthetic=True, cardId=1182, hp=0, energyType=0),  # a Trainer -> not (energyType 0, NOT None)
         666: CardStat(cardId=666, hp=160, energyType=2),  # a Pokémon -> not (hp>0)
     })
     return Pilot(Strategy(), deck=[], stats=stats, functions=CardFunctions({17: ["discard_eot"]}))

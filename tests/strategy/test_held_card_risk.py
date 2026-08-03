@@ -59,11 +59,11 @@ def _pilot_for(*, cost_discard: bool = True, hand_disruption_judge: bool = False
     if hand_disruption_judge:
         funcs_map[JUDGE] = ["draw", "hand_disruption", "shuffle_hand"]
     stats = DictCardStatProvider({
-        BASE: CardStat(BASE, name="Basep", hp=70),
-        WINC: CardStat(WINC, name="Wincmon", megaEx=True, hp=330, evolvesFrom="Basep"),
-        VAN1: CardStat(VAN1, name="Van1", hp=90),
-        VAN2: CardStat(VAN2, name="Van2", hp=90),
-        REFRESH: CardStat(REFRESH, name="Refresh", cardType=3),
+        BASE: CardStat(BASE, synthetic=True, name="Basep", hp=70),
+        WINC: CardStat(WINC, synthetic=True, name="Wincmon", megaEx=True, hp=330, evolvesFrom="Basep"),
+        VAN1: CardStat(VAN1, synthetic=True, name="Van1", hp=90),
+        VAN2: CardStat(VAN2, synthetic=True, name="Van2", hp=90),
+        REFRESH: CardStat(REFRESH, synthetic=True, name="Refresh", cardType=3),
         fid: CardStat(fid, name="Fetch", cardType=1),
     })
     strat = Strategy(lines=[Line(path=[BASE, WINC], payoff=WINC, role="win_condition")])

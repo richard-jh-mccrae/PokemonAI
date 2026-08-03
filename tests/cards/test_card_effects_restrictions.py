@@ -2,7 +2,7 @@
 
 A heal clause's ``restriction`` is derived from which in-play targets the engine's
 select actually OFFERS on a seeded board (damaged bench Mega + damaged non-Mega
-Active), not from card text. Synthetic shapes mirror the real engine dumps
+Active), not from card text. shapes mirror the real engine dumps
 (cg/api.py Option/Log/Pokemon).
 """
 import pytest

@@ -5,7 +5,7 @@ my Mega Starmie ex at 270 HP remaining ({L}-weak, so Fighting damage is un-adjus
 benched Riolu is a single hop from Mega Lucario ex (Aura Jab {F} 130 / Mega Brave {F}{F} 270). The
 old `_incoming_worst` sees only Riolu's own 30 and reports "survives" even when the bench Riolu holds
 the Energy to evolve-and-swing for an exact 270 KO. This exercises the primitive in isolation, both
-energy policies, on a lib-free synthetic provider.
+energy policies, on a lib-free provider.
 """
 from common.strategy.combat import CombatMath
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -26,7 +26,7 @@ def _combat(*, ignition_burst=0):
     stats = DictCardStatProvider({
         MY: CardStat(MY, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                      minAttackCost=1, attacks=(NEBULA,), evolvesFrom="Staryu", energyType=3),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, maxDamage=30, minAttackCost=2,
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, maxDamage=30, minAttackCost=2,
                         minCostDamage=30, attacks=(ACC_STAB,), energyType=6),
         MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, maxDamage=270,
                            minAttackCost=1, minCostDamage=130, attacks=(AURA_JAB, MEGA_BRAVE),
@@ -75,7 +75,7 @@ def test_old_style_current_form_only_when_no_forward_exists():
     stats = DictCardStatProvider({
         MY: CardStat(MY, name="Mega Starmie ex", hp=330, maxDamage=210, minAttackCost=1,
                      attacks=(NEBULA,), energyType=3),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, maxDamage=30, minAttackCost=2,
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, maxDamage=30, minAttackCost=2,
                         minCostDamage=30, attacks=(ACC_STAB,), energyType=6),
     }, attacks={ACC_STAB: AttackStat(ACC_STAB, damage=30, cost=2, energyTypes=(FIGHTING, FIGHTING)),
                 NEBULA: AttackStat(NEBULA, damage=210, cost=3)})
@@ -102,7 +102,7 @@ def test_charged_colorless_burst_pays_a_colorless_nuke_but_never_a_typed_cost():
     # attached (0 + 1 base + 2 burst ≥ 3), but can NEVER pay Mega Brave's typed {F}{F} — the
     # planner_6858-safe typed/colorless split. Burst applies because Mega Starmie ex is an Evolution.
     stats = DictCardStatProvider({
-        MY: CardStat(MY, name="Mega Starmie ex", hp=330, maxDamage=270, minAttackCost=1,
+        MY: CardStat(MY, synthetic=True, name='Mega Starmie ex', hp=330, maxDamage=270, minAttackCost=1,
                      attacks=(MEGA_BRAVE, NEBULA), evolvesFrom="Staryu", energyType=3),
     }, attacks={
         MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
@@ -119,7 +119,7 @@ def test_charged_burst_does_not_apply_to_a_basic_form():
     # Ignition provides only {C} on a Basic, so a Basic body gets NO burst — a colorless nuke it can't
     # otherwise reach stays out of reach (guards the evolution-gate on the burst).
     stats = DictCardStatProvider({
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, maxDamage=210, minAttackCost=3,
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, maxDamage=210, minAttackCost=3,
                         attacks=(NEBULA,), energyType=6),   # a Basic wielding a 3-colorless nuke
     }, attacks={NEBULA: AttackStat(NEBULA, damage=210, cost=3,
                                    energyTypes=(COLORLESS, COLORLESS, COLORLESS))})
@@ -163,12 +163,12 @@ def _bench_combat(*, both_riders=False, second_attack=False):
                                          energyTypes=(FIGHTING, FIGHTING, FIGHTING), benchSpread=60)
         aids = (SNIPE_ATK, SPREAD_ATK)
     stats = DictCardStatProvider({
-        DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, maxDamage=70, minAttackCost=2,
+        DRAKLOAK: CardStat(DRAKLOAK, synthetic=True, name='Drakloak', hp=90, maxDamage=70, minAttackCost=2,
                            attacks=(), evolvesFrom="Dreepy", energyType=8),
-        DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, tera=True,
+        DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name='Dragapult ex', hp=320, ex=True, tera=True,
                             maxDamage=200, minAttackCost=1, attacks=(), evolvesFrom="Drakloak",
                             energyType=8),
-        SNIPER: CardStat(SNIPER, name="Sniper", hp=200, maxDamage=270, minAttackCost=1,
+        SNIPER: CardStat(SNIPER, synthetic=True, name="Sniper", hp=200, maxDamage=270, minAttackCost=1,
                          attacks=aids, energyType=6),
     }, attacks=attacks)
     return CombatMath(stats, functions=None, transients=None)

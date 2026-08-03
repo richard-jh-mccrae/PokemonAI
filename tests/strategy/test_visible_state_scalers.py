@@ -184,9 +184,9 @@ def pilot():
         AZELF: CardStat(AZELF, name="Azelf", hp=70, energyType=5, attacks=(NEURO,)),
         DUDUNSPARCE: CardStat(DUDUNSPARCE, name="Dudunsparce ex", hp=270, ex=True,
                               evolvesFrom="Dunsparce", energyType=0, attacks=(TAIL,)),
-        1: CardStat(1, name="Plain", hp=300),
-        2: CardStat(2, name="Plain ex", hp=300, ex=True),
-        3: CardStat(3, name="Plain Stage 2", hp=300, stage2=True),
+        1: CardStat(1, synthetic=True, name="Plain", hp=300),
+        2: CardStat(2, synthetic=True, name="Plain ex", hp=300, ex=True),
+        3: CardStat(3, synthetic=True, name="Plain Stage 2", hp=300, stage2=True),
     }, attacks={LEAF: _atk(LEAF, 30), MARCH: _atk(MARCH, 180),
                 NEURO: _atk(NEURO, 10), TAIL: _atk(TAIL, 0)})
     return Pilot(Strategy(roles={}), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,

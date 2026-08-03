@@ -54,7 +54,7 @@ def test_deploy_hp_tool_fires_onto_the_active_wincon():
     Active is positively endorsed (`deploy-hp-tool`), so the equip can beat a draw Supporter in the
     develop phase. Proactive by default — no incoming threat is required (ADR-0028)."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, evolvesFrom="Staryu"),
     })
     funcs = CardFunctions({CAPE: ["tool"]})
@@ -77,7 +77,7 @@ def test_deploy_beats_a_hand_shuffle_supporter():
     the deck. The positive deploy lands in tier-2 (attach) and outranks the tier-3 shuffle, so `decide`
     equips the Cape — the bug, fixed (the old protect-weights left it at ≤0, below the shuffle)."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, evolvesFrom="Staryu"),
         LILLIES: CardStat(LILLIES, hp=0),
     })
@@ -101,9 +101,9 @@ def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
     its full worth), so the refresh scores NEGATIVE — the fold of the retired
     `hold-irreplaceable-tool-dont-shuffle` guard — and the agent holds the Cape (ends)."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         LILLIES: CardStat(LILLIES, hp=0),
-        OPENER: CardStat(OPENER, hp=160),                        # off-line body (NOT the wincon)
+        OPENER: CardStat(OPENER, synthetic=True, hp=160),                        # off-line body (NOT the wincon)
     })
     funcs = CardFunctions({CAPE: ["tool"], LILLIES: ["draw", "shuffle_hand"], OPENER: ["opener"]})
     pilot = Pilot(_wincon_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
@@ -119,7 +119,7 @@ def test_hold_irreplaceable_tool_dont_shuffle_with_no_good_target():
 def test_hold_irreplaceable_tool_silent_without_an_irreplaceable_tool():
     """No ACE SPEC Tool in hand -> nothing irreplaceable to protect -> the belt stays silent (the
     refresh is judged on its own merits)."""
-    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, hp=0), OPENER: CardStat(OPENER, hp=160)})
+    stats = DictCardStatProvider({LILLIES: CardStat(LILLIES, synthetic=True, hp=0), OPENER: CardStat(OPENER, synthetic=True, hp=160)})
     funcs = CardFunctions({LILLIES: ["draw", "shuffle_hand"], OPENER: ["opener"]})
     pilot = Pilot(_wincon_strat(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY,
                   stats=stats, functions=funcs)
@@ -137,7 +137,7 @@ def test_at_risk_deploy_prefers_the_higher_gain_bench_line_piece():
     Both are wincon-related bodies, so 'wincon priority' is intact (a wall would only get it if no
     wincon body wanted it)."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         STARYU: CardStat(STARYU, hp=70, weakness=LIGHTNING, energyType=WATER),
         SNIPER: CardStat(SNIPER, energyType=WATER, maxDamage=120, benchSnipeDamage=50),
@@ -164,7 +164,7 @@ def test_picker_handles_a_zero_gain_bench_line_piece_without_crashing():
     (gain 0 — the common real-game shape: a benched Staryu, no opponent snipe) must not crash the
     picker. It falls through to the proactive default (the active win-condition)."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         STARYU: CardStat(STARYU, hp=70, weakness=LIGHTNING, energyType=WATER),
     })
@@ -189,7 +189,7 @@ def test_doomed_active_redirects_the_cape_to_the_promotable_successor():
     successor (a 2nd win-condition) that inherits the fight — evaluated against the FULL incoming it
     will then face as the new Active, not the bench snipe."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         SNIPER: CardStat(SNIPER, energyType=WATER, maxDamage=350),   # 350 >= 200+100 -> active doomed at cape
     })
@@ -214,7 +214,7 @@ def test_no_deploy_onto_a_body_that_dies_even_with_the_boost():
     irreplaceable Cape on a body that is lost anyway (the user: 'here it IS never'). Deploy stays
     silent, so the agent holds the Cape."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         SNIPER: CardStat(SNIPER, energyType=WATER, maxDamage=350),
     })
@@ -235,8 +235,8 @@ def test_wall_gets_the_cape_when_it_buys_a_survival_turn():
     incoming: 1 → 2). With no win-condition body wanting the Cape, the wall gets it (wincon priority is
     preserved — a wincon body would still outrank it)."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
-        WALL: CardStat(WALL, hp=160, energyType=FIRE),                # off-line wall, NOT the wincon
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
+        WALL: CardStat(WALL, synthetic=True, hp=160, energyType=FIRE),                # off-line wall, NOT the wincon
         SNIPER: CardStat(SNIPER, energyType=WATER, maxDamage=210),
     })
     funcs = CardFunctions({CAPE: ["tool"], WALL: ["opener"]})
@@ -253,8 +253,8 @@ def test_wall_does_not_get_the_cape_when_it_gains_no_turn():
     """A wall the boost can't help (160 HP vs 400 incoming: dies in 1 turn either way → gain 0) gets
     nothing — don't fritter the irreplaceable Cape on an off-line body for no survival gain."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
-        WALL: CardStat(WALL, hp=160, energyType=FIRE),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
+        WALL: CardStat(WALL, synthetic=True, hp=160, energyType=FIRE),
         SNIPER: CardStat(SNIPER, energyType=WATER, maxDamage=400),
     })
     funcs = CardFunctions({CAPE: ["tool"], WALL: ["opener"]})
@@ -274,7 +274,7 @@ def test_predict_next_attacker_sees_a_benched_opp_promotion():
     is doomed even at +100 (350 >= 300) -> redirect the Cape to the benched successor (330 HP, gains a
     turn vs 350). Without predicting the promotion we'd wrongly cape the 'safe-looking' Active."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         WEAKOPP: CardStat(WEAKOPP, energyType=WATER, maxDamage=100),
         BIGOPP: CardStat(BIGOPP, energyType=WATER, maxDamage=350, minAttackCost=1),
@@ -303,7 +303,7 @@ def test_cape_deploy_never_forgoes_a_lethal_ko():
     turn-ender, so `_finish_turn_last` equips the Cape FIRST then takes the KO the same turn — the
     attack is DEFERRED (held for last), not dropped, so the Cape never costs the prize."""
     stats = DictCardStatProvider({
-        CAPE: CardStat(CAPE, hp=0, aceSpec=True, hpBonus=100),
+        CAPE: CardStat(CAPE, synthetic=True, hp=0, aceSpec=True, hpBonus=100),
         WINC: CardStat(WINC, megaEx=True, hp=330, weakness=LIGHTNING, energyType=WATER, evolvesFrom="Staryu"),
         FRAGILE: CardStat(FRAGILE, energyType=WATER, maxDamage=100),
     }, attacks={1: AttackStat(1, damage=200)})    # attack 1 does 200 -> KOs a 60-HP Active

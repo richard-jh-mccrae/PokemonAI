@@ -158,6 +158,8 @@ class CardStat:
                                             # (Mudsdale/Bouffalant ex/Mega Diancie ex -30)
     damageReductionTypes: tuple | None = None  # attacker EnergyTypes reduction scoped to
                                             # (Dewgong: {R}/{W} -> (2, 3)); None = all attackers
+    synthetic: bool = False             # test-only marker: this row is an arbitrary body using a
+                                       # convenient real id, not a source claim about that card.
 
     # --- single-card interpretation (ADR-0056): the questions consumers used to re-derive
     # from raw fields. Ports of the retired call-site idioms — byte-faithful, not redesigns.

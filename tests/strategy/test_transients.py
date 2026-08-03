@@ -78,8 +78,8 @@ def test_live_reduction_and_prevent_join_the_oracle():
     atk = AttackStat(attackId=1, damage=120)
     nebula = AttackStat(attackId=2, damage=210, ignoresWeakness=True, ignoresResistance=True,
                         ignoresEffects=True)
-    me = CardStat(cardId=50, name="Me", hp=200, energyType=3)
-    them = CardStat(cardId=2, name="Them", hp=200, energyType=7)
+    me = CardStat(synthetic=True, cardId=50, name="Me", hp=200, energyType=3)
+    them = CardStat(synthetic=True, cardId=2, name="Them", hp=200, energyType=7)
     assert compute_active_damage(atk, me, them, frozenset(),
                                  defender_transient={"reduction": 30}) == 90
     assert compute_active_damage(atk, me, them, frozenset(),
@@ -91,8 +91,8 @@ def test_live_reduction_and_prevent_join_the_oracle():
 
 def _pilot():
     stats = DictCardStatProvider({
-        1: CardStat(cardId=1, name="Mine", hp=100, energyType=3, attacks=(PLAIN,), minAttackCost=1),
-        2: CardStat(cardId=2, name="Theirs", hp=300, energyType=7,
+        1: CardStat(synthetic=True, cardId=1, name="Mine", hp=100, energyType=3, attacks=(PLAIN,), minAttackCost=1),
+        2: CardStat(synthetic=True, cardId=2, name="Theirs", hp=300, energyType=7,
                     attacks=(LOCKED, BONUS), minAttackCost=1),
     }, attacks=_stats())
     return Pilot(Strategy(), deck=[1] * 60, stats=stats, functions=CardFunctions({}))
@@ -144,7 +144,7 @@ def test_incoming_respects_their_self_lock_and_self_bonus():
 @pytest.mark.req("REQ-TRANS-0004")
 def test_incoming_same_attack_lock_excludes_only_that_attack():
     p = _pilot()
-    p.stats._stats[2] = CardStat(cardId=2, name="Theirs", hp=300, energyType=7,
+    p.stats._stats[2] = CardStat(synthetic=True, cardId=2, name="Theirs", hp=300, energyType=7,
                                  attacks=(NAMED, PLAIN), minAttackCost=1)
     oa = {"id": 2, "serial": 9, "hp": 300, "energies": [7]}
     ma = {"id": 1, "serial": 1, "hp": 100, "energies": [3]}

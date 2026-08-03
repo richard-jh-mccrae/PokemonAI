@@ -28,8 +28,8 @@ BIG = 701           # {C}{C} 300 — lethal vs my 270 HP, costs 2 Energy
 
 def _combat():
     stats = DictCardStatProvider({
-        MY: CardStat(MY, name="My Body", hp=330, maxDamage=100, minAttackCost=1, attacks=()),
-        OPP: CardStat(OPP, name="Opp Attacker", hp=200, maxDamage=300, minAttackCost=2,
+        MY: CardStat(MY, synthetic=True, name="My Body", hp=330, maxDamage=100, minAttackCost=1, attacks=()),
+        OPP: CardStat(OPP, synthetic=True, name="Opp Attacker", hp=200, maxDamage=300, minAttackCost=2,
                       minCostDamage=300, attacks=(BIG,)),
     }, attacks={BIG: AttackStat(BIG, damage=300, cost=2, energyTypes=(0, 0))})
     return CombatMath(stats, functions=None, transients=None)

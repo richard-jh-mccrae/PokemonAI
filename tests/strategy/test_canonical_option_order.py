@@ -27,7 +27,7 @@ OPT_CARD = 3
 
 
 def _pilot():
-    stats = DictCardStatProvider({CID: CardStat(CID, name="riolu", hp=70, energyType=3)})
+    stats = DictCardStatProvider({CID: CardStat(CID, synthetic=True, name="riolu", hp=70, energyType=3)})
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({}))
 

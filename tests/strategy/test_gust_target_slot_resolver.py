@@ -50,9 +50,9 @@ def _setup(hand_ids, *, opp_bench=(), gust_target_slots=False):
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         HAMMER: CardStat(HAMMER, name="Crushing Hammer", cardType=1),
-        BOSS: CardStat(BOSS, name="Boss's Orders", cardType=3),
-        FILLER: CardStat(FILLER, name="Filler", cardType=1),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
+        BOSS: CardStat(BOSS, synthetic=True, name="Boss's Orders", cardType=3),
+        FILLER: CardStat(FILLER, synthetic=True, name="Filler", cardType=1),
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
         FIGHTING_ENERGY: CardStat(FIGHTING_ENERGY, name="Basic {F} Energy", energyType=FIGHTING),
     }, attacks={11: AttackStat(11, damage=30, cost=1, energyTypes=(FIGHTING,))})
     funcs = CardFunctions({HAMMER: ["energy_denial"], BOSS: ["gust"]})

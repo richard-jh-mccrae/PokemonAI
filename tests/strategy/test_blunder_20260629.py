@@ -31,10 +31,10 @@ def _fired(o):
 
 def _stats(attacks=None):
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
                          evolvesFrom="Staryu", energyType=3),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, attacks=(12,), evolvesFrom=None),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0),
@@ -213,10 +213,10 @@ def _denial_pilot(**kw):
     """A Pilot that knows Crushing Hammer (Function Tag `energy_denial`) plus the win-con line — for
     the `play-energy-denial` doctrine: strip the opponent's Energy BEFORE the turn-ending attack."""
     stats = DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
                          evolvesFrom="Staryu", energyType=3),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         CRUSH: CardStat(CRUSH, name="Crushing Hammer", hp=0),
         OPP: CardStat(OPP, name="Mega Lucario ex", hp=340, megaEx=True, maxDamage=270,

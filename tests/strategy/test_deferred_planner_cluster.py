@@ -188,7 +188,7 @@ def test_item_enabler_cost_bands_stay_ordered_and_sub_prize():
 def test_item_gap_widens_when_a_gust_supporter_competes_for_the_slot():
     # A gust Supporter (Boss's Orders) in hand wants THIS turn's one Supporter slot — the Item enabler that
     # keeps the slot free earns the WIDER credit.
-    boss = CardStat(cardId=700, cardType=3)                          # cardType 3 = Supporter
+    boss = CardStat(synthetic=True, cardId=700, cardType=3)                          # cardType 3 = Supporter
     pilot = _pilot(stats=DictCardStatProvider({700: boss}),
                    functions=_CardFunctions({700: ["gust"]}))
     board = Board(hand_ids=frozenset({700}), no_supporter_in_hand=False)
@@ -198,7 +198,7 @@ def test_item_gap_widens_when_a_gust_supporter_competes_for_the_slot():
 
 def test_item_gap_widens_for_any_high_value_supporter_in_hand():
     # A non-gust Supporter also claims the slot (`no_supporter_in_hand` False) → wide credit.
-    supp = CardStat(cardId=701, cardType=3)
+    supp = CardStat(synthetic=True, cardId=701, cardType=3)
     pilot = _pilot(stats=DictCardStatProvider({701: supp}),
                    functions=_CardFunctions({701: ["draw"]}))
     board = Board(hand_ids=frozenset({701}), no_supporter_in_hand=False)
@@ -230,12 +230,12 @@ def _energy_chain_pilot(*, energy_tutor_is_supporter=False, deck=None):
     (`_BASE_ID`), plus a `tutor_energy` card (`_ETUTOR_ID`, Item by default) that could supply the 2nd attach."""
     etutor_type = 3 if energy_tutor_is_supporter else 1
     stats = DictCardStatProvider({
-        _BASE_ID: CardStat(cardId=_BASE_ID, name="Base", hp=70),                  # Basic (evolvesFrom None)
-        _EVO_ID: CardStat(cardId=_EVO_ID, name="Evo", hp=200, megaEx=True,
+        _BASE_ID: CardStat(synthetic=True, cardId=_BASE_ID, name="Base", hp=70),                  # Basic (evolvesFrom None)
+        _EVO_ID: CardStat(synthetic=True, cardId=_EVO_ID, name="Evo", hp=200, megaEx=True,
                           evolvesFrom="Base", attacks=(_AID,)),
-        _ITEM_ID: CardStat(cardId=_ITEM_ID, cardType=1),                          # the Mega Signal Item
+        _ITEM_ID: CardStat(synthetic=True, cardId=_ITEM_ID, cardType=1),                          # the Mega Signal Item
         _ETUTOR_ID: CardStat(cardId=_ETUTOR_ID, cardType=etutor_type),
-        _ENERGY_ID: CardStat(cardId=_ENERGY_ID, cardType=5, energyType=2),        # a Basic Energy
+        _ENERGY_ID: CardStat(synthetic=True, cardId=_ENERGY_ID, cardType=5, energyType=2),        # a Basic Energy
     }, {_AID: AttackStat(attackId=_AID, damage=200, cost=2, damageMax=200)})      # 2-Energy 200-dmg KO
     fns = _CardFunctions({_ITEM_ID: ["tutor_mega"], _ETUTOR_ID: ["tutor_energy"]})
     # The Attach Budget reads the YIELD off an Effect Clause, never off the tag — tags only route
@@ -319,9 +319,9 @@ _RARE_CANDY_ID = 1079        # Rare Candy (Item, SVI 191), carried locally now t
 
 def _rare_candy_pilot():
     stats = DictCardStatProvider({
-        _RC_BASIC: CardStat(cardId=_RC_BASIC, name="RcBase", hp=60),               # Basic (evolvesFrom None)
-        _RC_MID: CardStat(cardId=_RC_MID, name="RcMid", hp=90, evolvesFrom="RcBase"),   # the skipped Stage-1
-        _RC_TOP: CardStat(cardId=_RC_TOP, name="RcTop", hp=200, stage2=True,
+        _RC_BASIC: CardStat(synthetic=True, cardId=_RC_BASIC, name="RcBase", hp=60),               # Basic (evolvesFrom None)
+        _RC_MID: CardStat(synthetic=True, cardId=_RC_MID, name="RcMid", hp=90, evolvesFrom="RcBase"),   # the skipped Stage-1
+        _RC_TOP: CardStat(synthetic=True, cardId=_RC_TOP, name="RcTop", hp=200, stage2=True,
                           evolvesFrom="RcMid", attacks=(_RC_AID,)),                 # the in-hand Stage-2
         _RARE_CANDY_ID: CardStat(cardId=_RARE_CANDY_ID, cardType=1),               # Rare Candy (Item)
     }, {_RC_AID: AttackStat(attackId=_RC_AID, damage=200, cost=1, damageMax=200)})  # 1-Energy 200-dmg KO
@@ -412,7 +412,7 @@ def test_supporter_hypothesis_ships_weight_zero_and_assumed():
 
 
 def _ctx(*, option_type=_PLAY, tags=("draw",), card_type=3, board=None):
-    stat = CardStat(cardId=1, cardType=card_type)
+    stat = CardStat(synthetic=True, cardId=1, cardType=card_type)
     return Context(plan=Plan.RACE, select_context=0, option_type=option_type, card_id=1,
                    tags=list(tags), stat=stat, board=board or Board())
 

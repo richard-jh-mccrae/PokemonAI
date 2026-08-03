@@ -158,9 +158,9 @@ STARYU = 800
 
 def _whiff_stats():
     return DictCardStatProvider({
-        MEGA: CardStat(MEGA, hp=330, megaEx=True, evolvesFrom="Riolu"),
+        MEGA: CardStat(MEGA, synthetic=True, hp=330, megaEx=True, evolvesFrom="Riolu"),
         STARYU: CardStat(STARYU, hp=70, evolvesFrom=None),
-        OTHER: CardStat(OTHER, hp=90, evolvesFrom=None),
+        OTHER: CardStat(OTHER, synthetic=True, hp=90, evolvesFrom=None),
     })
 
 

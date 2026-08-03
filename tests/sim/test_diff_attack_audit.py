@@ -16,9 +16,9 @@ from common.scouting.provider import AttackStat, CardStat
 from sim.diff_attack_audit import diff_records
 
 STATS = {
-    1031: CardStat(cardId=1031, name="Mega Starmie ex", hp=300, megaEx=True, energyType=3),
-    345: CardStat(cardId=345, name="Crustle", hp=140, energyType=1),
-    9: CardStat(cardId=9, name="Vanilla", hp=200, energyType=2),
+    1031: CardStat(synthetic=True, cardId=1031, name='Mega Starmie ex', hp=300, megaEx=True, energyType=3),
+    345: CardStat(synthetic=True, cardId=345, name='Crustle', hp=140, energyType=1),
+    9: CardStat(synthetic=True, cardId=9, name="Vanilla", hp=200, energyType=2),
 }
 ATTACKS = {
     1488: AttackStat(attackId=1488, damage=210, cost=3,

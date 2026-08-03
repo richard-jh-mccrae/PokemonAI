@@ -38,15 +38,15 @@ def _fired(o):
 
 def _stats():
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(NEBULA, JETTING),
                          evolvesFrom="Staryu", energyType=3),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, minCostDamage=20, attacks=(12,)),
         ACCEL: CardStat(ACCEL, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
                         minAttackCost=1, minCostDamage=50, attacks=(TURBO,), energyType=2),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
-        678: CardStat(678, name="opp attacker", hp=180, megaEx=True, maxDamage=210, energyType=7),
+        678: CardStat(678, synthetic=True, name="opp attacker", hp=180, megaEx=True, maxDamage=210, energyType=7),
     }, attacks={NEBULA: AttackStat(NEBULA, damage=210, cost=3),
                 JETTING: AttackStat(JETTING, damage=120, cost=1),
                 TURBO: AttackStat(TURBO, damage=50, cost=1)})

@@ -48,19 +48,19 @@ SWITCH = 1123            # Switch Item ("Switch your Active Pokémon with 1 of y
 _STATS = {
     # retreat costs mirror the REAL cards (EN_Card_Data.csv: Riolu 2, Mega Lucario ex 2, Lunatone 1,
     # Solrock 1) — the promotion-ease lift reads them, so the fixture must carry them.
-    RIOLU: CardStat(RIOLU, name="riolu", hp=70, energyType=F, evolvesFrom=None, attacks=(3330,),
+    RIOLU: CardStat(RIOLU, synthetic=True, name="riolu", hp=70, energyType=F, evolvesFrom=None, attacks=(3330,),
                     minAttackCost=1, maxDamage=30, retreatCost=2),
-    MEGA: CardStat(MEGA, name="mega lucario ex", hp=340, energyType=F, evolvesFrom="riolu",
+    MEGA: CardStat(MEGA, synthetic=True, name="mega lucario ex", hp=340, energyType=F, evolvesFrom="riolu",
                    attacks=(6780, 6781), minAttackCost=1, maxDamage=270, megaEx=True, retreatCost=2),
-    LUNATONE: CardStat(LUNATONE, name="lunatone", hp=110, energyType=F, attacks=(6750,),
+    LUNATONE: CardStat(LUNATONE, synthetic=True, name="lunatone", hp=110, energyType=F, attacks=(6750,),
                        minAttackCost=2, maxDamage=50, hasAbility=True, retreatCost=1),
-    SOLROCK: CardStat(SOLROCK, name="solrock", hp=110, energyType=F, attacks=(6760,),
+    SOLROCK: CardStat(SOLROCK, synthetic=True, name="solrock", hp=110, energyType=F, attacks=(6760,),
                       minAttackCost=1, maxDamage=70, retreatCost=1),
-    JUNK: CardStat(JUNK, name="junk", hp=60, energyType=F, attacks=(), retreatCost=1),
-    ENERGY_F: CardStat(ENERGY_F, name="fighting energy", hp=0, cardType=5, energyType=F),
-    ENERGY_P: CardStat(ENERGY_P, name="psychic energy", hp=0, cardType=5, energyType=P),
-    AIR_BALLOON: CardStat(AIR_BALLOON, name="air balloon", hp=0, cardType=2, retreatReduction=2),
-    SWITCH: CardStat(SWITCH, name="switch", hp=0, cardType=1),
+    JUNK: CardStat(JUNK, synthetic=True, name="junk", hp=60, energyType=F, attacks=(), retreatCost=1),
+    ENERGY_F: CardStat(ENERGY_F, synthetic=True, name="fighting energy", hp=0, cardType=5, energyType=F),
+    ENERGY_P: CardStat(ENERGY_P, synthetic=True, name="psychic energy", hp=0, cardType=5, energyType=P),
+    AIR_BALLOON: CardStat(AIR_BALLOON, synthetic=True, name="air balloon", hp=0, cardType=2, retreatReduction=2),
+    SWITCH: CardStat(SWITCH, synthetic=True, name="switch", hp=0, cardType=1),
 }
 _ROLES = {MEGA: ["win_condition", "primary_attacker"], RIOLU: ["win_condition_base"],
           SOLROCK: ["secondary_attacker", "engine"], LUNATONE: ["engine"]}

@@ -35,13 +35,13 @@ CHARGED = {"base_attach": 1, "burst_on_evo": 0}
 
 def _combat(*, tagged=True, clauses=True):
     stats = DictCardStatProvider({
-        MORGREM: CardStat(MORGREM, name="Marnie's Morgrem", hp=90, energyType=DARK,
+        MORGREM: CardStat(MORGREM, synthetic=True, name="Marnie's Morgrem", hp=90, energyType=DARK,
                           maxDamageCost=1, maxDamage=30, minAttackCost=1, attacks=()),
-        GRIMMSNARL: CardStat(GRIMMSNARL, name="Marnie's Grimmsnarl ex", hp=340,
+        GRIMMSNARL: CardStat(GRIMMSNARL, synthetic=True, name="Marnie's Grimmsnarl ex", hp=340,
                              evolvesFrom="Marnie's Morgrem", energyType=DARK, maxDamageCost=2,
                              maxDamage=180, minAttackCost=2, attacks=(BIG,)),
-        DARK_ENERGY: CardStat(DARK_ENERGY, name="Basic {D} Energy", energyType=DARK, cardType=5),
-        1: CardStat(1, name="My Body", hp=200),
+        DARK_ENERGY: CardStat(DARK_ENERGY, synthetic=True, name="Basic {D} Energy", energyType=DARK, cardType=5),
+        1: CardStat(1, synthetic=True, name="My Body", hp=200),
     }, attacks={BIG: AttackStat(BIG, damage=180, cost=2, energyTypes=(DARK, DARK))})
     return CombatMath(stats,
                       functions=CardFunctions({GRIMMSNARL: ["energy_accel"]} if tagged else {}),

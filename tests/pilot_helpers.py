@@ -18,7 +18,7 @@ TO_HAND = 7  # SelectContext.TO_HAND — search: choose which card to add to you
 
 # The fetch doctrine's whiff/redundancy/confirmed-hit signals (`_search_deck_set`) read a search's
 # FETCH clauses from `card_effects.json` (ADR-0032) — the tier that replaced the tag-keyed
-# `_FETCH_FILTERS`. Synthetic test fetchers carry TAGS only, so mirror the standard fetcher tags to
+# `_FETCH_FILTERS`. test fetchers carry TAGS only, so mirror the standard fetcher tags to
 # their clauses. Import `fetch_effects` and pass its result as `Pilot(effects=...)`.
 _TAG_FETCH_CLAUSE = {
     "tutor_pokemon": {"kind": "fetch", "target": "pokemon", "zone": "deck"},
@@ -29,7 +29,7 @@ _TAG_FETCH_CLAUSE = {
 
 
 def fetch_effects(funcs_map: dict):
-    """A synthetic `CardEffects` mirroring the standard fetcher TAGS in a test's `CardFunctions` map to
+    """A `CardEffects` mirroring the standard fetcher TAGS in a test's `CardFunctions` map to
     their `card_effects.json` FETCH clauses, so a clause-driven `_search_deck_set` sees the fetch-set."""
     from common.effects import CardEffects
     table = {cid: [_TAG_FETCH_CLAUSE[t] for t in tags if t in _TAG_FETCH_CLAUSE]

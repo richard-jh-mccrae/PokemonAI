@@ -42,8 +42,8 @@ from pilot_helpers import fetch_effects as _fetch_effects   # noqa: E402
 def test_fetch_a_starter_prefers_a_basic_when_the_board_is_thin():
     """At a search, with a thin bench in SETUP and no higher need, grab a startable Basic over a
     non-startable Stage-1 — develop the board."""
-    stats = DictCardStatProvider({BASIC: CardStat(BASIC, hp=70),
-                                  STAGE1: CardStat(STAGE1, hp=90, evolvesFrom="Basicmon")})
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, hp=70),
+                                  STAGE1: CardStat(STAGE1, synthetic=True, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # SETUP (no win-condition Line), bench empty, Active already powered (not energy-starved).
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
@@ -59,8 +59,8 @@ def test_fetch_a_starter_prefers_a_basic_when_the_board_is_thin():
 def test_fetch_the_support_grabs_an_engine_piece_when_none_is_in_play():
     """At a search, with the Bench developed (no starter need) but NO engine Pokémon in play, grab a
     support piece (a Pokémon with a draw / accel / search ability) over a vanilla body."""
-    stats = DictCardStatProvider({SUPPORT: CardStat(SUPPORT, hp=90),
-                                  PLAINMON: CardStat(PLAINMON, hp=90)})
+    stats = DictCardStatProvider({SUPPORT: CardStat(SUPPORT, synthetic=True, hp=90),
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, hp=90)})
     funcs = CardFunctions({SUPPORT: ["energy_accel"]})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     # bench developed (2 vanilla bodies -> no starter need); none of my Pokémon is an engine piece.
@@ -78,8 +78,8 @@ def test_fetch_deck_priority_grabs_the_decks_top_listed_candidate():
     """A deck declares an explicit ordered `fetch_priority`; among the candidates present, grab the
     one earliest in that list (the combo deck's escape hatch). Candidates are Stage-1s so no derived
     rung fires — the deck's list is the only signal."""
-    stats = DictCardStatProvider({COMBO: CardStat(COMBO, hp=90, evolvesFrom="X"),
-                                  FILLER: CardStat(FILLER, hp=90, evolvesFrom="Y")})
+    stats = DictCardStatProvider({COMBO: CardStat(COMBO, synthetic=True, hp=90, evolvesFrom="X"),
+                                  FILLER: CardStat(FILLER, synthetic=True, hp=90, evolvesFrom="Y")})
     strat = Strategy(fetch_priority=[COMBO, FILLER])
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
@@ -99,7 +99,7 @@ def test_discard_the_redundant_sheds_a_duplicate_already_in_play():
     Graded on the DECISION since Issue #261 item 2h deleted the `_DISCARD` ladder: the keep-value v2
     needs-assignment reproduces this pick without the rung, which is the evidence that the rung was
     redundant rather than load-bearing."""
-    stats = DictCardStatProvider({DUP: CardStat(DUP, hp=90), NEEDED: CardStat(NEEDED, hp=90)})
+    stats = DictCardStatProvider({DUP: CardStat(DUP, synthetic=True, hp=90), NEEDED: CardStat(NEEDED, synthetic=True, hp=90)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # forced to discard one of {DUP, NEEDED}: DUP already benched (redundant); NEEDED not in play.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
@@ -118,7 +118,7 @@ def test_fetch_prefers_the_base_when_the_payoff_is_not_yet_deployable():
     from just strands it (and a bench-accelerator like Cinderace gets no recipient). `fetch-the-wincon`
     otherwise pulls the un-evolvable payoff (the verified mega_starmie trap)."""
     stats = DictCardStatProvider({BASEP: CardStat(BASEP, hp=70),
-                                  PAYP: CardStat(PAYP, megaEx=True, hp=330, evolvesFrom="Basep")})
+                                  PAYP: CardStat(PAYP, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basep")})
     strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
                      roles={PAYP: ["win_condition", "primary_attacker"], BASEP: ["starter"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -134,7 +134,7 @@ def test_fetch_takes_the_payoff_once_a_base_is_in_hand():
     """The inverse guard: with a base already in HAND the payoff IS deployable, so prefer the payoff
     (`fetch-the-wincon`) — `fetch-base-before-stranded-payoff` stands down (don't over-correct)."""
     stats = DictCardStatProvider({BASEP: CardStat(BASEP, hp=70),
-                                  PAYP: CardStat(PAYP, megaEx=True, hp=330, evolvesFrom="Basep")})
+                                  PAYP: CardStat(PAYP, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basep")})
     strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
                      roles={PAYP: ["win_condition", "primary_attacker"], BASEP: ["starter"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -150,8 +150,8 @@ def test_fetch_base_rule_never_zeroes_the_payoff():
     """Additive guard: with NO base deployable but the base absent from the reveal, the payoff is still
     the best grab over an off-need filler — `fetch-base-before-stranded-payoff` lifts the base, it never
     suppresses the payoff, so when only the payoff is on offer you still take it."""
-    stats = DictCardStatProvider({PAYP: CardStat(PAYP, megaEx=True, hp=330, evolvesFrom="Basep"),
-                                  860: CardStat(860, hp=90, evolvesFrom="Z")})   # off-need Stage-1 filler
+    stats = DictCardStatProvider({PAYP: CardStat(PAYP, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basep"),
+                                  860: CardStat(860, synthetic=True, hp=90, evolvesFrom="Z")})   # off-need Stage-1 filler
     strat = Strategy(lines=[Line(path=[BASEP, PAYP], payoff=PAYP, role="win_condition")],
                      roles={PAYP: ["win_condition", "primary_attacker"], BASEP: ["starter"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
@@ -167,8 +167,8 @@ def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singl
     """The hand-internal mirror of `discard-the-redundant`: among cards you must pitch, shed one you
     hold 2+ copies of in hand (keep one) before a SINGLETON — so a lone disruptor (which the flat
     keep-floors miss, scoring 0) is never discarded over a duplicate engine card."""
-    stats = DictCardStatProvider({HANDDUP: CardStat(HANDDUP, hp=0, cardType=SUPPORTER_CT),
-                                  HSINGLE: CardStat(HSINGLE, hp=0, cardType=SUPPORTER_CT)})
+    stats = DictCardStatProvider({HANDDUP: CardStat(HANDDUP, synthetic=True, hp=0, cardType=SUPPORTER_CT),
+                                  HSINGLE: CardStat(HSINGLE, synthetic=True, hp=0, cardType=SUPPORTER_CT)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # forced to discard one of {HANDDUP, HANDDUP, HSINGLE}: pitch a dup copy, keep the singleton.
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1), card_opt(HAND, 2)], context=DISCARD_SEL,
@@ -180,7 +180,7 @@ def test_discard_the_hand_duplicate_pitches_a_duplicate_effect_card_over_a_singl
 def test_discard_the_hand_duplicate_excludes_fungible_energy():
     """A spare Basic Energy is fungible — always a future attach, never a redundant pitch — so the
     hand-duplicate floor excludes it even when several are held."""
-    stats = DictCardStatProvider({DUPENERGY: CardStat(DUPENERGY, hp=0, cardType=BASIC_ENERGY_CT)})
+    stats = DictCardStatProvider({DUPENERGY: CardStat(DUPENERGY, synthetic=True, hp=0, cardType=BASIC_ENERGY_CT)})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
                       current=state(hand=[DUPENERGY, DUPENERGY]))
@@ -191,7 +191,7 @@ def test_discard_the_hand_duplicate_excludes_fungible_energy():
 def test_prefer_good_in_discard_pitches_the_decks_fodder_card():
     """The deck-override term: a recursion / discard-fed deck flags a card `discard_fodder` (good to
     have in the bin); at a forced discard, prefer pitching it over a generic card."""
-    stats = DictCardStatProvider({FODDER: CardStat(FODDER, hp=90), KEEPCARD: CardStat(KEEPCARD, hp=90)})
+    stats = DictCardStatProvider({FODDER: CardStat(FODDER, synthetic=True, hp=90), KEEPCARD: CardStat(KEEPCARD, synthetic=True, hp=90)})
     strat = Strategy(roles={FODDER: ["discard_fodder"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(HAND, 0), card_opt(HAND, 1)], context=DISCARD_SEL,
@@ -206,7 +206,7 @@ def test_multi_pick_grab_dedups_a_satisfied_need():
     Basic, grab ONE wincon (its need is met after the first pick) and then the Basic — not two dead
     wincon copies, which static top-N would take."""
     stats = DictCardStatProvider({WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  BASIC: CardStat(BASIC, hp=70)})
+                                  BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
     pilot = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1), card_opt(DECK, 2)],
@@ -222,8 +222,8 @@ def test_multi_pick_grab_takes_fewer_than_max_when_no_need_remains():
     """A TO_HAND grab of up to 2 with minCount 0: one Basic fills the lone starter need; the remaining
     off-need Stage-1s are worth nothing, so grab ONLY the Basic — don't take a second dead card just
     because maxCount allows it (static top-N would)."""
-    stats = DictCardStatProvider({BASIC: CardStat(BASIC, hp=70),
-                                  STAGE1: CardStat(STAGE1, hp=90, evolvesFrom="Basicmon")})
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, hp=70),
+                                  STAGE1: CardStat(STAGE1, synthetic=True, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1), card_opt(DECK, 2)],
                       min_count=0, max_count=2, context=TO_HAND,
@@ -247,8 +247,8 @@ def test_bench_fill_grab_benches_basics_at_to_bench():
 
     Asserted with the decider at its class DEFAULT (off), which is the degraded path: nothing scores
     these options at all, and the bar alone must still place bodies rather than waste the search."""
-    stats = DictCardStatProvider({BASIC: CardStat(BASIC, hp=70),
-                                  STAGE1: CardStat(STAGE1, hp=90, evolvesFrom="Basicmon")})
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, hp=70),
+                                  STAGE1: CardStat(STAGE1, synthetic=True, hp=90, evolvesFrom="Basicmon")})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats)
     # TO_BENCH, up to 2, minCount 0: two Basics + a non-Basic Stage-1 revealed from deck.
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1), card_opt(DECK, 2)],
@@ -271,9 +271,9 @@ def test_the_deploy_marginal_prices_the_to_bench_entry_point():
     Here the win-condition's Line base is on offer beside a body that covers nothing. Only the base
     fills a live slot, so only it carries a marginal — and the working row is attached to the trace,
     which is what makes the decision rulable at the Decision Gate."""
-    stats = DictCardStatProvider({BASIC: CardStat(BASIC, name="Basicmon", hp=70),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Basicmon"),
-                                  PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=60)})
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, name="Basicmon", hp=70),
+                                  WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basicmon"),
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, name="Plainmon", hp=60)})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[BASIC, WINC], payoff=WINC, role="win_condition")])
     pilot = Pilot(strat, deck=[BASIC, WINC, PLAINMON] + [PLAINMON] * 57,
@@ -299,9 +299,9 @@ def test_the_to_bench_multi_pick_stops_when_the_bench_runs_out():
     returns 0 — there is no counterfactual for a body that cannot be placed — and a take-fewer bar
     that declined only below zero would otherwise keep grabbing. Here the Bench holds four, one slot
     is free, and two bodies are offered: exactly one is taken."""
-    stats = DictCardStatProvider({BASIC: CardStat(BASIC, name="Basicmon", hp=70),
-                                  WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Basicmon"),
-                                  PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=60)})
+    stats = DictCardStatProvider({BASIC: CardStat(BASIC, synthetic=True, name="Basicmon", hp=70),
+                                  WINC: CardStat(WINC, synthetic=True, megaEx=True, hp=330, evolvesFrom="Basicmon"),
+                                  PLAINMON: CardStat(PLAINMON, synthetic=True, name="Plainmon", hp=60)})
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]},
                      lines=[Line(path=[BASIC, WINC], payoff=WINC, role="win_condition")])
     pilot = Pilot(strat, deck=[BASIC, WINC, PLAINMON] + [PLAINMON] * 57,
@@ -322,7 +322,7 @@ def test_fetch_is_endorsed_when_it_can_grab_a_needed_card():
     I currently lack (here the unfound win-condition) — so it's played over End."""
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
-                                  BASIC: CardStat(BASIC, hp=70)})
+                                  BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"]}
     funcs = CardFunctions(fmap)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
@@ -384,8 +384,8 @@ def test_dont_fetch_the_setup_only_opener_requires_the_stranded_evolution_chain(
     OPENER, RABOOT = 666, 667
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot", hasAbility=True),
-        RABOOT: CardStat(RABOOT, name="Raboot", hp=90),                  # a Basic in these stats
-        BASIC: CardStat(BASIC, hp=70)})
+        RABOOT: CardStat(RABOOT, synthetic=True, name="Raboot", hp=90),                  # a Basic in these stats
+        BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     funcs = CardFunctions({OPENER: ["opener"]})
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": OPENER}, {"id": BASIC}], current=state(hand=[]))
@@ -409,11 +409,11 @@ def test_stranded_chain_check_walks_the_full_previous_stage_chain():
     OPENER, RABOOT, SCORBUNNY = 666, 667, 668
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
-        RABOOT: CardStat(RABOOT, name="Raboot", hp=90, evolvesFrom="Scorbunny"),
-        SCORBUNNY: CardStat(SCORBUNNY, name="Scorbunny", hp=60),   # POOL only — OFF the deck list,
+        RABOOT: CardStat(RABOOT, synthetic=True, name="Raboot", hp=90, evolvesFrom="Scorbunny"),
+        SCORBUNNY: CardStat(SCORBUNNY, synthetic=True, name="Scorbunny", hp=60),   # POOL only — OFF the deck list,
         #   which is what strands the chain. Printing it keeps the test on its own subject: a pool
         #   with no Scorbunny at all is UNREADABLE data, which ADR-0104 fails open on by design.
-        BASIC: CardStat(BASIC, hp=70)})
+        BASIC: CardStat(BASIC, synthetic=True, hp=70)})
     funcs = CardFunctions({OPENER: ["opener"]})
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": OPENER}, {"id": BASIC}], current=state(hand=[]))
@@ -430,8 +430,8 @@ MEGA, SIGNAL = 555, 556  # a Mega ex payoff and its tutor (Mega Signal shape, tu
 def _confirmed_stats():
     # FILLER stays stat-LESS on purpose: it must join no fetch-filter set (a pure deck body).
     return DictCardStatProvider({
-        MEGA: CardStat(MEGA, hp=330, megaEx=True, evolvesFrom="Riolu"),
-        BASIC: CardStat(BASIC, hp=70),
+        MEGA: CardStat(MEGA, synthetic=True, hp=330, megaEx=True, evolvesFrom="Riolu"),
+        BASIC: CardStat(BASIC, synthetic=True, hp=70),
     })
 
 
@@ -515,9 +515,9 @@ def test_fetch_the_support_never_endorses_a_stranded_support():
     OPENER, LIVEMON, PLAINMON = 666, 868, 869
     stats = DictCardStatProvider({
         OPENER: CardStat(OPENER, name="Cinderace", hp=160, evolvesFrom="Raboot"),
-        667: CardStat(667, name="Raboot", hp=90),                    # POOL only — never on the list
-        LIVEMON: CardStat(LIVEMON, name="Livemon", hp=90),           # a Basic support
-        PLAINMON: CardStat(PLAINMON, name="Plainmon", hp=80)})       # non-engine Active
+        667: CardStat(667, synthetic=True, name="Raboot", hp=90),                    # POOL only — never on the list
+        LIVEMON: CardStat(LIVEMON, synthetic=True, name="Livemon", hp=90),           # a Basic support
+        PLAINMON: CardStat(PLAINMON, synthetic=True, name="Plainmon", hp=80)})       # non-engine Active
     funcs = CardFunctions({OPENER: ["opener", "energy_accel"], LIVEMON: ["energy_accel"]})
     pilot = Pilot(Strategy(), deck=[OPENER] * 4 + [LIVEMON] * 2 + [PLAINMON] + [1] * 53,
                   general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -540,7 +540,7 @@ def _netting_pilot(*, deck, extra_funcs=None, extra_stats=None):
     stats = DictCardStatProvider({ULTRA: CardStat(ULTRA, hp=0),
                                   WINC: CardStat(WINC, megaEx=True, hp=330, evolvesFrom="Staryu"),
                                   STARYU: CardStat(STARYU, name="Staryu", hp=70),
-                                  JUNKMON: CardStat(JUNKMON, hp=70), **(extra_stats or {})})
+                                  JUNKMON: CardStat(JUNKMON, synthetic=True, hp=70), **(extra_stats or {})})
     fmap = {ULTRA: ["search", "tutor_pokemon", "cost_discard"], **(extra_funcs or {})}
     funcs = CardFunctions(fmap)
     strat = Strategy(roles={WINC: ["win_condition", "primary_attacker"]})
@@ -589,8 +589,8 @@ def test_the_shed_predictor_ranks_by_DEADNESS_like_the_decider_it_predicts():
     pilot = _netting_pilot(
         deck=[WINC, JUNKMON], extra_funcs={BURST: ["discard_eot"]},
         extra_stats={BURST: CardStat(BURST, name="Ignition Energy", cardType=6, energyType=0),
-                     NEUT_SINGLE: CardStat(NEUT_SINGLE, hp=60),
-                     POWERED_ATK: CardStat(POWERED_ATK, hp=200, maxDamageCost=1)})
+                     NEUT_SINGLE: CardStat(NEUT_SINGLE, synthetic=True, hp=60),
+                     POWERED_ATK: CardStat(POWERED_ATK, synthetic=True, hp=200, maxDamageCost=1)})
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(POWERED_ATK, energy=1),
                                     bench=[poke(JUNKMON), poke(STARYU)],
@@ -615,7 +615,7 @@ def test_dont_shed_a_live_card_suppresses_the_fetch_below_end():
     predicted top-2 sheds, `dont-shed-a-live-card` nets the fetch below End — the ep83007714-f8
     'tossing the supporters is a poor trade' shape."""
     pilot = _netting_pilot(deck=[WINC, JUNKMON], extra_funcs={ENGINE_SUP: ["draw"]},
-                           extra_stats={ENGINE_SUP: CardStat(ENGINE_SUP, hp=0, cardType=SUPPORTER_CT)})
+                           extra_stats={ENGINE_SUP: CardStat(ENGINE_SUP, synthetic=True, hp=0, cardType=SUPPORTER_CT)})
     # only two shed candidates: one junk (benched duplicate), one LIVE engine Supporter.
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1),
@@ -658,7 +658,7 @@ def test_neutral_sheds_leave_the_fetch_at_the_pessimism_baseline():
     exactly `fetch-when-it-fills-a-need`'s +8 (today's behavior, the corpus-fit middle band)."""
     NEUT1, NEUT2 = 662, 663
     pilot = _netting_pilot(deck=[WINC, JUNKMON],
-                           extra_stats={NEUT1: CardStat(NEUT1, hp=60), NEUT2: CardStat(NEUT2, hp=60)})
+                           extra_stats={NEUT1: CardStat(NEUT1, synthetic=True, hp=60), NEUT2: CardStat(NEUT2, synthetic=True, hp=60)})
     obs = make_select([opt(PLAY, index=0), opt(14)], context=MAIN,
                       current=state(active=poke(900, energy=1), bench=[poke(701), poke(702)],
                                     hand=[ULTRA, NEUT1, NEUT2]))
@@ -696,10 +696,10 @@ def _recycle_pilot(deck):
     stats = DictCardStatProvider({
         NIGHTS: CardStat(NIGHTS, hp=0),
         STRANDED: CardStat(STRANDED, name="Cinderace", hp=160, evolvesFrom="Raboot"),
-        RABOOT_POOL: CardStat(RABOOT_POOL, name="Raboot", hp=90),   # in the POOL, never on the deck
+        RABOOT_POOL: CardStat(RABOOT_POOL, synthetic=True, name="Raboot", hp=90),   # in the POOL, never on the deck
         #   list. "Stranded" is a claim about the DECK; `common.playability` (ADR-0104) fails OPEN on
         #   a previous stage with no printing at all, because that is unreadable data, not a dead card.
-        LIVEMON: CardStat(LIVEMON, name="Staryu", hp=70),
+        LIVEMON: CardStat(LIVEMON, synthetic=True, name="Staryu", hp=70),
         WENERGY: CardStat(WENERGY, name="Basic {W} Energy", hp=0, energyType=3),
     })
     return Pilot(Strategy(), deck=deck, general_strategy=GENERAL_STRATEGY, stats=stats,
@@ -749,7 +749,7 @@ def _dig_pilot(deck):
     stats = DictCardStatProvider({
         GEAR: CardStat(GEAR, hp=0, cardType=1),                 # CardType.ITEM
         SUPP: CardStat(SUPP, hp=0, cardType=SUPPORTER_CT),
-        MEGA: CardStat(MEGA, hp=330, megaEx=True, evolvesFrom="Riolu"),
+        MEGA: CardStat(MEGA, synthetic=True, hp=330, megaEx=True, evolvesFrom="Riolu"),
     })
     effects = CardEffects({GEAR: [{"kind": "fetch", "target": "supporter",
                                    "zone": "deck", "dig": 7}]})

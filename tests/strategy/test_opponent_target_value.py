@@ -21,10 +21,10 @@ FAST_ATK, SLOW_ATK = 511, 512
 
 def _combat():
     stats = DictCardStatProvider({
-        MY: CardStat(MY, name="Me", hp=100, minAttackCost=1, attacks=()),
-        A: CardStat(A, name="Fast", hp=120, minAttackCost=1, minCostDamage=100, maxDamage=100,
+        MY: CardStat(MY, synthetic=True, name="Me", hp=100, minAttackCost=1, attacks=()),
+        A: CardStat(A, synthetic=True, name="Fast", hp=120, minAttackCost=1, minCostDamage=100, maxDamage=100,
                     attacks=(FAST_ATK,)),
-        B: CardStat(B, name="Slow", hp=120, minAttackCost=3, minCostDamage=100, maxDamage=100,
+        B: CardStat(B, synthetic=True, name="Slow", hp=120, minAttackCost=3, minCostDamage=100, maxDamage=100,
                     attacks=(SLOW_ATK,)),
     }, attacks={FAST_ATK: AttackStat(FAST_ATK, damage=100, cost=1, energyTypes=(0,)),
                 SLOW_ATK: AttackStat(SLOW_ATK, damage=100, cost=3, energyTypes=(0, 0, 0))})

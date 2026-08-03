@@ -34,8 +34,8 @@ def _stats():
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                        minAttackCost=1, maxDamageCost=3, evolvesFrom="Staryu"),
         STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, maxDamageCost=1),
-        WATER: CardStat(WATER, name="Water", energyType=2),
-        IGNITION: CardStat(IGNITION, name="Ignition", energyType=0),
+        WATER: CardStat(WATER, synthetic=True, name="Water", energyType=2),
+        IGNITION: CardStat(IGNITION, synthetic=True, name="Ignition", energyType=0),
     })
 
 
@@ -96,7 +96,7 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
                        maxDamageCost=3, evolvesFrom="Staryu"),
         STARYU: CardStat(STARYU, name="Staryu", hp=70, minAttackCost=1, maxDamageCost=1),
         CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, minAttackCost=1, maxDamageCost=1),
-        WATER: CardStat(WATER, name="Water", energyType=2)})
+        WATER: CardStat(WATER, synthetic=True, name="Water", energyType=2)})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], CINDERACE: ["accel_source"]},
                      lines=[Line(path=[STARYU, MEGA], payoff=MEGA)])
     p = Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
@@ -121,8 +121,8 @@ def _arm_pilot():
         {MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                         minAttackCost=1, maxDamageCost=3, evolvesFrom="Staryu",
                         attacks=(JETTING_BLOW, NEBULA_BEAM)),
-         WATER: CardStat(WATER, name="Water", energyType=2, cardType=5),
-         IGNITION: CardStat(IGNITION, name="Ignition", energyType=0, cardType=6)},
+         WATER: CardStat(WATER, synthetic=True, name="Water", energyType=2, cardType=5),
+         IGNITION: CardStat(IGNITION, synthetic=True, name="Ignition", energyType=0, cardType=6)},
         attacks={NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3, energyTypes=(0, 0, 0)),
                  JETTING_BLOW: AttackStat(JETTING_BLOW, damage=60, cost=1, energyTypes=(0,))})
     return Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}), deck=[1] * 60,

@@ -146,7 +146,7 @@ WATER_E, RIOLU = 1000, 2000
 def _stats():
     from common.scouting.provider import CardStat, DictCardStatProvider
     return DictCardStatProvider({
-        WATER_E: CardStat(WATER_E, name="Basic Water Energy", cardType=5, energyType=3),
+        WATER_E: CardStat(WATER_E, synthetic=True, name="Basic Water Energy", cardType=5, energyType=3),
         RIOLU: CardStat(RIOLU, name="Riolu", hp=70),
     })
 

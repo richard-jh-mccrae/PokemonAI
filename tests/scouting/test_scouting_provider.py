@@ -49,7 +49,7 @@ def test_engine_provider_warm_prebuilds_and_is_idempotent():
 
 @pytest.mark.req("REQ-SCOUT-0008")
 def test_dict_provider_returns_stats_or_none():
-    p = DictCardStatProvider({1: CardStat(1, name="x", hp=70)})
+    p = DictCardStatProvider({1: CardStat(1, synthetic=True, name="x", hp=70)})
     assert p.get(1).hp == 70
     assert p.get(999) is None
 
@@ -59,7 +59,7 @@ def test_ids_for_name_reverse_lookups_card_ids_by_name():
     # The Matchup Brief consumer resolves card NAMES -> ids; the provider is the reverse index.
     p = DictCardStatProvider({677: CardStat(677, name="Riolu"),
                               678: CardStat(678, name="Mega Lucario ex"),
-                              679: CardStat(679, name="Riolu")})   # a reprint under the same name
+                              679: CardStat(679, synthetic=True, name="Riolu")})   # a reprint under the same name
     assert p.ids_for_name("Riolu") == frozenset({677, 679})
     assert p.ids_for_name("Mega Lucario ex") == frozenset({678})
     assert p.ids_for_name("Nonexistent") == frozenset()
@@ -81,7 +81,7 @@ def test_forward_max_damage_is_zero_for_dead_ends_and_final_forms():
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         678: CardStat(678, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),
-        500: CardStat(500, name="Sunkern", maxDamage=20),          # bare basic, evolves into nothing
+        500: CardStat(500, synthetic=True, name="Sunkern", maxDamage=20),          # bare basic, evolves into nothing
     })
     assert stats.forward_max_damage(678) == 0     # final form: descendants only, NOT its own 270
     assert stats.forward_max_damage(500) == 0     # dead-end basic
@@ -94,8 +94,8 @@ def test_forward_max_damage_folds_max_over_same_name_printings():
     stats = DictCardStatProvider({
         333: CardStat(333, name="Riolu", maxDamage=10),
         974: CardStat(974, name="Riolu", maxDamage=30),            # second Riolu printing
-        678: CardStat(678, name="Mega Lucario ex", maxDamage=130, evolvesFrom="Riolu"),
-        679: CardStat(679, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),  # bigger print
+        678: CardStat(678, synthetic=True, name='Mega Lucario ex', maxDamage=130, evolvesFrom="Riolu"),
+        679: CardStat(679, synthetic=True, name="Mega Lucario ex", maxDamage=270, evolvesFrom="Riolu"),  # bigger print
     })
     assert stats.forward_max_damage(333) == 270   # folds 130/270 printings -> 270
     assert stats.forward_max_damage(974) == 270   # any printing of pre-evo resolves the same
@@ -104,13 +104,13 @@ def test_forward_max_damage_folds_max_over_same_name_printings():
 @pytest.mark.req("REQ-GEN-0022")
 def test_forward_max_damage_walks_branching_multihop_and_survives_cycles():
     stats = DictCardStatProvider({
-        1: CardStat(1, name="Wurmple", maxDamage=10),
-        2: CardStat(2, name="Silcoon", maxDamage=20, evolvesFrom="Wurmple"),
-        3: CardStat(3, name="Beautifly", maxDamage=90, evolvesFrom="Silcoon"),
-        4: CardStat(4, name="Cascoon", maxDamage=20, evolvesFrom="Wurmple"),
-        5: CardStat(5, name="Dustox", maxDamage=160, evolvesFrom="Cascoon"),  # max across all branches
+        1: CardStat(1, synthetic=True, name="Wurmple", maxDamage=10),
+        2: CardStat(2, synthetic=True, name="Silcoon", maxDamage=20, evolvesFrom="Wurmple"),
+        3: CardStat(3, synthetic=True, name="Beautifly", maxDamage=90, evolvesFrom="Silcoon"),
+        4: CardStat(4, synthetic=True, name="Cascoon", maxDamage=20, evolvesFrom="Wurmple"),
+        5: CardStat(5, synthetic=True, name="Dustox", maxDamage=160, evolvesFrom="Cascoon"),  # max across all branches
         # malformed self-cycle must not hang the walk
-        6: CardStat(6, name="Loop", maxDamage=50, evolvesFrom="Loop"),
+        6: CardStat(6, synthetic=True, name="Loop", maxDamage=50, evolvesFrom="Loop"),
     })
     assert stats.forward_max_damage(1) == 160     # max over both 2-hop branches
     assert stats.forward_max_damage(6) == 50      # cycle terminates (descendant 'Loop' folds its own)

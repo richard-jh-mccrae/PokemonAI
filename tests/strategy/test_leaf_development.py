@@ -25,9 +25,9 @@ JUNK = 800     # a roleless filler basic -> off-plan (base credit only)
 
 def _pilot(roles=None):
     stats = DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="wincon", hp=200, energyType=3),
-        PLAN: CardStat(PLAN, name="plan", hp=90, energyType=3),
-        JUNK: CardStat(JUNK, name="junk", hp=60, energyType=3),
+        WINCON: CardStat(WINCON, synthetic=True, name="wincon", hp=200, energyType=3),
+        PLAN: CardStat(PLAN, synthetic=True, name="plan", hp=90, energyType=3),
+        JUNK: CardStat(JUNK, synthetic=True, name="junk", hp=60, energyType=3),
     })
     roles = roles if roles is not None else {WINCON: ["primary_attacker"], PLAN: ["engine"]}
     return Pilot(Strategy(roles=roles), deck=[1] * 60,

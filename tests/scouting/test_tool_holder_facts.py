@@ -63,7 +63,7 @@ GARCHOMP_EX, ZACIAN_EX, PHANTUMP = 381, 299, 878     # real family members, real
 #: Kangaskhan ex (`megaEx`, and NOT `ex` — the case a gate written as `stat.ex` alone waves through).
 BRAVE_BANGLE, SLOWKING, METAGROSS, LATIAS_EX, MEGA_KANGASKHAN = 1175, 163, 276, 184, 756
 
-# synthetic ids for the consumer boards
+# ids for the consumer boards
 FAM_BODY, PLAIN_BODY, OPP = 7100, 7101, 7102
 A_HIT = 7200
 END = 14
@@ -301,7 +301,7 @@ def test_the_flat_discount_tools_keep_their_positive_sign():
 # ---- the same parsers against the REAL engine records --------------------------------------------
 
 def test_the_real_tool_records_parse_through_the_engine_provider():
-    """The synthetic texts above prove the REGEXES; this proves they meet the engine's actual
+    """The texts above prove the REGEXES; this proves they meet the engine's actual
     records — CLAUDE.md's standing rule applied to a parser, since a pattern that matches hand-typed
     prose but misses the real text fails silently and fail-closed, the shape of bug that hides."""
     from common.scouting.provider import EngineCardStatProvider
@@ -456,7 +456,7 @@ def test_the_deploy_picker_refuses_a_body_the_owner_gate_excludes():
     +70 only to a `Cynthia's` body, so a plain body is not a carrier at all — endorsing that attach
     would rank a no-op, which under 1-ply ordering is indistinguishable from a real gain. Read at
     the public seam (`explain(...).fired`), not off the picker's private return."""
-    weight = CardStat(POWER_WEIGHT, name="Cynthia's Power Weight", cardType=2, hpBonus=70,
+    weight = CardStat(POWER_WEIGHT, synthetic=True, name="Cynthia's Power Weight", cardType=2, hpBonus=70,
                       holderNameFamily="Cynthia's")
     pilot = _tool_pilot(weight)
     trace = pilot.explain(_board(PLAIN_BODY, POWER_WEIGHT)).options[0]
@@ -467,7 +467,7 @@ def test_the_deploy_picker_refuses_a_body_the_owner_gate_excludes():
 def test_the_deploy_picker_still_equips_a_body_inside_the_family():
     """The other half of the same gate: the Tool is not inert, it is TARGETED. On a `Cynthia's`
     Active the deploy rung fires — so widening the parser bought a decision rather than a field."""
-    weight = CardStat(POWER_WEIGHT, name="Cynthia's Power Weight", cardType=2, hpBonus=70,
+    weight = CardStat(POWER_WEIGHT, synthetic=True, name="Cynthia's Power Weight", cardType=2, hpBonus=70,
                       holderNameFamily="Cynthia's")
     pilot = _tool_pilot(weight)
     trace = pilot.explain(_board(FAM_BODY, POWER_WEIGHT)).options[0]
@@ -478,7 +478,7 @@ def test_the_deploy_picker_still_equips_a_body_inside_the_family():
 def test_an_ungated_hp_tool_is_unaffected_by_the_gate_machinery():
     """The no-regression assertion: Hero's Cape reaches the same plain body the gated Tool refuses,
     so every shipped +HP decision is untouched by this issue."""
-    cape = CardStat(CAPE, name="Hero's Cape", cardType=2, aceSpec=True, hpBonus=100)
+    cape = CardStat(CAPE, synthetic=True, name="Hero's Cape", cardType=2, aceSpec=True, hpBonus=100)
     pilot = _tool_pilot(cape)
     trace = pilot.explain(_board(PLAIN_BODY, CAPE)).options[0]
     assert "deploy-hp-tool" in _fired(trace)
@@ -488,7 +488,7 @@ def _boost_pilot():
     """A Pilot whose Active can be either family or plain, holding Hop's Choice Band, against an
     opponent exactly one boost short of a KO."""
     stats = DictCardStatProvider({
-        CHOICE_BAND: CardStat(CHOICE_BAND, name="Hop's Choice Band", cardType=2, damageBoost=30,
+        CHOICE_BAND: CardStat(CHOICE_BAND, synthetic=True, name="Hop's Choice Band", cardType=2, damageBoost=30,
                               attackCostReduction=1, holderNameFamily="Hop's"),
         FAM_BODY: CardStat(FAM_BODY, name="Hop's Zacian ex", hp=230, ex=True, stage="Basic",
                            maxDamage=90, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
@@ -604,8 +604,8 @@ def test_the_rule_box_gate_reaches_the_boost_lethal_consumer():
 
 def _gem_pilot():
     stats = DictCardStatProvider({
-        GEMSTONE: CardStat(GEMSTONE, name="Gravity Gemstone", cardType=2, retreatReduction=-1),
-        AIR_BALLOON: CardStat(AIR_BALLOON, name="Air Balloon", cardType=2, retreatReduction=2),
+        GEMSTONE: CardStat(GEMSTONE, synthetic=True, name='Gravity Gemstone', cardType=2, retreatReduction=-1),
+        AIR_BALLOON: CardStat(AIR_BALLOON, synthetic=True, name='Air Balloon', cardType=2, retreatReduction=2),
         PLAIN_BODY: CardStat(PLAIN_BODY, name="Walker", hp=120, stage="Basic", retreatCost=2,
                              maxDamage=60, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
         OPP: CardStat(OPP, name="Opponent", hp=300),

@@ -24,8 +24,8 @@ JUNK = 800
 
 def _pilot(**kw):
     stats = DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="wincon", hp=200, energyType=3),
-        JUNK: CardStat(JUNK, name="junk", hp=60, energyType=3),
+        WINCON: CardStat(WINCON, synthetic=True, name="wincon", hp=200, energyType=3),
+        JUNK: CardStat(JUNK, synthetic=True, name="junk", hp=60, energyType=3),
     })
     return Pilot(Strategy(roles={WINCON: ["primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}), **kw)

@@ -47,7 +47,7 @@ def _rank(pilot, obs, index):
     return pilot._target_threat_rank(obs, select, select["option"][index], None, 0.0)
 
 
-_SNIPER = CardStat(700, name="Sniper", maxDamage=120, attacks=(11,))   # my Active: a 50-snipe rider
+_SNIPER = CardStat(700, synthetic=True, name="Sniper", maxDamage=120, attacks=(11,))   # my Active: a 50-snipe rider
 _ATTACKS = {11: AttackStat(11, damage=120, benchSnipe=50)}             # its attack record
 
 
@@ -104,9 +104,9 @@ def test_the_rank_generalises_to_a_scaler_no_function_tag_covers():
     attacks[371] = AttackStat(371, damage=20, cost=2, scaleVar="both_bench", scalePerUnit=20)
     stats = DictCardStatProvider({
         700: _SNIPER,
-        272: CardStat(272, name="Lillie's Clefairy ex", hp=190, ex=True, maxDamage=20,
+        272: CardStat(272, synthetic=True, name="Lillie's Clefairy ex", hp=190, ex=True, maxDamage=20,
                       minAttackCost=2, attacks=(371,)),
-        64: CardStat(64, name="Hoothoot", hp=70, maxDamage=90),   # bigger PRINTED damage
+        64: CardStat(64, synthetic=True, name='Hoothoot', hp=70, maxDamage=90),   # bigger PRINTED damage
     }, attacks=attacks)
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
@@ -122,7 +122,7 @@ def test_a_benched_knockout_outranks_a_scarier_chip():
     stats = DictCardStatProvider({
         700: _SNIPER,
         121: CardStat(121, name="Dragapult ex", hp=320, ex=True, maxDamage=200, evolvesFrom="Drakloak"),
-        99: CardStat(99, name="Frail", hp=50, maxDamage=10),
+        99: CardStat(99, synthetic=True, name="Frail", hp=50, maxDamage=10),
     }, attacks=_ATTACKS)
     pilot = _pilot(stats)
     obs = make_select([card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)], context=15,
@@ -144,7 +144,7 @@ def test_forward_card_ids_collects_the_whole_descendant_line():
     stats = DictCardStatProvider({
         741: CardStat(741, name="Abra", hp=50, maxDamage=10),
         742: CardStat(742, name="Kadabra", hp=80, maxDamage=30, evolvesFrom="Abra"),
-        743: CardStat(743, name="Alakazam", hp=140, maxDamage=10, evolvesFrom="Kadabra"),
+        743: CardStat(743, synthetic=True, name='Alakazam', hp=140, maxDamage=10, evolvesFrom="Kadabra"),
     })
     assert stats.forward_card_ids(741) == frozenset({742, 743})     # Abra -> Kadabra -> Alakazam
     assert stats.forward_card_ids(743) == frozenset()               # terminal

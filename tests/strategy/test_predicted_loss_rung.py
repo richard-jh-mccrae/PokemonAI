@@ -35,7 +35,7 @@ def _pilot():
     stats = DictCardStatProvider({
         MY: CardStat(MY, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                      minAttackCost=1, attacks=(), energyType=3),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, maxDamage=30, minAttackCost=2,
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, maxDamage=30, minAttackCost=2,
                         minCostDamage=30, attacks=(ACC_STAB,), energyType=6),
         MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, maxDamage=270,
                            minAttackCost=1, minCostDamage=130, attacks=(AURA_JAB, MEGA_BRAVE),

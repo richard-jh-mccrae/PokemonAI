@@ -39,12 +39,12 @@ def _fired(o):
 
 def _stats():
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, megaEx=True, maxDamage=210,
                          maxDamageCost=3, minAttackCost=1, minCostDamage=120, attacks=(10, 11),
                          evolvesFrom="Staryu", hasAbility=False, energyType=3),
-        ABIL_EVO: CardStat(ABIL_EVO, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
+        ABIL_EVO: CardStat(ABIL_EVO, synthetic=True, name="Cinderace", hp=160, maxDamage=50, maxDamageCost=1,
                            minAttackCost=1, attacks=(12,), evolvesFrom="Raboot", hasAbility=True),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, maxDamage=20, maxDamageCost=1,
                          minAttackCost=1, attacks=(13,), evolvesFrom=None, hasAbility=False),
     }, attacks={10: AttackStat(10, damage=210, cost=3), 11: AttackStat(11, damage=120, cost=1),
                 12: AttackStat(12, damage=50, cost=1), 13: AttackStat(13, damage=20, cost=1)})

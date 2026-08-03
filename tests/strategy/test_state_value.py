@@ -127,42 +127,42 @@ METAGROSS = 276
 WRACK_DOWN, CONJOINED_BEAMS = 9276, 9277
 
 _STATS = {
-    DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
+    DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name='Dragapult ex', hp=320, ex=True, stage2=True,
                         evolvesFrom="Drakloak", energyType=DRAGON, maxDamage=200, maxDamageCost=2,
                         minAttackCost=1, minCostDamage=70, tera=True,
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
-    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC,
+    MUNKIDORI: CardStat(MUNKIDORI, synthetic=True, name='Munkidori', hp=110, energyType=PSYCHIC,
                         weakness=DARKNESS, resistance=FIGHTING, retreatCost=1, cardType=0),
-    RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, minAttackCost=2,
+    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=2,
                     maxDamage=30, maxDamageCost=2, attacks=(), cardType=0),
-    MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, energyType=FIGHTING,
+    MEGA_LUC: CardStat(MEGA_LUC, synthetic=True, name='Mega Lucario ex', hp=340, megaEx=True, energyType=FIGHTING,
                        evolvesFrom="Riolu", maxDamage=270, maxDamageCost=2, minAttackCost=1,
                        minCostDamage=130,
                        attacks=(AURA_JAB, MEGA_BRAVE), cardType=0),
     # ── Issue #281's damage-model cast: an attacker whose damage MOVES with the defender ──────
-    MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
+    MEGA_STARMIE: CardStat(MEGA_STARMIE, synthetic=True, name='Mega Starmie ex', hp=330, megaEx=True,
                            energyType=WATER, weakness=LIGHTNING, evolvesFrom="Staryu",
                            maxDamage=210, maxDamageCost=3, minAttackCost=1, minCostDamage=120,
                            benchSnipeDamage=50, attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
-    GOUGING_FIRE: CardStat(GOUGING_FIRE, name="Gouging Fire ex", hp=230, ex=True,
+    GOUGING_FIRE: CardStat(GOUGING_FIRE, synthetic=True, name='Gouging Fire ex', hp=230, ex=True,
                            energyType=FIRE, weakness=WATER, maxDamage=260, maxDamageCost=3,
                            minAttackCost=2, minCostDamage=60,
                            attacks=(HEAT_BLAST, BLAZE_BLITZ), cardType=0),
-    CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, energyType=GRASS, weakness=FIRE,
+    CRUSTLE: CardStat(CRUSTLE, synthetic=True, name='Crustle', hp=150, energyType=GRASS, weakness=FIRE,
                       evolvesFrom="Dwebble", preventsDamageFrom="ex", maxDamage=120,
                       maxDamageCost=3, minAttackCost=3, minCostDamage=120,
                       attacks=(SUPERB_SCISSORS,), cardType=0),
-    BRAVIARY: CardStat(BRAVIARY, name="Larry's Braviary", hp=130, energyType=COLORLESS,
+    BRAVIARY: CardStat(BRAVIARY, synthetic=True, name="Larry's Braviary", hp=130, energyType=COLORLESS,
                        weakness=LIGHTNING, resistance=FIGHTING, evolvesFrom="Larry's Rufflet",
                        maxDamage=50, maxDamageCost=2, minAttackCost=2, minCostDamage=50,
                        attacks=(CLUTCH,), cardType=0),
     # ── Issue #280's context cast: an attacker whose damage IS a context variable ──────────────
-    ALAKAZAM: CardStat(ALAKAZAM, name="Alakazam", hp=140, stage2=True, evolvesFrom="Kadabra",
+    ALAKAZAM: CardStat(ALAKAZAM, synthetic=True, name='Alakazam', hp=140, stage2=True, evolvesFrom="Kadabra",
                        energyType=PSYCHIC, weakness=DARKNESS, resistance=FIGHTING,
                        maxDamage=0, maxDamageCost=1, minAttackCost=1, minCostDamage=0,
                        handSizeDamage=20, attacks=(POWERFUL_HAND,), cardType=0),
     # ── Issue #345's cast: a boost that arrives ATTACHED, and a holder its gate can refuse ─────
-    SLOWKING: CardStat(SLOWKING, name="Slowking", hp=120, evolvesFrom="Slowpoke",
+    SLOWKING: CardStat(SLOWKING, synthetic=True, name='Slowking', hp=120, evolvesFrom="Slowpoke",
                        energyType=PSYCHIC, weakness=DARKNESS, resistance=FIGHTING, retreatCost=3,
                        maxDamage=120, maxDamageCost=3, minAttackCost=2, minCostDamage=0,
                        attacks=(SUPER_PSY_BOLT,), cardType=0),
@@ -174,13 +174,13 @@ _STATS = {
     # forward-payoff pre-evolution and read only its `maxDamage`, so the attack was never declared.
     # It is load-bearing here: `readiness_p` must be able to ask whether a COLOURLESS unit pays a
     # ``{W}`` slot, and a body with no attacks answers 0.0 for the wrong reason.
-    STARYU: CardStat(STARYU, name="Staryu", hp=70, energyType=WATER, weakness=LIGHTNING,
+    STARYU: CardStat(STARYU, synthetic=True, name='Staryu', hp=70, energyType=WATER, weakness=LIGHTNING,
                      retreatCost=1, maxDamage=20, maxDamageCost=1, minAttackCost=1,
                      minCostDamage=20, attacks=(WATER_GUN,), cardType=0),
-    DREEPY: CardStat(DREEPY, name="Dreepy", hp=70, energyType=DRAGON, retreatCost=1,
+    DREEPY: CardStat(DREEPY, synthetic=True, name='Dreepy', hp=70, energyType=DRAGON, retreatCost=1,
                      maxDamage=40, maxDamageCost=2, minAttackCost=1, minCostDamage=10,
                      cardType=0),
-    DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON,
+    DRAKLOAK: CardStat(DRAKLOAK, synthetic=True, name='Drakloak', hp=90, energyType=DRAGON,
                        evolvesFrom="Dreepy", retreatCost=1, maxDamage=70, maxDamageCost=2,
                        minAttackCost=2, minCostDamage=70, cardType=0),
     # ── Issue #286's one card: the Energy that is GONE at the end of the turn ─────────────────
@@ -192,13 +192,13 @@ _STATS = {
     # Brave ``{F}{F}``. `cardType=6` is SPECIAL_ENERGY (`cg.api.CardType`).
     IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     E_W: CardStat(E_W, name="Basic {W} Energy", cardType=5, energyType=WATER),
-    SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, energyType=FIGHTING, weakness=GRASS,
+    SOLROCK: CardStat(SOLROCK, synthetic=True, name='Solrock', hp=110, energyType=FIGHTING, weakness=GRASS,
                       minAttackCost=1, maxDamage=70, maxDamageCost=1, minCostDamage=70,
                       attacks=(COSMIC_BEAM,), cardType=0),
-    LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING, weakness=GRASS,
+    LUNATONE: CardStat(LUNATONE, synthetic=True, name='Lunatone', hp=110, energyType=FIGHTING, weakness=GRASS,
                        minAttackCost=2, maxDamage=50, maxDamageCost=2, minCostDamage=50,
                        attacks=(POWER_GEM,), cardType=0),
-    METAGROSS: CardStat(METAGROSS, name="Metagross", hp=170, stage2=True, evolvesFrom="Metang",
+    METAGROSS: CardStat(METAGROSS, synthetic=True, name='Metagross', hp=170, stage2=True, evolvesFrom="Metang",
                         energyType=PSYCHIC, minAttackCost=1, maxDamage=130, maxDamageCost=2,
                         minCostDamage=60, attacks=(WRACK_DOWN, CONJOINED_BEAMS), cardType=0),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
@@ -212,7 +212,7 @@ _STATS = {
     #: 50 damage to 1 of your opponent's Benched Pokémon"* and Nebula Beam ``●●●`` 210. A fixture
     #: that quietly drops the second attack would carry a `maxDamage` the real card contradicts.
     #: Referenced by exactly one test, so no existing assertion moves.
-    MEGA_STARMIE: CardStat(MEGA_STARMIE, name="Mega Starmie ex", hp=330, megaEx=True,
+    MEGA_STARMIE: CardStat(MEGA_STARMIE, synthetic=True, name='Mega Starmie ex', hp=330, megaEx=True,
                            energyType=WATER, evolvesFrom="Staryu", maxDamage=210, maxDamageCost=3,
                            minAttackCost=1, minCostDamage=120,
                            attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
@@ -1697,7 +1697,7 @@ def test_the_attacker_TYPE_gate_refuses_a_boost_the_attacker_does_not_qualify_fo
 
     The fixture is one gate away from a crossing on purpose: Mega Starmie ex reaches Jetting Blow's
     120 against Larry's Braviary's 130 HP, and 120 + 30 = 150 would cross. The control is the SAME
-    amount on the SAME board with the gate re-pointed at the attacker's own {W} — a synthetic probe,
+    amount on the SAME board with the gate re-pointed at the attacker's own {W} — a probe,
     not a card, and labelled as one — so the only difference between passing and failing is the gate
     itself rather than two different boards being compared."""
     unqualified = _starmie_board(_poke(BRAVIARY, hp=130, serial=9), boosts=[POWER_PRO])
@@ -2283,7 +2283,7 @@ def test_the_module_reaches_for_no_engine_no_obs_and_no_pilot():
 # ── the SAME monotonicity, on REAL corpus frames ──────────────────────────────────────────────────
 #
 # Issue #262's ordering-ruling amendment asks for this class "on a handful of CORPUS frames", and the
-# synthetic cases above are not a substitute: a fixture board is one I chose, and the failure mode
+# cases above are not a substitute: a fixture board is one I chose, and the failure mode
 # being guarded — a term that quietly assumes a completed turn — is likeliest on the boards nobody
 # designed. These perturb a real frame by exactly one beneficial fact and assert the direction.
 #
@@ -2517,7 +2517,7 @@ def test_on_real_frames_a_hand_size_attacker_shortens_the_clock_as_their_hand_gr
 
     Their hand is a COUNT and nothing else (`TheirSide.hand_size` reads ``handCount``), so the
     perturbation is exactly one integer — which is what makes this a controlled comparison on a real
-    board rather than a second synthetic fixture wearing a corpus costume.
+    board rather than a second fixture wearing a corpus costume.
 
     Asserted as monotone non-increasing PER FRAME with at least one strict move across the set: a
     frame can be genuinely indifferent (my Active already falls on turn 1, or the scaling attacker

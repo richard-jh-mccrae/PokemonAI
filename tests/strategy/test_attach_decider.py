@@ -6,7 +6,7 @@ select, the axes values on the decision's working record, and the order picks co
 asserts a helper's internals, a matcher's call pattern, or suppressed-rung bookkeeping.
 
 Two styles:
-  * Style A — synthetic hand-built boards pin the ruled TERMS deterministically (including the four
+  * Style A — hand-built boards pin the ruled TERMS deterministically (including the four
     grill synthetics, the burst family, the ordering deferral and degraded mode).
   * Style B — replay committed correction frames and assert the DECISION, on decider semantics.
 """
@@ -67,16 +67,16 @@ def _stats():
         MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, maxDamage=60, minCostDamage=60,
                             minAttackCost=2, maxDamageCost=2, hasAbility=True, retreatCost=1,
                             abilityEnergyTypes=(DARK,), attacks=(MIND_BEND,)),
-        DUNSPARCE: CardStat(DUNSPARCE, name="Dunsparce", hp=60, maxDamage=10, minCostDamage=10,
+        DUNSPARCE: CardStat(DUNSPARCE, synthetic=True, name='Dunsparce', hp=60, maxDamage=10, minCostDamage=10,
                             minAttackCost=1, maxDamageCost=1, retreatCost=0, attacks=(GNAW,)),
-        W_ENERGY: CardStat(W_ENERGY, name="Water", cardType=_BASIC_ENERGY, energyType=WATER),
-        P_ENERGY: CardStat(P_ENERGY, name="Psychic", cardType=_BASIC_ENERGY, energyType=PSYCHIC),
-        F_ENERGY: CardStat(F_ENERGY, name="Fighting", cardType=_BASIC_ENERGY, energyType=FIGHTING),
-        D_ENERGY: CardStat(D_ENERGY, name="Darkness", cardType=_BASIC_ENERGY, energyType=DARK),
-        IGNITION: CardStat(IGNITION, name="Ignition", cardType=_SPECIAL_ENERGY, energyType=0),
-        CAPE: CardStat(CAPE, name="Hero's Cape", cardType=_TOOL, aceSpec=True, hpBonus=100),
-        SHUFFLE: CardStat(SHUFFLE, name="Iono", cardType=4),
-        BALL: CardStat(BALL, name="Ultra Ball", cardType=3),
+        W_ENERGY: CardStat(W_ENERGY, synthetic=True, name="Water", cardType=_BASIC_ENERGY, energyType=WATER),
+        P_ENERGY: CardStat(P_ENERGY, synthetic=True, name="Psychic", cardType=_BASIC_ENERGY, energyType=PSYCHIC),
+        F_ENERGY: CardStat(F_ENERGY, synthetic=True, name="Fighting", cardType=_BASIC_ENERGY, energyType=FIGHTING),
+        D_ENERGY: CardStat(D_ENERGY, synthetic=True, name="Darkness", cardType=_BASIC_ENERGY, energyType=DARK),
+        IGNITION: CardStat(IGNITION, synthetic=True, name="Ignition", cardType=_SPECIAL_ENERGY, energyType=0),
+        CAPE: CardStat(CAPE, synthetic=True, name="Hero's Cape", cardType=_TOOL, aceSpec=True, hpBonus=100),
+        SHUFFLE: CardStat(SHUFFLE, synthetic=True, name="Iono", cardType=4),
+        BALL: CardStat(BALL, synthetic=True, name="Ultra Ball", cardType=3),
     }, attacks={
         JETTING: AttackStat(JETTING, damage=120, cost=1, energyTypes=(WATER,)),
         NEBULA: AttackStat(NEBULA, damage=210, cost=3, energyTypes=(0, 0, 0)),
@@ -188,7 +188,7 @@ def test_a_colourless_slot_absorbs_any_type():
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0006")
 def test_doomed_active_arms_a_non_biggest_attack_over_a_bench_build():
-    """Grill synthetic 1 — the tempo case the rung layer structurally lost: its arm exemption was
+    """Grill 1 — the tempo case the rung layer structurally lost: its arm exemption was
     biggest-attack-only, so a doomed Mega Starmie whose attach unlocks Jetting Blow (120, NOT its
     biggest) lost the Energy to a bench build worth ~70. Pure arithmetic now: ANY attack the attach
     unlocks tonight counts."""
@@ -205,7 +205,7 @@ def test_doomed_active_arms_a_non_biggest_attack_over_a_bench_build():
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0007")
 def test_lone_utility_body_desperation_attach_beats_ending_the_turn():
-    """Grill synthetic 2 — the desperation floor. A lone Lunatone (engine-only Role, partner absent)
+    """Grill 2 — the desperation floor. A lone Lunatone (engine-only Role, partner absent)
     is the ONLY legal home; the board-evaluated role gate stands down because no attacker
     alternative is in play, and Retreat Equity floors the attach above End regardless."""
     p = _pilot()
@@ -221,7 +221,7 @@ def test_lone_utility_body_desperation_attach_beats_ending_the_turn():
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0008")
 def test_the_double_duty_colour_beats_the_same_build_alternative_outright():
-    """Grill synthetic 3 — Munkidori: Mind Bend costs {P}●, Adrena-Brain wants a {D}. The {D} fills
+    """Grill 3 — Munkidori: Mind Bend costs {P}●, Adrena-Brain wants a {D}. The {D} fills
     the colourless slot AND wakes the Ability: two INDEPENDENT card features on one Energy. Under a
     `max` combiner they would TIE with a plain {P}; only the additive channel ranks {D} first."""
     p = _pilot(roles={MUNKIDORI: ["counter_mover"]}, partners={}, lines=())
@@ -238,7 +238,7 @@ def test_the_double_duty_colour_beats_the_same_build_alternative_outright():
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0009")
 def test_free_retreat_draw_engine_scores_zero_across_every_channel():
-    """Grill synthetic 4 — the f21 lesson survives the mobility channel. TEF Dunsparce has NO printed
+    """Grill 4 — the f21 lesson survives the mobility channel. TEF Dunsparce has NO printed
     Retreat cost, so Retreat Equity is structurally zero on it; the role gate zeroes its attack axis
     while a real attacker is in play; its Ability wants nothing. Every channel reads zero, so the
     deck's only {D} never goes there."""

@@ -30,7 +30,7 @@ def test_clutch_heal_outranks_the_attach_when_the_active_is_doomed():
     attaching to it — so the heal (which bounces all Energy to hand) happens BEFORE any fresh attach."""
     stats = DictCardStatProvider({
         1031: CardStat(cardId=1031, hp=330, megaEx=True),     # my Mega ex (max HP 330)
-        999: CardStat(cardId=999, hp=200, maxDamage=300),     # opponent's Active: 300 dmg >> my 50 HP
+        999: CardStat(synthetic=True, cardId=999, hp=200, maxDamage=300),     # opponent's Active: 300 dmg >> my 50 HP
         3: CardStat(cardId=3, hp=0, energyType=3),            # Basic Energy in hand
     })
     funcs = CardFunctions({1229: ["heal", "clutch_heal"]})

@@ -38,12 +38,12 @@ E_F, IGNITION, ROCK_FIGHTING = 6, 17, 20
 CAPE = 1250                                    # a Tool, to prove `tools` still rides the same walk
 
 _STATS = {
-    RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, cardType=0),
+    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, cardType=0),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     ROCK_FIGHTING: CardStat(ROCK_FIGHTING, name="Rock Fighting Energy", cardType=6,
                             energyType=FIGHTING),
-    CAPE: CardStat(CAPE, name="Hero's Cape", cardType=2),
+    CAPE: CardStat(CAPE, synthetic=True, name="Hero's Cape", cardType=2),
 }
 
 #: 4×Basic {F}, 2×Ignition, 2×Rock Fighting, a Tool and the Riolu — small, but the arithmetic is the

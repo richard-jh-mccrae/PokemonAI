@@ -35,14 +35,14 @@ BENCHIE = 700  # opponent's benched body (1 prize), KO-able by snipe rider
 
 def _stats():
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
                          minCostDamage=120, maxDamage=210, maxDamageCost=3,
                          attacks=(JETTING, NEBULA, SNIPE), evolvesFrom="Staryu"),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, energyType=3, minAttackCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, energyType=3, minAttackCost=1,
                          minCostDamage=20, maxDamage=20, attacks=(STARYU,)),
-        OPP: CardStat(OPP, name="opp active", hp=120, energyType=7),
-        EXOPP: CardStat(EXOPP, name="opp ex", hp=330, energyType=7, ex=True),
-        BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
+        OPP: CardStat(OPP, synthetic=True, name="opp active", hp=120, energyType=7),
+        EXOPP: CardStat(EXOPP, synthetic=True, name="opp ex", hp=330, energyType=7, ex=True),
+        BENCHIE: CardStat(BENCHIE, synthetic=True, name="opp benchie", hp=100, energyType=7),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, energyType=3),
     }, attacks={JETTING: AttackStat(JETTING, damage=120, cost=1),
                 NEBULA: AttackStat(NEBULA, damage=210, cost=3),
@@ -176,9 +176,9 @@ def test_simultaneous_double_ko_is_a_draw_not_a_locked_win():
     The Solver must NOT lock it. Dedicated fixtures so the recoil attack can't perturb other slices."""
     RECOILER, ROPP, RECOIL_ATK = 950, 951, 20
     stats = DictCardStatProvider({
-        RECOILER: CardStat(RECOILER, name="recoiler", hp=70, energyType=3, minAttackCost=1,
+        RECOILER: CardStat(RECOILER, synthetic=True, name="recoiler", hp=70, energyType=3, minAttackCost=1,
                            minCostDamage=210, maxDamage=210, attacks=(RECOIL_ATK,)),
-        ROPP: CardStat(ROPP, name="ropp", hp=200, energyType=7),
+        ROPP: CardStat(ROPP, synthetic=True, name="ropp", hp=200, energyType=7),
     }, attacks={RECOIL_ATK: AttackStat(RECOIL_ATK, damage=210, cost=1, recoil=400)})
     pilot = Pilot(Strategy(roles={RECOILER: ["win_condition"]}), deck=[1] * 60,
                   general_strategy=GENERAL_STRATEGY, stats=stats, functions=CardFunctions({}))
@@ -731,10 +731,10 @@ def test_ignore_effects_attack_bypasses_a_prevent_damage_ability_for_the_win():
     both ex attacks read as walled and the win is invisible (the missed-win blunder)."""
     EX_ATTACKER, CRUSTLE = 901, 345
     cards = {
-        EX_ATTACKER: CardStat(EX_ATTACKER, name="Mega Starmie ex", hp=330, energyType=3, ex=True,
+        EX_ATTACKER: CardStat(EX_ATTACKER, synthetic=True, name="Mega Starmie ex", hp=330, energyType=3, ex=True,
                               megaEx=True, minAttackCost=1, minCostDamage=120, maxDamage=210,
                               maxDamageCost=3, attacks=(JETTING, NEBULA)),
-        CRUSTLE: CardStat(CRUSTLE, name="Crustle", hp=150, energyType=7),
+        CRUSTLE: CardStat(CRUSTLE, synthetic=True, name='Crustle', hp=150, energyType=7),
     }
     funcs = CardFunctions({CRUSTLE: ["prevent_ex_damage"]})
 

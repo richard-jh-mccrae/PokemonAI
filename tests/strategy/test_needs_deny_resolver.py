@@ -28,7 +28,7 @@ Two fixture consequences, named rather than discovered:
     clock legs are differences of `turns_to_ko_me`). A board with an empty Active spot returns NO
     rows at all, where the old opponent-only oracle happily priced one.
 
-Synthetic boards mirror `test_discard_keep_rows._setup`; the captured-board case replays a REAL
+boards mirror `test_discard_keep_rows._setup`; the captured-board case replays a REAL
 recorded correction through the real shipped pilot (`test_gust_round0_corpus` pattern — fresh
 pilot per replay, the statefulness lesson).
 """
@@ -82,10 +82,10 @@ def _setup(hand_ids, *, opp_active=None, opp_bench=(), minc=1):
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         HAMMER: CardStat(HAMMER, name="Crushing Hammer", cardType=1),
-        BOSS: CardStat(BOSS, name="Boss's Orders", cardType=3),
-        FILLER: CardStat(FILLER, name="Filler", cardType=1),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
-        MLUC: CardStat(MLUC, name="Mega Lucario ex", hp=340, megaEx=True, evolvesFrom="Riolu",
+        BOSS: CardStat(BOSS, synthetic=True, name="Boss's Orders", cardType=3),
+        FILLER: CardStat(FILLER, synthetic=True, name="Filler", cardType=1),
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=70, maxDamageCost=1, maxDamage=30, attacks=(11,)),
+        MLUC: CardStat(MLUC, synthetic=True, name="Mega Lucario ex", hp=340, megaEx=True, evolvesFrom="Riolu",
                        maxDamageCost=2, maxDamage=270, attacks=(21, 22)),
         FIGHTING_ENERGY: CardStat(FIGHTING_ENERGY, name="Basic {F} Energy", energyType=FIGHTING),
     }, attacks={11: AttackStat(11, damage=30, cost=1, energyTypes=(FIGHTING,)),

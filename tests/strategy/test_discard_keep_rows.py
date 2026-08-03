@@ -37,13 +37,13 @@ def _setup(hand_ids, *, minc=2, powered=False):
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, maxDamageCost=3),
         SALVATORE: CardStat(SALVATORE, name="Salvatore", cardType=3),
         HILDA: CardStat(HILDA, name="Hilda", cardType=3),
-        WALLYS: CardStat(WALLYS, name="Wally's", cardType=3),
-        CAPE: CardStat(CAPE, name="Hero's Cape", aceSpec=True, hpBonus=100, cardType=2),
-        WATER: CardStat(WATER, name="Water", energyType=2, cardType=5),   # 5 = BASIC_ENERGY
-        CINDERACE: CardStat(CINDERACE, name="Cinderace", hp=160, cardType=0),   # a dead opener
-        FILLER: CardStat(FILLER, name="Filler", cardType=1),              # a role-less Item spare
+        WALLYS: CardStat(WALLYS, synthetic=True, name="Wally's", cardType=3),
+        CAPE: CardStat(CAPE, synthetic=True, name="Hero's Cape", aceSpec=True, hpBonus=100, cardType=2),
+        WATER: CardStat(WATER, synthetic=True, name="Water", energyType=2, cardType=5),   # 5 = BASIC_ENERGY
+        CINDERACE: CardStat(CINDERACE, synthetic=True, name='Cinderace', hp=160, cardType=0),   # a dead opener
+        FILLER: CardStat(FILLER, synthetic=True, name="Filler", cardType=1),              # a role-less Item spare
         IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=0),  # a burst
-        LILLIES: CardStat(LILLIES, name="Lillie's", cardType=3),          # a draw engine Supporter
+        LILLIES: CardStat(LILLIES, synthetic=True, name="Lillie's", cardType=3),          # a draw engine Supporter
         HARLEQUIN: CardStat(HARLEQUIN, name="Harlequin", cardType=3),     # hand_disruption filler
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],

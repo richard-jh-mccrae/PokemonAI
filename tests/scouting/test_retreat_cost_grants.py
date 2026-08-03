@@ -19,7 +19,7 @@ Card text verified at source in `data/EN_Card_Data.csv`:
     cannot supply it either: `retreatCost` exists only on `CardData` as the static printed value.
 
 **One deliberate exception to "test at the highest seam possible."** The board-level grant is tested
-against a SYNTHETIC board here, not a real one, because the only deck running Latias ex is
+against a board here, not a real one, because the only deck running Latias ex is
 `slowking` — which has `deck.csv`/`deck.txt` and **no `strategy.py`** (#149 §Charter), so it cannot
 be built as a Pilot and owns no corpus frames. The debt is named here rather than implied.
 
@@ -29,7 +29,7 @@ be built as a Pilot and owns no corpus frames. The debt is named here rather tha
    because Latias ex is in play, through `decide()` with engine-backed card data — not a synthetic
    statline calling `_effective_retreat_cost` directly.
 2. **A KNOWN DIVERGENCE to reconcile.** `_effective_retreat_cost` is now grant-aware; the other
-   retreat-cost readers in the codebase are NOT. Measured on a synthetic board with Latias ex benched
+   retreat-cost readers in the codebase are NOT. Measured on a board with Latias ex benched
    and a Basic Active at printed retreat 2 with ZERO Energy attached:
 
        _effective_retreat_cost(obs, active)  ->  0      (the grant is seen: free retreat)
@@ -152,7 +152,7 @@ def test_an_unmodelled_grant_parses_to_nothing_so_the_printed_cost_stands():
 
 
 def test_the_real_cards_parse_through_the_engine_provider():
-    """The synthetic texts above prove the REGEXES; this proves they meet the real card records.
+    """The texts above prove the REGEXES; this proves they meet the real card records.
 
     CLAUDE.md's standing rule — verify card facts at source, never from memory — applied to a parser:
     a pattern that matches hand-typed prose but misses the engine's actual skill text would fail
@@ -175,17 +175,17 @@ def test_the_real_cards_parse_through_the_engine_provider():
 
 def _pilot(*, grantor=None):
     stats = DictCardStatProvider({
-        WALKER: CardStat(WALKER, name="Walker", hp=120, stage="Basic", retreatCost=2,
+        WALKER: CardStat(WALKER, synthetic=True, name="Walker", hp=120, stage="Basic", retreatCost=2,
                          minAttackCost=1, maxDamage=60, maxDamageCost=1, attacks=(A_WALK,)),
-        BENCHIE: CardStat(BENCHIE, name="Benchie", hp=90, stage="Basic", retreatCost=1,
+        BENCHIE: CardStat(BENCHIE, synthetic=True, name="Benchie", hp=90, stage="Basic", retreatCost=1,
                           minAttackCost=1, maxDamage=30, maxDamageCost=1, attacks=(A_WALK,)),
-        WALL: CardStat(WALL, name="Wall", hp=300, minAttackCost=2, maxDamage=60,
+        WALL: CardStat(WALL, synthetic=True, name="Wall", hp=300, minAttackCost=2, maxDamage=60,
                        maxDamageCost=2, attacks=(A_WALL,)),
-        RESCUE_BOARD: CardStat(RESCUE_BOARD, name="Rescue Board", cardType=2,
+        RESCUE_BOARD: CardStat(RESCUE_BOARD, synthetic=True, name='Rescue Board', cardType=2,
                                retreatReduction=1, retreatFreeAtHp=30),
-        LATIAS_EX: CardStat(LATIAS_EX, name="Latias ex", hp=210, ex=True, stage="Basic",
+        LATIAS_EX: CardStat(LATIAS_EX, synthetic=True, name='Latias ex', hp=210, ex=True, stage="Basic",
                             retreatFreeGrant="basic"),
-        ARCHALUDON: CardStat(ARCHALUDON, name="Archaludon", hp=300, stage="Stage 2",
+        ARCHALUDON: CardStat(ARCHALUDON, synthetic=True, name='Archaludon', hp=300, stage="Stage 2",
                              retreatFreeGrant="metal_attached"),
     }, attacks={A_WALK: AttackStat(A_WALK, damage=60, cost=1),
                 A_WALL: AttackStat(A_WALL, damage=60, cost=2)})

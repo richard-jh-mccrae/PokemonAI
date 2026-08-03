@@ -15,9 +15,9 @@ from common.strategy.damage import compute_active_damage
 
 PSYCHIC, WATER, FIGHTING = 3, 2, 1   # arbitrary distinct energy-type ids, fixtures only
 
-MEGA_STARMIE = CardStat(cardId=1031, name="Mega Starmie ex", hp=300, megaEx=True, energyType=PSYCHIC)
-NON_EX = CardStat(cardId=50, name="Staryu", hp=70, energyType=PSYCHIC)
-CRUSTLE = CardStat(cardId=345, name="Crustle", hp=140, energyType=FIGHTING)   # prevention lives in TAGS
+MEGA_STARMIE = CardStat(synthetic=True, cardId=1031, name='Mega Starmie ex', hp=300, megaEx=True, energyType=PSYCHIC)
+NON_EX = CardStat(synthetic=True, cardId=50, name="Staryu", hp=70, energyType=PSYCHIC)
+CRUSTLE = CardStat(synthetic=True, cardId=345, name='Crustle', hp=140, energyType=FIGHTING)   # prevention lives in TAGS
 CRUSTLE_TAGS = frozenset({"prevent_ex_damage"})
 
 NEBULA = AttackStat(attackId=1488, damage=210, cost=3,
@@ -42,14 +42,14 @@ def test_prevention_only_stops_ex_attackers():
 
 @pytest.mark.req("REQ-DMG-0005")
 def test_weakness_doubles_unless_ignored():
-    weak = CardStat(cardId=9, name="WeakToPsychic", hp=200, weakness=PSYCHIC, energyType=WATER)
+    weak = CardStat(synthetic=True, cardId=9, name="WeakToPsychic", hp=200, weakness=PSYCHIC, energyType=WATER)
     assert compute_active_damage(JETTING, MEGA_STARMIE, weak, frozenset()) == 240
     assert compute_active_damage(NEBULA, MEGA_STARMIE, weak, frozenset()) == 210   # ignoresWeakness
 
 
 @pytest.mark.req("REQ-DMG-0005")
 def test_resistance_subtracts_30_unless_ignored_and_floors_at_zero():
-    resist = CardStat(cardId=10, name="ResistsPsychic", hp=200, resistance=PSYCHIC, energyType=WATER)
+    resist = CardStat(synthetic=True, cardId=10, name="ResistsPsychic", hp=200, resistance=PSYCHIC, energyType=WATER)
     assert compute_active_damage(JETTING, MEGA_STARMIE, resist, frozenset()) == 90
     assert compute_active_damage(NEBULA, MEGA_STARMIE, resist, frozenset()) == 210  # ignoresResistance
     chip = AttackStat(attackId=1, damage=20)
@@ -58,7 +58,7 @@ def test_resistance_subtracts_30_unless_ignored_and_floors_at_zero():
 
 @pytest.mark.req("REQ-DMG-0005")
 def test_weakness_applies_before_resistance():
-    both = CardStat(cardId=11, name="WeakAndResist", hp=300,
+    both = CardStat(synthetic=True, cardId=11, name="WeakAndResist", hp=300,
                     weakness=PSYCHIC, resistance=PSYCHIC, energyType=WATER)
     # (120x2)-30, not (120-30)x2 — order per rules.md §5
     assert compute_active_damage(JETTING, MEGA_STARMIE, both, frozenset()) == 210
@@ -87,7 +87,7 @@ POWERFUL_HAND = AttackStat(attackId=1072, damage=0, cost=1, scaleVar="atk_hand",
 
 @pytest.mark.req("REQ-DMG-0009")
 def test_visible_state_scaling_is_exact_given_context():
-    v = CardStat(cardId=9, name="Vanilla", hp=300, energyType=2)
+    v = CardStat(synthetic=True, cardId=9, name="Vanilla", hp=300, energyType=2)
     ctx = {"def_hand": 7, "def_active_energy": 3, "atk_hand": 5}
     assert compute_active_damage(MIND_RULER, NON_EX, v, frozenset(), context=ctx) == 210
     assert compute_active_damage(PSYCHIC_339, NON_EX, v, frozenset(), context=ctx) == 160
@@ -100,7 +100,7 @@ def test_visible_state_scaling_is_exact_given_context():
 
 @pytest.mark.req("REQ-DMG-0009")
 def test_damage_type_scaling_is_weakness_adjusted():
-    weak = CardStat(cardId=9, name="WeakToPsychic", hp=400, weakness=PSYCHIC, energyType=WATER)
+    weak = CardStat(synthetic=True, cardId=9, name="WeakToPsychic", hp=400, weakness=PSYCHIC, energyType=WATER)
     ctx = {"def_hand": 4}
     # (0+30x4)x2 — scaled DAMAGE still counts as damage: Weakness applies
     assert compute_active_damage(MIND_RULER, MEGA_STARMIE, weak, frozenset(), context=ctx) == 240
@@ -108,7 +108,7 @@ def test_damage_type_scaling_is_weakness_adjusted():
 
 @pytest.mark.req("REQ-DMG-0008")
 def test_bound_selects_floor_ceiling_or_printed():
-    v = CardStat(cardId=9, name="Vanilla", hp=200, energyType=2)
+    v = CardStat(synthetic=True, cardId=9, name="Vanilla", hp=200, energyType=2)
     assert compute_active_damage(BEST_PUNCH, NON_EX, v, frozenset(), bound="min") == 0
     assert compute_active_damage(BEST_PUNCH, NON_EX, v, frozenset(), bound="max") == 40
     assert compute_active_damage(BEST_PUNCH, NON_EX, v, frozenset()) == 40          # exact = printed
@@ -119,18 +119,18 @@ def test_bound_selects_floor_ceiling_or_printed():
 
 @pytest.mark.req("REQ-DMG-0008")
 def test_bounds_are_modifier_adjusted_like_any_damage():
-    weak = CardStat(cardId=9, name="WeakToPsychic", hp=200, weakness=PSYCHIC, energyType=WATER)
+    weak = CardStat(synthetic=True, cardId=9, name="WeakToPsychic", hp=200, weakness=PSYCHIC, energyType=WATER)
     tumbling_psy = AttackStat(attackId=1, damage=10, damageMin=10, damageMax=30)
     assert compute_active_damage(tumbling_psy, MEGA_STARMIE, weak, frozenset(), bound="max") == 60
 
 
-SYLVEON = CardStat(cardId=330, name="Sylveon", hp=130, energyType=1, preventsDamageFrom="ex")
-FARIGIRAF = CardStat(cardId=83, name="Farigiraf ex", hp=300, ex=True, energyType=3,
+SYLVEON = CardStat(synthetic=True, cardId=330, name='Sylveon', hp=130, energyType=1, preventsDamageFrom="ex")
+FARIGIRAF = CardStat(synthetic=True, cardId=83, name='Farigiraf ex', hp=300, ex=True, energyType=3,
                      preventsDamageFrom="basic_ex")
-DREDNAW = CardStat(cardId=158, name="Drednaw", hp=180, energyType=2, preventsDamageAtLeast=200)
-MUDSDALE = CardStat(cardId=383, name="Mudsdale", hp=140, energyType=1, damageReduction=30)
-BASIC_EX = CardStat(cardId=60, name="BasicEx", hp=200, ex=True, energyType=3)   # no evolvesFrom = Basic
-STAGE1_EX = CardStat(cardId=61, name="Stage1Ex", hp=280, ex=True, energyType=3, evolvesFrom="Base")
+DREDNAW = CardStat(synthetic=True, cardId=158, name='Drednaw', hp=180, energyType=2, preventsDamageAtLeast=200)
+MUDSDALE = CardStat(synthetic=True, cardId=383, name='Mudsdale', hp=140, energyType=1, damageReduction=30)
+BASIC_EX = CardStat(synthetic=True, cardId=60, name="BasicEx", hp=200, ex=True, energyType=3)   # no evolvesFrom = Basic
+STAGE1_EX = CardStat(synthetic=True, cardId=61, name="Stage1Ex", hp=280, ex=True, energyType=3, evolvesFrom="Base")
 
 
 @pytest.mark.req("REQ-DMG-0010")
@@ -157,7 +157,7 @@ def test_threshold_prevention_zeroes_only_big_hits():
     # Nebula Beam 210 dealt 210 — ignoresEffects pierces threshold prevention too
     assert compute_active_damage(NEBULA, MEGA_STARMIE, DREDNAW, frozenset()) == 210
     # Weakness pushes 120 over threshold: 120x2=240 >= 200 -> prevented
-    weak_drednaw = CardStat(cardId=158, name="Drednaw", hp=180, weakness=PSYCHIC, energyType=2,
+    weak_drednaw = CardStat(synthetic=True, cardId=158, name='Drednaw', hp=180, weakness=PSYCHIC, energyType=2,
                             preventsDamageAtLeast=200)
     assert compute_active_damage(JETTING, MEGA_STARMIE, weak_drednaw, frozenset()) == 0
 
@@ -165,7 +165,7 @@ def test_threshold_prevention_zeroes_only_big_hits():
 @pytest.mark.req("REQ-DMG-0010")
 def test_flat_reduction_applies_after_weakness_and_is_pierced_by_ignores_effects():
     assert compute_active_damage(JETTING, NON_EX, MUDSDALE, frozenset()) == 90        # 120-30
-    weak_mud = CardStat(cardId=383, name="Mudsdale", hp=140, weakness=PSYCHIC, energyType=1,
+    weak_mud = CardStat(synthetic=True, cardId=383, name='Mudsdale', hp=140, weakness=PSYCHIC, energyType=1,
                         damageReduction=30)
     assert compute_active_damage(JETTING, MEGA_STARMIE, weak_mud, frozenset()) == 210  # (120x2)-30
     assert compute_active_damage(NEBULA, MEGA_STARMIE, MUDSDALE, frozenset()) == 210   # ignoresEffects
@@ -179,7 +179,7 @@ HAMMER = AttackStat(attackId=1046, damage=0, cost=2, hiddenPerUnit=100, hiddenSa
 
 @pytest.mark.req("REQ-DMG-0018")
 def test_hidden_scaler_uses_exact_deck_facts_when_known():
-    v = CardStat(cardId=9, name="Vanilla", hp=700, energyType=2)
+    v = CardStat(synthetic=True, cardId=9, name="Vanilla", hp=700, energyType=2)
     # deck of 8 w/ 4 Basic {W}: discarding 6 MUST hit >= 6-(8-4) = 2 -> sound floor 200;
     # EV = 6 x 4/8 = 3 -> exact 300; ceiling capped by the 4 W actually left -> 400
     ctx = {"atk_deck_count": 8, "atk_deck_basic_by_type": {3: 4}}
@@ -197,7 +197,7 @@ ANY_ENERGY_446 = AttackStat(attackId=446, damage=30, cost=2, scaleVar="atk_disca
 
 @pytest.mark.req("REQ-DMG-0017")
 def test_discard_scaler_reads_typed_histogram_from_context():
-    v = CardStat(cardId=9, name="Vanilla", hp=300, energyType=2)
+    v = CardStat(synthetic=True, cardId=9, name="Vanilla", hp=300, energyType=2)
     ctx = {"atk_discard_energy_total": 7, "atk_discard_basic_by_type": {3: 5, 1: 2}}
     # Riptide: 20 x 5 Basic {W} in ATTACKER's discard — exact, visible state
     assert compute_active_damage(RIPTIDE, NON_EX, v, frozenset(), context=ctx) == 100
@@ -209,7 +209,7 @@ def test_discard_scaler_reads_typed_histogram_from_context():
 
 @pytest.mark.req("REQ-DMG-0011")
 def test_hidden_state_scaler_bounds():
-    v = CardStat(cardId=9, name="Vanilla", hp=400, energyType=2)
+    v = CardStat(synthetic=True, cardId=9, name="Vanilla", hp=400, energyType=2)
     # ceiling: every sampled card could be fuel — the Incoming threat model (600)
     assert compute_active_damage(HAMMER, NON_EX, v, frozenset(), bound="max") == 600
     # floor / exact: 0 without deck knowledge — sound (a Lethal never banks on hidden cards);
@@ -234,7 +234,7 @@ def test_incoming_sees_the_opponents_discard_scaler():
     stats = DictCardStatProvider({
         KYOGRE: CardStat(cardId=KYOGRE, name="Kyogre", hp=150, energyType=3,
                          attacks=(1042,), minAttackCost=1),
-        MYMON: CardStat(cardId=MYMON, name="Mine", hp=90, energyType=2),
+        MYMON: CardStat(synthetic=True, cardId=MYMON, name="Mine", hp=90, energyType=2),
         W_ENERGY: CardStat(cardId=W_ENERGY, name="Basic {W} Energy", cardType=5, energyType=3),
     }, attacks={1042: RIPTIDE})
     p = Pilot(Strategy(), deck=[1] * 60, stats=stats, functions=CardFunctions({}))
@@ -251,7 +251,7 @@ def test_incoming_sees_the_opponents_discard_scaler():
 def test_hidden_scaler_feeds_the_incoming_ceiling():
     # opp's Mega Abomasnow ex threatens the CEILING via _predicted_max_damage
     p = _pilot(attack_stats={1046: HAMMER})
-    abom = CardStat(cardId=723, name="Mega Abomasnow ex", hp=350, megaEx=True, energyType=2,
+    abom = CardStat(synthetic=True, cardId=723, name='Mega Abomasnow ex', hp=350, megaEx=True, energyType=2,
                     attacks=(1046,), minAttackCost=2, maxDamage=0)
     assert p._predicted_max_damage(abom, {"id": 9}) == 600
 
@@ -262,8 +262,8 @@ def test_tera_benched_body_is_never_a_snipe_ko():
     # rider must not claim the KO/prize (32 Tera bodies in pool; a phantom snipe-prize could lock a
     # false Lethal). A non-Tera body at same HP still credits.
     p = _pilot()
-    p.stats._stats[70] = CardStat(cardId=70, name="Tera ex", hp=40, ex=True, tera=True)
-    p.stats._stats[71] = CardStat(cardId=71, name="Plain", hp=40)
+    p.stats._stats[70] = CardStat(synthetic=True, cardId=70, name="Tera ex", hp=40, ex=True, tera=True)
+    p.stats._stats[71] = CardStat(synthetic=True, cardId=71, name="Plain", hp=40)
     assert p._snipe_ko_prizes(((70, 40),), rider=50) == 0      # Tera bench: untouchable
     assert p._snipe_ko_prizes(((71, 40),), rider=50) == 1      # plain bench: a real prize
 
@@ -283,7 +283,7 @@ def _pilot(attack_stats=None):
              142: AttackStat(attackId=142, damage=40, cost=1)}
     stats = DictCardStatProvider({
         1031: MEGA_STARMIE, 50: NON_EX, 345: CRUSTLE,
-        9: CardStat(cardId=9, name="Vanilla", hp=40, energyType=2),
+        9: CardStat(synthetic=True, cardId=9, name="Vanilla", hp=40, energyType=2),
     }, attacks={**synth, **(attack_stats or {})})
     strat = Strategy(lines=[Line(path=[50, 1031], payoff=1031, role="win_condition")],
                      roles={1031: ["win_condition"]})

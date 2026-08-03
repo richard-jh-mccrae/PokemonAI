@@ -241,7 +241,7 @@ def test_the_declared_self_lock_divergence_is_MEASURED_not_assumed():
                       maxDamage=60, attacks=(SMALL,)),
         EVO: CardStat(EVO, name="Its Evolution", hp=300, evolvesFrom="Locked Base", energyType=6,
                       minAttackCost=1, maxDamage=200, attacks=(BIG,)),
-        1: CardStat(1, name="My Body", hp=150),
+        1: CardStat(1, synthetic=True, name="My Body", hp=150),
     }, attacks={SMALL: AttackStat(SMALL, damage=60, cost=1),
                 BIG: AttackStat(BIG, damage=200, cost=1)})
 

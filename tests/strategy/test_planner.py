@@ -43,19 +43,19 @@ WATER = 3       # Basic {W} Energy card in hand (reusable attach)
 
 def _stats():
     return DictCardStatProvider({
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
                          minCostDamage=120, maxDamage=210, maxDamageCost=3,
                          attacks=(JETTING, NEBULA), evolvesFrom="Staryu", megaEx=True),
-        PREEVO: CardStat(PREEVO, name="Staryu", hp=70, energyType=3, minAttackCost=1,
+        PREEVO: CardStat(PREEVO, synthetic=True, name="Staryu", hp=70, energyType=3, minAttackCost=1,
                          minCostDamage=20, maxDamage=20, attacks=(STARYU,)),
-        OPENER: CardStat(OPENER, name="opener", hp=110, energyType=3, minAttackCost=1,
+        OPENER: CardStat(OPENER, synthetic=True, name="opener", hp=110, energyType=3, minAttackCost=1,
                          minCostDamage=30, maxDamage=30, attacks=(OPEN_ATK,)),
-        OPP: CardStat(OPP, name="opp active", hp=180, energyType=7),
-        EXOPP: CardStat(EXOPP, name="opp ex", hp=210, energyType=7, ex=True),
-        BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
-        BIGATK: CardStat(BIGATK, name="big hitter", hp=200, energyType=7, minAttackCost=1,
+        OPP: CardStat(OPP, synthetic=True, name="opp active", hp=180, energyType=7),
+        EXOPP: CardStat(EXOPP, synthetic=True, name="opp ex", hp=210, energyType=7, ex=True),
+        BENCHIE: CardStat(BENCHIE, synthetic=True, name="opp benchie", hp=100, energyType=7),
+        BIGATK: CardStat(BIGATK, synthetic=True, name="big hitter", hp=200, energyType=7, minAttackCost=1,
                          minCostDamage=340, maxDamage=340),   # benched threat, KOs my Mega next turn
-        THREAT: CardStat(THREAT, name="glass cannon", hp=70, energyType=7, minAttackCost=1,
+        THREAT: CardStat(THREAT, synthetic=True, name="glass cannon", hp=70, energyType=7, minAttackCost=1,
                          minCostDamage=210, maxDamage=210),   # KO-able now, dooms my Active next turn
         # cardType 5 = Basic Energy. Without it `is_typed_basic_energy` is False and the Attach
         # Budget sees no manual-attach source at all (ADR-0075).
@@ -619,14 +619,14 @@ THREATB = 702   # opponent's benched KEY threat: a 340-damage glass cannon at 90
 
 def _snipe_stats():
     base = {
-        WINCON: CardStat(WINCON, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
+        WINCON: CardStat(WINCON, synthetic=True, name="Mega Starmie ex", hp=330, energyType=3, minAttackCost=1,
                          minCostDamage=50, maxDamage=210, maxDamageCost=3,
                          attacks=(JETTING, NEBULA, SNIPE), evolvesFrom="Staryu", megaEx=True),
-        OPENER: CardStat(OPENER, name="opener", hp=110, energyType=3, minAttackCost=1,
+        OPENER: CardStat(OPENER, synthetic=True, name="opener", hp=110, energyType=3, minAttackCost=1,
                          minCostDamage=30, maxDamage=30, attacks=(OPEN_ATK,)),
-        OPP: CardStat(OPP, name="opp active", hp=330, energyType=7),
-        BENCHIE: CardStat(BENCHIE, name="opp benchie", hp=100, energyType=7),
-        THREATB: CardStat(THREATB, name="benched glass cannon", hp=90, energyType=7,
+        OPP: CardStat(OPP, synthetic=True, name="opp active", hp=330, energyType=7),
+        BENCHIE: CardStat(BENCHIE, synthetic=True, name="opp benchie", hp=100, energyType=7),
+        THREATB: CardStat(THREATB, synthetic=True, name="benched glass cannon", hp=90, energyType=7,
                           minAttackCost=1, minCostDamage=340, maxDamage=340),
         WATER: CardStat(WATER, name="Basic {W} Energy", hp=0, cardType=5, energyType=3),  # cardType 5 = Basic Energy: without it `is_typed_basic_energy` is False and the Attach Budget sees no manual-attach source (ADR-0075)
     }
@@ -681,8 +681,8 @@ def test_key_threat_rung_counts_a_forward_damage_only_threat():
     worth the snipe, not a silent skip."""
     DREEPY, DRAGA = 704, 705
     stats = _snipe_stats()
-    stats._stats[DREEPY] = CardStat(DREEPY, name="Dreepy", hp=60, energyType=7, maxDamage=0)
-    stats._stats[DRAGA] = CardStat(DRAGA, name="Dragapult ex", hp=320, energyType=7,
+    stats._stats[DREEPY] = CardStat(DREEPY, synthetic=True, name="Dreepy", hp=60, energyType=7, maxDamage=0)
+    stats._stats[DRAGA] = CardStat(DRAGA, synthetic=True, name="Dragapult ex", hp=320, energyType=7,
                                    evolvesFrom="Dreepy", minAttackCost=1, minCostDamage=200,
                                    maxDamage=200, attacks=(16,))
     pilot = _snipe_pilot(planner_key_threat=True)
@@ -710,7 +710,7 @@ def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
 
     FATB = 703                                         # a harmless fat benched body (no threat rank)
     stats = _snipe_stats()
-    stats._stats[FATB] = CardStat(FATB, name="fat benchie", hp=150, energyType=7)
+    stats._stats[FATB] = CardStat(FATB, synthetic=True, name="fat benchie", hp=150, energyType=7)
     pilot2 = _snipe_pilot(planner_key_threat=True)
     pilot2.stats = stats
     no_threat = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
@@ -947,7 +947,7 @@ def _ignition_pilot(**kw):
     strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
     stats = _stats()
     stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
-    stats._stats[BRUISER] = CardStat(BRUISER, name="bruiser", hp=180, energyType=7,
+    stats._stats[BRUISER] = CardStat(BRUISER, synthetic=True, name="bruiser", hp=180, energyType=7,
                                      minAttackCost=1, minCostDamage=210, maxDamage=210)
     fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=fns,
@@ -1043,7 +1043,7 @@ def test_evolution_tutor_excludes_ability_bearing_evolutions():
     evolution of the benched Staryu carries an Ability yields no line — neither the win rung nor
     the heuristic rung may plan on an ineligible fetch."""
     stats = _stats()
-    stats._stats[ABIL] = CardStat(ABIL, name="Abil Starmie ex", hp=330, energyType=3,
+    stats._stats[ABIL] = CardStat(ABIL, synthetic=True, name="Abil Starmie ex", hp=330, energyType=3,
                                   minAttackCost=1, minCostDamage=120, maxDamage=120,
                                   attacks=(JETTING,), evolvesFrom="Staryu", hasAbility=True)
     pilot = _salvatore_pilot(deck=[ABIL] * 3 + [1] * 57, stats=stats, lethal_family=True)

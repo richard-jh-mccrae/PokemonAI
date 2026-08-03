@@ -41,7 +41,7 @@ def _pilot(hand_ids=(), energy=20):
     # fallback is retired, ADR-0052) — same damage/cost the fallback used to read.
     A_MEGA, A_STAR, A_CIND, A_NEBULA = 31, 32, 33, 34
     stats = DictCardStatProvider({
-        3: CardStat(3, name="Water Energy", cardType=5, energyType=3),
+        3: CardStat(3, synthetic=True, name="Water Energy", cardType=5, energyType=3),
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
                        minCostDamage=120, maxDamageCost=3, evolvesFrom="Staryu",
                        attacks=(A_MEGA, A_NEBULA)),

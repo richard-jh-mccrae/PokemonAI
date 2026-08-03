@@ -1,7 +1,7 @@
 """Issue #137 Phase 0a — the self-side attach-affordability oracle (ADR-0067).
 
 ``CombatMath.attach_budget`` / ``reachable_attach`` / ``readiness_p``: the mirror of ADR-0064's
-``reachable_incoming``, on a lib-free synthetic provider (the `test_reachable_incoming.py` seam).
+``reachable_incoming``, on a lib-free provider (the `test_reachable_incoming.py` seam).
 
 Card facts VERIFIED at source (`data/EN_Card_Data.csv`, `src/common/card_functions.json`,
 `tools/meta_tracker/effect_overrides.json`) — never recalled:
@@ -25,13 +25,13 @@ from common.strategy.combat import (DISCARD_SUPPLY, AttachUnit, Budget, CombatMa
 COLORLESS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 2, 5, 6, 7, 9
 
 DRAGAPULT = 121
-JET_HEADBUTT, PHANTOM_DIVE = 9121, 9122          # synthetic attack ids for the two verified attacks
+JET_HEADBUTT, PHANTOM_DIVE = 9121, 9122          # attack ids for the two verified attacks
 CRISPIN, GONG, HILDA, PATCH, ROSA = 1198, 1142, 1225, 1146, 1240
 CINDERACE = 666
 E_R, E_P, E_D = 2, 5, 7                          # Basic {R} / {P} / {D} Energy card ids
 
 _STATS = {
-    DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, ex=True, stage2=True,
+    DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name='Dragapult ex', hp=320, ex=True, stage2=True,
                         evolvesFrom="Drakloak", energyType=DRAGON, maxDamage=200, maxDamageCost=2,
                         minAttackCost=1, minCostDamage=70,
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
@@ -137,7 +137,7 @@ def test_crispin_units_must_take_distinct_types():
     b = c.attach_budget(_pult(), [CRISPIN], deck_energy_types=DRAGAPULT_DECK_TYPES)
     same_colour = AttackStat(9999, damage=10, cost=2, energyTypes=(FIRE, FIRE))
     stats = DictCardStatProvider(
-        {**_STATS, DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320, minAttackCost=2,
+        {**_STATS, DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name='Dragapult ex', hp=320, minAttackCost=2,
                                        attacks=(9999,), cardType=0)},
         attacks={**_ATTACKS, 9999: same_colour})
     c2 = CombatMath(stats, functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
@@ -261,7 +261,7 @@ def test_wondrous_patch_funds_a_benched_psychic_body():
     c = _combat()
     slowking = {"id": 163, "hp": 120, "energies": []}
     stats = DictCardStatProvider({**_STATS,
-                                  163: CardStat(163, name="Slowking", hp=120, energyType=PSYCHIC,
+                                  163: CardStat(163, synthetic=True, name='Slowking', hp=120, energyType=PSYCHIC,
                                                 evolvesFrom="Slowpoke", cardType=0)},
                                  attacks=_ATTACKS)
     c = CombatMath(stats, functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
@@ -274,7 +274,7 @@ def test_wondrous_patch_needs_the_energy_visible_in_the_discard():
     c = _combat()
     slowking = {"id": 163, "hp": 120, "energies": []}
     stats = DictCardStatProvider({**_STATS,
-                                  163: CardStat(163, name="Slowking", hp=120, energyType=PSYCHIC,
+                                  163: CardStat(163, synthetic=True, name='Slowking', hp=120, energyType=PSYCHIC,
                                                 evolvesFrom="Slowpoke", cardType=0)},
                                  attacks=_ATTACKS)
     c = CombatMath(stats, functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
@@ -296,7 +296,7 @@ def test_rosa_funds_a_stage_2_only_while_ahead_on_prizes():
 
 def test_rosa_never_funds_a_non_stage_2_body():
     riolu = {"id": 677, "hp": 80, "energies": []}
-    stats = DictCardStatProvider({**_STATS, 677: CardStat(677, name="Riolu", hp=80, cardType=0)},
+    stats = DictCardStatProvider({**_STATS, 677: CardStat(677, synthetic=True, name='Riolu', hp=80, cardType=0)},
                                  attacks=_ATTACKS)
     c = CombatMath(stats, functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
     b = c.attach_budget(riolu, [ROSA], energy_attached=True, more_prizes_than_opp=True,
@@ -327,7 +327,7 @@ def test_the_discard_cap_binds_by_COLOUR_not_merely_by_count():
     b = c.attach_budget(_pult(), [ROSA], energy_attached=True, more_prizes_than_opp=True,
                         discard_energy_counts={FIRE: 1, PSYCHIC: 1}, deck_energy_types=())
     assert c.reachable_attach(_pult(), PHANTOM_DIVE, budget=b) is True         # {R}{P}: one each
-    same_colour = {**_STATS, DRAGAPULT: CardStat(DRAGAPULT, name="Dragapult ex", hp=320,
+    same_colour = {**_STATS, DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name='Dragapult ex', hp=320,
                                                  minAttackCost=2, attacks=(9998,), cardType=0)}
     c2 = CombatMath(DictCardStatProvider(same_colour,
                                          attacks={9998: AttackStat(9998, damage=10, cost=2,
@@ -344,7 +344,7 @@ def test_two_discard_accelerators_share_one_pile():
     discard-drawing effect this turn competes for the same public pile."""
     slowking = {"id": 163, "hp": 120, "energies": []}
     stats = DictCardStatProvider({**_STATS,
-                                  163: CardStat(163, name="Slowking", hp=120, energyType=PSYCHIC,
+                                  163: CardStat(163, synthetic=True, name='Slowking', hp=120, energyType=PSYCHIC,
                                                 evolvesFrom="Slowpoke", cardType=0)},
                                  attacks=_ATTACKS)
     c = CombatMath(stats, functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
@@ -360,7 +360,7 @@ def test_a_type_locked_accel_cannot_eat_a_colour_the_discard_lacks():
     """Wondrous Patch is {P}-locked: a discard full of {R} supplies it nothing."""
     slowking = {"id": 163, "hp": 120, "energies": []}
     stats = DictCardStatProvider({**_STATS,
-                                  163: CardStat(163, name="Slowking", hp=120, energyType=PSYCHIC,
+                                  163: CardStat(163, synthetic=True, name='Slowking', hp=120, energyType=PSYCHIC,
                                                 evolvesFrom="Slowpoke", cardType=0)},
                                  attacks=_ATTACKS)
     c = CombatMath(stats, functions=CardFunctions(_TAGS), effects=CardEffects(_CLAUSES))
@@ -564,14 +564,14 @@ def test_the_typed_matcher_agrees_with_an_exhaustive_reference():
 
 IGNITION, BOOMERANG = 17, 9
 MEGA_LUC, RIOLU = 678, 677                       # the single-hop line: Riolu (Basic) -> Mega Lucario ex
-MEGA_BRAVE, RIOLU_BIG = 983, 984                 # synthetic attack ids
+MEGA_BRAVE, RIOLU_BIG = 983, 984                 # attack ids
 
 
 def _special_combat(tags):
     stats = {
-        MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, energyType=FIGHTING,
+        MEGA_LUC: CardStat(MEGA_LUC, synthetic=True, name='Mega Lucario ex', hp=340, energyType=FIGHTING,
                            evolvesFrom="Riolu", attacks=(MEGA_BRAVE,), cardType=0),
-        RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, attacks=(RIOLU_BIG,),
+        RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, attacks=(RIOLU_BIG,),
                         cardType=0),
         IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=0),
         BOOMERANG: CardStat(BOOMERANG, name="Boomerang Energy", cardType=6, energyType=0),
