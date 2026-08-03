@@ -57,7 +57,7 @@ from __future__ import annotations
 import pytest
 
 from common import currency, state_value as sv
-from common.card_worth import ROLE_TIER
+from common.card_worth import ROLE_TIER, TAG_TIER
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -158,6 +158,7 @@ _ROLE_WORTH = {MEGA_LUC: ROLE_TIER["win_condition"], RIOLU: ROLE_TIER["win_condi
 #: Premium Power Pro (1141, **Item**), verified at `data/EN_Card_Data.csv`: *"During this turn,
 #: attacks used by your {F} Pokémon do 30 more damage to your opponent's Active Pokémon (before
 #: applying Weakness and Resistance)."* — amount 30, attacker-type gate {F}, no defender gate.
+POWER_PRO_ID = 1141
 POWER_PRO = (30, FIGHTING, False)
 #: Black Belt's Training (1211, **Supporter**), same source: *"During this turn, attacks used by your
 #: Pokémon do 40 more damage to your opponent's Active Pokémon {ex} (before applying Weakness and
@@ -1015,20 +1016,29 @@ def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_
 # is modelled as "the card leaves hand" (`apply_option.KIND_COVERAGE`), so a boost card whose effect
 # no term reads prices at MINUS the hand value of the card spent — playing Premium Power Pro would
 # score as a mistake. The path that stops that is `_SideBase.damage_boosts` -> `SideFacts` ->
-# `damage_context`'s `atk_boosts` -> `strategy/damage.py` -> #281's `best_reachable_damage_vs` ->
-# `threat`, and every link of it shipped with Issues #279 and #281 rather than with this one.
+# `damage_context`'s `atk_boosts` -> `strategy/damage.py` -> Issue #281's
+# `best_reachable_damage_vs` -> `threat`, and every link of it shipped with Issue #279 and
+# Issue #281 rather than with this one.
 #
 # What did NOT ship is any assertion that the whole path holds END TO END, at the scalar. Each link
-# is pinned in isolation — `test_damage_context.py` pins the context key, `test_tool_holder_facts.py`
-# pins the parsed triples against the real pool, `test_damage_oracle.py` pins the oracle's gates —
-# and a chain of separately-green links is exactly the shape that breaks silently in the middle. So
-# these assert on `state_value` itself, and each one is built so that the GATE is the only thing
-# standing between the fixture and a crossing: a broken gate is a failure here, not a plausible
-# number.
+# is covered in isolation — `test_damage_context.py` tests the context key,
+# `test_tool_holder_facts.py` tests the parsed triples against the real pool,
+# `test_damage_oracle.py` tests the oracle's gates — and a chain of separately-green links is
+# exactly the shape that breaks silently in the middle. So these assert on `state_value` itself, and
+# each one is built so that the GATE is the only thing standing between the fixture and a crossing:
+# a broken gate is a failure here, not a plausible number.
 
 
 def _boosts_of(model) -> tuple:
     return model.damage_context(attacker="mine")["atk_boosts"]
+
+
+def _vs_dragapult_at(hp, *, boosts=None, hand=()):
+    """MY funded Mega Lucario ex against a Dragapult ex chipped to ``hp`` — the one board every case
+    below perturbs. `{F}{F}` attached with the turn's attach already spent, so Mega Brave's 270 is
+    reachable and nothing the Attach Budget could add moves it."""
+    return _lucario_board(my_energies=[E_F, E_F], energy_attached=True, hand=list(hand),
+                          their_active=_poke(DRAGAPULT, hp=hp, serial=9), boosts=boosts)
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
@@ -1037,16 +1047,14 @@ def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
 
     The card leaving my hand is the only thing `_PLAY` structurally models, so without this the play
     is priced at a hand loss and nothing else. With it the boost enters through exactly ONE family —
-    `threat`, whose reachability gate is #281's `best_reachable_damage_vs` — which is asserted here
-    as well as the total, because a fact that moved two families would be double-counted.
+    `threat`, whose reachability gate is Issue #281's `best_reachable_damage_vs` — which is asserted
+    here as well as the total, because a fact that moved two families would be double-counted.
 
     Mega Lucario ex is {F} (`data/EN_Card_Data.csv`), so Power Pro's attacker-type gate is met;
     Dragapult ex carries no Weakness to {F} in this fixture, so 270 and 300 are the raw numbers with
     no W/R leg to disentangle."""
-    plain = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
-                           their_active=_poke(DRAGAPULT, hp=300, serial=9))
-    boosted = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
-                             their_active=_poke(DRAGAPULT, hp=300, serial=9), boosts=[POWER_PRO])
+    plain = _vs_dragapult_at(300)
+    boosted = _vs_dragapult_at(300, boosts=[POWER_PRO])
 
     assert _boosts_of(plain) == () and _boosts_of(boosted) == (POWER_PRO,)
     assert _reach(plain)[1] == 270, "Mega Brave's own damage — the breakpoint is 30 short"
@@ -1062,6 +1070,51 @@ def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
+def test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss():
+    """**The issue's headline sentence, as an arithmetic claim about the whole transition.**
+
+    The cases around this one hold the hand fixed and vary only the live boost, which shows the
+    boost is READ but not that playing the card comes out ahead. This one models the actual
+    `_PLAY`: before, Premium Power Pro is in hand and no boost is live; after, the card is gone and
+    the boost is live. That is exactly what `apply_option` will difference, and it is the only
+    arrangement in which the epic's failure mode can appear at all —
+    *"a card whose effect no term reads prices at MINUS the hand value of the card spent"*.
+
+    The hand leg has to be real for the claim to mean anything, so a `needs.Resolution` supplies the
+    held card's latent Worth at `card_worth.TAG_TIER["gust"]` — the shipped tier for a situational
+    Trainer, cited rather than invented (its own comment: *"reach (Boss's Orders) — the ladder's −10
+    keep floor"*, the band this ladder gives a held utility Trainer). At `POC_WORTH_PRIZE_RATE` that
+    is 1/12 of a prize the play gives up.
+
+    The margin is deliberately narrow and is asserted in BOTH directions: the boost's `threat` gain
+    must exceed the hold, so the play is a gain — and the hold must be genuinely non-zero, so the
+    test would go negative the moment the boost stopped being priced. A wide margin here would pass
+    on a board where the hand cost nothing, which is the vacuous version of this test."""
+    from common import needs
+
+    def _held(worth):
+        return needs.Resolution(slots=(), eligibility=(frozenset(), frozenset()), resupply=(),
+                                hand_ids=(POWER_PRO_ID,), latent_worth=worth)
+
+    before = _vs_dragapult_at(300, hand=[POWER_PRO_ID])
+    before.mine._needs = _held(TAG_TIER["gust"])
+    after = _vs_dragapult_at(300, boosts=[POWER_PRO])
+    after.mine._needs = _held(0.0)                       # the card is in the discard now
+
+    b, a = {}, {}
+    total_before = sv.state_value(before, working=b)
+    total_after = sv.state_value(after, working=a)
+
+    assert b["hand"] > 0.0 and a["hand"] == 0.0, "the hand loss must be REAL, or this passes vacuously"
+    assert a["threat"] > b["threat"] == 0.0, "the boost must be what crosses the breakpoint"
+    assert total_after > total_before, (
+        f"playing the boost scored as a mistake: {total_after} <= {total_before}")
+    # and the failure mode, stated as the counterfactual: with the boost UNPRICED the same play is
+    # a strict loss, which is what makes the assertion above a claim rather than a coincidence.
+    assert total_before - sv.state_value(_vs_dragapult_at(300)) == pytest.approx(b["hand"])
+
+
+@pytest.mark.req("REQ-STATEVALUE-0011")
 def test_a_live_boost_that_crosses_nothing_leaves_the_scalar_untouched():
     """The other half of the same claim, and the one that keeps `threat` a GATE rather than a slope.
 
@@ -1069,10 +1122,8 @@ def test_a_live_boost_that_crosses_nothing_leaves_the_scalar_untouched():
     this family prices — the extra damage above lethal is overkill, and converting the exposure is
     `attack_ev`'s job at the terminal action. The scalar must therefore be BIT-identical, not merely
     close: a boost that nudged the board value would be pricing overkill as position."""
-    plain = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
-                           their_active=_poke(DRAGAPULT, hp=260, serial=9))
-    boosted = _lucario_board(my_energies=[E_F, E_F], energy_attached=True,
-                             their_active=_poke(DRAGAPULT, hp=260, serial=9), boosts=[POWER_PRO])
+    plain = _vs_dragapult_at(260)
+    boosted = _vs_dragapult_at(260, boosts=[POWER_PRO])
     assert _reach(boosted)[1] == _reach(plain)[1] + 30, "the boost IS reaching the damage read"
     assert sv.state_value(boosted) == sv.state_value(plain)
 
@@ -1136,14 +1187,19 @@ def test_the_defender_ex_gate_counts_a_MEGA_ex_as_an_ex_and_a_plain_body_as_neit
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
 def test_with_no_boost_in_play_the_context_is_EMPTY_and_the_scalar_is_unmoved():
-    """The regression half: a board with no live boost must score exactly as it did before any of
-    this, and an EMPTY tracker must be indistinguishable from no tracker at all.
+    """The regression half: an EMPTY tracker must be indistinguishable from no tracker at all, so a
+    board with no live boost is scored by the same arithmetic it always was.
+
+    This is the in-tree half of the claim; the cross-COMMIT half — that Issue #281's shipped numbers
+    did not move — is the byte-identical gate A/B recorded in
+    `docs/plans/issue-sequence-281-wave3-packet.md`, because no assertion inside one commit can
+    reach a value from another.
 
     Bit-identical rather than approximate, and over the whole per-family breakdown rather than the
     total, because the failure being guarded is a term that quietly gained a boost-shaped leg — which
     a total could hide by cancellation."""
-    no_tracker = _lucario_board(my_energies=[E_F, E_F], energy_attached=True)
-    empty_tracker = _lucario_board(my_energies=[E_F, E_F], energy_attached=True, boosts=[])
+    no_tracker = _vs_dragapult_at(320)
+    empty_tracker = _vs_dragapult_at(320, boosts=[])
     assert _boosts_of(no_tracker) == () == _boosts_of(empty_tracker)
 
     without, empty = {}, {}

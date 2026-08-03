@@ -330,8 +330,8 @@ def footprints_writing_unhomed() -> dict:
     `special_conditions`, and `_RETREAT` also spent a retreat allowance with none either. Under
     differencing that is the exact §3c failure — part of what the transition did is invisible, so the
     delta under-reports, and at ordering time an under-reported delta is a PRUNED option. T1 homed
-    both, so the set is now pinned empty by `test_snapshot_coverage.py` in the direction that
-    matters: it may only ever SHRINK.
+    both, so `test_snapshot_coverage.py` now asserts the set EMPTY, in the direction that matters:
+    it may only ever SHRINK.
 
     ⚠️ **What this guard cannot reach, so no later reader trusts it further than it goes**
     (Issue #282). It is keyed on :data:`FOOTPRINTS`, which is per-KIND, and the one kind whose whole

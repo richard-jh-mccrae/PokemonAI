@@ -208,11 +208,24 @@ zone"*. Re-checked against `HEAD` before any code moved, three of its premises a
    would have read the wrong zone.
 3. **Gravity Mountain (1252) is not a damage modifier.** `data/EN_Card_Data.csv`: *"Each Stage 2
    Pokémon in play (both yours and your opponent's) gets **-30 HP**."* Its parsed `damageBoost` is
-   `0`, and the shipped whole-pool inventory pin agrees —
+   `0`, and the shipped whole-pool inventory test agrees —
    `tests/scouting/test_tool_holder_facts.py`: `carriers("damageBoost") == {1141: 30, 1158: 50,
    1171: 30, 1211: 40}`. So the issue's *"Gravity Mountain is two facts, not one … this issue covers
    the damage half only"* section has no damage half to cover. Its HP half remains genuinely
    unmodelled and stays with the Stadium ruling and Issue #263.
+
+Two further claims in the issue body did not survive either, both found by the Spec axis rather than
+by the build:
+
+4. *"`footprints_writing_unhomed()` … **works off per-card clause unions**"* — it does not. It
+   iterates `apply_option.FOOTPRINTS`, which is per-KIND (`_ATTACH` / `_EVOLVE` / `_RETREAT`). The
+   clause-union guard is the sibling `snapshot_coverage.clauses_writing_unhomed()`. The conclusion
+   the issue draws from it is nonetheless RIGHT, for a reason one step over: `_PLAY` is deliberately
+   absent from `FOOTPRINTS`, and the per-OPTION footprint T4 will supply for it *is* a clause union.
+   The landed docstring states the mechanism correctly rather than repeating the issue's version.
+5. *"`mega_lucario` runs **7**"* — the copy counts are right (4x Premium Power Pro, 1x Black Belt's
+   Training, 2x Gravity Mountain) but only **5** of the 7 carry a damage boost, because the two
+   Gravity Mountains do not (point 3).
 
 ### Measured, on the plumbing the issue says does not exist
 
@@ -231,24 +244,42 @@ the `{W}`-gated copy on a `{F}` attacker, and the defender-`{ex}` gate pays Blac
 Dragapult **ex**. Against a 320 HP defender two Power Pros cross the breakpoint and the scalar moves
 by the whole `threat` term. There was nothing to build.
 
+And the symptom itself, priced as the whole `_PLAY` transition rather than as a boost held fixed —
+Power Pro in hand and no boost live, versus the card gone and the boost live, against a 300 HP
+Dragapult ex, with a `needs.Resolution` supplying the held card's Worth at `TAG_TIER["gust"]`:
+
+| | `hand` | `threat` | total |
+|---|---|---|---|
+| before — card in hand, no boost | 0.083333 | 0.0 | −1.046667 |
+| after — card played, boost live | 0.0 | **0.100000** | **−1.030000** |
+
+**The play is worth +0.016667 prizes.** With the boost unpriced the identical play is
+**−0.083333** — exactly *"minus the hand value of the card spent"*, the epic's sentence to six
+decimal places. The margin is narrow by construction, which is what makes the test a claim rather
+than a coincidence.
+
 ### What this issue therefore shipped instead
 
 Only the parts of its own body that were genuinely unbuilt, plus the enumeration gap the symptom
 was really about:
 
 * **The four acceptance tests from the issue's own `## Tests` section**, at the scalar
-  (`tests/strategy/test_state_value.py`). Every link of the chain was pinned in isolation and the
-  chain end-to-end was pinned nowhere, which is exactly the shape that breaks silently in the
-  middle. Instrument verified in both directions: severing `damage_facts`' boost leg turns 4 of the
-  5 red (the regression test correctly stays green), and deleting both gates in `strategy/damage.py`
-  turns the two gate tests red.
+  (`tests/strategy/test_state_value.py`), plus a fifth for the transition above. Every link of the
+  chain was covered in isolation and the chain end-to-end was covered nowhere, which is exactly the
+  shape that breaks silently in the middle. Instrument verified in both directions: severing
+  `damage_facts`' boost leg turns 5 of the 6 red (the no-boost regression case correctly stays
+  green), and deleting both gates in `strategy/damage.py` turns the two gate tests red.
 * **`snapshot_coverage.WRITABLE` gains `this_turn_damage_boosts`**, homed at
   `mine.damage_boosts,theirs.damage_boosts`. The zone was **absent**, which is a worse status than
   `owed`: an owed zone is a scheduled gap with an owner, an unenumerated one is invisible to every
   assertion in the module. That absence is the real mechanism behind the issue's symptom.
+  It overturns **no ruling**: the epic's ruled-omission ledger routes *attached Tools · special
+  conditions · retreat allowance · transient grants* to Issue #260 and this is none of them, and the
+  entry is inert — `homes()` / `unhomed()` are read by the audit test and by nothing on any scoring
+  path.
 * **The limitation the issue asks to be recorded**, in `apply_option.footprints_writing_unhomed()` —
   which was ALSO carrying a stale finding (*"Not empty, and that is the finding"*; T1/Issue #260
-  homed both zones and `test_snapshot_coverage.py` has pinned it EMPTY since). Both guards are
+  homed both zones and `test_snapshot_coverage.py` has asserted it EMPTY since). Both guards are
   keyed on declared write-sets, and Premium Power Pro (1141), Black Belt's Training (1211) and Brave
   Bangle (1175) return `None` from `card_effects.json` — no clauses at all, so the union is empty and
   neither guard can ever see them. Now asserted as a test, not only a docstring.
@@ -269,10 +300,11 @@ Both gates, stashed and re-run against the committed baselines:
 | Discrimination (leaf) | FAIL — 1 unruled, 67 ruled, 3 voided | FAIL — **1 unruled**, 67 ruled, 3 voided |
 | Decision | PASS — agree 250/347, 0 picks moved | PASS — agree **250/347**, **0 picks moved** |
 
-Both reports are **byte-identical** pre vs post — the leaf report is 384 lines carrying 339
-per-frame rows, so byte-identity is zero movement on every scored row rather than an empty report.
-The one unruled leaf flip is Issue #280's `81906755|1|decision|9`, ruled above. Neither baseline was
-touched.
+Both reports are **byte-identical** pre vs post. The leaf report is 384 lines and prints every one
+of the 277 leaf frames' scored values at full float precision (`correct=-1602.0130208333335
+top=-1576.04296875`), so byte-identity is zero movement on every scored row rather than an empty
+report. The one unruled leaf flip is Issue #280's `81906755|1|decision|9`, ruled above. Neither
+baseline was touched.
 
 **And that zero is not evidence of correctness — it is evidence there was nothing to measure**,
 which is the distinction Issue #343's section above exists to draw. Proven rather than asserted:
@@ -286,6 +318,31 @@ The measurements that ARE evidence are the two above: the table showing the path
 and the new tests going red when either the supplier or either gate is severed. The lab's ability to
 see a `state_value` change on this corpus is separately controlled by Issue #280, which moved 21 of
 277 rows one commit earlier in this same batch.
+
+### What `/code-review` changed
+
+The Spec axis re-derived the load-bearing claim independently — driving the **real**
+`TurnBoostTracker` with real PLAY logs of 1141 / 1211 through the **real** `EngineCardStatProvider`,
+rather than through this build's fixtures — and reproduced the table above exactly (reach 270 → 300,
+`threat` 0.0 → 0.10, `state_value` −1.13 → −1.03, Gravity Mountain yielding `()`). Both subsidiary
+claims confirmed at source. It found the two further spec errors recorded above (points 4 and 5), and
+one **genuine gap in this build**, since closed:
+
+> the A/B never puts the card in the `before` hand, so `_PLAY`'s *"the card leaves hand"* leg — the
+> symptom itself — is untested.
+
+That is what the transition table two sections up now measures and what
+`test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss` asserts. The criterion's
+other half — *"byte-identical to Issue #281"* — is a cross-COMMIT claim no assertion inside one
+commit can reach, so it stays where the evidence actually is: the byte-identical gate A/B below,
+with the test naming it rather than pretending to cover it.
+
+The Standards axis verified all eight card facts against `data/EN_Card_Data.csv`, confirmed
+`docs/rulebook.txt` L337 is an exact quote, confirmed no file gained CRLF, and found no vacuous
+assertion. Its prose findings (bare `#281`/`#279` in comments, "pin" used as a NOUN for a test) are
+fixed. "Pin" as a VERB is left alone deliberately: `CLAUDE.md`'s rule is about the noun (*"A test
+fixture/Correction is not a 'pin'"*), and the verb is the surrounding style in ~20 files including
+`damage_context.py` and `state_model.py`.
 
 ### One follow-on filed
 
