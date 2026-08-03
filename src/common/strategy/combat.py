@@ -891,9 +891,28 @@ class CombatMath:
         A second divergence used to be claimed here — that the curve omits the
         ``hand_size_attacker`` forward counter. It was never true on a production path (Issue
         #213): the hand-size attack carries the Damage Formula's ``atk_hand`` scaler like any other
-        scaling attack, and all six Incoming call sites thread the per-decision damage context, so
-        both reads price it — the curve in fact reads HIGHER, because the generic term prices a
-        forward form at the full hand where the retired branch spent the evolving card.
+        scaling attack, and the scaler rides the ``context`` kwarg that **every live Incoming
+        consumer threads**, so both reads price it — the curve in fact reads HIGHER, because the
+        generic term prices a forward form at the full hand where the retired branch spent the
+        evolving card.
+
+        That clause used to state a COUNT — *"all six Incoming call sites thread the per-decision
+        damage context"* — and Issue #343 replaced it, **not because the arithmetic was wrong**.
+        Re-taken at that issue's base, the number was exactly right under the reading it was written
+        in: six consumer calls spelled ``incoming`` or ``doomed``, every one of them threading. The
+        sentence still misled, and the ambiguity is the reason. "Incoming" names a FAMILY here —
+        :meth:`reachable_incoming` and :meth:`turns_to_ko_me` funnel into :meth:`incoming` and carry
+        the same ``context`` — and under that wider reading the census stood at twenty consumer call
+        sites with four threading nothing (``pilot._opponent_target_rows`` and
+        ``pilot._strip_delta_terms``, two clock legs each). ``docs/plans/term-sufficiency-audit.md``
+        F2 read it the wide way, cited this very sentence as an invariant, and concluded
+        ``state_value`` was the lone exception; it was not.
+
+        So a defensible number still rotted into a false reassurance, which is the argument for a
+        PROPERTY — and for asserting it rather than asserting it in prose:
+        ``tests/strategy/test_target_rows_damage_context.py`` walks the consumer modules, fails on
+        any call site that prices no context, keeps an allowlist that is empty today, and carries a
+        positive control so the sweep cannot go quietly blind.
 
         ``charged`` selects the policy — ``None`` = ceiling, the survival read's worst-case."""
         if not oa:

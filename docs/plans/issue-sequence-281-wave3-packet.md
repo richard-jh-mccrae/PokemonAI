@@ -16,6 +16,8 @@ claim as *"this change moved nothing"*.
 
 Issue #281: **zero** flips on either gate.
 Issue #280: **one** leaf flip (above); Decision Gate **PASS, 0 picks moved, 0 rulings moved**.
+Issue #343: **zero** flips on either gate — but read the section below before treating the leaf
+half of that as evidence, because on this surface the leaf gate is blind by construction.
 
 ## `81906755|1|decision|9` — my own Energy raises their damage, and the leaf wants to dump it
 
@@ -114,3 +116,72 @@ selection is explicitly weakness-conditional … if the printed-damage gate is w
 unopposed on these boards, this is the deck where it would show first"* — is now **refuted by
 measurement**: the printed-damage gate was replaced (Issue #281) and the survival clock was made
 damage-aware (Issue #280), and neither touched a single one of the 15. The cause is somewhere else.
+
+## Issue #343 — the reads moved, no decision did, and the leaf gate could not have seen it
+
+`pilot._opponent_target_rows` and `pilot._strip_delta_terms` now thread the THEIRS-direction damage
+context into all four of their clock legs. Both gates are unchanged from the pre-change tree:
+
+| | pre-change | post-change |
+|---|---|---|
+| Discrimination (leaf) | FAIL — 1 unruled, 67 ruled, 3 voided | FAIL — **1 unruled**, 67 ruled, 3 voided |
+| Decision | PASS — agree 250/347, 0 picks moved | PASS — agree **250/347**, **0 picks moved** |
+
+The one unruled leaf flip is Issue #280's `81906755|1|decision|9`, already ruled above. **Issue #343
+adds no flip to either gate and neither baseline was touched.**
+
+### The leaf A/B is 0 of 277 — and that is the instrument, not the change
+
+Against the pre-change tree (not just the committed baseline): **0 of 277 scored leaf rows moved in
+value, 0 in rank, 0 `OK -> MISS`, 0 `MISS -> OK`.** That number must NOT be read as *"this change
+moves nothing"*, because the leaf gate cannot reach this surface:
+
+* `planner._engine_leaf_value` scores `KO_SCORE x state_value(end board)`, and `state_value`'s
+  `threat` family calls `needs.opponent_target_value(prize_advance=…, **survival_shift=0**, phase=…)`
+  with the zero hardcoded (`state_value.py`, and its own `blind_to` says so). It never reads
+  `_opponent_target_rows`' `survival_shift` or `_strip_delta_terms`' `strip_shift`.
+* **Positive control, same lab and same corpus:** Issue #280 landed one commit earlier, on a read
+  `state_value` DOES take, and moved **21 of 277** rows. So the lab demonstrably moves when the
+  change is in its path. The 0 here is attributable to the surface.
+
+So the load-bearing measurement for this issue is the **Decision Gate**, which replays the real
+`decide()` over 372 frames and reports **0 picks moved**.
+
+### What did move: the reads themselves
+
+Read-only replication of both call sites with and without `model.damage_context(attacker="theirs")`
+over the whole corrections corpus — **359 frames** with a live Active and a non-empty opponent board:
+
+| read | frames / bodies whose value changes |
+|---|---|
+| `_opponent_target_rows` base clock | **15** |
+| `_opponent_target_rows` removal Δ (`survival_shift`) | **32** |
+| `_strip_delta_terms` strip Δ (`strip_shift`) | **14** |
+
+**These are NOT the numbers Issue #343's body claims** (20 / 31 / 16 on 358 frames). The measurement
+was re-taken independently for this build and did not reproduce; the issue was self-filed by the
+previous sub-issue's implementer and its measurement section is corrected here rather than repeated.
+Direction check, over the same sweep: **0** base clocks LENGTHENED, as required — a Damage Formula
+scaler only ever adds damage, so learning to price one can only shorten a clock.
+
+Two other claims in that self-filed issue also failed re-verification and are recorded so the
+ledger is not left standing on them:
+
+* its worked example calls frame `82753102|16`'s clock-setter *"their Alakazam"* — the corpus record
+  holds Abra (741) Active with Dunsparce (305) and Abra benched, **no Alakazam in play**;
+* it states that frame's base clock as `6 -> 1` and its removal Δ as `-4 -> 0`. Measured: base
+  **`2 -> 1`**, Δ **`+4 -> 0`**. A removal Δ is `clock(board minus body) - clock(board)` and removing
+  a body can only lengthen my clock, so a negative Δ is **structurally impossible** at that call site.
+
+The issue's central factual claim — that these two sites passed no `context` while their siblings
+did — **is true**, and was re-verified at `git show 764d5b93:src/common/pilot.py` before any code
+moved. Only the surrounding measurements were wrong.
+
+### No developer ruling was owed on the deny half
+
+Issue #343 asks whether `_strip_delta_terms` belongs to Issue #228 (epic Issue #278's ruled-omission
+ledger routes *"energy denial / resource strip (`deny_relevance` dark) → #228"*). It does not, and
+the ledger entry's premise has decayed: **Issue #228 is CLOSED** (`status:4-done`, 2026-07-31) and it
+is the issue that ARMED both switches — `src/common/runtime.py` ships `deny_relevance: True` and
+`deny_strip_delta: True`. Nothing here is dark, there is no live ruling to re-litigate, and this
+change adds no term to `state_value` (which is what that ledger entry governs). Both halves shipped.

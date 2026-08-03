@@ -189,6 +189,19 @@ somebody already typed into a `does_not_read`.
 > both directions). Mega Abomasnow ex's hidden deck scaler is in the corpus too and is deliberately
 > NOT in that count: for a hidden deck the oracle's `bound="max"` leg already assumed every sampled
 > card fuels, with or without a context.
+>
+> **The invariant quoted below no longer reads as quoted — Issue #343.** The quote *"all six
+> Incoming call sites thread the per-decision context"* was **not wrong about its own count**: six
+> consumer calls are spelled `incoming` or `doomed`, and all six thread. It was read HERE as a claim
+> about the whole family that funnels into `incoming` — which is the reading the next sentence,
+> *"`state_value` is the seventh, and it does not"*, depends on — and under that wider reading the
+> census stood at **twenty** consumer call sites with **four** threading nothing. So `state_value`
+> was not the lone exception this finding takes it for: `pilot._opponent_target_rows` and
+> `pilot._strip_delta_terms` were blind on the very axis this finding is about, in the module the
+> sentence pointed at as healthy. Issue #343 threaded both and restated the invariant in
+> `combat.doomed_incoming` as a **property** rather than a number, asserted by
+> `tests/strategy/test_target_rows_damage_context.py` so it cannot rot a third time. This finding's
+> own body is left in its as-audited present tense, as above.
 
 `_exposed_bodies` calls `model.theirs.turns_to_ko_me(b.body, my_benched=…, my_bench=…,
 opp_active=…)` and passes **no `context`**. The hand-size leg reads the hand straight from that

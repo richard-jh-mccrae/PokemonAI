@@ -8658,7 +8658,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # keeps the worst-case energy policy whatever the Read says (ADR-0064 Decision 1 keeps the
         # conservatism per-consumer); taking the snapshot's threaded budget here would silently relax
         # every gust/deny target value behind a matched Brief.
-        clock = dict(bodies=bodies, charged=None, opp_active=opp_active, switch_enabler=enabler)
+        #
+        # `context` is the THEIRS-direction Damage Formula dict, and its omission here was an
+        # OVERSIGHT rather than a second conservatism ruling (Issue #343): the energy policy above
+        # was considered and stated, the scaler context was not named at all. It is not the same
+        # KIND of choice — `charged` picks how much Energy to credit them, while `context` decides
+        # whether a scaling attack is priced AT ALL, and dropping it is not conservative but BLIND
+        # (a variable absent from the context contributes 0, so Powerful Hand read as 0 damage).
+        # `self._opp_attack_context` is `_damage_context(obs, attacker_is_me=False)`, allocated once
+        # per decision by `_board` above, which is the same dict the sibling Incoming reads take.
+        # It goes into `clock` rather than onto each call so the removal Δ below cannot difference a
+        # threaded leg against a blind one — the two legs are one question by construction.
+        clock = dict(bodies=bodies, charged=None, opp_active=opp_active, switch_enabler=enabler,
+                     context=self._opp_attack_context)
         base_t = model.theirs.turns_to_ko_me(ma, **clock)
         # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once for the whole decision
         # rather than per body: which opponent bodies die to our Knock Out this turn, and so deny
@@ -9223,11 +9235,25 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # with the stripped copy spliced in — and both name `_DENY_CHARGED` explicitly, because this
         # Δ is measured under the zero-attach budget and must NOT drift onto the Read's threaded one
         # (see `_DENY_CHARGED` for why the "slow" reading was what gate 1 measured as broken).
+        #
+        # Both legs also name `context` (Issue #343), and for the opposite reason to `_DENY_CHARGED`:
+        # the policy is a per-consumer RULING that this Δ deliberately does not share, while the
+        # context is a per-decision FACT about the board that every consumer must price the same way.
+        # Omitting it did not make the strip read conservative, it made it silent — a scaling
+        # attacker contributed 0, so disarming their real threat priced at nothing. Threading it into
+        # BOTH legs is the one thing that must not be got wrong: the return below differences them,
+        # and a threaded leg minus a blind one is a comparison between two different questions.
+        # `self._opp_attack_context` is `None` on a hand-built board that never went through
+        # `_board`, which reproduces exactly today's reading rather than raising — the same
+        # fail-to-current-behaviour contract `_deny_rows` gives such a caller.
+        ctx = self._opp_attack_context
         base = model.theirs.turns_to_ko_me(ma, bodies=bodies, opp_active=opp_active,
-                                           switch_enabler=enabler, charged=self._DENY_CHARGED)
+                                           switch_enabler=enabler, charged=self._DENY_CHARGED,
+                                           context=ctx)
         after = model.theirs.turns_to_ko_me(ma, bodies=bodies[:i] + [stripped] + bodies[i + 1:],
                                             opp_active=stripped if b is opp_active else opp_active,
-                                            switch_enabler=enabler, charged=self._DENY_CHARGED)
+                                            switch_enabler=enabler, charged=self._DENY_CHARGED,
+                                            context=ctx)
         return {"strip_shift": after - base,                   # BOTH legs under `_DENY_CHARGED` — the
                                                                # caller's `base_t` is the CEILING
                                                                # baseline, and differencing across two
