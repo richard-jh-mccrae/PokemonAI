@@ -8,7 +8,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .correction import Correction, build_correction, identity_key, subject_of
+from .correction import (
+    Correction, build_correction, identity_key, select_min_count, subject_of,
+)
 from .decisions import Decision, iter_decisions
 from .decode import option_label
 from .seats import detect_seat
@@ -90,6 +92,11 @@ def frames_payload(replay: dict, our_team: str | None = None,
             "context": select.get("context"), "type": select.get("type"),
             "taggable": decision is not None,
             "chosen": chosen, "selected_label": selected_label, "options": options,
+            # Whether "take none" is a legal answer here, so the pane can offer a DECLINE at
+            # decision scope (Issue #229). Read through `select_min_count` -- the SAME derivation
+            # `build_correction` validates with, so the pane and the validator cannot disagree, and
+            # `None` (unknown) keeps the pane refusing exactly where the validator would.
+            "min_count": select_min_count(decision.obs) if decision is not None else None,
             "live": live,
         })
 

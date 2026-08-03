@@ -12,6 +12,15 @@ default and the shape ADR-0015 fixed), a whole ply (``turn``), or the whole Epis
 Anchor frame, ``correct`` is optional (and, when given, indexes the **Anchor** -- asserting it is
 the first divergent Decision), and the ``span`` of covered Decisions rides along so the record
 stays self-contained.
+
+At ``decision`` scope ``correct`` is mandatory with ONE exception (Issue #229): an empty ``correct``
+on a **provably optional** select (``minCount == 0``) is a recorded **DECLINE** -- the ruling *"take
+none of these"*, which is the answer an optional select exists to allow. This is not a new encoding:
+``gates.satisfies_human`` has always read an empty ``correct`` as a decline, matched EXACTLY and
+never by subset, at every scope. The reader already spoke the language; only the writer refused it,
+so the corpus could not hold the shape its own grader grades. Where ``minCount`` cannot be read the
+old refusal stands (``select_min_count``) -- an unverifiable decline is the degenerate record this
+narrowness exists to stop.
 """
 from __future__ import annotations
 
@@ -49,6 +58,27 @@ def subject_of(scope: str, decision: dict) -> int | None:
     if scope == "turn":
         return decision.get("turn")
     return None
+
+
+def select_min_count(obs: dict | None) -> int | None:
+    """The Anchor select's ``minCount``, or ``None`` when the record cannot establish it.
+
+    ``Decision`` carries no ``minCount`` field and ``snapshot()`` omits it, so the ONE route to it is
+    the agent observation -- and ``obs`` is ``None``-able (an unreplayable record has none). ``None``
+    therefore means *unknown*, and is deliberately NOT collapsed to 0: a caller that read a missing
+    field as "optional" would admit exactly the unverifiable decline this is here to refuse.
+
+    ``bool`` is excluded because ``True`` is an ``int`` in Python, and a ``minCount`` of ``True``
+    would read as the mandatory 1 by accident rather than as the malformed value it is.
+
+    Not shared with ``gates.records_a_decline_it_cannot_state``, which reads the same field for the
+    opposite job and so needs the opposite fail direction: that predicate only ever REMOVES a frame
+    from grading, so unknown-means-optional is its safe read, while admitting a record is a write and
+    must fail CLOSED. One extraction, two deliberate policies -- collapsing them would silently give
+    the writer the reader's leniency.
+    """
+    value = ((obs or {}).get("select") or {}).get("minCount")
+    return value if isinstance(value, int) and not isinstance(value, bool) else None
 
 
 def identity_key(correction) -> tuple:
@@ -181,7 +211,11 @@ def build_correction(
     Raises ValueError if ``source``/``scope`` is unknown, ``category`` is not in the closed
     vocabulary, or ``correct`` violates the Scope's contract (ADR-0049):
 
-    - ``decision`` — ``correct`` is mandatory and indexes the Anchor's options (ADR-0015).
+    - ``decision`` — ``correct`` indexes the Anchor's options (ADR-0015), and is mandatory EXCEPT as
+      a **DECLINE**: empty is admitted when the Anchor's select is provably optional
+      (``minCount == 0``), recording the ruling *"take none of these"* (Issue #229). Where
+      ``minCount`` cannot be read the record is refused, so this is a strict relaxation — a decline
+      is admitted only where the optional select is proved, never where it is merely assumed.
     - ``turn`` — ``correct`` is optional; when given it indexes the Anchor's options and must
       differ from ``chosen``, since giving it asserts the Anchor is the first divergent Decision.
     - ``match`` — ``correct`` must be empty: no single ``select`` carries a whole-match verdict.
@@ -193,13 +227,22 @@ def build_correction(
     if not is_valid_category(category):
         raise ValueError(f"unknown category {category!r}")
 
+    # Resolved ONCE, and the same value is stored below: validating against the Anchor's own `obs`
+    # while storing an override would admit a record on evidence it does not carry.
+    obs = obs if obs is not None else getattr(decision, "obs", None)
     n_options = len(decision.options)
     if scope == "match":
         if correct:
             raise ValueError("a match-scope Correction cannot name a correct option; "
                              "the intended line belongs in the rationale")
-    elif correct or scope == "decision":     # decision: mandatory; turn: optional but Anchor-indexed
-        if not correct or any(not isinstance(i, int) or i < 0 or i >= n_options for i in correct):
+    elif not correct:                        # turn scope may simply stay silent; decision must PROVE
+        if scope == "decision" and select_min_count(obs) != 0:
+            raise ValueError(
+                f"correct {correct!r} must index legal options 0..{n_options - 1} — an empty "
+                "`correct` is a DECLINE, recordable at decision scope only on a select whose "
+                "obs proves it OPTIONAL (minCount 0)")
+    else:                                    # named: Anchor-indexed at both decision and turn scope
+        if any(not isinstance(i, int) or i < 0 or i >= n_options for i in correct):
             raise ValueError(f"correct {correct!r} must index legal options 0..{n_options - 1}")
         if scope == "turn" and set(correct) == set(decision.chosen):
             raise ValueError(f"correct {correct!r} is what was chosen — a turn-scope prescription "
@@ -224,7 +267,7 @@ def build_correction(
         attribution=attribution,
         rationale=rationale,
         provenance=provenance,
-        obs=obs if obs is not None else getattr(decision, "obs", None),
+        obs=obs,                            # already resolved above — validated and stored are ONE
         agent_build=agent_build,
         built_at=built_at,
         live_trace=live_trace,

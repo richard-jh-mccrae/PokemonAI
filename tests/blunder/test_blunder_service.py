@@ -59,6 +59,19 @@ def test_frames_payload_matches_heroz_film_indexing():
     assert main["frame"] == main["step"] - 1             # POST uses 0-based frame
 
 
+def test_a_taggable_frame_carries_the_selects_min_count(tmp_path):
+    """REQ-BLUNDER-0021: the panel cannot offer a DECLINE it has no way to know is legal. `minCount`
+    lives only in the agent `obs`, so the payload carries it — read from the SAME place
+    `build_correction` validates against, so the button and the validator can never disagree.
+
+    `None` on an untaggable or obs-less frame is the fail-closed signal, not a default of 0."""
+    p = frames_payload(load_replay(FIXTURE))
+    main = next(f for f in p["frames"] if f["context"] == "Main")
+    assert main["min_count"] == 1                        # this fixture's MAIN select is mandatory
+    assert p["frames"][-1]["min_count"] is None          # terminal frame — nothing to establish
+    assert all("min_count" in f for f in p["frames"])     # ...the key is never simply absent
+
+
 def test_list_corrections_filters_by_episode(tmp_path):
     """REQ-BLUNDER-0013: the review list returns this episode's logged Corrections, with ids."""
     log = tmp_path / "c.jsonl"

@@ -3,9 +3,13 @@
 The apply-seam coverage census (`tools/apply_seam_coverage.py`, Issue #269) resolves 11 pool sites
 on the assumption that an Ability reading *"When you play this Pokemon from your hand to evolve 1 of
 your Pokemon / onto your Bench, you may…"* resolves **inside** the `_PLAY` / `_EVOLVE` option rather
-than posing its own `_ABILITY` option on a later menu. The assumption is load-bearing: `_ABILITY` is
-the sole kind `apply_option.ENGINE_ROUTE_KINDS` routes to the engine, so the other answer would move
-all 11 sites onto the engine route and shrink Issue #299's scope.
+than posing its own `_ABILITY` option on a later menu. The assumption was load-bearing when this was
+written: `_ABILITY` was then the sole kind `apply_option.ENGINE_ROUTE_KINDS` routed to the engine, so
+the other answer would have moved all 11 sites onto the engine route and shrunk Issue #299's scope.
+(**Issue #299 has since ruled**: the engine route is open per-option to every declared non-terminal
+kind, so `ENGINE_ROUTE_KINDS` no longer gates and all 11 sites are engine-route eligible where they
+sit. That settles the *stake* this measurement had, not the measurement — where the effect is posed
+is a fact about the engine, and it still decides which OPTION the census files these sites under.)
 
 **No corpus frame settles it** — every one of the 17 `_ABILITY` options in the 372-frame diagnostic
 corpus is an *activated* Ability. So this file measures it against the live engine instead, driving

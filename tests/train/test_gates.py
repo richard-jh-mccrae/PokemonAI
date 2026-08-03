@@ -1072,6 +1072,137 @@ def test_the_leaf_diffs_ruling_moves_and_compared_describe_ONE_population():
     assert d["ruling_moves"] == []                 # ...so the unscorable frame's move is not claimed
 
 
+# ── the Stale Baseline partition — a re-ruling's flip is LABELLED, never excused ─────────────────
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_a_flip_whose_ruling_moved_is_in_BOTH_ok_to_miss_and_stale_baseline():
+    """The defect, in one assertion. `correct_is_top` is FROZEN into each capture and computed under
+    that capture's own `correct`, so when a ruling moves the leaf diff grades its two halves under
+    two different oracles — and prints ``REGRESSED ... OK -> MISS`` about a build that did not move.
+
+    The frame stays in `ok_to_miss` (it still gates, ADR-0110 decision 1) and gains a LABEL
+    saying the reference, not the code, is what changed."""
+    before = _report([{**_row("reruled", "OK"), "correct": [1]}])
+    after = _report([{**_row("reruled", "MISS"), "correct": [2]}])
+    d = leaf_lab_diff(before, after)
+    assert [f["key"] for f in d["ok_to_miss"]] == ["reruled"]
+    assert [f["key"] for f in d["stale_baseline"]] == ["reruled"]
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_a_flip_with_no_ruling_move_is_NOT_labelled_stale():
+    """The positive control's other half: a real regression must not acquire the excuse-shaped label.
+    Same ``correct`` on both sides, so the flip is the agent's."""
+    before = _report([{**_row("real", "OK"), "correct": [1]}])
+    after = _report([{**_row("real", "MISS"), "correct": [1]}])
+    d = leaf_lab_diff(before, after)
+    assert [f["key"] for f in d["ok_to_miss"]] == ["real"]
+    assert d["stale_baseline"] == []
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_a_ruling_move_that_did_not_flip_the_verdict_is_not_a_stale_baseline():
+    """`stale_baseline` is a partition OF `ok_to_miss`, not a second view of `ruling_moves`. A frame
+    re-ruled without its verdict moving has nothing to explain — the gate says nothing about it."""
+    before = _report([{**_row("quiet", "OK"), "correct": [1]}])
+    after = _report([{**_row("quiet", "OK"), "correct": [1, 2]}])
+    d = leaf_lab_diff(before, after)
+    assert d["ruling_moves"] and d["ok_to_miss"] == [] and d["stale_baseline"] == []
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_the_stale_label_NEVER_changes_the_verdict():
+    """ADR-0110 decision 1, asserted structurally rather than by convention. A gate getting
+    quieter as a side effect is the one direction a gate must never move (ADR-0085 Amendment I):
+    excusing these would let a real regression hide behind a same-commit re-ruling.
+
+    `discrimination_gate_verdict` must return the IDENTICAL verdict for the labelled and unlabelled
+    shapes of the same diff — which is what makes this build verdict-neutral by construction, so
+    neither committed baseline is owed a re-capture."""
+    stale = _report([{**_row("k", "MISS"), "correct": [2]}])
+    plain = _report([{**_row("k", "MISS"), "correct": [1]}])
+    base = _report([{**_row("k", "OK"), "correct": [1]}])
+    labelled, unlabelled = leaf_lab_diff(base, stale), leaf_lab_diff(base, plain)
+    assert labelled["stale_baseline"] and not unlabelled["stale_baseline"]
+    for d in (labelled, unlabelled):
+        assert discrimination_gate_verdict(d, held_out={}) is False
+        assert discrimination_gate_verdict(d, held_out={"k": "#230"}) is True
+    # ...and the entries are the SAME objects `ok_to_miss` holds, so "it stays gated" is literal
+    # rather than a parallel list that could drift out of step with it.
+    assert labelled["stale_baseline"][0] is labelled["ok_to_miss"][0]
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_stale_baseline_is_drawn_from_the_same_scorable_population_as_ruling_moves():
+    """The trap `ruling_moves`' `keep` argument exists for, re-checked one key along: a partition
+    naming a frame that `compared` excludes puts two populations in one report."""
+    unscorable = {"key": "u", "correct_is_top": None, "unscorable": True}
+    before = _report([{**_row("s", "OK"), "correct": [1]}, {**unscorable, "correct": [1]}])
+    after = _report([{**_row("s", "MISS"), "correct": [2]}, {**unscorable, "correct": [9]}])
+    d = leaf_lab_diff(before, after)
+    assert d["compared"] == 1
+    assert [f["key"] for f in d["stale_baseline"]] == ["s"]
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_the_decision_gate_is_deliberately_NOT_given_a_stale_baseline_partition():
+    """The asymmetry, asserted rather than asserted-about (ADR-0110 decision 5).
+
+    `decider_lab_diff` resolves ``correct`` from the AFTER capture alone and grades BOTH sides
+    through it, so it never runs two oracles: a re-ruling with an unchanged pick emits no verdict row
+    at all, and a `REGRESSION` beside a ruling move is still the honest claim *"under today's ruling
+    this build is wrong here and the baseline was right"*. Labelling that `stale_baseline` would
+    print the actionable sentence *"re-capture, your reference cannot speak"* over a frame whose
+    reference speaks fine — the mirror image of the defect this issue fixes."""
+    d = decider_lab_diff(_dcap([_drow("k", [0], [0])]), _dcap([_drow("k", [0], [1])]))
+    assert d["rows"] == [] and d["ruling_moves"]          # a re-ruling alone produces no verdict row
+    assert "stale_baseline" not in d
+
+    moved = decider_lab_diff(_dcap([_drow("k", [1], [0])]), _dcap([_drow("k", [0], [1])]))
+    assert [(r["verdict"], r["correct"]) for r in moved["rows"]] == [("REGRESSION", [1])]
+    assert "stale_baseline" not in moved
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_the_stale_readout_names_the_capture_point_and_stays_silent_when_empty(capsys):
+    """A label with no instruction is scenery. The line must say WHERE to re-capture from, because
+    capturing at HEAD bakes the change under test into its own reference — the trap that makes this
+    class of red non-self-correcting."""
+    gates.print_stale_baseline([])
+    assert capsys.readouterr().out == ""
+
+    gates.print_stale_baseline([{"key": "k",
+                                 "before": {"correct": [1], "correct_rank": 1},
+                                 "after": {"correct": [2], "correct_rank": 3}}])
+    out = capsys.readouterr().out
+    assert "STALE BASELINE (1)" in out
+    assert "k" in out and "[1] -> [2]" in out and "1 -> 3" in out
+    assert gates.CAPTURE_POINT in out          # the capture-point instruction, verbatim
+    assert "still gate" in out                 # ...and that it is a label, not an excuse
+
+
+@pytest.mark.req("REQ-GATE-0013")
+def test_the_json_artifact_reports_stale_baseline_as_a_SUBSET_of_ok_to_miss():
+    """The machine-readable half of the same guarantee the readout gives a human.
+
+    `leaf_lab --diff --out` is consumed by `leaf-gate-main.yml`, so `stale_baseline` is a public
+    contract, not an internal field. The property that must hold is **subset**, never difference: a
+    consumer that saw a shrunken `ok_to_miss` would conclude the gate had excused these frames, which
+    is the precise misreading ADR-0110 decision 1 exists to prevent. Asserted on the artifact
+    dict rather than on `leaf_lab_diff`, because the artifact is what leaves the process."""
+    before = _report([_row("clean", "OK"), {**_row("reruled", "OK"), "correct": [1]}])
+    after = _report([_row("clean", "MISS"), {**_row("reruled", "MISS"), "correct": [2]}])
+    d = leaf_lab_diff(before, after)
+
+    ok, stale = [f["key"] for f in d["ok_to_miss"]], [f["key"] for f in d["stale_baseline"]]
+    assert set(stale) < set(ok)                       # STRICT subset: it partitions, never replaces
+    assert sorted(ok) == ["clean", "reruled"] and stale == ["reruled"]
+    # The un-re-ruled flip is NOT relabelled — otherwise the section would explain away a real
+    # regression, which is the failure mode in the opposite direction.
+    assert "clean" not in stale
+
+
 @pytest.mark.req("REQ-GATE-0007")
 def test_the_corpus_reader_over_the_COMMITTED_store_is_the_gates_corpus():
     """The invariant over the real corpus, not a fixture: the Decision Gate replays exactly the

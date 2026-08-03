@@ -50,6 +50,87 @@ option, that option indexes the **Anchor**'s `select.option` (asserting the Anch
 by its Scope's subject, so the same Turn tagged from two frames is one Correction.
 _Avoid_: pivot, mark, point, frame (the film index, not the Decision)
 
+**Decline**:
+A Correction whose `correct` is **empty on purpose** — the ruling *"take none of these"*, which is
+the answer an OPTIONAL select (`minCount == 0`) exists to allow. It is an ordinary ruling, not a
+third state and not silence: `gates.satisfies_human` grades it EXACTLY (see *Satisfying a
+Correction*), so an agent that also declines is satisfied and one that takes an option is not.
+Writable at `turn`/`match` scope from the start and, since **ADR-0111** (Issue #229), at
+`decision` scope too — but only where the record's `obs` PROVES the select optional
+(`correction.select_min_count`); where `minCount` cannot be read the writer still refuses, because an
+unverifiable decline cannot be told apart from a record that failed to state one.
+_Avoid_: pass, skip, no-op, "empty correction" (an absent ruling is `correct: None`, a different
+thing entirely — callers report those as UNLABELLED)
+
+**Unstatable Decline**:
+A Correction that MEANT a **Decline** and could not say so — an OPTIONAL select whose `correct`
+merely repeats the agent's own `chosen`, because before **ADR-0111** `decision` scope refused the
+empty `correct`. It reads *"the pick was right"* and means the opposite; `ep83661652` f3's rationale
+says so in prose while its fields say the reverse. Detected by
+`gates.records_a_decline_it_cannot_state`, narrow in two ways (`minCount == 0`, and `decision` scope
+only — at `turn` scope `correct: []` was always a statable ruling).
+**It is REPORTED, never excluded** (**ADR-0112**, Issue #251): the **Decision Gate** readout's
+`unstatable` section names every such frame and states that it is still **gradeable**, because
+ungrading a frame outlasts the record shape that caused it, and Issue #229 made the record repairable
+instead. Two frames carry it today; neither carries a `turn_plan` and both are `context 2`, so
+neither satisfies either arm of `leaf_lab.is_leaf_frame` and the **Discrimination Gate** has no
+symmetric exposure. The cure is to re-rule the record, not to quieten the gate.
+_Avoid_: excluded / held out / skipped (it is graded exactly like any other frame — those words name
+acts this one deliberately is not), degenerate record (true but says nothing about *what* it cannot
+state), invalid (the record is well-formed; the vocabulary was missing)
+
+**Refused Shape**:
+A **committed** Correction carrying a shape `build_correction` would refuse to *create* — the store
+holding what its own writer forbids. `build_correction` validates at write time; `Correction.from_dict`,
+THE loader and so what the **Corpus Reader** inherits, validates nothing, and that asymmetry is
+deliberate (**ADR-0113**, Issue #256): a validating loader would reject committed records at read
+time and take *both* gates down over a record that has been green for weeks. *Load anything committed,
+refuse to create new bad shapes* is the contract for a store that is also an **archive**.
+`gates.shape_the_constructor_would_refuse` re-applies the writer's rules to a record and
+`gates.refused_shapes` walks the corpus with it; the **Decision Gate** readout's `refused shape`
+section names every hit. **REPORTED, never excluded** — the same ruling the **Unstatable Decline**
+carries, for the same reason: ungrading a frame outlives the record shape that caused it. One record
+carried it until 2026-08-03, `85709280|1|match|` (`ee3191f7c3d6`) — `match` scope naming `correct: [0]`,
+hand-edited past the writer on 2026-07-29 — grading in both gates until the developer repaired it
+(re-scoped to `decision`/subject 51, ADR-0113 Amendment A; the corpus holds zero refused shapes
+today). The `category` vocabulary is deliberately NOT re-applied: it is extensible, so refusing an old
+record over it would report a vocabulary edit as a corpus defect.
+_Avoid_: invalid / corrupt (the record loads, round-trips and grades — it is well-formed as *data*),
+malformed (nearer, but says nothing about *whose* rule it breaks), schema violation (there is no schema
+layer; there is a constructor), unstatable (a different defect — that record's shape is legal, its
+ruling is not sayable)
+
+**Expired Coverage**:
+A `reviewed.json` entry whose justification names a **Rung Vocabulary** id that no longer exists —
+the closure's stated reason is gone, so the claim it makes about the shipped agent has never been
+re-examined (**ADR-0114**, Issue #238). Not a claim the frame is misplayed; a claim that nobody
+has looked since the reason evaporated. `reviewed_audit.stale_entries` finds them and
+`docs/plans/covered-disposition-audit.md` is the generated worklist. **60 today** — 50 `covered`, 7
+`refuted`, 2 `fixed`, 1 `deferred` — over 25 distinct dead rungs, against the 13 Issue #238 derived
+by hand (all 13 are in the 60). **REPORTED, never gating**, the same ruling the **Refused Shape**
+and **Unstatable Decline** carry: the ratchet is `data/corrections/reviewed_audit_allowlist.json`,
+which the flagged set must equal exactly, so a *new* expired closure is red while the standing
+backlog is not. Re-closing a frame is a human ruling about play and is deliberately out of the
+tool's reach.
+_Avoid_: orphaned ruling (**Orphaned Ruling** is an entry naming no *record*; this one names a real
+record and a dead *rule*), stale ruling (the ruling may still be right — what expired is the
+reason), invalid, unreviewed (it WAS reviewed; the review's premise is what went)
+
+**Rung Vocabulary**:
+The three namespaces a hyphenated token in a review note can resolve into, harvested rather than
+listed (**ADR-0114** decision 2): **live** = every `Hypothesis(id=…)` in `src/` (95), **sound
+rule** = every `SoundRule(id=…)` (15, a separate live namespace so its hyphenated ids are never read
+as dead rungs), **retired** = every id that WAS a `Hypothesis(id=…)` in git history and is not one
+now (96). A token in none of the three is **not a rung reference** and is never flagged — the corpus's
+most frequent hyphenated token is `attack-last` (46), which is the Pilot's structural resequencing,
+so a loose `[a-z-]+` scan flags nearly every note. The unresolved count is printed beside the finding
+rather than suppressed. The retired half is CACHED in `data/corrections/rung_vocabulary.json` because
+CI checks out shallow; `load_vocabulary` still widens it with `live_at_capture − live_now`, so a rung
+deleted after the last `--refresh-vocab` is caught with no git at all.
+_Avoid_: rung registry (there is no registry — the vocabulary is derived per run), rung list
+(a *list* is the hand-maintained thing this exists to avoid), hypothesis ids (that is one of the
+three namespaces, not the set)
+
 **Category**:
 The **human** axis of a Correction — *what kind* of mistake the blunder is, picked from a
 closed, extensible vocabulary (`missed_win`, `overextension`, `misattachment`, …).
@@ -217,6 +298,22 @@ as Issue #239. Distinct from `added`/`removed`, which report the *frame* appeari
 reports the *ruling about* a frame moving.
 _Avoid_: re-rule (the human act — this is the instrument's report of it), label change (a
 **Correction**'s `correct` is the ruling, not a label), corpus drift (that is `added`/`removed`)
+
+**Stale Baseline**:
+An `ok_to_miss` flip whose frame is ALSO a **Ruling Move** — `leaf_lab_diff`'s `stale_baseline`
+partition (**ADR-0110**, Issue #230). `correct_is_top` is frozen into each capture under *that
+capture's own* `correct`, so a re-ruling makes the **Discrimination Gate** grade its two halves under
+two oracles and print `REGRESSED … OK → MISS` about a build that did not move. It **names the red, it
+does not excuse it**: the entries are `ok_to_miss`'s own objects, `discrimination_gate_verdict` never
+consults the key, and a gate that gets quieter as a side effect is the one direction a gate must
+never move (ADR-0085 Amendment I). The redness was always right — a stale reference cannot speak —
+and only the explanation was wrong, so the fix is a **label plus a capture point**
+(`gates.CAPTURE_POINT`), not an exemption. Deliberately Discrimination-Gate-only: `decider_lab_diff`
+resolves `correct` from the AFTER capture and grades both sides through it, so it never runs two
+oracles and has nothing to relabel (ADR-0110 decision 5).
+_Avoid_: excused / exempt / held out (it gates exactly as before — those words name real exemptions,
+**Held-out Ledger** and **Voided Ruling**), false red (the red is true; the *reason* was false),
+stale corpus (that is `added`/`removed`)
 
 **Ruling Index**:
 The ONE query that spans every store a ruling can live in — `gates.ruling_index()`, `{Frame Key:

@@ -244,7 +244,26 @@ One machine-readable clause of a Trainer's or Ability's effect — `{kind, amoun
 rider}` — so a multi-clause card is a LIST of clauses (Wally's Compassion = heal(all, Mega-only) +
 bounce-Energy(→hand)). The parametric card-tier counterpart of the attack-tier **Attack Effect**:
 the **Function Tag** stays the coarse boolean *routing trigger* (`heal`), the Effect Clause carries
-the *quantities the math reads* (150 vs 60 vs all; the Energy-discard cost; the Mega-only gate).
+the *quantities the math reads* (150 vs 60 vs all; the Energy-discard cost; the Mega-only gate). The
+two vocabularies **share names on purpose** — `heal`, `draw` and (since Issue #303) `gust` are a tag
+and a clause kind alike — and the split is always that one: the tag says the card pulls a benched
+body Active, the clause says *which* class it may pull (`target: any | basic`) and what rides along
+(`self_switch`, `confuse_target`).
+A clause kind may also delegate its write to an `effect` value instead of carrying one itself: `coin`
+does (the flip is an RNG read; `effect` names the leg it resolves into), and so do Issue #304's
+`stadium_static` / `stadium_trigger`, where `effect` is `hp_delta` / `damage_reduction` /
+`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all three of `kind`, `rider`
+and `effect` for exactly that reason — a kind whose write-set reads empty is not a kind that writes
+nothing.
+A clause's KEYS are audited too (Issue #302, `snapshot_coverage.CLAUSE_PARAMETERS`), and they are a
+separate namespace from the values above: `undeclared_clauses` bites an unknown `kind`/`rider`/
+`effect` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared
+is one nobody reads, and it prices its option at 0 as surely as an undeclared kind does. That axis
+grew three keys with Issue #302's conditional draw Supporters: `to_hand_size` (*"draw until you have
+N in hand"* is a REFILL, so it is mutually exclusive with `amount`), `amount_if` (the second
+magnitude that REPLACES the first when a named board predicate holds — 17 Ignition Energy's
+`amount_on_evolution` generalised), and `cost_required` (failing to pay makes the card UNPLAYABLE,
+which is a different fact from the cost merely being expensive).
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.
@@ -254,18 +273,28 @@ a Clause is the measured, structured fact), effect (unqualified — say which ti
 **Clause-Set Completeness** (`covers`):
 The per-CARD verdict on whether that card's whole list of **Effect Clauses** carries its whole
 printed effect — `full` or `partial` — each verdict quoting the leg the clauses carry or miss. A
-property of the SET, never of one clause: *Surfer* carries `draw 1` and the printed card switches
-your Active first, so no single clause is wrong and the set is still incomplete. It is a hand
+property of the SET, never of one clause: *Judge* carries `draw 4`, which is exactly what it draws
+for me, and the printed card also shuffles the OPPONENT's hand away and redraws it — so no single
+clause is wrong and the set is still incomplete. (*Surfer* was this entry's example until Issue #302
+closed it, which is what a shrink-only owed list looks like from the inside.) It is a hand
 ruling, not a measurement (no parser reads "and then switch"), authored in
 `tools/meta_tracker/effect_overrides.json` under `_covers` and re-stamped verbatim into
 `card_effects.json`. Read two ways: `snapshot_coverage.partial_clause_cards()` reports the owed list
 (asserted **shrink-only**), and `CardEffects.clauses_cover()` hands the apply seam the fail-closed
-tri-state — `partial` and *unruled* both REFUSE, because §3b has no PARTIAL fate and a set that
-models three quarters of a card prices the last quarter at exactly 0, which under 1-ply ordering
-reads as *never explore this* (Issue #300).
+tri-state (Issue #300), which **Issue #299 wired into `apply_option.fate` as `clauses_cover`**:
+`full` resolves MODELLED whatever the option kind says, and `partial` REFUSES a kind the table calls
+MODELLED — because §3b has no PARTIAL fate and a set that models three quarters of a card prices the
+last quarter at exactly 0, which under 1-ply ordering reads as *never explore this*. **`unruled`
+(`None`) does NOT refuse**, and the asymmetry is deliberate: absence of a compendium entry also
+covers *"this option has no printed effect for a clause to cover"* — a vanilla Basic's deploy, a
+Basic Energy attach — which is most of the pool and is structurally MODELLED, so refusing on `None`
+would refuse the transitions the seam exists to provide. Telling *"nothing models this effect"* from
+*"there is no effect"* needs the card's text and is therefore the CALLER's obligation
+(`tools/apply_seam_coverage.py:clauses_cover` is the worked example).
 _Avoid_: coverage (the seam's option-kind table, `apply_option.KIND_COVERAGE` — a different
 question), complete (bare — `Footprint.complete` is the read/write-set's own flag), partial fate
-(there is none: PARTIAL is a report class and a refusal, never a fourth fate)
+(there is none: PARTIAL is a REPORT class, never a fourth fate — a partial set resolves to REFUSED,
+or to ENGINE-RESOLVED when its printed text is deterministic-shaped)
 
 **Transient Effect**:
 A one-turn effect an ATTACK grants — "during your (opponent's) next turn …": a damage shield

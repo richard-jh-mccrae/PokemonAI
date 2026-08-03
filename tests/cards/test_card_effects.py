@@ -9,8 +9,8 @@ import json
 import pytest
 
 from meta_tracker.card_effects import (
-    accumulate_effects, apply_overrides, build_effect_table, classify_effect_clauses,
-    merge_clauses)
+    _union_overrides, accumulate_effects, apply_overrides, build_effect_table,
+    classify_effect_clauses, merge_clauses)
 
 
 def _rec(logs, actor=0, contexts=None):
@@ -179,6 +179,215 @@ def test_shipped_supporter_trainer_coin_and_energy_provide_clauses():
                                   "type": "colorless", "rider": "discard_eot"}               # Ignition
     ultra = eff.clauses(1121)[0]                                                             # Ultra Ball
     assert ultra["target"] == "pokemon" and ultra["cost"] == "discard_2"
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_gust_clauses_carry_the_target_the_trigger_and_the_riders():
+    """Issue #303: the `gust` kind — *"Switch in 1 of your opponent's Benched Pokemon to the Active
+    Spot"* — the highest-exposure family the POC-A2 census refused. All 7 pool sites round-trip
+    override -> build -> `card_effects.json` with the fields the printed cards need, so the mechanic
+    lives in the representation rather than in a text parse or the 5-rung weight ladder it dissolves.
+
+    The load-bearing distinctions, each pinned because dropping one silently under-declares a card:
+    `target` tells Lisia's Appeal (Benched **Basic** only) from the other six; `trigger: on_evolve`
+    is what routes Hariyama's and Hop's Dubwool's clause onto the `_EVOLVE` site the engine actually
+    poses (Issue #305 measured that a triggered Ability rides that option and poses no `_ABILITY` of
+    its own); and a coin-gated gust composes as 1120 Crushing Hammer already does — a `coin` clause
+    whose `effect` NAMES the gust, never a `probability` field on `gust` itself."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.clauses(1182) == ({"kind": "gust", "target": "any"},)             # Boss's Orders
+    assert eff.clauses(674) == ({"kind": "gust", "target": "any", "trigger": "on_evolve",
+                                 "condition": "once_per_turn_ability"},)         # Hariyama
+    assert eff.clauses(310) == ({"kind": "gust", "target": "any",
+                                 "trigger": "on_evolve"},)                       # Hop's Dubwool
+    assert eff.clauses(1088) == ({"kind": "gust", "target": "any",
+                                  "rider": "self_switch"},)                      # Prime Catcher
+    assert eff.clauses(1204) == ({"kind": "gust", "target": "basic",
+                                  "rider": "confuse_target"},)                   # Lisia's Appeal
+    assert eff.clauses(1218) == ({"kind": "gust", "target": "any", "rider": "self_switch",
+                                  "name_family": "Team Rocket's"},)              # TR Giovanni
+    assert eff.clauses(1124) == ({"kind": "coin", "effect": "gust",
+                                  "target": "any"},)                             # Pokemon Catcher
+    # The completeness verdicts ride with them. Five carry the whole printed card; the two that do
+    # not are RULED incomplete rather than left unruled — the undecided `Team Rocket's` name family
+    # (the 1115 / 1134 / 1215 / 1220 ruling) and the coin stating a 50/50 as a certainty (1120's).
+    assert [eff.covers(c) for c in (1182, 674, 310, 1088, 1204)] == ["full"] * 5
+    assert eff.covers(1218) == "partial" and eff.clauses_cover(1218) is False
+    assert eff.covers(1124) == "partial" and eff.clauses_cover(1124) is False
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_stadium_clauses_carry_the_effect_the_magnitude_and_the_body_predicate():
+    """Issue #304: `stadium_static` and `stadium_trigger`. Six pool Stadiums round-trip override ->
+    build -> `card_effects.json`, each with the fields its printed text needs.
+
+    Two kinds rather than one, because the 22 Stadiums in the pool are five unrelated effect shapes
+    wearing a single card type — one `stadium` kind would be a union of everything or a lie. Neither
+    kind carries a write-set; the clause's `effect` does, which is 1120 Crushing Hammer's shape.
+
+    The load-bearing fields, each pinned because dropping one silently mis-states a card:
+
+    * `amount` is **SIGNED** — Gravity Mountain is −30 HP and Lively Stadium is +30, and an unsigned
+      read would turn the pool's one Stadium that *shrinks* Stage 2s into one that grows them.
+    * `symmetric` is on all six: every one prints *"both yours and your opponent's"*, so a Stadium I
+      play helps my opponent too, and pricing my own half alone would make every Stadium look free.
+    * `timing` carries the Weakness/Resistance ORDER the two damage modifiers print, which decides
+      whether the ×2 lands on the modified number or the printed one.
+    * `on: "bench_play"` is Risky Ruins' trigger EVENT, and it is deliberately **not** spelled
+      `trigger`: that key routes a clause to a SITE (`on_evolve` / `on_bench_play` / `on_attach`),
+      and using it here would file this clause on an option the engine never poses for a Stadium —
+      which would orphan it and silently un-cover the card."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.clauses(1252) == ({"kind": "stadium_static", "effect": "hp_delta", "amount": -30,
+                                  "applies_to": "stage2", "symmetric": True},)   # Gravity Mountain
+    assert eff.clauses(1251) == ({"kind": "stadium_static", "effect": "hp_delta", "amount": 30,
+                                  "applies_to": "basic", "symmetric": True},)    # Lively Stadium
+    assert eff.clauses(1244) == ({"kind": "stadium_static", "effect": "damage_reduction",
+                                  "amount": 30, "applies_to": "metal",
+                                  "source": "opponent_attack",
+                                  "timing": "after_weakness_resistance",
+                                  "symmetric": True},)                           # Full Metal Lab
+    assert eff.clauses(1255) == ({"kind": "stadium_static", "effect": "damage_boost", "amount": 30,
+                                  "applies_to": "name_family", "name_family": "Hop's",
+                                  "target": "opponent_active",
+                                  "timing": "before_weakness_resistance",
+                                  "symmetric": True},)                           # Postwick
+    assert eff.clauses(1247) == ({"kind": "stadium_static", "effect": "prevent_damage",
+                                  "applies_to": "no_rule_box", "source": "opponent_attack",
+                                  "source_class": "ex_or_v",
+                                  "symmetric": True},)                        # Neutralization Zone
+    assert eff.clauses(1260) == ({"kind": "stadium_trigger", "on": "bench_play",
+                                  "effect": "damage_counters", "amount": 2,
+                                  "applies_to": "basic_non_dark", "symmetric": True},)  # Risky Ruins
+    # All six carry their whole printed card. The two predicates that could have been ruled
+    # `partial` are not, and each defers to a verdict already shipped for the SAME predicate rather
+    # than being decided fresh here: 1247's `no_rule_box` is what 1152 Poke Pad is ruled `full` on,
+    # and its discard-pile sentence is 1096 Poke Vital A's *"a property of the card once it is in the
+    # discard"*. 1255's `Hop's` family is decided by `name_in_family`'s prefix test over a body
+    # ALREADY IN PLAY, which that function's own docstring separates from Issue #301's hidden-deck
+    # question — the reason 1115 / 1134 / 1215 / 1220 are `partial`.
+    assert [eff.covers(c) for c in (1244, 1247, 1251, 1252, 1255, 1260)] == ["full"] * 6
+    assert all(eff.clauses_cover(c) is True for c in (1244, 1247, 1251, 1252, 1255, 1260))
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best_case():
+    """**Issue #302.** The 14 draw Supporters whose committed clause was a flat count where the
+    printed card is conditional — the worst-served family in the apply-seam census.
+
+    Every one of them was PROBE-MEASURED, never authored: `classify_effect_clauses` counts the
+    actor's DRAW logs and this module's header already says a conditional count *"resolves to the
+    best observed case"*, so a long game that organically hit Lacey's prize-bonus mode measured 8 and
+    shipped 8 as if it were the base. A measurement of ONE resolution cannot state a card whose count
+    depends on the board, which is why these are overrides now.
+
+    The three shapes, each pinned because dropping one restores a specific lie:
+
+    * `to_hand_size` — *"draw cards until you have N in your hand"* is a REFILL. It is mutually
+      exclusive with `amount`, asserted below, because the number of cards drawn is not knowable
+      until resolution and an `amount` beside it would invite a reader to take the wrong one.
+    * `amount_if` — the second magnitude REPLACES the first (*"draw 8 cards instead"*), and its
+      predicate is named rather than hard-coded, generalising 17 Ignition Energy's shipped
+      `amount` + `amount_on_evolution`. `hand_size_10_plus_after_draw` carries the *after* in its
+      name on purpose: Billy & O'Nare prints *"Draw 2 cards. Then, if you have 10 or more…"*, so a
+      reader testing the PRE-play hand fires the bonus two cards early.
+    * `cost_required` — that failing to pay makes the card UNPLAYABLE, which is a different fact from
+      the cost merely being expensive. 1121 Ultra Ball's `discard_2` is the expensive kind and
+      deliberately carries no such flag.
+
+    The two coin cards keep `kind: "draw"` rather than 1120 Crushing Hammer's `kind: "coin"`, for a
+    mechanical reason asserted below: `_union_overrides` replaces measured clauses BY KIND, so a
+    `coin`-kinded override would leave the probe's measured `draw` clause standing beside it and the
+    compendium would claim the card draws twice."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    # (1) the conditional second tier — the base, then the magnitude that replaces it
+    assert eff.clauses(1227) == ({"kind": "draw", "amount": 6,                # Lillie's Determination
+                                  "amount_if": {"condition": "exactly_6_prizes_remaining",
+                                                "amount": 8},
+                                  "rider": "shuffle_own_hand_in"},)
+    assert eff.clauses(1199) == ({"kind": "draw", "amount": 4,                             # Lacey
+                                  "amount_if": {"condition": "opp_3_or_fewer_prizes", "amount": 8},
+                                  "rider": "shuffle_own_hand_in"},)
+    assert eff.clauses(1181) == ({"kind": "draw", "amount": 2,                    # Billy & O'Nare
+                                  "amount_if": {"condition": "hand_size_10_plus_after_draw",
+                                                "amount": 4}},)
+    # (2) refill-to-N, never draw-N — and `amount` is absent, not merely different
+    assert eff.clauses(1239) == ({"kind": "draw", "to_hand_size": 5},)                     # Naveen
+    assert eff.clauses(1216) == ({"kind": "draw", "to_hand_size": 5,           # TR Ariana, 5 or 8
+                                  "amount_if": {"condition": "all_own_pokemon_team_rocket",
+                                                "to_hand_size": 8}},)
+    assert eff.clauses(1203) == ({"kind": "draw", "to_hand_size": 5,                       # Surfer
+                                  "rider": "self_switch"},)
+    for refill in (1203, 1208, 1216, 1239):
+        assert "amount" not in eff.clauses(refill)[0], refill
+    # (3) a cost that GATES playability, and one that merely charges for it
+    assert eff.clauses(1208) == ({"kind": "draw", "to_hand_size": 6,           # Iris's Fighting Spirit
+                                  "cost": "discard_1", "cost_required": True},)
+    assert eff.clauses(1200) == ({"kind": "draw", "amount": 4,                             # Kofu
+                                  "cost": "bottom_2", "cost_required": True},)
+    assert eff.clauses(1192) == ({"kind": "draw", "amount": 5, "cost": "discard_hand"},)   # Carmine
+    assert "cost_required" not in eff.clauses(1121)[0]                                 # Ultra Ball
+    # Morty's Conviction states NO magnitude: one card per opponent BENCHED Pokemon is a board-scaled
+    # count no clause field expresses, and the fail-closed silence is the point — the flat 3 the
+    # probe measured was a number the card never prints.
+    assert eff.clauses(1187) == ({"kind": "draw", "cost": "discard_1", "cost_required": True},)
+    # The coin pair — `kind: "draw"`, so the override replaces the measured draw rather than
+    # doubling it, with the heads leg as the base and the tails leg as the replacement.
+    assert eff.clauses(1223) == ({"kind": "draw", "amount": 5,                          # Harlequin
+                                  "amount_if": {"condition": "coin_tails", "amount": 3},
+                                  "rider": "shuffle_both_hands"},)
+    assert eff.clauses(1237) == ({"kind": "draw", "amount": 6,                             # Lucian
+                                  "amount_if": {"condition": "coin_tails", "amount": 3},
+                                  "rider": "both_hands_to_bottom"},)
+    assert all(c["kind"] == "draw" and len(eff.clauses(cid)) == 1
+               for cid in (1223, 1237) for c in eff.clauses(cid))
+    # Judge gains the rider its own count never needed; Unfair Stamp is UNCHANGED — its own leg was
+    # already exact, which is why it is in the issue's 14 for the opponent leg alone.
+    assert eff.clauses(1213) == ({"kind": "draw", "amount": 4,                              # Judge
+                                  "rider": "shuffle_both_hands"},)
+    assert eff.clauses(1080) == ({"kind": "draw", "amount": 5,                     # Unfair Stamp
+                                  "condition": "pokemon_ko_last_turn",
+                                  "rider": "shuffle_both_hands"},)
+    # Eight of the 14 now carry the whole printed card. The six that do not are RULED incomplete
+    # with the leg named: four for the SYMMETRIC opponent redraw (a `state_value` term the POC does
+    # not have), Naveen for its optional pre-discard, Morty's for the board-scaled count.
+    assert [eff.covers(c) for c in (1181, 1192, 1199, 1200, 1203, 1208, 1216, 1227)] == ["full"] * 8
+    for still_partial in (1080, 1187, 1213, 1223, 1237, 1239):
+        assert eff.covers(still_partial) == "partial", still_partial
+        assert eff.clauses_cover(still_partial) is False, still_partial
+    # Two cards OUTSIDE the issue's 14 move with them, because one store cannot hold two verdicts
+    # for one shape: 1214 Emcee's Hype is 1199 Lacey's predicate exactly, and 1206 Larry's Skill
+    # prints 1192 Carmine's *"Discard your hand"* sentence and was ruled partial for the lack of the
+    # very field this issue mints. Larry's repeats the cost on all three legs, which is 1092 Secret
+    # Box's shipped shape for one cost paid once across a multi-leg find.
+    assert eff.clauses(1214) == ({"kind": "draw", "amount": 2,
+                                  "amount_if": {"condition": "opp_3_or_fewer_prizes", "amount": 4}},)
+    assert [c["cost"] for c in eff.clauses(1206)] == ["discard_hand"] * 3
+    assert [eff.covers(c) for c in (1206, 1214)] == ["full", "full"]
+    assert [c["cost"] for c in eff.clauses(1092)] == ["discard_3"] * 4               # the precedent
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_a_coin_kinded_override_would_leave_the_measured_draw_clause_standing():
+    """The measurement behind the ruling above, made executable rather than asserted in prose.
+
+    `_union_overrides` keeps every measured clause whose `kind` is not among the override's kinds. So
+    a `{"kind": "coin", "effect": "draw"}` override over Harlequin's probe-measured `{"kind": "draw",
+    "amount": 5}` ships BOTH — a compendium claiming the card draws twice. Keeping `kind: "draw"`
+    replaces it, which is why the coin rides as `amount_if` instead of as the clause kind."""
+    measured = [{"kind": "draw", "amount": 5}]
+    as_coin = _union_overrides(measured, [{"kind": "coin", "effect": "draw", "amount": 5}])
+    assert len(as_coin) == 2 and {c["kind"] for c in as_coin} == {"coin", "draw"}
+    as_draw = _union_overrides(measured, [{"kind": "draw", "amount": 5,
+                                           "amount_if": {"condition": "coin_tails", "amount": 3}}])
+    assert as_draw == [{"kind": "draw", "amount": 5,
+                        "amount_if": {"condition": "coin_tails", "amount": 3}}]
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
@@ -411,12 +620,16 @@ def test_the_covers_block_is_not_mistaken_for_a_cards_clauses(tmp_path):
 
 @pytest.mark.req("REQ-EFFECT-0018")
 def test_the_shipped_compendium_rules_every_clause_bearing_card(tmp_path):
-    """The artifact itself, not a fixture. Every card with clauses carries a verdict, and the two
-    named holes Issue #300 was opened for are the ones asserted: Surfer's switch and Crushing
-    Hammer's coin both declare PARTIAL rather than passing as complete."""
+    """The artifact itself, not a fixture. Every card with clauses carries a verdict.
+
+    Issue #300 was opened on two named holes, Surfer's switch and Crushing Hammer's coin. Issue #302
+    closed the first — the switch is now the `self_switch` rider — so the PARTIAL example here is
+    Judge, whose symmetric opponent redraw is a declared unknown rather than unfinished work. The
+    coin is unchanged and stays the standing precedent."""
     from pathlib import Path
     from common.effects import CardEffects
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
-    assert eff.covers(1203) == "partial" and eff.clauses_cover(1203) is False   # Surfer
+    assert eff.covers(1213) == "partial" and eff.clauses_cover(1213) is False   # Judge
     assert eff.covers(1120) == "partial" and eff.clauses_cover(1120) is False   # Crushing Hammer
     assert eff.covers(1121) == "full" and eff.clauses_cover(1121) is True       # Ultra Ball
+    assert eff.covers(1203) == "full" and eff.clauses_cover(1203) is True       # Surfer, Issue #302

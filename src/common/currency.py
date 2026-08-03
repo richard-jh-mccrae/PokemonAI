@@ -150,10 +150,11 @@ DEPLOY_WORTH_SCALE = max(_ROLE_TIER.values())     # == 30.0 (win_condition / pri
 #: was wrong by ~8x and endorsed feeding a 3-prize body to save a 40-point band: same species of
 #: number, but this one is checked against recorded frames rather than asserted.
 #:
-#: One bound the corpus supplies directly (ADR-0086 amendment D, frame `85709280|1|match|`): the
-#: human ruled Lillie's Determination (`dig-before-commit`, +20) OVER a redundant second Solrock
-#: into the last Bench slot, so `DEPLOY_BAND x relevance(that Solrock) < 20`. Weak — the relevance
-#: should be ~0 on that board anyway — but real, and gated.
+#: One bound the corpus supplies directly (ADR-0086 amendment D, frame `85709280|1|decision|51` —
+#: `85709280|1|match|` until ADR-0113 Amendment A re-scoped it, same record): the human ruled Lillie's
+#: Determination (`dig-before-commit`, +20) OVER a redundant second Solrock into the last Bench slot,
+#: so `DEPLOY_BAND x relevance(that Solrock) < 20`. Weak — the relevance should be ~0 on that board
+#: anyway — but real, and gated.
 DEPLOY_BAND = 25.0
 
 

@@ -42,8 +42,10 @@ Sites are derived structurally, never from a card's name:
 Whether a card's Effect Clauses cover its **whole** printed effect is not mechanically decidable —
 `Surfer` carries a `draw` clause and the printed card also switches the Active, and no parser reads
 that. It is a hand ruling, one per clause-bearing card, each quoting the leg the clauses miss, and it
-is the report's highest-value column: a PARTIAL clause set is **worse than none**, because §3b
-resolves it to MODELLED and the omitted leg then prices at exactly 0 — the §3c failure, silently.
+is the report's highest-value column. A PARTIAL clause set used to be **worse than none**, because
+§3b resolved it to MODELLED and the omitted leg then priced at exactly 0 — the §3c failure, silently.
+Issue #299 wired the verdict into `fate` as `clauses_cover`, so a partial set now refuses; the column
+survives because it still names the WORK, and because the seam reads the same store to decide it.
 
 The ruling was a table in THIS file until Issue #300 moved it into the compendium
 (`card_effects.json`'s `_covers` block, authored in `effect_overrides.json`), where the apply seam
@@ -88,13 +90,26 @@ BEGIN = "<!-- BEGIN GENERATED: tools/apply_seam_coverage.py -->"
 END = "<!-- END GENERATED -->"
 
 # ── report classes ────────────────────────────────────────────────────────────────────────────────
-# The three FATES are `seam.FATES`, imported rather than re-spelled. MODELLED is reported split,
-# because the split is the finding: the seam's own table cannot tell the two apart.
+# The three FATES are `seam.FATES`, imported rather than re-spelled. These four classes are the
+# report's own taxonomy on top of them: they partition the sites, and they split MODELLED by whether
+# the clause set is COMPLETE, because that split is what the fate alone cannot show.
 
 #: MODELLED, and the Effect Clauses cover the whole printed effect.
 FULL = "modelled-full"
-#: MODELLED **as far as §3b is concerned**, but the clauses cover only part of the printed effect.
-#: The uncovered leg differences to 0, which at ordering time reads as "no value here".
+#: The clauses cover only PART of the printed effect.
+#:
+#: This used to mean *"MODELLED as far as §3b is concerned"* — the seam had no `clauses_cover` gate,
+#: so a partial set priced as a complete one and the uncovered leg differenced to exactly 0. Issue
+#: #300 declared the verdict and **Issue #299 wired it**: a partial set now reaches `fate` as
+#: `clauses_cover=False`, which fails closed, so these sites are REFUSED (or engine-route candidates)
+#: rather than MODELLED. The class survives the ruling because it names WORK — complete the clause
+#: set — that is distinct from "no compendium entry at all". The WIRE VALUE survives unrenamed for
+#: the same reason `apply_option.ENGINE_ROUTE_KINDS` does: it is the report's stable row identity,
+#: printed in four committed tables, in the `### MODELLED-PARTIAL` heading `_partial_rows` splits on,
+#: and quoted by three queued sibling issues (Issue #302 / #303 / #304). Renaming it silently would
+#: move all of those; the honest alternative taken here is to say plainly, at the definition and
+#: directly under the heading, that these no longer resolve to MODELLED — and to print each row's
+#: actual `fate` beside it so no reader has to infer it from the label.
 PARTIAL = "modelled-partial"
 
 #: REFUSED causes, per the issue's grouping. Each has a different fix, which is the whole point of
@@ -430,55 +445,84 @@ def refusal_cause(text: str, *, rng_refuses: bool) -> str:
     return ""
 
 
+#: Stands in for a live `_search_api` when this census asks the seam for a fate. The census measures
+#: *"which fate would this option reach if the caller wired an engine and could prove determinism?"*,
+#: which is why ENGINE-RESOLVED here is an upper bound — see the report's Method section.
+_ENGINE_SEAM = object()
+
+
+def clauses_cover(site: Site, covers: dict[int, dict]) -> bool | None:
+    """The tri-state `apply_option.fate` takes for ``clauses_cover``, for one site.
+
+    This is the one place the census **extends** the seam rather than mirroring it, and the extension
+    is the per-OPTION judgement `fate` explicitly leaves to its caller: `None` from
+    `CardEffects.clauses_cover` means *absence of a compendium entry*, which covers both **"this
+    option has no printed effect at all"** (structural — a vanilla Basic's deploy, a Basic Energy
+    attach) and **"this card HAS an effect and nothing models it"**. Those two must not resolve alike:
+    the first is MODELLED by construction, the second is precisely the coverage gap this report
+    exists to count. The census can tell them apart because it holds the card's effect text, so it
+    answers `None` only for the structural case and `False` for the uncovered one.
+
+    `True` / `False` for a card that IS ruled come straight from the compendium's `_covers` verdict —
+    one store (see this module's header), never a second copy of the ruling."""
+    if not site.has_effect:
+        return None
+    judged = _covers_class(covers.get(site.card_id)) if site.clauses else None
+    if judged is None:
+        return False
+    return judged[0] == FULL
+
+
 def resolve(site: Site, covers: dict[int, dict]) -> Site:
     """Resolve one site to a §3b fate plus a reported class and, when refused, a cause.
 
-    Mirrors `apply_option.fate` exactly where that function decides, and extends it only where the
-    seam explicitly defers to T4 — the per-OPTION effect inside a MODELLED kind, which
-    `apply_option.refuse(..., scope=OPTION_SCOPE)` documents but does not (and at T0 cannot) decide.
+    **Calls `apply_option.fate` rather than re-deriving it** (Issue #299). It could not before: the
+    fate was a kind-table lookup plus an engine gate on two inputs nothing produces today, so a
+    literal call answered REFUSED for every engine-route option and the census had to mirror the
+    logic by hand. Now that `fate` takes the per-option `clauses_cover`, the census supplies the two
+    judgements it is entitled to make and asks the seam for the answer — so the two cannot drift, and
+    the report cannot claim a fate the seam would not return.
+
+    The two supplied judgements, both fail-CLOSED (ADR-0067's yield convention):
+
+    * ``clauses_cover`` — :func:`clauses_cover` above.
+    * ``deterministic`` — judged from the printed text: any shuffle, deck read, coin, reveal, prize
+      or opponent-judgement marker means *not proved*. **Absence of a marker is not a proof**, which
+      is why ENGINE-RESOLVED in this report means *eligible and candidate-deterministic* — an upper
+      bound, and every table that carries it says so.
 
     ``covers`` is the compendium's own verdict block (:func:`load_covers`) — passed in rather than
     read here, so this stays pure and the report cannot consult a different store than the seam.
     """
     how = seam.coverage(site.kind)
-
-    if how == seam.ENGINE_RESOLVED:
-        # Only `_ABILITY` lands here. The gate is a PROOF of determinism, so anything touching RNG,
-        # a hidden zone or the opponent's judgement refuses fail-closed — and note that a complete
-        # clause set does NOT rescue it: `fate()` never returns MODELLED for a kind the table routes
-        # to the engine. RNG counts against it here and only here: on a MODELLED kind a shuffle is
-        # priced as a distribution by `deck_odds`, but the engine route's gate is a determinism
-        # PROOF, so the same text refuses.
-        site.cause = refusal_cause(site.text, rng_refuses=True)
-        site.fate = seam.REFUSED if site.cause else seam.ENGINE_RESOLVED
-        if site.fate == seam.REFUSED and site.clauses and _covers_class(covers.get(site.card_id)):
-            site.note = ("clause-complete but UNREACHABLE: `_ABILITY` is routed to the engine, and "
-                         "the engine route refuses this")
-        site.report_class = site.fate
-        return site
-
-    if how != seam.MODELLED:
-        site.fate, site.cause = seam.REFUSED, GAP
-        site.report_class = seam.REFUSED
-        site.note = f"option kind {site.kind} is {how} in `KIND_COVERAGE`"
-        return site
-
-    if not site.has_effect:
-        site.fate, site.report_class = seam.MODELLED, FULL
-        site.note = "structural: the transition is the same shape for every card of the kind"
-        return site
-
     judged = _covers_class(covers.get(site.card_id)) if site.clauses else None
-    if judged:
-        site.fate = seam.MODELLED
-        site.report_class, site.note = judged
+    blocked = refusal_cause(site.text, rng_refuses=True)
+
+    site.fate = seam.fate({"type": site.kind}, depth=0, search_api=_ENGINE_SEAM,
+                          deterministic=not blocked, clauses_cover=clauses_cover(site, covers))
+
+    if site.fate == seam.MODELLED:
+        site.report_class = FULL
+        site.note = judged[1] if judged else (
+            "structural: the transition is the same shape for every card of the kind")
         return site
 
-    # No clause covers this site's effect: a per-option refusal inside a MODELLED kind. RNG does
-    # NOT count against it — a closed-form transition prices a shuffle as a distribution — so the
-    # residue is a vocabulary gap.
-    site.fate, site.report_class = seam.REFUSED, seam.REFUSED
-    site.cause = refusal_cause(site.text, rng_refuses=False) or GAP
+    # A PARTIAL clause set keeps its own report row whatever fate it now reaches. The fate moved in
+    # Issue #299 — a partial set is `clauses_cover=False`, so it no longer prices as a complete one —
+    # but the WORK it names did not: complete the clauses. Reporting it as an undifferentiated
+    # refusal would merge it with cards that have no compendium entry at all, and those are a
+    # different backlog. The `fate` column beside it carries where it actually landed.
+    partial = bool(judged) and judged[0] == PARTIAL
+    site.report_class = PARTIAL if partial else site.fate
+    if partial:
+        site.note = judged[1]
+
+    if site.fate == seam.REFUSED:
+        # RNG counts against the ENGINE route (a determinism PROOF) but NOT against a closed-form
+        # transition on a MODELLED kind, where a shuffle prices as a `deck_odds` distribution and §3
+        # already says a search-reveal returns an `Expectation`. So the same text is a vocabulary gap
+        # on `_PLAY` and a structural nondeterminism refusal on `_ABILITY`.
+        site.cause = refusal_cause(site.text, rng_refuses=how != seam.MODELLED) or GAP
     return site
 
 
@@ -654,6 +698,9 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     """The report's DATA sections. The verdict prose lives in `apply-seam-coverage.md`."""
     L: list[str] = []
     add = L.append
+    # Derived, never spelled: a sixth agent deck landed on main (`hydrapple`) and every table header
+    # reading "our 5 decks" became a lie the moment it did.
+    n_decks = len(decks)
 
     # Name and predicate agree, and the invariant that used to be an `or` clause is asserted
     # instead: a site with no card effect is structural, and structural is MODELLED-FULL by
@@ -698,6 +745,14 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         "that would promote them is a determinism PROOF, not a clause kind — a different backlog "
         "from the refusals below.")
     add("")
+    add("**Issue #299's ruling is live in these numbers.** The engine route is no longer gated by "
+        "`ENGINE_ROUTE_KINDS`; it is open per-option to every declared non-terminal kind, and a "
+        "COMPLETE clause set now resolves MODELLED whatever the kind table says. Two movements "
+        "follow, in opposite directions, and both are the ruling working as intended: every "
+        "deterministic-shaped refusal on a MODELLED kind became an engine-route candidate, and every "
+        "PARTIAL clause set stopped counting as MODELLED — `clauses_cover=False` fails closed, which "
+        "is the entire reason Issue #300 declared the verdict.")
+    add("")
     rows = []
     for fate in (seam.MODELLED, seam.ENGINE_RESOLVED, seam.REFUSED):
         n = by_fate.get(fate, 0)
@@ -705,13 +760,19 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
                      f"{wsum(lambda s, f=fate: s.fate == f, ours)}",
                      _pct(wsum(lambda s, f=fate: s.fate == f, ours), sum(ours.values())),
                      f"{wsum(lambda s, f=fate: s.fate == f, meta):.1f}"])
-    add(_table(rows, ["fate", "sites", "% sites", f"copies in our {len(decks)} decks", "% our copies",
+    add(_table(rows, ["fate", "sites", "% sites", f"copies in our {n_decks} decks", "% our copies",
                       "meta-weighted copies"]))
     add("")
-    add("MODELLED splits — and the seam's own table cannot tell the two apart:")
+    add("The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, "
+        "which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is "
+        "`clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its "
+        "uncovered leg at 0:")
     add("")
-    add(_table([[f"**{c}**", by_class.get(c, 0), _pct(by_class.get(c, 0), len(sites))]
-                for c in (FULL, PARTIAL)], ["class", "sites", "% sites"]))
+    add(_table([[f"**{c}**", by_class.get(c, 0), _pct(by_class.get(c, 0), len(sites)),
+                 ", ".join(f"{f} {n}" for f, n in sorted(
+                     collections.Counter(s.fate for s in sites
+                                         if s.report_class == c).items()))]
+                for c in (FULL, PARTIAL)], ["class", "sites", "% sites", "fate now"]))
     add("")
 
     add("The copy columns above sum over SITES, so a card with two of them (a Pokemon that both "
@@ -727,7 +788,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         rows.append([f"**{cls}**", n_cards, _pct(n_cards, len(worst)), n_ours,
                      _pct(n_ours, sum(ours.values())), f"{n_meta:.1f}",
                      _pct(n_meta, sum(meta.values()))])
-    add(_table(rows, ["worst site on the card", "cards", "% cards", f"copies in our {len(decks)} decks",
+    add(_table(rows, ["worst site on the card", "cards", "% cards", f"copies in our {n_decks} decks",
                       "% our copies", "meta copies", "% meta copies"]))
     add("")
 
@@ -744,7 +805,8 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add(_table(rows, ["fate", "sites", "% effect-bearing sites"]))
     add("")
     add(_table([[f"**{c}**", eff_class.get(c, 0), _pct(eff_class.get(c, 0), len(effect_bearing))]
-                for c in (FULL, PARTIAL)], ["MODELLED split", "sites", "% effect-bearing sites"]))
+                for c in (FULL, PARTIAL)],
+               ["clause-completeness split", "sites", "% effect-bearing sites"]))
     add("")
 
     add("### REFUSED, grouped by cause and ranked by exposure")
@@ -756,7 +818,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         if not group:
             continue
         n_ours = sum(ours.get(s.card_id, 0) for s in group)
-        add(f"#### {cause} — {len(group)} sites, {n_ours} copies across our {len(decks)} decks")
+        add(f"#### {cause} — {len(group)} sites, {n_ours} copies across our {n_decks} decks")
         add("")
         add(_table([[s.card_id, s.name, s.label, ours.get(s.card_id, 0),
                      f"{meta.get(s.card_id, 0.0):.2f}", s.family,
@@ -773,6 +835,12 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         "knows the shape. A NEW-VOCABULARY gap needs a clause kind, a write-set in "
         "`snapshot_coverage.CLAUSE_WRITES`, and a transition in T4. Reporting them as one pile "
         "would put a day of work and a quarter of it in the same number.")
+    add("")
+    add("**Since Issue #299 this table also counts the MODELLED-PARTIAL sites**, because a partial "
+        "clause set now refuses rather than pricing as a complete one — so `fetch` and `draw` rows "
+        "here are larger than they were pre-ruling, and the growth is cards whose clauses exist but "
+        "are incomplete, not cards with no entry at all. The MODELLED-PARTIAL section below names "
+        "them individually with the leg each one misses.")
     add("")
     gap = [s for s in refused if s.cause == GAP]
     fam = collections.defaultdict(lambda: [0, 0, 0.0, False])
@@ -800,13 +868,20 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
         ["deterministic-shaped (no RNG / hidden-zone marker)", len(det),
          sum(ours.get(s.card_id, 0) for s in det),
          f"{sum(meta.get(s.card_id, 0.0) for s in det):.1f}",
-         "would be ENGINE-RESOLVED if a MODELLED kind had an engine route — AMBIGUOUS #1"],
+         "**emptied by Issue #299** — a deterministic-shaped option on any declared non-terminal "
+         "kind now reaches the engine route, so it is an ENGINE-RESOLVED candidate above rather "
+         "than a refusal here"],
         ["RNG-shaped (shuffle / deck read / coin)", len(rng),
          sum(ours.get(s.card_id, 0) for s in rng),
          f"{sum(meta.get(s.card_id, 0.0) for s in rng):.1f}",
          "needs an `Expectation`-returning clause, NOT an engine call — and is structurally "
          "refused ONLY on the engine route"],
     ], ["gap shape", "sites", "our copies", "meta copies", "what it needs"]))
+    add("")
+    add("The first row is **expected to be empty** and its emptiness is the measurement, not an "
+        "omission: it is the exact set Issue #299's ruling moved. A non-zero count here would mean a "
+        "deterministic-shaped option is still being refused on a MODELLED kind, which the ruling "
+        "says cannot happen — so read it as a live check on the routing rather than as a backlog.")
     add("")
     n_new = sum(v[0] for v in fam.values() if not v[3])
     add(f"**{n_new} of {len(gap)}** gap sites need vocabulary that does not exist yet; "
@@ -834,7 +909,8 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add("")
     er = sorted((s for s in sites if s.fate == seam.ENGINE_RESOLVED),
                 key=lambda s: (-ours.get(s.card_id, 0), -meta.get(s.card_id, 0.0), s.name))
-    add(f"{len(er)} sites, {sum(ours.get(s.card_id, 0) for s in er)} copies across our {len(decks)} decks. "
+    add(f"{len(er)} sites, {sum(ours.get(s.card_id, 0) for s in er)} copies across our {n_decks} "
+        f"decks. "
         "Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, "
         "which is necessary for the `deterministic=True` proof but is not the proof itself.")
     add("")
@@ -847,12 +923,21 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
     add("")
     partial = sorted((s for s in sites if s.report_class == PARTIAL),
                      key=lambda s: (-ours.get(s.card_id, 0), -meta.get(s.card_id, 0.0), s.name))
-    add(f"{len(partial)} sites, {sum(ours.get(s.card_id, 0) for s in partial)} copies across our 5 "
-        "decks. §3b resolves each to MODELLED, so the uncovered leg differences to **0**.")
+    pf = collections.Counter(s.fate for s in partial)
+    add(f"{len(partial)} sites, {sum(ours.get(s.card_id, 0) for s in partial)} copies across our "
+        f"{n_decks} decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` "
+        f"verdict "
+        f"reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven "
+        f"`deterministic` does, so the uncovered leg can no longer difference to a silent 0. They "
+        f"land instead on " + ", ".join(f"**{f}** ({n})" for f, n in sorted(pf.items())) + ". The "
+        "row is kept because the WORK is unchanged and specific — complete the clause set — and "
+        "merging it into the undifferentiated refusals would hide it among cards that have no "
+        "compendium entry at all.")
     add("")
-    add(_table([[s.card_id, s.name, ours.get(s.card_id, 0), f"{meta.get(s.card_id, 0.0):.2f}",
-                 s.note] for s in partial],
-               ["id", "card", "our copies", "meta copies", "what the clauses miss"]))
+    add(_table([[s.card_id, s.name, s.fate, ours.get(s.card_id, 0),
+                 f"{meta.get(s.card_id, 0.0):.2f}", s.note] for s in partial],
+               ["id", "card", "fate now", "our copies", "meta copies",
+                "what the clauses miss"]))
     add("")
 
     add("### Pokemon Tools — MODELLED to attach, but is the attach worth anything?")

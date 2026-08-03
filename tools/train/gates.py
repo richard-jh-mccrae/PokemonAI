@@ -335,7 +335,10 @@ def leaf_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
 
     ``voided`` frames are still compared and still reported — only the gate verdict and the
     **Agree Delta** exclude them. A voided frame silently vanishing from the diff would be the
-    shrinking-gated-set failure ``added``/``removed`` exist to prevent."""
+    shrinking-gated-set failure ``added``/``removed`` exist to prevent.
+
+    ``stale_baseline`` PARTITIONS ``ok_to_miss`` rather than shrinking it: the flips whose ruling
+    also moved. See that key's comment below."""
     b = rows_by_key(before, keep=_scorable)
     a = rows_by_key(after, keep=_scorable)
     shared = b.keys() & a.keys()
@@ -346,12 +349,23 @@ def leaf_lab_diff(before: dict, after: dict, *, voided=()) -> dict:
             ok_to_miss.append({"key": k, "before": b[k], "after": a[k]})
         elif now and not was:
             miss_to_ok.append({"key": k, "before": b[k], "after": a[k]})
+    # SAME row filter as `compared` above, so the two numbers in one report describe one
+    # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
+    moves = ruling_moves(before, after, keep=_scorable)
+    moved_keys = {m["key"] for m in moves}
     return {"ok_to_miss": ok_to_miss, "miss_to_ok": miss_to_ok,
             "added": sorted(a.keys() - b.keys()), "removed": sorted(b.keys() - a.keys()),
             "compared": len(shared),
-            # SAME row filter as `compared` above, so the two numbers in one report describe one
-            # population — a ruling_moves drawn from all rows would name frames `compared` excludes.
-            "ruling_moves": ruling_moves(before, after, keep=_scorable),
+            "ruling_moves": moves,
+            # A PARTITION of `ok_to_miss`, holding its own entry objects — not a filtered copy and
+            # not a subtraction from it. `correct_is_top` is frozen into each capture and computed
+            # under THAT capture's `correct`, so when a ruling moves this diff grades its two halves
+            # under two oracles and reports `REGRESSED ... OK -> MISS` about a build that did not
+            # move. The redness is right (a stale reference cannot speak) and the LABEL is what was
+            # wrong. Excusing them instead was rejected: a gate getting quieter as a side effect is
+            # the one direction a gate must never move, and it would let a real regression hide
+            # behind a same-commit re-ruling (ADR-0110 decisions 1-2).
+            "stale_baseline": [f for f in ok_to_miss if f["key"] in moved_keys],
             "agree_delta": agree_delta(
                 before, after, keep=_scorable, voided=voided,
                 # The Leaf Lab's ruling is `correct_is_top`; an unscorable row is already filtered out
@@ -369,7 +383,12 @@ def discrimination_gate_verdict(diff: dict, *, held_out: dict, voided=()) -> boo
     ``voided`` frames do not block either (ADR-0088 decision 4): their ruling can no longer say
     the agent is wrong. Passed alongside ``held_out`` rather than folded into it because the two are
     different acts — one holds a STANDING ruling out of this gate's scope, the other says the ruling
-    itself cannot grade — and the readout names them separately."""
+    itself cannot grade — and the readout names them separately.
+
+    ``stale_baseline`` is deliberately NOT a third excuse (ADR-0110 decision 1). It reads
+    ``ok_to_miss`` whole, so a re-ruled frame gates exactly as it did before that key existed: the
+    partition is a LABEL on the readout, and this verdict cannot be made quieter by adding one.
+    A same-commit re-ruling would otherwise become a place for a real regression to hide."""
     excused = set(held_out) | set(voided or ())
     return all(f["key"] in excused for f in diff.get("ok_to_miss") or [])
 
@@ -714,7 +733,14 @@ def guarded_capture(out, fresh, *, index, diff_fn, fail_keys_fn, write) -> int:
 
     ``diff_fn(outgoing, fresh)`` and ``fail_keys_fn(diff)`` are the two genuinely per-lab pieces;
     ``write()`` performs the actual artifact write once the guard passes. A first capture (no
-    outgoing artifact) writes freely — there is no prior ruling record to protect."""
+    outgoing artifact) writes freely — there is no prior ruling record to protect.
+
+    **WHERE to capture from is not this guard's business, and it matters just as much.** A capture
+    taken at ``HEAD`` bakes the change under test into its own reference, so the gate can never speak
+    about that change again — the ruling-gated guard would pass such a capture without complaint. The
+    rule is `CAPTURE_POINT`: *"re-capture at a commit carrying the ruling but NOT the change under
+    test."* Written down in `docs/ci.md` §"Where to re-capture FROM" (ADR-0110 decision 4)
+    because it was tribal knowledge, and cost this rule's own author one wrong answer first."""
     from pathlib import Path
     import json as _json
     out = Path(out)
@@ -1194,22 +1220,55 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
       this predicate would swallow it, blinding a ruling instead of protecting one — the opposite of
       what it is for.
 
-    UNWIRED as of Issue #243, and kept deliberately. Its only caller was `deploy_decider_sweep`,
-    deleted by ADR-0089 as a gate that could only report FIX. The **Decision Gate** has the same
-    exposure on two `decision`-scope frames, but which frames stop gating is a *ruling*, not a
-    refactor, so wiring it is owned by **Issue #251** rather than taken as a side effect of a
-    cleanup. That issue argues the priority is LOW on purpose: the gap is DORMANT (ADR-0086 decision
-    9 — both frames decline by rule, so the tally reads `unstatable 0`), it can only fire on a
-    deliberate future flip, and it fails LOUD and correctly attributed. Wiring it wrong makes a gate
-    quieter, which is unfalsifiable from outside — the property that let four `*_decider_sweep.py`
-    report PASS for weeks in a state where PASS could not be told from FAIL.
+    **REPORTS, never excludes — Issue #251 RULED, and this is not an open question.** Its only
+    caller was `deploy_decider_sweep`, where it was a per-frame *verdict* that took the frame out of
+    grading; ADR-0089 deleted that sweep and lifted this predicate UNWIRED. Issue #251 then decided
+    what to do with it and ruled **against** wiring it into `decision_gate_verdict` or
+    `discrimination_gate_verdict`, for three reasons in the order they bind:
+
+    1. **Excluding makes a `main` watchdog permanently quieter.** A gate that under-reports cannot be
+       told from one with nothing to report — the property that let four `*_decider_sweep.py` report
+       PASS for weeks in a state where PASS could not be distinguished from FAIL. An exclusion also
+       outlives its cause: it would keep the frames ungraded after the record is repaired.
+    2. **Issue #229 made the record repairable, end to end.** `correct: []` is now writable at
+       `decision` scope — through the tagging pane, by a human, not merely by a Python caller — so
+       each exposed frame can be re-ruled into a real DECLINE that `satisfies_human` grades exactly.
+       A repaired record is strictly better than an ungraded frame.
+    3. **Nothing forces the worse fix.** Neither frame's pick has moved off the baseline, so neither
+       produces a gate verdict today.
+
+    Its one caller is therefore a REPORTING one: `decider_lab.unstatable_frames` /
+    `print_unstatable_readout` name every exposed frame in the Decision Gate readout and say it is
+    still **gradeable**. **Correction to the record:** the pre-Issue-#251 text here claimed *"the
+    tally reads `unstatable 0`"*. It does not. That number came from the deleted sweep's own
+    deploy-only frame population (where it read `unstatable 1`); measured through the Corpus Reader
+    across all 372 committed Corrections the predicate fires on **two** — `85785609|0|decision|4` and
+    `83661652|0|decision|3` — and both are still gradeable. What is dormant is the *gate verdict*,
+    not the exposure: both sit in the baseline with `chosen: []` against a recorded `correct: [0]`,
+    so they are standing DISAGREEMENTS that produce no *move*. That also flips which false verdict is
+    available. In the baselined gate it is a false **FIX** — if the agent ever starts taking the
+    option the human ruled against, its pick moves ONTO the record's `correct` and the gate applauds.
+    A false REGRESSION was the hazard in the two-arm sweep world ADR-0072 replaced.
+
+    **No symmetric Discrimination Gate change is owed**, and that was measured rather than assumed —
+    but state the reason precisely, because the obvious version of it is false. `leaf_lab.is_leaf_frame`
+    is a DISJUNCTION: a ``turn_plan`` record qualifies on its own, at any context and with an empty
+    ``correct`` (``86088989|0|turn|0`` is exactly that — context 2, `correct: []`, and a leaf frame).
+    Only the *second* arm requires a truthy ``correct`` AND ``select.context == 0``. Neither exposed
+    frame carries a ``turn_plan`` and both are context 2, so both fail both arms — today and after a
+    repair to `correct: []`, which adds no ``turn_plan``. Positive control: the same predicate returns
+    True on 278 of the same records. ADR-0072 decision 4's *one ruling holds a frame out of both
+    gates* is therefore satisfied vacuously: the Discrimination Gate never had these two.
+
     The encoding gap is a property of the Correction schema rather than of any frame, so it holds for
-    any future optional select. Its tests exercise the predicate directly, not through the corpus, so
-    they keep working while it is unexercised.
+    any future optional select. Its tests exercise the predicate directly, not only through the
+    corpus, so they keep working whatever the corpus does.
 
     Accepts anything carrying ``scope``/``chosen``/``correct`` — a `Correction` in practice. Reads
-    defensively: a malformed record must not take a gate down mid-run, and reading as *unstatable*
-    only ever REMOVES a frame from grading, so it can never fabricate a FIX."""
+    defensively: a malformed record must not take a gate down mid-run. That fail direction was chosen
+    when the predicate EXCLUDED (reading as unstatable only ever removed a frame, never fabricating a
+    FIX) and it survives the reporting role unchanged — a spurious hit now costs one advisory line in
+    a readout, and no verdict at all."""
     if getattr(correction, "scope", None) != "decision":
         return False
     select = ((obs or {}).get("select") or {})
@@ -1218,6 +1277,125 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
     chosen = getattr(correction, "chosen", None) or []
     correct = getattr(correction, "correct", None) or []
     return sorted(chosen) == sorted(correct)
+
+
+#: The `build_correction` rules a **Refused Shape** audit re-applies to already-committed records,
+#: as ``{slug: the sentence a readout prints}``. ONE source, so the predicate and the printer cannot
+#: describe a rule differently — the shape `CAPTURE_POINT` already has for the stale-baseline line.
+#:
+#: The slugs are the stable half (tests assert on them); the sentences paraphrase the constructor's
+#: own `ValueError` text and are free to be re-worded.
+REFUSED_SHAPE_RULES = {
+    "unknown_source": "`source` is not one of the two recorded sources",
+    "unknown_scope": "`scope` is not one of decision / turn / match",
+    "match_names_a_correct": "a match-scope Correction cannot name a `correct` option — no single "
+                             "select carries a whole-match verdict",
+    "correct_off_the_menu": "`correct` does not index the Anchor's own options",
+    "turn_correct_equals_chosen": "a turn-scope `correct` equal to `chosen` asserts nothing — it "
+                                  "must name the first DIVERGENT option at the Anchor",
+    "unprovable_decline": "an empty `correct` at decision scope is a DECLINE, recordable only where "
+                          "the record's `obs` PROVES the select optional (minCount 0)",
+}
+
+
+def shape_the_constructor_would_refuse(correction) -> list:
+    """Which of `build_correction`'s rules an ALREADY-COMMITTED record breaks — `REFUSED_SHAPE_RULES`
+    slugs, empty when the constructor would have accepted it (Issue #256).
+
+    **The store holds a shape its own writer forbids.** `build_correction` validates at *write* time
+    and `Correction.from_dict` — THE loader, and so what the **Corpus Reader** inherits — performs no
+    validation at all: it backfills `id`/`agent`/`scope`/`subject` and calls the dataclass. That
+    asymmetry is deliberate and stays (ADR-0113 decision 4): validating on load would reject
+    committed records at read time and take *both* gates down over a record that has been sitting
+    green for weeks. *Load anything committed, refuse to create new bad shapes* is the right contract
+    for a store that is also an archive.
+
+    But **unvalidated must not mean unobserved**, and it was: nothing re-applied the constructor's
+    rules to what is already on disk, which is how `85709280|1|match|` — `match` scope carrying
+    `correct: [0]`, hand-edited past the writer on 2026-07-29 — got in and stayed, *grading in both
+    gates*, until the developer reviewed this audit's finding and repaired it (ADR-0113 Amendment A):
+    re-scoped to `decision`/subject 51, its key today. This is the missing half. It reports; it
+    changes no verdict.
+
+    **Which rules, and why not the others.** Re-applied are the rules whose truth is a property of
+    the record *itself* against vocabularies fixed in `correction.py` and never grown: `source`,
+    `scope`, and the four `correct`-shape rules. Deliberately NOT re-applied is `is_valid_category`,
+    whose vocabulary lives in `categories.py`, is documented as *extensible*, and grows by process —
+    retroactively refusing a committed record because a category was later renamed would report a
+    **vocabulary edit as a corpus defect**, which is a different question and needs a ruling rather
+    than a predicate. Measured either way: all 372 committed records pass `source`, `scope` and
+    `category` today, so nothing is being hidden by the line — it is drawn for the future.
+
+    **Every applicable rule is reported, where the constructor stops at the first raise.** "Would
+    refuse" is true if ANY fires, so reporting all of them is strictly more informative and cannot be
+    wrong about any one. The single exception is an unrecognised ``scope``: every rule below it
+    dispatches on scope, so classifying further would be guessing.
+
+    An absent ``correct`` (``None``) is read the way the constructor's own truthiness test reads it —
+    as *no option named*. `build_correction` cannot produce one (it always stores ``list(correct)``),
+    so such a record is refusable regardless; the corpus holds none.
+
+    Duck-typed and defensive, for `records_a_decline_it_cannot_state`'s reason: a malformed record is
+    exactly what this walks over, and it must not take a gate run down mid-corpus. A spurious hit
+    costs one advisory line and no verdict at all."""
+    from train.blunder.correction import SCOPES, SOURCES, select_min_count
+
+    broken = []
+    if getattr(correction, "source", None) not in SOURCES:
+        broken.append("unknown_source")
+    scope = getattr(correction, "scope", None)
+    if scope not in SCOPES:
+        return broken + ["unknown_scope"]
+
+    correct = getattr(correction, "correct", None) or []
+    chosen = getattr(correction, "chosen", None) or []
+    n_options = len(((getattr(correction, "decision", None) or {}).get("options")) or [])
+    if scope == "match":
+        if correct:
+            broken.append("match_names_a_correct")
+    elif not correct:
+        if scope == "decision" and select_min_count(getattr(correction, "obs", None)) != 0:
+            broken.append("unprovable_decline")
+    else:
+        # The constructor's own test, verbatim — including that `bool` is an `int` in Python, so it
+        # would admit `correct: [True]` as index 1. The audit answers *what would the writer refuse*,
+        # not *what should it*; widening here would make the two disagree about one record.
+        if any(not isinstance(i, int) or i < 0 or i >= n_options for i in correct):
+            broken.append("correct_off_the_menu")
+        if scope == "turn" and set(correct) == set(chosen):
+            broken.append("turn_correct_equals_chosen")
+    return broken
+
+
+def refused_shapes(store=None) -> list:
+    """Every committed Correction carrying a **Refused Shape**, as
+    ``[{key, id, scope, violations}, ...]``. Empty list = the corpus is one the writer could have
+    written. Findings-as-dicts, like `claim_agreement`'s, so a readout and a machine consumer read
+    the same record without re-deriving anything.
+
+    Read through `keyed_corrections` — THE **Corpus Reader** (ADR-0087 decision 1) — and never by
+    walking raw JSONL: **23 records carry no explicit `scope` key** and only default to ``decision``
+    inside `Correction.from_dict`, so a raw walk mis-scopes them and every rule here dispatches on
+    scope. That is the same trap `unstatable_frames` documents, and it is why the audit lives beside
+    the reader rather than in a script.
+
+    Corpus-wide, not report-scoped — and that is the one way it differs from `unstatable_frames`,
+    which deliberately narrows to the replayable population `build_report` scores so *"is it still
+    gradeable?"* is answerable. A malformed record that cannot be replayed is still malformed, so
+    narrowing here would hide exactly the records least likely to be looked at. It is also why the
+    walk lives in `gates.py` beside the other corpus queries rather than in `decider_lab.py`.
+
+    **It reaches no verdict.** Neither `decision_gate_verdict` nor `discrimination_gate_verdict`
+    consults it, deliberately: a record's shape is the *record's* defect, and ungrading a frame over
+    it would outlive the repair — the identical argument Issue #251 settled for the **Unstatable
+    Decline**. The cure is to re-rule the record."""
+    out = []
+    for key, c in keyed_corrections(store):
+        violations = shape_the_constructor_would_refuse(c)
+        if violations:
+            out.append({"key": key, "id": getattr(c, "id", None),
+                        "scope": getattr(c, "scope", None), "violations": violations})
+    return out
 
 
 def rows_by_key(rpt: dict, *, keep=None) -> dict:
@@ -1289,6 +1467,47 @@ def print_ruling_moves(moves) -> None:
     print(f"\n  ⚠️ RULING MOVED ({len(moves)}) — the human re-ruled these frames; reported, never gating:")
     for m in moves:
         print(f"    {m['key']}  correct {m['before']} -> {m['after']}")
+
+
+#: The one actionable sentence a **Stale Baseline** frame is owed. Capturing at ``HEAD`` would bake
+#: the change under test into its own reference — the trap that makes this class of red incapable of
+#: correcting itself, and the reason ADR-0110 decision 3 rejected "a re-ruling must re-capture in
+#: the same change".
+#:
+#: **This is the one copy any CODE reads** — `print_stale_baseline` interpolates it, and a test locks
+#: the printed wording to it. The rule is also *restated in prose* three times for readers who never
+#: reach this module: `guarded_capture`'s docstring, `docs/ci.md` §"Where to re-capture FROM", and
+#: `leaf-gate-main.yml`'s `::warning::`. Those are deliberate duplication at a documentation boundary,
+#: not consumers — a workflow cannot import a Python constant. If the rule changes, all four move.
+CAPTURE_POINT = ("re-capture at a commit carrying the ruling but NOT the change under test, "
+                 "then re-run")
+
+
+def print_stale_baseline(entries) -> None:
+    """The **Stale Baseline** section — the ``ok_to_miss`` flips whose ruling ALSO moved.
+
+    Always visible when non-empty, like ``HELD OUT`` and ``VOIDED``, and for the same reason: a
+    reader who stops at the ``REGRESSED`` lines must not miss the fact that changes what those lines
+    mean. Unlike those two, this section **excuses nothing** — every frame it names is also printed
+    as gating, because the diff's own `stale_baseline` holds `ok_to_miss`'s entry objects.
+
+    What it fixes is the SENTENCE, not the redness. `leaf_lab_diff` compares `correct_is_top`, frozen
+    into each capture under that capture's own ``correct``; when the human re-rules a frame the two
+    halves are graded under two oracles, and ``REGRESSED ... OK -> MISS`` becomes a false statement
+    about a build that did not move. The gate is right to be red — its reference is stale, so it
+    cannot speak — and was wrong about why.
+
+    A shared printer beside `print_ruling_moves` for that function's reason: one wording, so two
+    readouts cannot describe one fact differently."""
+    if not entries:
+        return
+    print(f"\n  ⚠️ STALE BASELINE ({len(entries)}) — the baseline predates a re-ruling on these "
+          f"frames. Their OK -> MISS below is the REFERENCE moving, not the build; they still gate:")
+    for f in entries:
+        b, a = f.get("before") or {}, f.get("after") or {}
+        print(f"    {f['key']}  correct {b.get('correct')} -> {a.get('correct')}"
+              f"   rank {b.get('correct_rank')} -> {a.get('correct_rank')}")
+    print(f"    -> {CAPTURE_POINT}.")
 
 
 def decider_lab_diff(before: dict, after: dict, *, voided=(), equiv=None) -> dict:
