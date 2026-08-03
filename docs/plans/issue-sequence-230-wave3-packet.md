@@ -36,12 +36,14 @@ fixture does not preserve it). **Executed and committed** — see ADR-0113 Amend
 account, including the `reviewed.json` re-key this also required (`85709280-m1` → `85709280-51`,
 restoring `gates.orphan_rulings() == []`) and the measured gate consequence below.
 
-### R1 — a `match`-scope Correction should stop grading at its Anchor — now zero-instance, still open
+### R1 — a `match`-scope Correction should stop grading at its Anchor — RETIRED, not left open (2026-08-03)
 
-Unchanged as a general policy question for a HYPOTHETICAL future `match`-scope record — nothing
-forces an answer today, since the repair above means **the corpus currently holds zero `match`-scope
-records** (`scope="match"` is theoretical vocabulary, not dead code). Original text preserved below
-for whenever a future tag revives the question.
+**Superseded (Issue #353): the scope itself is gone, not just this one record.** See
+[ADR-0049](../adr/0049-corrections-carry-a-scope-decision-turn-or-match.md) Amendment A — `match` is
+removed from `SCOPES` at the writer, and both gates gain a defensive `scope != "match"` read-time guard
+against archive-tolerance (a hand-edit or merged branch could still introduce the shape even with the
+writer gone). The "hypothetical future match-scope record" this section was written to wait for can no
+longer occur. Original text preserved below for its historical reasoning.
 
 <details>
 <summary>Original R1 text (no longer about a live record)</summary>

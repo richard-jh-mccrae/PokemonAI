@@ -1,8 +1,9 @@
 # ADR-0113 — The store is an ARCHIVE, so the writer's rules are re-applied as a REPORT, never as a loader
 
 **Status:** Accepted (agent-grilled 2026-08-02 on Issue #256, batched issue-sequence run); decisions
-2 and 4 BUILT, decision 1 now zero-instance (Amendment A), decision 3 SUPERSEDED by Amendment A's
-developer ruling rather than executed as written.
+2 and 4 BUILT, decision 1 now MOOT — the `match` scope it concerned was retired outright, see
+[ADR-0049](0049-corrections-carry-a-scope-decision-turn-or-match.md) Amendment A (Issue #353) — decision
+3 SUPERSEDED by this ADR's own Amendment A developer ruling rather than executed as written.
 **Sits beside [ADR-0112](0112-a-gate-reports-what-it-cannot-grade-it-never-stops-grading-it.md)**,
 whose ruling this repeats one layer down: that one reports a record that cannot *state* its ruling,
 this one reports a record the writer would not have *created*. Both report; neither excludes.
