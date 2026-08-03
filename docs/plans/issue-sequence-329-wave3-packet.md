@@ -1,4 +1,4 @@
-# Wave-3 packet — issue-sequence run (329, 332, 351, 350, 349)
+# Wave-3 packet — issue-sequence run (329, 332, 362, 351, 350, 349)
 
 Gate flips from this batch, pending developer ruling. None conformed into either baseline.json —
 a baseline is a ruling record, not something a sub-issue may recapture on its own recognisance.
@@ -21,6 +21,10 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `82228640\|0\|decision\|53` | leaf (Discrimination) | Issue #332 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational — not a regression against the baseline.** A windfall improvement lost. |
 | `82525741\|0\|decision\|58` | leaf (Discrimination) | Issue #332 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational.** Same class. |
 | *(not a frame)* `test_PLAYING_the_boost_card_…` | **no gate** — a sibling issue's acceptance test | Issue #329 vs Issue #282 | `total_after > total_before` (+0.016667) | positional half is **−0.032051** | **RULING OWED — read this one even though no gate reports it.** See *"A sibling issue's acceptance assertion inverted"* below. It was rewritten rather than left failing, which is the one thing in this run that resembles conforming; the developer may direct otherwise. |
+| `82749168\|1\|decision\|88` | leaf (held out, `owner=#332`) | Issue #362 | REGRESSED, rank 1 -> 4 | **FIXED**, back to the baseline's `OK` rank 1 | **No ruling owed — it is a build.** The issue's headline frame. Recommend the held-out entry STAY (Issue #284's L1 precedent: `82229122\|0\|decision\|17` started passing, was kept, and now fails again). |
+| `82523164\|1\|decision\|75` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 5 | **FIXED** | **No ruling owed.** Same cause, same class — see the four measured frames below. |
+| `82524455\|1\|decision\|55` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 2 | **FIXED** | **No ruling owed.** Same class. |
+| `82522698\|1\|decision\|62` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 2 | **FIXED** | **No ruling owed.** Same class, the narrowest margin of the four (400.7). |
 
 **Decision Gate: PASS, and the before/after reports are byte-identical** — `agree 250/347 -> 250/347`,
 **0 picks moved, 0 rulings moved**, 24 voided. No shipped decision changes; this is the leaf's
@@ -275,6 +279,115 @@ about: under it `83037962|0|decision|48` reads `readiness −0.0064` and stays a
 `81906755|1|decision|93` reads −0.0090 (against −0.0063 as shipped), and `86089617|1|decision|4`
 reads −0.0011 instead of flat. **It fixes none of the three.** The shipped grade is the one that
 buys the two fixes, which is why the zero is taken rather than softened.
+
+## Issue #362 — the leaf's dominant-WIN short-circuit was out-scaled by the board scalar
+
+### What was built
+
+`_engine_leaf_value`'s coin-free-win short-circuit paid `KO_SCORE * (start_prizes + 1)` — prizes
+already BANKED when the line began, plus one. It now pays `KO_SCORE * state_value.WIN_PRIZES`, a
+constant DERIVED the way `LOSS_PRIZES` is: the largest sum the families can express on any legal
+board, plus one strict prize of headroom. `survival` and its `_MAX_BODIES x _MAX_PRIZE_VALUE` bound
+are the two summands the loss side has and this one does not — `survival` is non-positive by
+construction, so it can never push a board UP toward the win band, and the terminal charge here
+REPLACES the scalar rather than sitting inside a family that has to out-dominate its own sum.
+`WIN_PRIZES` = 10.9 prizes = 10900 on the leaf axis, against `LOSS_PRIZES` 28.9.
+
+`gate0_ab.py` and `transposition_probe.py` both re-implemented the old magnitude and now IMPORT the
+constant. Their **non-win** branch is still the retired hand-composed `_leaf_value`, so both of their
+columns have been grading a leaf the agent stopped using at the POC-T3 swap; the comment says so
+rather than letting the import imply otherwise. Not fixed here — a different subsystem, not this
+issue's, and bundling it would have made this gate diff unattributable.
+
+### Gate arithmetic — attributed against a BEFORE control on the same tree
+
+The before column is a real `leaf_lab diff` run at `5f44bd86` (Issue #332's end state), not a
+remembered table.
+
+| | before (Issue #332's end state) | after |
+|---|---|---|
+| unruled `OK -> MISS` | 7 | **7 — the SAME seven frames, by name. Zero new flips.** |
+| held-out `OK -> MISS` | 63 | **59** (−4: the four named above) |
+| total `ok_to_miss` rows | 74 | **70** |
+| `IMPROVED MISS -> OK` | 12 | **12 — unchanged** |
+| held-out SET / voided SET | 80 / 24 | **80 / 24 — unchanged, no frame gained or lost an owner** |
+| leaf agree | 122/249 | **126/249** (+4 — exactly the four fixed frames) |
+| Decision Gate | PASS, 0 picks moved | **PASS, `agree 250/347 -> 250/347`, 0 picks moved, 0 rulings moved** |
+
+So this issue costs the packet nothing and pays four frames back. Everything above the gate line is
+Issues #329's and #332's, already tabled.
+
+### The premise, re-verified at `HEAD` before any edit
+
+Issue #362 is SELF-FILED (the Issue #332 subagent wrote it), so its numbers were re-measured rather
+than trusted. Re-implementing both branches of `_engine_leaf_value` around the real `_simulate_line`:
+
+| claim | verdict |
+|---|---|
+| `82749168\|1\|decision\|88` win short-circuit = **2000.0** | reproduced exactly |
+| out-scored by opt 1 (`Harlequin`) at **6789.9** | reproduced (6789.9421) |
+| the winning board's own `state_value` = **6910** | reproduced (opt 8, 6909.9849 = 6.909985 prizes) |
+| **4** frames out-scored by a non-win | reproduced — the same four, same margins |
+| **26** frames reach a coin-free simulated win | reproduced |
+| **361** frames swept | **did NOT reproduce — the number is 371** (372 corrections carry an obs; one agent, `SkiChu`, has no `strategy.py`). Off by 10; changes no conclusion, since both numerators reproduce. |
+| *"tied at exactly 2000 with **eight other** options"* | **off by one — there are 8 winning options, so 7 others.** The `8` is the BASELINE row's `top_tie`, not the current count. |
+| *"the leaf ranks it 10th of 11"* | reproduces only under an index-tiebreak read (3 options score above 2000; the ruled option is the 7th of the 8 tied at 2000). `leaf_lab`'s own `correct_rank` is **4**. |
+
+Positive control on every sweep: the win-frame count is asserted non-zero, because a sweep that never
+reached the win branch would report "0 of N out-scored" and be indistinguishable from a fix.
+
+### The magnitude decision, MEASURED rather than argued
+
+Issue #362 scope 1 offered two candidates and asked for an argument. Candidate (b) — *drop the
+short-circuit and let the won board score itself, since a board where the opponent has no Pokémon
+left already reads well* — is **REFUTED by measurement**: on **8 of the 26** win frames a non-winning
+option's board is `>=` the weakest winning option's board, which fails acceptance criterion 2
+outright.
+
+| frame | weakest WIN board | a NON-win at |
+|---|---|---|
+| `84897262\|1\|decision\|110` | **−29063.1** | −28896.7 |
+| `82749168\|1\|decision\|88` | 6706.6 | 6789.9 |
+| `82524455\|1\|decision\|55` | 6064.5 | 6191.2 |
+| `82522698\|1\|decision\|62` | 4164.3 | 4400.7 |
+| `83663053\|1\|decision\|22` | 3690.6 | 3690.6 (exact tie) |
+| `82752604\|0\|decision\|106` | 2326.2 | 2463.9 |
+| `83455356\|0\|decision\|11` | 1919.3 | 1919.3 (exact tie) |
+| `83007714\|1\|decision\|135` | 1583.7 | 1703.7 |
+
+The first row is the argument in one number: a board on which **I have already won** scores −29 prizes,
+because `survival`'s `_predicted_loss` fires on a game that is over. A won board is not a board.
+
+### Acceptance, measured on the SHIPPED leaf
+
+* 26 of 26 win frames, **0 out-scored by a non-win** (the sweep's positive control still fires: 26 > 0).
+* `82749168|1|decision|88`'s ruled option ranks **1st**, matching the committed baseline row exactly
+  (`correct_is_top: true`, `rank 1`, `top_tie 8`).
+* Max board-branch value observed anywhere in the corpus: **7101.4** (7.101 prizes), against the
+  derived band's 10900 — so the bound holds empirically as well as by construction.
+
+### The flat tie — taken as an OWNED zero, with the measurement that makes it free
+
+Scope 3 allowed either. Every winning line in a frame still prices identically, and **so did the old
+formula**: `_simulate_line` reads `start_prizes` off the ROOT observation, before the first step, so
+it is one number per FRAME that every option carries. It could never separate two winning lines; all
+it varied was the flat value's per-frame scale (2000 here, 5000 there), which no within-frame ranking
+can use. Measured on frame 88: eight winning options, all `start_prizes 1`, all 2000. Asserted by
+test through the real `_simulate_line` rather than quoted.
+
+Nor is there anything to separate: the sim stops at MY turn end, so every one of these lines wins
+THIS turn. What does differ — how far the heuristic sim had to predict — is already governed by the
+`coins` bit (which demotes an RNG-won line out of this branch entirely) and by
+`_develop_rollout_line`'s refusal to rank anything that rode `stream`. Ordering two equally-winning,
+equally-coin-free lines is Issue #263's, which owns ordering and inherits this leaf.
+
+### The soundness guard was checked, not assumed
+
+*A phantom sim win must never beat the sound win rung.* It still cannot: `_develop_rollout_line`
+defers on any leaf `>= KO_SCORE`, and a win short-circuit was already `>= KO_SCORE` at the old
+magnitude — raising it to 10900 keeps it above the same threshold, so no new commit path exists.
+`_pool_floor_fails`' `< KO_SCORE` premise check is likewise cleared at both magnitudes. What changed
+is RANKING among candidates the rung was already willing to consider, which is the defect.
 
 ## Neither baseline was recaptured
 

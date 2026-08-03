@@ -27,7 +27,7 @@ from dataclasses import dataclass, replace
 from common import needs, playability
 from common.option_equivalence import class_representatives, fan_out, option_equivalence
 from common.state_model import StateModel
-from common.state_value import state_value
+from common.state_value import WIN_PRIZES, state_value
 from common.strategy.context import (_ACTIVE, _ATTACH, _ATTACK, _ATTACKER_ROLES, _BASIC_ENERGY, _BENCH,
                                      _COIN_HEAD, _END, _EVOLVE, _MAIN, _PLAY, _RETREAT, _SPECIAL_ENERGY,
                                      _TO_HAND, KO_SCORE)
@@ -3215,7 +3215,8 @@ class PlannerMixin:
         removed ADR-0043 two-ply used for "the reply won for them"),
         else 0. The flat ``_PLANNER_SURVIVAL_W`` keeps pricing the recoverable lose-a-body case; this
         only bites when the loss is structural. Composes below the win rung by construction (a line
-        that wins outright returns ``KO_SCORE × (prizes+1)`` before any leaf math)."""
+        that wins outright returns ``KO_SCORE × WIN_PRIZES`` before any leaf math — Issue #362; it
+        read ``KO_SCORE × (prizes+1)`` until that band was derived)."""
         active = next((p for p in (me.get("active") or []) if p), None)
         my_hp = (active or {}).get("hp", 0)
         my_stat = self.stats.get(active.get("id")) if (active and self.stats) else None
@@ -3339,7 +3340,30 @@ class PlannerMixin:
         swap is answered far more cheaply with the retired composition still in the tree. T4
         (Issue #263) deletes them with the rollout.
 
-        A line that finishes the game in my favour still scores above any prize count (dominant).
+        **A line that finishes the game in my favour scores above any BOARD, and that is what Issue
+        #362 fixed rather than what it always did.** The short-circuit's magnitude was
+        ``KO_SCORE * (start_prizes + 1)`` — prizes already BANKED when the line began, plus one — so
+        it topped out at 7 prizes and was commonly 2000-5000. That was dominant against the retired
+        hand-composed leaf, whose positional band summed to 590. It is not dominant against
+        `state_value`, whose `prize_race` lead leg has unit slope and is deliberately uncapped, and
+        nothing re-checked the comparison at the swap: measured over the committed corpus, 26 frames
+        reach a coin-free simulated win and on 4 of them a non-winning option out-scored it, worst
+        `82749168|1|decision|88` at a won 2000 against a non-win 6789.9 — a frame the human ruled
+        "could have just attacked for the win". The magnitude is now
+        :data:`~common.state_value.WIN_PRIZES`, DERIVED to exceed the largest sum the families can
+        express plus a prize of headroom, which also covers the `_LINE_CAP` this function adds outside
+        the scalar. The mirror constant `LOSS_PRIZES` got that treatment at the swap; the win side did
+        not.
+
+        **Every winning line still prices IDENTICALLY, and that is an OWNED zero.** So did the old
+        formula — `_simulate_line` reads `start_prizes` off the ROOT observation, so it is one number
+        per FRAME that every option carries, and it could never separate two winning lines; all it
+        varied was the flat value's per-frame scale, which no within-frame ranking can use. Nor is
+        there anything here to separate: this sim stops at MY turn end, so every one of these lines
+        wins THIS turn. What does differ between them — how far the heuristic sim had to predict —
+        is already governed by the two RNG bits below, and ordering two equally-winning coin-free
+        lines is Issue #263's (T4 owns ordering and inherits this leaf).
+
         None when the search is unavailable — the caller then keeps the closed-form leaf value (never
         crashes, decision 7). ``spend_account=False`` drops the line term (the apples-to-apples column
         the Gate-0 search probe grades both its columns on). ``with_stream=True`` returns
@@ -3359,8 +3383,13 @@ class PlannerMixin:
         players = (end.get("current") or {}).get("players") or []
         me = players[my_index] if 0 <= my_index < len(players) and players[my_index] else {}
         opp = players[1 - my_index] if 0 <= 1 - my_index < len(players) and players[1 - my_index] else {}
-        if result == my_index and not coins:              # line wins outright, COIN-FREE — dominant.
-            return _out(KO_SCORE * (start_prizes + 1))    # A win through auto-resolved coins is one
+        if result == my_index and not coins:              # line wins outright, COIN-FREE — dominant,
+            return _out(KO_SCORE * WIN_PRIZES)            # and since Issue #362 that word is true: the
+                                                          # band is DERIVED to exceed every board the
+                                                          # families can express, where the old
+                                                          # `start_prizes + 1` topped out at 7 prizes
+                                                          # and lost to a merely-winning position.
+                                                          # A win through auto-resolved coins is one
                                                           # lucky RNG stream, not a guarantee — it falls
                                                           # through to ordinary board ranking (prizes
                                                           # actually banked still count), so a phantom

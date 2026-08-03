@@ -73,7 +73,10 @@ incumbent leaf drew the same line with the same numbers: `_predicted_loss` at �
 
 :data:`LOSS_PRIZES` then sits above BOTH, DERIVED from the rulebook maxima rather than authored, so
 the terminal `_predicted_loss` dominance the incumbent −`KO_SCORE` rung had is preserved by
-construction instead of by a hopeful constant.
+construction instead of by a hopeful constant. :data:`WIN_PRIZES` is its mirror on the other side —
+the planner's terminal verdict for an ACHIEVED win — and it was added late (Issue #362) for exactly
+the reason the loss side was derived in the first place: the leaf's transcribed win magnitude stopped
+dominating the moment two families went uncapped, and nothing re-checked the comparison.
 
 ## Old Issue #145's five amendments, each with its disposition
 
@@ -370,6 +373,40 @@ POSITIONAL_MAX = _THREAT_CAP + _READINESS_CAP + _HAND_CAP + _DEVELOPMENT_CAP
 LOSS_PRIZES = (
     _MAX_BODIES * _MAX_PRIZE_VALUE
     + _PRIZES_START + _PROXIMITY_W
+    + POSITIONAL_MAX
+    + 1.0)
+
+#: **An ACHIEVED GAME WIN, in prizes — DERIVED, not authored** (Issue #362). The mirror of
+#: :data:`LOSS_PRIZES`, and the one the T3 swap forgot.
+#:
+#: `planner._engine_leaf_value` short-circuits a coin-free simulated win to a dominant terminal value.
+#: Its magnitude was `KO_SCORE * (start_prizes + 1)` — prizes ALREADY BANKED when the line began,
+#: plus one. Against the retired hand-composed leaf that genuinely was dominant: the whole positional
+#: band summed to 590 against `KO_SCORE` 1000. Against THIS module it is not. `prize_race`'s lead leg
+#: has unit slope and is deliberately uncapped, so a merely-WINNING position out-scores a won GAME:
+#: measured over the committed corpus, 26 frames reach a coin-free simulated win and on **4** of them
+#: a non-winning option scored higher — worst `82749168|1|decision|88`, a won 2000 against a non-win
+#: 6789.9, on a frame whose own winning board scores 6.909985 prizes.
+#:
+#: Derived the same way its mirror is, from the largest sum the families can express on any legal
+#: board, plus one strict prize of headroom:
+#:
+#:     prize_race  _PRIZES_START + _PROXIMITY_W   — the whole race plus its proximity leg
+#:     positional  the four caps above
+#:     survival    NOTHING — non-positive by construction, so it can only push a board DOWN
+#:
+#: Two summands of `LOSS_PRIZES` are therefore absent, and the difference is exactly
+#: `_MAX_BODIES x _MAX_PRIZE_VALUE`. That summand exists on the loss side because the terminal charge
+#: sits INSIDE `survival` and has to out-dominate that family's own exposure sum; a win REPLACES the
+#: whole scalar, so it has nothing of the kind to clear. `test_state_value.py` asserts the domination
+#: rather than the literal, and asserts `survival`'s sign rather than arguing it.
+#:
+#: **The leaf's line account is not in here, and that is the boundary.** `_engine_leaf_value` adds
+#: `min(_LINE_CAP, line_val)` OUTSIDE the scalar, so the win has to clear that as well; the prize of
+#: headroom covers `_LINE_CAP`'s 0.1 prizes ten times over and `test_planner.py` is where the leaf's
+#: own axis is asserted. This module owns the band, the planner owns its axis.
+WIN_PRIZES = (
+    _PRIZES_START + _PROXIMITY_W
     + POSITIONAL_MAX
     + 1.0)
 
@@ -1899,7 +1936,7 @@ def double_counted() -> list[str]:
 
 
 __all__: Sequence[str] = (
-    "POC_WORTH_PRIZE_RATE", "LOSS_PRIZES",
+    "POC_WORTH_PRIZE_RATE", "LOSS_PRIZES", "WIN_PRIZES",
     "REGISTRY", "FAMILIES", "TERMINAL_REGISTRY", "TERMINAL_FAMILIES",
     "TermFamily", "ExposedBody", "ReadyBody", "AttackEV",
     "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",

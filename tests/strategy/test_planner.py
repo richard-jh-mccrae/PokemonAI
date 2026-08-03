@@ -781,12 +781,100 @@ def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeyp
     coined = pilot._engine_leaf_value({}, [0])
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False, stream=True))
     drawn = pilot._engine_leaf_value({}, [0])
+    from common.state_value import WIN_PRIZES
     from common.strategy.context import KO_SCORE
-    assert clean == KO_SCORE * 3                        # coin-free win: dominant (prizes+1)
-    assert coined < KO_SCORE * 3                        # coin-won "win": ordinary board ranking
+    assert clean == KO_SCORE * WIN_PRIZES               # coin-free win: dominant (Issue #362's band)
+    assert coined < KO_SCORE * WIN_PRIZES               # coin-won "win": ordinary board ranking
     assert coined < clean
     assert drawn == clean                               # a DRAWN win keeps the leaf's value: the
                                                         # rung's gate is `with_stream`, not this one
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_a_coin_free_simmed_WIN_outranks_every_board_the_leaf_can_score(monkeypatch):
+    """Issue #362: the short-circuit's comment said *"dominant"* and its arithmetic no longer was.
+
+    `KO_SCORE * (start_prizes + 1)` tops out at 7 prizes — 7000 — and is commonly 2000-5000, because
+    `start_prizes` counts prizes ALREADY BANKED when the line began. It was written against the
+    retired hand-composed leaf, whose whole positional band summed to 590. Since the POC-T3 swap
+    (Issue #262) the other branch is `KO_SCORE * state_value(board)`, whose `prize_race` lead leg has
+    UNIT SLOPE and is deliberately UNCAPPED — so a merely-winning POSITION routinely out-scored a won
+    GAME. Measured over the committed corpus at the parent commit: 26 frames reach a coin-free simmed
+    win, 4 of them are out-scored by a non-win, worst by 4789.9 leaf points.
+
+    The bound is asserted on the LEAF's axis rather than `state_value`'s, because the leaf adds
+    `min(_LINE_CAP, line_val)` OUTSIDE the scalar and the win has to clear that too. `WIN_PRIZES`'
+    one prize of headroom (1000) covers `_LINE_CAP` (100) ten times over, which is why the derivation
+    lives in `state_value` and only this assertion knows about the line account."""
+    import common.state_value as sv
+    from common.strategy.context import KO_SCORE
+    from common.strategy.planner import _LINE_CAP
+
+    ceiling = KO_SCORE * (sv._PRIZES_START + sv._PROXIMITY_W + sv.POSITIONAL_MAX) + _LINE_CAP
+    assert KO_SCORE * sv.WIN_PRIZES > ceiling
+
+    # …and end-to-end through the two branches on the SAME simulated board, so the wiring is under
+    # test and not only the arithmetic: flipping `result` is the only difference between the calls.
+    pilot = _pilot()
+    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None]}
+    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 5}
+
+    def sim(result):
+        end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": result}}
+        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 1, result, 0.0, False, False)
+
+    monkeypatch.setattr(pilot, "_simulate_line", sim(0))
+    won = pilot._engine_leaf_value({}, [0])
+    monkeypatch.setattr(pilot, "_simulate_line", sim(-1))
+    unfinished = pilot._engine_leaf_value({}, [0])
+    assert unfinished > KO_SCORE, (
+        "non-vacuity: this board's ordinary branch must clear a prize, or the comparison below "
+        "would pass against a board the old formula also beat")
+    assert won > unfinished
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_the_win_value_is_FLAT_and_that_costs_the_ranking_nothing(monkeypatch):
+    """Issue #362 scope 3, taken as an OWNED zero rather than closed — with the measurement that
+    makes it free.
+
+    Every winning line in a frame now prices identically. So did the old formula: `start_prizes` is
+    read off the **root observation** inside `_simulate_line`, before the first step, so it is one
+    number per FRAME and every option of that frame carries it. It could never separate two winning
+    lines; all it ever did was scale the flat value differently per frame (2000 here, 5000 there),
+    which is a magnitude no ranking can use because rankings are within-frame. Measured on
+    `82749168|1|decision|88`: eight winning options, all `start_prizes 1`, all 2000.
+
+    So the tie is not a regression this change introduced and there is nothing here to distinguish:
+    `_simulate_line` stops at MY turn end, so every one of these lines wins THIS turn — there is no
+    sooner-or-later to prefer. What genuinely varies between them is how far the heuristic sim had to
+    predict to get there, and that is ALREADY governed: the `coins` bit demotes an RNG-won line out of
+    this branch entirely and `_develop_rollout_line` refuses any ranking that rode `stream`. The
+    residual — ordering two equally-winning, equally-coin-free lines — is Issue #263's (T4 owns
+    ordering and inherits this leaf)."""
+    import common.state_value as sv
+    from common.strategy.context import KO_SCORE
+
+    pilot = _pilot()
+    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
+    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
+    end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
+
+    values = set()
+    for banked in range(0, 7):                      # every legal prize count a line can begin from
+        monkeypatch.setattr(pilot, "_simulate_line",
+                            lambda obs, first_step, max_steps=40, _b=banked, **kw:
+                            (end, 0, _b, 0, 0.0, False, False))
+        values.add(pilot._engine_leaf_value({}, [0]))
+    assert values == {KO_SCORE * sv.WIN_PRIZES}, "a win is a win — the banked count no longer scales it"
+
+    # The claim the paragraph above rests on, asserted through the REAL `_simulate_line` rather than
+    # quoted: two different first steps on one board report the same `start_prizes`, so the term the
+    # old formula varied on was frame-constant and never discriminated within a frame.
+    real = _pilot()
+    real._search_api = _FakeSearchApi([])
+    obs = dict(_two_candidate_obs(), search_begin_input="x")
+    assert real._simulate_line(obs, [0])[2] == real._simulate_line(obs, [1])[2]
 
 
 @pytest.mark.req("REQ-PLANNER-0037")

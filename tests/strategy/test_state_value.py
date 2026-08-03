@@ -745,6 +745,44 @@ def test_landing_an_attack_can_outprice_the_one_retreat_a_turn_allows():
     assert best_offence_the_end_board_prices > one_retreat_buys
 
 
+@pytest.mark.req("REQ-STATEVALUE-0006")
+def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
+    """`ko-score-band`'s OTHER terminal half, and the one :data:`LOSS_PRIZES` never got (Issue #362).
+
+    The loss side was derived at the T3 swap precisely because a transcribed magnitude stopped
+    dominating once two families went uncapped. The WIN side kept the leaf's hand-composed
+    `KO_SCORE * (start_prizes + 1)`, which tops out at 7 prizes and is commonly 2-5 — so a merely
+    WINNING position out-scored a won GAME. Measured on the committed corpus at the fix's parent
+    commit: 26 frames reach a coin-free simulated win and on **4** of them a non-winning option
+    scored higher, worst `82749168|1|decision|88` at a won 2000 against a non-win 6789.9.
+
+    Same construction as the loss side, and asserted the same way — from the constants the equations
+    use, so moving any of them moves this test rather than silently breaking the invariant. Two of the
+    three summands differ from `LOSS_PRIZES`' and the difference is the argument:
+
+      * `survival` is ABSENT because it is non-positive by construction (it returns the negated
+        exposure), so it can never push a board UP toward the win band. Asserted below rather than
+        asserted in prose.
+      * `_MAX_BODIES x _MAX_PRIZE_VALUE` is therefore absent with it — that summand exists on the
+        loss side because the terminal charge sits INSIDE `survival` and has to out-dominate that
+        family's own exposure sum. A win replaces the whole scalar, so it has nothing to out-dominate.
+    """
+    worst_race = sv._PRIZES_START + sv._PROXIMITY_W
+    assert sv.WIN_PRIZES > worst_race + sv.POSITIONAL_MAX
+
+    # The dropped summand, asserted rather than argued: `survival` cannot contribute on the UP side,
+    # whatever the board. A non-empty exposure only ever subtracts, and the empty board scores 0.
+    assert sv.survival([]) == 0.0
+    assert sv.survival([sv.ExposedBody(3.0, 1)] * sv._MAX_BODIES) < 0.0
+    assert sv.survival([sv.ExposedBody(0.0, 9)]) <= 0.0
+
+    # …and the literal, pinned the way Issue #329 pinned the band it moved: legible failure beats a
+    # tautology, and every summand here is a constant somebody could later move.
+    assert sv.WIN_PRIZES == 10.9
+    assert sv.WIN_PRIZES == pytest.approx(sv.LOSS_PRIZES - sv._MAX_BODIES * sv._MAX_PRIZE_VALUE), (
+        "the two terminal constants are ONE construction differing by exactly the survival summand")
+
+
 # ── case 1: prize lethality (ADR-0064 Amendment B, Issue #283) ────────────────────────────────────
 #
 # `docs/rules.md` §7 case 1 — *they take their last prize card*. The positional families price "they

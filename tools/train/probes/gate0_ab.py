@@ -25,6 +25,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from train.leaf_lab import _cgpy_pilot_builder, _PLACEHOLDER_SBI    # noqa: E402
 from train.blunder.store import load_corrections                    # noqa: E402
 from common.strategy.context import KO_SCORE                         # noqa: E402
+from common.state_value import WIN_PRIZES                            # noqa: E402
 from common.strategy.planner import _prune_none                      # noqa: E402
 from common.strategy.refresh import refresh_branches                 # noqa: E402
 
@@ -68,7 +69,13 @@ def exhaustive_values(pilot, c):
         m = pl[mi] if 0 <= mi < len(pl) and pl[mi] else {}
         res = (o.get("current") or {}).get("result", -1)
         if res == mi:
-            return KO_SCORE * (start_prizes + 1)
+            # IMPORTED, not re-derived (Issue #362): the shipped short-circuit's magnitude moved from
+            # `KO_SCORE * (start_prizes + 1)` to the derived `WIN_PRIZES` band, and a probe carrying
+            # its own copy of a constant is exactly the drift ADR-0087 charges for. NOTE the honest
+            # limit of that: this probe's NON-win branch is still the RETIRED hand-composed
+            # `_leaf_value`, so both its columns have graded a leaf the agent stopped using at the
+            # POC-T3 swap (Issue #262). Only the win magnitude is current.
+            return KO_SCORE * WIN_PRIZES
         taken = max(0, start_prizes - len(m.get("prize") or []))
         act = next((p for p in (m.get("active") or []) if p), None)
         surv = False
