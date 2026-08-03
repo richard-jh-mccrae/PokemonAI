@@ -99,6 +99,37 @@ malformed (nearer, but says nothing about *whose* rule it breaks), schema violat
 layer; there is a constructor), unstatable (a different defect — that record's shape is legal, its
 ruling is not sayable)
 
+**Expired Coverage**:
+A `reviewed.json` entry whose justification names a **Rung Vocabulary** id that no longer exists —
+the closure's stated reason is gone, so the claim it makes about the shipped agent has never been
+re-examined (**ADR-TEMP-238**, Issue #238). Not a claim the frame is misplayed; a claim that nobody
+has looked since the reason evaporated. `reviewed_audit.stale_entries` finds them and
+`docs/plans/covered-disposition-audit.md` is the generated worklist. **60 today** — 50 `covered`, 7
+`refuted`, 2 `fixed`, 1 `deferred` — over 25 distinct dead rungs, against the 13 Issue #238 derived
+by hand (all 13 are in the 60). **REPORTED, never gating**, the same ruling the **Refused Shape**
+and **Unstatable Decline** carry: the ratchet is `data/corrections/reviewed_audit_allowlist.json`,
+which the flagged set must equal exactly, so a *new* expired closure is red while the standing
+backlog is not. Re-closing a frame is a human ruling about play and is deliberately out of the
+tool's reach.
+_Avoid_: orphaned ruling (**Orphaned Ruling** is an entry naming no *record*; this one names a real
+record and a dead *rule*), stale ruling (the ruling may still be right — what expired is the
+reason), invalid, unreviewed (it WAS reviewed; the review's premise is what went)
+
+**Rung Vocabulary**:
+The three namespaces a hyphenated token in a review note can resolve into, harvested rather than
+listed (**ADR-TEMP-238** decision 2): **live** = every `Hypothesis(id=…)` in `src/` (95), **sound
+rule** = every `SoundRule(id=…)` (15, a separate live namespace so its hyphenated ids are never read
+as dead rungs), **retired** = every id that WAS a `Hypothesis(id=…)` in git history and is not one
+now (96). A token in none of the three is **not a rung reference** and is never flagged — the corpus's
+most frequent hyphenated token is `attack-last` (46), which is the Pilot's structural resequencing,
+so a loose `[a-z-]+` scan flags nearly every note. The unresolved count is printed beside the finding
+rather than suppressed. The retired half is CACHED in `data/corrections/rung_vocabulary.json` because
+CI checks out shallow; `load_vocabulary` still widens it with `live_at_capture − live_now`, so a rung
+deleted after the last `--refresh-vocab` is caught with no git at all.
+_Avoid_: rung registry (there is no registry — the vocabulary is derived per run), rung list
+(a *list* is the hand-maintained thing this exists to avoid), hypothesis ids (that is one of the
+three namespaces, not the set)
+
 **Category**:
 The **human** axis of a Correction — *what kind* of mistake the blunder is, picked from a
 closed, extensible vocabulary (`missed_win`, `overextension`, `misattachment`, …).
