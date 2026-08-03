@@ -398,6 +398,39 @@ def test_a_revealer_never_joins_a_commutative_block_whatever_its_footprint_says(
 
 
 @pytest.mark.req("REQ-APPLY-0009")
+def test_playing_a_stadium_DISPLACES_the_one_in_play_and_spends_the_allowance():
+    """**Issue #304.** A Stadium REPLACES the one in play, so *displacing one that is hurting me* is
+    a real play — and while nothing named the zone, the seam could not see it and the swap
+    differenced to ~0. `_PLAY` now carries a footprint naming `stadium`, `allowance_stadium_played`
+    and both discards, checked at source rather than recalled:
+
+    * `docs/rulebook.txt` L135-137 — *"A Stadium stays in play when you play it. Only one Stadium can
+      be in play at a time—if a new one comes into play, discard the old one and end its effects. You
+      can't play a Stadium card if a Stadium with the same name is already in play."*
+    * `docs/rulebook.txt` L112 / L138, and `docs/rules.md` §3 — one Stadium per turn, *"and only if
+      it differs from the one in play"*.
+    * `docs/rulebook.txt` L78 — *"Each player has their own discard pile"*, which is why BOTH
+      discards are written: the displaced Stadium goes to its own owner's pile, and displacing
+      THEIRS is the case that made this worth naming.
+
+    **The footprint stays INCOMPLETE and that is deliberate**, so this changes no commutativity
+    answer: a Trainer play writes whatever its Effect Clauses write, which is per-card. The sets are
+    a declared FLOOR — what T4 must at least write — and `complete=False` is the statement that the
+    true set is larger. The kind still commutes with nothing, itself included, which the test above
+    asserts and this one re-asserts so the two cannot be changed apart."""
+    fp = ao.footprint(_PLAY)
+    assert fp.complete is False and ao.commutes(_PLAY, _PLAY) is False
+    assert {"stadium", "allowance_stadium_played"} <= fp.reads
+    assert {"stadium", "allowance_stadium_played"} <= fp.writes
+    # Displacement is a DISCARD on whichever side owned the old Stadium, and the played card leaves
+    # my hand. All three are the structural half — no card's effect text is read to know them.
+    assert {"my_hand_ids", "my_discard_contents", "their_discard_contents"} <= fp.writes
+    # Not an empty claim: the floor is asserted to be a floor by naming a zone only the per-card
+    # EFFECT can write, which must NOT be in it.
+    assert "deck_odds" not in (fp.reads | fp.writes)
+
+
+@pytest.mark.req("REQ-APPLY-0009")
 def test_footprints_speak_the_coverage_registrys_field_vocabulary():
     """One store. A footprint naming a zone `snapshot_coverage` has never heard of would look like
     analysis while corresponding to nothing the snapshot was ever checked for."""

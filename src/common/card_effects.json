@@ -364,6 +364,30 @@
 "1242": {
 "covers": "partial",
 "reason": "clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried"
+},
+"1244": {
+"covers": "full",
+"reason": "the whole card: -30 damage taken by {M} bodies, symmetric, after Weakness/Resistance, and only from the opponent's attacks"
+},
+"1247": {
+"covers": "full",
+"reason": "the prevention IS the card — the no-Rule-Box defender and the ex/V attacker are both carried, and `no_rule_box` is the predicate 1152 Poke Pad is already ruled `full` on (one store cannot hold two opposite verdicts for one predicate). The second sentence, \"This card can't be put into your hand or deck from the discard pile\", is a property of the card once it is IN the discard rather than a leg of this play — 1096 Poke Vital A's shipped ruling verbatim"
+},
+"1251": {
+"covers": "full",
+"reason": "+30 HP to every Basic in play, both sides — the whole card"
+},
+"1252": {
+"covers": "full",
+"reason": "-30 HP to every Stage 2 in play, both sides — the whole card, and `CardStat.stage2` exists FOR this card"
+},
+"1255": {
+"covers": "full",
+"reason": "+30 damage from Hop's attackers to the opponent's Active, before Weakness/Resistance, symmetric. The Hop's family is DECIDED here and not merely recorded: the bodies are in play and we hold their names, so `card_text.name_in_family`'s normalised PREFIX test answers it — which is the question its own docstring separates from Issue #301's deck-side one (1115 / 1134 / 1215 / 1220 are `partial` because no build-time index over a HIDDEN deck exists, not because the string test is unavailable)"
+},
+"1260": {
+"covers": "full",
+"reason": "2 damage counters on any Basic non-{D} put onto EITHER player's Bench during their turn — the whole card, and the tax the Deploy Marginal (ADR-0086) currently misses"
 }
 },
 "17": [
@@ -1188,6 +1212,67 @@
 "kind": "heal",
 "amount": 10,
 "condition": "played_supporter_this_turn"
+}
+],
+"1244": [
+{
+"kind": "stadium_static",
+"effect": "damage_reduction",
+"amount": 30,
+"applies_to": "metal",
+"source": "opponent_attack",
+"timing": "after_weakness_resistance",
+"symmetric": true
+}
+],
+"1247": [
+{
+"kind": "stadium_static",
+"effect": "prevent_damage",
+"applies_to": "no_rule_box",
+"source": "opponent_attack",
+"source_class": "ex_or_v",
+"symmetric": true
+}
+],
+"1251": [
+{
+"kind": "stadium_static",
+"effect": "hp_delta",
+"amount": 30,
+"applies_to": "basic",
+"symmetric": true
+}
+],
+"1252": [
+{
+"kind": "stadium_static",
+"effect": "hp_delta",
+"amount": -30,
+"applies_to": "stage2",
+"symmetric": true
+}
+],
+"1255": [
+{
+"kind": "stadium_static",
+"effect": "damage_boost",
+"amount": 30,
+"applies_to": "name_family",
+"name_family": "Hop's",
+"target": "opponent_active",
+"timing": "before_weakness_resistance",
+"symmetric": true
+}
+],
+"1260": [
+{
+"kind": "stadium_trigger",
+"on": "bench_play",
+"effect": "damage_counters",
+"amount": 2,
+"applies_to": "basic_non_dark",
+"symmetric": true
 }
 ]
 }

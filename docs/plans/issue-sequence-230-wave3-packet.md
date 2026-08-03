@@ -120,7 +120,16 @@ no decision changed"*. Reverting it is −1, symmetrically.
 | frame | gate | issue | old | new | recommendation |
 |---|---|---|---|---|---|
 
-*(No gate flip has occurred in this batch. Issues #230, #299, #229, #251 and #256 all landed
-gate-neutral: both baselines byte-identical, Decision Gate PASS at agree 250/347 with 0 picks moved
-and 0 rulings moved, Discrimination Gate PASS with 0 unruled OK→MISS, 67 ruled, 3 voided, 198 frames
-gated. The table is kept so a later issue in the run has somewhere to put one.)*
+*(No gate flip has occurred in this batch. Issues #230, #299, #229, #251, #256, #238, #303 and #304
+have all landed gate-neutral: both baselines byte-identical, Decision Gate PASS at agree 250/347 with
+0 picks moved and 0 rulings moved, Discrimination Gate PASS with 0 unruled OK→MISS, 67 ruled, 3
+voided, 198 frames gated. The table is kept so a later issue in the run has somewhere to put one.)*
+
+*Worth recording because the parent epic #298 predicted otherwise: it warned that A2.1/2, /3, /5 and
+/6 "**move live decisions the moment they land**", since `card_effects.json` is read on the hot path.
+Measured after both #303 and #304, with a positive control on the same instrument, it does not — every
+live `effects.clauses(...)` consumer filters on a specific `kind` string (`fetch` / `accel` / `heal` /
+`draw` / `energy_recur`) and the two generic `kind = cl.get("kind")` switches are equality cascades an
+unrecognised kind falls straight through. The prediction is right about the FILE and wrong about which
+kinds are wired; a sub-issue that adds a NEW kind is inert until T4, while one that edits an existing
+kind's clauses is not. #302 edits `draw`, which IS wired.*

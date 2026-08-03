@@ -249,6 +249,12 @@ two vocabularies **share names on purpose** — `heal`, `draw` and (since Issue 
 and a clause kind alike — and the split is always that one: the tag says the card pulls a benched
 body Active, the clause says *which* class it may pull (`target: any | basic`) and what rides along
 (`self_switch`, `confuse_target`).
+A clause kind may also delegate its write to an `effect` value instead of carrying one itself: `coin`
+does (the flip is an RNG read; `effect` names the leg it resolves into), and so do Issue #304's
+`stadium_static` / `stadium_trigger`, where `effect` is `hp_delta` / `damage_reduction` /
+`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all three of `kind`, `rider`
+and `effect` for exactly that reason — a kind whose write-set reads empty is not a kind that writes
+nothing.
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.

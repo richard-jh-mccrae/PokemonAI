@@ -165,6 +165,63 @@ def test_the_gust_family_declares_the_pull_AND_what_leaving_the_active_spot_clea
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_stadium_kinds_delegate_their_write_to_the_effect_they_resolve_into():
+    """**Issue #304's write-sets.** A Stadium is not one mechanic — the 22 in the pool are five
+    unrelated effect shapes wearing one card type — so it gets two kinds, and neither carries a
+    write-set of its own. What each one writes is what its `effect` names, which is 1120 Crushing
+    Hammer's `coin` shape and the reason the Issue #300 walk covers `effect` at all.
+
+    **Both kinds reading EMPTY is the assertion, not an omission**, and the case is pinned two ways
+    so the reading cannot rot: the kinds are empty, AND every `effect` value they resolve into is
+    declared. Reading `stadium_static == frozenset()` as *"a Stadium writes nothing"* is exactly the
+    defect Crushing Hammer taught.
+
+    Only `hp_delta` writes the snapshot. Lively Stadium's +30 and Gravity Mountain's −30 move a
+    body's max HP, and `damage_counters` is the zone homed on the HP read. The three damage
+    modifiers are read by `CombatMath` off the `stadium` zone when it prices an attack and store
+    nothing, so declaring a write for them would claim a change that never happens."""
+    from common.strategy.context import _PLAY
+    vocab = set(sc.clause_vocabulary(_compendium()))
+    assert {"stadium_static", "stadium_trigger"} <= vocab
+    assert {"hp_delta", "damage_reduction", "damage_boost", "prevent_damage",
+            "damage_counters"} <= vocab
+    assert sc.CLAUSE_WRITES["stadium_static"] == frozenset()
+    assert sc.CLAUSE_WRITES["stadium_trigger"] == frozenset()
+    assert sc.undeclared_clauses(sorted(vocab)) == []
+    assert sc.CLAUSE_WRITES["hp_delta"] == {"damage_counters"}
+    assert sc.CLAUSE_WRITES["damage_counters"] == {"damage_counters"}
+    for read_only in ("damage_reduction", "damage_boost", "prevent_damage"):
+        assert sc.CLAUSE_WRITES[read_only] == frozenset(), read_only
+    # A Stadium's board write — the displacement and the allowance — is STRUCTURAL, so it is
+    # `apply_option`'s `_PLAY` footprint's and not any card's clauses'. Asserted here so the two
+    # halves of one mechanic cannot drift into each declaring the other's job.
+    assert {"stadium", "allowance_stadium_played"} <= ao.footprint(_PLAY).writes
+    assert not any("stadium" in zs for zs in
+                   (sc.CLAUSE_WRITES["stadium_static"], sc.CLAUSE_WRITES["stadium_trigger"]))
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_damage_counters_is_homed_on_BOTH_sides_and_on_the_bench():
+    """A symmetric Stadium writes this zone on bodies that are neither mine nor Active (Issue #304):
+    Gravity Mountain is *"Each Stage 2 Pokémon in play (both yours and your opponent's)"*, and Risky
+    Ruins places 2 counters on whichever player just benched a Basic. A my-Active-only home would
+    declare a write the snapshot cannot show — the same argument that already homes `attached_energy`
+    and (Issue #303) `transient_grants` on both sides.
+
+    The home was too narrow before those clauses landed, which is why this is a fix and not merely an
+    accommodation: `heal` writes here too and 1096 Poke Vital A heals *"1 of your Pokémon"*, benched
+    or not."""
+    assert sc.homes()["damage_counters"] == [
+        "mine.active.hp_remaining", "mine.bench", "theirs.active.hp_remaining", "theirs.bench"]
+    # The bench legs name the CONTAINER, exactly as `bodies_in_play` does; each `BodyView` inside it
+    # carries the per-body reads. Asserted so "mine.bench" cannot be read as a scalar HP field.
+    assert hasattr(sm.BodyView, "hp_remaining") and hasattr(sm.BodyView, "damage_counters")
+    assert sc.homes()["bodies_in_play"] == ["mine.active", "mine.bench", "theirs.active",
+                                            "theirs.bench"]
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
     """One vocabulary, not two. A write-set naming an invented zone would look like coverage while
     corresponding to nothing the snapshot was ever checked for."""

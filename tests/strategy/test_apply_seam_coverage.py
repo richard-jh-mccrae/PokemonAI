@@ -135,6 +135,52 @@ def test_the_gust_family_reaches_the_seam_as_a_closed_form_transition(census):
     assert residue == [1124], residue
 
 
+def test_six_stadiums_reach_the_seam_closed_form_and_the_rest_stay_honestly_missing(census):
+    """**Issue #304's acceptance, as a measurement, in both directions.**
+
+    Six Stadiums now resolve MODELLED-FULL, including the two with live copies behind them —
+    1252 Gravity Mountain (2, `mega_lucario`) and 1260 Risky Ruins (2, `dragapult_ex`), the second
+    of which taxes bench development on BOTH sides and so was over-valuing every deploy the Deploy
+    Marginal (ADR-0086) prices.
+
+    The other direction is the half that matters more, per *no silent caps*: an unmodelled group
+    that reads as covered is worse than one that reads as missing. So this also asserts that the
+    granted-action Stadiums, the suppression Stadiums and the rule-change Stadiums did **not**
+    quietly become MODELLED — they carry no clauses and stay engine-route candidates or refusals.
+    Two of them have four copies each behind them (1248 Academy at Night in `slowking`, 1259
+    Spikemuth Gym in `grimmsnarl_ex`) and are cross-posted to Issue #289 and Issue #301 rather than
+    built here, because they are those tracks' problems wearing a Stadium.
+
+    The unmodelled assertion is the POSITIVE CONTROL for the modelled one: both lists are read off
+    the same census run through the same predicate, so "six moved" cannot be an artefact of a walk
+    that reaches nothing."""
+    mod, cards, effects, covers, pool = census
+    from common.strategy.context import _PLAY
+    sites, _aside = mod.census(pool, cards, effects, covers)
+    stadium = {s.card_id: s for s in sites if s.category == "stadium"}
+    assert len(stadium) == 22, sorted(stadium)
+    assert all(s.kind == _PLAY for s in stadium.values())
+
+    minted = (1244, 1247, 1251, 1252, 1255, 1260)
+    for cid in minted:
+        assert stadium[cid].clauses, cid
+        assert stadium[cid].fate == seam.MODELLED, (cid, stadium[cid].fate)
+        assert stadium[cid].report_class == mod.FULL, (cid, stadium[cid].report_class)
+
+    # DELIBERATELY unmodelled, each named in the report with its reason. 1242 Community Center is
+    # the one Stadium that already had a clause set, and it stays `partial` on the per-body scope
+    # and the symmetry its `heal` clause cannot carry.
+    unmodelled = (1248, 1249, 1254, 1257, 1259, 1262, 1263, 1267,   # per-turn granted actions
+                  1264,                                            # triggered prevention
+                  1245, 1246, 1256,                                # Tool / Ability suppression
+                  1250, 1261, 1266)                                # rule changes
+    for cid in unmodelled:
+        assert not stadium[cid].clauses, (cid, stadium[cid].clauses)
+        assert stadium[cid].fate != seam.MODELLED, (cid, stadium[cid].fate)
+    assert stadium[1242].report_class == mod.PARTIAL
+    assert set(minted) | set(unmodelled) | {1242} == set(stadium)
+
+
 def test_the_census_asks_the_seam_for_the_fate_rather_than_re_deriving_it(census):
     """One store for the resolution order (Issue #299). The census used to mirror `fate`'s cascade by
     hand, because `fate` demanded two inputs nothing produces; now it supplies those judgements and

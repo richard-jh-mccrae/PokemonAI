@@ -219,6 +219,62 @@ def test_shipped_gust_clauses_carry_the_target_the_trigger_and_the_riders():
 
 
 @pytest.mark.req("REQ-EFFECT-0004")
+def test_shipped_stadium_clauses_carry_the_effect_the_magnitude_and_the_body_predicate():
+    """Issue #304: `stadium_static` and `stadium_trigger`. Six pool Stadiums round-trip override ->
+    build -> `card_effects.json`, each with the fields its printed text needs.
+
+    Two kinds rather than one, because the 22 Stadiums in the pool are five unrelated effect shapes
+    wearing a single card type — one `stadium` kind would be a union of everything or a lie. Neither
+    kind carries a write-set; the clause's `effect` does, which is 1120 Crushing Hammer's shape.
+
+    The load-bearing fields, each pinned because dropping one silently mis-states a card:
+
+    * `amount` is **SIGNED** — Gravity Mountain is −30 HP and Lively Stadium is +30, and an unsigned
+      read would turn the pool's one Stadium that *shrinks* Stage 2s into one that grows them.
+    * `symmetric` is on all six: every one prints *"both yours and your opponent's"*, so a Stadium I
+      play helps my opponent too, and pricing my own half alone would make every Stadium look free.
+    * `timing` carries the Weakness/Resistance ORDER the two damage modifiers print, which decides
+      whether the ×2 lands on the modified number or the printed one.
+    * `on: "bench_play"` is Risky Ruins' trigger EVENT, and it is deliberately **not** spelled
+      `trigger`: that key routes a clause to a SITE (`on_evolve` / `on_bench_play` / `on_attach`),
+      and using it here would file this clause on an option the engine never poses for a Stadium —
+      which would orphan it and silently un-cover the card."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+    assert eff.clauses(1252) == ({"kind": "stadium_static", "effect": "hp_delta", "amount": -30,
+                                  "applies_to": "stage2", "symmetric": True},)   # Gravity Mountain
+    assert eff.clauses(1251) == ({"kind": "stadium_static", "effect": "hp_delta", "amount": 30,
+                                  "applies_to": "basic", "symmetric": True},)    # Lively Stadium
+    assert eff.clauses(1244) == ({"kind": "stadium_static", "effect": "damage_reduction",
+                                  "amount": 30, "applies_to": "metal",
+                                  "source": "opponent_attack",
+                                  "timing": "after_weakness_resistance",
+                                  "symmetric": True},)                           # Full Metal Lab
+    assert eff.clauses(1255) == ({"kind": "stadium_static", "effect": "damage_boost", "amount": 30,
+                                  "applies_to": "name_family", "name_family": "Hop's",
+                                  "target": "opponent_active",
+                                  "timing": "before_weakness_resistance",
+                                  "symmetric": True},)                           # Postwick
+    assert eff.clauses(1247) == ({"kind": "stadium_static", "effect": "prevent_damage",
+                                  "applies_to": "no_rule_box", "source": "opponent_attack",
+                                  "source_class": "ex_or_v",
+                                  "symmetric": True},)                        # Neutralization Zone
+    assert eff.clauses(1260) == ({"kind": "stadium_trigger", "on": "bench_play",
+                                  "effect": "damage_counters", "amount": 2,
+                                  "applies_to": "basic_non_dark", "symmetric": True},)  # Risky Ruins
+    # All six carry their whole printed card. The two predicates that could have been ruled
+    # `partial` are not, and each defers to a verdict already shipped for the SAME predicate rather
+    # than being decided fresh here: 1247's `no_rule_box` is what 1152 Poke Pad is ruled `full` on,
+    # and its discard-pile sentence is 1096 Poke Vital A's *"a property of the card once it is in the
+    # discard"*. 1255's `Hop's` family is decided by `name_in_family`'s prefix test over a body
+    # ALREADY IN PLAY, which that function's own docstring separates from Issue #301's hidden-deck
+    # question — the reason 1115 / 1134 / 1215 / 1220 are `partial`.
+    assert [eff.covers(c) for c in (1244, 1247, 1251, 1252, 1255, 1260)] == ["full"] * 6
+    assert all(eff.clauses_cover(c) is True for c in (1244, 1247, 1251, 1252, 1255, 1260))
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
 def test_override_only_card_needs_no_probe():
     ovr = [{"kind": "heal", "amount": 150}]
     assert classify_effect_clauses({}, overrides=ovr) == ovr

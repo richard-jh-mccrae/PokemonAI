@@ -120,23 +120,23 @@ Pool: **385 distinct cards** — 6 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 6 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 300 | 72.5% | 295 | 81.9% | 46.0 |
-| **engine-resolved** | 52 | 12.6% | 27 | 7.5% | 7.2 |
+| **modelled** | 306 | 73.9% | 299 | 83.1% | 47.4 |
+| **engine-resolved** | 46 | 11.1% | 23 | 6.4% | 5.8 |
 | **refused** | 62 | 15.0% | 63 | 17.5% | 9.2 |
 
 The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is `clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its uncovered leg at 0:
 
 | class | sites | % sites | fate now |
 |---|---|---|---|
-| **modelled-full** | 300 | 72.5% | modelled 300 |
+| **modelled-full** | 306 | 73.9% | modelled 306 |
 | **modelled-partial** | 23 | 5.6% | engine-resolved 2, refused 21 |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 6 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 271 | 70.4% | 270 | 75.0% | 43.6 | 72.7% |
-| **engine-resolved** | 50 | 13.0% | 27 | 7.5% | 7.2 | 12.0% |
+| **modelled-full** | 277 | 71.9% | 274 | 76.1% | 45.0 | 75.0% |
+| **engine-resolved** | 44 | 11.4% | 23 | 6.4% | 5.8 | 9.7% |
 | **modelled-partial** | 23 | 6.0% | 42 | 11.7% | 5.9 | 9.9% |
 | **refused** | 41 | 10.6% | 21 | 5.8% | 3.2 | 5.4% |
 
@@ -146,13 +146,13 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 56 | 32.9% |
-| **engine-resolved** | 52 | 30.6% |
+| **modelled** | 62 | 36.5% |
+| **engine-resolved** | 46 | 27.1% |
 | **refused** | 62 | 36.5% |
 
 | clause-completeness split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 56 | 32.9% |
+| **modelled-full** | 62 | 36.5% |
 | **modelled-partial** | 23 | 13.5% |
 
 ### REFUSED, grouped by cause and ranked by exposure
@@ -283,13 +283,11 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 1213 | Judge | play | modelled-partial | dragapult_ex, mega_lucario | 3 |
 | 1123 | Switch | play | engine-resolved | mega_lucario | 2 |
 | 1223 | Harlequin | play | modelled-partial | mega_starmie | 2 |
-| 1252 | Gravity Mountain | play | engine-resolved | mega_lucario | 2 |
-| 1260 | Risky Ruins | play | engine-resolved | dragapult_ex | 2 |
 | 1211 | Black Belt’s Training | play | engine-resolved | mega_lucario | 1 |
 
 ### ENGINE-RESOLVED — the modelling backlog
 
-52 sites, 27 copies across our 6 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
+46 sites, 23 copies across our 6 decks. Each is a CANDIDATE: no RNG, hidden-zone or opponent-choice marker appears in its text, which is necessary for the `deterministic=True` proof but is not the proof itself.
 
 | id | card | site | our copies | meta copies |
 |---|---|---|---|---|
@@ -298,19 +296,15 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 1261 | Forest of Vitality | play | 4 | 0.02 |
 | 9 | Boomerang Energy | attach | 3 | 0.00 |
 | 1123 | Switch | play | 2 | 0.55 |
-| 1252 | Gravity Mountain | play | 2 | 0.46 |
-| 1260 | Risky Ruins | play | 2 | 0.02 |
 | 150 | Hydrapple ex | ability: Ripening Charge | 2 | 0.00 |
 | 1079 | Rare Candy | play | 1 | 1.08 |
 | 1211 | Black Belt’s Training | play | 1 | 0.04 |
 | 11 | Mist Energy | attach | 0 | 1.02 |
 | 1081 | Enhanced Hammer | play | 0 | 0.89 |
-| 1255 | Postwick | play | 0 | 0.80 |
 | 1264 | Battle Cage | play | 0 | 0.26 |
 | 18 | Grow Grass Energy | attach | 0 | 0.23 |
 | 14 | Spiky Energy | attach | 0 | 0.19 |
 | 1256 | Team Rocket's Watchtower | play | 0 | 0.15 |
-| 1244 | Full Metal Lab | play | 0 | 0.10 |
 | 1254 | Levincia | play | 0 | 0.09 |
 | 269 | Iono’s Bellibolt ex | ability: Electric Streamer | 0 | 0.09 |
 | 15 | Team Rocket's Energy | attach | 0 | 0.06 |
@@ -318,7 +312,6 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 20 | Rock Fighting Energy | attach | 0 | 0.04 |
 | 401 | Team Rocket's Spidops | ability: Charging Up | 0 | 0.04 |
 | 16 | Prism Energy | attach | 0 | 0.04 |
-| 1247 | Neutralization Zone | play | 0 | 0.02 |
 | 1052 | Barbaracle | ability: Stone Arms | 0 | 0.02 |
 | 1218 | Team Rocket's Giovanni | play | 0 | 0.02 |
 | 132 | Dusclops | ability: Cursed Blast | 0 | 0.01 |
@@ -335,7 +328,6 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 75 | Iron Leaves ex | deploy | 0 | 0.00 |
 | 1209 | Ruffian | play | 0 | 0.00 |
 | 326 | Blaziken ex | ability: Seething Spirit | 0 | 0.00 |
-| 1251 | Lively Stadium | play | 0 | 0.00 |
 | 10 | Neo Upper Energy | attach | 0 | 0.00 |
 | 512 | Eelektrik | ability: Dynamotor | 0 | 0.00 |
 | 652 | Mega Venusaur ex | ability: Solar Transfer | 0 | 0.00 |
@@ -409,10 +401,10 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 
 | deck | modelled-full | modelled-partial | engine-resolved | refused | % at-risk (partial+refused) |
 |---|---|---|---|---|---|
-| dragapult_ex | 46 | 10 | 4 | 0 | 16.7% |
+| dragapult_ex | 48 | 10 | 2 | 0 | 16.7% |
 | grimmsnarl_ex | 44 | 6 | 5 | 5 | 18.3% |
 | hydrapple | 44 | 5 | 6 | 5 | 16.7% |
-| mega_lucario | 45 | 7 | 8 | 0 | 11.7% |
+| mega_lucario | 47 | 7 | 6 | 0 | 11.7% |
 | mega_starmie | 50 | 10 | 0 | 0 | 16.7% |
 | slowking | 41 | 4 | 4 | 11 | 25.0% |
 
@@ -429,6 +421,7 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | draw | 20 | yes |
 | gust | 6 | yes |
 | heal | 5 | yes |
+| stadium_static | 5 | declared EMPTY |
 | accel | 4 | yes |
 | energy_provide | 2 | yes |
 | self_switch | 2 | yes |
@@ -442,6 +435,7 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | discard_remainder | 1 | yes |
 | confuse_target | 1 | yes |
 | bounce_energy_to_hand | 1 | yes |
+| stadium_trigger | 1 | declared EMPTY |
 
 <!-- END GENERATED -->
 
@@ -556,12 +550,57 @@ that archetype ships a Brief (`scouting/briefs/hop_s_trevenant_hop_s_snorlax.jso
 carried as **doctrine** today and now as **data**, with nothing joining them. Whoever prices an
 opponent's clock next should start there.
 
-**stadium — structurally hampered.** 14 sites needing vocabulary that does not exist.
-`snapshot_coverage` homes `stadium` (which Stadium is in play) and T1 added
-`allowance_stadium_played`, so the seam can represent *that* a Stadium changed — but there is no
-clause kind for what a Stadium *does*, so `state_value` has nothing to read and the swap differences
-to ~0. Playing a Stadium, and more importantly **displacing the opponent's**, is unpriceable on day
-one.
+**stadium — PARTLY MINTED (Issue #304).** The original finding: 14 sites needing vocabulary that did
+not exist. `snapshot_coverage` homed `stadium` (which Stadium is in play) and T1 added
+`allowance_stadium_played`, so the seam could represent *that* a Stadium changed — but there was no
+clause kind for what a Stadium *does*, so `state_value` had nothing to read and the swap differenced
+to ~0. Playing a Stadium, and more importantly **displacing the opponent's**, was unpriceable.
+
+Two halves landed, and neither is the whole family.
+
+**Displacement is now structural.** `apply_option.FOOTPRINTS` gained a `_PLAY` entry — the first
+INCOMPLETE footprint to carry sets, a declared *floor* rather than an exhaustive answer — naming
+`stadium`, `allowance_stadium_played` and both discards. The rulebook lines are recorded at the
+entry: L135-137 (*"Only one Stadium can be in play at a time—if a new one comes into play, discard
+the old one and end its effects"*), L112/L138 (one per turn), L78 (each player has their own discard,
+so whose discard the displaced Stadium enters depends on whose Stadium it was). `complete=False`
+still means `_PLAY` commutes with nothing, so the floor licenses no reorder; what it does is stop a
+T4 transition forgetting the Stadium it displaced.
+
+**Six cards now carry clauses**, under TWO new kinds rather than one — `stadium_static` (an ongoing
+modifier) and `stadium_trigger` (fires on a board event), because Groups A–E below are five
+unrelated effect shapes wearing one card type and a single `stadium` kind would be a union of
+everything or a lie. The write rides the clause's `effect`, exactly as Crushing Hammer's rides its
+`coin`'s: `hp_delta` writes `damage_counters`, and `damage_reduction` / `damage_boost` /
+`prevent_damage` write **nothing** — `CombatMath` reads them off the `stadium` zone when it prices an
+attack. All six resolve **MODELLED-FULL**: 1260 Risky Ruins (2 copies, `dragapult_ex`), 1252 Gravity
+Mountain (2, `mega_lucario`), 1255 Postwick (0.80 meta — the family's largest opponent-side
+exposure), 1244 Full Metal Lab, 1247 Neutralization Zone, 1251 Lively Stadium.
+
+Risky Ruins is the one that corrupts an equation we already ship: it taxes **bench development on
+both sides**, which is exactly the option the Deploy Marginal (ADR-0086) prices, so every deploy
+under it was over-valued by 20 damage on the body just placed.
+
+**What is deliberately still unmodelled, named rather than left to read as covered** (16 of the 22
+pool sites): the nine **per-turn granted actions**, which change the OPTION SET rather than the
+board and so can never fold into a commutative block — 1248 Academy at Night (4 copies, `slowking`)
+puts a card on top of the deck and is cross-posted to **Issue #289**'s known-top-of-deck decision;
+1259 Spikemuth Gym (4 copies, `grimmsnarl_ex`) is a name-locked deck search and is cross-posted to
+**Issue #301**'s fetch vocabulary; 1242 Community Center stays `partial` on its per-body scope and
+symmetry; the other six have 0 copies. Then 1264 Battle Cage (prevention of damage-counter
+*placement* on Benched bodies by opponent effects — the same `prevent_damage` value, but a source
+class `CombatMath` has no read for), the three **suppression** Stadiums (1246 / 1256 / 1245 — making
+every Tool and Ability read conditional on the Stadium is a `CardStat` architecture change, not a
+clause), and the three **rule changes** (1250 Area Zero Underdepths moves a LOSS condition and wants
+a ruling before it is modelled; 1261 Forest of Vitality — **4 copies in `hydrapple`**, joint-largest
+Stadium exposure we ship alongside Academy at Night and Spikemuth Gym — changes evolution LEGALITY;
+1266 Nighttime Mine changes an attack COST). None of the last seven is a `state_value` term today.
+
+⚠️ **That last one is a correction to Issue #304's own body**, which files Forest of Vitality under
+*"Rule changes — 3 cards, **0 of our copies**"*. The `hydrapple` deck landed on `main` after the issue
+was written. Two more of its numbers were stale the same way and are recorded on the issue: the
+*"21 of 22 sites are REFUSED"* opening (6 were, post-#299), and the deck attributions for Academy at
+Night and Spikemuth Gym, which are transposed. **16 copies across 6 decks, not 12 across 5.**
 
 **gust-whether — MINTED (Issue #303).** It was the headline failure: 7 sites, 13 copies across our
 decks, 2.55 copies in the meta-weighted opposing deck, *Boss's Orders* named by all three authored
@@ -589,15 +628,23 @@ pulling. And the two on-evolve gusts (Hariyama, Hop's Dubwool) reach a clause th
 forced, recorded below.
 
 > **What Issue #299's ruling did and did not change for the Stadium family.** It was REFUSED
-> entirely when this was written; most of its sites are now ENGINE-RESOLVED *candidates* (2 refused
-> of 14), because the printed text carries no RNG, hidden-zone or opponent-choice marker and the
-> engine route is no longer closed to `_PLAY`. **That is not the same as being priced.** A candidate
-> needs a `deterministic=True` proof and a wired `search_api`, and nothing produces either; and even
-> resolved through the engine it would be a 1-ply bridge, not the closed-form clause the composer
-> wants. So the vocabulary work below is unchanged in scope and unchanged in priority — the ruling
-> moved where these sit in the tables, not what they cost. Issue #304 owns it. Gust sat in exactly
-> the same place until Issue #303 minted the kind, which is what taking a family from *candidate* to
-> *closed-form* actually costs and actually buys.
+> entirely when this was written; most of its sites became ENGINE-RESOLVED *candidates*, because the
+> printed text carries no RNG, hidden-zone or opponent-choice marker and the engine route is no
+> longer closed to `_PLAY`. **That is not the same as being priced.** A candidate needs a
+> `deterministic=True` proof and a wired `search_api`, and nothing produces either; and even resolved
+> through the engine it would be a 1-ply bridge, not the closed-form clause the composer wants. So
+> the vocabulary work was unchanged in scope and unchanged in priority — the ruling moved where these
+> sit in the tables, not what they cost.
+>
+> That is worth reading twice, because **Issue #304's own body was written against the pre-#299
+> census and its opening numbers were already stale when the work started**: it says *"21 of the 22
+> Stadium sites are REFUSED"*, and by then 15 were engine-route candidates and only 6 were refused.
+> The same trap caught Issue #303's acceptance criterion. A sub-issue of a long queue must re-measure
+> before it builds against a number.
+>
+> Issue #304 landed the two halves recorded above. Gust sat in exactly the same place until Issue
+> #303 minted its kind, which is what taking a family from *candidate* to *closed-form* actually
+> costs and actually buys.
 
 ## The findings that are not about coverage percentages
 
@@ -753,7 +800,14 @@ Issue #263.
 5. ~~**Rule AMBIGUOUS #3 by measurement**~~ — **DONE (Issue #305).** Two probes through the live
    engine, one per trigger kind, settled where the 11 sites belong: on the `_PLAY` / `_EVOLVE` they
    ride. Nothing moved. *The triggered-Ability ruling* below carries the evidence.
-6. **Stadium vocabulary** — 14 sites, and unlike the others it has no partial answer available today.
+6. ~~**Stadium vocabulary**~~ — **PARTLY DONE (Issue #304).** Displacement is structural now
+   (`_PLAY`'s footprint names `stadium`, `allowance_stadium_played` and both discards, with the
+   rulebook lines recorded), and 6 of the 22 pool sites carry `stadium_static` / `stadium_trigger`
+   clauses and resolve MODELLED-FULL — including Risky Ruins, which taxes bench development on both
+   sides and was silently over-valuing every deploy the Deploy Marginal prices. The remaining 16 are
+   named, with reasons, in *stadium* above; the two with real copies behind them (Academy at Night 4,
+   Spikemuth Gym 4) are cross-posted to **Issue #289** and **Issue #301** because they are those
+   tracks' problems wearing a Stadium, not Stadium problems.
 
 ## The triggered-Ability ruling (AMBIGUOUS #3, answered by measurement — Issue #305)
 

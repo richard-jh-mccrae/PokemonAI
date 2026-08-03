@@ -109,8 +109,20 @@ WRITABLE: tuple[Zone, ...] = (
     Zone("attached_energy", "Energy attached to a body, either side", HOMED,
          home="mine.active.energy_count,mine.active.attached_types,"
               "theirs.active.energy_count,theirs.active.attached_types"),
-    Zone("damage_counters", "damage on a body — heal writes it, attacks write it", HOMED,
-         home="mine.active.hp_remaining"),
+    # BOTH sides, and the BENCH as well as the Active — the same argument `attached_energy` and
+    # `transient_grants` already carry. A SYMMETRIC Stadium writes this zone on bodies that are
+    # neither mine nor Active (Issue #304): Gravity Mountain's `hp_delta` is *"Each Stage 2 Pokémon
+    # in play (both yours and your opponent's)"*, and Risky Ruins places its 2 counters on whichever
+    # player just BENCHED a Basic. A my-Active-only home would declare a write the snapshot cannot
+    # show — the silent zero one level down.
+    #
+    # The home was already too narrow before those clauses landed: `heal` writes here too and 1096
+    # Poke Vital A heals *"1 of your Pokémon"*, benched or not. The bench legs name the CONTAINER,
+    # exactly as `bodies_in_play` already does — every `BodyView` in it carries `hp_remaining` and
+    # `damage_counters`.
+    Zone("damage_counters", "damage on a body — heal writes it, attacks write it, and a symmetric "
+                            "Stadium writes it on either side's Bench", HOMED,
+         home="mine.active.hp_remaining,mine.bench,theirs.active.hp_remaining,theirs.bench"),
     Zone("allowance_energy_attached", "the one-Energy-per-turn allowance, spent or not", HOMED,
          home="energy_attached"),
     Zone("allowance_supporter_played", "the one-Supporter-per-turn allowance", HOMED,
@@ -190,6 +202,17 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # both: :func:`undeclared_clauses` looks the string up, not the position it came from.
     "gust": frozenset({"bodies_in_play", "special_conditions", "transient_grants"}),
     "heal": frozenset({"damage_counters"}),
+    # Issue #304: the Stadium vocabulary. TWO kinds rather than one, because Groups A–E of that
+    # issue's census are five unrelated effect shapes wearing the same card type — a single
+    # `stadium` kind would be either a union of everything or a lie.
+    #
+    # **Both are declared EMPTY, and reading that as "a Stadium writes nothing" is the Issue #300
+    # defect again.** What a Stadium writes is what its `effect` names (below), exactly as Crushing
+    # Hammer's write is what its `coin`'s `effect` names. What is common to every Stadium — the one
+    # in play is DISPLACED and the once-per-turn allowance is spent — is STRUCTURAL, so it belongs
+    # to `apply_option`'s `_PLAY` footprint and not to any card's clauses.
+    "stadium_static": frozenset(),
+    "stadium_trigger": frozenset(),
     # riders
     "bounce_energy_to_hand": frozenset({"attached_energy", "my_hand_ids"}),
     # Issue #303, Lisia's Appeal: *"If you do, the new Active Pokemon is now Confused."* The
@@ -224,10 +247,34 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "shuffle_both_hands": frozenset({"my_hand_ids", "their_hand_size", "my_deck_count",
                                      "their_deck_count", "deck_odds", "deck_order"}),
     "shuffle_self_in": frozenset({"bodies_in_play", "my_deck_count", "deck_odds", "deck_order"}),
-    # effects — the leg a `coin` (or any other gate) RESOLVES INTO. `discard_opp_energy` is the only
-    # value in the committed compendium and in `effect_overrides.json` today (swept 2026-08-02);
-    # a second one lands in `undeclared_clauses()` rather than passing green.
+    # effects — the leg a `coin` (or a `stadium_static` / `stadium_trigger`) RESOLVES INTO.
     "discard_opp_energy": frozenset({"attached_energy", "their_discard_contents"}),
+    # ── Issue #304, the `stadium_static` effects ──────────────────────────────────────────────────
+    # `applies_to` names the body the modifier is ABOUT, and WHICH body that is, is fixed by the
+    # effect rather than by a separate field: the modified body for `hp_delta`, the DEFENDER for
+    # `damage_reduction` / `prevent_damage`, the ATTACKER for `damage_boost`.
+    #
+    # **Only the HP delta writes the snapshot at all.** Lively Stadium's +30 and Gravity Mountain's
+    # −30 move a body's max HP, and `damage_counters` is the zone homed on the HP read
+    # (`…active.hp_remaining`), so an HP floor change IS a damage-model write — which is also why it
+    # was the widening that zone's home needed. The three damage modifiers are READ by `CombatMath`
+    # off the `stadium` zone when it prices an attack and store nothing, so declaring a write for
+    # them would claim a snapshot change that never happens — the mirror-image error, and just as
+    # able to make a delta lie.
+    "hp_delta": frozenset({"damage_counters"}),
+    "damage_reduction": frozenset(),
+    "damage_boost": frozenset(),
+    "prevent_damage": frozenset(),
+    # The one `stadium_trigger` effect: Risky Ruins' tax on bench development — *"Whenever any
+    # player puts a Basic non-{D} Pokémon onto their Bench during their turn, place 2 damage
+    # counters on that Pokémon"* — which fires on exactly the option the Deploy Marginal (ADR-0086)
+    # prices, on BOTH sides.
+    #
+    # This key is an `effect` VALUE that happens to be spelled like the ZONE it writes. The two
+    # namespaces are separate and stay separate mechanically (`undeclared_clauses` looks keys up
+    # here; `unknown_zones` looks values up in `BY_ID`), but a reader meeting
+    # `"damage_counters": {"damage_counters"}` cold deserves to be told which is which.
+    "damage_counters": frozenset({"damage_counters"}),
 }
 
 #: Clauses that consult RNG. **Never eligible for the ENGINE-RESOLVED route** — the gate there is

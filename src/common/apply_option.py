@@ -282,11 +282,20 @@ class Footprint:
 
     **Fail closed.** ``complete=False`` — unknown or partial — means the kind commutes with NOTHING.
     A footprint that under-reports is worse than none: it would license a reorder that changes the
-    board, and the composer would collapse two genuinely different lines into one candidate."""
+    board, and the composer would collapse two genuinely different lines into one candidate.
 
-    #: Snapshot zones the transition reads. Meaningless unless ``complete``.
+    **An INCOMPLETE footprint may still carry sets, and they are a FLOOR** (Issue #304). `_PLAY` is
+    the case: the zones a play touches *structurally* — decidable from the card's type alone, before
+    any effect text is read — are known, while the per-card effect on top of them is not. Declaring
+    the floor licenses nothing, because :func:`commutes` ignores both sets unless ``complete``; what
+    it does is state what T4 must at LEAST write, so a transition that forgets the Stadium it
+    displaced fails a reading rather than passing silently."""
+
+    #: Snapshot zones the transition reads. Ignored by :func:`commutes` unless ``complete``; on an
+    #: incomplete footprint they are the declared FLOOR, never an exhaustive set.
     reads: frozenset[str] = frozenset()
-    #: Snapshot zones the transition writes. Meaningless unless ``complete``.
+    #: Snapshot zones the transition writes. Ignored by :func:`commutes` unless ``complete``; on an
+    #: incomplete footprint they are the declared FLOOR, never an exhaustive set.
     writes: frozenset[str] = frozenset()
     #: Is this footprint exhaustive? False (the default) is the fail-closed answer.
     complete: bool = False
@@ -346,12 +355,12 @@ class Refusal:
 
 #: Per-kind READ/WRITE footprints, in `snapshot_coverage` field vocabulary (Issue #259 §3b).
 #:
-#: Only the four closed-form kinds carry a complete footprint: their write-set follows from the
-#: rulebook, not from a card's text. Everything else defaults to the fail-closed `Footprint()` —
-#: incomplete, so it commutes with nothing — and `_PLAY` is the one that matters: a Trainer play
-#: writes whatever its Effect Clauses write, which is per-card, so the KIND cannot claim a complete
-#: footprint even though its structural half (the card leaves hand) is known. T4 supplies the
-#: per-option footprint by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses.
+#: Only three kinds carry a COMPLETE footprint: their write-set follows from the rulebook, not from
+#: a card's text. Everything else defaults to the fail-closed `Footprint()` — incomplete, so it
+#: commutes with nothing. `_PLAY` is the fourth closed-form kind and is deliberately INCOMPLETE: a
+#: Trainer play writes whatever its Effect Clauses write, which is per-card, so the KIND cannot
+#: claim a complete footprint. T4 supplies the per-option footprint by unioning
+#: `snapshot_coverage.CLAUSE_WRITES` over the card's clauses, on top of `_PLAY`'s structural floor.
 #:
 #: **A kind whose footprint touches an `owed` zone must not be trusted as MODELLED until that zone is
 #: homed** — that is §3c's "hard, loud failure rather than a silent zero" as a rule T4 can check, via
@@ -377,8 +386,43 @@ FOOTPRINTS: dict[int, Footprint] = {
         writes=frozenset({"bodies_in_play", "attached_energy", "my_discard_contents",
                           "allowance_retreat_used", "special_conditions"}),
         complete=True),
-    # _PLAY is deliberately ABSENT: per-card effects mean the kind has no complete footprint, and
-    # `footprint()` returns the fail-closed default for anything not listed here.
+    # `_PLAY`'s STRUCTURAL FLOOR (Issue #304), `complete=False`: everything here follows from the
+    # played card's TYPE, with no effect text read. The per-card effect adds to it, which is what
+    # `complete=False` says — so `commutes` still refuses `_PLAY` against everything, including
+    # itself, exactly as it did when this entry was absent.
+    #
+    # The Stadium legs are why the entry exists at all. A Stadium REPLACES the one in play, and
+    # displacing one that is hurting me is a real play the seam could not see while nothing named
+    # the zone. Checked at source, not recalled:
+    #
+    #   `docs/rulebook.txt` L135-137 — *"A Stadium stays in play when you play it. Only one Stadium
+    #     can be in play at a time—if a new one comes into play, discard the old one and end its
+    #     effects. You can't play a Stadium card if a Stadium with the same name is already in
+    #     play."* (The glossary at L622 restates it.)
+    #   `docs/rulebook.txt` L112 — *"Play Trainer cards (as many as you want, but only one Supporter
+    #     card and one Stadium card per turn)."* L138 the same.
+    #   `docs/rules.md` §3 — *"Play a Stadium | **1** (and only if it differs from the one in play)"*.
+    #   `docs/rulebook.txt` L78 — *"Each player has their own discard pile. Cards taken out of play
+    #     go to the discard pile"*, which is why displacement writes BOTH discards: the old Stadium
+    #     is discarded, and whose discard that is depends on whose Stadium it was.
+    #
+    # Zone by zone, and which structural sub-case of `_PLAY` each one comes from:
+    #   my_hand_ids                  every play — the card leaves my hand
+    #   my_discard_contents          an Item / Supporter played goes to my discard; so does my own
+    #                                Stadium when I replace it
+    #   their_discard_contents       displacing THEIR Stadium puts THEIR card in THEIR discard
+    #   stadium                      read (is it a different name? L137) and written (the swap)
+    #   allowance_stadium_played     read (spent already?) and written (spending it)
+    #   allowance_supporter_played   the same pair for a Supporter play
+    #   bodies_in_play               a Basic deploy puts a body on the Bench
+    #   bench_occupancy              read (is the Bench full?) and written by that deploy
+    _PLAY: Footprint(
+        reads=frozenset({"my_hand_ids", "stadium", "allowance_stadium_played",
+                         "allowance_supporter_played", "bench_occupancy"}),
+        writes=frozenset({"my_hand_ids", "my_discard_contents", "their_discard_contents",
+                          "stadium", "allowance_stadium_played", "allowance_supporter_played",
+                          "bodies_in_play", "bench_occupancy"}),
+        complete=False),
 }
 
 
@@ -393,11 +437,13 @@ def footprint(kind: int) -> Footprint:
 def footprints_writing_unhomed() -> dict:
     """``{kind: [owed zone ids]}`` — kinds whose transition writes state the snapshot cannot hold.
 
-    **Not empty, and that is the finding.** `_EVOLVE` and `_RETREAT` both clear Special Conditions
-    (`docs/rules.md` §4 and §8) and `special_conditions` has no snapshot home yet; `_RETREAT` also
-    reads and writes the retreat allowance, which has none either. Under differencing that is the
-    exact §3c failure: part of what the transition did is invisible, so the delta under-reports and
-    at ordering time an under-reported delta is a pruned option.
+    **Empty since T1 (Issue #260), and that is what the finding turned into.** It was NOT empty at
+    T0: `_EVOLVE` and `_RETREAT` both clear Special Conditions (`docs/rules.md` §4 and §8) and
+    `special_conditions` had no snapshot home, and `_RETREAT` read and wrote a retreat allowance
+    that had none either. Under differencing that is the exact §3c failure — part of what the
+    transition did is invisible, so the delta under-reports, and at ordering time an under-reported
+    delta is a pruned option. T1 homed all three, so the work list this generated is done; the
+    function survives as the standing check that a NEW footprint zone does not re-open it.
 
     Surfaced as a function rather than a comment so T1 (Issue #260) has a generated work list and
     `test_snapshot_coverage.py` can assert the set only ever SHRINKS."""
