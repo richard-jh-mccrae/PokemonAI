@@ -63,6 +63,18 @@ a green gate means *nothing regressed*, **not** that the agent is right — the 
 frame it captured as the reference, including the ones where the agent contradicts a human
 (`docs/plans/decider-disagreement-triage.md` ranks those).
 
+## Reading the `unstatable` section
+
+A Correction on an **optional** select that names only the agent's own pick has not said *"taking it
+was right"* — before Issue #229 that was the only shape a ruling on such a frame could take, because
+`decision` scope refused the empty `correct` that means *decline*. Grading a decider against such a
+record grades it against the opposite of what the human meant.
+`gates.records_a_decline_it_cannot_state` detects the shape; **Issue #251 ruled that this report
+NAMES those frames and never excludes them.** Excluding one would remove it from grading forever —
+including after the record is repaired, which Issue #229 made possible — and a gate that under-reports is
+indistinguishable from one with nothing to report. The line says what to do about it: re-rule the
+record, do not ungrade the frame.
+
 **The baseline is a RULING RECORD, never auto-recaptured** — the same discipline `data/leaf_lab/`
 carries. Re-capture only once a build's flips have been ruled with the user, or the gate becomes a
 mirror that agrees with whatever it is shown. Frames ruled out of a decider's scope are held out via
@@ -85,8 +97,10 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from train.gates import (classes_of, decider_lab_diff, decision_gate_verdict,  # noqa: E402
                          decision_fail_keys, equivalence_index, guarded_capture, held_out_frames,
                          keyed_corrections, orphan_rulings, print_agree_delta, print_gate_report,
-                         print_ruling_moves, print_ruling_readout, restamp_artifact, ruling_index,
-                         satisfies_human, split_excused, voided_frames, write_json_artifact)
+                         print_ruling_moves, print_ruling_readout,
+                         records_a_decline_it_cannot_state, restamp_artifact, rows_by_key,
+                         ruling_index, satisfies_human, split_excused, voided_frames,
+                         write_json_artifact)
 
 
 def _git_rev() -> str:
@@ -180,12 +194,92 @@ def build_report(store, agent=None, *, voided=(), equiv=None) -> dict:
             errors += 1
         rows.append(row)
     labelled = [r for r in rows if r.get("correct") is not None and r.get("chosen") is not None]
-    gradeable = [r for r in labelled if r["key"] not in voided]
+    gradeable = gradeable_rows(rows)
     agree = sum(1 for r in gradeable
                 if satisfies_human(r["chosen"], r["correct"], equiv=equiv.get(r["key"])))
     return {"rows": rows, "n": len(rows), "errors": errors,
             "labelled": len(labelled), "voided": len(labelled) - len(gradeable),
             "gradeable": len(gradeable), "agree": agree}
+
+
+def gradeable_rows(rows) -> list:
+    """The rows behind the honest denominator — labelled on BOTH sides, and not voided.
+
+    ONE definition with three readers: `build_report`'s totals, `_print_summary`'s per-context
+    breakdown, and the `unstatable` readout's claim that an exposed frame is *still graded*. Written
+    out three times it would be free to drift, and the readout's entire job is to say truthfully
+    whether a frame the gate cannot properly grade is nevertheless still in the population the gate
+    scores. A readout that answered that from its own private definition could say "still graded"
+    about a frame something else had quietly dropped."""
+    return [r for r in rows if r.get("correct") is not None and r.get("chosen") is not None
+            and not r.get("voided")]
+
+
+def unstatable_frames(store, agent=None) -> list:
+    """The **Frame Keys** whose Correction is an **Unstatable Decline**
+    (`gates.records_a_decline_it_cannot_state`), over the same replayable population `build_report`
+    scores — so *"is it still gradeable?"* is answerable against that report's own rows.
+
+    **A REPORTING caller, and deliberately the only kind.** Issue #251 ruled AGAINST wiring this
+    predicate into either gate verdict: excluding a frame removes it from grading permanently,
+    including after Issue #229 made the shape writable and the record repairable. The predicate's
+    own docstring carries the ruling and its reasons.
+
+    Read through the Corpus Reader like everything else (ADR-0087 decision 1): 23 records carry no
+    explicit ``scope`` and only default to ``decision`` inside `Correction.from_dict`, so a raw JSONL
+    walk mis-scopes them and this predicate — which tests ``scope`` first — would under-count.
+
+    This is a SECOND pass over the corpus, and deliberately so. `build_report` holds every
+    `(key, record)` pair but keeps only the row, and recording the exposure ON the row — the way
+    ``voided`` and ``equiv`` are recorded — would change the shape of the committed capture, which is
+    a **ruling record**. A reporting-only issue does not get to move the artifact. The pass costs one
+    `load_corrections`, against 372 Pilot replays."""
+    return [key for key, rec in _records(store, agent)
+            if records_a_decline_it_cannot_state(rec, rec.obs)]
+
+
+def print_unstatable_readout(exposed, rpt: dict) -> None:
+    """Name every frame whose Correction cannot state the ruling it means — and say it is still
+    **gradeable**.
+
+    The section exists because *unwired and unreported* is the weakest of the three states. The
+    predicate has detected a real encoding gap since Issue #197 and has had no caller at all since
+    Issue #243, so nothing any operator reads has ever mentioned it. If the agent's pick moves on one
+    of these frames, the gate's verdict is computed against a record that says the opposite of what
+    the human meant, and no line in the report says why.
+
+    Always visible when it fires, for the same reason `print_gate_report`'s ``HELD OUT`` and
+    ``VOIDED`` sections are: a frame that a gate cannot grade properly must not become scenery.
+    Silent at zero, so a clean corpus prints a clean report.
+
+    It reports ``chosen``/``correct`` as measured rather than an AGREE/DISAGREE verdict: the
+    agreement test is `satisfies_human`'s, threaded with an equivalence map this printer is not
+    given, and a second opinion about agreement is exactly the drift `gradeable_rows` exists to
+    avoid one class of.
+
+    The exposure is a property of the CORPUS, so this section is not narrowed by ``--context`` and
+    does not claim to be — unlike `print_agree_delta`, which is withheld there because it is a delta
+    over the gated population. It says *this capture's* gradeable population, which is corpus-wide in
+    every run.
+
+    ``exposed`` is passed in rather than computed here so the section is testable on a synthetic
+    record. Neither live exposed frame's pick has moved off the baseline, so a test that only ran
+    against the corpus could not prove the section survives a flip."""
+    if not exposed:
+        return
+    rows = rows_by_key(rpt)
+    gradeable = {r["key"] for r in gradeable_rows(rpt.get("rows") or [])}
+    print(f"\n  unstatable ({len(exposed)}) — reported, NEVER excluded (Issue #251):")
+    for key in exposed:
+        row = rows.get(key) or {}
+        state = ("still GRADEABLE, still in the denominator" if key in gradeable
+                 else "not in this capture's gradeable population")
+        print(f"    {key}  records a decline it cannot state "
+              f"(optional select, chosen == correct); {state}")
+        print(f"      agent picks {row.get('chosen')} against a recorded correct "
+              f"{row.get('correct')}")
+        print("      -> re-rule it to `correct: []` (writable at `decision` scope since Issue #229) "
+              "rather than excluding it")
 
 
 def _print_summary(rpt: dict, equiv=None) -> None:
@@ -203,8 +297,7 @@ def _print_summary(rpt: dict, equiv=None) -> None:
           + (f"; {classed} carry indistinguishable options" if classed else ""))
     for ctx in sorted(by_ctx, key=lambda c: (c is None, c)):
         rs = by_ctx[ctx]
-        lab = [r for r in rs if r.get("correct") is not None and r.get("chosen") is not None
-               and not r.get("voided")]
+        lab = gradeable_rows(rs)
         ok = sum(1 for r in lab
                  if satisfies_human(r["chosen"], r["correct"], equiv=(equiv or {}).get(r["key"])))
         print(f"  context {str(ctx):<5} {len(rs):>4} frames   {ok}/{len(lab)} agree")
@@ -250,6 +343,12 @@ def main(argv=None) -> int:
     # must not resolve two different ideas of which options are one decision.
     equiv = equivalence_index(args.store)
     rpt = build_report(args.store, args.agent, voided=set(voided), equiv=equiv)
+    # The **unstatable** exposure, resolved here and reported by both subcommands because it is a
+    # property of the CORPUS, not of a capture or a diff — the same reason the Ruling Index is read
+    # up here. Unlike that index it costs a second corpus read, which is a deliberate trade:
+    # see `unstatable_frames`. Reported only — it reaches no verdict, and Issue #251 ruled it
+    # never should.
+    exposed = unstatable_frames(args.store, args.agent)
 
     if args.cmd == "capture":
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
@@ -260,6 +359,7 @@ def main(argv=None) -> int:
             write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
             _print_summary(rpt, equiv)
             print_ruling_readout(index, voided, orphans=orphans, detail=True)
+            print_unstatable_readout(exposed, rpt)
             print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
 
         return guarded_capture(
@@ -289,6 +389,7 @@ def main(argv=None) -> int:
             print(f"\n  ⚠️ corpus shape moved: +{len(diff['added'])} / -{len(diff['removed'])} frames")
         print_ruling_moves(diff["ruling_moves"])
         print_ruling_readout(index, voided, orphans=orphans)
+        print_unstatable_readout(exposed, rpt)
         if args.context is None:
             print_agree_delta(diff["agree_delta"])
         else:

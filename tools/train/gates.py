@@ -1220,22 +1220,55 @@ def records_a_decline_it_cannot_state(correction, obs) -> bool:
       this predicate would swallow it, blinding a ruling instead of protecting one — the opposite of
       what it is for.
 
-    UNWIRED as of Issue #243, and kept deliberately. Its only caller was `deploy_decider_sweep`,
-    deleted by ADR-0089 as a gate that could only report FIX. The **Decision Gate** has the same
-    exposure on two `decision`-scope frames, but which frames stop gating is a *ruling*, not a
-    refactor, so wiring it is owned by **Issue #251** rather than taken as a side effect of a
-    cleanup. That issue argues the priority is LOW on purpose: the gap is DORMANT (ADR-0086 decision
-    9 — both frames decline by rule, so the tally reads `unstatable 0`), it can only fire on a
-    deliberate future flip, and it fails LOUD and correctly attributed. Wiring it wrong makes a gate
-    quieter, which is unfalsifiable from outside — the property that let four `*_decider_sweep.py`
-    report PASS for weeks in a state where PASS could not be told from FAIL.
+    **REPORTS, never excludes — Issue #251 RULED, and this is not an open question.** Its only
+    caller was `deploy_decider_sweep`, where it was a per-frame *verdict* that took the frame out of
+    grading; ADR-0089 deleted that sweep and lifted this predicate UNWIRED. Issue #251 then decided
+    what to do with it and ruled **against** wiring it into `decision_gate_verdict` or
+    `discrimination_gate_verdict`, for three reasons in the order they bind:
+
+    1. **Excluding makes a `main` watchdog permanently quieter.** A gate that under-reports cannot be
+       told from one with nothing to report — the property that let four `*_decider_sweep.py` report
+       PASS for weeks in a state where PASS could not be distinguished from FAIL. An exclusion also
+       outlives its cause: it would keep the frames ungraded after the record is repaired.
+    2. **Issue #229 made the record repairable, end to end.** `correct: []` is now writable at
+       `decision` scope — through the tagging pane, by a human, not merely by a Python caller — so
+       each exposed frame can be re-ruled into a real DECLINE that `satisfies_human` grades exactly.
+       A repaired record is strictly better than an ungraded frame.
+    3. **Nothing forces the worse fix.** Neither frame's pick has moved off the baseline, so neither
+       produces a gate verdict today.
+
+    Its one caller is therefore a REPORTING one: `decider_lab.unstatable_frames` /
+    `print_unstatable_readout` name every exposed frame in the Decision Gate readout and say it is
+    still **gradeable**. **Correction to the record:** the pre-Issue-#251 text here claimed *"the
+    tally reads `unstatable 0`"*. It does not. That number came from the deleted sweep's own
+    deploy-only frame population (where it read `unstatable 1`); measured through the Corpus Reader
+    across all 372 committed Corrections the predicate fires on **two** — `85785609|0|decision|4` and
+    `83661652|0|decision|3` — and both are still gradeable. What is dormant is the *gate verdict*,
+    not the exposure: both sit in the baseline with `chosen: []` against a recorded `correct: [0]`,
+    so they are standing DISAGREEMENTS that produce no *move*. That also flips which false verdict is
+    available. In the baselined gate it is a false **FIX** — if the agent ever starts taking the
+    option the human ruled against, its pick moves ONTO the record's `correct` and the gate applauds.
+    A false REGRESSION was the hazard in the two-arm sweep world ADR-0072 replaced.
+
+    **No symmetric Discrimination Gate change is owed**, and that was measured rather than assumed —
+    but state the reason precisely, because the obvious version of it is false. `leaf_lab.is_leaf_frame`
+    is a DISJUNCTION: a ``turn_plan`` record qualifies on its own, at any context and with an empty
+    ``correct`` (``86088989|0|turn|0`` is exactly that — context 2, `correct: []`, and a leaf frame).
+    Only the *second* arm requires a truthy ``correct`` AND ``select.context == 0``. Neither exposed
+    frame carries a ``turn_plan`` and both are context 2, so both fail both arms — today and after a
+    repair to `correct: []`, which adds no ``turn_plan``. Positive control: the same predicate returns
+    True on 278 of the same records. ADR-0072 decision 4's *one ruling holds a frame out of both
+    gates* is therefore satisfied vacuously: the Discrimination Gate never had these two.
+
     The encoding gap is a property of the Correction schema rather than of any frame, so it holds for
-    any future optional select. Its tests exercise the predicate directly, not through the corpus, so
-    they keep working while it is unexercised.
+    any future optional select. Its tests exercise the predicate directly, not only through the
+    corpus, so they keep working whatever the corpus does.
 
     Accepts anything carrying ``scope``/``chosen``/``correct`` — a `Correction` in practice. Reads
-    defensively: a malformed record must not take a gate down mid-run, and reading as *unstatable*
-    only ever REMOVES a frame from grading, so it can never fabricate a FIX."""
+    defensively: a malformed record must not take a gate down mid-run. That fail direction was chosen
+    when the predicate EXCLUDED (reading as unstatable only ever removed a frame, never fabricating a
+    FIX) and it survives the reporting role unchanged — a spurious hit now costs one advisory line in
+    a readout, and no verdict at all."""
     if getattr(correction, "scope", None) != "decision":
         return False
     select = ((obs or {}).get("select") or {})

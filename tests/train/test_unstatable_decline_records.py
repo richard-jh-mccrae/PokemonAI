@@ -13,6 +13,10 @@ decline into a REGRESSION (ep83661652 f3, whose rationale says the opposite of i
 The scope guard is the half that only a SHARED predicate needs, and the corpus proves why: at
 `turn`/`match` scope `correct: []` is encodable and is a real DECLINE, which `satisfies_human`
 grades exactly. Unguarded, this predicate would swallow `86088989|0|turn|0`.
+
+**Issue #251 ruled what the predicate is FOR: it REPORTS, it never excludes** (ADR-TEMP-251). The
+second half of this module guards that ruling from both directions — the Decision Gate readout must
+NAME an exposed frame and keep counting it, and the gate verdict must give it no excuse.
 """
 import sys
 from dataclasses import dataclass
@@ -156,3 +160,134 @@ def test_the_decline_census_the_writer_relaxation_was_sized_against():
     # broken reader or a mis-typed field would satisfy all of them at once. A reader that finds no
     # ruling at all is a broken instrument, not a clean corpus.
     assert sum(1 for _k, c in recs if c.correct) == 362
+
+
+# ---------------------------------------------------------------------------
+# Issue #251 — the predicate REPORTS. It must never come to excuse or exclude.
+# ---------------------------------------------------------------------------
+
+def _row(key, *, chosen=None, correct=None, **extra):
+    return {"key": key, "chosen": chosen, "correct": correct, **extra}
+
+
+def _rpt(rows):
+    from train.decider_lab import gradeable_rows
+    return {"rows": rows, "n": len(rows), "gradeable": len(gradeable_rows(rows))}
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_the_readout_names_a_synthetic_exposed_frame_and_still_counts_it(capsys):
+    """**THE test Issue #251 exists to leave behind.** Driven by a SYNTHETIC record, not the corpus:
+    neither live exposed frame's pick has moved off the baseline, so a test that only read the corpus
+    could not prove the section survives a flip — and the failure this guards against is a future
+    session "helpfully" excluding the frame to quieten the gate.
+
+    Two assertions, and the second is the load-bearing one: the frame is NAMED, and it is still
+    counted in the gradeable population. An exclusion would satisfy the first alone."""
+    from train.decider_lab import gradeable_rows, print_unstatable_readout
+    key = "99999999|0|decision|7"
+    rows = [_row(key, chosen=[], correct=[0]), _row("other|0|decision|1", chosen=[1], correct=[1])]
+    print_unstatable_readout([key], _rpt(rows))
+    out = capsys.readouterr().out
+
+    assert key in out, "the exposed frame must be NAMED, not silently handled"
+    assert "unstatable (1)" in out
+    assert "still GRADEABLE" in out
+    assert "correct: []" in out and "Issue #229" in out, "the line must say what to DO about it"
+    # Still in the gradeable population — the exclusion this issue ruled against would drop it.
+    assert key in {r["key"] for r in gradeable_rows(rows)}
+    assert _rpt(rows)["gradeable"] == 2
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_the_readout_is_silent_when_nothing_is_exposed(capsys):
+    """A clean corpus prints a clean report. The section is always visible when it fires and absent
+    when it does not — the shape `print_gate_report`'s HELD OUT / VOIDED sections already have."""
+    from train.decider_lab import print_unstatable_readout
+    print_unstatable_readout([], _rpt([_row("k", chosen=[0], correct=[0])]))
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_the_readout_says_so_when_an_exposed_frame_is_NOT_gradeable(capsys):
+    """The claim is computed, never asserted. A voided or unreplayable exposed frame is out of the
+    denominator, and a readout that printed "still GRADEABLE" regardless would be decoration."""
+    from train.decider_lab import print_unstatable_readout
+    key = "99999999|0|decision|7"
+    print_unstatable_readout([key], _rpt([_row(key, chosen=[], correct=[0], voided=True)]))
+    out = capsys.readouterr().out
+    assert key in out and "still GRADEABLE" not in out
+    assert "not in this capture's gradeable population" in out
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_an_exposed_frame_gets_no_excuse_from_either_gate():
+    """**Decision D1**, asserted behaviourally rather than by reading source. The predicate reports;
+    it never excuses. A REGRESSION (Decision Gate) or an `OK -> MISS` (Discrimination Gate) on an
+    exposed frame must FAIL exactly as any other unruled flip does — wiring the exclusion is
+    precisely what would stop that. Both verdicts are asserted because the ruling covers both, and
+    an untested one is where the exclusion would land unnoticed."""
+    from train.gates import decision_gate_verdict, discrimination_gate_verdict
+    exposed = "85785609|0|decision|4"
+    assert decision_gate_verdict([{"key": exposed, "verdict": "REGRESSION"}], held_out={}) is False
+    assert discrimination_gate_verdict({"ok_to_miss": [{"key": exposed}]}, held_out={}) is False
+    # POSITIVE CONTROL: both calls CAN return True, so the Falses above are verdicts rather than
+    # functions that only ever refuse.
+    assert decision_gate_verdict([{"key": exposed, "verdict": "FIX"}], held_out={}) is True
+    assert discrimination_gate_verdict({"ok_to_miss": []}, held_out={}) is True
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_the_live_exposure_is_named_and_still_carried_by_the_committed_baseline():
+    """The corpus half. Both exposed frames must still be IN the committed capture and labelled on
+    both sides — i.e. still gradeable.
+
+    The baseline is a never-auto-recaptured ruling record, so this does not go red the *instant*
+    someone excludes a frame; it goes red at the next deliberate re-capture, which is the moment a
+    human is looking. What it does catch immediately is the exposure moving — a record repaired,
+    added or re-ruled — which is the change that should never pass unnoticed."""
+    import json
+    from train.decider_lab import gradeable_rows, unstatable_frames
+    exposed = unstatable_frames(REPO / "data" / "corrections")
+    assert sorted(exposed) == ["83661652|0|decision|3", "85785609|0|decision|4"]
+
+    baseline = json.loads((REPO / "data" / "decider_lab" / "baseline.json")
+                          .read_text(encoding="utf-8"))
+    gradeable = {r["key"] for r in gradeable_rows(baseline["rows"])}
+    assert set(exposed) <= gradeable, "an exposed frame must never leave the gradeable set"
+    # POSITIVE CONTROL: `gradeable` is a real population, not an accidentally-everything set.
+    assert 0 < len(gradeable) < len(baseline["rows"])
+
+
+@pytest.mark.req("REQ-GATE-0009")
+def test_neither_exposed_frame_is_a_leaf_frame_so_no_symmetric_fix_is_owed():
+    """**Decision D4's measurement**, asserted so the next reader does not re-derive it — or worse,
+    apply symmetry by default.
+
+    Stated precisely, because the issue's own version was wrong: `is_leaf_frame` is a DISJUNCTION.
+    *"It requires `select.context == 0`"* describes only its second arm — a `turn_plan` record is a
+    leaf frame at ANY context with an EMPTY `correct`, which is why the corollary *"a repaired
+    decline is not a leaf frame either"* is false in general. What holds for these two frames is
+    narrower and is what this asserts: neither carries a `turn_plan` and both are context 2, so both
+    fail both arms — before a repair and after one, since re-ruling adds no `turn_plan`."""
+    from train.gates import keyed_corrections
+    from train.leaf_lab import is_leaf_frame
+    recs = keyed_corrections()
+    hits = [(k, c) for k, c in recs if unstatable(c, c.obs)]
+    assert len(hits) == 2
+    for k, c in hits:
+        assert ((c.obs or {}).get("select") or {}).get("context") == 2, k
+        assert not getattr(c, "turn_plan", None), k
+        assert is_leaf_frame(c) is False, k
+
+    # THE DISJUNCTION, asserted directly on the corpus so the false reading cannot come back:
+    # `86088989|0|turn|0` is context 2 with `correct: []` and IS a leaf frame, purely on its
+    # `turn_plan`. It is also the record the scope guard above exists to protect.
+    turn_plan_decline = next(c for k, c in recs if k == "86088989|0|turn|0")
+    assert turn_plan_decline.correct == [] and turn_plan_decline.turn_plan
+    assert ((turn_plan_decline.obs or {}).get("select") or {}).get("context") == 2
+    assert is_leaf_frame(turn_plan_decline) is True
+
+    # POSITIVE CONTROL. `is_leaf_frame` returning False on everything would satisfy the loop above
+    # while proving nothing; it must still recognise the frames it is for.
+    assert sum(1 for _k, c in recs if is_leaf_frame(c)) == 278

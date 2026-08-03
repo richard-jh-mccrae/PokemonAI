@@ -62,6 +62,23 @@ unverifiable decline cannot be told apart from a record that failed to state one
 _Avoid_: pass, skip, no-op, "empty correction" (an absent ruling is `correct: None`, a different
 thing entirely — callers report those as UNLABELLED)
 
+**Unstatable Decline**:
+A Correction that MEANT a **Decline** and could not say so — an OPTIONAL select whose `correct`
+merely repeats the agent's own `chosen`, because before **ADR-TEMP-229** `decision` scope refused the
+empty `correct`. It reads *"the pick was right"* and means the opposite; `ep83661652` f3's rationale
+says so in prose while its fields say the reverse. Detected by
+`gates.records_a_decline_it_cannot_state`, narrow in two ways (`minCount == 0`, and `decision` scope
+only — at `turn` scope `correct: []` was always a statable ruling).
+**It is REPORTED, never excluded** (**ADR-TEMP-251**, Issue #251): the **Decision Gate** readout's
+`unstatable` section names every such frame and states that it is still **gradeable**, because
+ungrading a frame outlasts the record shape that caused it, and Issue #229 made the record repairable
+instead. Two frames carry it today; neither carries a `turn_plan` and both are `context 2`, so
+neither satisfies either arm of `leaf_lab.is_leaf_frame` and the **Discrimination Gate** has no
+symmetric exposure. The cure is to re-rule the record, not to quieten the gate.
+_Avoid_: excluded / held out / skipped (it is graded exactly like any other frame — those words name
+acts this one deliberately is not), degenerate record (true but says nothing about *what* it cannot
+state), invalid (the record is well-formed; the vocabulary was missing)
+
 **Category**:
 The **human** axis of a Correction — *what kind* of mistake the blunder is, picked from a
 closed, extensible vocabulary (`missed_win`, `overextension`, `misattachment`, …).
