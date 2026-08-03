@@ -232,21 +232,168 @@ Recorded so they are not swept in by proximity.
 
 ---
 
+## The dependency tree
+
+**Read the shape first: this graph is WIDE at the root and NARROW at the tip.** That is the opposite
+of what a prerequisite tree usually looks like, and it is not an accident — every upstream track
+(T0, T1, T3, and Issue #298's eight sub-issues) has already merged, so what remains is four lanes
+with no dependency on each other, converging on one closeout node.
+
+```
+LEGEND
+  ■  build-ready         spec is at build depth; start coding
+  ◆  ruling owed first   a developer decision, then build (or then NOTHING — see D1/D2)
+  ▲  grill owed first    status:1-grilling → /grill-with-docs → /to-spec → /implement
+  ──→   hard prerequisite — the downstream work is wrong or impossible without it
+  ┄┄→   advisory ordering — same file, or "measure this after that". Order matters; dependency does not.
+```
+
+```
+● TODAY ─ all four lanes are unblocked right now
+│
+│   ┌─────────────────────────────────────────────────────────────────────┐
+│   │  ANSWER THESE FIRST — each can DELETE work from the tree below      │
+│   │    ◆ D1  rule Issue #330   → option 1 removes an entire landing     │
+│   │    ◆ D2  rule Issue #331   → option 1 or 3 removes an entire landing│
+│   │    ◆ D4  place Issue #289  → "split" moves the 54-story build off   │
+│   │                              the critical path                      │
+│   │    ◆ D3  Issue #275 in-path? → "no" removes LANE 5 entirely         │
+│   └─────────────────────────────────────────────────────────────────────┘
+│
+├── LANE 1 ── Issue #278 (POC-T3.5) closeout
+│   │         Develop in PARALLEL. LAND ONE AT A TIME — Issue #278's standing
+│   │         discipline; a flip that cannot be attributed to a cause defeats
+│   │         the wave packet. The arrows below are LANDING order, not
+│   │         development order.
+│   │
+│   ├─■ #329  T3.5/14 · threat saturates into one bit
+│   │  │      Head of the lane: Issue #281 landed, so it is unblocked, and it
+│   │  │      re-scales the term Issue #330's whole argument is measured against.
+│   │  ┊
+│   │  ┊┄┄→ (measurement hygiene, not a blocker: no frame overlap between the
+│   │  ┊     five Issue #329 names and the twelve Issue #330 names)
+│   │  ▼
+│   ├─◆ #330  survival out-scales everything · 12 ruled frames played wrong
+│   │  │      D1. Answer BEFORE writing code: option 1 ("wire attack_ev — that
+│   │  │      is Issue #263's job") means this lands ZERO code here and becomes
+│   │  │      an acceptance clause on Issue #263 instead.
+│   │  ▼
+│   ├─◆ #331  development credits a play nothing charges for · 5 frames
+│   │  │      D2. Same shape: option 1 ("leave it — the composer scores REAL
+│   │  │      boards where `hand` is live") or option 3 (hold the frames out)
+│   │  │      both land zero code. Option 2 is a substrate build with no owner.
+│   │  ▼
+│   ├─■ #332  readiness funds the Active over the benched successor
+│   │  │      Smallest, no ruling owed, cleanest signal (every other family
+│   │  │      flat at 0.0000 on both frames).
+│   │  ┊
+│   │  ┊┄┄→ (file contention: both edit `_readiness_odds`. Either order works;
+│   │  ┊     they are DIFFERENT facts — which body to fund vs which Energy counts)
+│   │  ▼
+│   ├─■ #351  readiness_p counts an evaporating Energy on a body that cannot attack
+│   │  │      Unmasks Issue #286. Carries its own embedded ruling (its three
+│   │  │      options must be decided, not defaulted into).
+│   │  ▼
+│   └─◆ #289  T3.5/11 · known top-of-deck
+│      │      D4. Build-vs-declare is ALREADY RULED (build) and the spec is
+│      │      written. The open question is only WHERE:
+│      │        · "split"   → registry half (spec D8) lands here; the Known Top
+│      │                      build runs BESIDE Issue #263 on Issue #301's precedent
+│      │        · "in-path" → full build here, itself split two ways per its own
+│      │                      spec (scaffold + corpus frames, ruled; then scoring)
+│      ▼
+│    ┌───────────────────────────────────────────────────────────────┐
+│    │  ■ #291  T3.5/13 CLOSEOUT — THE SINGLE JOIN NODE              │
+│    │  Formally blocked only by Issue #289 (the last open           │
+│    │  registered sub-issue). In practice it must be LAST overall,  │
+│    │  because two of its three deliverables go stale the moment    │
+│    │  anything downstream of them lands:                           │
+│    │    1 reconcile the audit report + its verdict                 │
+│    │    2 re-measure the 15 deferred frames                        │
+│    │    3 record the P95 per-decision wall-clock ◄── Issue #263    │
+│    │      sizes its beam against THIS NUMBER                       │
+│    └───────────────────────────────────────────────────────────────┘
+│                                    ▲          ▲
+├── LANE 2 ── apply-seam vocabulary  │          │
+│   │         Serial: both edit `snapshot_coverage.py`.
+│   │         Gate-NEUTRAL one first, scoring-mover second.
+│   │
+│   ├─■ #350  `cost` is undeclared vocabulary — no cost value has a write-set
+│   │  │      Gate-neutral by its own acceptance (`CLAUSE_WRITES` has no runtime
+│   │  │      consumer today). A ruling + five entries, no new machinery.
+│   │  ▼
+│   └─■ #349  the board-scaled magnitude — no clause field says "for each"
+│      │      Heal magnitudes ARE live (`_heal_candidate`, `_heal_averts_doom`),
+│      │      so this one moves scoring. Land the field and its readers together,
+│      │      or land the field explicitly inert.
+│      └──────────────────────────────────────────────► joins at #291
+│
+├── LANE 5 ── conditional on D3 ── Issue #275 defender-side attack audit
+│   │         ▲ #275  GRILL (status:1-grilling) → spec → build AXIS 1 ONLY
+│   │         Feeds #291 because it changes the damage oracle, which every
+│   │         state_value read sits on. Defer axes 2–4 (they serve two cards
+│   │         provably absent from the pool as exercised).
+│   └──────────────────────────────────────────────────► joins at #291
+│
+├── LANE 3 ── integration ── joins at Issue #263 directly (tests only, no scoring change)
+│   └─■ #270  POC-A3 cross-track integration tests
+│             Ready today (Issues #260 + #262 both merged). Catches semantic
+│             drift BEFORE the composer builds a beam on the seam — after
+│             Issue #263 lands, the same drift is only visible as a mis-ordered beam.
+│
+└── LANE 4 ── CI hygiene (optional) ── joins at Issue #263 directly
+    ├─▲ #352  probe_card flake — GRILL first (confirming the mechanism is task 1).
+    │         Not a logical prerequisite; buys a clean CI signal on what will be
+    │         one of the largest PRs in the project. Reproduce on Linux only.
+    └─■ #339  the leaf gate's baseline-provenance table is 5 movements stale.
+              Correct the record before Issue #263 adds to it.
+
+                                    │
+                                    ▼
+                    ►►► Issue #263 — POC-T4, the Turn Planner ◄◄◄
+                                    │
+                                    ├──► Issue #273  POC-B3 per-decision time budget
+                                    └──► Issue #264  POC-T5 purge + integration
+```
+
+### Why the branch points sit where they do
+
+- **Four lanes at the root, not one sequence**, because lanes 1/2/3/4 share no file, no term and no
+  measurement. Lane 1 is `state_value.py` + the Pilot; lane 2 is `snapshot_coverage.py` +
+  `card_effects.json`; lane 3 is `tests/` only; lane 4 is CI and a probe harness.
+- **Lane 1 is serial for LANDING only.** Issue #278 says it outright: *"develop in parallel, land one
+  at a time."* Five of its nodes are independently developable today; what serialises them is the
+  gate-attribution rule, not a code dependency.
+- **The only true many-to-one join is Issue #291**, and it joins there because of *measurement*
+  staleness, not compilation order — its P95 and its 15-frame re-measurement are only meaningful once
+  everything that moves scoring or per-decision cost has landed.
+- **Lanes 3 and 4 bypass Issue #291** and attach straight to Issue #263, because neither changes a
+  score or a per-decision cost.
+
+### The collapsed tree, if the recommended rulings are taken
+
+D1 = option 1 · D2 = option 1 · D4 = split · D3 = yes (axis 1). The tree shortens to:
+
+```
+● TODAY
+├─ LANE 1:  #329 → #332 → #351 → #289(registry half) ────┐
+├─ LANE 2:  #350 → #349 ─────────────────────────────────┤
+├─ LANE 5:  #275 grill → build axis 1 ───────────────────┤
+│                                                        ▼
+│                                                    ■ #291 ──┐
+├─ LANE 3:  #270 ────────────────────────────────────────────┤
+└─ LANE 4:  #352, #339 (optional) ───────────────────────────┤
+                                                             ▼
+                                                   ► Issue #263
+```
+
+Six landings on the critical path (Issues #329, #332, #351, #289-registry, #350, #349) plus
+Issue #291, with Issues #330 and #331 discharged as rulings that cost no code and Issue #289's
+54-story build running beside Issue #263 rather than in front of it.
+
+---
+
 ## Summary — the minimum walk
-
-```
-  ┌─ lane A (serial, Issue #278) ──────────────────────────────────────┐
-  │  #329 → #332 → #351 → [rule #330] → [rule #331] → #289* → #291     │
-  └────────────────────────────────────────────────────────────────────┘
-  ┌─ lane B (parallel) ─┐   ┌─ lane C (parallel) ────────────┐
-  │  #350 → #349        │   │  #270  (+ #352, #339 optional) │
-  └─────────────────────┘   └────────────────────────────────┘
-                              ↓  both lanes joined, #291 last
-                          ► Issue #263 (POC-T4)  ► #273 ► #264
-```
-
-`*` subject to decision D4. Decisions D1, D2 and D3 are owed before A4, A5 and the lane head
-respectively.
 
 **Hard minimum** (nothing optional, D4 answered "split"): Issues #329, #332, #351, #350, #349, #291,
 plus rulings on Issues #330 and #331 and the registry half of Issue #289.
