@@ -588,20 +588,278 @@ def test_commutes_delegates_to_the_ONE_disjointness_test():
 
 
 @pytest.mark.req("REQ-APPLY-0009")
-def test_the_element_level_granularity_is_NOT_assumed_while_the_ruling_is_open():
-    """Issue #383 §B item 2 requested an element-level refinement on Issue #263 as a wave-packet
-    ruling line, with a stated fail-closed fallback: **zone granularity, blocks never form**. Until
-    that ruling lands the fallback is what ships, and this asserts it rather than leaving the
-    difference invisible — a session that quietly implemented the refinement would be self-ruling a
-    contract extension.
+def test_the_KIND_level_answer_is_UNCHANGED_by_the_element_ruling():
+    """The developer GRANTED the element-level refinement (2026-08-04, recorded in
+    ADR-0098 Amendment D), and it changes nothing here — deliberately.
 
-    So `commutes` still licenses NOTHING over the shipped table, and Issue #263's own worked example
-    (Energy + evolution + Tool) still fails on `my_hand_ids`."""
+    An element is an INSTANCE (a hand card's `serial`, a body's `serial`), and a KIND has no
+    instance, so a per-kind footprint declares no elements and every element zone it names stays
+    UNRESOLVED — which fails closed. `commutes` therefore still licenses exactly nothing over the
+    shipped table, and Issue #263's worked example still fails at kind level on `my_hand_ids`. The
+    refinement lives entirely in `option_footprint`, which is where instances exist.
+
+    This replaces the placeholder that asserted the ruling was still open."""
     import itertools
     kinds = sorted(ao.KIND_COVERAGE)
     assert [(a, b) for a, b in itertools.combinations_with_replacement(kinds, 2)
             if ao.commutes(a, b)] == []
     assert "my_hand_ids" in ao.footprint(_ATTACH).writes & ao.footprint(_EVOLVE).writes
+    assert ao.footprint(_ATTACH).write_elements == frozenset()      # a KIND has no instance
+
+
+# ── the RULED element-level granularity (Issue #263, granted 2026-08-04) ──────────────────────────
+#
+# Card facts below are read at source, never recalled:
+#   677 Riolu           Basic, HP 80,  {F}   — `data/EN_Card_Data.csv`
+#   678 Mega Lucario ex Stage 1, HP 340      — evolves from **Riolu ALONE**, a SINGLE hop
+#                                              (`docs/rulebook.txt` Appendix 1)
+#   6   Basic {F} Energy                     — `docs/rules.md` §3: ONE manual attachment per turn
+#   1159-shaped flat-HP Tool (synthetic)     — a Tool is an ordinary Trainer play with NO such cap,
+#                                              which is why the triple can commute at all
+_RIOLU, _MEGA_LUC, _E_F, _TOOL = 677, 678, 6, 1159
+_TOOL_TYPE, _BASIC_ENERGY_TYPE = 2, 5
+_FIGHTING = 6
+
+
+def _triple_board():
+    """A board with THREE distinct benched bodies and a hand of Energy + evolution + Tool.
+
+    Distinct targets on purpose: element-level commutativity is about writes to DIFFERENT instances,
+    so a fixture that pointed all three at one body would be testing the rejection, not the licence.
+    The same-body case is its own test below."""
+    from common.cards import CardFunctions
+    from common.effects import CardEffects
+    from common.scouting.provider import CardStat, DictCardStatProvider
+    from common.state_model import StateModel
+    from common.strategy.combat import CombatMath
+    stats = {
+        _RIOLU: CardStat(_RIOLU, name="Riolu", hp=80, energyType=_FIGHTING),
+        _MEGA_LUC: CardStat(_MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, ex=True,
+                            energyType=_FIGHTING, evolvesFrom="Riolu"),
+        _E_F: CardStat(_E_F, name="Basic {F} Energy", cardType=_BASIC_ENERGY_TYPE,
+                       energyType=_FIGHTING),
+        _TOOL: CardStat(_TOOL, synthetic=True, name="Flat-HP Tool", cardType=_TOOL_TYPE,
+                        hpBonus=100),
+    }
+    combat = CombatMath(DictCardStatProvider(stats), functions=CardFunctions({}), transients=None,
+                        effects=CardEffects({}))
+
+    def body(serial):
+        return {"id": _RIOLU, "serial": serial, "playerIndex": 0, "hp": 80, "maxHp": 80,
+                "appearThisTurn": False, "energies": [], "energyCards": [], "tools": [],
+                "preEvolution": []}
+    # Hand indices are load-bearing for the tests below, so they are named here once:
+    #   0 Energy · 1 evolution · 2 Tool   -> the commuting triple
+    #   3 a SECOND Energy                 -> the two-Energy rejection needs two DISTINCT hand cards,
+    #                                        or it passes on `my_hand_ids` and never reaches the
+    #                                        allowance it claims to test
+    #   4, 5 two Basics (Riolu)           -> the last-Bench-slot rejection needs actual BASICS
+    me = {"active": [body(10)], "bench": [body(11), body(12)], "benchMax": 5,
+          "hand": [{"id": _E_F, "serial": 701, "playerIndex": 0},
+                   {"id": _MEGA_LUC, "serial": 702, "playerIndex": 0},
+                   {"id": _TOOL, "serial": 703, "playerIndex": 0},
+                   {"id": _E_F, "serial": 704, "playerIndex": 0},
+                   {"id": _RIOLU, "serial": 705, "playerIndex": 0},
+                   {"id": _RIOLU, "serial": 706, "playerIndex": 0}],
+          "handCount": 6, "discard": [], "prize": [None] * 6}
+    opp = {"active": [], "bench": [], "benchMax": 5, "hand": [], "handCount": 0, "discard": [],
+           "prize": [None] * 6}
+    obs = {"current": {"players": [me, opp], "yourIndex": 0, "stadium": []},
+           "select": {"context": 0, "option": []}}
+    return StateModel.build(obs, combat=combat, deck=[_RIOLU] * 4)
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_the_ENERGY_EVOLUTION_TOOL_triple_provably_commutes():
+    """**The positive control Issue #383's Tests section names, and the ruling's whole point.**
+
+    Issue #263 § *Commutative-block collapse*: *"Playing an Energy, an evolution and a Tool in any of
+    3! orders reaches ONE board, so it is ONE candidate."* At zone granularity that was UNPROVABLE —
+    all three collide on `my_hand_ids`, and two of them on `bodies_in_play`. Under the ruled
+    element-level reading each names a DISTINCT hand `serial` and a DISTINCT target body, so every
+    pair commutes and the 3! orderings collapse to one candidate.
+
+    Note what still separates the Energy leg from the Tool leg: only the Energy spends
+    `allowance_energy_attached` (`docs/rules.md` §3 caps the MANUAL attachment; a Tool is an ordinary
+    Trainer play), which is exactly why these two `_ATTACH`s do not collide on the allowance while
+    two Energy attaches below do."""
+    from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND
+    model = _triple_board()
+    energy = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 0,
+                                         "inPlayArea": AREA_BENCH, "inPlayIndex": 0})
+    evolve = ao.option_footprint(model, {"type": _EVOLVE, "area": AREA_HAND, "index": 1,
+                                         "inPlayArea": AREA_BENCH, "inPlayIndex": 1})
+    tool = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 2,
+                                       "inPlayArea": AREA_ACTIVE, "inPlayIndex": 0})
+    assert energy.complete and evolve.complete and tool.complete
+    assert ao.footprints_commute(energy, evolve) is True
+    assert ao.footprints_commute(energy, tool) is True
+    assert ao.footprints_commute(evolve, tool) is True
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_two_ENERGY_attaches_do_NOT_commute_on_the_per_turn_allowance():
+    """**Required rejection 1**, and the one that proves the per-turn scalars stayed zone-level.
+
+    `docs/rules.md` §3 — *"Attach Energy from hand | **1** (manual attachment; card effects can add
+    more)"*. Two Energy attaches from DIFFERENT hand cards onto DIFFERENT bodies have disjoint
+    elements everywhere an element exists, so the ONLY thing left to refuse them is
+    `allowance_energy_attached` being whole-zone. It is, and they are — correct in the strongest
+    sense, since only one of the two is a legal play at all.
+
+    **The last assertion is what makes this a test rather than a coincidence.** Removing the
+    allowance from both footprints must let the pair commute; if it does not, something else was
+    doing the rejecting and this test would pass while the ruling's teeth were missing."""
+    import dataclasses
+
+    from common import snapshot_coverage as sc
+    from common.option_equivalence import AREA_BENCH, AREA_HAND
+    model = _triple_board()
+    a = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 0,
+                                    "inPlayArea": AREA_BENCH, "inPlayIndex": 0})
+    b = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 3,
+                                    "inPlayArea": AREA_BENCH, "inPlayIndex": 1})
+    assert a.complete and b.complete
+    assert a.write_elements != b.write_elements                            # genuinely distinct cards
+    assert "allowance_energy_attached" in a.writes & b.writes
+    assert "allowance_energy_attached" not in sc.ELEMENT_ZONES             # the load-bearing fact
+    assert ao.footprints_commute(a, b) is False
+    without = [dataclasses.replace(fp, reads=fp.reads - {"allowance_energy_attached"},
+                                   writes=fp.writes - {"allowance_energy_attached"})
+               for fp in (a, b)]
+    assert ao.footprints_commute(*without) is True     # ...so the allowance WAS the only rejector
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_two_BASICS_competing_for_the_last_bench_slot_do_NOT_commute():
+    """**Required rejection 2** — the spec's own named case: *"two Basics competing for the last
+    Bench slot (both write bench-slots; the orders reach DIFFERENT boards)"*.
+
+    Asserted three ways, because they carry different weight and only two of them bite. The MECHANISM
+    assertion is the ruling's teeth: two otherwise-disjoint COMPLETE footprints differing only by both
+    writing `bench_occupancy` must still be refused, which is what "`bench_occupancy` stays
+    whole-zone" buys.
+
+    The end-to-end pair is two REAL Riolu deploys — Basics, from distinct hand instances. On its own
+    that assertion proves little, and saying so is the point: a clause-less `_PLAY` is independently
+    UNKNOWN under item 1's rule, so the pair would refuse even if `bench_occupancy` were
+    instance-separable. The third assertion is what closes that hole — force both footprints
+    `complete` and they must STILL refuse, which can now only be `bench_occupancy` doing it."""
+    import dataclasses
+
+    from common.option_equivalence import AREA_HAND
+    # 1. the mechanism, isolated: same footprints, with and without the zone-level bench write.
+    slotless_a = ao.Footprint(reads=frozenset({"my_hand_ids"}), writes=frozenset({"my_hand_ids"}),
+                              complete=True,
+                              read_elements=frozenset({("my_hand_ids", 701)}),
+                              write_elements=frozenset({("my_hand_ids", 701)}))
+    slotless_b = ao.Footprint(reads=frozenset({"my_hand_ids"}), writes=frozenset({"my_hand_ids"}),
+                              complete=True,
+                              read_elements=frozenset({("my_hand_ids", 702)}),
+                              write_elements=frozenset({("my_hand_ids", 702)}))
+    assert ao.footprints_commute(slotless_a, slotless_b) is True     # distinct hand instances
+    bench_a = ao.Footprint(reads=slotless_a.reads | {"bench_occupancy"},
+                           writes=slotless_a.writes | {"bench_occupancy"}, complete=True,
+                           read_elements=slotless_a.read_elements,
+                           write_elements=slotless_a.write_elements)
+    bench_b = ao.Footprint(reads=slotless_b.reads | {"bench_occupancy"},
+                           writes=slotless_b.writes | {"bench_occupancy"}, complete=True,
+                           read_elements=slotless_b.read_elements,
+                           write_elements=slotless_b.write_elements)
+    assert ao.footprints_commute(bench_a, bench_b) is False          # the last-slot rejection
+    # 2. end to end, on the two REAL Riolu deploys (hand indices 4 and 5, serials 705 / 706).
+    model = _triple_board()
+    play_a = ao.option_footprint(model, {"type": _PLAY, "area": AREA_HAND, "index": 4})
+    play_b = ao.option_footprint(model, {"type": _PLAY, "area": AREA_HAND, "index": 5})
+    assert play_a.write_elements != play_b.write_elements       # distinct hand instances...
+    assert "bench_occupancy" in play_a.writes & play_b.writes   # ...contending for one slot count
+    assert ao.footprints_commute(play_a, play_b) is False
+    # 3. ...and NOT merely because a clause-less `_PLAY` is UNKNOWN. Grant both completeness — the
+    #    one gate that would otherwise short-circuit the test — and `bench_occupancy` must still bite.
+    assert play_a.complete is False and play_b.complete is False
+    forced = [dataclasses.replace(fp, complete=True) for fp in (play_a, play_b)]
+    assert ao.footprints_commute(*forced) is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_two_writes_to_the_SAME_instance_do_not_commute():
+    """Element-level means DISTINCT elements. Attaching an Energy to a body and evolving THAT SAME
+    body do not commute — and the rejection is real rather than pedantic: `board_delta._attach`
+    re-derives an Energy's provision against the target's stage, so Ignition Energy renders `[0]` on
+    a Basic and `[0,0,0]` on an Evolution. Attach-then-evolve and evolve-then-attach reach genuinely
+    different boards."""
+    from common.option_equivalence import AREA_BENCH, AREA_HAND
+    model = _triple_board()
+    energy = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 0,
+                                         "inPlayArea": AREA_BENCH, "inPlayIndex": 0})
+    evolve_same = ao.option_footprint(model, {"type": _EVOLVE, "area": AREA_HAND, "index": 1,
+                                              "inPlayArea": AREA_BENCH, "inPlayIndex": 0})
+    assert ao.footprints_commute(energy, evolve_same) is False
+    # ...and the ONLY difference from the commuting pair above is which body it names.
+    evolve_other = ao.option_footprint(model, {"type": _EVOLVE, "area": AREA_HAND, "index": 1,
+                                               "inPlayArea": AREA_BENCH, "inPlayIndex": 1})
+    assert ao.footprints_commute(energy, evolve_other) is True
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_an_element_zone_with_UNDECLARED_elements_commutes_with_nothing():
+    """Fail closed, and this is the clause that keeps the refinement sound. A footprint may write an
+    element zone WITHOUT knowing which element — a shuffle rewrites the whole hand, and a `_RETREAT`
+    carries no target at all (Issue #382: all 5807 offered retreats are the bare `{"type": 12}`). An
+    unresolved element zone is an UNKNOWN, so it conflicts with every other write to that zone,
+    including one that named its instance precisely."""
+    named = ao.Footprint(reads=frozenset(), writes=frozenset({"my_hand_ids"}), complete=True,
+                         write_elements=frozenset({("my_hand_ids", 701)}))
+    unresolved = ao.Footprint(reads=frozenset(), writes=frozenset({"my_hand_ids"}), complete=True)
+    assert ao.footprints_commute(named, unresolved) is False
+    assert ao.footprints_commute(unresolved, unresolved) is False
+    # ...while two NAMED, distinct instances are exactly what the ruling licenses.
+    other = ao.Footprint(reads=frozenset(), writes=frozenset({"my_hand_ids"}), complete=True,
+                         write_elements=frozenset({("my_hand_ids", 702)}))
+    assert ao.footprints_commute(named, other) is True
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_the_element_refinement_does_not_loosen_ANY_item_1_fail_closed_rule():
+    """The ruling widened the disjointness test; it did not touch the three gates in front of it. All
+    three still veto BEFORE elements are consulted, so no amount of instance precision can rescue an
+    incomplete, a partial, or a revealing footprint."""
+    elems = frozenset({("my_hand_ids", 701)})
+    other = frozenset({("my_hand_ids", 702)})
+    incomplete = ao.Footprint(writes=frozenset({"my_hand_ids"}), write_elements=elems)
+    complete = ao.Footprint(writes=frozenset({"my_hand_ids"}), complete=True, write_elements=other)
+    revealer = ao.Footprint(writes=frozenset({"my_hand_ids"}), complete=True, write_elements=other,
+                            reveals_information=True)
+    assert ao.footprints_commute(incomplete, complete) is False       # unknown => nothing
+    assert ao.footprints_commute(revealer, ao.Footprint(
+        writes=frozenset({"my_hand_ids"}), complete=True, write_elements=elems)) is False
+    # ...and a clause-less `_PLAY` is still UNKNOWN however precisely it names its hand card.
+    model, option = _footprint_model(1141, clauses=None)
+    assert ao.option_footprint(model, option, clauses_cover=True).complete is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_a_TOOL_attach_does_not_declare_the_energy_allowance_and_an_energy_does_not_declare_tools():
+    """The `_ATTACH` kind footprint is the UNION of two legs that never both fire — and the per-option
+    answer splits them, which is what lets an Energy and a Tool sit in one block.
+
+    Read at source, not inferred: `board_delta._attach` branches on `CardStat.cardType` and writes
+    `attached_tools` (+ `damage_counters` for a flat HP grant) on the Tool leg, `attached_energy` +
+    `allowance_energy_attached` on the Energy leg, and `my_hand_ids` on both. `docs/rules.md` §3 caps
+    only the MANUAL Energy attachment."""
+    from common.option_equivalence import AREA_BENCH, AREA_HAND
+    model = _triple_board()
+    energy = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 0,
+                                         "inPlayArea": AREA_BENCH, "inPlayIndex": 0})
+    tool = ao.option_footprint(model, {"type": _ATTACH, "area": AREA_HAND, "index": 2,
+                                       "inPlayArea": AREA_BENCH, "inPlayIndex": 0})
+    assert "allowance_energy_attached" in energy.writes
+    assert "allowance_energy_attached" not in tool.writes and \
+           "allowance_energy_attached" not in tool.reads
+    assert "attached_energy" in energy.writes and "attached_energy" not in tool.writes
+    assert "attached_tools" in tool.writes and "attached_tools" not in energy.writes
+    # The union is still what the KIND declares — the narrowing is per-option, not a table change.
+    assert energy.writes | tool.writes >= ao.footprint(_ATTACH).writes
 
 
 # ── refusal is a RESULT, not an exception and not a no-op ─────────────────────────────────────────

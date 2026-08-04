@@ -326,6 +326,15 @@ class Footprint:
     #: `snapshot_coverage.REVEALING_CLAUSES` (POC-T4/2, Issue #383). A KIND does not reveal; a
     #: Pokégear does.
     reveals_information: bool = False
+    #: ``{(zone, serial)}`` — WHICH instances this option reads, for the zones
+    #: `snapshot_coverage.ELEMENT_ZONES` declares instance-separable (developer ruling 2026-08-04,
+    #: recorded in ADR-0098 Amendment D). Empty means UNRESOLVED, which conflicts: being
+    #: element-level is a licence to speak instance-wise, never an obligation to.
+    read_elements: frozenset[tuple[str, int]] = frozenset()
+    #: ``{(zone, serial)}`` — the same for writes. A KIND has no instance, so every entry in
+    #: :data:`FOOTPRINTS` leaves both empty and :func:`commutes` is unchanged by the ruling.
+    #: :func:`option_footprint` is where instances exist, and therefore where the refinement lives.
+    write_elements: frozenset[tuple[str, int]] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -535,19 +544,48 @@ def footprints_commute(a: Footprint, b: Footprint) -> bool:
     here. A second copy of the rule is the drift ADR-0087 charges for one store over, and it would be
     invisible — each copy would stay internally consistent while disagreeing about one pair.
 
-    **Granularity is ZONE-level, and that is the fail-closed fallback, not an oversight**
-    (Issue #383 §B item 2). An element-level refinement — distinct hand serials and distinct target
-    bodies commuting while `bench_occupancy` stays zone-level — extends the T0 §3b contract, so it
-    was requested on Issue #263 as a wave-packet ruling line and is NOT implemented on that
-    request's own recognisance. Until it is ruled, blocks never form and the composer explores
-    orderings at full width, which is sound and merely wider."""
+    **Granularity is ELEMENT-level for the zones that hold instances** — the T0 §3b contract
+    extension the developer GRANTED on 2026-08-04 (Issue #383 §B item 2, requested as a wave-packet
+    ruling line on Issue #263; the ruling is recorded in ADR-0098 Amendment D). For a zone
+    in `snapshot_coverage.ELEMENT_ZONES`, two writes collide only when they name the SAME instance;
+    every other zone stays whole-zone, which is what keeps the spec's own required rejections:
+    ``bench_occupancy`` still refuses two Basics contending for the last Bench slot, and
+    ``allowance_energy_attached`` still refuses two Energy attaches.
+
+    **Unresolved beats precise.** A footprint that names an element zone without naming an instance
+    is an UNKNOWN there and conflicts with every other write to it, however precisely the other side
+    named itself. That is what keeps a targetless `_RETREAT` and a whole-hand shuffle
+    non-commutative, and it is why the refinement widens what can be PROVED disjoint without widening
+    what is ASSUMED disjoint."""
     if not (a.complete and b.complete):
         return False
     if a.reveals_information or b.reveals_information:
         return False
-    if a.reads & b.writes or b.reads & a.writes:
+    if _collides(a.reads, a.read_elements, b.writes, b.write_elements):
         return False
-    return not (a.writes & b.writes)
+    if _collides(b.reads, b.read_elements, a.writes, a.write_elements):
+        return False
+    return not _collides(a.writes, a.write_elements, b.writes, b.write_elements)
+
+
+def _collides(zones_x, elements_x, zones_y, elements_y) -> bool:
+    """Do these two zone-sets touch, once element granularity is applied?
+
+    One helper for all three of :func:`footprints_commute`'s comparisons, so the read-vs-write and
+    write-vs-write questions cannot drift apart — they are the same disjointness question asked over
+    different pairs of sets.
+
+    A shared zone collides unless BOTH sides resolved it to instances AND those instances are
+    disjoint. Three ways to collide, in the order they are checked: the zone is not
+    instance-separable at all; one side left it unresolved; or they named the same instance."""
+    for zone in zones_x & zones_y:
+        if zone not in snapshot_coverage.ELEMENT_ZONES:
+            return True
+        here = {s for z, s in elements_x if z == zone}
+        there = {s for z, s in elements_y if z == zone}
+        if not here or not there or (here & there):
+            return True
+    return False
 
 
 def commutes(kind_a: int, kind_b: int) -> bool:
@@ -596,7 +634,8 @@ def option_footprint(model, option: Mapping, *, clauses_cover: bool | None = Non
     from common.board_delta import card_clauses      # the ONE home of the clause walk
     if is_terminal(option):
         return Footprint()                    # no transition, so no footprint to have
-    base = footprint(transition_kind(option))
+    kind = transition_kind(option)
+    base = footprint(kind)
     card = _option_card(model, option)
     clauses = card_clauses(getattr(model, "combat", None), card[0]) if card is not None else ()
     # A separate walk from `board_delta._clause_writes`, and deliberately so: that one RAISES on an
@@ -625,9 +664,188 @@ def option_footprint(model, option: Mapping, *, clauses_cover: bool | None = Non
                 and clauses_cover is not False
                 and not undeclared
                 and card is not None)
-    return Footprint(reads=frozenset(base.reads | clause_zones),
-                     writes=frozenset(base.writes | clause_zones), complete=bool(complete),
-                     reveals_information=reveals)
+    # The narrowing applies to the FLOOR, and the clause union goes on TOP of the result — never the
+    # other way round, or a Supporter's `gust` would have its `bodies_in_play` write stripped back off
+    # by the sub-case narrowing that knows nothing about it.
+    drop = _structural_drop(model, kind, card)
+    reads = (set(base.reads) - drop) | clause_zones
+    writes = (set(base.writes) - drop) | clause_zones
+    hand_serial, body_serial = _option_serials(model, option)
+    body_serial = _deployed_body_serial(model, kind, card, hand_serial, body_serial)
+    return Footprint(reads=frozenset(reads), writes=frozenset(writes), complete=bool(complete),
+                     reveals_information=reveals,
+                     read_elements=_elements(reads, hand_serial, body_serial),
+                     write_elements=_elements(writes, hand_serial, body_serial))
+
+
+def _elements(zones, hand_serial, body_serial) -> frozenset:
+    """``{(zone, serial)}`` for the element zones this option can actually RESOLVE.
+
+    Which serial keys which zone comes from `snapshot_coverage`'s own split
+    (:data:`~common.snapshot_coverage.CARD_KEYED_ZONES` /
+    :data:`~common.snapshot_coverage.BODY_KEYED_ZONES`, from which `ELEMENT_ZONES` is derived) rather
+    than from a second list here — the two serials come from different halves of the option
+    (``area``/``index`` vs ``inPlayArea``/``inPlayIndex``) and mixing them up would be silent: a
+    footprint would still look precise while naming the wrong instance.
+
+    A zone whose key is unavailable — a `_RETREAT` names no body, a `_PLAY` names no in-play target —
+    is simply left out, which makes it *unresolved* and therefore conflicting. Silence here is the
+    fail-closed answer, never an assertion that the zone is untouched."""
+    out = set()
+    for zone in zones & snapshot_coverage.ELEMENT_ZONES:
+        serial = (hand_serial if zone in snapshot_coverage.CARD_KEYED_ZONES
+                  else body_serial if zone in snapshot_coverage.BODY_KEYED_ZONES else None)
+        if serial is not None:
+            out.add((zone, serial))
+    return frozenset(out)
+
+
+def _deployed_body_serial(model, kind: int, card, hand_serial, body_serial):
+    """A Basic deploy's new body carries the HAND CARD's serial, so `bodies_in_play` is resolvable
+    for a `_PLAY` that names no in-play target at all.
+
+    Read at source rather than assumed — `board_delta._play` builds the benched body as
+    ``{"id": card_id, "serial": card.get("serial"), ...}`` from the very card it took out of my hand.
+
+    **Narrow on purpose, and the narrowness is the soundness.** This fires ONLY for a Basic Pokémon.
+    A Trainer's `_PLAY` also declares `bodies_in_play` in the structural floor, but a Trainer that
+    moves a body moves someone ELSE's — a `gust` writes the OPPONENT's Active — so keying that write
+    by my hand card's serial would be false precision, and false precision is the one direction that
+    licenses a reorder which changes the board. A Trainer therefore leaves the zone UNRESOLVED, which
+    conflicts.
+
+    Without this, two Basic deploys are refused by an unresolved `bodies_in_play` rather than by
+    `bench_occupancy` — still the right answer, but for the wrong reason, which would leave the
+    ruling's named last-Bench-slot rejection doing no actual work. Found by mutating
+    `ELEMENT_ZONES` and watching the rejection test stay green."""
+    if body_serial is not None or kind != _PLAY or card is None or hand_serial is None:
+        return body_serial
+    stat = model.card_stat(card[0])
+    is_basic = bool(getattr(stat, "is_pokemon", False)) and not getattr(stat, "evolvesFrom", None)
+    return hand_serial if is_basic else None
+
+
+def _option_serials(model, option: Mapping):
+    """``(hand card serial, targeted body serial)``, either of which may be None.
+
+    The engine's ``serial`` is the instance number, and it is the SAME field ADR-0091's Option
+    Equivalence deliberately IGNORES. That is not a contradiction and is worth stating once: the
+    fingerprint drops it because two indistinguishable bodies are ONE decision, while commutativity
+    keeps it because two writes to indistinguishable bodies are still TWO writes. Same field,
+    opposite questions.
+
+    Never raises — it runs on the ordering hot path, and an unresolvable reference must degrade to
+    *unresolved* (which conflicts) rather than to a crash.
+
+    **The seat is honoured, not assumed.** An option carries `playerIndex` (the field
+    `option_equivalence.option_fingerprint` reads for exactly this), and an option naming the
+    OPPONENT's board must resolve to None here rather than to my own body at that index — a serial
+    from the wrong side is FALSE PRECISION, which is the one direction that can license a bad
+    reorder. Unreachable today (only `_ATTACH` and `_EVOLVE` carry complete footprints and both
+    target my own bodies), and guarded anyway: the cost is one comparison and the failure mode is
+    silent."""
+    from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND
+    obs = getattr(model, "source_obs", None) or {}
+    players = ((obs.get("current") or {}).get("players")) or []
+    seat = int(getattr(model, "my_index", 0))
+    named = option.get("playerIndex")
+    if named is not None and int(named) != seat:
+        return None, None                     # the option is about THEIR board; I key nothing here
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+
+    def serial_at(cards, index):
+        if not isinstance(index, int) or not 0 <= index < len(cards) or not cards[index]:
+            return None
+        return (cards[index] or {}).get("serial")
+
+    # A `_PLAY` names its hand index bare, with no `area` at all — the same default `_option_card`
+    # takes, and the reason this cannot just filter on `area == AREA_HAND`.
+    hand = serial_at(me.get("hand") or (), option.get("index")) \
+        if option.get("area") in (None, AREA_HAND) else None
+    area, index = option.get("inPlayArea"), option.get("inPlayIndex")
+    if area == AREA_ACTIVE:
+        body = serial_at(me.get("active") or (), index)
+    elif area == AREA_BENCH:
+        body = serial_at(me.get("bench") or (), index)
+    else:
+        body = None
+    return hand, body
+
+
+def _structural_drop(model, kind: int, card) -> frozenset:
+    """Zones to DROP from the KIND's structural floor, narrowing it to the ONE sub-case this option
+    actually takes.
+
+    **Why a kind footprint over-declares at all.** `_ATTACH` and `_PLAY` each cover several sub-cases
+    that never co-occur, and a KIND cannot know which one a given option is — so its entry is the
+    UNION, which is the right answer for a table and the wrong one for an option. The per-OPTION
+    answer can tell them apart, and it must: while `_PLAY` declared every sub-case's zones, two Basic
+    deploys collided on `stadium`, both discards and two allowances that neither of them writes, so
+    the last-Bench-slot rejection the 2026-08-04 ruling NAMES was never the thing doing the
+    rejecting. Found by mutating `snapshot_coverage.ELEMENT_ZONES` and watching the test stay green.
+
+    **Applied to the FLOOR only, never to the clause union.** A Supporter's `gust` writes
+    `bodies_in_play`, which the Pokémon sub-case's narrowing would otherwise strip back off — so the
+    caller subtracts this from ``base`` and unions the clause zones on top of the result, in that
+    order. Reversing them would delete a real card effect's write.
+
+    Every sub-case below is the write-set `common.board_delta` actually returns, read off that module
+    rather than reasoned about:
+
+    * `_ATTACH` **Tool leg** — `attached_tools` (+ `damage_counters` for a flat HP grant); spends no
+      allowance, since `docs/rules.md` §3 caps only the MANUAL Energy attachment
+      (*"Attach Energy from hand | **1** (manual attachment; card effects can add more)"*) and a Tool
+      is an ordinary Trainer play.
+    * `_ATTACH` **Energy leg** — `attached_energy` + `allowance_energy_attached`.
+    * `_PLAY` **Basic Pokémon deploy** — exactly
+      ``{"my_hand_ids", "bodies_in_play", "bench_occupancy"}``.
+    * `_PLAY` **Stadium** — `my_hand_ids`, `stadium`, `allowance_stadium_played`, and whichever
+      discard owned the displaced one (`docs/rulebook.txt` L78 — *"Each player has their own discard
+      pile"*), so BOTH discards stay declared: which one is written depends on whose Stadium it was,
+      and that is not decidable from the option.
+    * **Anything else** — no narrowing at all. A Trainer's `_PLAY` has no measured structural
+      write-set (`board_delta._play` refuses it outright), so the full floor stands. Fail closed.
+
+    `damage_counters` is kept for EVERY Tool rather than only one whose `hpBonus` clears
+    `applies_to_holder` — the deliberate over-report, since an extra declared write can only make
+    :func:`footprints_commute` refuse a block while a missing one would license a bad reorder.
+
+    :data:`FOOTPRINTS`'s `_ATTACH` entry is the UNION of two legs that never both fire, because a
+    KIND cannot know which card is being attached. The per-OPTION answer can, and it must: without
+    this split an Energy and a Tool would collide on `allowance_energy_attached` and Issue #263's own
+    worked triple could not commute even under the element ruling.
+
+    Read at source rather than inferred — `board_delta._attach` branches on `CardStat.cardType`:
+
+    * **Tool leg** — writes `attached_tools`, plus `damage_counters` for a flat HP grant. Spends no
+      allowance: `docs/rules.md` §3 caps only the MANUAL Energy attachment, and *"a Tool is an
+      ordinary Trainer play with no such cap"*.
+    * **Energy leg** — writes `attached_energy` and `allowance_energy_attached`.
+    * Both write `my_hand_ids`.
+
+    `damage_counters` is kept for EVERY Tool rather than only for one whose `hpBonus` clears
+    `applies_to_holder`, which is the deliberate over-report: an extra declared write can only make
+    :func:`footprints_commute` refuse a block, while a missing one would license a bad reorder."""
+    if card is None or kind not in (_ATTACH, _PLAY):
+        return frozenset()
+    stat = model.card_stat(card[0])
+    if stat is None:
+        return frozenset()                      # unknown card — keep the union, fail closed
+    floor = footprint(kind)
+    everything = floor.reads | floor.writes
+    if kind == _ATTACH:
+        if getattr(stat, "is_tool", False):
+            return frozenset({"attached_energy", "allowance_energy_attached"})
+        if getattr(stat, "is_energy", False):
+            return frozenset({"attached_tools", "damage_counters"})
+        return frozenset()                      # neither leg — `board_delta._attach` refuses it
+    # `_PLAY`, and only for the two sub-cases `board_delta._play` actually models.
+    if getattr(stat, "is_pokemon", False) and not getattr(stat, "evolvesFrom", None):
+        return frozenset(everything - {"my_hand_ids", "bodies_in_play", "bench_occupancy"})
+    if getattr(stat, "is_stadium", False):
+        return frozenset(everything - {"my_hand_ids", "stadium", "allowance_stadium_played",
+                                       "my_discard_contents", "their_discard_contents"})
+    return frozenset()                          # a Trainer play — no measured floor, so keep it all
 
 
 @dataclass(frozen=True)

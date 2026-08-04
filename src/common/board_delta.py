@@ -56,9 +56,12 @@ wrong delta is a mis-priced sequence with nothing to say so.
 
 ## Rules read at source, never from memory
 
-* `docs/rules.md` §3 — the per-turn allowances: *"Attach an Energy | 1"*, *"Play a Stadium | 1 (and
-  only if it differs from the one in play)"*, *"Retreat (manual) | 1 (pay the Retreat cost in Energy;
-  card effects can switch for free)"*.
+* `docs/rules.md` §3 — the per-turn allowances, quoted from the table verbatim: *"Attach Energy from
+  hand | **1** (manual attachment; card effects can add more)"*, *"Play a Stadium | **1** (and only
+  if it differs from the one in play)"*, *"Retreat (manual) | **1** (pay the Retreat cost in Energy;
+  card effects can switch for free)"*. (The Energy row was previously paraphrased here as *"Attach an
+  Energy | 1"*, which is not what §3 prints — corrected under Issue #383, since a quotation the
+  source does not contain is the exact failure `CLAUDE.md`'s verify-at-source rule exists to prevent.)
 * `docs/rules.md` §4 — *"Evolving keeps attached cards + damage counters; **clears** Special
   Conditions and attack effects."*
 * `docs/rules.md` §8 — Special Conditions live on the **Active only**, and are *"cleared when it

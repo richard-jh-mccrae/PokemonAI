@@ -362,3 +362,125 @@ is the first consumer.
   a fate the seam would not return.
 - **Nothing at runtime moved.** No production caller invokes `apply_option` yet (T4 / Issue #263
   writes them), so both gates were expected to be — and were — unaffected.
+
+## Amendment D — footprint granularity is ELEMENT-level (ruled 2026-08-04, Issue #263 / Issue #383)
+
+**This is a contract-freeze ruling line**, in the form ADR-0092's freeze discipline requires: the
+footprint contract Amendment B froze at POC-T0 is EXTENDED here, and it lands only because the
+developer ruled it on the record. Requested by the Issue #383 build session on
+[Issue #263](https://github.com/richard-jh-mccrae/PokemonAI/issues/263#issuecomment-5180494615)
+**before any code was written**, with a stated fail-closed fallback; **GRANTED 2026-08-04** (option
+1 of two). Recorded here rather than in `data/leaf_lab/wave3-rulings.md` because that file is the
+gate-flip record — frame → verdict — and this ruling moves no frame: it changes what the contract
+means, which is what an ADR amendment is for.
+
+### D1. What was wrong
+
+Amendment B's rule — *"two options commute iff neither reads what the other writes and they do not
+both write the same field"* — is sound and **licensed nothing**. Measured over every pair in
+`KIND_COVERAGE`, including self-pairs: **zero commuting pairs**. *Positive control:* `commutes` does
+return True for two hand-built complete disjoint footprints, so the zero was the table's answer and
+not a broken function.
+
+That made Issue #263 § *Commutative-block collapse*'s own worked example — *"an Energy, an evolution
+and a Tool in any of 3! orders reaches ONE board, so it is ONE candidate"* — **unprovable by the very
+test that section mandates**. A Tool arrives as `OptionType.ATTACH` exactly like an Energy, so the
+triple is two `_ATTACH`s and one `_EVOLVE`, and at whole-zone granularity every pair collides on
+`my_hand_ids`, two of them on `bodies_in_play`, and the two `_ATTACH`s on
+`allowance_energy_attached`. The section's justification — that reorderings crowd genuinely different
+lines out of a beam of width *k*, a **search-quality** property rather than a speed one — was
+therefore unbought.
+
+### D2. The ruling
+
+**Where a write is an element-level removal or addition over distinct instances, two such writes to
+DISTINCT instances commute.** The instance key is the engine's own `serial`.
+
+`snapshot_coverage.ELEMENT_ZONES` is the registry — **five** zones, DERIVED from the two halves that
+say which serial keys them (`CARD_KEYED_ZONES`, `BODY_KEYED_ZONES`) so the membership is never listed
+twice: `my_hand_ids` by the played card's serial, and `bodies_in_play` / `attached_energy` /
+`attached_tools` / `damage_counters` by the target body's.
+
+**The grant as delivered said "discard arrivals by `serial`", and that leg is NOT implemented — a
+deliberate narrowing in the fail-closed direction.** The seam cannot resolve the key:
+`their_discard_contents` receives a card that is never from my hand, and `my_discard_contents` is
+right only for *"the Trainer I played lands in my discard"* — wrong for every `cost` clause
+(`discard_1` … `discard_hand`) and for `discard_own_energy`, where WHICH card is discarded is chosen
+at a follow-up select. Declaring a zone element-level while keying it wrongly is unsound in the one
+direction this registry exists to prevent, so both discards stay whole-zone until an option shape
+carries the arriving card's identity. It costs nothing today: no two `_PLAY`s can commute anyway,
+because `_PLAY` writes whole-zone `bench_occupancy`.
+
+**Everything else stays whole-zone, and that exclusion is a condition of the grant, not a leftover.**
+Each excluded zone is what refuses a case the spec requires refused:
+
+| zone | what it refuses | source |
+|---|---|---|
+| `bench_occupancy` | two Basics contending for the last Bench slot — the orders reach *different* boards | Issue #263 § *Commutative-block collapse*, named as a required rejection |
+| `allowance_energy_attached` | a second Energy attach — only one of the two is a legal play at all | `docs/rules.md` §3, *"Attach Energy from hand \| **1** (manual attachment; card effects can add more)"* |
+| `allowance_supporter_played` / `allowance_stadium_played` / `allowance_retreat_used` | the same, per turn | `docs/rules.md` §3, *"Play a Supporter \| **1**"* etc. |
+| `special_conditions` | any pair touching them — conditions live on the Active alone and the engine holds the five flags on `PlayerState`, so there is no per-body instance to key on | `docs/rules.md` §8 |
+| `stadium` | any pair — one shared slot for the whole board | `docs/rulebook.txt` L135-137 |
+
+**`serial` is the same field ADR-0091's Option Equivalence deliberately IGNORES**, and the two are
+not in conflict. The fingerprint drops it because two indistinguishable bodies are ONE decision;
+commutativity keeps it because two writes to indistinguishable bodies are still TWO writes. Same
+field, opposite questions — stated here so a later reader does not "fix" one to match the other.
+
+### D3. Fail-closed, unchanged and unweakened
+
+The refinement widens what can be **proved** disjoint; it widens nothing that is **assumed** disjoint.
+
+- An unknown or partial footprint still commutes with NOTHING.
+- A revealing play still joins no block, whatever its footprint says.
+- A clause-less `_PLAY` is still UNKNOWN, never an empty write-set — and `clauses_cover=True` cannot
+  complete an empty clause list, since that would be coverage asserted over the compendium's silence.
+- **Unresolved beats precise:** a footprint naming an element zone *without* naming an instance is an
+  UNKNOWN there and collides with every other write to it, however precisely the other side named
+  itself. This is what keeps a targetless `_RETREAT` (all 5807 offered occurrences in the parity
+  corpus are the bare `{"type": 12}`) and a whole-hand shuffle correctly non-commutative.
+
+### D4. Consequences
+
+- **`Footprint` gains `read_elements` / `write_elements`** (`{(zone, serial)}`), additive — `reads`
+  and `writes` keep their meaning, so no existing entry changes.
+- **`KIND_COVERAGE`'s table is untouched and `commutes()` still licenses ZERO pairs.** An element is
+  an instance and a KIND has no instance, so a per-kind footprint resolves nothing and fails closed.
+  The refinement lives entirely in `option_footprint`, which is where instances exist.
+- **`option_footprint` narrows a KIND's structural floor to the SUB-CASE the option takes**
+  (`_structural_drop`), because a kind footprint is the UNION of sub-cases that never co-occur and
+  a table cannot tell them apart while an option can. Two places it is load-bearing, both discovered
+  by mutating `ELEMENT_ZONES` and watching a rejection test stay green:
+  - `_ATTACH` — the Tool leg writes `attached_tools` (+`damage_counters`), the Energy leg writes
+    `attached_energy` + `allowance_energy_attached`; `board_delta._attach` already branches on
+    `CardStat.cardType`. **Without the split an Energy and a Tool collide on the allowance and the
+    worked triple cannot commute even under this ruling.**
+  - `_PLAY` — a Basic deploy writes exactly `{my_hand_ids, bodies_in_play, bench_occupancy}`
+    (`board_delta._play`'s own returned set). While the floor also declared `stadium`, both discards
+    and two allowances, two Basic deploys collided on five zones neither of them writes, so the
+    last-Bench-slot rejection **this ruling names** was never the thing doing the rejecting. A
+    Trainer's `_PLAY` is NOT narrowed — `board_delta._play` refuses it, so there is no measured
+    write-set to narrow to, and the full floor stands.
+  The narrowing applies to the FLOOR only; the clause union goes on top of the result, or a
+  Supporter's `gust` would have its `bodies_in_play` write stripped off by a sub-case that knows
+  nothing about it.
+- **A Basic deploy's `bodies_in_play` element is the HAND CARD's serial** — `board_delta._play`
+  builds the benched body as `{"id": card_id, "serial": card.get("serial"), …}`. Resolved only for a
+  Basic Pokémon: a Trainer that moves a body moves someone ELSE's (a `gust` writes the opponent's
+  Active), so keying that by my hand card would be false precision.
+- **`_option_serials` honours the option's `playerIndex`.** An option naming the opponent's board
+  resolves to no element rather than to my own body at that index — a serial from the wrong side is
+  false precision, the one direction that can license a bad reorder. Unreachable today, guarded
+  anyway.
+- **A narrowness worth recording rather than discovering:** two `_EVOLVE`s on distinct bodies still
+  do NOT commute, because `_EVOLVE` writes whole-zone `special_conditions`. That is correct under
+  this ruling as written (§8 gives no per-body instance to key on) but it was not anticipated in the
+  request's conflict table, and it means evolution pairs stay at full width.
+- **A requirement this puts on the composer (Issue #385), accepted by the developer with the grant:**
+  element-level commutativity is a claim about the resulting **board**, never about option
+  **encodings**. An option names its card by hand *index*, and removing hand card 0 shifts card 3 to
+  index 2 — so the composer must re-resolve each block member against the board it is actually
+  applied to, or canonicalise the block by `serial`. Replaying a saved option dict in a different
+  order is wrong even when the two plays provably commute.
+- **Nothing at runtime moved.** No production caller invokes `apply_option`, so both ADR-0072 gates
+  were expected to be — and were — byte-identical.
