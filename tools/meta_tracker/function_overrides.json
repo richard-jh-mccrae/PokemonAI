@@ -35,9 +35,9 @@
  "756": [
   "stall"
  ],
+ "_note_1071_stall_retired": "1071 Meowth ex — `stall` was RETIRED here on 2026-07-03 (developer sign-off; re-model recorded in src/agents/mega_lucario/STRATEGY.md §3: `['search','stall']` -> `['search','supporter_tutor']`). Do NOT restore it. `stall` is a play-role meaning \"a big-HP wall piloted not to attack\"; Meowth ex is the opposite — HP 170 for TWO prizes, and Last-Ditch Catch is a once-only ON-PLAY-FROM-HAND Supporter search, so once played the body's value is SPENT. Its only attack is Tuck Tail {C}{C}{C} for 60, and the standing doctrine is \"never attach energy to Meowth unless desperate\". The replacement tag `supporter_tutor` carries the real function. This entry exists because the 2026-07-03 re-model edited the SHIPPED table (src/common/card_functions.json) but left `stall` here, and this file is a standing INSTRUCTION to the builder, not a record — classify_functions unions it in on every build (`--fresh` included, since the union sits upstream of the accumulate step `--fresh` skips), so the stale tag was a pending re-introduction. Reconciliation is now asserted: tests/cards/test_card_functions_oracle.py, REQ-FUNC-0016 (Issue #375).",
  "1071": [
-  "search",
-  "stall"
+  "search"
  ],
  "1079": [
   "rare_candy"
