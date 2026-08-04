@@ -114,6 +114,31 @@ Both run on every non-docs change, gating, and together they cost about 2 minute
   engine-audited effect probes). Those markers are the parity ledger — they disappear as cgpy
   parity grows, and a non-gating step would have hidden the same information.
 
+### Line-ending guard
+
+One `git ls-files --eol` call, ~0.1 s, run on **every** event — deliberately not gated on the
+test plan, because a docs-only PR can reintroduce the fault. It enforces one invariant:
+
+> no blob may be stored CRLF under a `.gitattributes` rule that declares it LF.
+
+The reason it exists is that nothing else could see the fault. `.gitattributes` governs writes
+from the moment it lands; it never retroactively rewrites blobs already stored. So the
+`*.py text eol=lf` rule sat in disagreement with thirteen `.py` files committed before it, and
+git reported them permanently-modified on every fresh Linux clone (CI, the Kaggle grader, web
+sessions) while a Windows box with `core.autocrlf=true` masked it completely. No test could
+catch it: it is a property of the **index**, not of any file's content — every one of those
+thirteen files was byte-identical to HEAD modulo line endings, and the suite passed throughout.
+
+The byte-stable record stores (`data/**`, `src/cg/**`, `tests/fixtures/**`,
+`docs/tuning/runs/**`) carry `-text !eol` and are invisible to the check by construction, so it
+cannot start demanding that a correction record be normalized. `.editorconfig` is the
+write-side companion — `.gitattributes` decides what git stores, `.editorconfig` what the
+editor saves, and both are needed when dev runs on Windows and Linux at once.
+
+Fix when it fires: `git add --renormalize -- '<pathspec>' && git commit`. Scope the pathspec —
+a bare `git add --renormalize .` overrides the `text=auto` grandfathering that is currently the
+only thing sparing ~160 already-committed record files.
+
 ## What runs (the suite itself)
 
 The suite is offline and self-contained on Linux:

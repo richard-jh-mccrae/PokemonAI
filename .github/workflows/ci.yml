@@ -40,6 +40,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # LINE-ENDING GUARD. `.gitattributes` declares `text eol=lf` for source (*.py, *.yml, *.sh,
+      # *.toml, …), but it governs writes from the moment it lands — it never retroactively
+      # rewrites blobs already stored. Thirteen `.py` files sat `i/crlf` under `attr/text eol=lf`
+      # for months because of exactly that gap: git reported them permanently-modified on every
+      # fresh Linux clone (CI, the Kaggle grader, web sessions) while a Windows box with
+      # `core.autocrlf=true` masked it completely. Nothing in the suite could see it, because it
+      # is a property of the INDEX, not of any file's content.
+      #
+      # This is the whole invariant in one line: no blob may be stored CRLF under a rule that
+      # declares it LF. Byte-stable stores (`data/**`, `src/cg/**`, `tests/fixtures/**`,
+      # `docs/tuning/runs/**`) carry `-text !eol` and are invisible to it by construction, so the
+      # check cannot start demanding that a correction record be normalized. Pure git, ~0.1 s, and
+      # deliberately NOT gated on the test plan — a docs-only PR can reintroduce this.
+      - name: Line-ending guard (no CRLF blob under a `text eol=lf` rule)
+        run: |
+          bad=$(git ls-files --eol | grep '^i/crlf' | grep 'attr/text eol=lf' || true)
+          if [ -n "$bad" ]; then
+            echo "::error::CRLF stored in blobs that .gitattributes declares LF-only:"
+            echo "$bad"
+            echo "Fix: git add --renormalize -- '<pathspec>' && git commit"
+            exit 1
+          fi
+          echo "no CRLF blob under a text eol=lf rule ✅"
+
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v5
         with:
