@@ -26,7 +26,7 @@ a baseline is a ruling record, not something a sub-issue may recapture on its ow
 | `83661649\|0\|decision\|54` | leaf (Discrimination) | Issue #332 | OK, rank 1/n | MISS, rank 5/n | **RULE, do not conform.** Same class, and the deepest of the three. |
 | `82228640\|0\|decision\|53` | leaf (Discrimination) | Issue #332 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational — not a regression against the baseline.** A windfall improvement lost. |
 | `82525741\|0\|decision\|58` | leaf (Discrimination) | Issue #332 | `IMPROVED MISS -> OK` | back to the baseline's `MISS` | **Informational.** Same class. |
-| *(not a frame)* `test_PLAYING_the_boost_card_…` | **no gate** — a sibling issue's acceptance test | Issue #329 vs Issue #282 | `total_after > total_before` (+0.016667) | positional half is **−0.032051** | **RULING OWED — read this one even though no gate reports it.** See *"A sibling issue's acceptance assertion inverted"* below. It was rewritten rather than left failing, which is the one thing in this run that resembles conforming; the developer may direct otherwise. |
+| *(not a frame)* `test_PLAYING_the_boost_card_…` | **no gate** — a sibling issue's acceptance test | Issue #329 vs Issue #282 | `total_after > total_before` (+0.016667) | positional half is **−0.032051** | **RULING DISCHARGED 2026-08-04 — ACCEPT the rewrite.** Temporary underplay of enabling cards is accepted; no ladder submission before Issue #263's turn composer lands. |
 | `82749168\|1\|decision\|88` | leaf (held out, `owner=#332`) | Issue #362 | REGRESSED, rank 1 -> 4 | **FIXED**, back to the baseline's `OK` rank 1 | **No ruling owed — it is a build.** The issue's headline frame. Recommend the held-out entry STAY (Issue #284's L1 precedent: `82229122\|0\|decision\|17` started passing, was kept, and now fails again). |
 | `82523164\|1\|decision\|75` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 5 | **FIXED** | **No ruling owed.** Same cause, same class — see the four measured frames below. |
 | `82524455\|1\|decision\|55` | leaf (held out, `owner=#263`) | Issue #362 | REGRESSED, rank 1 -> 2 | **FIXED** | **No ruling owed.** Same class. |
@@ -143,7 +143,7 @@ by `_MAX_BODIES x TARGET_VALUE_CEILING`, which is derived but flattens the commo
 to near-nothing, or (b) change the composition from a sum to a max-with-discount, which is a
 frozen-composition change. **Neither is taken here, and no new constant was invented.**
 
-### A sibling issue's acceptance assertion inverted — RULING OWED
+### A sibling issue's acceptance assertion inverted — RULING DISCHARGED 2026-08-04
 
 **No gate reports this, which is exactly why it is tabled.** Flagged by `/code-review`'s Spec axis as
 the one thing in this run that resembles conforming rather than ruling.
@@ -179,6 +179,12 @@ outright on the full sequence score.
 **Nothing was retuned to accommodate any of this**, and the rewritten test is strictly stronger than
 the one it replaces — it would fail under a boost that stopped being priced, which is the property
 Issue #282 actually exists to guard.
+
+**Developer ruling 2026-08-04:** Option 1, **ACCEPT the rewrite**. `state_value` must not include the
+prize value of cashing an attack boost; that belongs to `attack_ev` under Issue #263's
+`score(sequence) = state_value(end board) + EV(terminal action)` composer. The temporary gap is
+accepted: enabling cards such as Boss's Orders or Premium Power Pro may be underplayed until Issue
+#263 can rank the whole turn line, and the agent will not be submitted to ladder before that lands.
 
 ## Issue #332 — `readiness` funded the Active over the benched successor
 
@@ -454,6 +460,13 @@ held constant and only this change moves.
 The count is unchanged and the membership is not: `82752604\|0\|decision\|88` (Issue #329's) leaves,
 `85046350\|0\|decision\|85` arrives. Net ledger effect on this batch is therefore **zero new unruled
 flips**, with one of Issue #329's three retired.
+
+**Developer follow-up 2026-08-04 (Issue #376 Item 2):** direct-build the generalized Meowth sentence
+rather than send it through the stale proposal queue. The rule is narrow: a spent on-play
+supporter-tutor ex body banks no attack, mobility, or ability-fuel value while a real attacker can
+receive the Energy; the desperation floor still exists when no attacker alternative exists. This
+lands in `Pilot._attach_value` as `spent_utility_gated`, backed by source-verified card 1071 Meowth ex
+(`supporter_tutor`, on-play Bench ability, Tuck Tail for 3 Energy / 60 damage, ex liability).
 
 The other six unruled flips are all present with the gate OFF and are NOT this issue's:
 `81904451\|0\|decision\|9`, `83457493\|1\|decision\|20`, `83661649\|0\|decision\|54` (Issue #332,
