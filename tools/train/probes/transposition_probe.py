@@ -21,6 +21,7 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 from train.leaf_lab import _cgpy_pilot_builder, _PLACEHOLDER_SBI    # noqa: E402
 from train.blunder.store import load_corrections                    # noqa: E402
 from common.strategy.context import KO_SCORE                         # noqa: E402
+from common.state_value import WIN_PRIZES                            # noqa: E402
 from common.strategy.planner import _prune_none                      # noqa: E402
 from common.strategy.refresh import refresh_branches                 # noqa: E402
 
@@ -78,7 +79,10 @@ def probe_frame(pilot, c):
         pl = (end_obs.get("current") or {}).get("players") or []
         m = pl[mi] if 0 <= mi < len(pl) and pl[mi] else {}
         if res == mi:
-            return KO_SCORE * (start_prizes + 1), ("WIN",)
+            # IMPORTED, not re-derived (Issue #362) — see `gate0_ab.py`'s note: the shipped win
+            # short-circuit is now the derived `WIN_PRIZES` band, and the same honest limit applies
+            # here, since the non-win branch below is still the retired `_leaf_value`.
+            return KO_SCORE * WIN_PRIZES, ("WIN",)
         taken = max(0, start_prizes - len(m.get("prize") or []))
         act = next((p for p in (m.get("active") or []) if p), None)
         surv = False

@@ -292,18 +292,58 @@ body Active, the clause says *which* class it may pull (`target: any | basic`) a
 A clause kind may also delegate its write to an `effect` value instead of carrying one itself: `coin`
 does (the flip is an RNG read; `effect` names the leg it resolves into), and so do Issue #304's
 `stadium_static` / `stadium_trigger`, where `effect` is `hp_delta` / `damage_reduction` /
-`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all three of `kind`, `rider`
-and `effect` for exactly that reason — a kind whose write-set reads empty is not a kind that writes
-nothing.
+`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all four of `kind`, `rider`,
+`effect` and `cost` for exactly that reason — a kind whose write-set reads empty is not a kind that
+writes nothing.
+`cost` is the fourth (Issue #350) and it is VOCABULARY, not a parameter: its values are a closed set
+of strings that MOVE CARDS BETWEEN ZONES (`discard_1` / `discard_2` / `discard_3` / `discard_hand`
+take cards from my hand to my discard; `bottom_2` — Kofu — discards nothing and puts two on the
+bottom of my DECK, so it writes `my_deck_count`, `deck_odds` and `deck_order` instead). The values
+are ONE flat namespace across all four keys, which is why `gust` needs a single entry for a `kind`
+(Boss's Orders) and an `effect` (Pokemon Catcher) alike: `undeclared_clauses` looks the string up,
+never the key position it came from — and why a cost's zones union into its clause's rather than
+nesting. `snapshot_coverage`'s module docstring carries the ruling and its three grounds.
 A clause's KEYS are audited too (Issue #302, `snapshot_coverage.CLAUSE_PARAMETERS`), and they are a
 separate namespace from the values above: `undeclared_clauses` bites an unknown `kind`/`rider`/
-`effect` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared
+`effect`/`cost` VALUE, `undeclared_clause_keys` bites an unknown parameter KEY. A parameter nobody declared
 is one nobody reads, and it prices its option at 0 as surely as an undeclared kind does. That axis
 grew three keys with Issue #302's conditional draw Supporters: `to_hand_size` (*"draw until you have
 N in hand"* is a REFILL, so it is mutually exclusive with `amount`), `amount_if` (the second
 magnitude that REPLACES the first when a named board predicate holds — 17 Ignition Energy's
 `amount_on_evolution` generalised), and `cost_required` (failing to pay makes the card UNPLAYABLE,
-which is a different fact from the cost merely being expensive).
+which is a different fact from the cost merely being expensive). `cost_required` is authored **iff**
+the card prints a restriction on **paying that cost** — *"You can use this card only if you
+discard/put…"*, or Kofu's parenthetical inverse naming the same payment. Deliberately narrower than
+*"prints a playability restriction"*, which ten board-condition cards would also satisfy (1101 Call
+Bell's *"only if you go second"* is a `condition`, not a cost gate). Issue #372 ruled that
+biconditional after finding the store holding two opposite readings of one sentence — 1233 Canari
+and 1187 Morty's Conviction print it character for character and disagreed — and
+`tests/cards/test_card_effects.py` now grades it against the engine's card text in both directions.
+It bit because every other check on this axis is per-KEY or per-CARD: nothing asked whether two cards
+printing the same text read it the same way. The cgpy twin had already ruled it the other way
+(`chain_overrides.json` gives 1121 Ultra Ball `legal: handOthers n=2`), so this was one repo holding
+two answers, not merely one store.
+It grew TWO more with Issue #349's board-scaled magnitudes: `amount_per` AGGREGATES (a string naming
+a board set whose COUNT multiplies `amount`, all of it landing in the clause's single destination —
+1187 Morty's Conviction draws one card per OPPONENT benched body into MY hand) and `each_of`
+DISTRIBUTES (a boolean: the FULL `amount` to EVERY body the clause's own `target` names — 1222 Fennel
+heals 40 from each of mine). They are two keys rather than one on purpose; `snapshot_coverage`'s
+module docstring carries that ruling and its grounds, as it does for `cost`.
+A THIRD axis was added by Issue #374 (`snapshot_coverage.CLAUSE_SELECTORS`): the VALUES of the
+string-valued keys that do the SELECTING — `target`, `condition`, `applies_to`, `restriction`,
+`name_family`, `trigger` and eleven more, 17 keys carrying 74 values. `CLAUSE_WRITES` audits the
+values of the four VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a
+selector's value, so a mistyped `target` passed both audits and every consumer of it fails CLOSED
+(`combat._accel_target_ok`, `planner._heal_restriction_ok`, `planner._condition_holds` all
+`return False` on a string they do not know) — the clause funds nothing, reaches nothing, or never
+counts toward survival. `undeclared_selector_values` is its teeth. **Unlike the value namespace
+above it is keyed PER KEY, not flat**, and that is measured rather than aesthetic: `"basic"` means
+three different things across `target` / `applies_to` / `energy`, and `"deck"` / `"discard"` two
+each across `zone` / `source`, so one flat set would have to accept `{"zone": "basic"}`. The 33 of
+74 values that reach no consumer are declared legal and ledgered in `UNCONSUMED_SELECTORS` with a
+written reason each — `WRITABLE`'s `owed` discipline, one axis over — so the registry cannot become
+a mere transcription of the store. The module docstring carries the ruling and the two rejected
+shapes.
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.

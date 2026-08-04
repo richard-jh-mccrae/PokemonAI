@@ -24,8 +24,8 @@ This module is the enumeration, as data:
 
 * :data:`CLAUSE_WRITES` — the Effect Clause vocabulary (`card_effects.json`, ADR-0032) mapped to the
   zones each clause writes. The audit test walks the committed compendium and fails on a clause
-  ``kind``, ``rider`` **or** ``effect`` with **no declared write-set**, which is the "a new clause
-  kind must fail rather than silently price 0" requirement made executable.
+  ``kind``, ``rider``, ``effect`` **or** ``cost`` with **no declared write-set**, which is the "a new
+  clause kind must fail rather than silently price 0" requirement made executable.
 
   ``effect`` was the third of those and it was unaudited until Issue #300: :func:`clause_vocabulary`
   walked kinds and riders only, so Crushing Hammer's
@@ -34,10 +34,115 @@ This module is the enumeration, as data:
   all. The walk lives in THIS module rather than in the test for exactly that reason: a vocabulary
   the audit forgets to visit is an audit that passes by not looking.
 
+  ``cost`` was the FOURTH and went the same way (Issue #350). Ultra Ball's ``"cost": "discard_2"``
+  moves two real cards from my hand to my discard and Kofu's ``"bottom_2"`` puts two on the bottom
+  of my deck; neither value could fail the audit however undeclared it was, because the walk did not
+  visit the key. **The ruling is that `cost` JOINS `VOCABULARY_KEYS` rather than taking a registry
+  of its own**, on three grounds, none of them "it is smaller":
+
+  - It matches :data:`VOCABULARY_KEYS`' own printed definition — *a value drawn from a closed set
+    that must have a declared write-set* — exactly as `kind` / `rider` / `effect` do.
+  - **Union, not nesting**, and that was already ruled elsewhere rather than decided here:
+    `apply_option.FOOTPRINTS` records that T4 supplies a played card's per-OPTION footprint *"by
+    unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses"*. A flat `value → zones`
+    table unions by construction, so a cost's zones join its clause's with no new machinery. The
+    `gust` entry is the standing precedent that position does not matter: one key serves it as a
+    `kind` (Boss's Orders) and as an `effect` (Pokemon Catcher), because
+    :func:`undeclared_clauses` looks the string up, never where it came from.
+  - A second registry would need its own :func:`undeclared_clauses`, :func:`unknown_zones` and
+    :func:`clauses_writing_unhomed` — four functions duplicated to hold five entries whose values
+    are zone ids from the same :data:`BY_ID` namespace. That is the "two vocabularies that drift"
+    :func:`unknown_zones` exists to prevent, and the drift that let `effect` go unaudited from the
+    day it was authored.
+
 * :data:`CLAUSE_PARAMETERS` — the same discipline on the OTHER axis of the same dict (Issue #302).
   `CLAUSE_WRITES` audits clause VALUES; nothing audited the clause KEYS, so a parameter no reader
   knows — a typo, or a shape authored ahead of the consumer that was meant to read it — sat in the
   store and priced exactly 0. :func:`undeclared_clause_keys` is its teeth.
+
+  **The board-scaled magnitudes are TWO keys, not one** (Issue #349), and the issue left that open —
+  *"two keys or one, argued either way, but the argument is written down"*. A clause could say how
+  many (`amount`) and how many UNTIL (`to_hand_size`); it could not say how many PER, and two printed
+  shapes are neither:
+
+  - ``amount_per`` **AGGREGATES**. 1187 Morty's Conviction — *"Draw a card for each of your
+    opponent's Benched Pokémon"* — is one `amount` times a count of bodies that are NOT the clause's
+    targets, landing in ONE destination. Nothing else on the clause names that set, so the key does:
+    a string.
+  - ``each_of`` **DISTRIBUTES**. 1222 Fennel — *"Heal 40 damage from each of your Pokémon"* — is the
+    full `amount` to EVERY body `target` already names. A boolean, because re-naming the set here
+    would open a second body-class namespace beside `target` and `applies_to`, which is the drift
+    :func:`unknown_zones` exists to prevent one axis over.
+
+  They cannot share a key. The magnitudes differ by a factor of N and the collapse fails in the
+  OVER-counting direction: read as a multiplier, Fennel credits my Active 200 on a full board instead
+  of 40, which is a KO_SCORE-class phantom survival in `planner._heal_candidate`. Nor can `kind`
+  decide it — the same board set is counted aggregately by one card and distributed over by another
+  (62 Koraidon's *"30 damage for each of your Ancient Pokémon in play"* against 1085 Awakening Drum's
+  draw over that identical set), so aggregate-vs-distribute is ORTHOGONAL to both `kind` and the set.
+
+  Both are PARAMETERS rather than :data:`VOCABULARY_KEYS`, and ``applies_to`` is the standing
+  precedent rather than a call made here: it too is a string-valued body-class selector from a closed
+  set and it too lives in this registry, because the discriminator is *names a WRITE*, not *is a
+  string*. A magnitude modifier writes nothing — the write is still the clause `kind`'s.
+
+  **The consequence WAS a known gap, and Issue #374 closed it:** ``amount_per``'s VALUES were
+  unaudited, because :func:`undeclared_clauses` walks only :data:`VOCABULARY_KEYS` — so a typo,
+  ``"their_bnech"``, passed both audits and priced exactly 0, this module's own stated failure mode
+  one level down from the axis Issue #349 had just widened. It was never specific to this key.
+  :data:`CLAUSE_SELECTORS` below is the third registry, and the axis it audits is the widest of the
+  three.
+
+* :data:`CLAUSE_SELECTORS` — the THIRD axis (Issue #374): the values of the keys that do the
+  SELECTING. `CLAUSE_WRITES` audits the values of the four VOCABULARY keys and `CLAUSE_PARAMETERS`
+  audits the key names; nothing walked a selector's VALUE, so a mistyped ``target`` reached no audit
+  and its clause funded nothing. Every consumer of these values fails CLOSED on an unrecognised one
+  — `combat._accel_target_ok`, `planner._heal_restriction_ok`, `planner._condition_holds` all
+  ``return False`` on a string they do not know — which is correct policy and exactly what makes the
+  gap silent rather than loud. A crash is recoverable; a fall-through to "reaches nothing" is the
+  §3c silent zero.
+
+  Measured off the committed artifact when the ruling was taken: **seventeen string-valued selector
+  keys carrying 74 distinct values, none of them audited.** (Issue #374's body opened with thirteen
+  keys and 54 values; that count omitted ``condition``, ``trigger``, ``type`` and the string form of
+  ``amount``, and the ``condition`` omission contradicted the issue's own prose, which named
+  `planner._condition_holds` as one of the three fail-closed consumers. This registry was built to
+  the MEASURED 17/74 rather than to the issue's smaller number, and the discrepancy was reported back
+  on the issue rather than quietly absorbed.)
+
+  **The ruling is ONE registry keyed by clause KEY — not one flat namespace, and not a per-key
+  table — and the deciding fact is measured, not aesthetic.** Selector values do NOT share a
+  namespace the way `CLAUSE_WRITES`' zone ids share :data:`BY_ID`: ``"basic"`` means three different
+  things across ``target`` / ``applies_to`` / ``energy``, and ``"deck"`` and ``"discard"`` mean two
+  each across ``zone`` / ``source``. A flat `value → legal` table would therefore have to accept
+  ``{"zone": "basic"}``, which is not a narrower audit but a WRONG one. That is also why the `cost`
+  ruling above does not transfer: it folded `cost` into :data:`VOCABULARY_KEYS` precisely BECAUSE
+  its values were zone ids from one shared namespace, and the premise fails here.
+
+  Two shapes were named and rejected. **Folding the value sets into :data:`CLAUSE_PARAMETERS`** —
+  one dict instead of two — would change that registry from ``dict[str, str]`` to a compound type
+  that Issues #302, #349 and #350 plus six assertions in `test_snapshot_coverage.py` already read as
+  a plain description string; the audits are cleanly separable, so paying that migration buys
+  nothing. **Auditing only the keys with a live consumer** (``target`` / ``restriction`` /
+  ``applies_to``) would leave thirteen of seventeen keys unwalked, which is the "audit that passes
+  by not looking" this module condemns twice already — and its own scope was mis-stated, since
+  ``condition`` has a live consumer and Issue #374's table omitted it.
+
+  **The orphans are declared legal and LEDGERED rather than either waved through or failed.**
+  :data:`UNCONSUMED_SELECTORS` records the 33 of 74 values that reach no consumer at all, each with
+  the reason it was authored ahead of one — the `owed`-status discipline :data:`WRITABLE` already
+  runs, one axis over. Declaring them silently would make the registry a transcription of the store,
+  unable to disagree with it and therefore vacuous; failing on them would demand 33 consumer builds
+  before anything is green. What the audit must still do is BITE A NEW VALUE, and
+  `test_snapshot_coverage.py` asserts exactly that with a positive control on the same run: a
+  fabricated selector value fails while every committed one passes.
+
+  **The reach measurement behind that ledger needed its own positive control**, and the first
+  instrument was wrong. A grep for each value over `src/` counted a string quoted in a COMMENT or a
+  DOCSTRING as "reached" — which scored ``my_ancient`` as consumed when its only occurrence in the
+  tree is this module's own prose, and scored the deliberate typo ``their_bnech`` as consumed for
+  the same reason. Re-measured by parsing each module and sweeping only CODE string literals, the
+  orphan count went 28 → 33 and both controls came out right.
 
 * :data:`COVERS_FULL` / :data:`COVERS_PARTIAL` — whether a card's clause SET covers its whole printed
   effect. A **partial** set is worse than none: §3b has no PARTIAL fate, so the seam models what the
@@ -196,10 +301,10 @@ WRITABLE: tuple[Zone, ...] = (
 BY_ID = {z.id: z for z in WRITABLE}
 
 #: The Effect Clause vocabulary (`card_effects.json`, ADR-0032) -> the zones each clause WRITES.
-#: Keys are the committed `kind`, `rider` **and** `effect` values — all three, because all three are
-#: vocabulary a card can be written in. The audit test walks the compendium (:func:`clause_vocabulary`)
-#: and fails on any of them absent here: that is the "a new clause kind fails rather than silently
-#: pricing 0" requirement, executable.
+#: Keys are the committed `kind`, `rider`, `effect` **and** `cost` values — all four, because all
+#: four are vocabulary a card can be written in. The audit test walks the compendium
+#: (:func:`clause_vocabulary`) and fails on any of them absent here: that is the "a new clause kind
+#: fails rather than silently pricing 0" requirement, executable.
 CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # kinds
     "accel": frozenset({"attached_energy", "my_discard_contents", "my_deck_count", "deck_odds"}),
@@ -313,6 +418,55 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     # here; `unknown_zones` looks values up in `BY_ID`), but a reader meeting
     # `"damage_counters": {"damage_counters"}` cold deserves to be told which is which.
     "damage_counters": frozenset({"damage_counters"}),
+    # ── costs — the FOURTH axis (Issue #350) ──────────────────────────────────────────────────────
+    # What playing the card costs, paid out of my own resources. A `cost` is not a flavour note:
+    # every value here moves real cards out of my hand, and at T4 an undeclared one prices at exactly
+    # 0 — Ultra Ball's two discarded cards would look free.
+    #
+    # Four identical entries rather than one, because the write-set is about ZONES and
+    # `undeclared_clauses` looks up the exact string: folding them would leave three of the four
+    # undeclared. The COUNT lives in the value's name today, a compendium shape this issue does not
+    # change.
+    #
+    # Printed text quoted from `tools/meta_tracker/cards.json` (engine `all_card_data()`), never
+    # recalled. Which discard they land in is `docs/rulebook.txt` L78: *"Each player has their own
+    # discard pile. Cards taken out of play go to the discard pile"* — mine, so no cost writes
+    # `their_discard_contents`.
+    #
+    #   discard_1     1233 Canari, 1187 Morty's Conviction, 1208 Iris's Fighting Spirit
+    #                 *"You can use this card only if you discard another card from your hand."*
+    #   discard_2     1121 Ultra Ball — *"…if you discard 2 other cards from your hand."*
+    #   discard_3     1092 Secret Box (×4 legs) — *"…if you discard 3 other cards from your hand."*
+    #   discard_hand  1192 Carmine, 1206 Larry's Skill (×3 legs) — *"Discard your hand…"*
+    #
+    # **The quoted sentences also settle `cost_required`, and the split is exactly the one above.**
+    # The first three print *"You can use this card ONLY IF…"* — a playability restriction, so all
+    # six clauses on those five cards carry `cost_required: true` (Issue #372). `discard_hand` prints
+    # an INSTRUCTION, always payable even on a hand holding nothing but the Supporter, so its two
+    # cards carry no flag. Which value a cost takes says nothing about the gate — `discard_1` and
+    # `discard_hand` both empty cards out of one hand — so the two halves are read off the printed
+    # text and nothing else; the split is not derivable from this table's keys.
+    "discard_1": frozenset({"my_hand_ids", "my_discard_contents"}),
+    "discard_2": frozenset({"my_hand_ids", "my_discard_contents"}),
+    "discard_3": frozenset({"my_hand_ids", "my_discard_contents"}),
+    "discard_hand": frozenset({"my_hand_ids", "my_discard_contents"}),
+    # **The sharp one, and the reason a reader must not generalise from the four above.** 1200 Kofu:
+    # *"Put 2 cards from your hand on the bottom of your deck in any order."* Nothing is discarded at
+    # all. Two cards leave my hand and JOIN my deck, so `my_deck_count` goes UP rather than down,
+    # two known cards become unseen (`deck_odds`), and where they land is `deck_order` — the
+    # registry's ONE `hidden` zone. `other_to_bottom` already declares the same three for the dig
+    # riders; this adds `my_hand_ids` because the material comes from the hand, not the deck. It is
+    # the value Issue #302 added LAST, so "a cost discards from hand" was exactly the wrong
+    # generalisation to reach for — the whole argument for declaring costs at all.
+    #
+    # **Deliberately NOT in `NONDETERMINISTIC_CLAUSES`**, and checked rather than inherited from its
+    # neighbour: `other_to_bottom` IS nondeterministic because it re-buries cards a `dig` pulled out
+    # of an unknown deck, so simulating it is one Monte-Carlo sample. Kofu charges cards I can see
+    # and lets me choose their order, so no RNG is consulted and the determinism proof survives. The
+    # `draw 4` it gates is NOT a separate clause — Kofu's whole entry is the single clause
+    # `{"kind": "draw", "amount": 4, "cost": "bottom_2", "cost_required": true}`, so the draw is this
+    # same clause's own `kind`, and `draw` carries the determinism story for that half.
+    "bottom_2": frozenset({"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}),
 }
 
 #: Clauses that consult RNG. **Never eligible for the ENGINE-RESOLVED route** — the gate there is
@@ -336,8 +490,9 @@ REVEALING_CLAUSES: frozenset[str] = frozenset({"draw", "fetch"})
 #: write-set — as opposed to a parameter (`amount`, `dig`, `hp_max`) or a gate (`restriction`,
 #: `condition`). :func:`clause_vocabulary` walks exactly these, and `CLAUSE_WRITES` keys exactly
 #: these. One list, so "which keys does the audit walk?" has a single answer rather than one per
-#: reader — the drift that let `effect` go unaudited from the day it was authored.
-VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect")
+#: reader — the drift that let `effect` go unaudited from the day it was authored, and `cost` after
+#: it. `cost` joined as the fourth at Issue #350; the module docstring carries that ruling.
+VOCABULARY_KEYS: tuple[str, ...] = ("kind", "rider", "effect", "cost")
 
 #: Every clause KEY the compendium is allowed to use, each with what it carries. The other half of
 #: the §3c audit, and the half that did not exist until Issue #302.
@@ -372,6 +527,23 @@ CLAUSE_PARAMETERS: dict[str, str] = {
                  "to a named predicate rather than one hard-coded branch)",
     "to_hand_size": "draw UNTIL the hand holds N — a refill, not a draw-N (Issue #302). Mutually "
                     "exclusive with `amount`: the count depends on the hand at resolution",
+    # ── the board-scaled magnitudes (Issue #349) ──────────────────────────────────────────────────
+    # `amount` says how many and `to_hand_size` says how many UNTIL; neither says how many PER. Two
+    # printed shapes are neither, and they are TWO keys rather than one because a consumer that read
+    # either as the other would be wrong by `amount x (N-1)` in the OVER-counting direction — on a
+    # heal, exactly the phantom survival the planner refuses to manufacture.
+    #
+    # The two differ in where the magnitude LANDS, and that is why one names a set and one does not.
+    "amount_per": "AGGREGATE: `amount` multiplied ONCE PER body in the named board set, landing in "
+                  "the clause's single destination (Issue #349). A STRING, because the counted set "
+                  "is not the clause's target and nothing else on the clause names it — 1187 "
+                  "Morty's Conviction draws one card per OPPONENT benched body into MY hand. "
+                  "Mutually exclusive with `each_of`",
+    "each_of": "DISTRIBUTE: the FULL `amount` to EVERY body the clause's `target` names, not to one "
+               "of them (Issue #349) — 1222 Fennel's *heal 40 from each of your Pokemon*. A "
+               "BOOLEAN, deliberately: `target` already carries the set, and a second body-class "
+               "namespace beside `target` and `applies_to` is the drift `unknown_zones` prevents "
+               "one axis over. Requires a `target`; mutually exclusive with `amount_per`",
     "window": "how many cards an ability's draw sees, when that differs from what it takes",
     "dig": "how deep a search looks",
     "hp_max": "an HP ceiling on what the clause may target",
@@ -396,14 +568,211 @@ CLAUSE_PARAMETERS: dict[str, str] = {
     "name_family": "an owner name family gating the clause",
     "no_rule_box": "the target must have no Rule Box",
     "no_ability": "the target must have no Ability",
-    "cost": "what playing the card costs, paid from my own resources",
+    "cost": "what playing the card costs, paid from my own resources — a VOCABULARY key since "
+            "Issue #350, write-set in CLAUSE_WRITES. Listed beside its gate rather than up with "
+            "the other three because `cost` and `cost_required` are one fact in two halves",
     "cost_required": "TRUE when failing to pay `cost` makes the card UNPLAYABLE, which is a "
-                     "different fact from the cost merely being expensive (Issue #302)",
+                     "different fact from the cost merely being expensive (Issue #302). A "
+                     "PARAMETER, not vocabulary: its value is a boolean, so it names no write. "
+                     "Authored IF AND ONLY IF the card prints a restriction on PAYING THAT COST — "
+                     "*\"You can use this card only if you discard/put…\"*, or Kofu's parenthetical "
+                     "inverse naming the same payment — and NOT for the wider \"prints a "
+                     "playability restriction\", which ten board-condition cards would satisfy "
+                     "(1101 Call Bell's *\"only if you go second\"* takes a `condition`). A "
+                     "biconditional Issue #372 ruled and `tests/cards/test_card_effects.py` grades "
+                     "against the engine's own card text in both directions",
     # ── shape ─────────────────────────────────────────────────────────────────────────────────────
     "type": "the card type a clause names, where `target` would be ambiguous",
     "choice": "the clause is one alternative of a choose-one card",
     "distinct_types": "the fetched cards must differ in Energy type",
     "symmetric": "the effect applies to BOTH players, not only the one who played it",
+}
+
+#: Every SELECTOR value the compendium is allowed to use, keyed by the clause key that carries it
+#: (Issue #374). The third audit axis, and the widest: 74 values against `CLAUSE_WRITES`' ~35.
+#:
+#: **Keyed by clause key, deliberately — a flat namespace would be wrong, not merely coarse.**
+#: `"basic"` is a `target` (a Basic Pokemon), an `applies_to` (a Stadium's Basic-body scope) and an
+#: `energy` (a Basic Energy card); `"deck"` and `"discard"` are each both a `zone` and a `source`.
+#: One flat set would have to accept `{"zone": "basic"}`. The module docstring carries the full
+#: ruling, including the two shapes rejected.
+#:
+#: **This registry names no WRITE**, which is why it is a third table beside `CLAUSE_WRITES` rather
+#: than an extension of it, and why none of these keys joins :data:`VOCABULARY_KEYS`: Issue #349's
+#: discriminator is *names a WRITE*, not *is a string*. A selector narrows WHICH bodies or cards its
+#: clause reaches; the write is still the clause `kind`'s.
+CLAUSE_SELECTORS: dict[str, frozenset[str]] = {
+    # ── body / card classes ───────────────────────────────────────────────────────────────────────
+    # The widest key, and the one whose fail-closed consumer bites hardest: `_accel_target_ok`
+    # recognises exactly `any_pokemon` / `stage2` / `benched` and returns False on everything else,
+    # so a mistyped target means the accel funds NO body at all.
+    "target": frozenset({
+        "any", "any_pokemon", "basic", "basic_energy", "basic_pokemon", "bench_only", "benched",
+        "energy", "evolution", "future", "item", "mega", "opponent_active", "own_line", "own_type",
+        "pokemon", "pokemon_ex", "stadium", "stage1", "stage2", "supporter", "tera", "tool",
+        "trainer",
+    }),
+    # `target_type` is deliberately ABSENT: its values are ints (EnergyType), so the walk never
+    # yields it, and an entry declaring an empty value set would be inert — `undeclared_selector_values`
+    # already bites an unknown KEY, so a string form fails identically with no entry here.
+    "applies_to": frozenset({"basic", "basic_non_dark", "metal", "name_family", "no_rule_box",
+                             "stage2"}),
+    "source_class": frozenset({"ex_or_v"}),
+    "type": frozenset({"colorless", "psychic"}),
+    # ── zones ─────────────────────────────────────────────────────────────────────────────────────
+    "zone": frozenset({"deck", "discard"}),
+    "dest": frozenset({"bench", "in_play"}),
+    "source": frozenset({"deck", "discard", "opponent_attack"}),
+    "dig_from": frozenset({"bottom"}),
+    "energy": frozenset({"basic"}),
+    # ── gates ─────────────────────────────────────────────────────────────────────────────────────
+    # FOUR of these thirteen reach a consumer, spread over three modules — `planner._condition_holds`
+    # evaluates `remaining_hp_30_or_less` and `energy_3_plus`, `combat._AttachCtx.condition_met` reads
+    # `more_prizes_remaining_than_opp`, and `planner`'s ability-draw window reads
+    # `once_per_turn_ability`. Every one of them fails CLOSED on a string it does not know, which is
+    # why the remaining nine are ledgered below rather than silently accepted.
+    "condition": frozenset({
+        "all_own_pokemon_team_rocket", "coin_tails", "energy_3_plus", "exactly_6_prizes_remaining",
+        "going_second_first_turn", "hand_size_10_plus_after_draw", "more_prizes_remaining_than_opp",
+        "once_per_turn_ability", "opp_3_or_fewer_prizes", "played_supporter_this_turn",
+        "pokemon_ko_last_turn", "remaining_hp_30_or_less", "solrock_in_play",
+    }),
+    "restriction": frozenset({"active_dragon_only", "active_only", "arvens_pokemon", "mega_only",
+                              "psychic_only"}),
+    "trigger": frozenset({"on_attach", "on_attack", "on_bench_play", "on_evolve"}),
+    "on": frozenset({"bench_play"}),
+    "timing": frozenset({"after_weakness_resistance", "before_weakness_resistance"}),
+    # **Owner-family gate, and it carries TWO different tests — which is a finding, not a typo.**
+    # 1218 / 1220 / 1115 / 1215 print an owner possessive ("Switch your Active **Team Rocket's
+    # Pokemon**"), a PREFIX test `card_text.name_in_family` already implements. 1134 Team Rocket's
+    # Transceiver prints something else: *"Search your deck for a Supporter card that has "Team
+    # Rocket" in its name"* — a SUBSTRING test over Supporter NAMES, and its stored value transcribes
+    # the card's own quoted literal. Quoted from `tools/meta_tracker/cards.json`, never recalled.
+    #
+    # So `"Team Rocket"` is NOT a misspelling of `"Team Rocket's"` and was NOT rewritten to it: the
+    # two answer different questions, and over this pool they only coincide because all 65 Team
+    # Rocket cards happen to carry the possessive. `name_in_family` scores the first spelling 0/65
+    # and the second 65/65 — measured, with `name_in_family("Hop's Bag", "Hop's")` → True as the
+    # positive control on the same run.
+    #
+    # **The Pokemon-membership half of this moved OFF this key entirely** (developer's ruling, Issue
+    # #374): "Team Rocket's Pokemon" is now the `team_rocket` Function Tag on the 52 Pokemon
+    # themselves (`card_functions.json`), which is the build-time family index over the pool Issue
+    # #301 said did not exist. All four values stay declared here because the compendium still
+    # carries them and an undeclared value must bite; all four are ledgered as unconsumed below.
+    "name_family": frozenset({"Ethan's", "Hop's", "Team Rocket", "Team Rocket's"}),
+    # ── magnitude modifiers ───────────────────────────────────────────────────────────────────────
+    # `amount` is an int everywhere except the one sentinel; declaring the sentinel is what lets a
+    # mistyped `"al"` bite instead of silently reading as 0.
+    "amount": frozenset({"all"}),
+    "amount_per": frozenset({"my_ancient", "their_bench"}),
+}
+
+#: ``"key=value" -> why nothing reads it yet``. The honest half of :data:`CLAUSE_SELECTORS`
+#: (Issue #374), and the same discipline :data:`WRITABLE`'s ``owed`` status runs one axis over: a
+#: value authored ahead of its consumer is a scheduled gap, and a scheduled gap with no reason is a
+#: silence.
+#:
+#: **Why these are declared LEGAL rather than failed.** A registry that rejected them would need 33
+#: consumer builds before the suite could go green; a registry that accepted them with no record
+#: would be a transcription of the store, incapable of disagreeing with it. What the audit owes is
+#: to bite a value nobody declared — `test_snapshot_coverage.py` asserts that with a fabricated value
+#: against a positive control, so this ledger cannot make the audit vacuous.
+#:
+#: **Not asserted exhaustive, deliberately.** Membership here is measured by sweeping CODE string
+#: literals (comments and docstrings parsed out) for each value, which answers *"does any module
+#: mention it"* and NOT *"does any module act on it"* — a value named in a dict that nothing indexes
+#: would read as consumed. So the audit test asserts every entry here is a declared selector value
+#: and carries a reason; it does not assert the converse. Same footing as
+#: :data:`PARTIAL_CLAUSE_BASELINE`: a record of what was owed when the ruling was taken.
+UNCONSUMED_SELECTORS: dict[str, str] = {
+    # Issue #349 minted the key and BOTH consumers decline it by name: `planner._heal_candidate` and
+    # `_heal_averts_doom` each record that reading `amount_per` would over-credit, and that ignoring
+    # it under-credits — their own stated error direction. The set it ranges over is the harder half:
+    # ANCIENT has no structural field in the engine dump at all.
+    "amount_per=my_ancient": "1085 Awakening Drum. Issue #349 ruled the ANCIENT trait unmodellable — "
+                             "the dump carries stage/ex/megaEx/tera/aceSpec and nothing of that "
+                             "family — so the shape is carried and the set stays undecided",
+    "amount_per=their_bench": "1187 Morty's Conviction. The set IS decidable (theirs.bench is homed) "
+                              "but no consumer multiplies by it yet; both heal readers decline it in "
+                              "the under-counting direction",
+    # Stadium scopes. `CombatMath` reads the stadium zone for the damage modifiers but branches on
+    # the `effect`, never on these two body-class narrowings.
+    "applies_to=basic_non_dark": "1260 Risky Ruins. The bench-tax trigger's scope; the Deploy "
+                                 "Marginal prices the option, not the {D} exemption",
+    "applies_to=metal": "1244 Full Metal Lab. A {M}-body scope on a damage modifier read off the "
+                        "stadium zone, which branches on the effect rather than this narrowing",
+    # `_condition_holds` evaluates `remaining_hp_30_or_less` and `energy_3_plus` and fails CLOSED on
+    # every other string — so each of these nine already reaches "the clause whiffs", which is the
+    # safe direction and the reason none is urgent.
+    "condition=all_own_pokemon_team_rocket": "1216 Team Rocket's Ariana. Board-wide family "
+                                             "membership; the `team_rocket` Function Tag is the "
+                                             "index that would answer it",
+    "condition=coin_tails": "1223 Harlequin, 1237 Lucian. An RNG branch, so a scalar transition "
+                            "cannot state it — the `coin` Expectation ruling, one key over",
+    "condition=exactly_6_prizes_remaining": "1227 Lillie's Determination. Prize state is homed; no "
+                                            "reader gates a clause on it yet",
+    "condition=going_second_first_turn": "1101 Call Bell. Turn-parity state the Board carries but no "
+                                         "clause reader consults",
+    "condition=hand_size_10_plus_after_draw": "1181 Billy & O'Nare. Post-resolution hand size — a "
+                                              "predicate about the clause's own outcome, not the "
+                                              "board before it",
+    "condition=opp_3_or_fewer_prizes": "1199 Lacey, 1214 Emcee's Hype. Prize state is homed; no "
+                                       "clause reader gates on it yet",
+    "condition=played_supporter_this_turn": "1242 Community Center. The allowance IS homed "
+                                            "(`supporter_played`); the alternating per-player "
+                                            "availability is what stays unmodelled",
+    "condition=pokemon_ko_last_turn": "140 Fezandipiti ex, 1080 Unfair Stamp, 1193 Hassel. LAST "
+                                      "turn's KO is history the snapshot does not carry",
+    "condition=solrock_in_play": "675 Lunatone. A named-partner board check; "
+                                 "`parse_attack_bench_requirement` answers the attack-side twin, not "
+                                 "this clause gate",
+    "dig_from=bottom": "1102 Dusk Ball. Which END of the deck a dig reads — `deck_order` is the "
+                       "registry's one HIDDEN zone, so the distinction has nowhere to land",
+    # All four, and every one by the same Issue #301 ruling: the clause records the family and
+    # `fetch_closure` refuses the fetch for reach rather than guessing. Its `_CONDITIONAL_FETCH_FIELDS`
+    # reads the key's PRESENCE, never the value — which is exactly why the 1134 divergence could sit
+    # in the store undetected.
+    "name_family=Ethan's": "1215 Ethan's Adventure. Recorded and undecided (Issue #301); "
+                           "`fetch_closure` refuses on the key's presence",
+    "name_family=Hop's": "1115 Hop's Bag, 1255 Postwick. Same ruling. `name_in_family` implements "
+                         "the string test but is wired only to the TOOL-side holderNameFamily",
+    "name_family=Team Rocket": "1134 Team Rocket's Transceiver, and the ONE substring-over-Supporter"
+                               "-names test in the store — not a misspelling of the possessive. "
+                               "Kept as printed; see CLAUSE_SELECTORS",
+    "name_family=Team Rocket's": "1218 Giovanni, 1220 Proton. The Pokemon-membership half is now the "
+                                 "`team_rocket` Function Tag, so the string value stays recorded and "
+                                 "unread",
+    "on=bench_play": "1260 Risky Ruins. The one `stadium_trigger` EVENT; the trigger fires on the "
+                     "option `apply_option` already prices, so nothing dispatches on the string",
+    "restriction=active_dragon_only": "1105 Dragon Elixir. `_heal_restriction_ok` fails closed on it, "
+                                      "so the heal never counts toward survival — under-count",
+    "restriction=arvens_pokemon": "1130 Arven's Sandwich. An owner family wearing the `restriction` "
+                                  "key rather than `name_family`; same Issue #301 refusal",
+    "source=opponent_attack": "1244 Full Metal Lab, 1247 Neutralization Zone. Names the OPPONENT's "
+                              "attack as the material a modifier acts on; the damage readers branch "
+                              "on the effect instead",
+    "source_class=ex_or_v": "1247 Neutralization Zone. The modifier's source must be an ex/V body — "
+                            "a second class namespace beside `target`, authored with the clause",
+    "target=future": "1089 Reboot Pod. Issue #349 ruled the FUTURE trait unmodellable for the same "
+                     "reason as ANCIENT; `_accel_target_ok` fails CLOSED, so the clause funds no "
+                     "body rather than funding every one",
+    "target=opponent_active": "1255 Postwick. The body a Stadium's damage modifier is aimed at, read "
+                              "off the stadium zone by effect rather than by this value",
+    "target=own_type": "190 Archaludon ex. A same-type-as-holder narrowing; no consumer resolves a "
+                       "relative body class yet",
+    "timing=after_weakness_resistance": "1244 Full Metal Lab. WHERE in the damage pipeline a modifier "
+                                        "lands. `CombatMath` hard-codes its pipeline order, so the "
+                                        "declared timing is not what sequences it",
+    "timing=before_weakness_resistance": "1255 Postwick. Same — the pipeline position is structural "
+                                         "in `damage.py`, not dispatched off this string",
+    "trigger=on_attach": "19 Telepath Psychic Energy. Which OPTION the clause rides; the routing is "
+                         "by clause `kind` at the site, so the declared trigger is not consulted",
+    "trigger=on_attack": "678 Mega Lucario ex. Same routing story",
+    "trigger=on_bench_play": "1071 Meowth ex. Same routing story",
+    "type=colorless": "17 Ignition Energy. The card type a clause names where `target` would be "
+                      "ambiguous; the energy readers use `energy_type` instead",
+    "type=psychic": "19 Telepath Psychic Energy. Same",
 }
 
 # ── the compendium's audited shape ────────────────────────────────────────────────────────────────
@@ -462,9 +831,27 @@ COVERS_VERDICTS = frozenset({COVERS_FULL, COVERS_PARTIAL})
 #:   deliberately decides nothing rather than reading as an unrestricted switch.
 #:
 #: Neither is in a shipped deck; their combined meta weight is ~0.03 copies.
+#:
+#: **Issue #349's two additions are NEW EXPOSURE, ruled, not a downgrade** — the same shape as Issue
+#: #301's five and Issue #303's two: both cards had NO clauses and therefore no verdict, and both now
+#: carry an authored set that is honestly incomplete. Both scale over a printed body TRAIT — *Ancient*
+#: and *Future* — and that trait has **no structural field at all** in the engine's own
+#: `all_card_data()` dump (`tools/meta_tracker/cards.json` carries `stage` / `ex` / `megaEx` / `tera`
+#: / `aceSpec` and nothing else of that family; the words occur only inside printed TEXT). So the
+#: magnitude's SHAPE is now carried and the SET it ranges over is recorded and undecided, which is the
+#: `name_family` ruling verbatim.
+#:
+#: * 1085 Awakening Drum — *"Draw a card for each of your Ancient Pokémon in play."* `amount_per:
+#:   "my_ancient"`. Not in the census pool at all.
+#: * 1089 Reboot Pod — *"Attach a Basic Energy card from your discard pile to each of your Future
+#:   Pokémon."* `each_of` over `target: "future"`, which `combat._accel_target_ok` fails CLOSED on as
+#:   an unmodelled target class — so the clause funds no body rather than funding every one.
+#:
+#: Neither is in a shipped deck; their combined meta weight is ~0.001 copies.
 PARTIAL_CLAUSE_BASELINE: frozenset[int] = frozenset({
-    1080, 1086, 1100, 1110, 1115, 1118, 1120, 1124, 1134, 1153, 1181, 1187, 1192, 1199, 1200, 1203,
-    1206, 1207, 1208, 1213, 1214, 1215, 1216, 1218, 1220, 1222, 1223, 1227, 1237, 1239, 1242,
+    1080, 1085, 1086, 1089, 1100, 1110, 1115, 1118, 1120, 1124, 1134, 1153, 1181, 1187, 1192, 1199,
+    1200, 1203, 1206, 1207, 1208, 1213, 1214, 1215, 1216, 1218, 1220, 1222, 1223, 1227, 1237, 1239,
+    1242,
 })
 
 
@@ -497,22 +884,39 @@ def covers_table(payload: Mapping) -> dict[int, dict]:
             if is_card_key(k) and isinstance(v, Mapping)}
 
 
+def clause_values(clause: Mapping) -> list[str]:
+    """Every vocabulary value in ONE clause, in :data:`VOCABULARY_KEYS` order. Duplicates kept.
+
+    **The single per-clause extractor**, so no reader keeps its own idea of which keys are vocabulary
+    or how a list-valued rider is read. That drift is not hypothetical twice over: it is what let
+    ``effect`` go unaudited from the day it was authored (Issue #300) and ``cost`` after it (Issue
+    #350), and `tools/apply_seam_coverage.py`'s *Clause write-set health* table kept a hand-rolled
+    ``kind``-plus-``rider`` walk that reported on two axes while the audit walked three.
+
+    A list is accepted as well as a string because a `rider` may be either, and a hand-rolled
+    ``used[clause["rider"]] += 1`` raises `TypeError` on the list form rather than reading it."""
+    out: list[str] = []
+    for key in VOCABULARY_KEYS:
+        value: Any = clause.get(key)
+        if isinstance(value, str) and value:
+            out.append(value)
+        elif isinstance(value, (list, tuple)):
+            out.extend(v for v in value if isinstance(v, str) and v)
+    return out
+
+
 def clause_vocabulary(payload: Mapping) -> list[str]:
     """Every vocabulary value the committed compendium actually uses, sorted.
 
-    Walks :data:`VOCABULARY_KEYS` over every clause — ``kind``, ``rider`` and ``effect`` — and accepts
-    a list-valued rider as well as a string one. Read off the artifact rather than from a hand-kept
-    list, because a hand-kept list is precisely what a new clause value would not be added to."""
-    vocab: set[str] = set()
-    for clauses in clause_lists(payload).values():
-        for clause in clauses:
-            for key in VOCABULARY_KEYS:
-                value: Any = clause.get(key)
-                if isinstance(value, str) and value:
-                    vocab.add(value)
-                elif isinstance(value, (list, tuple)):
-                    vocab.update(v for v in value if isinstance(v, str) and v)
-    return sorted(vocab)
+    :func:`clause_values` over every clause — ``kind``, ``rider``, ``effect`` and ``cost``. Read off
+    the artifact rather than from a hand-kept list, because a hand-kept list is precisely what a new
+    clause value would not be added to.
+
+    **The values are one flat namespace, deliberately.** A string means the same write wherever it
+    appears, which is why `gust` needs one entry for a `kind` and an `effect` alike, and why a cost's
+    zones simply union into its clause's."""
+    return sorted({v for clauses in clause_lists(payload).values()
+                   for clause in clauses for v in clause_values(clause)})
 
 
 def clause_keys(payload: Mapping) -> list[str]:
@@ -533,6 +937,59 @@ def clause_keys(payload: Mapping) -> list[str]:
         for clause in clauses:
             walk(clause)
     return sorted(keys)
+
+
+def clause_selectors(payload: Mapping) -> list[tuple[str, str]]:
+    """Every ``(key, value)`` SELECTOR pair the committed compendium uses, sorted and de-duplicated.
+
+    The third extractor beside :func:`clause_vocabulary` (values of the four vocabulary keys) and
+    :func:`clause_keys` (key names), and read off the artifact for the same reason both of those are:
+    a hand-kept list is precisely what a new selector value would not be added to.
+
+    A pair, not a bare value, and that IS the audit's shape — selector values do not share one
+    namespace, so ``"basic"`` must be checked as a `target` or as an `energy` and never as either.
+    :data:`VOCABULARY_KEYS` are skipped: their values are `CLAUSE_WRITES`' business, and a string
+    that is both (`gust` is a `kind` and an `effect`) is deliberately looked up there by value alone.
+
+    Descends into a nested mapping (`amount_if`) exactly as :func:`clause_keys` does, so a mistyped
+    `condition` inside the block is as visible as one outside it. A list value is walked too — a
+    `rider` may be either form, and the same is allowed here rather than raising on it."""
+    out: set[tuple[str, str]] = set()
+
+    def walk(block: Mapping) -> None:
+        for key, value in block.items():
+            if isinstance(value, Mapping):
+                walk(value)
+                continue
+            if key in VOCABULARY_KEYS:
+                continue
+            if isinstance(value, str) and value:
+                out.add((str(key), value))
+            elif isinstance(value, (list, tuple)):
+                out.update((str(key), v) for v in value if isinstance(v, str) and v)
+
+    for clauses in clause_lists(payload).values():
+        for clause in clauses:
+            walk(clause)
+    return sorted(out)
+
+
+def undeclared_selector_values(pairs: Sequence[tuple[str, str]]) -> list[str]:
+    """Selector pairs with no entry in :data:`CLAUSE_SELECTORS`, as ``"key=value"``. Empty is the
+    contract.
+
+    **The teeth on the third axis** (Issue #374), and it bites in BOTH directions: a value its key
+    does not declare, and a string-valued key the registry has never heard of. The second half
+    matters because :func:`undeclared_clause_keys` would pass a key that IS a declared
+    `CLAUSE_PARAMETERS` entry while carrying values nothing has ruled on — which is how a selector
+    key could otherwise arrive already exempt from the audit meant to cover it.
+
+    Takes the pairs rather than the compendium so it can be bitten by a fabricated one; pair it with
+    :func:`clause_selectors` to walk the real artifact. **That pairing is the whole lesson of Issue
+    #350**: the table there would already have bitten `discard_2`, and what never arrived was the
+    WALK."""
+    return sorted(f"{k}={v}" for k, v in set(pairs)
+                  if k not in CLAUSE_SELECTORS or v not in CLAUSE_SELECTORS[k])
 
 
 def undeclared_clause_keys(keys: Sequence[str]) -> list[str]:
@@ -640,8 +1097,11 @@ def undeclared_clauses(kinds: Sequence[str]) -> list[str]:
     value lands here rather than silently writing to nothing and pricing its option at 0.
 
     Takes the values, not the compendium, so it can be bitten by a fabricated one; pair it with
-    :func:`clause_vocabulary` to walk the real artifact. That walk covers all three of
-    :data:`VOCABULARY_KEYS` — until Issue #300 it covered two, and `effect` was the third."""
+    :func:`clause_vocabulary` to walk the real artifact. **The pairing is the point**: this function
+    would already have bitten `discard_2` before Issue #350, because the table simply lacked the key
+    — what was missing was the WALK arriving, since `cost` was not in :data:`VOCABULARY_KEYS`. That
+    walk now covers all four — until Issue #300 it covered two and `effect` was the third; `cost` was
+    the fourth."""
     return sorted(k for k in set(kinds) if k not in CLAUSE_WRITES)
 
 
@@ -667,9 +1127,12 @@ def clauses_writing_unhomed() -> dict:
 __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
     "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS", "CLAUSE_PARAMETERS",
+    "CLAUSE_SELECTORS", "UNCONSUMED_SELECTORS",
     "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",
-    "is_card_key", "clause_lists", "covers_table", "clause_vocabulary", "clause_keys",
+    "is_card_key", "clause_lists", "covers_table", "clause_values", "clause_vocabulary",
+    "clause_keys", "clause_selectors",
     "clauses_cover", "partial_clause_cards",
     "covers_problems", "validate", "homes", "unhomed",
-    "undeclared_clauses", "undeclared_clause_keys", "unknown_zones", "clauses_writing_unhomed",
+    "undeclared_clauses", "undeclared_clause_keys", "undeclared_selector_values", "unknown_zones",
+    "clauses_writing_unhomed",
 )

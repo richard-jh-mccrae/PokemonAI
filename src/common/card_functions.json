@@ -431,6 +431,9 @@
  "235": [
   "item_lock"
  ],
+ "24": [
+  "team_rocket"
+ ],
  "245": [
   "confuse"
  ],
@@ -501,41 +504,159 @@
  "380": [
   "search"
  ],
+ "399": [
+  "team_rocket"
+ ],
+ "400": [
+  "team_rocket"
+ ],
+ "401": [
+  "team_rocket"
+ ],
+ "407": [
+  "team_rocket"
+ ],
+ "408": [
+  "team_rocket"
+ ],
+ "409": [
+  "team_rocket"
+ ],
  "413": [
   "burn"
+ ],
+ "414": [
+  "team_rocket"
  ],
  "417": [
   "energy_accel"
  ],
+ "425": [
+  "team_rocket"
+ ],
+ "426": [
+  "team_rocket"
+ ],
  "427": [
-  "paralyze"
+  "paralyze",
+  "team_rocket"
+ ],
+ "428": [
+  "team_rocket"
  ],
  "429": [
-  "sleep"
+  "sleep",
+  "team_rocket"
+ ],
+ "430": [
+  "team_rocket"
+ ],
+ "431": [
+  "team_rocket"
+ ],
+ "432": [
+  "team_rocket"
  ],
  "433": [
-  "hand_disruption"
+  "hand_disruption",
+  "team_rocket"
+ ],
+ "434": [
+  "team_rocket"
+ ],
+ "435": [
+  "team_rocket"
+ ],
+ "436": [
+  "team_rocket"
+ ],
+ "440": [
+  "team_rocket"
+ ],
+ "441": [
+  "team_rocket"
+ ],
+ "442": [
+  "team_rocket"
  ],
  "448": [
-  "paralyze"
+  "paralyze",
+  "team_rocket"
+ ],
+ "449": [
+  "team_rocket"
+ ],
+ "450": [
+  "team_rocket"
+ ],
+ "451": [
+  "team_rocket"
+ ],
+ "452": [
+  "team_rocket"
+ ],
+ "453": [
+  "team_rocket"
+ ],
+ "454": [
+  "team_rocket"
+ ],
+ "455": [
+  "team_rocket"
  ],
  "456": [
-  "poison"
+  "poison",
+  "team_rocket"
  ],
  "457": [
-  "confuse"
+  "confuse",
+  "team_rocket"
+ ],
+ "458": [
+  "team_rocket"
+ ],
+ "459": [
+  "team_rocket"
+ ],
+ "460": [
+  "team_rocket"
+ ],
+ "461": [
+  "team_rocket"
+ ],
+ "462": [
+  "team_rocket"
+ ],
+ "463": [
+  "team_rocket"
+ ],
+ "464": [
+  "team_rocket"
  ],
  "468": [
-  "poison"
+  "poison",
+  "team_rocket"
+ ],
+ "469": [
+  "team_rocket"
  ],
  "470": [
-  "hand_disruption"
+  "hand_disruption",
+  "team_rocket"
  ],
  "471": [
-  "confuse"
+  "confuse",
+  "team_rocket"
+ ],
+ "473": [
+  "team_rocket"
+ ],
+ "474": [
+  "team_rocket"
  ],
  "475": [
-  "draw"
+  "draw",
+  "team_rocket"
  ],
  "488": [
   "poison"
@@ -691,6 +812,21 @@
  ],
  "866": [
   "draw"
+ ],
+ "873": [
+  "team_rocket"
+ ],
+ "874": [
+  "team_rocket"
+ ],
+ "881": [
+  "team_rocket"
+ ],
+ "882": [
+  "team_rocket"
+ ],
+ "891": [
+  "team_rocket"
  ],
  "895": [
   "hand_disruption"

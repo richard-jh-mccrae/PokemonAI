@@ -86,7 +86,7 @@ from __future__ import annotations
 
 import pytest
 
-from common import currency, state_value as sv
+from common import currency, needs as _needs, state_value as sv
 from common.card_worth import ROLE_TIER, TAG_TIER
 from common.cards import CardFunctions
 from common.effects import CardEffects
@@ -745,6 +745,52 @@ def test_landing_an_attack_can_outprice_the_one_retreat_a_turn_allows():
     assert best_offence_the_end_board_prices > one_retreat_buys
 
 
+@pytest.mark.req("REQ-STATEVALUE-0006")
+def test_an_achieved_WIN_outscales_every_board_the_families_can_express():
+    """`ko-score-band`'s OTHER terminal half, and the one :data:`LOSS_PRIZES` never got (Issue #362).
+
+    The loss side was derived at the T3 swap precisely because a transcribed magnitude stopped
+    dominating once two families went uncapped. The WIN side kept the leaf's hand-composed
+    `KO_SCORE * (start_prizes + 1)` — and `start_prizes` counts prizes still REMAINING, so the old
+    magnitude ran BACKWARDS as well as small: most generous six prizes from home, stingiest with the
+    win one turn away. Either way a merely WINNING position out-scored a won GAME. Measured on the
+    committed corpus at the fix's parent commit: 26 frames reach a coin-free simulated win and on
+    **4** of them a non-winning option scored higher, worst `82749168|1|decision|88` at a won 2000
+    against a non-win 6789.9. Re-runnable: `tools/train/probes/win_band_sweep.py`.
+
+    Same construction as the loss side, and asserted the same way — from the constants the equations
+    use, so moving any of them moves this test rather than silently breaking the invariant. Two of the
+    three summands differ from `LOSS_PRIZES`' and the difference is the argument:
+
+      * `survival` is ABSENT because it is non-positive by construction (it returns the negated
+        exposure), so it can never push a board UP toward the win band. Asserted below rather than
+        asserted in prose.
+      * `_MAX_BODIES x _MAX_PRIZE_VALUE` is therefore absent with it — that summand exists on the
+        loss side because the terminal charge sits INSIDE `survival` and has to out-dominate that
+        family's own exposure sum. A win replaces the whole scalar, so it has nothing to out-dominate.
+    """
+    worst_race = sv._PRIZES_START + sv._PROXIMITY_W
+    assert sv.WIN_PRIZES > worst_race + sv.POSITIONAL_MAX
+
+    # The dropped summand, asserted rather than argued, and SWEPT rather than sampled — three lucky
+    # examples would not carry the words "by construction". Every prize yield the set can print,
+    # against every clock a body can read, at every legal body count: `survival` never returns a
+    # positive number, so it can never push a board UP toward the win band.
+    assert sv.survival([]) == 0.0
+    for prize in (0.0, 1.0, 2.0, sv._MAX_PRIZE_VALUE):
+        for clock in range(1, sv.HORIZON + 3):
+            for count in range(1, sv._MAX_BODIES + 1):
+                assert sv.survival([sv.ExposedBody(prize, clock)] * count) <= 0.0
+    assert sv.survival([sv.ExposedBody(sv._MAX_PRIZE_VALUE, 1)] * sv._MAX_BODIES) < 0.0, (
+        "non-vacuity: the sweep must contain a board the family actually charges for")
+
+    # …and the literal, asserted the way Issue #329 asserted the band it moved: legible failure beats
+    # a tautology, and every summand here is a constant somebody could later move.
+    assert sv.WIN_PRIZES == 10.9
+    assert sv.WIN_PRIZES == pytest.approx(sv.LOSS_PRIZES - sv._MAX_BODIES * sv._MAX_PRIZE_VALUE), (
+        "the two terminal constants are ONE construction differing by exactly the survival summand")
+
+
 # ── case 1: prize lethality (ADR-0064 Amendment B, Issue #283) ────────────────────────────────────
 #
 # `docs/rules.md` §7 case 1 — *they take their last prize card*. The positional families price "they
@@ -1110,17 +1156,28 @@ def test_readiness_survives_the_turns_one_manual_attach_being_spent():
 # ── Issue #286 — readiness's FORWARD leg must not count Energy that evaporates ────────────────────
 
 
-def _expiring_board(cid, *, energies, energy_cards, hp):
+def _expiring_board(cid, *, energies, energy_cards, hp, benched=False, turn=5):
     """MY body holding a chosen Energy set, the turn's manual attach already SPENT and my hand empty.
 
     Both are deliberate: with the attach spent and nothing in hand the Attach Budget adds nothing, so
     `readiness_p`'s answer is a fact about what is ON the body rather than about what the fixture's
     deck happens to hold. Their side is a bare Dragapult ex, the same defender every other board in
-    this file uses."""
+    this file uses.
+
+    ``benched`` (Issue #351) puts the SAME body on the Bench behind a bare Staryu instead of in the
+    Active spot, which is the one fact that decides whether it may attack this turn. Staryu is the
+    line's real Basic, so the benched shape is `mega_starmie`'s own — the corpus frame this fixture
+    stands for (`83664991|…|43`) is a benched Mega Starmie ex. ``turn`` is the other fact —
+    ``turn=1`` is the first player's turn, where the rules skip the attack step outright
+    (`MySide.attack_blocked`). Both default to the pre-Issue #351 shape, so every board above is
+    byte-identical."""
+    body = _poke(cid, hp=hp, energies=energies, energy_cards=energy_cards)
+    mine = (_player(active=_poke(STARYU, hp=70, serial=4), bench=[body], prize=4) if benched
+            else _player(active=body, prize=4))
     return _model(
-        _player(active=_poke(cid, hp=hp, energies=energies, energy_cards=energy_cards), prize=4),
+        mine,
         _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
-        energy_attached=True)
+        energy_attached=True, turn=turn)
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1207,11 +1264,24 @@ def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
     EVOLUTION. The partial-loan case above is the deck's other half and is NOT masked; the corpus
     simply holds no frame of it.
 
-    This test therefore asserts a gap, not a virtue. Its worst case is not the masking itself but
-    what the masking rests on: `readiness_p` never asks whether the body may attack at all, so a
-    BENCHED Mega Starmie ex reads 1.0 (corpus frame `83664991|…|43`). Issue #351 is the spec; Issue
-    #263 owns *who is Active*. This turns red the day either lands, which is exactly when someone
-    should read it again."""
+    **Issue #351 landed and this test stayed GREEN — deliberately, and the prediction it replaces was
+    wrong.** Issue #351's acceptance criteria called this test *"the tripwire; it was written to fail
+    here"*, and the paragraph that stood here said it *"turns red the day either lands"*. It did not,
+    because the fixture's body is the **ACTIVE** on ``turn=5``: it may legally attack this turn, its
+    ``{C}{C}{C}`` pays Nebula Beam outright, and so ``readiness_p == 1.0`` is a TRUE statement about
+    it. The ``max`` discarding the forward leg here is the family answering its own question
+    correctly — *P(this body gets to its payoff attack)* is 1.0 when the body attacks this turn.
+
+    So what survives is the honest half: masking is CORRECT wherever the body can cash the Energy,
+    and it was only ever a defect where the body cannot. Issue #351 gated exactly that — the now-leg
+    is asked only of a body the AREA and the RULES both permit an attack to (`_may_attack_now`) — and
+    the four corpus bodies that failed the gate are covered by the tests below this block. This board
+    is not one of them, which is why the assertion is unchanged and this docstring is what moved.
+
+    Kept rather than deleted because it is now the ANTI-regression: a later change that gates the
+    now-leg more aggressively — stripping the expiring Energy from it (Issue #351's rejected option
+    2), say — would break this, and it should, because it would be telling an armed Active attacker
+    it is not ready to swing."""
     board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
     body = board.mine.active
     assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0
@@ -1223,6 +1293,174 @@ def test_the_NOW_leg_keeps_the_evaporating_energy_and_therefore_MASKS_the_fix():
                                    energy_cards=[E_W, E_W, E_W], hp=330), working=real)
     assert loan["readiness"] == real["readiness"], (
         "the now-leg no longer masks the forward leg — re-read the packet line, this is the unlock")
+
+
+# ── Issue #351 — the NOW leg may not credit a body the rules will not let attack ─────────────────
+#
+# `readiness_p` has NO legality leg, and that is the defect. Verified at source rather than recalled:
+# `MySide.readiness_p` -> `CombatMath.readiness_p` -> `reachable_attach_p` -> `reachable_attach`,
+# whose only non-affordability gates are the ADR-0033 transient `self_lock`/`same_lock`. Nothing on
+# that path reads
+# the body's AREA, the turn number, or the first-player attack ban. `MySide.active_famine` is the
+# shipped proof it is missing: that property checks `attack_blocked` BEFORE calling the oracle, and
+# its docstring says why — *"only the RULE leg may claim a famine without one"*. The rules leg lives
+# in the caller, so the oracle does not have it, and `_readiness_odds` is a caller that never added
+# it.
+#
+# MEASURED at this commit over the committed corrections corpus, through the shipped Pilot (372
+# frames / 1018 of my bodies; positive control 536 bodies reading `readiness_p == 0.0`, so a silent
+# 1.0 everywhere is not what is being counted): 25 bodies hold a `discard_eot` Energy, the forward
+# clock moves on all 25, and `_readiness_odds` moved on NONE. Of those 25, **4** are bodies the rules
+# forbid an attack to — 1 BENCHED (`83664991|43`, a Mega Starmie ex, the issue's named frame) and
+# **3 `attack_blocked`** (`81903490|8`, `81903490|10`, `81904451|9` — the first player on turn 1,
+# which is the very episode `docs/rules.md` cites as its worked example of a reason-only rule,
+# correction `ep81903490 f5`). The other 21 are ACTIVE on an unblocked turn and their 1.0 is HONEST,
+# which is why the fix is a legality gate and not a strip of the now-leg.
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_a_BENCHED_body_is_not_READY_to_attack_however_much_energy_it_holds():
+    """The issue's named frame as a fixture — `83664991|…|43`, a **BENCHED** Mega Starmie ex holding
+    one Ignition, reading `readiness_p == 1.0`.
+
+    A benched Pokémon cannot attack. `docs/rules.md` §3 — *"Attack: 1, and it ends the turn"* — is a
+    thing the ACTIVE does; the Bench is where a body waits. So the now-leg's claim *"P(this body is
+    READY to use the attack this turn)"* is false for every benched body, whatever its Energy says,
+    and the family must fall back to the forward clock.
+
+    Asserted on the SAME body in both spots so the only difference is the area: identical card,
+    identical Energy, identical everything. The Active reading is the control — it must NOT move,
+    because an Active Mega Starmie ex with ``{C}{C}{C}`` genuinely can swing Nebula Beam right
+    now."""
+    benched = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                              hp=330, benched=True)
+    body = benched.mine.bench[0]
+    aid = benched.mine.attack_payoff(body).attack_id
+    assert body.is_active is False
+    assert benched.mine.attack_blocked is False, "turn 5 — the RULES allow an attack; area is the fact"
+
+    # The incumbent oracle is UNTOUCHED and still says 1.0. That is the point: the fix is a gate in
+    # the caller, not a retune of a probability `promote_retreat_value` (ADR-0073) also reads.
+    assert benched.mine.readiness_p(body, aid) == 1.0
+
+    # …and the composed answer no longer repeats it. It rides the forward clock, which Issue #286
+    # already taught to drop the evaporating Energy.
+    assert sv._readiness_odds(benched, body, aid) < 1.0
+
+    # The ACTIVE control: same body, same Energy, in the spot where 1.0 is true.
+    active = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330)
+    a_body = active.mine.active
+    assert sv._readiness_odds(active, a_body,
+                              active.mine.attack_payoff(a_body).attack_id) == 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_now_leg_is_zero_when_the_RULES_forbid_an_attack_at_all():
+    """The first player on turn 1 — three of the four corpus bodies, and `docs/rules.md`'s own worked
+    example of a reason-only rule.
+
+    Verified at source: *"Player going FIRST, turn 1 — restrictions: CANNOT attack (the starting
+    player skips the attack step on turn 1)"* (`docs/rules.md` §2, `[RULE: rulebook L152]`,
+    `[PROJECT-VERIFIED: ep81903490 f5]`). `MySide.attack_blocked` is the shipped read and it carries
+    all three rule facts — Asleep, Paralyzed, and ``turn <= 1``.
+
+    This is the case the deck doctrine names outright — *"don't attach Ignition T1-going-first, you
+    can't attack, so it's discarded for nothing"* — and the ACTIVE body makes it independent of the
+    area gate above: it is in the attacking spot and still may not swing."""
+    board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION], hp=330,
+                            turn=1)
+    body = board.mine.active
+    aid = board.mine.attack_payoff(body).attack_id
+    assert body.is_active is True, "the AREA is fine here — the RULES are what forbid the attack"
+    assert board.mine.attack_blocked is True
+
+    assert board.mine.readiness_p(body, aid) == 1.0        # the oracle, still legality-blind
+    assert sv._readiness_odds(board, body, aid) < 1.0      # the composed answer, no longer
+
+    # Non-vacuity: the SAME board on a turn the rules allow reads the full 1.0, so this test is
+    # measuring the rule and not some other property of the fixture.
+    allowed = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                              hp=330, turn=5)
+    a_body = allowed.mine.active
+    assert sv._readiness_odds(allowed, a_body,
+                              allowed.mine.attack_payoff(a_body).attack_id) == 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_legality_gate_UNMASKS_issue_286s_forward_leg_on_a_benched_body():
+    """Issue #351's headline: the correction Issue #286 built becomes VISIBLE.
+
+    On a body that cannot attack, the now-leg is gone and `readiness` rides the forward clock alone —
+    so the clock's `exclude_expiring` strip finally reaches the family. The Ignition board must now
+    fall to exactly the BARE board, the same equality Issue #286's own T1 test asserts for the
+    partial-loan case, because an Energy that evaporates buys no FORWARD readiness at all.
+
+    The Basic-Energy control is what makes it a statement about evaporation rather than about the
+    gate: three real ``{W}`` on the same benched body do not expire, so that board must stay strictly
+    above both."""
+    ign, water, bare = {}, {}, {}
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                                   hp=330, benched=True), working=ign)
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[E_W] * 3, energy_cards=[E_W] * 3,
+                                   hp=330, benched=True), working=water)
+    sv.state_value(_expiring_board(MEGA_STARMIE, energies=[], energy_cards=[], hp=330,
+                                   benched=True), working=bare)
+    assert ign["readiness"] == pytest.approx(bare["readiness"]), (
+        "an evaporating Energy still buys forward readiness on a body that cannot cash it")
+    assert bare["readiness"] < water["readiness"], (
+        "non-vacuity: real Energy must still buy readiness, or the equality above is trivial")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_legality_gate_fails_CLOSED_on_a_board_that_states_no_turn():
+    """The absent-fact direction, which `test_value_stack_integration`'s query census requires an
+    answer for before a new model read joins `state_value` — made executable here rather than left
+    as the comment beside its `CONSUMED` entry.
+
+    `MySide.attack_blocked` reads `self.turn <= 1` over `self.turn = int(turn or 0)`, so a board
+    that states no turn at all reads turn 0, which is blocked. The now-leg then claims nothing and
+    the family falls back to the forward clock. That is the SAFE direction for this gate — the
+    failure it must never have is crediting a body that cannot swing — and it is the opposite of the
+    `RULED_COLLAPSES` hazard, where an absent fact arrives as a number that reads like a
+    measurement.
+
+    Both spellings of absent are asserted, because `int(turn or 0)` collapses them and a reader
+    should not have to trust that it does."""
+    for missing in (None, 0):
+        board = _expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3, energy_cards=[IGNITION],
+                                hp=330, turn=missing)
+        body = board.mine.active
+        assert board.mine.attack_blocked is True, f"turn={missing!r} must fail CLOSED"
+        assert sv._may_attack_now(board, body) is False
+        assert sv._readiness_odds(board, body, board.mine.attack_payoff(body).attack_id) < 1.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_gate_leaves_readiness_p_ITSELF_byte_identical():
+    """The standing discipline's *"add a sibling accessor — never retune the incumbent"*, executable.
+
+    `readiness_p` is shared: `promote_retreat_value` (ADR-0073) reads it to price a promote, and it
+    is right for that caller precisely BECAUSE it is area-blind — a promote's whole question is what
+    a body would do once it reaches the Active spot, so an oracle that returned 0 for a benched body
+    would break it. That is the argument for gating in `_readiness_odds` rather than in the oracle,
+    and this test is that argument as an assertion.
+
+    Walks the four boards the gate discriminates between and pins the oracle at 1.0 on every one."""
+    for board, benched, turn in ((_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
+                                                  energy_cards=[IGNITION], hp=330), False, 5),
+                                 (_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
+                                                  energy_cards=[IGNITION], hp=330,
+                                                  benched=True), True, 5),
+                                 (_expiring_board(MEGA_STARMIE, energies=[COLORLESS] * 3,
+                                                  energy_cards=[IGNITION], hp=330,
+                                                  turn=1), False, 1),
+                                 (_expiring_board(MEGA_STARMIE, energies=[E_W] * 3,
+                                                  energy_cards=[E_W] * 3, hp=330,
+                                                  benched=True), True, 5)):
+        body = board.mine.bench[0] if benched else board.mine.active
+        assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0, (
+            f"the shared oracle moved (benched={benched}, turn={turn}) — the gate belongs in the "
+            f"caller, not in `readiness_p`")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1238,6 +1476,222 @@ def test_a_basic_energy_is_never_stripped_from_the_forward_clock():
         body = board.mine.active
         assert (board.mine.turns_to_afford(body)
                 == board.mine.turns_to_afford(body, exclude_expiring=True))
+
+
+# ── Issue #332 — readiness must not fund a body the opponent removes next turn ───────────────────
+#
+# The measured misplay is `83037962|0|decision|48` (`mega_starmie`, category `misattachment`), where
+# `readiness` was the SOLE decider — every other family read exactly 0.0000 on both sides — and it
+# preferred a second Energy on a doomed Active over the first Energy on the benched successor. The
+# developer's rationale is a survivability argument the term could not see: *"Placed second energy on
+# active doomed mega starmie. this deosnt allow it to attack with Nebula Beam … therefor should start
+# powering up our reserve benched staryu"*.
+
+#: A deck the Starmie line can actually fund from, so `turns_to_afford`'s deck-fetch leg has {W} to
+#: find. The default `DECK` is `mega_lucario`'s and holds only {F}, which would make every clock here
+#: read "unknown" for a reason that has nothing to do with the fact under test.
+STARMIE_DECK = [E_W] * 6 + [STARYU] * 3 + [MEGA_STARMIE] * 3
+
+
+def _successor_board(*, active_energies=(), bench_energies=(), active_damage=0):
+    """MY Mega Starmie ex Active with the Staryu that becomes its successor on the Bench behind it,
+    the turn's manual attach already SPENT, against a fully-funded Dragapult ex.
+
+    ``active_damage`` is the ONE fact the doomed and safe boards differ by. Verified at source:
+    Phantom Dive is ``{R}{P}`` for 200 (`data/EN_Card_Data.csv` Card ID 121) and this Mega Starmie ex
+    prints 330 HP with no Weakness to Dragon, so an undamaged Active needs two swings (clock 2) and
+    one damaged to 200 remaining needs one (clock 1). Nothing else on the board moves — same bodies,
+    same Energy total, same deck, same prizes.
+
+    The two FUNDING choices are then the same board with one Energy in two places: on the Active, or
+    on the Bench. That is exactly the option pair the corpus frame offers."""
+    return _model(
+        _player(active=_poke(MEGA_STARMIE, hp=330, damage=active_damage,
+                             energies=list(active_energies)),
+                bench=[_poke(STARYU, hp=70, energies=list(bench_energies), serial=2)], prize=4),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+        energy_attached=True, deck=STARMIE_DECK)
+
+
+def _clock(model, body):
+    """The body's survival clock as `survival` itself reads it — through the ONE shared call."""
+    return sv._survival_clock(model, body)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_doomed_active_and_the_safe_one_differ_by_EXACTLY_the_clock():
+    """The fixture's own control, asserted before anything is concluded from it. If the damaged and
+    undamaged boards did not actually differ in `turns_to_ko_me` the two tests below would pass or
+    fail for a reason that has nothing to do with survivability — the classic instrument that reports
+    a clean result because it is pointed at nothing."""
+    doomed = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    safe = _successor_board(active_energies=[E_W], bench_energies=[E_W])
+    assert _clock(doomed, doomed.mine.active) == 1, "the damaged Active is not actually doomed"
+    assert _clock(safe, safe.mine.active) == 2, "the undamaged Active is not actually safe"
+    # …and the SUCCESSOR is the same body on both, so nothing else can be doing the work.
+    assert _clock(doomed, doomed.mine.bench[0]) == _clock(safe, safe.mine.bench[0])
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_energy_on_a_DOOMED_body_no_longer_outbids_the_successor_behind_it():
+    """The corpus frame, as a fixture. Both boards hold the same two Energy; they differ only in
+    WHICH body carries the second one, and the Active is one the opponent Knocks Out on their very
+    next turn.
+
+    A payoff the body only reaches on a LATER turn cannot be spent by a body that is gone before that
+    turn arrives, so the Energy has to be worth more on the successor. Before Issue #332 the forward
+    leg paid the doomed Active in full and this comparison ran the other way."""
+    funded_active, funded_successor = {}, {}
+    sv.state_value(_successor_board(active_energies=[E_W, E_W], active_damage=130),
+                   working=funded_active)
+    sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130),
+                   working=funded_successor)
+    assert funded_successor["readiness"] > funded_active["readiness"], (
+        "readiness still prefers funding a body the opponent removes next turn")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_SAFE_board_still_prefers_funding_the_active_wincon():
+    """The control that makes the test above mean something. The discount is a survivability read,
+    not a blanket preference for the Bench — on the identical board with the Active undamaged, the
+    3-prize wincon in front is still the better place for the Energy, because its payoff is ten times
+    the Staryu's and it now survives to spend it.
+
+    Without this half, zeroing `readiness` outright would pass the doomed case too."""
+    funded_active, funded_successor = {}, {}
+    sv.state_value(_successor_board(active_energies=[E_W, E_W]), working=funded_active)
+    sv.state_value(_successor_board(active_energies=[E_W], bench_energies=[E_W]),
+                   working=funded_successor)
+    assert funded_active["readiness"] > funded_successor["readiness"], (
+        "the discount inverted a board where funding the Active is right")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_survivability_discount_is_GRADED_rather_than_a_gate():
+    """`1 - halve(turns_to_ko_me - 1)`, the exact complement of the grade `survival` puts on the same
+    clock — so the same shipped decay convention, no new curve and no new constant.
+
+    Graded rather than binary for the reason the constants block gives: a term with no derivative is
+    never explored under 1-ply differencing, so a body two turns from a Knock Out has to score
+    strictly between a doomed one and a safe one rather than falling off a cliff."""
+    assert sv._survives_to_spend.__doc__                      # the argument lives on the function
+    board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    assert sv._survives_to_spend(board, board.mine.active) == 0.0
+    for clock, expected in ((2, 0.5), (3, 0.75), (5, 0.9375)):
+        assert 1.0 - sv.halve(clock - 1) == pytest.approx(expected)
+    # strictly increasing in the clock, and never above 1 however far out the Knock Out is
+    grades = [1.0 - sv.halve(t - 1) for t in range(1, sv.HORIZON + 1)]
+    assert grades == sorted(grades) and grades[-1] < 1.0
+    assert len(set(grades)) == len(grades), "the grade collapsed — a clock read that discriminates 1 bit"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_survival_and_readiness_read_ONE_clock_and_cannot_disagree():
+    """The sole-supplier half of the fix, and the reason `_survival_clock` was extracted rather than
+    the call copied. `survival` grades a body's exposure by this clock and `readiness` discounts its
+    forward potential by the same one; two independently-written argument lists (the Bench-Harvest
+    pair, `opp_active`, the THEIRS-direction Damage Formula context) is exactly how two families come
+    to believe a body dies on different turns."""
+    board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    exposed = {round(b.prize_at_risk): b.turns_to_ko_me for b in sv._exposed_bodies(board)}
+    for body in board.mine.bodies:
+        clock = exposed[round(float(body.prize_value))]
+        assert sv._survives_to_spend(board, body) == pytest.approx(1.0 - sv.halve(clock - 1))
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_NOW_leg_takes_NO_survivability_discount():
+    """The half of `_readiness_odds` this must not touch, pinned as a number rather than argued.
+
+    A body that can fire its payoff THIS turn attacks before the opponent's turn happens at all, so
+    its clock says nothing about whether the potential is spendable — `readiness_p` stays the answer.
+    Mega Starmie ex holding ``{W}{W}{W}`` pays Nebula Beam ``{C}{C}{C}`` outright, so the now-leg
+    reads 1.0; damaging it to a one-shot clock must not move `readiness` by anything at all.
+
+    This is also where Issue #351's masking bites, and the assertion is written to fail loudly if it
+    ever stops: the same `max(now, forward)` that exempts a real attacker here also exempts a BENCHED
+    body that cannot attack at all."""
+    doomed, safe = {}, {}
+    sv.state_value(_successor_board(active_energies=[E_W] * 3, active_damage=130), working=doomed)
+    sv.state_value(_successor_board(active_energies=[E_W] * 3), working=safe)
+    board = _successor_board(active_energies=[E_W] * 3, active_damage=130)
+    body = board.mine.active
+    assert board.mine.readiness_p(body, board.mine.attack_payoff(body).attack_id) == 1.0
+    assert sv._survives_to_spend(board, body) == 0.0, "the fixture's Active is not doomed"
+    assert doomed["readiness"] == pytest.approx(safe["readiness"]), (
+        "the survivability discount reached the now-leg — a body attacking THIS turn was charged "
+        "for a Knock Out that happens after it swings")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_clock_consultation_is_not_a_second_claim_on_a_priced_fact():
+    """Issue #332's first acceptance criterion, executable. `readiness_odds` consults
+    `turns_to_ko_me`, which `survival` prices, and the one-fact-one-family rule is this module's
+    headline — so the call has to be argued rather than assumed.
+
+    The registry fact stays `readiness_odds`: the clock is an INPUT to that probability exactly as
+    `turns_to_afford` is, and the two families price two different CONSEQUENCES of it in two
+    different currencies (the prizes handed over when the body falls, against the potential that
+    dies with it). That is `survival`'s own shipped precedent — its `_predicted_loss` consults
+    `prize_race`'s counts as a win-condition TEST and keeps `predicted_loss` as the fact — and both
+    places refuse the alternative, because a fact renamed to dodge the detector makes the detector
+    pass VACUOUSLY."""
+    assert sv.double_counted() == []
+    assert sv.registry_gaps() == []
+    assert sv.FAMILIES["readiness"].reads == ("body_payoff", "readiness_odds", "role_relevance")
+    assert "turns_to_ko_me" in sv.FAMILIES["survival"].reads
+    assert "turns_to_ko_me" not in sv.FAMILIES["readiness"].reads
+    # the argument is RECORDED where a reader of the tuples will look for it, not only in a packet
+    assert "turns_to_ko_me" in sv.FAMILIES["readiness"].composition
+    # …and the consultation it argues for is REAL. Without this the assertions above would hold on a
+    # module that never consults the clock at all — a contract describing something that does not
+    # happen, which is the vacuity the whole `reads` map exists to prevent.
+    board = _successor_board(active_energies=[E_W], bench_energies=[E_W], active_damage=130)
+    body = board.mine.active
+    attack = board.mine.attack_payoff(body).attack_id
+    arm = board.mine.turns_to_afford(body, exclude_expiring=True)
+    assert arm is not None and board.mine.readiness_p(body, attack) == 0.0
+    assert sv._readiness_odds(board, body, attack) < sv.halve(arm), (
+        "the forward leg is not actually consulting the clock the composition claims it does")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_ADR_0069_attach_decider_is_STRUCTURALLY_unable_to_move_under_this_module():
+    """Issue #332's owed *"`attach_value` unmoved"* guard, in the form that is not a re-measurement.
+
+    ADR-0069's attach marginal is `Pilot._attach_value`, and Issue #278's standing discipline forbids
+    retuning it. The strongest available statement is not *"the corpus did not move"* — a corpus can
+    fail to move for the wrong reason — but that `pilot.py` cannot READ this module at all: no
+    import, no reference, so a change to `state_value` is unable to reach the attach decider however
+    it is written.
+
+    Asserted over the parsed module rather than a substring search, because `pilot.py` does mention
+    `state_value` in prose (a docstring explaining why it does NOT thread a context into it) and a
+    raw `in` check would fail on the documentation.
+
+    **A negative result needs a positive control** (CLAUDE.md): the same instrument is pointed at two
+    deciders `pilot.py` genuinely does consume, and must find both."""
+    import ast
+    from pathlib import Path
+
+    src = Path(sv.__file__).with_name("pilot.py").read_text(encoding="utf-8")
+    tree = ast.parse(src)
+    names = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            names.update(a.name.split(".")[-1] for a in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            names.add((node.module or "").split(".")[-1])
+            names.update(a.name for a in node.names)
+        elif isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+    assert {"evolve_value", "promote_retreat_value"} <= names, (
+        "the instrument found neither shipped decider — it is broken, not the codebase")
+    assert "state_value" not in names, (
+        "pilot.py grew a `state_value` reader — the ADR-0069 attach decider is no longer insulated "
+        "from this module and `attach_value unmoved` stops holding by construction")
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
@@ -1541,36 +1995,127 @@ def test_more_cards_in_THEIR_hand_never_improves_survival():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0009")
-@pytest.mark.xfail(strict=True, reason="OPEN DEFECT, diagnosed and parked — see the test body and "
-                                       "`threat`'s `blind_to` entry 'SATURATION INTO ONE BIT'")
 def test_threat_GRADES_by_what_the_target_yields_instead_of_saturating_into_one_bit():
-    """A strict-xfail **TARGET** (the `test_hyperclosure_corpus.py` idiom): a defect stated as the
-    assertion that will pass the day it is fixed, so the fix cannot land silently and the defect
-    cannot rot into scenery. Green while `threat` is still broken; a red XPASS is the signal to
-    delete this mark.
+    """The regression guard for Issue #329, and the ex-strict-xfail TARGET it discharges.
 
     `threat`'s inputs are `needs.opponent_target_value`, which at the fail-closed
-    ``survival_shift=0`` this module passes returns the target's PRIZE value essentially unscaled —
-    1, 2 or 3 (`docs/rules.md` §6, verified at source: regular / ex / Mega ex). Against a 0.1-prize
-    cap with no weight in front of it, `min(cap, sum)` binds on **every** non-empty input, so the
-    family answers one bit — *is their Active reachable at all* — and a 1-prize Basic prices the
-    same as a 3-prize Mega ex. Measured on Issue #262's 22 gating Discrimination-Gate frames:
-    `threat` read 0.0 on 20 and exactly the cap on 2, never a value between.
+    ``survival_shift=0`` this module passes returns the target's PRIZE value plus Issue #285's small
+    forward credit — so a single target sits between 1.0 and ~3.09 (`docs/rules.md` §6, verified at
+    source: regular / ex / Mega ex). Against a 0.1-prize cap with **no weight in front of it**,
+    `min(cap, sum)` bound on every non-empty input and the family answered one bit — *is anything of
+    theirs reachable at all* — so a 1-prize Basic priced the same as a 3-prize Mega ex.
 
-    **Why the fix is not applied**, since it is derived rather than authored
-    (`_THREAT_CAP / _MAX_PRIZE_VALUE`) and leaves the positional band untouched: measured on the
-    corpus, its only effect is negative — the Discrimination Gate goes 65 -> 68 unruled and loses
-    two `MISS -> OK` improvements. Five frames were winning by a margin smaller than the 0.067
-    prizes of threat advantage the saturation handed them. Removing a windfall is correct AND costs
-    rulings, and this module does not get to write them; the fix is parked with the other
-    calibration findings for the post-POC fit (Issues #146-#148).
+    Measured on one full leaf-lab pass over the 371-frame corpus, 2061 `threat()` calls: **614
+    non-empty inputs spanning 33 distinct sums collapsed to exactly 2 distinct outputs** (0.0 x1447,
+    0.1 x614), with the cap binding on 614/614. That is the defect, and this test is the assertion
+    that could not hold while it stood.
+
+    The fix is :data:`sv._THREAT_W` = ``_THREAT_CAP / needs.TARGET_VALUE_CEILING`` — both terms
+    already-shipped constants, so it is DERIVED rather than authored and adds no scaffold debt. It
+    goes in FRONT of the cap, never into it: :data:`sv.POSITIONAL_MAX` sums the four positional caps
+    and :data:`sv.LOSS_PRIZES` is derived from that sum, so moving `_THREAT_CAP` itself would
+    silently move the predicted-loss dominance constant.
+    `test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved` is that guard.
 
     The assertion is STRICT monotonicity, which is exactly what the saturated form cannot satisfy,
-    plus the two band properties any fix must preserve."""
+    plus the band property any fix must preserve. The 3-prize case is asserted against the anchor's
+    own value rather than against the cap: under `/3.9` a maximum-value SINGLE target reads
+    0.076923, not the band — the cap is reached only by a multi-target SUM."""
     assert sv.threat([1.0]) < sv.threat([2.0]) < sv.threat([3.0])
-    assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_CAP)
-    assert sv.threat([3.0, 3.0]) == pytest.approx(sv._THREAT_CAP)
+    assert sv.threat([sv._MAX_PRIZE_VALUE]) == pytest.approx(sv._THREAT_W * sv._MAX_PRIZE_VALUE)
+    assert sv.threat([sv._MAX_PRIZE_VALUE]) < sv._THREAT_CAP, (
+        "a single maximum-prize target is BELOW the band — the divisor is the single-target ceiling "
+        "3.9, and only a sum over several targets can reach it")
     assert sv.threat(()) == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_threat_anchor_is_DERIVED_from_the_two_shipped_constants():
+    """`_THREAT_W` is a quotient of numbers this module and `needs` already verify at source, not a
+    seed. Asserted against the operands rather than against `0.025641…`, because a literal would
+    agree with a hand-typed constant as readily as with the derivation.
+
+    `TARGET_VALUE_CEILING` is the divisor because it is the true ceiling of `opponent_target_value`
+    *as a function* — `MAX_PRIZE_VALUE` 3 plus `_SURVIVAL_CAP` 0.9 — and because ADR-0107 already
+    chose it for `gust_target`, the sibling member of the opponent-target family. Measured both ways
+    over 614 non-empty corpus inputs: `/3.9` yields 28 distinct outputs with the guard biting on
+    45 (7.3%), `/3.0` yields 26 with the guard biting on 180 (29.3%).
+
+    The third assertion is what keeps this from testing a definition: without it, deleting
+    `_THREAT_W` from `threat()`'s body — leaving the constant defined and unused — would still pass.
+    """
+    assert sv._THREAT_W == sv._THREAT_CAP / _needs.TARGET_VALUE_CEILING
+    assert _needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
+    assert sv.threat([1.0]) == pytest.approx(sv._THREAT_W), (
+        "…and the equation actually READS it — a defined-but-unused anchor would pass the two "
+        "assertions above")
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_anchor_went_in_FRONT_of_the_cap_so_the_terminal_band_never_moved():
+    """The guard that proves Issue #329 scaled the INPUT rather than shrinking the guard.
+
+    `POSITIONAL_MAX` sums the four positional runaway guards, and `LOSS_PRIZES` — the predicted-loss
+    dominance constant — is derived from it. Had the anchor been folded into `_THREAT_CAP` (say
+    `0.1/3.9`), both would have moved silently and `ko-score-band`'s two-band argument would have
+    shifted with them. Pinned as the literals so the failure is legible rather than tautological."""
+    assert sv._THREAT_CAP == 0.1
+    assert sv.POSITIONAL_MAX == 3.4
+    assert sv.LOSS_PRIZES == 28.9
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_runaway_guard_still_guards_a_multi_target_SUM():
+    """The cap is not decoration after the anchor — it binds on 45 of 614 non-empty corpus inputs
+    (7.3%), and the reason is structural: `threat` sums over up to six targets while
+    `TARGET_VALUE_CEILING` is ONE target's ceiling. Reaching a 3-prize Mega ex *and* a 2-prize body
+    sums to 5.0, which is 1.28x the divisor — five prizes of simultaneously-reachable exposure, which
+    is exactly the extreme board a runaway guard exists for.
+
+    The threshold is stated honestly: the edge is at a sum of `TARGET_VALUE_CEILING`, not at `2 x
+    _MAX_PRIZE_VALUE`. `[3.0, 3.0]` would clamp too, but it would not say where the edge is — so the
+    edge is asserted from BOTH sides, which is also what stops this test being arithmetic on
+    literals that never reaches the implementation."""
+    ceiling = _needs.TARGET_VALUE_CEILING
+    assert sv.threat([ceiling]) == pytest.approx(sv._THREAT_CAP), "at the edge, the guard binds"
+    assert sv.threat([ceiling - 0.1]) < sv._THREAT_CAP, "…and just below it, it does not"
+    assert sum([3.0, 2.0]) >= ceiling
+    assert sv.threat([3.0, 2.0]) == pytest.approx(sv._THREAT_CAP), (
+        "a reachable 3-prize Mega ex AND a 2-prize body is 5.0, past the edge")
+    assert sv.threat([sv._MAX_PRIZE_VALUE] * 6) == pytest.approx(sv._THREAT_CAP)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_no_legal_input_drives_the_family_outside_its_BAND():
+    """The band property, swept rather than sampled at two points.
+
+    Every legal input is between 1 and `_MAX_BODIES` targets, each a `opponent_target_value` in
+    `[1.0, TARGET_VALUE_CEILING]` — `prize_value` is 1, 2 or 3 (`docs/rules.md` §6) plus a forward
+    credit the corpus caps at 0.0855, and `_MAX_BODIES` is 6 because the Bench holds 5
+    (`docs/rulebook.txt` L75). Sweeping that whole space, the family must stay inside
+    `[0, _THREAT_CAP]` — the guarantee `POSITIONAL_MAX` and the module's two-band argument rest on.
+
+    Monotone in every argument too, which the point assertions elsewhere cannot show: adding a target
+    or raising one never lowers the answer."""
+    ladder = [1.0, 2.0, 3.0, _needs.TARGET_VALUE_CEILING]
+    assert sv.threat(()) == 0.0
+    for v in ladder:
+        for n in range(1, sv._MAX_BODIES + 1):
+            got = sv.threat([v] * n)
+            assert 0.0 < got <= sv._THREAT_CAP, f"{n} x {v} left the band at {got}"
+            assert got >= sv.threat([v] * (n - 1)), f"a {n}th target of {v} LOWERED the answer"
+    for a, b in zip(ladder, ladder[1:]):
+        assert sv.threat([a]) <= sv.threat([b]), "a more valuable target scored less"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0012")
+def test_threat_grades_the_COUNT_of_reachable_targets_not_merely_their_existence():
+    """The property Issue #284's widening created and this anchor makes readable. While the cap bound
+    on every non-empty input a second reachable body added exactly 0, so a chipped bench under a
+    reachable Active scored identically to a fresh one. Measured on the corpus: 74 of 614 non-empty
+    calls carry 2 or 3 targets, and all 74 were flattened."""
+    assert sv.threat([1.0]) < sv.threat([1.0, 1.0]) < sv.threat([1.0, 1.0, 1.0])
+    assert sv.threat([1.0, 1.0, 1.0]) < sv._THREAT_CAP, "three 1-prize bodies is not an extreme board"
 
 
 # ── a live Trainer damage-BOOST reaches the scalar, gates and all (Issue #282) ────────────────────
@@ -1633,26 +2178,36 @@ def test_a_live_boost_crosses_a_breakpoint_and_the_scalar_moves_for_it():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
-def test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss():
+def test_PLAYING_the_boost_card_is_priced_as_the_BOOST_and_not_as_the_hand_loss():
     """**The issue's headline sentence, as an arithmetic claim about the whole transition.**
 
     The cases around this one hold the hand fixed and vary only the live boost, which shows the
-    boost is READ but not that playing the card comes out ahead. This one models the actual
-    `_PLAY`: before, Premium Power Pro is in hand and no boost is live; after, the card is gone and
-    the boost is live. That is exactly what `apply_option` will difference, and it is the only
-    arrangement in which the epic's failure mode can appear at all —
+    boost is READ but not what playing the card comes out at. This one models the actual `_PLAY`:
+    before, Premium Power Pro is in hand and no boost is live; after, the card is gone and the boost
+    is live. That is exactly what `apply_option` will difference, and it is the only arrangement in
+    which the epic's failure mode can appear at all —
     *"a card whose effect no term reads prices at MINUS the hand value of the card spent"*.
 
     The hand leg has to be real for the claim to mean anything, so a `needs.Resolution` supplies the
     held card's latent Worth at `card_worth.TAG_TIER["gust"]` — the shipped tier for a situational
     Trainer, cited rather than invented (its own comment: *"reach (Boss's Orders) — the ladder's −10
     keep floor"*, the band this ladder gives a held utility Trainer). At `POC_WORTH_PRIZE_RATE` that
-    is 1/12 of a prize the play gives up.
+    is 1/12 of a prize (0.083333) the play gives up.
 
-    The margin is deliberately narrow and is asserted in BOTH directions: the boost's `threat` gain
-    must exceed the hold, so the play is a gain — and the hold must be genuinely non-zero, so the
-    test would go negative the moment the boost stopped being priced. A wide margin here would pass
-    on a board where the hand cost nothing, which is the vacuous version of this test."""
+    ⚠️ **This test asserted `total_after > total_before` until Issue #329, and that margin was a
+    windfall.** The old `threat` had no scale anchor, so ANY reachable target priced at the full
+    `_THREAT_CAP` 0.1 and the transition read +0.016667 — 0.1 against the 0.083333 hold. With the
+    anchor a 2-prize Dragapult ex prices `_THREAT_W x 2 = 0.051282` and the POSITIONAL half of the
+    transition is −0.032051. That is not a regression, it is the double-count `_THREAT_CAP` exists
+    to prevent: `threat` prices the exposure STANDING on the board and the prize for CONVERTING it
+    is `attack_ev`'s, under `score = state_value(end board) + EV(terminal action)`. A boost played
+    and never cashed genuinely is a spent card for a position; the old form paid the conversion
+    prize twice and called the difference a gain.
+
+    So the claim is now made where it actually lives, in three parts: the positional half is priced
+    as the BOOST (exactly `threat` gained minus `hand` lost, to the float), the boost recovers most
+    of the card's cost rather than none of it, and on the full sequence score — the surface the
+    planner ranks — playing and cashing it is a large gain."""
     from common import needs
 
     def _held(worth):
@@ -1670,11 +2225,33 @@ def test_PLAYING_the_boost_card_is_priced_as_a_gain_and_not_as_the_hand_loss():
 
     assert b["hand"] > 0.0 and a["hand"] == 0.0, "the hand loss must be REAL, or this passes vacuously"
     assert a["threat"] > b["threat"] == 0.0, "the boost must be what crosses the breakpoint"
-    assert total_after > total_before, (
-        f"playing the boost scored as a mistake: {total_after} <= {total_before}")
-    # and the failure mode, stated as the counterfactual: with the boost UNPRICED the same play is
-    # a strict loss, which is what makes the assertion above a claim rather than a coincidence.
-    assert total_before - sv.state_value(_vs_dragapult_at(300)) == pytest.approx(b["hand"])
+    assert total_after - total_before == pytest.approx(a["threat"] - b["hand"]), (
+        "the positional half of the transition is the boost's gain against the card's hold, and "
+        "nothing else — no third family may move")
+    assert a["threat"] == pytest.approx(sv._THREAT_W * 2.0), (
+        "Dragapult ex is a 2-prize body (`docs/rules.md` §6), priced at the anchor and not at the "
+        "band — asserting the operand is what makes the arithmetic above a claim about the anchor")
+
+    # The boost is READ: it recovers 0.051282 of the 0.083333 the card cost, where an unpriced
+    # effect recovers exactly nothing. `unpriced` is the SAME post-play board scored as though no
+    # term read the boost — which is what the epic's failure mode actually is — so the two identities
+    # below are the epic's sentence, and they hold at any scale of the anchor.
+    unpriced = sv.state_value(_vs_dragapult_at(300))     # boost gone from BOTH hand and board
+    assert total_after - unpriced == pytest.approx(a["threat"]), (
+        "priced, the played boost is worth exactly the exposure it creates")
+    assert total_before - unpriced == pytest.approx(b["hand"]), (
+        "…and unpriced it is worth nothing, so the play would score at MINUS the whole hand value "
+        "of the card spent — the epic's failure mode, stated as the counterfactual")
+
+    # …and on the sequence score the planner actually ranks, the play is a gain outright. The boost
+    # is what makes Mega Brave's 270 into the 300 that Knocks Out the fixture's Dragapult ex — whose
+    # PRINTED HP is 320 (`data/EN_Card_Data.csv` id 121); `_vs_dragapult_at(300)` chips it to 300
+    # remaining, which is the number the breakpoint is against. So the terminal leg the boost unlocks
+    # dwarfs the positional half either equation produces.
+    ko = sv.attack_ev(damage=300.0, target_hp=300.0, target_prizes=2.0)
+    no_ko = sv.attack_ev(damage=270.0, target_hp=300.0, target_prizes=2.0)
+    assert ko.knockout == pytest.approx(2.0) and no_ko.knockout == 0.0
+    assert total_after + ko.total > total_before + no_ko.total
 
 
 @pytest.mark.req("REQ-STATEVALUE-0011")
@@ -2226,25 +2803,31 @@ def test_the_two_forward_payoff_suppliers_agree_and_diverge_only_where_the_DECKL
 
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
-def test_the_denial_credit_is_INVISIBLE_once_the_cap_binds():
-    """The ceiling on what this issue can deliver, asserted rather than described.
+def test_the_denial_credit_REACHES_the_family_once_the_anchor_is_in_front_of_the_cap():
+    """The wall this test used to record, now measured from the far side.
 
-    `threat` is `min(_THREAT_CAP, sum)` and `_THREAT_CAP` is 0.1, while every appended target carries
-    `prize_advance >= 1.0` because `prize_value` is 1, 2 or 3 and never less. So the cap binds on
-    every frame this loop touches, while the largest credit measured anywhere on the corrections
-    corpus is 0.054 prizes. It cannot move the family — on ANY board, not merely on already-firing
-    ones.
+    Until Issue #329 `threat` was `min(_THREAT_CAP, sum)` with no scale anchor, and every appended
+    target carries `prize_advance >= 1.0` because `prize_value` is 1, 2 or 3 and never less — so the
+    cap bound on every frame this loop touches and the credit was invisible in the family on ANY
+    board, not merely on already-firing ones. This test asserted exactly that, and was written to
+    turn red the day the anchor landed. It did.
 
-    This is the same wall Issue #284 measured from the other side, and the unlock is the same parked
-    `_THREAT_CAP / _MAX_PRIZE_VALUE` scale anchor, which this track was told not to move. Recorded as
-    a test so the next reader meets it as a measurement rather than as a surprise — and so that the
-    day the anchor lands, this test fails and points at the packet line."""
+    With `_THREAT_W` in front of the cap the seam's discrimination survives into the family: a
+    1-prize body whose line becomes Mega Starmie ex now outscores a 1-prize dead end by the credit
+    times the anchor. That product is SMALL — the largest single-target credit measured anywhere on
+    the corrections corpus is 0.054 prizes, so its `threat` contribution tops out near 0.0014 — which
+    is why the assertion is a strict inequality and not a magnitude claim. Small and read beats
+    larger and erased."""
     staryu = _starmie_board(_poke(STARYU, hp=70, serial=9))
     dead_end = _starmie_board(_poke(MUNKIDORI, hp=110, damage=40, serial=9))
 
     assert _target_values(staryu)[0] > _target_values(dead_end)[0], "the seam DOES discriminate"
-    assert _threat_of(staryu) == _threat_of(dead_end) == sv._THREAT_CAP, (
-        "…and the capped family cannot: both boards saturate at exactly the cap")
+    assert _threat_of(staryu) > _threat_of(dead_end) > 0.0, (
+        "…and the family now carries that discrimination instead of flattening it")
+    assert _threat_of(staryu) < sv._THREAT_CAP, "one 1-prize target is nowhere near the guard"
+    assert _threat_of(staryu) - _threat_of(dead_end) == pytest.approx(
+        sv._THREAT_W * (_target_values(staryu)[0] - _target_values(dead_end)[0])), (
+        "the gap the family shows IS the seam's gap, scaled by the anchor and nothing else")
     # Not asserted on `state_value` itself: these two boards differ in their Active's own attacks, so
     # `survival` moves between them for a reason that has nothing to do with this credit. The claim
     # under test is about `threat`, and it is made about `threat`.

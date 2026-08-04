@@ -131,7 +131,7 @@ tagged; the runtime reads those off `CardData` (`ex`/`megaEx`/`cardType`/`aceSpe
 | Conditions | `poison`, `burn` (chip attrition), `sleep`, `paralyze` (lock out attack/retreat), `confuse` (attack deterrent) | probe |
 | Defensive | `bench_guard` (protect the Bench from attack/Ability *effects* — Battle Cage) | override |
 | Setup | `opener` (a non-Basic that may take the Active Spot from hand during setup — Explosiveness; keeps a no-Basic hand from being mulliganed away — Cinderace), `rare_candy` (put a Stage 2 from hand onto its root Basic, skipping the Stage 1) | override |
-| Play-role | `stall` (a big-HP setup wall that *declines to attack* to buy tempo — Mega Kangaskhan ex, Dudunsparce, Meowth ex) | curated seed |
+| Play-role | `stall` (a big-HP setup wall that *declines to attack* to buy tempo — Mega Kangaskhan ex, Dudunsparce) | curated seed |
 
 ### Complete tag reference
 
@@ -160,7 +160,8 @@ ex/Mega-ex, trainer type, ACE SPEC — are *not* here; the runtime reads them of
 | `confuse` | condition | Confused — attacking risks self-damage on a coin flip (deterrent). | Probe: a `CONFUSED` condition log. |
 | `bench_guard` | defensive | Protects benched Pokémon from the *effects* of attacks/Abilities (anti-spread/disruption — Battle Cage). | Override: passive/preventive, so not probe-observable, but readable from card text. |
 | `opener` | setup | A non-Basic that may be placed in the Active Spot from hand during setup (Explosiveness — Cinderace) — so a hand with no Basic Pokémon is still keepable. The Pilot reads it to *keep* (not mulligan) a startable opening hand. | Override: a setup-phase placement ability, not probe-observable, but readable from card text (like `bench_guard`). |
-| `stall` | play-role | A big-HP wall piloted *not to attack*, buying tempo to set up. | Curated seed (`function_overrides.json`): a usage pattern, not parseable — full coverage needs replay-usage data (future). |
+| `stall` | play-role | A big-HP wall piloted *not to attack*, buying tempo to set up. **Not a "does not attack much" catch-all** — 1071 Meowth ex was re-modeled OFF it on 2026-07-03 (→ `supporter_tutor`); the reason is recorded once, in `_note_1071_stall_retired` in `function_overrides.json`. | Curated seed (`function_overrides.json`): a usage pattern, not parseable — full coverage needs replay-usage data (future). |
+| `team_rocket` | membership | **The one owner-NAME-family tag, and the one ruled exception to REQ-FUNC-0001** (Issue #374, developer-ruled). Marks the 52 Pokémon whose printed name carries the *"Team Rocket's"* prefix. Nine cards in the pool gate an effect on *"Team Rocket's Pokémon"* — 15 Team Rocket's Energy, 414 Articuno, 431 Mewtwo ex, 436 Orbeetle, 1154 Hypnotizer, 1216 Ariana, 1217 Archer, 1218 Giovanni, 1220 Proton. For a body already **in play** that test is already free (`CardStat.name` → `card_text.name_in_family`); what has no answer is the hidden-**deck** half (*"search your deck for up to 3 Basic Team Rocket's Pokémon"*), which needs an index over the POOL — the *"no build-time family index"* Issue #301 recorded, and why those clause sets are `covers: partial`. **Why it is not structural-and-therefore-excluded:** REQ-FUNC-0001 excludes structural facts *because the runtime reads them off `CardData`*; there is no `CardData` field for an owner family (the dump carries `stage`/`ex`/`megaEx`/`tera`/`aceSpec`/`evolvesFrom`/`energy`, and the 52 span 8 energy types), so the rationale does not reach it. Note `tool`/`item`/`supporter` are a **counter**-precedent, not a precedent — ADR-0006 removed those structural tags. **Inert today** (no consumer whitelist names it) and does not by itself promote any `partial` verdict; ledgered as authored-ahead-of-its-consumer. Beware a name collision that is not a functional one: `EnergyType.TEAM_ROCKET` (11) is the special *Energy card's* type, not a Pokémon trait. | Curated (`function_overrides.json`): derived from the printed name in `tools/meta_tracker/cards.json`, not probe-derived. |
 | `discard_eot` | energy | An Energy that is **discarded at end of turn** (Ignition Energy) — worth attaching only if the holder attacks that same turn. The Pilot reads it (`dont-waste-discard-energy`) to avoid wasting it (benched target / can't-attack first turn / a reusable Basic is in hand). | Curated seed (`function_overrides.json`): energies aren't probed, but the discard clause is readable from card text. |
 | `rare_candy` | setup | A card that puts a **Stage 2 from hand straight onto its root Basic, skipping the Stage 1** (*"Choose 1 of your Basic Pokémon in play. If you have a Stage 2 card in your hand that evolves from that Pokémon, put that card onto the Basic Pokémon to evolve it, skipping the Stage 1"* — Rare Candy, id 1079). Read in two places, which is why it is a tag at all: the Turn Planner's Rare Candy KO line (`_is_rare_candy`) asks it of a PLAY option, and the backward playability oracle (`common.playability`, ADR-0104) asks whether one is reachable in hand or deck at all — a missing Stage 1 does not prove a Stage 2 dead. Distinct from `rush_evolve`: that one is a TUTOR that also evolves; this fetches nothing and needs the Stage 2 already in hand. | Curated seed (`function_overrides.json`): the evolve-skip is readable from card text, not probe-derived. |
 | `rush_evolve` | setup | A card that **evolves a Pokémon ahead of the normal schedule** — even the turn its pre-evolution was played (Salvatore: search a no-Ability Pokémon and evolve onto a matching pre-evo). High tempo: it brings the win-condition online a turn early. | Curated seed (`function_overrides.json`): the evolve-bypass isn't probe-derived, but is readable from card text. |
@@ -253,7 +254,7 @@ Lib-free unit/oracle/audit tests run without the engine; the audit *tool* reads 
 
 | ID | Requirement |
 |---|---|
-| REQ-FUNC-0001 | Structural facts (ex/Mega-ex, trainer subtype, ACE SPEC) are *not* tagged — the table is behavioral-only; the runtime reads them off `CardData`. |
+| REQ-FUNC-0001 | Structural facts (ex/Mega-ex, trainer subtype, ACE SPEC) are *not* tagged — the table is behavioral-only; the runtime reads them off `CardData`. **One ruled exception, `team_rocket` (Issue #374)**: the rule's own rationale is *the runtime reads them off `CardData`*, and every fact it names has a `CardData` field. An owner NAME family has none, so the exception is where the rationale stops applying rather than a hole in it. See the tag's row below. |
 | REQ-FUNC-0002 | Behavioral tags from the engine probe record (draw, search, spread, …). |
 | REQ-FUNC-0003 | Curated overrides union with derived tags; sparse input degrades to empty, never raises. |
 | REQ-FUNC-0004 | Probe harness builds a legal 60-card deck featuring the target (startable, ≤4 copies, ACE SPEC=1). |
@@ -268,6 +269,7 @@ Lib-free unit/oracle/audit tests run without the engine; the audit *tool* reads 
 | REQ-FUNC-0013 | Golden oracle: named, deterministic cards carry their expected tag in the shipped table (end-to-end regression gate). |
 | REQ-FUNC-0014 | Meta-card verification: rank cards by real usage (`rank_card_usage`, band-weighted) to prioritise the text-audit toward the staples that decide games. |
 | REQ-FUNC-0015 | Triggered-Ability shape probe (Issue #305): build a deck whose triggers have real targets, and reduce a captured select to the shuffle-INVARIANT record a fixture can pin (`build_trigger_deck`, `select_shape`, `_strip_serials`). |
+| REQ-FUNC-0016 | Override/table **reconciliation** (Issue #375): every curated tag in `function_overrides.json` is present in the shipped table. The override file is a standing *instruction* to the builder (REQ-FUNC-0003 unions it in on every build, `--fresh` included), so a tag left there after it was retired is a pending re-introduction, not stale documentation — and REQ-FUNC-0011's monotonic accumulate can never drop it back out. Presence-only oracles (REQ-FUNC-0013) structurally cannot catch this; a retired tag returning alongside its replacement leaves them green. |
 
 ## Status
 
@@ -314,7 +316,9 @@ plain Item — are now omitted, so the table is smaller than the old structural-
   `opener` (Cinderace's Explosiveness — a startable non-Basic), `tutor_energy` (the nine
   deck-search-Energy-into-hand Trainers — a `search` refinement the probe can't derive, feeding the
   Turn Planner's Supporter-enabled KO line), and the curated `stall` seed
-  (Mega Kangaskhan ex, Dudunsparce, Meowth ex). They union in at build
-  time and are guarded by the golden oracle; extend the file as the meta-verification flags more.
+  (Mega Kangaskhan ex, Dudunsparce — Meowth ex was re-modeled off it 2026-07-03). They union in at
+  build time and are guarded by the golden oracle **plus the reconciliation gate** (REQ-FUNC-0016):
+  every curated tag must be present in the shipped table, so a retirement that edits only one of the
+  two stores can no longer be undone by the next build. Extend the file as meta-verification flags more.
 - Optional future polish (not blocking): richer probing of conditional Abilities; regenerating
   the stale `cards.json`. The tag *vocabulary* itself is done.

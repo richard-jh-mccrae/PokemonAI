@@ -14,7 +14,7 @@ because file existence is never evidence of file content).
 **A — the ENUMERATION.** Nothing enumerated what `state_value` actually asks the model. The census
 below does, by AST, and the table is the reviewed list: a new query added to `state_value` goes red
 until somebody has looked at what that query returns when the fact behind it is ABSENT. Three of the
-twenty are known **collapses** — ABSENT and ZERO arrive as the same integer — and those are RULED,
+twenty-one are known **collapses** — ABSENT and ZERO arrive as the same integer — and those are RULED,
 not asserted-and-forgotten: the tests here pin the collapse so that "fixing" one is a decision.
 
 **B — threading equivalence.** #260's migration is only honest if the model route answers what the
@@ -143,14 +143,25 @@ def _model_queries(src: str) -> set[str]:
 #: contract groups them: the two sides, the cross-side composite, and the top level.
 #:
 #: The bare handles (`model.mine`, `model.theirs`, `model.prize_race`) are here because the census
-#: reports them; they are navigation, not facts. The twenty FACTS are everything below them.
+#: reports them; they are navigation, not facts. The twenty-one FACTS are everything below them.
 CONSUMED = frozenset({
     "model.mine", "model.theirs", "model.prize_race",
-    # ── MySide (12) ──
+    # ── MySide (13) ──
     "model.mine.active", "model.mine.bench", "model.mine.bodies", "model.mine.bench_raws",
     "model.mine.attack_payoff", "model.mine.readiness_p", "model.mine.turns_to_afford",
     "model.mine.role_worth", "model.mine.needs", "model.mine.forward_payoff",
     "model.mine.best_reachable_damage_vs", "model.mine.best_reachable_bench_damage",
+    # `attack_blocked` joined at Issue #351 (`state_value._may_attack_now`, the legality leg
+    # `readiness_p` does not have). REVIEWED, and it is NOT a `RULED_COLLAPSES` case — its absent
+    # direction is the opposite hazard. Read at source: `MySide.attack_blocked` is
+    # `self.turn <= 1 or bool(player.get("asleep") or player.get("paralyzed"))`, over
+    # `self.turn = int(turn or 0)`. So an ABSENT turn reads 0, which is `<= 1`, which returns
+    # True == BLOCKED — and a blocked body makes the now-leg claim NOTHING and fall back to the
+    # forward clock. Absence therefore fails CLOSED here, where the three collapses below fail into
+    # a value that reads like a measurement. The condition flags collapse the other way
+    # (`.get()` -> None -> False), but they are unreachable on an absent-turn board because the
+    # turn leg short-circuits first, and on a real observation the engine always states them.
+    "model.mine.attack_blocked",
     # ── TheirSide (5) — the newly-threaded half ──
     "model.theirs.active_raw", "model.theirs.bodies", "model.theirs.turns_to_ko_me",
     "model.theirs.reachable_incoming", "model.theirs.forward_payoff",

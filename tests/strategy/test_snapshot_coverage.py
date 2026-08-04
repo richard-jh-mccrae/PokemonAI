@@ -31,6 +31,9 @@ import pytest
 from common import apply_option as ao
 from common import snapshot_coverage as sc
 from common import state_model as sm
+# The ONE implementation of the owner-family prefix test (Issue #374 asserts what it does and does
+# not match); a second transcription here would be the drift `unknown_zones` exists to prevent.
+from common.scouting.card_text import name_in_family
 # The engine's own `OptionType.PLAY`, taken from the DLL-free mirror `apply_option` itself reads it
 # from — a second transcription of the number here is the drift ADR-0087 charges for one store over.
 from common.strategy.context import _PLAY as _PLAY_KIND
@@ -107,17 +110,27 @@ def test_every_clause_kind_rider_and_effect_in_the_compendium_declares_what_it_w
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
-def test_the_audit_walks_all_three_vocabularies_including_effect():
-    """**The Issue #300 hole, as a test.** The walk used to cover `kind` and `rider` only, so
-    Crushing Hammer's `{"kind": "coin", "effect": "discard_opp_energy"}` passed green while the write
-    it performs — the opponent's Energy, and their discard — had no declared home at all.
+def test_the_audit_walks_all_four_vocabularies_including_effect_and_cost():
+    """**The Issue #300 hole, as a test — and Issue #350's, which was the same hole one axis over.**
 
-    Asserted two ways, because either alone would rot: that the key list IS all three, and that the
-    value actually in the compendium comes back out of the walk. A walk that names `effect` but never
-    meets one would be an audit passing by absence."""
-    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect")
-    assert "discard_opp_energy" in sc.clause_vocabulary(_compendium())
+    The walk used to cover `kind` and `rider` only, so Crushing Hammer's
+    `{"kind": "coin", "effect": "discard_opp_energy"}` passed green while the write it performs —
+    the opponent's Energy, and their discard — had no declared home at all. `cost` was the fourth
+    such axis and went the same way: it is a closed set of strings that MOVES CARDS BETWEEN ZONES,
+    and no value of it could fail the audit however undeclared it was.
+
+    Asserted two ways per axis, because either alone would rot: that the key list IS all four, and
+    that a value actually in the compendium comes back out of the walk. A walk that names an axis
+    but never meets one of its values would be an audit passing by absence."""
+    assert sc.VOCABULARY_KEYS == ("kind", "rider", "effect", "cost")
+    vocab = sc.clause_vocabulary(_compendium())
+    assert "discard_opp_energy" in vocab
     assert sc.CLAUSE_WRITES["discard_opp_energy"] == {"attached_energy", "their_discard_contents"}
+    # The fourth axis, reached by the same walk: `undeclared_clauses` looks the string up, never the
+    # key position it came from, which is why one table serves all four (the `gust` precedent — one
+    # entry for a value that is a `kind` on Boss's Orders and an `effect` on Pokemon Catcher).
+    assert "discard_2" in vocab
+    assert sc.CLAUSE_WRITES["discard_2"] == {"my_hand_ids", "my_discard_contents"}
     # And the flip itself still writes nothing — `coin` is an RNG READ, which is the half of that
     # comment that was always true.
     assert sc.CLAUSE_WRITES["coin"] == frozenset()
@@ -131,6 +144,90 @@ def test_an_effect_value_nobody_declared_is_caught_by_the_walk():
     fabricated = {"1": [{"kind": "coin", "effect": "an_effect_that_does_not_exist"}]}
     assert sc.undeclared_clauses(sc.clause_vocabulary(fabricated)) == \
         ["an_effect_that_does_not_exist"]
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_every_cost_the_compendium_charges_declares_what_it_MOVES():
+    """**Issue #350's write-sets.** A `cost` is not a flavour note — every committed value moves real
+    cards out of my hand, and until this landed none of them said where the cards went.
+
+    Card text quoted from the engine dump `tools/meta_tracker/cards.json` (`all_card_data()`), never
+    recalled; which discard they land in is `docs/rulebook.txt` L78, *"Each player has their own
+    discard pile. Cards taken out of play go to the discard pile"* — MY discard, so a cost never
+    touches `their_discard_contents`.
+
+    * 1092 Secret Box    — *"discard 3 other cards from your hand"*  → `discard_3`
+    * 1121 Ultra Ball    — *"discard 2 other cards from your hand"*  → `discard_2`
+    * 1233 Canari / 1187 Morty's Conviction / 1208 Iris's Fighting Spirit
+                         — *"discard another card from your hand"*   → `discard_1`
+    * 1192 Carmine / 1206 Larry's Skill — *"Discard your hand…"*     → `discard_hand`
+    * 1200 Kofu — *"Put 2 cards from your hand on the bottom of your deck in any order."* →
+      `bottom_2`, **the one whose write-set differs**: nothing is discarded at all. Two cards leave
+      my hand and JOIN my deck, so the count goes UP, two known cards become unseen (`deck_odds`),
+      and where they land is `deck_order` — the registry's one `hidden` zone. A reader who assumed
+      "a cost discards from hand" would be wrong about exactly the value that was added last
+      (Issue #302), which is why it is asserted separately rather than folded into the four."""
+    discard_from_hand = {"my_hand_ids", "my_discard_contents"}
+    for value in ("discard_1", "discard_2", "discard_3", "discard_hand"):
+        assert sc.CLAUSE_WRITES[value] == discard_from_hand, value
+        assert "their_discard_contents" not in sc.CLAUSE_WRITES[value], value
+    assert sc.CLAUSE_WRITES["bottom_2"] == {"my_hand_ids", "my_deck_count", "deck_odds",
+                                            "deck_order"}
+    assert "my_discard_contents" not in sc.CLAUSE_WRITES["bottom_2"]
+    assert "deck_order" in sc.CLAUSE_WRITES["bottom_2"], \
+        "Kofu's cards go to a CHOSEN position in the deck — the zone no snapshot can hold"
+    assert sc.BY_ID["deck_order"].status == sc.HIDDEN
+    # Declared, and actually USED — a write-set for a cost no card charges would be untested prose.
+    vocab = set(sc.clause_vocabulary(_compendium()))
+    assert {"discard_1", "discard_2", "discard_3", "discard_hand", "bottom_2"} <= vocab
+    # **Deliberately NOT nondeterministic**, checked at source rather than inherited from the
+    # neighbouring `other_to_bottom` (which IS). Kofu names the cards and their order out of a hand
+    # I can see; `other_to_bottom` re-buries cards a `dig` pulled from an unknown deck, so simulating
+    # it is one sample. A cost consults no RNG, so none of the five defeats the determinism proof.
+    assert not ({"discard_1", "discard_2", "discard_3", "discard_hand", "bottom_2"}
+                & sc.NONDETERMINISTIC_CLAUSES)
+    assert sc.clauses_writing_unhomed() == {}
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_a_cost_value_nobody_declared_is_caught_by_the_walk():
+    """**The positive control for the fourth axis**, and the one this issue turns on: before it
+    landed, `undeclared_clauses(["discard_2"])` already returned `["discard_2"]` — the table would
+    have bitten. What never happened was the WALK arriving, because `cost` was not in
+    `VOCABULARY_KEYS`, so `clause_vocabulary()` never yielded the value to be looked up.
+
+    So the bite is asserted through the walk, on a fabricated cost, on the same run as the green
+    assertion over the real compendium above — a red that only the table can produce would prove
+    nothing about whether the audit reaches `cost` at all."""
+    fabricated = {"1": [{"kind": "draw", "amount": 4, "cost": "a_cost_that_does_not_exist"}]}
+    assert sc.undeclared_clauses(sc.clause_vocabulary(fabricated)) == \
+        ["a_cost_that_does_not_exist"]
+    # …and the same walk on the same fabricated card still finds the legitimate `kind`, so the single
+    # result above is a measurement rather than a walk that reached nothing.
+    assert "draw" in sc.clause_vocabulary(fabricated)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_one_extractor_reads_a_clause_s_vocabulary_so_no_second_walk_can_drift():
+    """**Why `cost` was reachable to miss twice.** `VOCABULARY_KEYS` exists so *"which keys does the
+    audit walk?"* has ONE answer, but the census's write-set-health table
+    (`tools/apply_seam_coverage.py`) kept its own hand-rolled `kind`-plus-`rider` walk — so the
+    report titled *Clause write-set health* has been silently reporting on two axes since Issue #300
+    minted the third, and would have missed the fourth for the same reason.
+
+    :func:`snapshot_coverage.clause_values` is the single per-clause extractor both readers now go
+    through. Asserted here in the direction that matters: it yields every axis, in `VOCABULARY_KEYS`
+    order, and tolerates the list-valued rider `clause_vocabulary` always accepted — the shape a
+    hand-rolled `used[c["rider"]] += 1` would have raised `TypeError` on."""
+    clause = {"kind": "coin", "effect": "gust", "amount": 2, "cost": "discard_2"}
+    assert sc.clause_values(clause) == ["coin", "gust", "discard_2"]
+    assert sc.clause_values({"kind": "draw", "rider": ["shuffle_own_hand_in", "other_to_bottom"]}) \
+        == ["draw", "shuffle_own_hand_in", "other_to_bottom"]
+    assert sc.clause_values({"amount": 3}) == []
+    # The set walk is now this extractor, so the two can no longer disagree about the real artifact.
+    from_extractor = {v for cls in sc.clause_lists(_compendium()).values()
+                      for c in cls for v in sc.clause_values(c)}
+    assert sorted(from_extractor) == sc.clause_vocabulary(_compendium())
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
@@ -288,6 +385,232 @@ def test_the_clause_KEY_audit_actually_bites_including_inside_a_nested_block():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_every_clause_SELECTOR_value_in_the_compendium_is_declared():
+    """**Issue #374 — the THIRD axis, and the widest.** `CLAUSE_WRITES` audits the values of the four
+    VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a selector's VALUE.
+    So a mistyped `target` passed both audits, and every consumer of these values fails CLOSED on a
+    string it does not recognise — `combat._accel_target_ok`, `planner._heal_restriction_ok` and
+    `planner._condition_holds` all `return False` — which means the clause funds nothing, reaches
+    nothing, or never counts toward survival. A crash would be recoverable; this is the §3c silent
+    zero.
+
+    Seventeen keys carry 74 values. Issue #374's body opened with thirteen and 54: it omitted
+    `condition`, `trigger`, `type` and the string form of `amount`, and the `condition` omission
+    contradicted its own prose, which named `_condition_holds` as a fail-closed consumer. The
+    registry was built to the MEASURED 17/74 rather than to the issue's smaller number, and the
+    numbers below are that measurement rather than a restatement of the issue."""
+    pairs = sc.clause_selectors(_compendium())
+    assert sc.undeclared_selector_values(pairs) == [], (
+        "selector values with no CLAUSE_SELECTORS entry: %s"
+        % sc.undeclared_selector_values(pairs))
+    # The walk actually reached the artifact, rather than passing by finding nothing.
+    keys = {k for k, _ in pairs}
+    assert (len(pairs), len(keys)) == (74, 17), (len(pairs), len(keys))
+    # Every selector key is a declared PARAMETER, and none of them is VOCABULARY — Issue #349's
+    # discriminator is *names a WRITE*, not *is a string*, and a selector narrows reach, never writes.
+    assert set(sc.CLAUSE_SELECTORS) <= set(sc.CLAUSE_PARAMETERS)
+    assert not (set(sc.CLAUSE_SELECTORS) & set(sc.VOCABULARY_KEYS))
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_selector_value_audit_actually_bites_with_a_positive_control():
+    """The positive control, on the same run as the green pass above — this repo's standing rule,
+    because *"found nothing"* and *"my instrument is broken"* return the same empty list.
+
+    Bites in BOTH directions, and the second is the one a smaller design would have missed: an
+    undeclared VALUE on a known key, and a string-valued KEY the selector registry has never heard of
+    even though `CLAUSE_PARAMETERS` might already declare it. Nested blocks included, so a typo
+    inside `amount_if` is as visible as one outside it."""
+    fabricated = {"999": [{"kind": "accel", "target": "a_target_nobody_declared"}]}
+    assert sc.undeclared_selector_values(sc.clause_selectors(fabricated)) == \
+        ["target=a_target_nobody_declared"]
+    # A brand-new selector KEY bites too — otherwise a key could arrive already exempt from the audit
+    # that exists to cover it.
+    assert sc.undeclared_selector_values([("brandnewsel", "x")]) == ["brandnewsel=x"]
+    # Nested, inside `amount_if`.
+    nested = {"999": [{"kind": "draw", "amount_if": {"condition": "nope_typo", "amount": 2}}]}
+    assert sc.undeclared_selector_values(sc.clause_selectors(nested)) == ["condition=nope_typo"]
+    # …and on that same run every committed value still passes, so the bite above is discrimination
+    # rather than a check that reddens on everything.
+    assert sc.undeclared_selector_values(sc.clause_selectors(_compendium())) == []
+    # A VOCABULARY value is NOT this audit's business — it is `undeclared_clauses`'. The two axes stay
+    # separate, which is why `gust` can be a `kind` and an `effect` without confusing either.
+    assert sc.undeclared_selector_values(sc.clause_selectors(
+        {"999": [{"kind": "a_kind_nobody_declared"}]})) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_selector_values_are_keyed_PER_KEY_because_one_string_means_several_things():
+    """**Why the registry is keyed by clause key and not one flat namespace** — the deciding fact is
+    measured, not aesthetic. `"basic"` is a `target` (a Basic Pokemon), an `applies_to` (a Stadium's
+    Basic-body scope) AND an `energy` (a Basic Energy card); `"deck"` and `"discard"` are each both a
+    `zone` and a `source`. A flat `value -> legal` set would therefore have to accept
+    `{"zone": "basic"}` — not a coarser audit but a WRONG one.
+
+    That is also why the `cost` ruling (Issue #350) does not transfer. It folded `cost` into
+    `VOCABULARY_KEYS` precisely BECAUSE its values were zone ids drawn from one shared `BY_ID`
+    namespace; selector values share no namespace, so the premise fails and the conclusion with it."""
+    assert sc.undeclared_selector_values([("target", "basic")]) == []
+    assert sc.undeclared_selector_values([("zone", "basic")]) == ["zone=basic"]
+    assert sc.undeclared_selector_values([("zone", "deck"), ("source", "deck")]) == []
+    # The collision is real in the committed store, not hypothetical.
+    for key in ("target", "applies_to", "energy"):
+        assert "basic" in sc.CLAUSE_SELECTORS[key], key
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_unconsumed_selector_ledger_is_declared_and_every_entry_is_reasoned():
+    """**The honest half of the third axis.** 33 of the 74 committed values reach no consumer at all.
+    They are declared LEGAL and ledgered rather than waved through or failed: rejecting them would
+    demand 33 consumer builds before the suite could go green, and accepting them silently would make
+    `CLAUSE_SELECTORS` a transcription of the store — incapable of disagreeing with it, and therefore
+    vacuous for exactly the population it exists to catch. The `owed`-status discipline `WRITABLE`
+    already runs, one axis over.
+
+    Not asserted exhaustive, deliberately: membership was measured by sweeping CODE string literals
+    (comments and docstrings parsed out), which answers *does any module mention it* and not *does
+    any module act on it*. So the ledger may under-report, and the assertions run in the direction
+    that cannot rot — every entry names a value the registry really declares, and every entry gives a
+    reason."""
+    declared = {f"{k}={v}" for k, vs in sc.CLAUSE_SELECTORS.items() for v in vs}
+    assert set(sc.UNCONSUMED_SELECTORS) <= declared, (
+        "ledgered values that are not declared selector values: %s"
+        % sorted(set(sc.UNCONSUMED_SELECTORS) - declared))
+    assert [k for k, v in sc.UNCONSUMED_SELECTORS.items() if not str(v).strip()] == []
+    # The ledger is about the COMMITTED store, so every entry must still be carried by a real card.
+    committed = {f"{k}={v}" for k, v in sc.clause_selectors(_compendium())}
+    assert set(sc.UNCONSUMED_SELECTORS) <= committed, (
+        "ledger entries no card carries any more: %s"
+        % sorted(set(sc.UNCONSUMED_SELECTORS) - committed))
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_name_family_carries_TWO_tests_and_1134_is_not_a_typo():
+    """**Issue #374's live instance, and the finding that reversed its diagnosis.** The issue filed
+    1134 Team Rocket's Transceiver's `name_family: "Team Rocket"` as a typo for 1218 / 1220's
+    `"Team Rocket's"`, to be reconciled. Verified against the engine's own `all_card_data()` dump it
+    is not a typo at all: 1134 prints *"Search your deck for a Supporter card that has "Team Rocket"
+    in its name"* — a SUBSTRING test over Supporter NAMES, whose stored value transcribes the card's
+    own quoted literal — where 1218 prints *"Switch your Active Team Rocket's Pokemon"*, an owner
+    possessive that `card_text.name_in_family` implements as a normalised PREFIX test.
+
+    Two tests on one key. They coincide over this pool only because all 65 Team Rocket cards happen
+    to carry the possessive, so rewriting 1134 would have been behaviour-neutral today and wrong the
+    day a non-possessive one arrives. Kept as printed.
+
+    The Pokemon-membership half moved OFF this key entirely (developer's ruling): it is now the
+    `team_rocket` Function Tag on the 52 Pokemon themselves, which is the build-time family index
+    over the pool Issue #301 recorded as missing. All four values stay declared here because the
+    compendium still carries them, and all four are ledgered as unconsumed."""
+    clauses = sc.clause_lists(_compendium())
+    carriers = {cid: cl.get("name_family") for cid, cls in clauses.items() for cl in cls
+                if cl.get("name_family")}
+    assert carriers[1134] == "Team Rocket", "1134 keeps its PRINTED literal — it is not a typo"
+    assert carriers[1218] == carriers[1220] == "Team Rocket's"
+    # The prefix test really does separate them, which is why one key cannot serve both meanings.
+    assert name_in_family("Team Rocket's Giovanni", "Team Rocket's") is True
+    assert name_in_family("Team Rocket's Giovanni", "Team Rocket") is False
+    # Positive control on the same run: the instrument is live, not answering False to everything.
+    assert name_in_family("Hop's Bag", "Hop's") is True
+    assert name_in_family("Amulet of Hope", "Hop's") is False
+    # Every spelling is declared, and every one is ledgered as reaching no consumer.
+    for value in ("Team Rocket", "Team Rocket's", "Hop's", "Ethan's"):
+        assert value in sc.CLAUSE_SELECTORS["name_family"], value
+        assert f"name_family={value}" in sc.UNCONSUMED_SELECTORS, value
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_two_board_scaled_magnitudes_are_declared_and_stay_TWO_keys():
+    """**Issue #349.** A clause could say *how many* (`amount`) and *how many until* (`to_hand_size`),
+    but not *how many PER*. Two printed shapes were neither, and the issue left it open whether they
+    are one key or two — *"argued either way, but the argument is written down"*. They are two, and
+    this is the argument made executable.
+
+    Card text quoted from the engine dump `tools/meta_tracker/cards.json` (`all_card_data()`), never
+    recalled:
+
+    * `amount_per` — **AGGREGATE**. 1187 Morty's Conviction: *"Draw a card for each of your
+      opponent's Benched Pokémon."* One `amount`, multiplied by a count of bodies that are NOT the
+      clause's targets, landing in ONE destination (my hand). The counted set is not derivable from
+      anything else on the clause, so the key names it: a string.
+    * `each_of` — **DISTRIBUTE**. 1222 Fennel: *"Heal 40 damage from each of your Pokémon."* The FULL
+      `amount` to EVERY body the clause already targets. The set is `target`, which the clause
+      carries, so re-naming it here would be a second body-class namespace beside `target` and
+      `applies_to` — the drift `unknown_zones` exists to prevent, one axis over. A boolean.
+
+    **They cannot share a key, and the failure is not symmetric.** A consumer that read Fennel's
+    distribution as a multiplier would credit my Active `40 × 5 = 200` on a full board instead of 40
+    — an OVER-count on a survival read, which is the KO_SCORE-class phantom this codebase refuses.
+    Nothing on the clause could recover which was meant: `kind` does not decide it either, because
+    the same board set is counted aggregately by one card and distributed over by another (62
+    Koraidon: *"This attack does 30 damage for each of your Ancient Pokémon in play"* against 1085
+    Awakening Drum's draw over that identical set). Aggregate-vs-distribute is ORTHOGONAL to both
+    `kind` and the body set, so it needs its own key rather than a rule for inferring it.
+
+    **Both are PARAMETERS, not `VOCABULARY_KEYS`**, and `applies_to` is the standing precedent rather
+    than a judgement made here: it too is a string-valued body-class selector drawn from a closed set
+    and it too lives in `CLAUSE_PARAMETERS`, because the discriminator is *names a WRITE*, not *is a
+    string*. Neither of these writes anything — the write is still the clause `kind`'s."""
+    for key in ("amount_per", "each_of"):
+        assert key in sc.CLAUSE_PARAMETERS, key
+        assert sc.CLAUSE_PARAMETERS[key].strip(), key
+        assert key not in sc.VOCABULARY_KEYS, (
+            f"{key} names no write — it modifies a magnitude, and the write is still the kind's")
+        assert key not in sc.CLAUSE_WRITES, key
+    # Declared, and actually USED — a parameter no card carries would be untested prose.
+    payload = _compendium()
+    clauses = {cid: cls for cid, cls in sc.clause_lists(payload).items()}
+    carriers = {k: sorted(cid for cid, cls in clauses.items() if any(k in c for c in cls))
+                for k in ("amount_per", "each_of")}
+    assert carriers["amount_per"] == [1085, 1187], carriers["amount_per"]
+    assert carriers["each_of"] == [1089, 1222, 1242], carriers["each_of"]
+    # The shapes, off the artifact. `amount_per` names its set; `each_of` defers to `target`.
+    morty = next(c for c in clauses[1187] if "amount_per" in c)
+    assert morty["kind"] == "draw" and morty["amount"] == 1
+    assert morty["amount_per"] == "their_bench"
+    fennel = next(c for c in clauses[1222] if "each_of" in c)
+    assert fennel["kind"] == "heal" and fennel["amount"] == 40
+    assert fennel["each_of"] is True and fennel["target"] == "any_pokemon", (
+        "`each_of` is a boolean over the clause's OWN `target` — a second body-class namespace "
+        "beside `target` is exactly the drift this key was shaped to avoid")
+    for cid in carriers["each_of"]:
+        assert all(c.get("target") for c in clauses[cid] if c.get("each_of")), (
+            f"card {cid}: `each_of` with no `target` distributes over an unnamed set")
+    # `CLAUSE_PARAMETERS` declares the two MUTUALLY EXCLUSIVE. A declared invariant nothing checks is
+    # the toothless kind, and this one is cheap: a clause carrying both would be claiming its
+    # magnitude is simultaneously multiplied by one set and distributed over another, which is not a
+    # shape any card prints. (`to_hand_size` / `amount` carry the same declared exclusion, asserted
+    # in `tests/cards/test_card_effects.py` — this is that discipline on the new pair.)
+    both = [cid for cid, cls in clauses.items()
+            if any("amount_per" in c and "each_of" in c for c in cls)]
+    assert both == [], f"card(s) {both} carry BOTH board-scaled magnitudes"
+    for key in ("amount_per", "each_of"):
+        assert "utually exclusive" in sc.CLAUSE_PARAMETERS[key], (
+            f"{key} stopped declaring the exclusion the assertion above enforces")
+    # Both walk into the key audit off the real artifact, so a typo in either fails there.
+    keys = set(sc.clause_keys(payload))
+    assert {"amount_per", "each_of"} <= keys
+    assert sc.undeclared_clause_keys(sorted(keys)) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_a_board_scaled_magnitude_key_nobody_declared_is_caught_by_the_walk():
+    """The positive control for the pair above. Green on the real compendium proves nothing unless the
+    same walk goes red on a near-miss — and the near-miss that matters is a plausible MISSPELLING of
+    the two keys this issue mints, since those are the strings an author will next type by hand."""
+    fabricated = {"1": [{"kind": "draw", "amount": 1, "amount_pre": "their_bench"},
+                        {"kind": "heal", "amount": 40, "target": "any_pokemon", "each_off": True}]}
+    assert sc.undeclared_clause_keys(sc.clause_keys(fabricated)) == ["amount_pre", "each_off"]
+    # …and the same walk on the same payload finds the legitimate keys, so the result above is a
+    # measurement rather than a walk that reached nothing.
+    assert {"amount", "target", "kind"} <= set(sc.clause_keys(fabricated))
+    # The correctly-spelled pair must come back CLEAN through the same call — without this the
+    # assertion above is green whether or not the two keys were ever declared, which is the shape of
+    # control that proves nothing.
+    assert sc.undeclared_clause_keys(["amount_per", "each_of"]) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
     """One vocabulary, not two. A write-set naming an invented zone would look like coverage while
     corresponding to nothing the snapshot was ever checked for."""
@@ -298,8 +621,21 @@ def test_the_clause_map_names_no_zone_the_registry_has_never_heard_of():
 def test_no_clause_the_compendium_knows_writes_to_a_zone_with_no_home():
     """**The strong invariant.** Owed zones are a schedule; a clause that already writes to one makes
     them a defect — the seam would model that clause and the delta would silently omit part of what
-    it did. Non-empty here means the zone must be homed BEFORE that clause is modelled."""
+    it did. Non-empty here means the zone must be homed BEFORE that clause is modelled.
+
+    **It reads as a complete statement about what the compendium writes, so it must be told which
+    axes it is complete OVER** (Issue #350). It walks `CLAUSE_WRITES`, whose keys are the values of
+    all four :data:`snapshot_coverage.VOCABULARY_KEYS` — `kind`, `rider`, `effect` and, since this
+    issue, `cost`. Until Issue #300 it was three and `effect` was silently outside it; until Issue
+    #350 it was three-plus-`cost`-missing and Ultra Ball's two discarded cards were outside it. The
+    second assertion is what keeps the sentence honest, and it is a SUBSET rather than the equality
+    `test_the_audit_walks_all_four_vocabularies_including_effect_and_cost` owns: a FIFTH axis is that
+    test's business and must not redden this one too, but NARROWING the list back would make this
+    docstring a lie, and that is what fails here."""
     assert sc.clauses_writing_unhomed() == {}
+    assert {"kind", "rider", "effect", "cost"} <= set(sc.VOCABULARY_KEYS), (
+        "the invariant above is only as complete as the axes CLAUSE_WRITES is keyed on — dropping "
+        "one silently narrows what 'no clause the compendium knows' means")
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")

@@ -387,6 +387,41 @@ def test_clause_heal_stabilizes_when_amount_and_rider_math_check_out():
 
 
 @pytest.mark.req("REQ-PLANNER-0024")
+def test_a_per_body_heal_credits_my_active_the_PRINTED_amount_not_amount_times_bodies():
+    """**Issue #349's live half.** `draw` magnitudes have no consumer; `heal` magnitudes have two —
+    `_heal_candidate` and `_heal_averts_doom` both read `clause["amount"]` and compare the result to
+    the incoming damage. So the board-scaled magnitude key had to land without moving a survival read.
+
+    `each_of` widens the SET a heal reaches, never the amount any one body receives: 1222 Fennel's
+    *"Heal 40 damage from each of your Pokémon"* gives my Active 40, exactly as a single-target
+    Potion-shaped 40 would. That is why the key is safe here — and why it had to be a separate key
+    from `amount_per`, which DOES multiply. Read as a multiplier on a 5-body board this clause would
+    credit 200 and manufacture a KO_SCORE-class phantom survival.
+
+    Asserted in both directions on one harness, so the green is a measurement rather than a line that
+    never fired: 40 does not clear the 210 Incoming from 160 HP and the planner stands down **whether
+    or not `each_of` is present**; the same board with the multiplied amount it would wrongly imply
+    (200 → 360, capped to 330) does fire. If `each_of` ever started scaling the Active's credit, the
+    first assertion would go green-to-red into the third's behaviour."""
+    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
+                  opp_bench=[poke(BENCHIE, hp=100)], hand=[POTION, WATER], prizes=2, opp_prizes=2)
+    obs = make_select([opt(PLAY, area=HAND, index=0),
+                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
+                       attack_opt(JETTING), opt(END)], current=board)
+    per_body = _pilot(effects=_effects({POTION: [
+        {"kind": "heal", "amount": 40, "target": "any_pokemon", "each_of": True}]}))
+    assert per_body._board(obs).active_doomed
+    assert per_body.explain(obs).planned is None          # 160 + 40 = 200 <= 210: no stabilise
+    plain = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 40}]}))
+    assert plain.explain(obs).planned is None             # …and `each_of` changed nothing
+    # The positive control: the credit `each_of` must NOT produce (40 x 5 bodies) does fire here, so
+    # the two stand-downs above are the key staying inert rather than the harness being unable to plan.
+    multiplied = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 200}]}))
+    planned = multiplied.explain(obs).planned
+    assert planned is not None and planned.goal == "stabilize_then_ko"
+
+
+@pytest.mark.req("REQ-PLANNER-0024")
 def test_clause_heal_stands_down_when_the_amount_cannot_stabilize():
     # Potion heals 30: 160+30=190 <= 210 Incoming — heal wouldn't save Active, don't spend it
     pilot = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 30}]}))
@@ -781,12 +816,99 @@ def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeyp
     coined = pilot._engine_leaf_value({}, [0])
     monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False, stream=True))
     drawn = pilot._engine_leaf_value({}, [0])
+    from common.state_value import WIN_PRIZES
     from common.strategy.context import KO_SCORE
-    assert clean == KO_SCORE * 3                        # coin-free win: dominant (prizes+1)
-    assert coined < KO_SCORE * 3                        # coin-won "win": ordinary board ranking
+    assert clean == KO_SCORE * WIN_PRIZES               # coin-free win: dominant (Issue #362's band)
+    assert coined < KO_SCORE * WIN_PRIZES               # coin-won "win": ordinary board ranking
     assert coined < clean
     assert drawn == clean                               # a DRAWN win keeps the leaf's value: the
                                                         # rung's gate is `with_stream`, not this one
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_a_coin_free_simmed_WIN_outranks_every_board_the_leaf_can_score(monkeypatch):
+    """Issue #362: the short-circuit's comment said *"dominant"* and its arithmetic no longer was.
+    The defect, its corpus measurement and the derivation all live on
+    :data:`~common.state_value.WIN_PRIZES`; this asserts the half that module cannot.
+
+    The bound belongs on the LEAF's axis rather than `state_value`'s, because the leaf adds
+    `min(_LINE_CAP, line_val)` OUTSIDE the scalar and the win has to clear that too. `WIN_PRIZES`'
+    one prize of headroom (1000) covers `_LINE_CAP` (100) ten times over, which is why the derivation
+    lives over there and only this assertion knows about the line account."""
+    import common.state_value as sv
+    from common.strategy.context import KO_SCORE
+    from common.strategy.planner import _LINE_CAP
+
+    ceiling = KO_SCORE * (sv._PRIZES_START + sv._PROXIMITY_W + sv.POSITIONAL_MAX) + _LINE_CAP
+    assert KO_SCORE * sv.WIN_PRIZES > ceiling
+
+    # …and end-to-end through the two branches on the SAME simulated board, so the wiring is under
+    # test and not only the arithmetic: flipping `result` is the only difference between the calls.
+    pilot = _pilot()
+    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None]}
+    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 5}
+    start_prizes = len(me["prize"])                  # 1 prize REMAINING — a win one turn away
+
+    def sim(result):
+        end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": result}}
+        return lambda obs, first_step, max_steps=40, **kw: (
+            end, 0, start_prizes, result, 0.0, False, False)
+
+    monkeypatch.setattr(pilot, "_simulate_line", sim(0))
+    won = pilot._engine_leaf_value({}, [0])
+    monkeypatch.setattr(pilot, "_simulate_line", sim(-1))
+    unfinished = pilot._engine_leaf_value({}, [0])
+    # NON-VACUITY, and it reproduces the defect in a unit test rather than only in prose: this
+    # ordinary UNFINISHED board out-scores what the retired formula would have paid the WIN on this
+    # very frame — and it clears the formula's absolute ceiling of 7 prizes on a real corpus board
+    # (`82749168|1|decision|88`: won 2000, non-win 6789.9). Without this the comparison below would
+    # pass against a board the old magnitude also beat, which would test nothing.
+    assert unfinished > KO_SCORE * (start_prizes + 1)
+    assert won > unfinished
+
+
+@pytest.mark.req("REQ-PLANNER-0037")
+def test_the_win_value_is_FLAT_and_that_costs_the_ranking_nothing(monkeypatch):
+    """Issue #362 scope 3, taken as an OWNED zero rather than closed — with the measurement that
+    makes it free.
+
+    Every winning line in a frame now prices identically. So did the old formula: `start_prizes` is
+    read off the **root observation** inside `_simulate_line`, before the first step, so it is one
+    number per FRAME and every option of that frame carries it. It could never separate two winning
+    lines; all it ever did was scale the flat value differently per frame, which is a magnitude no
+    ranking can use because rankings are within-frame. Measured on `82749168|1|decision|88`: eight
+    winning options, all `start_prizes 1`, all 2000.
+
+    So the tie is not a regression this change introduced and there is nothing here to distinguish:
+    `_simulate_line` stops at MY turn end, so every one of these lines wins THIS turn — there is no
+    sooner-or-later to prefer. What genuinely varies between them is how far the heuristic sim had to
+    predict to get there, and that is ALREADY governed: the `coins` bit demotes an RNG-won line out of
+    this branch entirely and `_develop_rollout_line` refuses any ranking that rode `stream`. The
+    residual — ordering two equally-winning, equally-coin-free lines — is Issue #263's (T4 owns
+    ordering and inherits this leaf)."""
+    import common.state_value as sv
+    from common.strategy.context import KO_SCORE
+
+    pilot = _pilot()
+    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
+    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
+    end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
+
+    values = set()
+    for banked in range(0, 7):                      # every legal prize count a line can begin from
+        monkeypatch.setattr(pilot, "_simulate_line",
+                            lambda obs, first_step, max_steps=40, _b=banked, **kw:
+                            (end, 0, _b, 0, 0.0, False, False))
+        values.add(pilot._engine_leaf_value({}, [0]))
+    assert values == {KO_SCORE * sv.WIN_PRIZES}, "a win is a win — the banked count no longer scales it"
+
+    # The claim the paragraph above rests on, asserted through the REAL `_simulate_line` rather than
+    # quoted: two different first steps on one board report the same `start_prizes`, so the term the
+    # old formula varied on was frame-constant and never discriminated within a frame.
+    real = _pilot()
+    real._search_api = _FakeSearchApi([])
+    obs = dict(_two_candidate_obs(), search_begin_input="x")
+    assert real._simulate_line(obs, [0])[2] == real._simulate_line(obs, [1])[2]
 
 
 @pytest.mark.req("REQ-PLANNER-0037")

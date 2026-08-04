@@ -35,6 +35,16 @@ sections argue for a recommendation that the ruling has now settled.
 ruled as a single decision covering Issues #284, #285 and the anchor itself rather than three
 separate ones, and no work in this run touched it.
 
+> **DISCHARGED 2026-08-03 by Issue #329** — this line is left as written because it is a record of
+> what was ruled, and only its *status* has moved. The single decision above was executed: the anchor
+> shipped as `state_value._THREAT_W = _THREAT_CAP / needs.TARGET_VALUE_CEILING`. Note the divisor is
+> **3.9**, not the `_MAX_PRIZE_VALUE` 3.0 this packet and `data/leaf_lab/wave3-rulings.md` name
+> throughout — 3.9 is the true ceiling of `opponent_target_value` as a function and ADR-0107's own
+> choice, and it was measured to discriminate better. The flips it produced, including the three
+> frames this packet's own reverted attempt predicted, are tabled for ruling in
+> `docs/plans/issue-sequence-329-wave3-packet.md`. Nothing above was conformed and no baseline was
+> recaptured, then or now.
+
 ## The flip as originally filed
 
 The analysis below is preserved as written, pre-ruling. Its recommendation was upheld; its

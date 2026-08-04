@@ -126,23 +126,23 @@ Pool: **385 distinct cards** — 6 shipped agent decks (`src/agents/*/deck.csv`)
 
 | fate | sites | % sites | copies in our 6 decks | % our copies | meta-weighted copies |
 |---|---|---|---|---|---|
-| **modelled** | 315 | 76.1% | 323 | 89.7% | 51.5 |
+| **modelled** | 316 | 76.3% | 323 | 89.7% | 51.5 |
 | **engine-resolved** | 46 | 11.1% | 23 | 6.4% | 5.8 |
-| **refused** | 53 | 12.8% | 39 | 10.8% | 5.1 |
+| **refused** | 52 | 12.6% | 39 | 10.8% | 5.1 |
 
 The clause-completeness split — and since Issue #299 the seam **does** tell the two apart, which is why `modelled-partial` no longer sits inside `modelled` above. A partial set is `clauses_cover=False`, so it refuses (or takes the engine route) instead of pricing its uncovered leg at 0:
 
 | class | sites | % sites | fate now |
 |---|---|---|---|
-| **modelled-full** | 315 | 76.1% | modelled 315 |
-| **modelled-partial** | 14 | 3.4% | engine-resolved 2, refused 12 |
+| **modelled-full** | 316 | 76.3% | modelled 316 |
+| **modelled-partial** | 14 | 3.4% | engine-resolved 3, refused 11 |
 
 The copy columns above sum over SITES, so a card with two of them (a Pokemon that both evolves and poses an Ability) contributes its copies twice. The copy-weighted question a deck author actually asks is per CARD — *of the 60 cards I shuffle, how many will the seam price correctly when I draw them?* — so that answer takes each card's WORST site:
 
 | worst site on the card | cards | % cards | copies in our 6 decks | % our copies | meta copies | % meta copies |
 |---|---|---|---|---|---|---|
-| **modelled-full** | 286 | 74.3% | 298 | 82.8% | 49.0 | 81.7% |
-| **engine-resolved** | 44 | 11.4% | 23 | 6.4% | 5.8 | 9.7% |
+| **modelled-full** | 287 | 74.5% | 298 | 82.8% | 49.1 | 81.8% |
+| **engine-resolved** | 43 | 11.2% | 23 | 6.4% | 5.8 | 9.7% |
 | **modelled-partial** | 14 | 3.6% | 18 | 5.0% | 1.9 | 3.1% |
 | **refused** | 41 | 10.6% | 21 | 5.8% | 3.2 | 5.4% |
 
@@ -152,18 +152,18 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 
 | fate | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled** | 71 | 41.8% |
+| **modelled** | 72 | 42.4% |
 | **engine-resolved** | 46 | 27.1% |
-| **refused** | 53 | 31.2% |
+| **refused** | 52 | 30.6% |
 
 | clause-completeness split | sites | % effect-bearing sites |
 |---|---|---|
-| **modelled-full** | 71 | 41.8% |
+| **modelled-full** | 72 | 42.4% |
 | **modelled-partial** | 14 | 8.2% |
 
 ### REFUSED, grouped by cause and ranked by exposure
 
-#### clause-vocabulary gap — 30 sites, 31 copies across our 6 decks
+#### clause-vocabulary gap — 29 sites, 31 copies across our 6 decks
 
 | id | card | site | our copies | meta copies | effect family | deterministic-shaped | note |
 |---|---|---|---|---|---|---|---|
@@ -189,7 +189,6 @@ A vanilla Basic's deploy and a Basic Energy attach are structural: they carry no
 | 1217 | Team Rocket's Archer | play | 0 | 0.05 | hand disruption — their hand |  |  |
 | 1257 | Team Rocket's Factory | play | 0 | 0.04 | hand disruption — their hand |  |  |
 | 1124 | Pokémon Catcher | play | 0 | 0.01 | gust — pull a benched opponent body Active |  | the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts) |
-| 1187 | Morty’s Conviction | play | 0 | 0.01 | draw |  | the discard-1 cost and its playability gate are carried (`cost_required`); the MAGNITUDE is one card per opponent BENCHED Pokemon, a board-scaled count no clause field expresses, so the clause deliberately states NO amount rather than the flat 3 the probe measured |
 | 1114 | Redeemable Ticket | play | 0 | 0.01 | prize manipulation |  |  |
 | 1267 | Lumiose City | play | 0 | 0.00 | Stadium static board modifier |  |  |
 | 1249 | Grand Tree | play | 0 | 0.00 | Stadium static board modifier |  |  |
@@ -247,7 +246,7 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 | hand disruption — their hand | **NEW** | 8 | 16 | 0.34 |
 | energy denial — remove Energy from their body | **NEW** | 1 | 8 | 0.54 |
 | fetch / search / recover | existing | 6 | 4 | 1.05 |
-| draw | existing | 5 | 2 | 1.94 |
+| draw | existing | 4 | 2 | 1.93 |
 | prize manipulation | **NEW** | 4 | 1 | 0.18 |
 | energy attach / acceleration | existing | 1 | 0 | 0.29 |
 | recover discard -> DECK (not to hand) | **NEW** | 2 | 0 | 0.24 |
@@ -259,11 +258,11 @@ An EXPRESSIBLE gap is a compendium ENTRY — the clause kind exists and the buil
 | gap shape | sites | our copies | meta copies | what it needs |
 |---|---|---|---|---|
 | deterministic-shaped (no RNG / hidden-zone marker) | 0 | 0 | 0.0 | **emptied by Issue #299** — a deterministic-shaped option on any declared non-terminal kind now reaches the engine route, so it is an ENGINE-RESOLVED candidate above rather than a refusal here |
-| RNG-shaped (shuffle / deck read / coin) | 30 | 31 | 4.6 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
+| RNG-shaped (shuffle / deck read / coin) | 29 | 31 | 4.6 | needs an `Expectation`-returning clause, NOT an engine call — and is structurally refused ONLY on the engine route |
 
 The first row is **expected to be empty** and its emptiness is the measurement, not an omission: it is the exact set Issue #299's ruling moved. A non-zero count here would mean a deterministic-shaped option is still being refused on a MODELLED kind, which the ruling says cannot happen — so read it as a live check on the routing rather than as a backlog.
 
-**18 of 30** gap sites need vocabulary that does not exist yet; 12 need only a compendium entry in an existing kind.
+**18 of 29** gap sites need vocabulary that does not exist yet; 11 need only a compendium entry in an existing kind.
 
 ### Win-plan critical path
 
@@ -335,7 +334,7 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 
 ### MODELLED-PARTIAL — clause sets that cover only part of the card
 
-14 sites, 18 copies across our 6 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (2), **refused** (12). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
+14 sites, 18 copies across our 6 decks. **These no longer resolve to MODELLED** (Issue #299): a `_covers: partial` verdict reaches the seam as `clauses_cover=False`, which fails closed exactly as an unproven `deterministic` does, so the uncovered leg can no longer difference to a silent 0. They land instead on **engine-resolved** (3), **refused** (11). The row is kept because the WORK is unchanged and specific — complete the clause set — and merging it into the undifferentiated refusals would hide it among cards that have no compendium entry at all.
 
 | id | card | fate now | our copies | meta copies | what the clauses miss |
 |---|---|---|---|---|---|
@@ -350,8 +349,8 @@ A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` sh
 | 1215 | Ethan's Adventure | refused | 0 | 0.06 | the Basic {R} Energy leg is exact; the Ethan's NAME family on the Pokemon leg is recorded and UNDECIDED, so that leg deliberately reaches nothing |
 | 1218 | Team Rocket's Giovanni | engine-resolved | 0 | 0.02 | both legs are carried — the `self_switch` first, then the pull it gates ("If you do") — but the Team Rocket's NAME family restricting BOTH of my bodies is recorded and UNDECIDED, so it deliberately decides nothing rather than reading as an unrestricted switch (the 1115 / 1134 / 1215 / 1220 ruling) |
 | 1124 | Pokémon Catcher | refused | 0 | 0.01 | the flip is carried and its `effect` names the gust, but the clause set still states a COIN as a certainty — the 50/50 needs an `Expectation`, not a scalar transition (1120 Crushing Hammer's ruling verbatim; the same shape cannot hold two opposite verdicts) |
-| 1187 | Morty’s Conviction | refused | 0 | 0.01 | the discard-1 cost and its playability gate are carried (`cost_required`); the MAGNITUDE is one card per opponent BENCHED Pokemon, a board-scaled count no clause field expresses, so the clause deliberately states NO amount rather than the flat 3 the probe measured |
-| 1242 | Community Center | engine-resolved | 0 | 0.01 | clause heals 10 gated on a Supporter played; the card heals EACH of that player's Pokemon and works for BOTH players, neither of which is carried |
+| 1242 | Community Center | engine-resolved | 0 | 0.01 | heal 10 gated on a Supporter played, now distributed over EACH of that player's Pokemon (`each_of` + `target: any_pokemon`, Issue #349) — the MAGNITUDE leg is closed. What stays uncarried is the OTHER leg: the card is usable once during EACH player's turn, each healing their OWN bodies, and `symmetric` cannot say that — on all six clauses that carry it (1244/1247/1251/1252/1255 `stadium_static` plus 1260 Risky Ruins' `stadium_trigger`) it means ONE modifier applying to both sides' bodies at once, so setting it here would claim a board-wide heal that also repairs my opponent's board, which the card never does. An alternating per-player grant needs its own field; declared rather than faked |
+| 1089 | Reboot Pod | engine-resolved | 0 | 0.00 | the per-body attach is carried — one Basic Energy from my discard to EACH body in the set (`each_of` + `amount: 1`, Issue #349) — but the FUTURE trait naming that set has no structural field in the engine dump, exactly as 1085's Ancient does not, so `target: future` is recorded and UNDECIDED. `combat._accel_target_ok` fails CLOSED on an unmodelled target class, so the clause funds no body rather than every one |
 | 1237 | Lucian | refused | 0 | 0.00 | the own leg now carries both coin branches (6 heads / 3 tails) and both hands going to the BOTTOM, but the coin still needs an `Expectation` (1120's ruling) and the opponent's own per-player flip and redraw is unmodelled |
 
 ### Pokemon Tools — MODELLED to attach, but is the attach worth anything?
@@ -401,29 +400,66 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 - `unhomed()`: `{}`
 - `footprints_writing_unhomed()`: `{}`
 
-| clause kind/rider in pool | sites using it | has a write-set |
+| kind/rider/effect/cost in pool | sites using it | has a write-set |
 |---|---|---|
 | fetch | 57 | yes |
 | draw | 20 | yes |
-| gust | 6 | yes |
+| gust | 7 | yes |
+| accel | 5 | yes |
 | heal | 5 | yes |
 | stadium_static | 5 | declared EMPTY |
-| accel | 4 | yes |
-| shuffle_both_hands | 3 | yes |
+| discard_3 | 4 | yes |
+| discard_hand | 4 | yes |
+| discard_1 | 3 | yes |
 | self_switch | 3 | yes |
-| energy_provide | 2 | yes |
+| shuffle_both_hands | 3 | yes |
 | coin | 2 | declared EMPTY |
+| energy_provide | 2 | yes |
+| hp_delta | 2 | yes |
 | shuffle_own_hand_in | 2 | yes |
-| discard_eot | 1 | yes |
-| shuffle_self_in | 1 | yes |
-| other_to_bottom | 1 | yes |
-| energy_recur | 1 | yes |
-| discard_basic_f_energy | 1 | yes |
-| discard_remainder | 1 | yes |
-| confuse_target | 1 | yes |
-| bounce_energy_to_hand | 1 | yes |
 | both_hands_to_bottom | 1 | yes |
+| bottom_2 | 1 | yes |
+| bounce_energy_to_hand | 1 | yes |
+| confuse_target | 1 | yes |
+| damage_boost | 1 | declared EMPTY |
+| damage_counters | 1 | yes |
+| damage_reduction | 1 | declared EMPTY |
+| discard_2 | 1 | yes |
+| discard_basic_f_energy | 1 | yes |
+| discard_eot | 1 | yes |
+| discard_opp_energy | 1 | yes |
+| discard_remainder | 1 | yes |
+| energy_recur | 1 | yes |
+| other_to_bottom | 1 | yes |
+| prevent_damage | 1 | declared EMPTY |
+| shuffle_self_in | 1 | yes |
 | stadium_trigger | 1 | declared EMPTY |
+
+### Clause selector-value health (`snapshot_coverage`, Issue #374)
+
+- `undeclared_selector_values()`: `[]`
+- selector keys / values in the compendium: **17** / **74**
+- of those, ledgered as reaching no consumer yet (`UNCONSUMED_SELECTORS`): **33**
+
+| selector key in the compendium | distinct values | unconsumed | declared |
+|---|---|---|---|
+| target | 24 | 3 | yes |
+| condition | 13 | 9 | yes |
+| applies_to | 6 | 2 | yes |
+| restriction | 5 | 2 | yes |
+| name_family | 4 | 4 | yes |
+| trigger | 4 | 3 | yes |
+| source | 3 | 1 | yes |
+| amount_per | 2 | 2 | yes |
+| dest | 2 | 0 | yes |
+| timing | 2 | 2 | yes |
+| type | 2 | 2 | yes |
+| zone | 2 | 0 | yes |
+| amount | 1 | 0 | yes |
+| dig_from | 1 | 1 | yes |
+| energy | 1 | 0 | yes |
+| on | 1 | 1 | yes |
+| source_class | 1 | 1 | yes |
 
 <!-- END GENERATED -->
 
@@ -488,16 +524,59 @@ predicate — Lillie's Determination, Lacey, Billy & O'Nare, Ariana; Ignition En
 cost being expensive — Morty's Conviction, Iris's, Kofu, Carmine). Two riders were minted with them:
 `shuffle_own_hand_in` for the ONE-SIDED refresh, and `both_hands_to_bottom` for Lucian.
 
-**Eight of the 14 now resolve MODELLED-FULL and six are declared-partial**, which is the deliverable
+**Nine of the 14 now resolve MODELLED-FULL and five are declared-partial**, which is the deliverable
 in both directions. *Lillie's Determination* — 24 copies, named by all three authored doctrines —
 now carries base 6 with the 8 gated on exactly 6 Prizes. *Surfer* carries the switch as the
 `self_switch` rider Issue #303 minted, and refills to five. The four SYMMETRIC refreshes (*Judge*,
 *Unfair Stamp*, *Harlequin*, *Lucian*) carry their OWN leg exactly and stay `partial` on the
 opponent's shuffle-and-redraw, which needs a `state_value` term that prices their hand and which
 this seam already refuses as an accepted POC unknown; *Naveen* stays partial on its optional
-pre-discard, *Morty's Conviction* on a magnitude that scales with the opponent's Bench and which no
-clause field expresses — it states NO amount rather than the flat 3 the probe measured. Four silent
-errors became four declared ones, which is the whole point.
+pre-discard. Four silent errors became four declared ones, which is the whole point.
+
+The ninth arrived later. *Morty's Conviction* was declared-partial here on *"a magnitude that scales
+with the opponent's Bench and which no clause field expresses"* — it stated NO amount rather than the
+flat 3 the probe measured — and **Issue #349 minted the field**. It is the only one of the six a
+later sub-issue could close, because its missing leg was VOCABULARY rather than an accepted unknown,
+and that is exactly what a declared error is for.
+
+**the board-scaled magnitude — `amount_per` and `each_of` (Issue #349).** A clause could say *how
+many* (`amount`) and *how many until* (`to_hand_size`); it could not say *how many per*. A sweep of
+the engine's own `all_card_data()` dump for `/for each|each of/` returns exactly **seven** Trainers,
+and they split three ways rather than two:
+
+* **AGGREGATE** — `amount` times the COUNT of a board set, landing in one destination. `amount_per`
+  names that set, because it is not the clause's own target: *Morty's Conviction* draws one card per
+  **opponent** benched body into **my** hand. *Awakening Drum* is the same shape over my Ancient
+  bodies.
+* **DISTRIBUTE** — the FULL `amount` to EVERY body the clause's `target` already names. `each_of` is
+  a boolean for exactly that reason: re-naming the set would open a second body-class namespace
+  beside `target` and `applies_to`. *Fennel* (heal 40 from each of mine, now `full`), *Community
+  Center* (heal 10, magnitude leg closed, still `partial` on the alternating per-player grant), and
+  *Reboot Pod*.
+
+They are TWO keys and not one because collapsing them is wrong by `amount × (N−1)` in the
+**over**-counting direction — read as a multiplier, Fennel would credit my Active 200 on a full board
+instead of 40, a KO_SCORE-class phantom survival in `planner._heal_candidate`. `kind` cannot
+disambiguate them either: 62 Koraidon's attack counts *my Ancient Pokémon in play* aggregately while
+Awakening Drum draws over that identical set.
+
+*Awakening Drum* and *Reboot Pod* carry the shape and stay `partial`, because the **Ancient** and
+**Future** traits their sets range over have no structural field anywhere in the engine dump — the
+words occur only inside printed text — so those sets are recorded and UNDECIDED, the `name_family`
+ruling verbatim. `combat._accel_target_ok` fails CLOSED on Reboot Pod's unmodelled `target`, so it
+funds no body rather than every one.
+
+**DELIBERATELY NOT MODELLED, per *no silent caps*: 1195 Janine's Secret Art and 1098 Glass Trumpet.**
+Both match the text sweep — *"For each of those Pokémon, search your deck for a Basic {D} Energy card
+and attach it"*; *"Choose up to 2 of your Benched {C} Pokémon and attach a Basic Energy card from
+your discard pile to each of them"* — and both are a THIRD shape that neither key describes: the set
+is a player-CHOSEN subset **capped at 2**, not a board-determined one. `each_of` (every body in the
+set) would over-state them on a wide board and `amount_per` (multiply by a board count) does not
+describe them at all. A capped-spread field would be vocabulary minted ahead of any consumer, which
+is the silent zero `CLAUSE_PARAMETERS` exists to catch. **Neither card is in this census's pool at
+all**, so neither has a row above and neither has a measured exposure figure of any kind — that is an
+absence, not a measured zero, and it is why naming them here caps nothing. The family is SEVEN, not
+five, and a later sweep should not have to rediscover that.
 
 **None of it moved a live decision, measured rather than assumed.** Every `effects.clauses(...)`
 consumer in `src/` filters on a specific `kind`, and the ONE that filters on `draw`
@@ -738,13 +817,32 @@ that `effect` field is a **second vocabulary that `undeclared_clauses()` never w
 and riders only). So the audit test passes while the card's actual write — the opponent's attached
 Energy and their discard — has no declared home. Eight copies across our decks.
 
-> **Fixed by Issue #300.** `effect` is audited vocabulary: `snapshot_coverage.VOCABULARY_KEYS` is
-> `("kind", "rider", "effect")`, the walk (`clause_vocabulary()`) moved out of the test and into the
+> **Fixed by Issue #300.** `effect` is audited vocabulary: `snapshot_coverage.VOCABULARY_KEYS` grew
+> it as a third key, the walk (`clause_vocabulary()`) moved out of the test and into the
 > module so no reader can under-walk it, and `discard_opp_energy` declares
 > `{attached_energy, their_discard_contents}`. `attached_energy` grew its their-side home in the same
 > change — a my-side-only home would have declared a write the snapshot could not show. The `coin`
 > entry keeps its empty write-set, correctly: the FLIP writes nothing, and the comment now says which
 > half of the clause it is talking about.
+>
+> **The same finding had a FOURTH axis, closed by Issue #350: `cost`.** `VOCABULARY_KEYS` is now
+> `("kind", "rider", "effect", "cost")`. A `cost` is a closed set of strings that moves cards between
+> zones — Ultra Ball's `discard_2` takes two cards from my hand to my discard, Kofu's `bottom_2` puts
+> two on the bottom of my deck — and none of the five committed values could fail the audit however
+> undeclared it was, because the walk did not visit the key. All five now declare a write-set, and
+> `bottom_2` is the sharp one: it is the only cost that discards nothing, writing `my_deck_count`,
+> `deck_odds` and `deck_order` instead, so the generalisation *"a cost discards from hand"* would
+> have been wrong about exactly the value Issue #302 added last. The ruling was that `cost` JOINS
+> `VOCABULARY_KEYS` rather than taking a registry of its own; `snapshot_coverage`'s module docstring
+> carries it and its three grounds.
+>
+> The table above is a second beneficiary. It kept a hand-rolled `kind`-plus-`rider` walk, so a
+> section titled *Clause write-set health* had been reporting on two of the audit's axes ever since
+> `effect` was minted; it now goes through the same `snapshot_coverage.clause_values()` extractor the
+> audit does. That took it from **21 rows to 32**: +5 `cost` values over 13 sites and +6 `effect`
+> values over 8 sites (`gust` is both a `kind` and an `effect`, so it gains a site rather than a
+> row). Every one of the 13 cost sites now reads `yes`; before this issue all 13 would have read
+> `**UNDECLARED**`, had the table been able to see them at all.
 
 **5. The registry itself is clean.** `clauses_writing_unhomed()`, `unknown_zones()`, `unhomed()` and
 `footprints_writing_unhomed()` are all empty after T1. The §3c contract is being kept; the exposure
@@ -831,7 +929,10 @@ Issue #263.
    that did not are ruled `partial` with the uncovered leg named rather than left unbuilt. Two
    cards outside the 14 moved with them because one store cannot hold two verdicts for one shape:
    1214 Emcee's Hype is Lacey's predicate exactly, and 1206 Larry's Skill prints Carmine's
-   *"Discard your hand"*. *draw* above carries the detail.
+   *"Discard your hand"*. **Issue #349 took it to 9 of 14**, minting `amount_per` / `each_of` for
+   the board-scaled magnitude Morty's Conviction was declared-partial on — the only one of the six
+   whose missing leg was vocabulary rather than an accepted unknown. *draw* and *the board-scaled
+   magnitude* above carry the detail.
 5. ~~**Rule AMBIGUOUS #3 by measurement**~~ — **DONE (Issue #305).** Two probes through the live
    engine, one per trigger kind, settled where the 11 sites belong: on the `_PLAY` / `_EVOLVE` they
    ride. Nothing moved. *The triggered-Ability ruling* below carries the evidence.

@@ -139,7 +139,14 @@ WHITELIST: tuple[SoundRule, ...] = (
                "play's MOVE, and the per-body bounds hold that under 1.0. That restatement is a "
                "change to a ratified structural entry and is filed in the wave-3 packet; it is "
                "recorded here rather than left as a docstring claim, because a whitelist that "
-               "describes a band the code abandoned is worse than one that says so.",
+               "describes a band the code abandoned is worse than one that says so. "
+               "**The band has TWO terminal constants, not one (Issue #362).** `LOSS_PRIZES` was "
+               "derived at the T3 swap; the mirror `WIN_PRIZES` was not, and until Issue #362 the "
+               "planner's coin-free-win short-circuit paid a transcribed `KO_SCORE x (start_prizes "
+               "+ 1)` that a merely-WINNING position out-scored on 4 of the 26 corpus frames that "
+               "reach a simulated win. Both are now derived from the same summands, both live in "
+               "`state_value.py`, and the leaf's own `_LINE_CAP` is covered by the win band's prize "
+               "of headroom rather than by a second constant.",
     ),
     SoundRule(
         id="setup-never-bench",
@@ -237,13 +244,22 @@ WHITELIST: tuple[SoundRule, ...] = (
               "the gust-target seam's `currency.GUST_TARGET_BAND`) — and, "
                "since POC-T3, the `state_value` scale anchors and runaway guards: `_READINESS_W`, "
                "`_SATURATED`, `_ROLE_FLOOR`, `_PROXIMITY_W`, `_DEPLOY_PRIZE_BAND`, "
-               "`_BENCH_SLOT_PRICE` and the four family caps. `_THREAT_CAP` is in that list for a "
-               "second reason as of 2026-08-02 (Issue #262): it is the one family cap with NO scale "
-               "anchor in front of it, so it binds on 100% of inputs and `threat` answers one bit "
-               "rather than grading. The anchor that fixes it is derived rather than authored and "
-               "would therefore ADD no scaffold debt, but applying it measured -5/+0 on the "
-               "Discrimination Gate, so it is parked with the rest of this entry's queue and "
-               "recorded as a strict-xfail TARGET instead",
+               "`_BENCH_SLOT_PRICE` and the four family caps. `_THREAT_CAP` was in that list for a "
+               "second reason between 2026-08-02 and 2026-08-03 (Issue #262): it was the one family "
+               "cap with NO scale anchor in front of it, so it bound on 100% of inputs and `threat` "
+               "answered one bit rather than grading. **Issue #329 closed that half and this entry "
+               "did not grow**: the anchor is `state_value._THREAT_W = _THREAT_CAP / "
+               "needs.TARGET_VALUE_CEILING` — the numerator already on this list, the denominator "
+               "itself derived from the card set's own largest prize value and the existing "
+               "survival cap (the same derivation the `GUST_TARGET_BAND` note below cites) — so it "
+               "introduces no new magnitude and adds no "
+               "scaffold debt. `_THREAT_CAP` itself is unmoved at 0.1 — the anchor went in FRONT of "
+               "the guard, which is what leaves `POSITIONAL_MAX` (3.4) and the `LOSS_PRIZES` (28.9) "
+               "derived from it byte-identical. Measured after the change: the guard bites on 45 of "
+               "614 non-empty corpus inputs rather than 614, and 33 distinct inputs now reach 28 "
+               "distinct outputs rather than 1. `_THREAT_CAP` remains listed here for the ORIGINAL "
+               "reason it and its three siblings are — an authored magnitude inside an equation "
+               "whose shape is right",
         type=AUTHORED_SCAFFOLD,
         fact="magnitudes inside equations that already fire correctly",
         reason="Tolerated for the POC: these sit INSIDE equations whose shape is right, so they "

@@ -13,7 +13,9 @@ composition of an already-FIRING equation, and where a coverage gap remains it i
     prize_race    `StateModel.prize_race`
     survival      `theirs.turns_to_ko_me` (Bench-Harvest kwargs threaded) + `grading.halve`
     threat        `needs.opponent_target_value` + `needs.phase_scale`
-    readiness     `mine.readiness_p` + `mine.turns_to_afford`, at `planner._READINESS_ATTACK_W`'s band
+    readiness     `mine.readiness_p` + `mine.turns_to_afford`, the forward leg discounted by
+                  `theirs.turns_to_ko_me` through the same `grading.halve` `survival` grades with,
+                  all at `planner._READINESS_ATTACK_W`'s band
     hand          `needs.assignment_split` — `set_keep_v2`'s own `_keep_slot_dp`, read as its two
                   halves rather than as the set marginal, so `coverage` and `re_access` arrive
                   separately the way the frozen composition asks for them
@@ -71,7 +73,10 @@ incumbent leaf drew the same line with the same numbers: `_predicted_loss` at �
 
 :data:`LOSS_PRIZES` then sits above BOTH, DERIVED from the rulebook maxima rather than authored, so
 the terminal `_predicted_loss` dominance the incumbent −`KO_SCORE` rung had is preserved by
-construction instead of by a hopeful constant.
+construction instead of by a hopeful constant. :data:`WIN_PRIZES` is its mirror on the other side —
+the planner's terminal verdict for an ACHIEVED win — and it was added late (Issue #362) for exactly
+the reason the loss side was derived in the first place: the leaf's transcribed win magnitude stopped
+dominating the moment two families went uncapped, and nothing re-checked the comparison.
 
 ## Old Issue #145's five amendments, each with its disposition
 
@@ -272,10 +277,30 @@ _READINESS_CAP = 0.3
 #: their exposure is a standing POSITION, and the prize for actually converting it is `attack_ev`'s
 #: at the terminal action. See :func:`threat` for why the my-side/their-side asymmetry is real.
 #:
-#: Nominally a RUNAWAY GUARD, like its three positional siblings — which means it should not bite in
-#: normal play. It bites on 100% of inputs instead, because it has no SCALE ANCHOR in front of it;
-#: `threat`'s `blind_to` carries the measurement and the derivation of the anchor that would fix it.
+#: A RUNAWAY GUARD, like its three positional siblings, and since Issue #329 it behaves like one: with
+#: :data:`_THREAT_W` in front of it the guard bites on **45 of 614** non-empty corpus inputs (7.3%)
+#: rather than on 100%. It bites at all because `threat` sums over up to six targets while the anchor's
+#: divisor is ONE target's ceiling — 5 prizes of simultaneously-reachable exposure is exactly the
+#: extreme board a runaway guard is for. **Do not fold the anchor into this number.**
+#: :data:`POSITIONAL_MAX` sums the four positional caps and :data:`LOSS_PRIZES` is derived from that
+#: sum, so shrinking `_THREAT_CAP` would silently move the predicted-loss dominance constant.
 _THREAT_CAP = 0.1
+#: **`threat`'s scale anchor — DERIVED, not authored** (Issue #329, ADR-0107's form applied to the
+#: third member of the opponent-target family).
+#:
+#: T3 ported the incumbent rung `min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * threat_removed)`, whose
+#: input is a printed attack's DAMAGE and whose weight is 0.1 *per damage point* — so its guard bit
+#: only past 1000 damage. The port re-denominated the input into PRIZES and carried the cap across
+#: **without the weight**, leaving `threat` the one positional family with a runaway guard and no
+#: scale anchor. Measured consequence, over one full leaf pass (2061 calls, 614 non-empty): 33
+#: distinct input sums collapsed to exactly 2 distinct outputs.
+#:
+#: Both operands are already-shipped constants, so this adds no scaffold debt. The divisor is
+#: `needs.TARGET_VALUE_CEILING` (3.9 = `MAX_PRIZE_VALUE` 3 + `_SURVIVAL_CAP` 0.9), the true ceiling of
+#: `opponent_target_value` *as a function* and ADR-0107's own choice for the sibling `gust_target`
+#: seam. Measured against the alternative `_MAX_PRIZE_VALUE` (3.0) on the same 614 inputs: 3.9 yields
+#: **28** distinct outputs with the guard biting 45 times, 3.0 yields 26 with it biting 180 times.
+_THREAT_W = _THREAT_CAP / _needs.TARGET_VALUE_CEILING
 
 #: **The per-body deploy band, in prizes** — `currency.DEPLOY_BAND` (25 damage) across
 #: `PRIZE_DAMAGE_RATE`. The ratified ADR-0086 answer to "what is one body on the board worth", reused
@@ -348,6 +373,46 @@ POSITIONAL_MAX = _THREAT_CAP + _READINESS_CAP + _HAND_CAP + _DEVELOPMENT_CAP
 LOSS_PRIZES = (
     _MAX_BODIES * _MAX_PRIZE_VALUE
     + _PRIZES_START + _PROXIMITY_W
+    + POSITIONAL_MAX
+    + 1.0)
+
+#: **An ACHIEVED GAME WIN, in prizes — DERIVED, not authored** (Issue #362). The mirror of
+#: :data:`LOSS_PRIZES`, and the one the T3 swap forgot.
+#:
+#: `planner._engine_leaf_value` short-circuits a coin-free simulated win to a dominant terminal value.
+#: Its magnitude was `KO_SCORE * (start_prizes + 1)`, and that term is **prizes still REMAINING when
+#: the line began** — `_simulate_line` reads `len(me["prize"])`, the same expression
+#: `state_model.prizes_remaining` is ("Prizes this side still needs to take"), never `prizes_taken`.
+#: So the old magnitude ran BACKWARDS: it paid a win the most (7000) when six prizes were still to
+#: take and the least (1000-2000) when the win was about to land. Against the retired hand-composed
+#: leaf even the floor was dominant — the whole positional band summed to 590 against `KO_SCORE`
+#: 1000. Against THIS module it is not. `prize_race`'s lead leg has unit slope and is deliberately
+#: uncapped, so a merely-WINNING position out-scores a won GAME: measured over the committed corpus,
+#: 26 frames reach a coin-free simulated win and on **4** of them a non-winning option scored higher —
+#: worst `82749168|1|decision|88`, a won 2000 against a non-win 6789.9, on a frame whose own winning
+#: board scores 6.909985 prizes. That worst case is the inversion's signature: one prize remaining is
+#: the position closest to victory and drew the second-smallest payout the formula could produce.
+#: `tools/train/probes/win_band_sweep.py` re-runs the measurement.
+#:
+#: Derived the same way its mirror is, from the largest sum the families can express on any legal
+#: board, plus one strict prize of headroom:
+#:
+#:     prize_race  _PRIZES_START + _PROXIMITY_W   — the whole race plus its proximity leg
+#:     positional  the four caps above
+#:     survival    NOTHING — non-positive by construction, so it can only push a board DOWN
+#:
+#: Two summands of `LOSS_PRIZES` are therefore absent, and the difference is exactly
+#: `_MAX_BODIES x _MAX_PRIZE_VALUE`. That summand exists on the loss side because the terminal charge
+#: sits INSIDE `survival` and has to out-dominate that family's own exposure sum; a win REPLACES the
+#: whole scalar, so it has nothing of the kind to clear. `test_state_value.py` asserts the domination
+#: rather than the literal, and asserts `survival`'s sign rather than arguing it.
+#:
+#: **The leaf's line account is not in here, and that is the boundary.** `_engine_leaf_value` adds
+#: `min(_LINE_CAP, line_val)` OUTSIDE the scalar, so the win has to clear that as well; the prize of
+#: headroom covers `_LINE_CAP`'s 0.1 prizes ten times over and `test_planner.py` is where the leaf's
+#: own axis is asserted. This module owns the band, the planner owns its axis.
+WIN_PRIZES = (
+    _PRIZES_START + _PROXIMITY_W
     + POSITIONAL_MAX
     + 1.0)
 
@@ -485,8 +550,15 @@ REGISTRY: tuple[TermFamily, ...] = (
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
-                    "the two must not both read a clock — `turns_to_ko_me` is THEIR clock on MY "
-                    "bodies. Reach is one affordability filter (the Attach Budget) over two damage "
+                    "THIS family must not read a clock — `turns_to_ko_me` is THEIR clock on MY "
+                    "bodies, which says nothing about how exposed THEIR bodies are to me, so "
+                    "reading it here would be a genuine second pricing of `survival`'s fact rather "
+                    "than a different consequence of it. (Since Issue #332 `readiness` DOES consult "
+                    "the clock, on the forward leg of `readiness_odds`; that is argued at "
+                    "`_survives_to_spend` and is a different question from this one. The rule was "
+                    "never *at most one family may consult a fact* — it is *at most one family may "
+                    "PRICE it*, which is what `reads` records.) "
+                    "Reach is one affordability filter (the Attach Budget) over two damage "
                     "ROUTES: their Active through `best_reachable_damage_vs`, the DAMAGE MODEL "
                     "against the body actually in front of me (Weakness, Resistance, prevention, my "
                     "live boosts — Issue #281); their Bench through `best_reachable_bench_damage`, "
@@ -516,45 +588,57 @@ REGISTRY: tuple[TermFamily, ...] = (
             "no multiplicity, so Kyurem's Trifrost (*110 damage to 3 of your opponent's Pokémon*) "
             "and Greninja ex's 2-target rider read as reachable against a fourth and fifth body "
             "they could not actually all fell. An over-read, and unrepresentable as a fix without a "
-            "new parsed field. It is absorbed by `_THREAT_CAP` today — but read the SATURATION "
-            "entry below before taking comfort from that: the cap binds on every non-empty input, "
-            "so an extra target is currently free in BOTH directions, and the day the parked scale "
-            "anchor lands this over-read starts costing something.",
-            "the BENCH LEG'S OWN REACH, whenever their Active is already reachable — the "
-            "saturation entry below is not a separate topic, it is the ceiling on what Issue #284 "
-            "could deliver. `min(_THREAT_CAP, sum)` binds on every non-empty input, so a second "
-            "reachable body adds exactly 0 and a chipped bench under a reachable Active scores "
-            "identically to a fresh one. Measured on the 371-frame corrections corpus: the bench "
-            "leg is ASKED 904 times, returns a non-zero reach 338 times, and `threat` moves on 13 "
-            "frames — every one of them 0.0 -> 0.1, i.e. exactly the boards where the Active leg "
-            "read nothing. So the family now SEES their bench and still cannot grade it, and the "
-            "unlock is the same parked `_THREAT_CAP / _MAX_PRIZE_VALUE` anchor, not more "
-            "reachability. Recorded rather than fixed: applying that anchor is a calibration change "
-            "this module has already measured as a corpus regression.",
-            "THE DENIAL CREDIT'S OWN MAGNITUDE, for the same reason and to a stricter degree "
-            "(Issue #285). Every appended target contributes `prize_advance >= 1.0` — "
-            "`CombatMath.prize_value` returns 1, 2 or 3 and never less — so `min(_THREAT_CAP, sum)` "
-            "with `_THREAT_CAP` 0.1 binds on EVERY frame where the loop appends anything at all, "
-            "while the largest credit measured anywhere on the corrections corpus is 0.054 prizes "
-            "(Riolu 30 → Mega Lucario ex 270: 0.045 x 240/100 x halve(1); the doctrine's headline "
-            "Staryu 20 → Mega Starmie ex 210 is smaller still at 0.043). The credit is therefore "
-            "invisible in `state_value` on 100% of boards, not merely on already-firing ones. It is "
-            "nonetheless correct where it is READ, and that is where it is measured: "
-            "`_reachable_target_values` is module-private with exactly one caller — `state_value` "
-            "itself, one line below — so *no consumer outside this module sees it today*, and the "
-            "claim being made is about the extractor's arithmetic, not about a downstream reader. "
-            "Same unlock as the entry above and the same refusal: `_THREAT_CAP / _MAX_PRIZE_VALUE` "
-            "is a calibration change this track was told not to make, and it must be measured "
-            "TOGETHER with this credit and Issue #284's widening rather than one at a time.",
+            "new parsed field. **It was free while the cap bound on every input; since Issue #329's "
+            "scale anchor it is not.** A phantom extra target now costs `_THREAT_W` x its "
+            "`opponent_target_value` — 0.0256 prizes for a 1-prize body, up to 0.0769 for a Mega ex "
+            "— where it previously cost exactly 0, and the corpus carries 2 or 3 targets on 74 of "
+            "614 non-empty calls. So this entry moved from harmless to priced, in the OVER-read "
+            "direction, and it is the one entry here the anchor made worse rather than better.",
+            "the BENCH LEG'S OWN REACH beyond the SNIPE RIDER — narrowed by Issue #284 and no "
+            "longer erased by the cap. The old form of this entry recorded a ceiling that Issue "
+            "#329 removed: `min(_THREAT_CAP, sum)` bound on every non-empty input, so a second "
+            "reachable body added exactly 0 and a chipped bench under a reachable Active scored "
+            "identically to a fresh one. **Both figures below are in `threat()` CALLS over one leaf "
+            "pass (2061 calls, the leg severed to 0.0 as the control), so they are comparable**; "
+            "Issue #284's own 904-ask / 338-reach / 13-move measurement is denominated in corpus "
+            "FRAMES and is NOT the same denominator. Under the old equation the leg could only move "
+            "the output by making an empty input non-empty, which is **278** calls. Under the "
+            "anchor it moves **336**, by 0.023 to 0.077 prizes — and the extra **58** are exactly "
+            "the boards where the Active leg ALREADY read something, the case the cap used to erase "
+            "(commonest shape 0.0769 -> 0.1, 31 calls). What remains blind is the leg's reach "
+            "itself: the route is the indivisible single-target rider, so spread payloads and "
+            "un-parsed riders still contribute nothing at all.",
+            "THE DENIAL CREDIT'S SIZE relative to the prize leg it rides on (Issue #285) — real, "
+            "read, and small. Until Issue #329 it was not merely small but INVISIBLE: every "
+            "appended target contributes `prize_advance >= 1.0` (`CombatMath.prize_value` returns "
+            "1, 2 or 3 and never less), so `min(_THREAT_CAP, sum)` bound on every frame the loop "
+            "touched and the credit could not move the family on ANY board. **Re-measured after the "
+            "anchor** (same leaf pass, `_denied_forward_payoff` severed to 0.0 as the control, and "
+            "in the same CALL denominator as the entry above): the "
+            "credit changes 327 of 614 non-empty inputs and now moves `threat`'s OUTPUT on **296** "
+            "of 2061 calls, by **0.000115 to 0.002192** prizes, against **0** calls under the old "
+            "equation — a credit can never make an empty input non-empty, so this was the one leg "
+            "the cap erased completely rather than partly. "
+            "The residual 31 are where the runaway guard "
+            "absorbs it — small, not zero, and no longer structural. "
+            "**Two credit maxima are recorded in this module and they measure different things; do "
+            "not overwrite one with the other.** 0.054 prizes is the largest SINGLE-target credit "
+            "on the corrections corpus (Riolu 30 → Mega Lucario ex 270: 0.045 x 240/100 x "
+            "halve(1); the doctrine's headline Staryu 20 → Mega Starmie ex 210 is smaller still at "
+            "0.043). 0.0855 is the largest TOTAL across every target in ONE `threat()` call, which "
+            "only became possible when Issue #284 let the loop append more than one body; at "
+            "`_THREAT_W` that is the 0.002192 above. Both are correct at their own seam.",
             "THE PRIZE a denied line would have YIELDED — the credit reads `owed_damage` only, so a "
             "pre-evolution whose forward form is a 3-prize Mega ex and one whose forward form is a "
             "1-prize body of the same printed damage price IDENTICALLY. That is a real gap against "
             "the doctrine's own headline, *\"trade 1 prize for a denied 3\"* — the sentence is about "
-            "PRIZES and this term answers in DAMAGE. It is not an oversight: `ForwardPayoff` carries "
-            "no prize leg, `development.evolve_marginal` prices its my-side mirror the same way, and "
-            "adding one here would price a forward form's prize value in a family whose `blind_to` "
-            "for the SAME quantity on the current form is `_MAX_PRIZE_VALUE`-capped and saturated. "
-            "Closing it means the parked scale anchor first; recorded so the damage-only reading is "
+            "PRIZES and this term answers in DAMAGE. Re-checked at Issue #329 and it SURVIVES the "
+            "scale anchor unchanged, because the anchor scales the whole marginal and adds no leg: "
+            "`ForwardPayoff` still carries no prize leg, and `development.evolve_marginal` still "
+            "prices its my-side mirror the same way, so adding one here would give the same card "
+            "two valuation bases across the board. What the anchor DID retire is the old reason "
+            "given for deferring it — *\"the parked scale anchor first\"* — so this is now a plain "
+            "ForwardPayoff-shape gap with no prerequisite, recorded so the damage-only reading is "
             "read as measured rather than as complete.",
             "THEIR DECKLIST, when crediting a denied forward payoff — `TheirSide.forward_payoff` "
             "reads the POOL-level forward index, so a Staryu on their board carries the Mega Starmie "
@@ -613,28 +697,6 @@ REGISTRY: tuple[TermFamily, ...] = (
             "opponent's never is (`_SideBase._deck_facts` claims `(None, None)`), so threading the "
             "context did NOT quietly give the deck count a reader the way it gave the hand size "
             "one. Narrowed, not closed; T4 must always-expand disruption plays.",
-            "SATURATION INTO ONE BIT — this family cannot tell a 1-prize Basic from a 3-prize Mega "
-            "ex. `needs.opponent_target_value` returns `prize_advance` essentially unscaled at the "
-            "``survival_shift=0`` this module passes, so `min(_THREAT_CAP, sum)` binds on EVERY "
-            "non-empty input. Measured 2026-08-02 across Issue #262's 22 gating frames: 0.0 on 20 "
-            "and exactly the cap on 2, never a value between. The cause is a unit slip in the port "
-            "— the incumbent rung is `min(_PLANNER_THREAT_CAP, _PLANNER_THREAT_W * magnitude)` with "
-            "`_PLANNER_THREAT_W` 0.1 per DAMAGE point (`planner._threat_magnitude`), so its guard "
-            "bit only past 1000 damage; T3 re-denominated the input into PRIZES and carried the cap "
-            "across without the weight, leaving this the one positional family with a runaway guard "
-            "and no scale anchor, against the rule the module header states for all four. "
-            "**The fix is derived and MEASURED, and deliberately NOT applied.** It is "
-            "`_THREAT_CAP / _MAX_PRIZE_VALUE`, so a maximum-yield target lands at the band and "
-            "everything below grades (1 prize -> 0.033, 2 -> 0.067, 3 -> 0.1), leaving "
-            "`POSITIONAL_MAX` and `ko-score-band` untouched. Applied, its ONLY measured effect on "
-            "the corpus is negative: the Discrimination Gate goes 65 -> 68 unruled and loses two "
-            "`MISS -> OK` improvements, five frames worse and none better. All five were winning by "
-            "a margin SMALLER than the 0.067 prizes of threat advantage the saturation handed them "
-            "— each reaches a 1- or 2-prize target the unscaled term priced at the 3-prize maximum "
-            "— so removing the windfall is correct and still costs rulings this module cannot "
-            "write. Parked with the other calibration findings for the post-POC fit against a "
-            "held-out set (Issues #146-#148); `test_state_value.py`'s strict-xfail TARGET is the "
-            "standing record and turns red the day it lands.",
             "CHIP DAMAGE — progress toward a Knock Out I cannot yet complete. Reachability is a "
             "STEP: `_reachable_target_values` credits nothing for a body unless my Active's best "
             "reachable damage AGAINST THAT SEAT already meets its remaining HP, so a Mega "
@@ -643,7 +705,8 @@ REGISTRY: tuple[TermFamily, ...] = (
             "legs are still steps, so bench chip that does not reach the rider still prices 0. "
             "This family is `survival`'s mirror "
             "in name and NOT in form — survival grades continuously by a clock "
-            "(`halve(turns_to_ko_me - 1)`), threat is on/off — and the asymmetry is exactly what "
+            "(`halve(turns_to_ko_me - 1)`), while this family's REACHABILITY is on/off however "
+            "finely Issue #329's anchor grades what a reached body yields — and that is exactly what "
             "the wave-3 ruling on `83116501|0|decision|60` objects to: *\"Our Starmie cannot KO the "
             "Lucario in under 3 turns. We can KO it with 2 Jetting Blows and a single Nebula "
             "Beam.\"* A multi-turn KO plan prices 0 every turn until the last one. Closing it needs "
@@ -673,12 +736,31 @@ REGISTRY: tuple[TermFamily, ...] = (
                     "roll-up (ADR-0109). That makes `body_payoff` depend on MY Bench CONTENTS for a "
                     "bench-gated attack, which is not a second claim on `bench_slot_price`: "
                     "`development` prices how many slots are left, this prices what one attack can "
-                    "land, and the two never read the same number.",
+                    "land, and the two never read the same number. "
+                    "**`readiness_odds` consults `turns_to_ko_me`, and that is not a disjointness "
+                    "breach** — stated here because it is the first thing a reader of the tuples "
+                    "will suspect, and because Issue #332 required the call to be argued rather "
+                    "than assumed. The odds ask *does this body get to its payoff attack*, and a "
+                    "body the opponent removes first does not get there; the clock is an INPUT to "
+                    "that probability the way `turns_to_afford` already is, consulted on the "
+                    "FORWARD leg alone (`_survives_to_spend`). `survival` prices a different "
+                    "CONSEQUENCE of the same fact in a different currency — the `prize_at_risk` "
+                    "handed over when the body falls, against the damage-denominated potential that "
+                    "dies with it — so removing the body raises one family and lowers the other, "
+                    "which is not one quantity added twice. Both families read the clock through "
+                    "ONE call (`_survival_clock`), so they cannot come to disagree about it. The "
+                    "registry fact stays `readiness_odds`, exactly as `survival` keeps "
+                    "`predicted_loss` while consulting `prize_race`'s counts: splitting the clock "
+                    "into a second fact string to make the read visible would make "
+                    "`double_counted()` pass VACUOUSLY, which is the answer "
+                    "`sound_rules.SCHEDULED_PAIRS` already records for the same temptation.",
         blind_to=(
-            "who is ACTIVE — `readiness_p` is per body and area-aware through the Attach Budget, "
-            "but nothing here prices the Active SLOT itself, so a retreat that puts the right body "
-            "in front moves this family only through the Budget. `promote_retreat_value` is the "
-            "instrument and composes into `survival`; the retreat allowance itself is an OWED "
+            "the VALUE of the Active slot — narrowed by Issue #351, which took the legality half. "
+            "`_may_attack_now` now gates the now-leg on the area and on `attack_blocked`, so a "
+            "benched body no longer claims it can attack this turn; what stays unpriced is the "
+            "slot's WORTH, so a retreat that puts the right body in front still moves this family "
+            "only through the Attach Budget and the gate's on/off step. `promote_retreat_value` is "
+            "the instrument and composes into `survival`; the retreat allowance itself is an OWED "
             "snapshot zone (T1).",
             "a board condition that is NOT a bench-partner condition — ADR-0109 routed the payoff "
             "through the damage oracle, which reads the one condition family the card-text parser "
@@ -701,20 +783,31 @@ REGISTRY: tuple[TermFamily, ...] = (
             "supplies an Ability payoff, so an evolve whose whole point is switching an engine "
             "Ability on prices only its attack payoff. The largest single regression risk in this "
             "swap, and named here so T4 reads it as a gap rather than a verdict.",
-            "an Energy that EVAPORATES, on the now-leg — and the blindness is what hides most of "
-            "Issue #286's forward-leg fix. `_readiness_odds` is `max(readiness_p, "
-            "halve(turns_to_afford))`; the forward clock now drops `discard_eot` Energy "
+            "an Energy that EVAPORATES, on the now-leg of a body that CAN cash it — and this is now "
+            "a VERDICT rather than a gap (Issue #351). `_readiness_odds` is `max(readiness_p, "
+            "halve(turns_to_afford))`; the forward clock drops `discard_eot` Energy "
             "(`MySide.turns_to_afford(exclude_expiring=True)`) but `readiness_p` keeps it, and the "
             "two legs read the same attachment through the same matcher, so an Energy that FULLY "
-            "arms the body zeroes the clock and pins the now-leg at 1.0 together. MEASURED over "
-            "the committed corpus (2026-08-03): 25 of 1015 of my bodies hold one, the clock moves "
-            "on all 25, this family moves on none — every one sits on an Evolution, where "
-            "Ignition's {C}{C}{C} pays the payoff outright. A PARTIAL loan is still priced right "
-            "(a Staryu holding one Ignition), so the fix is live on the deck and invisible on the "
-            "corpus. What stays wrong is the extreme case: a BENCHED Mega Starmie ex that cannot "
-            "attack at all still reads `readiness_p == 1.0`. Unmasking it means teaching the "
-            "now-leg whether the body may attack THIS turn, which is *who is ACTIVE* above; "
-            "specced as Issue #351, ledgered to Issue #263.",
+            "arms the body zeroes the clock and pins the now-leg at 1.0 together. Issue #351 gated "
+            "the now-leg on LEGALITY (`_may_attack_now` — the area plus `attack_blocked`) rather "
+            "than stripping the Energy from it, and the measurement is why: over the committed "
+            "corpus, 25 of 1018 of my bodies hold a `discard_eot` Energy and the clock moves on all "
+            "25, but **21 of those are the Active on an unblocked turn**, where the body really can "
+            "spend the Energy this turn and the 1.0 is TRUE. Masking the forward leg there is this "
+            "family answering its own question correctly. What remains unpriced is only the "
+            "residue: an Active that will attack with a DIFFERENT attack than its payoff, leaving "
+            "the Ignition partly unspent. That is `attack_ev`'s at the terminal action (Issue #263) "
+            "rather than a hole here, and it is bounded by the same 21 frames.",
+            "what a DOOMED body could still do THIS turn OUTSIDE its payoff attack — the "
+            "survivability discount (`_survives_to_spend`, Issue #332) zeroes the FORWARD leg on a "
+            "body whose clock reads 1, which is exact for a payoff that lands on a later turn, and "
+            "the now-leg is what keeps that body priced for a swing it can take right now. What "
+            "nothing prices is the lesser swing: `attack_payoff` names ONE attack, so a doomed Mega "
+            "Starmie ex whose Nebula Beam is unaffordable reads 0 forward while Jetting Blow is "
+            "still on the menu in front of it. That swing is `attack_ev`'s at the terminal action "
+            "rather than a hole in this family, and it is recorded because the zero is NEW — before "
+            "Issue #332 the forward leg paid the doomed body anyway, so a reader diffing the two "
+            "would otherwise read the drop as the body's whole value disappearing.",
         ),
     ),
     TermFamily(
@@ -956,15 +1049,30 @@ def _exposed_bodies(model: "StateModel") -> tuple:
     branching here would encode the oracle's internals in `state_value` and would go stale the day a
     rider learns to scale. The cost is nil — the context is memoized per direction and
     identity-stable, so it canonicalises once into the clock's memo key."""
-    bench_raws = model.mine.bench_raws
-    opp_active = model.theirs.active_raw
-    context = model.damage_context(attacker="theirs")
     return tuple(
-        ExposedBody(prize_at_risk=float(b.prize_value),
-                    turns_to_ko_me=int(model.theirs.turns_to_ko_me(
-                        b.body, my_benched=not b.is_active, my_bench=bench_raws,
-                        opp_active=opp_active, context=context)))
+        ExposedBody(prize_at_risk=float(b.prize_value), turns_to_ko_me=_survival_clock(model, b))
         for b in model.mine.bodies)
+
+
+def _survival_clock(model: "StateModel", body) -> int:
+    """**THE** clock on one of my bodies — the single call two families read (Issue #332).
+
+    Extracted from :func:`_exposed_bodies` rather than copied into the readiness path, and the
+    extraction is the correctness rather than tidiness. `survival` grades exposure by this clock and
+    `readiness` now discounts a body's FORWARD potential by it (:func:`_survives_to_spend`); asking
+    the oracle twice with two independently-written argument lists is precisely how the two families
+    come to hold different opinions about when the same body dies. The sole-supplier ruling forbids a
+    second opinion, and one call site is what makes that structural instead of hopeful.
+
+    Every kwarg is :func:`_exposed_bodies`' own, unchanged and argued there: the Bench-Harvest pair
+    (``my_benched`` / ``my_bench``), ``opp_active``, and the THEIRS-direction Damage Formula context
+    (Issue #280) — the attacker on a survival read is the opponent. Cost is nil on the second
+    reader: `StateModel.turns_to_ko_me` is memoized by VALUE over every argument, `bench_raws` and
+    `active_raw` are `lazy` snapshot properties, and `damage_context` is a method memoized per
+    DIRECTION and identity-stable — so the readiness path pays a memo hit rather than a re-derivation."""
+    return int(model.theirs.turns_to_ko_me(
+        body.body, my_benched=not body.is_active, my_bench=model.mine.bench_raws,
+        opp_active=model.theirs.active_raw, context=model.damage_context(attacker="theirs")))
 
 
 def _predicted_loss(model: "StateModel") -> bool:
@@ -1206,6 +1314,10 @@ def _ready_bodies(model: "StateModel") -> tuple:
       saturated term has zero derivative, so the attach that completes the payoff cost would price
       at 0 delta and never be explored. The attack id comes from the SAME `AttackPayoff` record as the
       damage, which is what keeps the pair honest once a gated maximum falls back to a lesser attack.
+      Its FORWARD leg is discounted by the body's own survival clock (:func:`_survives_to_spend`,
+      Issue #332): potential that lands on a later turn needs the body to still be standing on that
+      turn, and `turns_to_ko_me` is the shipped answer. Read through :func:`_survival_clock`, the
+      one call `survival` reads too, so neither family can hold its own opinion about the clock.
     * ``role_relevance`` — `role_value` normalised by `DEPLOY_WORTH_SCALE`, which is exactly
       `deploy_value._relevance`'s dimensionless ratio. Composed rather than re-derived so a role
       re-tier moves both instruments together."""
@@ -1283,29 +1395,134 @@ def _readiness_odds(model: "StateModel", body, attack_id) -> float:
     Ignition T1-going-first — you can't attack, so it's discarded for nothing"*, correction
     ep81903490 f5), and `mega_starmie` runs four of them in thirteen Energy.
 
-    **Measured caveat, recorded because it is half the result** (2026-08-03, swept over the
-    committed corrections corpus): the ``max`` MASKS the correction wherever the expiring Energy
-    FULLY arms the body. Both legs read the same attached Energy through the same matcher —
-    `matched_slots` is *"the matcher `reachable_attach` uses"* — so an Energy that zeroes the clock
-    also pins `readiness_p` at 1.0, and the ``max`` then discards the forward leg. 25 of my 1015
-    corpus bodies hold a `discard_eot` Energy; the clock moves on all 25 and this function on none,
-    because every one of them sits on an EVOLUTION, where Ignition's ``{C}{C}{C}`` pays both shipped
-    payoffs outright.
-
     It is live on a PARTIAL loan, and `mega_starmie` prints one: Ignition on a **Basic** provides
     only ``{C}``, so a Staryu holding one is still two attaches from its line's ``{C}{C}{C}`` payoff
     and `readiness_p` reads 0.0 (a colourless unit cannot pay Water Gun's ``{W}``). Measured on the
     real pilot: `readiness` 0.000750 → **0.000375**, which is exactly the bare-Staryu value. An
     Ignition on a Staryu now buys nothing forward, which is the correction.
 
-    Unmasking the rest means teaching the now-leg whether the body may attack THIS turn — it does
-    not ask, and a BENCHED body reads 1.0 — which is *who is ACTIVE* (`readiness.blind_to`), Issue
-    #263's ledger. Specced as **Issue #351**; the correct half is built here and the masking is a
-    packet line rather than a second, unruled retune."""
-    now = model.mine.readiness_p(body, attack_id)
+    **The now-leg is asked only of a body that may LEGALLY attack this turn** (Issue #351,
+    :func:`_may_attack_now`), and that is what un-masks the rest of Issue #286's fix. The oracle has
+    no legality leg — nothing on its path reads the body's area, the turn, or the first-player attack
+    ban — so a BENCHED body, or an Active on a turn with no attack step, used to read 1.0 and
+    ``max`` discarded the forward clock behind it. Measured over the committed corrections corpus
+    (372 frames / 1018 of my bodies, positive control 536 reading 0.0): 25 hold a `discard_eot`
+    Energy and the clock moves on all 25; **21 are Active on an unblocked turn**, where the 1.0 is
+    TRUE and the masking is this function answering correctly, and **4** are not — 1 benched
+    (`83664991|43`) and 3 first-player-turn-1 (`81903490|8`, `81903490|10`, `81904451|9`). Those 4
+    are the whole of the defect, and Issue #351's option 2 — stripping the expiring Energy from the
+    now-leg too — was rejected because it would tell an armed Active attacker it cannot swing.
+
+    **The forward leg is also discounted by the body's own SURVIVAL clock** (Issue #332,
+    :func:`_survives_to_spend`), and it rides the forward leg ALONE for the same reason
+    `exclude_expiring` does: the two legs answer about two different turns. The now-leg is about a
+    payoff cashed on MY turn, which happens before the opponent's next one, so a body about to fall
+    still swings and no discount is owed. The forward leg is about a payoff cashed on a LATER turn,
+    which the body has to still be standing for — and `turns_to_ko_me` is exactly the shipped answer
+    to whether it will be. Without it `readiness` prices an attach onto a body the opponent removes
+    next turn identically to one onto the successor behind it, which is the measured misplay
+    (`83037962|0|decision|48`: *"Placed second energy on active doomed mega starmie … therefor
+    should start powering up our reserve benched staryu"*)."""
+    now = model.mine.readiness_p(body, attack_id) if _may_attack_now(model, body) else 0.0
     arm = model.mine.turns_to_afford(body, exclude_expiring=True)
-    forward = 0.0 if arm is None else halve(arm)
+    forward = 0.0 if arm is None else halve(arm) * _survives_to_spend(model, body)
     return max(0.0, min(1.0, max(now, forward)))
+
+
+def _may_attack_now(model: "StateModel", body) -> bool:
+    """May ``body`` attack THIS turn at all — the legality leg `readiness_p` does not have.
+
+    The now-leg asks *P(this body is READY to use the attack this turn)* and answers it from
+    affordability alone. Verified at source rather than recalled: `MySide.readiness_p` →
+    `CombatMath.readiness_p` → `reachable_attach_p` → `reachable_attach`, whose only
+    non-affordability gates are the ADR-0033 transient `self_lock`/`same_lock`. Nothing on that
+    path reads the
+    body's AREA, the turn number, or the first-player attack ban — so a **BENCHED** body reads 1.0,
+    and so does an Active on a turn the rules give no attack step to.
+
+    Two facts, both already shipped and neither re-derived here:
+
+    * :attr:`BodyView.is_active` — only the Active attacks. The Bench is where a body waits
+      (`docs/rules.md` §3).
+    * :attr:`MySide.attack_blocked` — the RULE leg, carrying all three of Asleep, Paralyzed and the
+      first player on turn 1 (`docs/rules.md` §2, *"CANNOT attack — the starting player skips the
+      attack step on turn 1"*, `[RULE: rulebook L152]`).
+
+    **This is `active_famine`'s composition, applied to an arbitrary body rather than to the
+    Active.** That property is the shipped precedent for the shape: it checks `attack_blocked`
+    BEFORE calling the affordability oracle, and its docstring says why — *"only the RULE leg may
+    claim a famine without one"*. The rules leg lives in the caller; this is a caller that was
+    missing it. `active_famine` itself is not reusable here because it is Active-scoped by
+    construction, and the body this function is asked about is usually not the Active.
+
+    **Why the gate is HERE and not in `readiness_p`** (Issue #278's *"never retune the incumbent"*).
+    The oracle is shared, and its area-blindness is CORRECT for its other caller: `promote_retreat_value`
+    (ADR-0073) reads it to price bringing a benched body TO the Active spot, and a `readiness_p` that
+    returned 0 for a benched body would answer that question with the very fact the promote changes.
+    So the legality leg belongs to the consumer that asks about a body standing still, which is this
+    one. `test_the_gate_leaves_readiness_p_ITSELF_byte_identical` pins that the oracle did not move.
+
+    **What this does NOT do, stated because the difference is the whole design.** It does not strip
+    the evaporating Energy from the now-leg (Issue #351's rejected option 2). Where the body CAN
+    attack, an Ignition on it is genuinely spendable this turn and the 1.0 is true; masking Issue
+    #286's forward leg there is the family answering correctly, not a defect. Measured over the
+    committed corpus at the fix commit: of the 25 of my bodies holding a `discard_eot` Energy, **21
+    are Active on an unblocked turn** and keep their 1.0, and **4** fail this gate — one benched
+    (`83664991|43`) and three first-player-turn-1 (`81903490|8`, `81903490|10`, `81904451|9`, the
+    episode `docs/rules.md` cites for exactly this misplay).
+
+    **The ABSENT-fact direction is fail-CLOSED**, which is the safe one here: `attack_blocked` reads
+    ``self.turn <= 1`` over ``self.turn = int(turn or 0)``, so a board that states no turn at all
+    reads turn 0 and comes back BLOCKED — the now-leg then claims nothing and the family falls back
+    to the forward clock. That is the opposite of the collapses
+    `test_value_stack_integration.RULED_COLLAPSES` catalogues, where an absent fact arrives as a
+    number that reads like a measurement, and it is the direction this gate wants: the failure it
+    must never have is crediting a body that cannot swing.
+    `test_the_legality_gate_fails_CLOSED_on_a_board_that_states_no_turn` pins it."""
+    return body.is_active and not model.mine.attack_blocked
+
+
+def _survives_to_spend(model: "StateModel", body) -> float:
+    """How much of this body's FUTURE I still own, in [0, 1] — ``1 - halve(turns_to_ko_me - 1)``.
+
+    The complement of `survival`'s own grade, on the same clock through the same
+    :func:`_survival_clock` call, so the two families cannot come to disagree about when a body
+    dies. No new curve and no new constant: `survival` grades a body's exposure by
+    ``halve(turns_to_ko_me - 1)`` — undiscounted when they can Knock it Out this coming turn, an
+    eighth of the worry at three turns — and this is one minus that number.
+
+    **It reads as an exact statement rather than as a smoothing at the end that matters.** A clock
+    of 1 means they Knock the body Out on their very NEXT turn, and the forward leg is a payoff that
+    lands on one of MY later turns — which comes after theirs. So a forward payoff on a body with a
+    clock of 1 is never spent, and `1 - halve(0) == 0.0` says so. At 2 the body survives to act once
+    more and the grade is 0.5; the smoothing is in the middle of the curve, not at the end the
+    measured frame turns on.
+
+    **The zero is a priced zero, not a pruning one, and the distinction is the module's own.** A
+    saturated term has no derivative and is never explored (see the constants block), so a factor
+    that flattened a whole family would be a defect. This flattens ONE leg of ONE body: every play
+    that arms that body THIS turn still moves the now-leg, and a play that only advances a doomed
+    body's future arming genuinely buys nothing — 0 delta is the developer's ruling on that frame,
+    not a term failing to notice. What the zero DOES leave unpriced is named in `readiness.blind_to`
+    rather than left to be discovered.
+
+    **Why this is not a double count against `survival`, argued rather than assumed** (Issue #332's
+    first acceptance criterion). The two families price two different CONSEQUENCES of the one fact,
+    in two different currencies: `survival` charges the body's ``prize_at_risk`` — the prizes handed
+    over when it falls — and this discounts the body's ``payoff`` — the damage-denominated potential
+    that dies with it. Removing the doomed body from the board would raise `survival` (less
+    exposure) and lower `readiness` (lost potential), so the two readings are not one quantity added
+    twice.
+
+    The registry fact therefore stays `readiness_odds`, already in `readiness.reads`, and the clock
+    is an INPUT to that probability exactly as `turns_to_afford` already is. This is `survival`'s own
+    shipped precedent, applied to the mirror case: its `_predicted_loss` consults
+    `their_prizes_remaining`, which `prize_race` owns, as a win-condition TEST rather than as race
+    value, and keeps `predicted_loss` as the registry fact. **Splitting the clock into a second fact
+    string to make the read visible is the move both places reject** — `sound_rules.SCHEDULED_PAIRS`
+    records the same temptation and the same answer, because a fact renamed to dodge a detector makes
+    the detector pass VACUOUSLY. `double_counted()` stays empty and means it."""
+    return 1.0 - halve(_survival_clock(model, body) - 1)
 
 
 #: The floor under an UNDECLARED body's role relevance, and it is derived rather than chosen: the
@@ -1517,17 +1734,30 @@ def threat(targets: Iterable[float]) -> float:
     six. CONVERTING any of them is still `attack_ev`'s at the terminal action; what this family
     prices is the exposure standing on the board (see its `blind_to`).
 
-    **POSITIONAL, so capped** at :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 /
-    `KO_SCORE`), which is where the my-side/their-side asymmetry described in the module header
-    lives. Their exposure standing on the board is worth something — it constrains what they can
-    afford to leave in front — but the PRIZE for converting it belongs to the attack that converts
-    it, and `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for one
-    Knock Out twice.
+    **POSITIONAL, so SCALED then capped** — :data:`_THREAT_W` crosses the prize-denominated sum into
+    the positional band, and :data:`_THREAT_CAP` (`planner._PLANNER_THREAT_CAP` 100 / `KO_SCORE`) is
+    the runaway guard behind it. That band is where the my-side/their-side asymmetry described in the
+    module header lives. Their exposure standing on the board is worth something — it constrains what
+    they can afford to leave in front — but the PRIZE for converting it belongs to the attack that
+    converts it, and `score(sequence) = state_value(end board) + EV(terminal)` would otherwise pay for
+    one Knock Out twice.
 
-    **This family SATURATES, and that is a known open defect** — see its `blind_to` entry
-    *"saturation into one bit"* for the measurement, the derivation of the fix, and the measured
-    reason the fix is not applied here yet."""
-    return min(_THREAT_CAP, float(sum(float(t) for t in targets)))
+    **The anchor is in FRONT of the cap and the cap is untouched** (Issue #329). Order is
+    load-bearing rather than stylistic: :data:`POSITIONAL_MAX` sums the four positional caps and
+    :data:`LOSS_PRIZES` is derived from that sum, so folding the anchor into `_THREAT_CAP` would move
+    the predicted-loss dominance constant without anything saying so.
+
+    The shape is ADR-0107's, CLAMP INCLUDED — that ADR's `gust_target` seam is
+    `GUST_TARGET_BAND x min(1, otv / TARGET_VALUE_CEILING)`, and `min(_THREAT_CAP, _THREAT_W * sum)`
+    is the same expression with the band factored out of the clamp. Worth stating because the
+    fraction is written UNclamped in more than one prose record of this family.
+
+    **The guard still bites, on 7.3% of non-empty corpus inputs, and that is not a residual defect.**
+    This is a SUM over up to six targets while `_THREAT_W`'s divisor is a SINGLE target's ceiling, so
+    reaching a 3-prize Mega ex and a 2-prize body at once sums to 5.0 — 1.28x the divisor. Five prizes
+    of simultaneously-reachable exposure is the extreme board a runaway guard exists for. Do not write
+    *"the cap never binds"* anywhere; it is measurably false."""
+    return min(_THREAT_CAP, _THREAT_W * float(sum(float(t) for t in targets)))
 
 
 def readiness(bodies: Iterable[ReadyBody]) -> float:
@@ -1547,7 +1777,14 @@ def readiness(bodies: Iterable[ReadyBody]) -> float:
     requirement: `payoff` is the body's printed line payoff and does not depend on what is attached,
     so a partly-funded attacker scores `payoff x odds x relevance` with odds strictly between 0 and
     1 — not zero, not full. A term that read "can it attack right now" instead would price every
-    mid-turn board at 0 and prune every attach before the leaf could vindicate it."""
+    mid-turn board at 0 and prune every attach before the leaf could vindicate it.
+
+    **Odds are FORWARD-LOOKING on both clocks** (Issue #332). `readiness_odds` asks whether the body
+    gets to its payoff attack, and there are two ways not to: it never affords the cost
+    (`turns_to_afford`), or the opponent removes it first (`turns_to_ko_me`, through
+    :func:`_survives_to_spend`). Funding a body the opponent Knocks Out next turn therefore buys
+    nothing forward, which is what stops this family preferring the body already in front to the
+    successor being built behind it."""
     total = 0.0
     for body in bodies:
         contribution = (_READINESS_W * float(body.payoff)
@@ -1755,7 +1992,7 @@ def double_counted() -> list[str]:
 
 
 __all__: Sequence[str] = (
-    "POC_WORTH_PRIZE_RATE", "LOSS_PRIZES",
+    "POC_WORTH_PRIZE_RATE", "LOSS_PRIZES", "WIN_PRIZES",
     "REGISTRY", "FAMILIES", "TERMINAL_REGISTRY", "TERMINAL_FAMILIES",
     "TermFamily", "ExposedBody", "ReadyBody", "AttackEV",
     "state_value", "prize_race", "survival", "threat", "readiness", "hand", "development",
