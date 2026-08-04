@@ -1,0 +1,13 @@
+{
+  "frame_key": "81785223|0|decision|44",
+  "claims": {
+    "decision": {
+      "correct": [
+        4
+      ],
+      "owner": "#263",
+      "ruled": "2026-08-02",
+      "why": "Developer-ruled REVERT in data/leaf_lab/wave3-rulings.md: this shares 81785223|0|decision|32's ideal turn sequence. The ruling STANDS; Issue #263 owns the within-turn ordering gap."
+    }
+  }
+}

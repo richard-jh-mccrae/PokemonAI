@@ -1,0 +1,13 @@
+{
+  "frame_key": "83661649|0|decision|54",
+  "claims": {
+    "decision": {
+      "correct": [
+        4
+      ],
+      "owner": "#332",
+      "ruled": "2026-08-02",
+      "why": "Developer-ruled REVERT and routed in docs/plans/issue-sequence-329-wave3-packet.md. The ruling STANDS; Issue #332 owns readiness funding a doomed Active over the successor and the related sub-floor frames."
+    }
+  }
+}

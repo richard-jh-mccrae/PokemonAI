@@ -24,7 +24,14 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
-FIXTURES = sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json"))
+
+
+def _has_obs(fixture: Path) -> bool:
+    return "obs" in json.loads(fixture.read_text(encoding="utf-8"))
+
+
+FIXTURES = [f for f in sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json"))
+            if _has_obs(f)]
 
 #: (Board field, how the OLD helper computed it from the raw obs) for every field migrated in 0b.
 #: Each entry is the pre-migration expression, kept verbatim so the comparison is against history

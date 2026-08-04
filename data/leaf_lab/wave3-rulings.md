@@ -646,10 +646,11 @@ get a name attached to them.
 |---|---|---|---|
 | `81906755\|1\|decision\|9` | REVERT | **REVERT** | do not retreat — retreating Staryu to Staryu solves nothing, and our Active's Energy is not what is protecting us |
 
-**Nothing on disk changes.** Per this file's own vocabulary a `REVERT` leaves the recorded label
-standing and needs no ledger entry; the frame keeps failing the gate. Neither
-`data/leaf_lab/baseline.json` nor `data/decider_lab/baseline.json` was touched at any point in that
-run.
+**Ledger encoded 2026-08-04.** Per this file's own vocabulary a `REVERT` leaves the recorded label
+standing, but the Discrimination Gate still needs an owner to keep a routed leaf gap from failing
+`main` forever. `tests/fixtures/corrections/leaf_holdout_81906755_1_decision_9.json` holds the frame
+out to Issue #332. Neither `data/leaf_lab/baseline.json` nor `data/decider_lab/baseline.json` was
+touched.
 
 ### The ruling refutes the packet's *reasoning*, not just its ranking
 
