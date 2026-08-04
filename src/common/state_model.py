@@ -544,6 +544,40 @@ class _SideBase(_Lazily):
         return tuple((b.stat.name if b.stat is not None else "") for b in self.bench)
 
     @lazy
+    def in_play_names(self) -> tuple:
+        """Every IN-PLAY body's card name — Active first, then Bench — ``""`` when the card does not
+        resolve, so the tuple stays positional and an unknown body claims nothing.
+
+        A different fact from :attr:`bench_names`, not a superset of it by accident: the condition
+        that reads the Bench is printed *"on your Bench"*, and the filtered count that reads this one
+        is printed *"for each Pokémon in play"* — and the Bench IS in play alongside the Active
+        (`docs/rulebook.txt` L559: *"Your deck, your discard pile, and your Prize cards are not in
+        play, but your Benched Pokémon are."*), so a Weezing in the Active spot DOES count itself.
+        Feeds ``both_in_play_named`` through the ``both_in_play_names`` context key (Issue #361)."""
+        return tuple((b.stat.name if b.stat is not None else "") for b in self.bodies)
+
+    @lazy
+    def in_play_attack_names(self) -> tuple:
+        """Per IN-PLAY body (Active first, then Bench), that body's printed attack NAMES.
+
+        The raw material of ``atk_in_play_with_attack`` — *"for each of your Pokémon in play that has
+        the Round attack"*. NESTED, one tuple per body, because the predicate counts bodies: a flat
+        list of names could not distinguish two Round-havers from one body carrying the name twice.
+        A body whose card, or whose attack record, does not resolve contributes an EMPTY tuple —
+        fail-closed, because this scaler multiplies MY OWN damage and an over-read is the direction
+        that manufactures a phantom lethal (Issue #361)."""
+        attack_stat = self._combat.attack_stat      # hoisted: the accessor rebuilds a fallback
+        out = []                                    # lambda per call, and this is a per-attack loop
+        for b in self.bodies:
+            names = []
+            for aid in (getattr(b.stat, "attacks", ()) or ()):
+                ast = attack_stat(aid)
+                if ast is not None and getattr(ast, "name", ""):
+                    names.append(ast.name)
+            out.append(tuple(names))
+        return tuple(out)
+
+    @lazy
     def bench_raws(self) -> tuple:
         """The BENCHED bodies' raw engine dicts — the Bench Harvest's input (ADR-0071 decision 7).
 
@@ -822,6 +856,8 @@ class _SideBase(_Lazily):
             discard_energy_total=self.discard_energy_total,
             discard_basic_by_type=self.discard_energy_counts,
             bench_names=self.bench_names,
+            in_play_names=self.in_play_names,
+            in_play_attack_names=self.in_play_attack_names,
             damage_boosts=self.damage_boosts,
             deck_count=deck_count, deck_basic_by_type=deck_by_type)
 

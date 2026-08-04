@@ -303,6 +303,41 @@ STATE_VALUE_PROFILE = frozenset({
     # share, and `damage_context` itself only decides which side's record becomes `atk_`/`def_`.
     # So the profile below does not grow at all for Issue #280 — the second direction reads no
     # field the first did not.
+    # ── ADR-0115 / Issue #361: the gatherer walks two MORE per-side facts ──────────────────
+    # The open filtered-count family reads RAW MATERIAL rather than a pre-reduced count, because its
+    # predicate's argument lives on the ATTACK (`AttackStat.scaleFilter`) and the context builder has
+    # never seen the attack. So `damage_facts` gained `in_play_names` (a name per in-play body) and
+    # `in_play_attack_names` (that body's attack names) — on BOTH sides, for the same structural
+    # reason the block below gives: `damage_facts` is one un-overridden `_SideBase` method and the
+    # Formula's variables are `atk_`/`def_`-relative, so one direction needs both records.
+    #
+    # **Measured before re-pinning**, as this pin's own note demands. In-process A/B on the same
+    # pilot and the same frames, the fields LIVE vs NEUTERED (returning their empty identity), and
+    # INTERLEAVED per frame (live, off, off, live) with the paired per-frame deltas summarised — a
+    # sequential A/B was tried first and its two halves disagreed by more than the effect, because
+    # the whole machine drifts between them. 40 correction frames:
+    #
+    #   * the sub-step, `damage_context` BOTH directions on a fresh model (1200 pairs):
+    #     **72.9 us -> 87.7 us median, paired delta +13.7 us (+18.8%)**.
+    #   * the whole leaf, `StateModel.build` + `state_value` on a fresh model (600 pairs):
+    #     **888.1 us -> 912.3 us median, paired delta +29.7 us (+3.3%)**.
+    #
+    # Accepted on the same grounds as the three re-measures at the top of this file, and it is the
+    # SMALLEST of them by nearly two orders — Issue #261 item 2d accepted +1.75 ms on this same path.
+    # Paid once per decision, memoised for the life of the snapshot, and ~4 orders below the
+    # per-match budget (grader: 2 vCPUs x ~10 min/match). The walk is per BODY over `bodies` — the
+    # same iteration `counters_in_play` / `ex_in_play` already make — plus one `attack_stat` dict
+    # lookup per attack; nothing here is a new derivation.
+    #
+    # Two consumers exist in the whole pool (651, 708) and neither card appears in any shipped deck,
+    # which is why this cost is worth stating plainly rather than burying: today it is paid on every
+    # leaf and collected on none of them. That is the price of the context being ONE dict built
+    # per direction rather than per attack, which is the property `test_damage_context` pins.
+    "mine.in_play_names",
+    "theirs.in_play_names",
+    "mine.in_play_attack_names",
+    "theirs.in_play_attack_names",
+
     "mine.best_reachable_damage_vs",
     "model.damage_context",
     # the gatherer, and the per-side countables it walks (`_SideBase.damage_facts`). Both sides,

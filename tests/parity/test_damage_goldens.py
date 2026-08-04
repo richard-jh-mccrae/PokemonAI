@@ -39,7 +39,8 @@ NEBULA_BEAM = 1488
 
 def make_state(attacker_cid: int, defender_cid: int,
                defender_bench: Sequence[int] = (),
-               attacker_tools: Sequence[int] = ()) -> GameState:
+               attacker_tools: Sequence[int] = (),
+               attacker_bench: Sequence[int] = ()) -> GameState:
     cards: dict[int, CardInstance] = {}
     serial = iter(range(3, 200))
 
@@ -54,6 +55,7 @@ def make_state(attacker_cid: int, defender_cid: int,
     b0, b1 = PlayerBoard(), PlayerBoard()
     b0.active = mon(attacker_cid, 0)
     b1.active = mon(defender_cid, 1)
+    b0.bench = [mon(c, 0) for c in attacker_bench]
     b1.bench = [mon(c, 1) for c in defender_bench]
     for cid in attacker_tools:                 # attached Pokémon Tool (owner = attacker)
         s = next(serial)
@@ -261,3 +263,106 @@ def test_every_attackBonus_Tool_agrees_with_its_printed_ex_restriction():
     assert agree_true, "sweep found no {ex}-restricted attackBonus Tool — instrument is broken"
     assert agree_false, "sweep found no unrestricted attackBonus Tool — instrument is broken"
     assert not mismatched, f"ChainDef disagrees with printed card text: {mismatched}"
+
+
+# ------------------------------------------------- the open FILTERED-COUNT family (Issue #361)
+# ADR-0115 grew the agent-side scaler vocabulary a filtered-count FORM: `scaleVar` names the
+# family and `AttackStat.scaleFilter` carries the predicate's argument. Two implementations of one
+# predicate now exist — `cgpy.damage.attack_damage`'s `scale` leg and
+# `common.strategy.damage.compute_active_damage` — and two implementations of one fact are the thing
+# most likely to drift, so these assert they AGREE board-for-board rather than each asserting a
+# number it computed itself. The engine names its members differently (`atk_named_attack` vs
+# `atk_in_play_with_attack`) and always has (`all_bench` vs `both_bench`, `atk_discard_basic_energy`
+# vs `atk_discard_energy`): the contract between the two vocabularies is the VALUE, not the spelling.
+
+TR_KOFFING, TR_WEEZING = 461, 462       # the pool's ONLY two "Koffing"/"Weezing" names
+TYMPOLE, PALPITOAD, SEISMITOAD = 500, 501, 502
+REGIGIGAS = 251                         # neutral defender: weakness {F}=6, no Resistance, no
+                                        # Ability, no `defense` ChainDef — so nothing but the
+                                        # scaling term moves the number for a {D}/{W} attacker
+EXPLODE, ROUND_708 = 651, 708
+
+
+def _agent_damage(gs: GameState, attack_id: int) -> float:
+    """The AGENT's oracle on the same board — shipped `attack_overrides.json` and all.
+
+    `build_attack_stats` is pure, so it takes cgpy's own `Attack` records (`attackId`/`name`/`text`/
+    `damage`/`energies`) and folds the SHIPPED override table over them. That is the point: this is
+    the table CI ships, not a fixture that could agree with the engine while the table does not.
+    """
+    from common.scouting.provider import (CardStat, build_attack_stats, load_attack_overrides)
+    from common.strategy.damage import compute_active_damage
+    from common.strategy.damage_context import SideFacts, damage_context
+
+    stats = build_attack_stats(list(DB.attacks.values()), load_attack_overrides())
+
+    def side(seat: int) -> SideFacts:
+        bodies = gs.in_play(seat)
+        return SideFacts(
+            in_play_names=tuple(gs.stat(p.top).name for p in bodies),
+            in_play_attack_names=tuple(tuple(DB.attacks[a].name for a in gs.stat(p.top).attacks)
+                                       for p in bodies))
+
+    def card(p) -> CardStat:
+        d = gs.stat(p.top)
+        return CardStat(d.cardId, name=d.name, hp=d.hp, energyType=d.energyType,
+                        weakness=d.weakness, resistance=d.resistance)
+
+    return compute_active_damage(stats[attack_id], card(gs.players[0].active),
+                                 card(gs.players[1].active),
+                                 context=damage_context(side(0), side(1)))
+
+
+@pytest.mark.req("REQ-SCALER-0013")
+@pytest.mark.parametrize("mine,theirs,units", [
+    ((), (), 1),                                    # the attacker alone — the COMMON board, and the
+                                                    # one the frozen {"damage": 80} doubled
+    ((TR_KOFFING,), (), 2),
+    ((), (TR_WEEZING,), 2),                         # "both yours and your opponent's"
+    ((TR_KOFFING, TR_KOFFING), (TR_WEEZING,), 4),
+])
+def test_explode_together_now_agrees_between_the_engine_and_the_agent(mine, theirs, units):
+    """651, verbatim (`data/EN_Card_Data.csv` 462): *"This attack does 40 damage for each Pokémon in
+    play that has "Koffing" or "Weezing" in its name (both yours and your opponent's)."* Printed
+    `damage: 0` (`src/cgpy/defs/attack_data.json`), so the scaler is the whole number.
+
+    The `units=1` row IS the defect this issue exists for: the attacker matches its own predicate, so
+    a lone Team Rocket's Weezing deals 40 and the shipped table used to promise 80."""
+    gs = make_state(TR_WEEZING, REGIGIGAS, attacker_bench=list(mine), defender_bench=list(theirs))
+    engine = attack_damage(gs, gs.players[0].active, DB.attacks[EXPLODE],
+                           gs.players[1].active, adef=def_for(f"attack:{EXPLODE}") or {})
+    assert engine == 40 * units
+    assert _agent_damage(gs, EXPLODE) == engine
+
+
+@pytest.mark.req("REQ-SCALER-0013")
+@pytest.mark.parametrize("mine,theirs,units", [
+    ((), (), 1),
+    ((TYMPOLE,), (), 2),
+    ((TYMPOLE, SEISMITOAD), (), 3),
+    ((), (TYMPOLE, SEISMITOAD), 1),                 # "each of YOUR Pokémon" — theirs never count
+])
+def test_round_agrees_between_the_engine_and_the_agent(mine, theirs, units):
+    """708, verbatim (`data/EN_Card_Data.csv` 501): *"This attack does 40 damage for each of your
+    Pokémon in play that has the Round attack."* Printed `damage: 0`.
+
+    Tympole (500/`Round` 707) and Seismitoad (502/`Round` 710) carry the same attack NAME at
+    different per-unit values, which is what makes this a name predicate rather than an id list."""
+    gs = make_state(PALPITOAD, REGIGIGAS, attacker_bench=list(mine), defender_bench=list(theirs))
+    engine = attack_damage(gs, gs.players[0].active, DB.attacks[ROUND_708],
+                           gs.players[1].active, adef=def_for(f"attack:{ROUND_708}") or {})
+    assert engine == 40 * units
+    assert _agent_damage(gs, ROUND_708) == engine
+
+
+@pytest.mark.req("REQ-SCALER-0013")
+def test_the_pool_holds_exactly_the_matching_cards_this_family_was_ruled_against():
+    """A positive control for the two predicates above: if the pool held a third "Koffing" name or a
+    fifth `Round` the parametrised counts would be reasoning about a board that cannot occur. Asserts
+    the predicate's own reach off `card_data.json`, so a set refresh that widens it fails HERE."""
+    named = sorted(c.cardId for c in DB.cards.values()
+                   if "Koffing" in c.name or "Weezing" in c.name)
+    assert named == [TR_KOFFING, TR_WEEZING], "the name predicate's reach moved"
+    rounds = sorted(c.cardId for c in DB.cards.values()
+                    if any(DB.attacks[a].name == "Round" for a in c.attacks))
+    assert rounds == [TYMPOLE, PALPITOAD, SEISMITOAD, 842], "the Round predicate's reach moved"

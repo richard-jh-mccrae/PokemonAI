@@ -211,17 +211,32 @@ vocabulary has three **direction classes**: `atk_` (attacker-relative), `def_` (
 and `both_` — a variable counting BOTH sides at once, e.g. "for each Benched Pokémon (both yours and
 your opponent's)". A `both_` variable is the sum of its two per-side halves and is therefore
 direction-SYMMETRIC: one value is correct whichever side is attacking (ADR-0083, Issue #213).
-A variable may also be a **filtered count** — a predicate over a zone rather than the zone's size
-(`atk_bench_stage2` = Stage 2 Pokémon on my Bench; `def_ex_in_play` = their `{ex}` in play). Filtered
-counts take **flat names**, and the closed vocabulary deliberately did NOT grow a filtered-count
-*form* to hold them (ruled with Issue #225, POC-T1): ADR-0083 §4 already rejected letting `scaleVar`
-carry an expression, because that turns a closed vocabulary of named facts into a mini-language
-inside the damage oracle — and a parameterised form is the first step of exactly that. Two members
-are also not a shape: the ADR's own test for growing one is that "the very next candidate has the
-same shape", and a stage predicate over MY bench and a rule-box predicate over THEIR whole board do
-not. The cost is the one ADR-0083 already accepted for `both_bench`: a future card with the same text
-needs its own per-`attackId` entry. The benefit is that the oracle stays ONE dict lookup per scaler —
-every variable name IS a context key, with `atk_discard_energy` the single documented exception.
+A variable may also be a **filtered count** — a predicate over a zone rather than the zone's size —
+and the vocabulary now holds **two kinds of them**, split on whether the predicate is CLOSED or OPEN
+(ADR-0115, Issue #361; this supersedes the flat-names-only rule ruled with Issue #225, POC-T1).
+
+  * A **closed** predicate takes a **flat name**, exactly as before: `atk_bench_stage2` (Stage 2
+    Pokémon on my Bench), `def_ex_in_play` (their `{ex}` in play), `def_counters_all` (damage
+    counters on their whole board). A stage, a rule box and a damage counter are each finite,
+    engine-known facts, so the name says the whole predicate and the context can pre-reduce it to an
+    integer. These three are **deliberately NOT migrated** to the form below — they work, they are
+    corpus-ruled, and moving them would move the damage oracle for attacks Issue #361 is not about.
+  * An **open** predicate cannot be flattened, because its argument is arbitrary: *"each Pokémon in
+    play that has 'Koffing' or 'Weezing' in its name"* (651) and *"each of your Pokémon in play that
+    has the Round attack"* (708). A flat `both_in_play_koffing_weezing` is not a vocabulary, it is a
+    card list wearing one — and the next card with that text needs a new *name*, not a new argument.
+    So `scaleVar` names the **family** (`both_in_play_named`, `atk_in_play_with_attack`) and the
+    predicate's argument rides beside it on `AttackStat.scaleFilter`, with the context supplying raw
+    material (`both_in_play_names`, `atk_in_play_attack_names`) that the oracle reduces at lookup.
+
+This does NOT re-open what ADR-0083 §4 rejected — an *expression* in `scaleVar`
+(`"atk_bench+def_bench"`), a mini-language inside the damage oracle. There is no expression and no
+evaluator: the family vocabulary stays closed and finite, and `scaleFilter` is DATA the family reads,
+which is the shape `scaleEnergyType` has given `atk_discard_energy` since ADR-0032. The cost ADR-0083
+accepted for `both_bench` still stands — a future card needs its own per-`attackId` entry — but its
+entry now carries an argument rather than requiring a new variable name. The oracle stays ONE lookup
+per scaler; "every variable name IS a context key" holds for every closed variable, with
+`atk_discard_energy` and the two open filtered counts as the documented exceptions.
 The context dict itself has **one builder**, `common/strategy/damage_context.py` (POC-T3.5,
 Issue #279): a direction-NEUTRAL `SideFacts` per side — gathered once, by `_SideBase.damage_facts` —
 and a `damage_context(attacker, defender)` that is the only place a per-side fact becomes an
@@ -265,6 +280,16 @@ reading one card's printed sentence into one attackId is not that mechanism.
     measuring them would verify a number nothing consumes. See
     `tests/strategy/test_visible_state_scalers.py`, which asserts that absence — over all four
     stores, each with its own positive control — so the claim cannot rot.
+**Issue #361 paid off two `unaudited` rows and opened one new debt.** `651` Explode Together Now and
+`708` Round shipped `{"damage": 80}` — a per-unit attack frozen at ONE board's count, and therefore a
+2× **over-prediction** on the common board where the attacker is the only match. Both now ship the
+open filtered-count family above, TEXT-VERIFIED, owed by **Issue #364**: no sweep axis varies *which*
+cards are in play (bench fodder is chosen by HP rank), so the count is constant at 1 across every
+point the harness can produce and a name-filtered predicate is unfittable by construction. 708's
+reading is independently corroborated by the engine's own ChainDef, which has priced it
+`atk_named_attack`/40 all along; `tests/parity/test_damage_goldens.py` now pins the engine and the
+agent EQUAL board-for-board, because two implementations of one predicate are the thing most likely
+to drift.
 **How each shipped fact was established is itself recorded** (ADR-0108, Issue #224):
 `attack_overrides.provenance.json` is a committed sidecar, emitted by the generator in the same pass
 as the table, carrying one row per `attackId` — `engine_fit` (with the fitted rows *and the rejected,

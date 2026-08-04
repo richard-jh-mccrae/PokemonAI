@@ -78,6 +78,18 @@ class SideFacts:
     #: The NAMES of this side's Benched Pokémon, in bench order — the bench-partner condition's
     #: input ("does nothing without Lunatone on your Bench"). ``""`` for an unresolvable body.
     bench_names: Sequence[str] = ()
+    #: The NAMES of every Pokémon this side has IN PLAY — Active first, then Bench (the Bench IS in
+    #: play: `docs/rulebook.txt` L559). A different field from :attr:`bench_names`, which is the Bench and
+    #: only the Bench because the condition it feeds is printed *"on your Bench"*; the filtered count
+    #: that reads THIS one is printed *"in play"* and a Weezing in the Active spot does satisfy it.
+    #: ``""`` for an unresolvable body, so it stays positional and claims nothing (Issue #361).
+    in_play_names: Sequence[str] = ()
+    #: One entry PER in-play body (Active first, then Bench): that body's printed attack NAMES.
+    #: The raw material of ``atk_in_play_with_attack`` — *"for each of your Pokémon in play that has
+    #: the Round attack"*. Nested rather than flattened because the predicate counts BODIES: a flat
+    #: name list could not tell two Round-havers from one body carrying the name twice. ``()`` for a
+    #: body whose card does not resolve (Issue #361).
+    in_play_attack_names: Sequence[Sequence[str]] = ()
     #: ``((amount, attackerEnergyType|None, vsExOnly), ...)`` — flat damage boosts live for this
     #: side's attacks: this-turn Trainer plays and Tools attached to this side's Active. Both are
     #: open information in either direction, so both are read for whichever side is attacking.
@@ -116,6 +128,11 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
     * the **scaler variables** proper — every name here is a ``scaleVar`` the text parser can emit
       (``scouting/card_text.py``) or one shipped as a per-``attackId`` override
       (``common/attack_overrides.json``);
+    * the **filtered-count raw material** — ``atk_discard_energy_total`` /
+      ``atk_discard_basic_by_type`` for ``atk_discard_energy``, and ``both_in_play_names`` /
+      ``atk_in_play_attack_names`` for the open filtered-count family (ADR-0115). These keys are
+      NOT variable names: the attack's own ``scaleFilter`` reduces them at lookup time, which is what
+      lets one key serve every attack in a family whose argument differs per card;
     * the **attacker's private riders** the oracle reads off the same dict — ``atk_bench_names``
       (a bench-partner condition), ``atk_boosts`` (flat Trainer/Tool boosts, applied before
       Weakness/Resistance);
@@ -157,12 +174,23 @@ def damage_context(attacker: SideFacts, defender: SideFacts) -> dict:
         "def_counters": defender.active_counters,
         "atk_prizes_taken": attacker.prizes_taken,
         "def_prizes_taken": defender.prizes_taken,
-        # the two FILTERED counts (Issue #225, POC-T1) — a predicate over a zone rather than the
-        # zone's size, carrying flat names because the vocabulary deliberately did NOT grow a
-        # filtered-count FORM to hold them (`src/common/CONTEXT.md`).
+        # the three CLOSED filtered counts (Issue #225, POC-T1) — a predicate over a zone rather
+        # than the zone's size. They keep FLAT names: each predicate is closed (a stage, a rule box,
+        # a damage counter), so the name says the whole fact and the value can be pre-reduced to an
+        # integer here. They are deliberately NOT migrated onto the open form below — they work,
+        # they are corpus-ruled, and moving them would move the damage oracle for attacks
+        # ADR-0115 is not about (`src/common/CONTEXT.md`).
         "atk_bench_stage2": attacker.bench_stage2,
         "def_counters_all": defender.counters_in_play,
         "def_ex_in_play": defender.ex_in_play,
+        # the OPEN filtered counts (ADR-0115, Issue #361) — the predicate's argument is an
+        # arbitrary name substring or attack name, so it cannot be flattened into the variable's
+        # NAME without hardcoding a card list into the vocabulary. These two keys therefore carry
+        # RAW MATERIAL rather than a count, and the oracle reduces it with the filter the attack
+        # itself carries (`AttackStat.scaleFilter`). `both_in_play_names` is a `both_` key: the
+        # concatenation is direction-symmetric, so ONE key is right whichever side attacks.
+        "both_in_play_names": tuple(attacker.in_play_names) + tuple(defender.in_play_names),
+        "atk_in_play_attack_names": tuple(tuple(n) for n in attacker.in_play_attack_names),
     }
     if attacker.deck_count is not None:
         ctx["atk_deck_count"] = attacker.deck_count

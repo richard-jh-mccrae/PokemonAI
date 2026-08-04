@@ -18,6 +18,41 @@ from __future__ import annotations
 _RESISTANCE = 30       # flat S&V Resistance reduction — engine-verified (tools/sim/probe_resistance.py)
 _PREVENT_EX_TAG = "prevent_ex_damage"
 
+#: The OPEN filtered-count family (ADR-0115, Issue #361), family -> the context key holding its
+#: RAW MATERIAL. ``scaleVar`` names the FAMILY and ``AttackStat.scaleFilter`` carries the predicate's
+#: argument, because the argument is an arbitrary name substring or attack name and cannot be
+#: flattened into a variable name without hardcoding a card list into the vocabulary. A pre-reduced
+#: integer in the context is impossible for the same reason: the builder cannot know what an attack
+#: it has never seen will filter on. This generalises the ``atk_discard_energy`` exception below from
+#: one special case to a small, CLOSED class of two — the vocabulary of families stays closed even
+#: though each family's argument is open.
+_FILTERED_COUNTS = {
+    "both_in_play_named": "both_in_play_names",
+    "atk_in_play_with_attack": "atk_in_play_attack_names",
+}
+
+
+def _filtered_count(var: str, material, terms: tuple) -> int:
+    """How many units the filtered-count ``var`` sees in ``material`` under ``terms``.
+
+    * ``both_in_play_named`` — Pokémon in play on EITHER side whose card name CONTAINS any term
+      ("does 40 damage for each Pokémon in play that has 'Koffing' or 'Weezing' in its name (both
+      yours and your opponent's)"). Substring, case-sensitive, and the card asks for CONTAINMENT
+      rather than equality for a reason: an owner prefix is part of the printed name
+      (`docs/rules.md` §9 — *"suffix/owner/regional forms are part of the name"*), so the pool's
+      "Team Rocket's Koffing" is a DIFFERENT name from "Koffing" and only a substring test counts
+      it. Case-sensitive because the pool's own capitalisation IS the fact, not an approximation.
+    * ``atk_in_play_with_attack`` — the ATTACKER's in-play bodies HAVING an attack of that exact
+      name ("for each of your Pokémon in play that has the Round attack"). Bodies, not names: the
+      material is one entry per body precisely so two Round-havers cannot collapse into one.
+
+    Both fail CLOSED on a body that carries no name / no resolvable attacks — these scalers multiply
+    MY OWN damage, and an over-read is the direction that manufactures a phantom lethal.
+    """
+    if var == "both_in_play_named":
+        return sum(1 for n in material if n and any(t in n for t in terms))
+    return sum(1 for names in material if any(t in names for t in terms))
+
 
 def wr_adjust(attacker, defender, dmg: float) -> float:
     """The card-level Weakness/Resistance rule (ADR-0052): x2 on the defender's Weakness, then a
@@ -58,7 +93,10 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
         context: visible-state counts for a scaling attack (ADR-0032 Damage Formula) —
             ``{"atk_hand", "def_hand", "def_active_energy", "atk_active_energy"}``, attacker-
             relative. Scaling is EXACT when its variable is supplied (every var is public);
-            with no context the term contributes 0 (a sound floor, a weak ceiling).
+            with no context the term contributes 0 (a sound floor, a weak ceiling). Two families
+            read RAW MATERIAL rather than a count and reduce it with the attack's own filter —
+            ``atk_discard_energy`` (its Energy-type filter) and the open filtered counts
+            ``both_in_play_named`` / ``atk_in_play_with_attack`` (``AttackStat.scaleFilter``).
 
     Returns:
         The predicted damage to the Active (never negative).
@@ -88,6 +126,14 @@ def compute_active_damage(attack, attacker, defender, defender_tags=frozenset(),
             units = context.get("atk_discard_energy_total")
         if units is not None:
             dmg += attack.scalePerUnit * units
+    elif attack.scaleVar in _FILTERED_COUNTS and attack.scalePerUnit and attack.scaleFilter:
+        # an OPEN filtered count: the family names the context key, the ATTACK names the predicate.
+        # No filter -> no claim at all (falling through to "count everything in play" would be a
+        # board-wide over-read), and a missing key contributes 0 like every other absent variable.
+        material = (context or {}).get(_FILTERED_COUNTS[attack.scaleVar])
+        if material is not None:
+            dmg += attack.scalePerUnit * _filtered_count(attack.scaleVar, material,
+                                                         tuple(attack.scaleFilter))
     elif attack.scaleVar and attack.scalePerUnit and (context or {}).get(attack.scaleVar) is not None:
         dmg += attack.scalePerUnit * context[attack.scaleVar]
     if attack.hiddenPerUnit and attack.hiddenSample:

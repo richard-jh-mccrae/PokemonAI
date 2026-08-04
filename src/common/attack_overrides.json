@@ -168,7 +168,12 @@
   "damageMax": 0
  },
  "651": {
-  "damage": 80
+  "scaleVar": "both_in_play_named",
+  "scalePerUnit": 40,
+  "scaleFilter": [
+   "Koffing",
+   "Weezing"
+  ]
  },
  "657": {
   "damageMin": 0,
@@ -199,7 +204,11 @@
   "damageMax": 30
  },
  "708": {
-  "damage": 80
+  "scaleVar": "atk_in_play_with_attack",
+  "scalePerUnit": 40,
+  "scaleFilter": [
+   "Round"
+  ]
  },
  "717": {
   "damageMin": 0,

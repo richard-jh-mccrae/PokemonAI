@@ -307,6 +307,12 @@ class AttackStat:
     ignore-family flags so the damage oracle reads ONE record per attack. Parsed fields are
     seeds — the engine audit verifies and corrects them through ``build_attack_stats`` overrides."""
     attackId: int
+    name: str = ""                     # the PRINTED attack name. Card knowledge like every other
+                                       # field here, and load-bearing for exactly one family: the
+                                       # filtered count "for each of your Pokémon in play that has
+                                       # the Round attack" (`atk_in_play_with_attack`) names an
+                                       # attack rather than a card, so the context cannot describe a
+                                       # body's attacks without it (Issue #361)
     damage: int = 0
     cost: int = 0                      # energy count (efficiency tiebreaks, affordability)
     energyTypes: tuple = ()            # the cost's per-slot Energy TYPE codes (EnergyType enum; 0 =
@@ -332,6 +338,15 @@ class AttackStat:
                                        # atk_discard_energy — EXACT (all visible incl. both discards)
     scaleEnergyType: int | None = None  # atk_discard_energy's type filter (Riptide Basic {W} -> 3);
                                        # None = count EVERY Energy card in attacker's discard
+    scaleFilter: tuple | None = None   # the FILTERED-COUNT family's predicate ARGUMENT (ADR-0115,
+                                       # Issue #361): the name substrings `both_in_play_named` looks
+                                       # for ("Koffing"/"Weezing"), the attack names
+                                       # `atk_in_play_with_attack` looks for ("Round"). The scaler
+                                       # names the FAMILY and this carries what it filters ON, so one
+                                       # context key serves every attack in the family — the same
+                                       # shape `scaleEnergyType` already gives `atk_discard_energy`.
+                                       # None/empty = no predicate, so the family claims NOTHING
+                                       # (counting every body would be a wild over-read)
     hiddenPerUnit: int = 0             # HIDDEN-state scaler (deck-discard family: Hammer-lanche /
                                        # Misty's Lapras / Ground Burn): damage += perUnit x units,
     hiddenSample: int = 0              # units unknowable closed-form — "max" assumes every sampled card
@@ -437,7 +452,7 @@ def build_attack_stats(attacks, overrides: dict | None = None) -> dict[int, Atta
         if scaling and scaling[2]:      # counter-placer: counters aren't damage — no W/R, no
             w = r = e = True            # prevention (Powerful Hand lands through Crustle)
         table[a.attackId] = AttackStat(
-            attackId=a.attackId, damage=printed,
+            attackId=a.attackId, name=getattr(a, "name", "") or "", damage=printed,
             cost=len(getattr(a, "energies", None) or []),
             energyTypes=tuple(getattr(a, "energies", None) or []),
             recoil=parse_attack_recoil(text),
