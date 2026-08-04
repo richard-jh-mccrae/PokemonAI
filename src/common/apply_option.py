@@ -696,7 +696,7 @@ def option_footprint(model, option: Mapping, *, clauses_cover: bool | None = Non
     drop = _structural_drop(model, kind, card)
     reads = (set(base.reads) - drop) | clause_zones
     writes = (set(base.writes) - drop) | clause_zones
-    hand_serial, body_serial = _option_serials(model, option)
+    hand_serial, body_serial = option_serials(model, option)
     body_serial = _deployed_body_serial(model, kind, card, hand_serial, body_serial)
     return Footprint(reads=frozenset(reads), writes=frozenset(writes), complete=bool(complete),
                      reveals_information=reveals,
@@ -751,8 +751,17 @@ def _deployed_body_serial(model, kind: int, card, hand_serial, body_serial):
     return hand_serial if is_basic else None
 
 
-def _option_serials(model, option: Mapping):
+def option_serials(model, option: Mapping):
     """``(hand card serial, targeted body serial)``, either of which may be None.
+
+    **Public since POC-T4/4** (Issue #385), and for the reason its own ruling comment gives: the
+    composer emits a block's subsets in an order the original menu did not have, so a stored option
+    dict replayed from a permuted position names its card by a STALE hand index — and the failure is
+    silent, because a shifted index still resolves to *a* legal card. The composer re-resolves each
+    block member by the instance key this function already produces (`common.composer.resolve_against`)
+    rather than re-deriving the same walk beside it, which is the drift ADR-0087 charges for one
+    store over. It was private only because nothing outside this module had yet needed an option's
+    instance identity.
 
     The engine's ``serial`` is the instance number, and it is the SAME field ADR-0091's Option
     Equivalence deliberately IGNORES. That is not a contradiction and is worth stating once: the
@@ -1315,6 +1324,7 @@ __all__: Sequence[str] = (
     "NONDETERMINISM_SCOPE", "NO_ENGINE_SCOPE",
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",
     "Footprint", "FOOTPRINTS", "footprint", "commutes", "footprints_commute", "option_footprint",
+    "option_serials",
     "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "UnsupportedTransition",
     "transition_kind", "coverage", "fate", "is_terminal", "refuse", "must_expand", "require_model",
     "apply_option", "quarantined_kinds", "QUARANTINED_KINDS",

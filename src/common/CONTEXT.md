@@ -1800,3 +1800,35 @@ _Avoid_: tie (options scoring equal is the SYMPTOM; being the same decision is t
 can score one class member 12× above another, see **Class Asymmetry**), duplicate (the cards are
 distinct objects with distinct serials; it is the DECISION that is one), transposition table (that is
 `transposition_probe.py`'s deliberately lossy search key, which drops `hp` — never reuse it to grade)
+
+**Commutative Block**:
+A set of menu options whose ORDER cannot change the resulting board, so the *n*! orderings are ONE
+candidate while *which subset* to play stays a real choice (Issue #263 § *Commutative-block collapse*;
+built in `common/composer.py`, POC-T4/4, Issue #385). A **different axis** from the **Option
+Equivalence Class** and it composes with it: OEC dedupes indistinguishable SIBLINGS at one ply, a
+block dedupes ORDERINGS of distinct options across depth.
+
+Licensed only by PROVEN per-option footprints (`apply_option.footprints_commute`) and fail-closed
+everywhere: an unknown or partial footprint commutes with nothing, and a play that REVEALS information
+can never join a block whatever its read/write sets say — a revealer changes the option SET, not only
+the board, so the fixed-option-set premise fails and it becomes a block BOUNDARY.
+
+Two properties do the work. The block is emitted as the **Subset Lattice** — 2**n candidates, one
+canonical ordering per subset, generated a-priori (8 / 16 / 32 for n = 3 / 4 / 5, against the
+16 / 65 / 326 ordered prefixes a naive tree holds), never generate-then-hash-then-merge. And the
+canonical in-block order is the **information-before-commitment tier order**, whose ratified reason
+travels with it: inside a block no function of the end state separates any ordering, so the doctrine
+order is the principled canonical choice. That canonicalisation is also what makes the Issue #254
+index-order bug class structurally impossible rather than hand-fixed.
+
+**The claim is about the resulting BOARD, never about option ENCODINGS**, and the gap between the two
+is the module's sharpest trap: an option names its card by hand INDEX, so a stored dict replayed from a
+permuted position applies a *different play* — silently, because a shifted index still resolves to *a*
+legal card. Every block member is therefore re-resolved by its `(hand serial, body serial)` instance
+key (`apply_option.option_serials` → `composer.resolve_against`) against the board it is actually
+applied to.
+_Avoid_: transposition table (a block is generated a-priori; a transposition table merges after paying
+full generation cost, and needs a canonical state hash a block never forms), Option Equivalence Class
+(the other axis — siblings at one ply, not orderings across depth), commutativity as a per-KIND fact
+(`commutes()` answers by kind and licenses almost nothing; the per-OPTION footprint is what proves a
+block, since element-level granularity is what separates two writes to distinct instances)

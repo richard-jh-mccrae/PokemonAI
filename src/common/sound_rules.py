@@ -358,6 +358,47 @@ WHITELIST: tuple[SoundRule, ...] = (
         reconciliation="Reviewed post-POC as the option-kind table grows; a floor that never fails "
                        "is as uninformative as one that always does.",
     ),
+    SoundRule(
+        id="composer-budget-caps",
+        entry="`composer.BEAM_WIDTH` / `composer.SEQUENCE_DEPTH` / `composer.EPSILON` "
+              "(+ `board_expectation.BRANCH_CAP`, declared here rather than twice)",
+        type=AUTHORED_SCAFFOLD,
+        fact="how much of the sequence tree one decision may explore",
+        reason="Structural search caps, not tuned strategy: they bound WHAT IS EXPLORED, never what "
+               "a candidate is worth, and every one of them reports its truncation rather than "
+               "capping in silence (`ComposerResult.stats`, `Expectation.truncated`). Owed by "
+               "Issue #385, which arms the composer and is therefore the first issue for which a "
+               "budget cap is live — `board_expectation`'s header states the debt and names this "
+               "entry. Derived from the two measurements already on the record rather than guessed: "
+               "post-Option-Equivalence menu width P50 6 / P95 12 / max 23 and leaf P95 4.46 ms "
+               "(`python tools/train/value_lab.py --menu` over the 372 corpus frames both gates "
+               "replay), against the grader's per-decision FLOOR of >= 3.0 s (2 vCPU x ~10 min per "
+               "player per match, P95 137 / max 198 decisions per match over the 377 committed "
+               "native traces). A full run costs at most (1 + 3 x 4) x 12 = 156 leaf evaluations "
+               "~ 0.70 s, i.e. ~23% of that floor — then MEASURED end to end at those caps over "
+               "the 371 corpus frames (`python tools/train/composer_lab.py`): per-decision "
+               "median 10.0 ms, P95 152 ms, max 684 ms, so the arithmetic bound held and the whole "
+               "distribution sits under the grader floor. Anchored on the WIDTH half deliberately, for the "
+               "reason `BRANCH_CAP` records: the width is exactly 12 on every run while the "
+               "millisecond half moves ~10% run-to-run and ~45% between boxes, so a cap keyed to a "
+               "wall-clock figure is a property of whoever ran it last. EPSILON is not authored at "
+               "all — it is `family_diag.DECIDER_FLOOR`, the corpus-calibrated threshold below "
+               "which a family cannot be any frame's decider, carried under its own name because "
+               "`tools/` must never be a `src/` dependency and asserted equal by test. It was SWEPT rather "
+               "than assumed (`composer_lab.py --epsilon-sweep`) and the sweep says the band is not "
+               "load-bearing at this seam coverage: over {0.0, 0.001, 0.005, 0.01, 0.05} nothing "
+               "moves — 153 first steps earn a scored top-k slot, 39 are admitted by the band alone, "
+               "agreement holds at 77/270 ruled and 54/278 committed — so the 39 are EXACT ties "
+               "rather than near-ties. The value is chosen inside that flat region at the measured "
+               "noise floor.",
+        reconciliation="Re-measured on GRADER hardware post-POC (Issue #273, POC-B3) — the figures "
+                       "above are a DEV-MACHINE number and Issue #291 §3a says so in as many "
+                       "words. The derived per-decision P95 it rests on is additionally a LOWER "
+                       "BOUND on the leaf half alone; the apply-seam transition cost joined the "
+                       "measurable set only at Issue #382 and the composer's own wall-clock is "
+                       "reported by `tools/train/composer_lab.py`. Re-fit when both halves are "
+                       "measured on the grader.",
+    ),
     # ── composed-into-the-leaf (added 2026-08-01 by the Issue #263 ordering ruling) ────────────────
     # The composer's ordering heuristic became uniform 1-ply differencing, so these four stop being
     # DECIDERS for any option the enumerator covers. They are listed here — not deleted, not
