@@ -388,7 +388,7 @@ lives on the frame it names, so grading it means resolving the pointer first.
 - **By agent: 38 `mega_starmie`, 3 `dragapult_ex`, 0 `mega_lucario`.** The acceptance corpus is one
   deck's turn plans plus a rounding error. A composer that grades green here has been graded on
   `mega_starmie` sequencing — not on Mega Lucario's economy-vs-lock attack choice, which is Issue
-  #263's own acceptance requirement 3 and has **no sequence in this file at all**.
+  Issue #263's own acceptance requirement 3 and has **no sequence in this file at all**.
 - **By shape: 16 of 41 grade a single action.** Useful as decision cases, but they cannot falsify a
   *sequence* composer — the thing this corpus exists to grade — because any ordering that ends in the
   named action satisfies them.
@@ -981,7 +981,8 @@ are an owed repointing ruling, in this priority order:
 2. **The 1 `#143` claim** (`ms_deny_wasted_on_doomed_active_f41`, frame `85163634|1|decision|41`) —
    closed `not_planned`, so unlike the others there is no successor issue implied by the closure. It
    needs a fresh owner, not a redirect.
-3. The 9 `#332` and 3 `#262` claims, whose successors (#369 / #263) are at least identifiable.
+3. The 9 `#332` and 3 `#262` claims, whose successors (Issue #369 / Issue #263) are at least
+   identifiable.
 
 ## The Issue #263 hand-off package — three artifacts
 
@@ -1055,7 +1056,7 @@ Issue #263 family the blindness would silently zero. Under uniform 1-ply differe
 **never explored**, not merely undervalued, so this is the list of plays the composer will
 structurally refuse to consider.
 
-| # | family | blindness (abbrev. — the module carries the full text) | still blind? | which #263 family it silently zeroes |
+| # | family | blindness (abbrev. — the module carries the full text) | still blind? | which Issue #263 family it silently zeroes |
 |---|---|---|---|---|
 | 1 | `prize_race` | deck_count / deck-out proximity | **blind** | fetch/search, draw supporters — a mill or heavy-draw line |
 | 2 | `prize_race` | turn number / who went first | **blind** | the whole beam: a line trading a turn for position prices the trade at 0 |
@@ -1098,7 +1099,7 @@ structurally refuse to consider.
 that belongs to `attack_ev` under `score(sequence) = state_value(end board) + EV(terminal action)` —
 and states the cost outright: **enabling cards such as Boss's Orders and Premium Power Pro may be
 underplayed until Issue #263 lands.** A ruled, accepted, temporary blindness owned by **#263**, with
-no `blind_to` entry because the term that would carry it is the one #263 wires. Listed here so the
+no `blind_to` entry because the term that would carry it is the one Issue #263 wires. Listed here so
 composer meets it before it writes a beam.
 
 **Reading guide for Issue #263.** Six entries are *by design* (3, 17, 27, 28, 33, and half of 29) and

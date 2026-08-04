@@ -915,7 +915,7 @@ track shipped more than its 13 sub-issues, so this reconciles against the full l
 | **F5** denied forward payoff | #285, then #329 | **deferred — ⚠️ UNOWNED** | Credit built and un-walled by #329 (0 → 296 of 2061 `threat()` calls). Residue: it answers in **damage** where the doctrine asks in **prizes**. Ruled at `threat.blind_to` entry 5, and below `DECIDER_FLOOR`, so still ungradeable. **The entry names no owner and, since #329 discharged its stated prerequisite (*"the parked scale anchor first"*), it no longer has one — a live gap with nothing in front of it and nobody behind it.** Contrast F6, whose residue at least names T1 / Issue #260 |
 | **F6** standing bench chip | #284, then #329 | **deferred → #260** | Bench reach leg built and un-walled by #329 (278 → 336 calls). Residue: reachability stayed a **step**, so chip that does not yet reach prices 0. Ruled at `threat.blind_to` entry 14; needs T1's my-side KO clock |
 | **F7** known top-of-deck | #289 | **done** (built) | The decision issue offered *build* vs *declare* and predicted it might collapse into F13. **It did not** — the developer ruled **build**, then took the widest scope at every subsequent fork, and it shipped: `known_top` has a producer (`Pilot._observe_known_top`, self-verifying against the logs) and a consumer (`_copy_top_tactical`), with `copy_top_value` defaulting **ON** in `runtime.py`. Built in the **Pilot** path rather than in `state_value`, the same routing F12 took |
-| **F8** end-of-turn energy decay | #286, then #351 | **done** | #286 alone did **not** discharge it — #351 unmasked and fixed `readiness_p`'s missing legality leg (`_may_attack_now`). `readiness.blind_to` entry 4 is now a **verdict** rather than a gap, bounded at 21 measured frames |
+| **F8** end-of-turn energy decay | #286, then #351 | **done** | Issue #286 alone did **not** discharge it — Issue #351 unmasked and fixed `readiness_p`'s missing legality leg (`_may_attack_now`). `readiness.blind_to` entry 4 is now a **verdict** rather than a gap, bounded at 21 measured frames |
 | **F9, F10** | — | **out of scope** | Ruled out by the developer, tabulated with owners in Issue #278. Not re-litigated here |
 | **F11** | #287 | **done** | Built |
 | **F12** | #288 | **done** | Built **outside** `state_value`, in the Pilot's needs/playability path, so one fix serves both systems |
@@ -932,15 +932,15 @@ above, where all three look like ordinary sub-issues that closed:
   alone would have recorded the opposite outcome.
 - **F8 was NOT discharged by its own sub-issue.** Issue #286 built the end-of-turn decay read and left
   a defect that only Issue #351 — outside the 13 — unmasked and fixed. The 13-sub-issue view scores
-  F8 done at #286; the landed view scores it done at #351.
+  F8 done at Issue #286; the landed view scores it done at Issue #351.
 
 **One live blindness that belongs in this table and was ruled outside it.** Issue #376's developer
 ruling (2026-08-04) accepts that `state_value` must not carry the prize value of cashing an attack
 boost — it belongs to `attack_ev` under Issue #263's composer — and states the consequence outright:
 enabling cards such as Boss's Orders and Premium Power Pro *may be underplayed until Issue #263 lands*.
-That is a ruled, accepted, temporary blindness of exactly this table's kind, owned by **#263**, and it
-is carried in the consolidated `blind_to` package in `data/leaf_lab/wave3-rulings.md` so the composer
-meets it before it writes a beam rather than after.
+That is a ruled, accepted, temporary blindness of exactly this table's kind, owned by **Issue #263**,
+and it is carried in the consolidated `blind_to` package in `data/leaf_lab/wave3-rulings.md` so the
+composer meets it before it writes a beam rather than after.
 
 ## Re-running this audit
 
