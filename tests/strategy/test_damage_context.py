@@ -309,7 +309,8 @@ def test_a_stable_context_is_canonicalised_once_where_a_fresh_one_is_not(combat)
 
 def _frames(n=12):
     """``(name, obs)`` for the first ``n`` committed correction fixtures (all of them for None)."""
-    files = sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json"))
+    files = [f for f in sorted((REPO / "tests" / "fixtures" / "corrections").glob("*.json"))
+             if "obs" in json.loads(f.read_text(encoding="utf-8"))]
     return [(f.name, json.loads(f.read_text(encoding="utf-8"))["obs"])
             for f in (files if n is None else files[:n])]
 
