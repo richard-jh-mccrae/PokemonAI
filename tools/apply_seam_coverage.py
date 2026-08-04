@@ -1045,6 +1045,37 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
                ["/".join(snapshot_coverage.VOCABULARY_KEYS) + " in pool", "sites using it",
                 "has a write-set"]))
     add("")
+    # ── the THIRD axis (Issue #374) ───────────────────────────────────────────────────────────────
+    # The table above reports the health of the VOCABULARY axis. It reported nothing at all about the
+    # SELECTOR axis, which is the wider one — and that is the same defect one level up that Issue
+    # #350 fixed inside the table itself: a report titled "Clause write-set health" cannot claim
+    # health over ground the audit walks and it does not. Read through the same
+    # `snapshot_coverage.clause_selectors` extractor the audit uses, for the same reason.
+    #
+    # `UNCONSUMED` is the honest column: a value can be perfectly well DECLARED and still have no
+    # reader, which is the state 33 of the 74 are in. Declared-and-unread is a scheduled gap with a
+    # written reason; declared-and-silent would be the vacuous registry this axis was built to avoid.
+    add("### Clause selector-value health (`snapshot_coverage`, Issue #374)")
+    add("")
+    # WHOLE-COMPENDIUM, unlike the pool-scoped table above — deliberately, and said out loud because
+    # the two sit next to each other. The audit this mirrors walks every committed clause, so a
+    # pool-scoped count here would report health over a strictly smaller set than the check enforces.
+    pairs = snapshot_coverage.clause_selectors(load_effects())
+    undeclared = snapshot_coverage.undeclared_selector_values(pairs)
+    add(f"- `undeclared_selector_values()`: `{undeclared}`")
+    add(f"- selector keys / values in the compendium: "
+        f"**{len({k for k, _ in pairs})}** / **{len(pairs)}**")
+    add(f"- of those, ledgered as reaching no consumer yet "
+        f"(`UNCONSUMED_SELECTORS`): **{len(snapshot_coverage.UNCONSUMED_SELECTORS)}**")
+    add("")
+    by_key = collections.Counter(k for k, _ in pairs)
+    unconsumed = collections.Counter(
+        e.split("=", 1)[0] for e in snapshot_coverage.UNCONSUMED_SELECTORS)
+    add(_table([[k, n, unconsumed.get(k, 0),
+                 "yes" if k in snapshot_coverage.CLAUSE_SELECTORS else "**UNDECLARED**"]
+                for k, n in sorted(by_key.items(), key=lambda kv: (-kv[1], kv[0]))],
+               ["selector key in the compendium", "distinct values", "unconsumed", "declared"]))
+    add("")
     return "\n".join(L)
 
 

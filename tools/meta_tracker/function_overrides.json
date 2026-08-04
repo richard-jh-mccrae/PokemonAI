@@ -163,5 +163,162 @@
  ],
  "9": [
   "provides:1"
+ ],
+ "_note_team_rocket": "TEAM ROCKET FAMILY (Issue #374, POC-A2.1) — `team_rocket` marks the 52 Pokemon whose PRINTED NAME carries the \"Team Rocket's\" owner prefix, re-derived from tools/meta_tracker/cards.json (the engine's own all_card_data dump) rather than recalled. It is the build-time family index over the pool that Issue #301 recorded as MISSING, which is why nine cards' membership tests could only be `partial`: 15 Team Rocket's Energy (attach-legal only to one), 414 Articuno, 431 Mewtwo ex (can't attack under 4 in play), 436 Orbeetle, 1154 Hypnotizer, 1216 Ariana, 1217 Archer, 1218 Giovanni, 1220 Proton. The gap is NARROWER than 'nothing could answer it', and the narrower claim is the true one: for a body already IN PLAY the question is free — the dump carries `name`, CardStat.name holds it, and provider.applies_to_holder already answers it through card_text.name_in_family. What has no answer is the HIDDEN-DECK half (1220 Proton's 'Search your deck for up to 3 Basic Team Rocket's Pokemon'), which needs an index over the POOL rather than a test against one visible name. No STRUCTURAL field supplies that — the dump carries stage/ex/megaEx/tera/aceSpec/evolvesFrom/energy and nothing naming the family, and the 52 spread across 8 different energy types, so this is the same shape as Issue #349's ANCIENT / FUTURE finding. DELIBERATELY NOT TAGGED, per 'no silent caps': 1256 Team Rocket's Watchtower is a red herring — despite the name its text is \"{C} Pokemon in play (both yours and your opponent's) have no Abilities\", which runs no membership test at all. 1257 Team Rocket's Factory and 1134 Team Rocket's Transceiver run a DIFFERENT test — substring \"Team Rocket\" over SUPPORTER NAMES, not owner-family membership over Pokemon — and the developer ruled the stadium out of scope; 1134 keeps its printed literal in card_effects.json. The tag is inert today (no consumer whitelist names it), which is the authored-ahead-of-its-consumer case snapshot_coverage.UNCONSUMED_SELECTORS ledgers one axis over. Beware a NAME collision that is not a functional one: EnergyType.TEAM_ROCKET (11) in src/cg/api.py is the special ENERGY card's type, not a Pokemon trait.",
+ "24": [
+  "team_rocket"
+ ],
+ "399": [
+  "team_rocket"
+ ],
+ "400": [
+  "team_rocket"
+ ],
+ "401": [
+  "team_rocket"
+ ],
+ "407": [
+  "team_rocket"
+ ],
+ "408": [
+  "team_rocket"
+ ],
+ "409": [
+  "team_rocket"
+ ],
+ "414": [
+  "team_rocket"
+ ],
+ "425": [
+  "team_rocket"
+ ],
+ "426": [
+  "team_rocket"
+ ],
+ "427": [
+  "team_rocket"
+ ],
+ "428": [
+  "team_rocket"
+ ],
+ "429": [
+  "team_rocket"
+ ],
+ "430": [
+  "team_rocket"
+ ],
+ "431": [
+  "team_rocket"
+ ],
+ "432": [
+  "team_rocket"
+ ],
+ "433": [
+  "team_rocket"
+ ],
+ "434": [
+  "team_rocket"
+ ],
+ "435": [
+  "team_rocket"
+ ],
+ "436": [
+  "team_rocket"
+ ],
+ "440": [
+  "team_rocket"
+ ],
+ "441": [
+  "team_rocket"
+ ],
+ "442": [
+  "team_rocket"
+ ],
+ "448": [
+  "team_rocket"
+ ],
+ "449": [
+  "team_rocket"
+ ],
+ "450": [
+  "team_rocket"
+ ],
+ "451": [
+  "team_rocket"
+ ],
+ "452": [
+  "team_rocket"
+ ],
+ "453": [
+  "team_rocket"
+ ],
+ "454": [
+  "team_rocket"
+ ],
+ "455": [
+  "team_rocket"
+ ],
+ "456": [
+  "team_rocket"
+ ],
+ "457": [
+  "team_rocket"
+ ],
+ "458": [
+  "team_rocket"
+ ],
+ "459": [
+  "team_rocket"
+ ],
+ "460": [
+  "team_rocket"
+ ],
+ "461": [
+  "team_rocket"
+ ],
+ "462": [
+  "team_rocket"
+ ],
+ "463": [
+  "team_rocket"
+ ],
+ "464": [
+  "team_rocket"
+ ],
+ "468": [
+  "team_rocket"
+ ],
+ "469": [
+  "team_rocket"
+ ],
+ "470": [
+  "team_rocket"
+ ],
+ "471": [
+  "team_rocket"
+ ],
+ "473": [
+  "team_rocket"
+ ],
+ "474": [
+  "team_rocket"
+ ],
+ "475": [
+  "team_rocket"
+ ],
+ "873": [
+  "team_rocket"
+ ],
+ "874": [
+  "team_rocket"
+ ],
+ "881": [
+  "team_rocket"
+ ],
+ "882": [
+  "team_rocket"
+ ],
+ "891": [
+  "team_rocket"
  ]
 }

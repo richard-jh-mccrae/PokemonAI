@@ -31,6 +31,9 @@ import pytest
 from common import apply_option as ao
 from common import snapshot_coverage as sc
 from common import state_model as sm
+# The ONE implementation of the owner-family prefix test (Issue #374 asserts what it does and does
+# not match); a second transcription here would be the drift `unknown_zones` exists to prevent.
+from common.scouting.card_text import name_in_family
 # The engine's own `OptionType.PLAY`, taken from the DLL-free mirror `apply_option` itself reads it
 # from — a second transcription of the number here is the drift ADR-0087 charges for one store over.
 from common.strategy.context import _PLAY as _PLAY_KIND
@@ -379,6 +382,141 @@ def test_the_clause_KEY_audit_actually_bites_including_inside_a_nested_block():
     # …and the same walk on the same fabricated card finds the legitimate nested key too, so the
     # single result above is a measurement rather than a walk that reached nothing.
     assert "condition" in sc.clause_keys(fabricated)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_every_clause_SELECTOR_value_in_the_compendium_is_declared():
+    """**Issue #374 — the THIRD axis, and the widest.** `CLAUSE_WRITES` audits the values of the four
+    VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a selector's VALUE.
+    So a mistyped `target` passed both audits, and every consumer of these values fails CLOSED on a
+    string it does not recognise — `combat._accel_target_ok`, `planner._heal_restriction_ok` and
+    `planner._condition_holds` all `return False` — which means the clause funds nothing, reaches
+    nothing, or never counts toward survival. A crash would be recoverable; this is the §3c silent
+    zero.
+
+    Seventeen keys carry 74 values. Issue #374's body opened with thirteen and 54: it omitted
+    `condition`, `trigger`, `type` and the string form of `amount`, and the `condition` omission
+    contradicted its own prose, which named `_condition_holds` as a fail-closed consumer. The
+    registry was built to the MEASURED 17/74 rather than to the issue's smaller number, and the
+    numbers below are that measurement rather than a restatement of the issue."""
+    pairs = sc.clause_selectors(_compendium())
+    assert sc.undeclared_selector_values(pairs) == [], (
+        "selector values with no CLAUSE_SELECTORS entry: %s"
+        % sc.undeclared_selector_values(pairs))
+    # The walk actually reached the artifact, rather than passing by finding nothing.
+    keys = {k for k, _ in pairs}
+    assert (len(pairs), len(keys)) == (74, 17), (len(pairs), len(keys))
+    # Every selector key is a declared PARAMETER, and none of them is VOCABULARY — Issue #349's
+    # discriminator is *names a WRITE*, not *is a string*, and a selector narrows reach, never writes.
+    assert set(sc.CLAUSE_SELECTORS) <= set(sc.CLAUSE_PARAMETERS)
+    assert not (set(sc.CLAUSE_SELECTORS) & set(sc.VOCABULARY_KEYS))
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_selector_value_audit_actually_bites_with_a_positive_control():
+    """The positive control, on the same run as the green pass above — this repo's standing rule,
+    because *"found nothing"* and *"my instrument is broken"* return the same empty list.
+
+    Bites in BOTH directions, and the second is the one a smaller design would have missed: an
+    undeclared VALUE on a known key, and a string-valued KEY the selector registry has never heard of
+    even though `CLAUSE_PARAMETERS` might already declare it. Nested blocks included, so a typo
+    inside `amount_if` is as visible as one outside it."""
+    fabricated = {"999": [{"kind": "accel", "target": "a_target_nobody_declared"}]}
+    assert sc.undeclared_selector_values(sc.clause_selectors(fabricated)) == \
+        ["target=a_target_nobody_declared"]
+    # A brand-new selector KEY bites too — otherwise a key could arrive already exempt from the audit
+    # that exists to cover it.
+    assert sc.undeclared_selector_values([("brandnewsel", "x")]) == ["brandnewsel=x"]
+    # Nested, inside `amount_if`.
+    nested = {"999": [{"kind": "draw", "amount_if": {"condition": "nope_typo", "amount": 2}}]}
+    assert sc.undeclared_selector_values(sc.clause_selectors(nested)) == ["condition=nope_typo"]
+    # …and on that same run every committed value still passes, so the bite above is discrimination
+    # rather than a check that reddens on everything.
+    assert sc.undeclared_selector_values(sc.clause_selectors(_compendium())) == []
+    # A VOCABULARY value is NOT this audit's business — it is `undeclared_clauses`'. The two axes stay
+    # separate, which is why `gust` can be a `kind` and an `effect` without confusing either.
+    assert sc.undeclared_selector_values(sc.clause_selectors(
+        {"999": [{"kind": "a_kind_nobody_declared"}]})) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_selector_values_are_keyed_PER_KEY_because_one_string_means_several_things():
+    """**Why the registry is keyed by clause key and not one flat namespace** — the deciding fact is
+    measured, not aesthetic. `"basic"` is a `target` (a Basic Pokemon), an `applies_to` (a Stadium's
+    Basic-body scope) AND an `energy` (a Basic Energy card); `"deck"` and `"discard"` are each both a
+    `zone` and a `source`. A flat `value -> legal` set would therefore have to accept
+    `{"zone": "basic"}` — not a coarser audit but a WRONG one.
+
+    That is also why the `cost` ruling (Issue #350) does not transfer. It folded `cost` into
+    `VOCABULARY_KEYS` precisely BECAUSE its values were zone ids drawn from one shared `BY_ID`
+    namespace; selector values share no namespace, so the premise fails and the conclusion with it."""
+    assert sc.undeclared_selector_values([("target", "basic")]) == []
+    assert sc.undeclared_selector_values([("zone", "basic")]) == ["zone=basic"]
+    assert sc.undeclared_selector_values([("zone", "deck"), ("source", "deck")]) == []
+    # The collision is real in the committed store, not hypothetical.
+    for key in ("target", "applies_to", "energy"):
+        assert "basic" in sc.CLAUSE_SELECTORS[key], key
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_unconsumed_selector_ledger_is_declared_and_every_entry_is_reasoned():
+    """**The honest half of the third axis.** 33 of the 74 committed values reach no consumer at all.
+    They are declared LEGAL and ledgered rather than waved through or failed: rejecting them would
+    demand 33 consumer builds before the suite could go green, and accepting them silently would make
+    `CLAUSE_SELECTORS` a transcription of the store — incapable of disagreeing with it, and therefore
+    vacuous for exactly the population it exists to catch. The `owed`-status discipline `WRITABLE`
+    already runs, one axis over.
+
+    Not asserted exhaustive, deliberately: membership was measured by sweeping CODE string literals
+    (comments and docstrings parsed out), which answers *does any module mention it* and not *does
+    any module act on it*. So the ledger may under-report, and the assertions run in the direction
+    that cannot rot — every entry names a value the registry really declares, and every entry gives a
+    reason."""
+    declared = {f"{k}={v}" for k, vs in sc.CLAUSE_SELECTORS.items() for v in vs}
+    assert set(sc.UNCONSUMED_SELECTORS) <= declared, (
+        "ledgered values that are not declared selector values: %s"
+        % sorted(set(sc.UNCONSUMED_SELECTORS) - declared))
+    assert [k for k, v in sc.UNCONSUMED_SELECTORS.items() if not str(v).strip()] == []
+    # The ledger is about the COMMITTED store, so every entry must still be carried by a real card.
+    committed = {f"{k}={v}" for k, v in sc.clause_selectors(_compendium())}
+    assert set(sc.UNCONSUMED_SELECTORS) <= committed, (
+        "ledger entries no card carries any more: %s"
+        % sorted(set(sc.UNCONSUMED_SELECTORS) - committed))
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_name_family_carries_TWO_tests_and_1134_is_not_a_typo():
+    """**Issue #374's live instance, and the finding that reversed its diagnosis.** The issue filed
+    1134 Team Rocket's Transceiver's `name_family: "Team Rocket"` as a typo for 1218 / 1220's
+    `"Team Rocket's"`, to be reconciled. Verified against the engine's own `all_card_data()` dump it
+    is not a typo at all: 1134 prints *"Search your deck for a Supporter card that has "Team Rocket"
+    in its name"* — a SUBSTRING test over Supporter NAMES, whose stored value transcribes the card's
+    own quoted literal — where 1218 prints *"Switch your Active Team Rocket's Pokemon"*, an owner
+    possessive that `card_text.name_in_family` implements as a normalised PREFIX test.
+
+    Two tests on one key. They coincide over this pool only because all 65 Team Rocket cards happen
+    to carry the possessive, so rewriting 1134 would have been behaviour-neutral today and wrong the
+    day a non-possessive one arrives. Kept as printed.
+
+    The Pokemon-membership half moved OFF this key entirely (developer's ruling): it is now the
+    `team_rocket` Function Tag on the 52 Pokemon themselves, which is the build-time family index
+    over the pool Issue #301 recorded as missing. All four values stay declared here because the
+    compendium still carries them, and all four are ledgered as unconsumed."""
+    clauses = sc.clause_lists(_compendium())
+    carriers = {cid: cl.get("name_family") for cid, cls in clauses.items() for cl in cls
+                if cl.get("name_family")}
+    assert carriers[1134] == "Team Rocket", "1134 keeps its PRINTED literal — it is not a typo"
+    assert carriers[1218] == carriers[1220] == "Team Rocket's"
+    # The prefix test really does separate them, which is why one key cannot serve both meanings.
+    assert name_in_family("Team Rocket's Giovanni", "Team Rocket's") is True
+    assert name_in_family("Team Rocket's Giovanni", "Team Rocket") is False
+    # Positive control on the same run: the instrument is live, not answering False to everything.
+    assert name_in_family("Hop's Bag", "Hop's") is True
+    assert name_in_family("Amulet of Hope", "Hop's") is False
+    # Every spelling is declared, and every one is ledgered as reaching no consumer.
+    for value in ("Team Rocket", "Team Rocket's", "Hop's", "Ethan's"):
+        assert value in sc.CLAUSE_SELECTORS["name_family"], value
+        assert f"name_family={value}" in sc.UNCONSUMED_SELECTORS, value
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")

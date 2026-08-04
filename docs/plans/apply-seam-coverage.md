@@ -435,6 +435,32 @@ Per CARD (each card counted once, at its WORST site), so every row totals the de
 | shuffle_self_in | 1 | yes |
 | stadium_trigger | 1 | declared EMPTY |
 
+### Clause selector-value health (`snapshot_coverage`, Issue #374)
+
+- `undeclared_selector_values()`: `[]`
+- selector keys / values in the compendium: **17** / **74**
+- of those, ledgered as reaching no consumer yet (`UNCONSUMED_SELECTORS`): **33**
+
+| selector key in the compendium | distinct values | unconsumed | declared |
+|---|---|---|---|
+| target | 24 | 3 | yes |
+| condition | 13 | 9 | yes |
+| applies_to | 6 | 2 | yes |
+| restriction | 5 | 2 | yes |
+| name_family | 4 | 4 | yes |
+| trigger | 4 | 3 | yes |
+| source | 3 | 1 | yes |
+| amount_per | 2 | 2 | yes |
+| dest | 2 | 0 | yes |
+| timing | 2 | 2 | yes |
+| type | 2 | 2 | yes |
+| zone | 2 | 0 | yes |
+| amount | 1 | 0 | yes |
+| dig_from | 1 | 1 | yes |
+| energy | 1 | 0 | yes |
+| on | 1 | 1 | yes |
+| source_class | 1 | 1 | yes |
+
 <!-- END GENERATED -->
 
 ---

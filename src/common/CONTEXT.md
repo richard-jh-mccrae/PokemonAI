@@ -318,6 +318,21 @@ a board set whose COUNT multiplies `amount`, all of it landing in the clause's s
 DISTRIBUTES (a boolean: the FULL `amount` to EVERY body the clause's own `target` names — 1222 Fennel
 heals 40 from each of mine). They are two keys rather than one on purpose; `snapshot_coverage`'s
 module docstring carries that ruling and its grounds, as it does for `cost`.
+A THIRD axis was added by Issue #374 (`snapshot_coverage.CLAUSE_SELECTORS`): the VALUES of the
+string-valued keys that do the SELECTING — `target`, `condition`, `applies_to`, `restriction`,
+`name_family`, `trigger` and eleven more, 17 keys carrying 74 values. `CLAUSE_WRITES` audits the
+values of the four VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a
+selector's value, so a mistyped `target` passed both audits and every consumer of it fails CLOSED
+(`combat._accel_target_ok`, `planner._heal_restriction_ok`, `planner._condition_holds` all
+`return False` on a string they do not know) — the clause funds nothing, reaches nothing, or never
+counts toward survival. `undeclared_selector_values` is its teeth. **Unlike the value namespace
+above it is keyed PER KEY, not flat**, and that is measured rather than aesthetic: `"basic"` means
+three different things across `target` / `applies_to` / `energy`, and `"deck"` / `"discard"` two
+each across `zone` / `source`, so one flat set would have to accept `{"zone": "basic"}`. The 33 of
+74 values that reach no consumer are declared legal and ledgered in `UNCONSUMED_SELECTORS` with a
+written reason each — `WRITABLE`'s `owed` discipline, one axis over — so the registry cannot become
+a mere transcription of the store. The module docstring carries the ruling and the two rejected
+shapes.
 Measured from the engine probe's own logs (heal amount = the `HP_CHANGE` value, restriction = which
 targets the select actually offers), with a hand-authored override tail for clauses no probe board
 can trigger. Shipped as `card_effects.json` beside the tag table.
