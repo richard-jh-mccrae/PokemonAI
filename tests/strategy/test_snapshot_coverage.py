@@ -36,6 +36,7 @@ from common import state_model as sm
 from common.scouting.card_text import name_in_family
 # The engine's own `OptionType.PLAY`, taken from the DLL-free mirror `apply_option` itself reads it
 # from — a second transcription of the number here is the drift ADR-0087 charges for one store over.
+from common.strategy.context import _EVOLVE as _EVOLVE_KIND
 from common.strategy.context import _PLAY as _PLAY_KIND
 
 _EFFECTS = Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json"
@@ -61,8 +62,14 @@ def _resolve(path: str) -> bool:
             return False
         attr = getattr(cur, p)
         # A `lazy`/property descriptor has no return type to walk into; the BodyView legs
-        # (`mine.active.energy_count`) hop through it explicitly.
-        cur = sm.BodyView if p in ("active",) else attr
+        # (`mine.active.energy_count`, `mine.bench.new_in_play`) hop through it explicitly.
+        #
+        # `bench` joined `active` at Issue #391. Until then a home could only name a per-body field
+        # on the ACTIVE, so a bench leg had to name the CONTAINER (`damage_counters`' spelling) and
+        # WHICH per-body facts got compared was decided in `apply_parity._project` instead — where
+        # dropping one is silent, because every home still resolves. Hopping the container here is
+        # what lets a bench leg name its field and be checked like any other.
+        cur = sm.BodyView if p in ("active", "bench") else attr
     return True
 
 
@@ -711,6 +718,53 @@ def test_a_this_turn_damage_boost_is_ENUMERATED_and_homed_on_both_sides():
     assert sorted(sc.homes()["this_turn_damage_boosts"]) == ["mine.damage_boosts",
                                                              "theirs.damage_boosts"]
     assert hasattr(sm.MySide, "damage_boosts") and hasattr(sm.TheirSide, "damage_boosts")
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0003")
+def test_the_new_in_play_bit_is_ENUMERATED_homed_per_body_and_written_by_both_transitions():
+    """The zone Issue #391 added, and the third `ABSENT, not owed` finding after Issue #282's.
+
+    The two are NOT the same shape, which is why this one needed an issue rather than a line in
+    Issue #382's diff: `this_turn_damage_boosts` already had a shipped `_SideBase` read when it was
+    enumerated, so that fix was documentation catching up with code. Here there was no read at all —
+    34 sites across `src/` and `tools/` consult `appearThisTurn` off a RAW body dict and none off a
+    snapshot — so the fix included building `BodyView.new_in_play`.
+
+    Three properties, and the second is the one that is easy to get wrong:
+
+    1. **Homed on BOTH sides.** The argument is a READ one rather than the write one
+       `attached_energy` / `damage_counters` / `transient_grants` carry: nothing writes the
+       opponent's half, but the engine carries the bit on their bodies too and `docs/rules.md` §4
+       gates their evolutions on it exactly as it gates mine.
+    2. **All four legs name the FIELD, Bench included.** A container leg (`mine.bench`) resolves as
+       long as the container exists and delegates what actually gets compared to
+       `apply_parity._project` — where dropping a field is silent. Naming the field is what makes
+       THIS test the thing that fails.
+    3. **Both transitions that set the bit declare it.** `_PLAY` writes it (a Basic deploy arrives
+       new in play) and `_EVOLVE` both writes it (the evolved body does too) and READS it (§4 is why
+       `[play Basic, evolve it]` is illegal — Issue #263's own worked 2-ply sequence)."""
+    zone = sc.BY_ID["new_in_play"]
+    assert zone.status == sc.HOMED
+    assert sc.homes()["new_in_play"] == [
+        "mine.active.new_in_play", "mine.bench.new_in_play",
+        "theirs.active.new_in_play", "theirs.bench.new_in_play"]
+    assert hasattr(sm.BodyView, "new_in_play")
+    # The registry's OTHER bench spelling, asserted so the difference above reads as deliberate
+    # rather than as an inconsistency somebody will "fix" in one direction or the other.
+    assert "mine.bench" in sc.homes()["damage_counters"]
+
+    play, evolve = ao.FOOTPRINTS[_PLAY_KIND], ao.FOOTPRINTS[_EVOLVE_KIND]
+    assert "new_in_play" in play.writes and "new_in_play" not in play.reads
+    assert "new_in_play" in evolve.writes and "new_in_play" in evolve.reads
+    assert ao.footprints_writing_unhomed() == {}
+
+    # It stays WHOLE-ZONE (`ELEMENT_ZONES`), and that costs nothing today — asserted rather than
+    # claimed. `_PLAY` is incomplete so it commutes with nothing at all, and two `_EVOLVE`s already
+    # collide on whole-zone `special_conditions`, so no `commutes()` answer turns on this zone.
+    assert "new_in_play" not in sc.ELEMENT_ZONES
+    assert not play.complete
+    assert "special_conditions" in evolve.writes and "special_conditions" not in sc.ELEMENT_ZONES
+    assert not ao.commutes(_EVOLVE_KIND, _EVOLVE_KIND)
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")

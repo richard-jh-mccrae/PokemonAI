@@ -76,9 +76,12 @@ def test_the_diff_BITES_when_a_transition_is_wrong():
     ⚠️ **The control found a real blind spot, and it is filed rather than papered over.** Four defects
     were injected while building this lane; three went red (the energy allowance, 551 divergences;
     carried damage across an evolution, 2; a retreat modelling the whole maneuver, 471). The fourth —
-    a deploy that forgets `appearThisTurn` — went **green**, because that bit is enumerated in no
-    `snapshot_coverage` zone and so has no snapshot home for this projection to read. **Issue #391**
-    owns it, and its acceptance is that this test grows a second control that bites."""
+    a deploy that forgets `appearThisTurn` — went **green**, because that bit was enumerated in no
+    `snapshot_coverage` zone and so had no snapshot home for this projection to read.
+    `test_a_deploy_that_forgets_the_NEW_IN_PLAY_bit_now_bites` below is Issue #391 closing it, and
+    the two tests are kept apart on purpose: this one proves the lane can see an ALLOWANCE, that one
+    proves it can see a per-BODY bit on the Bench, and a single test asserting a union of zones would
+    stay green if either half stopped working."""
     paths = sorted(lane.TRACES.glob("*.trace.json.gz"))[:4]
     combat = lane.offline_combat()
     assert lane.sweep(combat=combat, traces=paths).clean          # the same subset, honest
@@ -97,6 +100,47 @@ def test_the_diff_BITES_when_a_transition_is_wrong():
         bd.TRANSITIONS[bd._RETREAT] = original
     assert not broken.clean
     assert {d.zone for d in broken.divergences} == {"allowance_retreat_used"}
+
+
+@pytest.mark.req("REQ-APPLY-0004")
+def test_a_deploy_that_forgets_the_NEW_IN_PLAY_bit_now_bites():
+    """**The control Issue #382 injected and watched stay GREEN**, run again now that the bit has a
+    zone (Issue #391). This is the acceptance criterion, as a test: `board_delta._play` writes
+    ``appearThisTurn: True`` onto every deployed body and — until `new_in_play` was enumerated —
+    nothing in the tree could hold it to that, because the lane compares the HOMED zones of
+    `snapshot_coverage` and no zone named the bit.
+
+    The defect is the smallest possible one: the deploy happens correctly and then the new body's bit
+    is cleared. Nothing else about the board moves, which is what makes the zone set below evidence
+    rather than a side effect — a body that *also* landed in the wrong place would redden
+    `bodies_in_play` too, and this asserts it does not.
+
+    The bit is cleared on the LAST bench entry (the one `_play` just appended) rather than across the
+    whole Bench, and by REPLACING the dict rather than mutating it: a Stadium play forks a bench list
+    whose body dicts are shared with the source observation, and mutating one in place would corrupt
+    the pre-state the lane is diffing against."""
+    paths = sorted(lane.TRACES.glob("*.trace.json.gz"))[:4]
+    combat = lane.offline_combat()
+    assert lane.sweep(combat=combat, traces=paths).clean          # the same subset, honest
+
+    original = bd.TRANSITIONS[bd._PLAY]
+
+    def _forgets_the_bit(obs, option, *, seat_index, combat):
+        delta = original(obs, option, seat_index=seat_index, combat=combat)
+        players = ((delta.obs.get("current") or {}).get("players")) or []
+        bench = (players[seat_index] or {}).get("bench") or []
+        if bench and (bench[-1] or {}).get("appearThisTurn"):
+            bench[-1] = {**bench[-1], "appearThisTurn": False}
+        return delta
+
+    bd.TRANSITIONS[bd._PLAY] = _forgets_the_bit
+    try:
+        broken = lane.sweep(combat=combat, traces=paths)
+    finally:
+        bd.TRANSITIONS[bd._PLAY] = original
+    assert not broken.clean, "the deploy defect is invisible again — the zone has stopped comparing"
+    assert {d.zone for d in broken.divergences} == {"new_in_play"}
+    assert {d.kind for d in broken.divergences} == {bd._PLAY}
 
 
 @pytest.mark.req("REQ-APPLY-0004")

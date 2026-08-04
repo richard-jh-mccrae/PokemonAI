@@ -280,6 +280,55 @@ WRITABLE: tuple[Zone, ...] = (
          "consumes off the Damage Formula context's `atk_boosts` key", HOMED,
          home="mine.damage_boosts,theirs.damage_boosts"),
 
+    # ── enumerated by POC-T4/3 (Issue #391). ABSENT, not owed — the same worse status, one track on.
+    #
+    # Issue #282's entry above was an enumeration catching up with a SHIPPED read; this one was not.
+    # `appearThisTurn` had no `StateModel` field at all, so the registry could not have homed it even
+    # if somebody had thought to enumerate it — the fix included building the read
+    # (`BodyView.new_in_play`). That is the difference between the two, and it is why this was an
+    # issue rather than a line in Issue #382's diff.
+    #
+    # **How it surfaced is the whole argument for enumerating it.** Issue #382 built the apply-seam
+    # parity lane and — per the standing *"a negative result needs a positive control"* rule —
+    # deliberately broke each transition to prove the lane could see it. Three of four controls went
+    # red (the energy allowance, 551 divergences; carried damage across an evolution, 2; a retreat
+    # modelling the whole maneuver, 471). The fourth — a `_PLAY` deploy that FORGETS this bit — went
+    # green, because the lane compares the HOMED zones of this registry and no zone named it. The
+    # transitions wrote it correctly and no assertion in the tree could hold them to it.
+    #
+    # **HOMED on BOTH sides, and the ruling is a READ argument rather than a write one** — which is
+    # what distinguishes it from `attached_energy` / `transient_grants` / `damage_counters`, whose
+    # two-sided homes are all *"an effect writes the OPPONENT's half"*. Nothing writes theirs here:
+    # only my own `_PLAY` and `_EVOLVE` set the bit, on my own bodies. It is homed on both anyway,
+    # for two reasons that are measured rather than argued:
+    #
+    #   * The FACT is symmetric and fully visible. The engine carries `appearThisTurn` on the
+    #     opponent's bodies too and it changes across the turn boundary exactly as mine does
+    #     (measured on the committed parity corpus: at the first MAIN frame both sides read True,
+    #     and both read False a turn later). A my-side-only home would be a narrower snapshot than
+    #     the observation supports.
+    #   * The RULE is symmetric. `docs/rules.md` §4 gates the opponent's evolutions on this bit
+    #     exactly as it gates mine, so *"what can they field next turn"* is the same read as *"what
+    #     can I"*.
+    #
+    # **All four legs name the FIELD, including the Bench ones — deliberately NOT `damage_counters`'
+    # container spelling**, and the difference is about what can fail. A leg naming a field is
+    # resolved against the real class by `test_snapshot_coverage.py`, so deleting or renaming
+    # `BodyView.new_in_play` goes red there. A leg naming a container (`mine.bench`) resolves as long
+    # as the container exists, and delegates WHICH per-body facts get compared to
+    # `tools/train/apply_parity.py`'s `_project` tuple — so a field dropped from that tuple would
+    # silently stop being compared while this registry still claimed a home. That is the vacuity this
+    # module exists to prevent, so the newer zone takes the spelling that cannot reach it.
+    # `damage_counters` is left on the older spelling: migrating it is a real change to what the
+    # parity lane compares and belongs to whoever measures it, not to this issue.
+    Zone("new_in_play",
+         "whether a body ENTERED PLAY this turn, per body, both sides — the engine's own "
+         "`appearThisTurn`. `docs/rules.md` §4: *\"Cannot evolve a Pokemon the turn it was "
+         "played/put into play\"*, which is what makes the 2-ply sequence [play Basic, evolve it] "
+         "ILLEGAL rather than merely bad", HOMED,
+         home="mine.active.new_in_play,mine.bench.new_in_play,"
+              "theirs.active.new_in_play,theirs.bench.new_in_play"),
+
     # ── hidden: no field can hold it. Recorded so nobody 'fixes' it. ──────────────────────────────
     Zone("deck_order", "the ORDER of cards in a deck — what a shuffle and a to-bottom rider change",
          HIDDEN,
@@ -326,6 +375,18 @@ BY_ID = {z.id: z for z in WRITABLE}
 #: * ``stadium`` — OUT. One shared slot for the whole board (`docs/rulebook.txt` L135-137).
 #: * ``transient_grants`` — OUT, fail-closed rather than reasoned: ADR-0033 grants are scoped to a
 #:   turn and a side, and nothing has established that two grant writes are separable by body.
+#: * ``new_in_play`` — OUT (Issue #391), and this one is a DECLINED widening rather than an
+#:   unexamined one, so read the reason: the zone genuinely holds separable instances (the bit lives
+#:   on ONE body, and `board_delta._play` / `_evolve` each set exactly one), so it would qualify. It
+#:   stays whole-zone because joining is a LICENCE and licences are the developer's to grant —
+#:   ADR-0098 Amendment D names its membership as *"five zones"* and its exclusions as *"a condition
+#:   of the grant"*. **It costs nothing today, measured rather than assumed:** `_PLAY` is
+#:   `complete=False` so it commutes with nothing at all, and two `_EVOLVE`s already collide on
+#:   whole-zone ``special_conditions`` — so no `commutes()` or `footprints_commute()` answer in the
+#:   tree differs either way. What element-keying would buy is a FUTURE distinction: [play Basic A,
+#:   evolve body B] provably commuting while [play Basic A, evolve A] — the illegal sequence
+#:   `docs/rules.md` §4 forbids — still conflicts, since `board_delta._play` gives the deployed body
+#:   the hand card's own ``serial``. Whole-zone refuses both, which is the sound direction.
 #: * every deck / prize / hand-SIZE count — OUT. They are counts, not containers.
 #:
 #: Being element-level is a LICENCE, never an obligation: a footprint that names no instance for a

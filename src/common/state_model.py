@@ -597,6 +597,37 @@ class BodyView(_Lazily):
         holds the record and the oracle keeps applying it, exactly as it does for damage."""
         return dict(self._combat._grant(self.body) or {})
 
+    @lazy
+    def new_in_play(self) -> bool:
+        """This body ENTERED PLAY this turn — the engine's own ``appearThisTurn`` bit (POC-T4/3,
+        Issue #391).
+
+        Homes the ``new_in_play`` zone of the §3c completeness contract
+        (:mod:`common.snapshot_coverage`). It is a RULE, not a heuristic: `docs/rules.md` §4 —
+        *"Cannot evolve a Pokémon **the turn it was played/put into play** (it's 'new in play')."* —
+        so this bit is what makes the 2-ply sequence ``[play Basic, evolve it]`` **illegal**, which is
+        precisely the kind of sequence Issue #263's composer enumerates.
+
+        Named for the rule rather than for the field, deliberately: the engine spells it
+        ``appearThisTurn`` and 34 sites across `src/` and `tools/` read it straight off the raw body
+        dict, which is fine for a reader that HAS the raw board. What could not be done before this
+        field is read it off a **snapshot** — and the value layer, the apply seam's parity lane and
+        the composer's ply-≥1 legality filter are restricted to exactly that
+        (`docs/plans/value-system-poc-plan.md` §4-T0's sole-supplier ruling: `state_value` takes a
+        `StateModel` and reads nothing else).
+
+        **Absent reads False**, and that is agreement rather than a fail-closed choice: every one of
+        the 34 raw sites spells the eligibility test ``not b.get("appearThisTurn")``, so a missing key
+        already means *"in play since last turn"* everywhere else in the tree, and a model field that
+        answered differently about the same body would be a second answer to one question. Only a
+        hand-built board reaches it — a real observation carries the bit on BOTH sides' bodies
+        (measured across the committed parity corpus), which is why the zone is homed on both.
+
+        ⚠️ Note the direction it leans: False is the PERMISSIVE reading for an evolve. A legality
+        filter built on this (Issue #385) is therefore a narrowing of the engine's own menu, never
+        the only thing standing between the composer and an illegal option."""
+        return bool(self.body.get("appearThisTurn"))
+
 
 # ── the two sides ─────────────────────────────────────────────────────────────────────────────
 

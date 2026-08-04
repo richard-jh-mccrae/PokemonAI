@@ -484,3 +484,86 @@ The refinement widens what can be **proved** disjoint; it widens nothing that is
   order is wrong even when the two plays provably commute.
 - **Nothing at runtime moved.** No production caller invokes `apply_option`, so both ADR-0072 gates
   were expected to be — and were — byte-identical.
+
+## Amendment E — the new-in-play bit gets a zone, a read, and two footprint declarations (Issue #391, built 2026-08-04)
+
+Not a ruling — no contract meaning changes and nothing was granted. It is recorded here because it
+**edits facts Amendments B and D state outright**, and an ADR that quietly rots is worse than one
+that corrects itself: B3's registry gains a zone, and D4's *"a Basic deploy writes exactly
+`{my_hand_ids, bodies_in_play, bench_occupancy}`"* is now a set of four.
+
+### E1. What was wrong
+
+`appearThisTurn` — *"this body entered play this turn"* — was in **no** `snapshot_coverage` zone. So
+it had no `StateModel` home, `state_value` could not read it, and no instrument built on the registry
+could compare it. It is the bit `docs/rules.md` §4 turns into a rule: *"Cannot evolve a Pokémon the
+turn it was played/put into play"*, which is what makes the 2-ply sequence `[play Basic, evolve it]`
+**illegal** rather than merely bad — precisely the kind of sequence Issue #263's composer enumerates.
+
+It surfaced through Amendment B's own discipline. Issue #382's parity lane injected four deliberate
+defects to prove it could see them; three went red and the fourth — a `_PLAY` deploy that forgets the
+bit — went **green**, because the lane compares the HOMED zones of `snapshot_coverage` and no zone
+named it. `board_delta._play` and `_evolve` both wrote the bit correctly the whole time. Nothing in
+the tree could hold them to it.
+
+This is the status Issue #282 named **ABSENT, not owed — the worse status**, with one difference that
+is the reason it took an issue rather than a line in Issue #382's diff: `this_turn_damage_boosts`
+already HAD a shipped `_SideBase` read, so enumerating it was documentation catching up with code.
+Here there was no read at all — 34 sites consult the bit off a RAW body dict and none off a snapshot
+— so the fix included **building** `BodyView.new_in_play`.
+
+### E2. What changed
+
+- **`snapshot_coverage.WRITABLE` gains `new_in_play`**, HOMED, on both sides.
+- **The both-sides home rests on a READ argument, not the write one its neighbours use.**
+  `attached_energy` / `damage_counters` / `transient_grants` are two-sided because *an effect writes
+  the opponent's half*; nothing writes theirs here — only my own `_PLAY` and `_EVOLVE` set the bit, on
+  my own bodies. It is homed on both anyway because the FACT is symmetric and fully visible (measured
+  on the committed parity corpus: the engine carries `appearThisTurn` on the opponent's bodies and it
+  clears across the turn boundary exactly as mine does) and because the RULE is symmetric — §4 gates
+  their evolutions on it exactly as it gates mine.
+- **All four legs name the FIELD, Bench included** (`mine.bench.new_in_play`), which is a departure
+  from `damage_counters`' container spelling and the departure is the point. A leg naming a field is
+  resolved against the real class by `test_snapshot_coverage.py`; a leg naming a container resolves
+  as long as the container exists and delegates what is actually compared to `apply_parity._project`,
+  where dropping a field is **silent**. `damage_counters` keeps the older spelling: migrating it
+  changes what the lane compares and belongs to whoever measures it.
+- **`_EVOLVE`'s footprint gains the zone on BOTH sides of the arrow.** It WRITES it (the evolved body
+  arrives new in play — measured, `alakazam_9000` f127) and it READS it (§4 is the kind's legality
+  input). Declaring the read is what lets `footprints_commute` refuse `[play Basic, evolve it]` for
+  the reason the rule gives rather than incidentally via `my_hand_ids`.
+- **`_PLAY`'s structural floor gains it as a WRITE**, and so does `_structural_drop`'s Basic-deploy
+  sub-case — which is the D4 sentence this amendment corrects. A play's own legality does not depend
+  on the bit, so there is no read.
+- **`apply_parity`'s DECLARED BLIND SPOTS list loses its first entry**, and
+  `test_the_diff_BITES_when_a_transition_is_wrong` grows the sibling
+  `test_a_deploy_that_forgets_the_NEW_IN_PLAY_bit_now_bites`. Two tests rather than one union: this
+  one proves the lane sees an ALLOWANCE, that one proves it sees a per-BODY bit on the Bench.
+
+### E3. It stays WHOLE-ZONE, and that is a declined widening
+
+`new_in_play` would QUALIFY for `ELEMENT_ZONES` under Amendment D's own criterion — the bit lives on
+one body and each transition sets exactly one. It is **out** anyway: joining is a licence, D names its
+membership as *"five zones"* and its exclusions as *a condition of the grant*, and a licence is the
+developer's to give.
+
+**It costs nothing today, measured rather than assumed.** `_PLAY` is `complete=False`, so it commutes
+with nothing at all; two `_EVOLVE`s already collide on whole-zone `special_conditions` (D4's own
+recorded narrowness). No `commutes()` or `footprints_commute()` answer in the tree differs either
+way, and `test_the_new_in_play_bit_is_ENUMERATED_homed_per_body_and_written_by_both_transitions`
+asserts that rather than claiming it. What element-keying would buy is a FUTURE distinction —
+`[play Basic A, evolve body B]` provably commuting while `[play Basic A, evolve A]`, the sequence §4
+forbids, still conflicts, since `board_delta._play` gives the deployed body the hand card's own
+`serial`. Whole-zone refuses both, which is the sound direction.
+
+### E4. Consequences
+
+- **The full 377-trace parity sweep stays clean with the zone compared**, which is the claim that
+  matters: the seam was already right about the bit and now the lane can say so.
+- **`sc.unhomed()` and `footprints_writing_unhomed()` are still `{}`** — the zone arrived HOMED, which
+  `test_the_owed_list_is_empty_because_T1_carried_it` requires.
+- **The audit harness can now check a per-body read on the BENCH at all.** `test_snapshot_coverage`'s
+  `_resolve` hops `bench` as well as `active`; until this it could only verify a per-body field on the
+  Active, which is why bench legs were spelled as containers in the first place.
+- **Nothing at runtime moved.** No production caller invokes `apply_option`, and no consumer reads the
+  new field yet — Issue #385's composer is the first.

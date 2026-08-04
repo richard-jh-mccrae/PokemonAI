@@ -39,9 +39,6 @@ it is missing from the registry, which its own audit test is what catches.
 Stated rather than discovered, because *"0 DIVERGED"* is exactly the result that invites over-reading.
 Each was found by injecting a defect and watching the lane stay green:
 
-* **`appearThisTurn`** — the new-in-play bit is in no `snapshot_coverage` zone, so it has no snapshot
-  home for the projection to read at all. A deploy that forgot it would pass. **Issue #391** owns it,
-  and its acceptance is a second control here that bites.
 * **`transient_grants`** — :func:`offline_combat` builds the oracle with ``transients=None``, so
   `BodyView.grant` is `{}` on both sides and the zone compares a constant. Reconstructing the grant
   tracker means replaying attack effects across the trace, which is a different instrument; no
@@ -50,6 +47,14 @@ Each was found by injecting a defect and watching the lane stay green:
   tools, prizes) and not by engine instance number, deliberately: that is the same field ADR-0091's
   Option Equivalence ignores, because two indistinguishable bodies are one decision. The cost is that
   a transition which carried the WRONG instance of an identical card would pass here.
+
+**`appearThisTurn` was on this list and is not any more (Issue #391).** The new-in-play bit was in no
+`snapshot_coverage` zone, so the projection had no home to read at all and a `_PLAY` deploy that
+forgot it passed green — the one control of four that stayed silent when this lane was built. It is
+now the `new_in_play` zone, homed at `BodyView.new_in_play` on the Active AND the Bench of both
+sides, and `test_the_diff_BITES_when_a_transition_is_wrong` runs that same deploy defect as its
+second control. Its four legs name the FIELD rather than the body container — see :func:`_project`
+for why that spelling and not `damage_counters`'.
 
 **`my_deck_count` was on this list and is not any more.** The lane threads each trace's real 60-card
 decklist from `Trace.meta["decks"]` (see :func:`replay`), because `MySide.deck_count` is derived from
@@ -122,7 +127,15 @@ def _project(value):
     `BodyView`s and tuples of them are the case that needs a rule: they are objects, so ``==`` is
     identity and every comparison would "diverge". Projected to the facts a value equation actually
     asks a body — who it is, how hurt it is, what it is carrying — which is the same standard the
-    module docstring sets for the zones themselves."""
+    module docstring sets for the zones themselves.
+
+    ⚠️ **This tuple is a SECOND place a zone's content can be decided**, and the two do not fail the
+    same way. A `home` that names a field (`mine.active.tool_ids`, `mine.bench.new_in_play`) is
+    resolved against the real class by `test_snapshot_coverage.py`, so deleting the field goes red. A
+    `home` that names a CONTAINER (`mine.bench`) delegates to this tuple instead — so a field dropped
+    from HERE would silently stop being compared while every home still resolved, which is the
+    vacuity the registry exists to prevent. That is why Issue #391 spelled `new_in_play` per-body on
+    all four legs rather than following `damage_counters`' container spelling."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, (frozenset, set)):

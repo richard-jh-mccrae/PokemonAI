@@ -552,7 +552,12 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
         "preEvolution": list(target.get("preEvolution") or ()) + [_card_ref(target, seat_index)],
     }
     _replace_body(me, area, index, body)
-    writes = {"my_hand_ids", "bodies_in_play"}
+    # `new_in_play` unconditionally: the evolved body arrives with `appearThisTurn: True` above, and
+    # the body it replaced necessarily had it FALSE — `docs/rules.md` §4 forbids evolving a body the
+    # turn it was played, so every evolve flips the bit. The zone was enumerated at Issue #391; until
+    # then this write was real and undeclared, and the parity lane's `_PLAY` control proved nothing
+    # in the tree could see it.
+    writes = {"my_hand_ids", "bodies_in_play", "new_in_play"}
     if area == AREA_ACTIVE and _clear_conditions(me):
         writes.add("special_conditions")
     return Delta(obs=new_obs, writes=frozenset(writes))
@@ -660,7 +665,8 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
         })
         me["bench"] = bench
         return Delta(obs=new_obs,
-                     writes=frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy"}))
+                     writes=frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy",
+                                       "new_in_play"}))
 
     if stat.is_stadium:
         old = (current.get("stadium") or [None])[0]
