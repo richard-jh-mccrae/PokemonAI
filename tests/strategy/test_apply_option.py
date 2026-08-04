@@ -447,6 +447,163 @@ def test_footprints_speak_the_coverage_registrys_field_vocabulary():
         assert unknown == [], (kind, unknown)
 
 
+# ── §3b: PER-OPTION footprints (POC-T4/2, Issue #383) ─────────────────────────────────────────────
+#
+# The kind table cannot answer for `_PLAY` — a Trainer play writes whatever its Effect Clauses write,
+# which is per-card. `option_footprint` is the answer: the kind's structural FLOOR plus the union of
+# `snapshot_coverage.CLAUSE_WRITES` over the card's own clauses, with `reveals_information` armed off
+# `REVEALING_CLAUSES`.
+#
+# Every fixture row below is COPIED from `src/common/card_effects.json`, and its card TYPE read off
+# `data/EN_Card_Data.csv` — both checked at source, never recalled:
+#   1125 Master Ball        Item      `[{"kind": "fetch", "target": "pokemon", "zone": "deck"}]`
+#                                     — REVEALING
+#   1182 Boss's Orders      Supporter `[{"kind": "gust", "target": "any"}]` — writes, reveals nothing
+#   1141 Premium Power Pro  Item      `null` — NO clauses at all: the clause-less blind spot, which
+#                                     must read as UNKNOWN and never as "writes nothing, so commutes
+#                                     with everything"
+_ITEM_TYPE, _SUPPORTER_TYPE = 1, 3
+
+
+def _footprint_model(card_id, *, clauses, card_type=_ITEM_TYPE):
+    """A one-card hand over a dict-backed provider — the same DLL-free seam the rest of this file
+    uses, extended with a `CardEffects` because a per-OPTION footprint is a question about a card."""
+    from common.cards import CardFunctions
+    from common.effects import CardEffects
+    from common.option_equivalence import AREA_HAND
+    from common.scouting.provider import CardStat, DictCardStatProvider
+    from common.state_model import StateModel
+    from common.strategy.combat import CombatMath
+    stats = {card_id: CardStat(card_id, synthetic=True, name=f"footprint fixture {card_id}",
+                               cardType=card_type)}
+    combat = CombatMath(DictCardStatProvider(stats), functions=CardFunctions({}), transients=None,
+                        effects=CardEffects({card_id: clauses} if clauses is not None else {}))
+    player = {"active": [], "bench": [], "benchMax": 5,
+              "hand": [{"id": card_id, "serial": 700, "playerIndex": 0}], "handCount": 1,
+              "discard": [], "prize": [None] * 6}
+    obs = {"current": {"players": [player, dict(player, hand=[], handCount=0)], "yourIndex": 0,
+                       "stadium": []},
+           "select": {"context": 0, "option": []}}
+    option = {"type": _PLAY, "area": AREA_HAND, "index": 0}
+    return StateModel.build(obs, combat=combat, deck=[card_id]), option
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_a_per_option_footprint_unions_the_cards_clause_writes_onto_the_kinds_floor():
+    """Boss's Orders' `gust` writes `bodies_in_play`, `special_conditions` and `transient_grants` —
+    none of them in `_PLAY`'s structural floor, all three in the per-OPTION answer."""
+    from common import snapshot_coverage as sc
+    model, option = _footprint_model(1182, clauses=[{"kind": "gust", "target": "any"}],
+                                     card_type=_SUPPORTER_TYPE)
+    fp = ao.option_footprint(model, option, clauses_cover=True)
+    assert ao.footprint(_PLAY).writes <= fp.writes                 # the floor survives
+    assert sc.CLAUSE_WRITES["gust"] <= fp.writes                   # ...and the clauses join it
+    assert fp.reveals_information is False                         # a gust moves a body, reveals none
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_a_per_option_footprint_ARMS_reveals_information_from_the_registry():
+    """**The reveal veto was unarmed code until now** — no entry in `FOOTPRINTS` sets the flag, so
+    `commutes` could never reach that clause on a real option. Positive control that the absence is
+    real and not a bad search: the kind table still sets it nowhere, while a `fetch` card's per-option
+    footprint sets it True."""
+    assert [k for k, f in ao.FOOTPRINTS.items() if f.reveals_information] == []
+    model, option = _footprint_model(
+        1125, clauses=[{"kind": "fetch", "target": "pokemon", "zone": "deck"}])
+    fp = ao.option_footprint(model, option, clauses_cover=True)
+    assert fp.reveals_information is True
+    assert ao.footprints_commute(fp, ao.footprint(_RETREAT)) is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_a_CLAUSELESS_play_card_is_UNKNOWN_and_never_an_empty_write_set():
+    """The blind spot `footprints_writing_unhomed` names by card. Premium Power Pro (1141), Black
+    Belt's Training (1211) and Brave Bangle (1175) return NOTHING from `card_effects.json`, so a
+    union over their clauses is the empty set — and an empty write-set reads as *"conflicts with
+    nobody"*, which would license every reorder involving them. It must read as UNKNOWN instead."""
+    model, option = _footprint_model(1141, clauses=None)
+    fp = ao.option_footprint(model, option)
+    assert fp.complete is False
+    assert ao.footprints_commute(fp, fp) is False
+    assert ao.footprints_commute(fp, ao.footprint(_RETREAT)) is False
+    # ...and a CALLER asserting coverage cannot complete it either. `CardEffects.clauses_cover`
+    # returns `None` for a card it has never heard of, but `fate`'s contract requires the caller to
+    # join that against whether the card carries printed text — so `True` can reach here, and over an
+    # empty clause list it would be coverage asserted over the compendium's silence. 1141's printed
+    # text is *"During this turn, attacks used by your {F} Pokémon do 30 more damage…"*, so it very
+    # much HAS an effect; the compendium simply does not hold it.
+    assert ao.option_footprint(model, option, clauses_cover=True).complete is False
+    assert ao.option_footprint(model, option, clauses_cover=True).writes == ao.footprint(_PLAY).writes
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_completeness_needs_the_CALLERS_clause_coverage_proof_not_merely_some_clauses():
+    """`clauses_cover` is the same tri-state `fate` takes and it means the same thing here. `True`
+    completes the `_PLAY` floor; `False` is Issue #300's *partial* verdict and can never complete
+    anything; `None` is absence of a compendium verdict and fails closed."""
+    model, option = _footprint_model(1182, clauses=[{"kind": "gust", "target": "any"}],
+                                     card_type=_SUPPORTER_TYPE)
+    assert ao.option_footprint(model, option, clauses_cover=True).complete is True
+    assert ao.option_footprint(model, option, clauses_cover=False).complete is False
+    assert ao.option_footprint(model, option, clauses_cover=None).complete is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_an_undeclared_clause_value_makes_the_footprint_unknown_rather_than_narrower():
+    """Fail closed against vocabulary drift: a clause value `snapshot_coverage.CLAUSE_WRITES` has
+    never heard of contributes no zones, and treating that silence as "writes nothing" is exactly the
+    under-report `Footprint` calls *worse than none*."""
+    model, option = _footprint_model(1182, clauses=[{"kind": "a_clause_nobody_declared"}])
+    assert ao.option_footprint(model, option, clauses_cover=True).complete is False
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_a_clause_write_is_also_declared_a_clause_READ():
+    """`CLAUSE_WRITES` is a WRITE registry; §3b's read-set for a clause is not shipped. So every zone
+    a clause writes is declared read as well — OVER-reporting, which can only make `commutes` refuse
+    a block it might have allowed, never license one it should have refused. Under-reporting a read
+    is the direction that silently collapses two genuinely different lines."""
+    from common import snapshot_coverage as sc
+    model, option = _footprint_model(1182, clauses=[{"kind": "gust", "target": "any"}],
+                                     card_type=_SUPPORTER_TYPE)
+    fp = ao.option_footprint(model, option, clauses_cover=True)
+    assert sc.CLAUSE_WRITES["gust"] <= fp.reads
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_commutes_delegates_to_the_ONE_disjointness_test():
+    """One rule, one home. `commutes` is the per-KIND door onto `footprints_commute`, and the
+    per-OPTION door is `option_footprint` — two callers, never two copies of the test, which is the
+    drift ADR-0087 charges for one store over."""
+    quiet = ao.Footprint(reads=frozenset({"stadium"}), writes=frozenset({"stadium"}), complete=True)
+    other = ao.Footprint(reads=frozenset({"my_prizes"}), writes=frozenset({"my_prizes"}),
+                         complete=True)
+    assert ao.footprints_commute(quiet, other) is True
+    assert ao.footprints_commute(quiet, quiet) is False           # both write `stadium`
+    ao.FOOTPRINTS[903], ao.FOOTPRINTS[904] = quiet, other
+    try:
+        assert ao.commutes(903, 904) is ao.footprints_commute(quiet, other)
+    finally:
+        del ao.FOOTPRINTS[903], ao.FOOTPRINTS[904]
+
+
+@pytest.mark.req("REQ-APPLY-0009")
+def test_the_element_level_granularity_is_NOT_assumed_while_the_ruling_is_open():
+    """Issue #383 §B item 2 requested an element-level refinement on Issue #263 as a wave-packet
+    ruling line, with a stated fail-closed fallback: **zone granularity, blocks never form**. Until
+    that ruling lands the fallback is what ships, and this asserts it rather than leaving the
+    difference invisible — a session that quietly implemented the refinement would be self-ruling a
+    contract extension.
+
+    So `commutes` still licenses NOTHING over the shipped table, and Issue #263's own worked example
+    (Energy + evolution + Tool) still fails on `my_hand_ids`."""
+    import itertools
+    kinds = sorted(ao.KIND_COVERAGE)
+    assert [(a, b) for a, b in itertools.combinations_with_replacement(kinds, 2)
+            if ao.commutes(a, b)] == []
+    assert "my_hand_ids" in ao.footprint(_ATTACH).writes & ao.footprint(_EVOLVE).writes
+
+
 # ── refusal is a RESULT, not an exception and not a no-op ─────────────────────────────────────────
 
 

@@ -146,9 +146,17 @@ class Delta:
 
 
 # ── copy-on-write scaffolding ─────────────────────────────────────────────────────────────────────
+#
+# **PUBLIC since POC-T4/2** (Issue #383), and the promotion is the point rather than an oversight.
+# `common.board_expectation` synthesizes the board a REVEAL resolves to and needs exactly this
+# scaffolding — and `state_model.py` already paid for the general rule these three would otherwise
+# break: *"a private reach across a module boundary is how a refactor inside `MySide` breaks a caller
+# nothing warned about"*, which is why it exposed `combat` / `deck` / `card_stat()` rather than let
+# the apply seam reach in. Same answer here, one module out: a second consumer means a public name,
+# never an underscore reached across a boundary.
 
 
-def _fork(obs: dict) -> tuple[dict, dict, list]:
+def fork(obs: dict) -> tuple[dict, dict, list]:
     """Fresh ``obs`` / ``current`` / ``players`` containers, sharing every zone below them.
 
     Three dicts and one list per transition, whatever the board holds. Everything a step does not
@@ -162,7 +170,7 @@ def _fork(obs: dict) -> tuple[dict, dict, list]:
     return new_obs, current, players
 
 
-def _fork_player(players: list, index: int) -> dict:
+def fork_player(players: list, index: int) -> dict:
     """A fresh copy of one side's `PlayerState`, spliced into ``players``. Its zone lists are still
     shared — the caller forks whichever list it writes."""
     seat = dict(players[index] or {})
@@ -215,7 +223,7 @@ def _replace_body(seat: dict, area: int, index: int, body: dict) -> None:
     seat[zone] = bodies
 
 
-def _take_from_hand(seat: dict, index, what: str) -> dict:
+def take_from_hand(seat: dict, index, what: str) -> dict:
     """Remove and return my hand card at ``index``, resyncing ``handCount``.
 
     Every transition that plays a card does exactly this, and each one used to spell the bounds
@@ -308,6 +316,24 @@ def _units_for_cards(combat, cards, *, onto_evolution: bool) -> list:
     return out
 
 
+def card_clauses(combat, card_id) -> tuple:
+    """This card's Effect Clauses off the combat oracle's own `CardEffects`, or ``()``.
+
+    **One home for the walk**, because three modules now need it and each would otherwise spell
+    ``getattr(getattr(combat, "effects", None), "clauses", ...)`` for itself — a message chain
+    repeated is a message chain that drifts. `state_model.StateModel` added `combat` and
+    `card_stat()` as public reads for exactly this reason; this is the same move one level out.
+
+    ⚠️ **``()`` is *undeclared*, never *writes nothing*.** A card the compendium has never heard of
+    is indistinguishable here from one with no effect, and every caller has to join that against
+    whether the card carries printed text at all — the same residue `apply_option.fate` documents for
+    its `clauses_cover=None`. Premium Power Pro (1141), Black Belt's Training (1211) and Brave Bangle
+    (1175) are the worked cases: `card_effects.json` returns nothing for any of them while their whole
+    effect is the parsed `CardStat.damageBoost` triple."""
+    effects = getattr(combat, "effects", None)
+    return tuple(effects.clauses(card_id) if effects is not None else ())
+
+
 def _clause_writes(combat, card_id) -> frozenset:
     """Every `snapshot_coverage` zone this card's Effect Clauses write, unioned over all four
     vocabulary axes (``kind`` / ``rider`` / ``effect`` / ``cost``).
@@ -321,10 +347,8 @@ def _clause_writes(combat, card_id) -> frozenset:
     names by card: Premium Power Pro (1141), Black Belt's Training (1211) and Brave Bangle (1175) all
     return no clauses while their whole effect is the parsed `CardStat.damageBoost` triple. So the
     CALLERS here never treat "wrote nothing" as a licence on its own — see :func:`_play`."""
-    effects = getattr(combat, "effects", None)
-    clauses = effects.clauses(card_id) if effects is not None else ()
     out: set = set()
-    for clause in clauses:
+    for clause in card_clauses(combat, card_id):
         for value in snapshot_coverage.clause_values(clause):
             if value not in snapshot_coverage.CLAUSE_WRITES:
                 raise Unmodellable(
@@ -408,9 +432,9 @@ def _attach(obs, option, *, seat_index, combat) -> Delta:
 
     Only the Energy leg spends the allowance: `docs/rules.md` §3 limits the *manual* attachment to
     one per turn, while a Tool is an ordinary Trainer play with no such cap."""
-    new_obs, current, players = _fork(obs)
-    me = _fork_player(players, seat_index)
-    card = _take_from_hand(me, option.get("index"), "attach")
+    new_obs, current, players = fork(obs)
+    me = fork_player(players, seat_index)
+    card = take_from_hand(me, option.get("index"), "attach")
     stat = _stat(combat, card.get("id"))
     if stat is None:
         raise Unmodellable(f"{card.get('id')}: no `CardStat` for the attached card")
@@ -470,9 +494,9 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
     body has a different maximum, so ``hp = new max − damage already taken``. Measured shape,
     `alakazam_9000` f127: an undamaged 80 HP body evolving into a 140 HP one arrives at 140/140 with
     ``appearThisTurn: true`` and a two-deep ``preEvolution`` stack."""
-    new_obs, current, players = _fork(obs)
-    me = _fork_player(players, seat_index)
-    card = _take_from_hand(me, option.get("index"), "evolve")
+    new_obs, current, players = fork(obs)
+    me = fork_player(players, seat_index)
+    card = take_from_hand(me, option.get("index"), "evolve")
     stat = _stat(combat, card.get("id"))
     if stat is None or not stat.hp:
         raise Unmodellable(f"{card.get('id')}: no `CardStat` HP for the Evolution card, so the "
@@ -549,7 +573,7 @@ def _retreat(obs, option, *, seat_index, combat) -> Delta:
     composer (**Issue #392**, which blocks Issue #385), not a licence to model a swap the engine did
     not perform: this seam's reference is the recorded native trace, and the trace says the board did
     not move."""
-    new_obs, current, _players = _fork(obs)
+    new_obs, current, _players = fork(obs)
     current["retreated"] = True
     return Delta(obs=new_obs, writes=frozenset({"allowance_retreat_used"}))
 
@@ -594,9 +618,9 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
     The union is deliberately not the ONLY gate — a card the compendium has never heard of unions to
     the empty set (see :func:`_clause_writes`), which is why the card-TYPE branch decides first and
     the union only narrows it."""
-    new_obs, current, players = _fork(obs)
-    me = _fork_player(players, seat_index)
-    card = _take_from_hand(me, option.get("index"), "play")
+    new_obs, current, players = fork(obs)
+    me = fork_player(players, seat_index)
+    card = take_from_hand(me, option.get("index"), "play")
     card_id = card.get("id")
     stat = _stat(combat, card_id)
     if stat is None:
@@ -652,7 +676,7 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
         if old is not None:
             owner = old.get("playerIndex")
             owner = seat_index if owner is None else int(owner)
-            side = _fork_player(players, owner)
+            side = fork_player(players, owner)
             side["discard"] = list(side.get("discard") or ()) + [old]
             writes.add("my_discard_contents" if owner == seat_index
                        else "their_discard_contents")
@@ -713,4 +737,5 @@ def transition(obs: dict, option: dict, *, seat_index: int, combat, context=None
     return fn(obs or {}, option or {}, seat_index=int(seat_index), combat=combat)
 
 
-__all__ = ("CONTEXT_MAIN", "CONDITION_FLAGS", "Unmodellable", "Delta", "TRANSITIONS", "transition")
+__all__ = ("CONTEXT_MAIN", "CONDITION_FLAGS", "Unmodellable", "Delta", "TRANSITIONS", "transition",
+           "fork", "fork_player", "take_from_hand", "card_clauses")
