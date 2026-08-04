@@ -994,15 +994,35 @@ consumer, so it was run, and the two legs it did not have were added to it.
 
 **Leaf unit cost** (`state_value` + `_leaf_state_model`, 371 frames, 371 scored, 0 failed):
 
-| | P50 | P95 |
-|---|---|---|
-| committed artifact run | **3.56 ms** | **6.44 ms** |
-| observed across 7 runs | 3.44 – 3.66 ms | **6.37 – 7.06 ms** |
+| | P50 | P95 | **max** |
+|---|---|---|---|
+| committed artifact run | **3.63 ms** | **6.57 ms** | **53.85 ms** |
+| observed across 10 runs | 3.44 – 3.94 ms | **6.37 – 7.20 ms** | **46.8 – 59.9 ms** |
 
 ⚠️ **Quote the RANGE, not the point.** This is wall-clock on a shared 4-vCPU container and it moves
-about 10% run to run. A beam sized against `6.44` as though it were exact would be sized against
+about 10% run to run. A beam sized against `6.57` as though it were exact would be sized against
 noise. The **width** half of the derivation below has no such problem — it is a property of the
-boards, and came out at exactly 12 on every one of the 7 runs.
+boards, and came out at exactly 12 on every run.
+
+> ### ⚠️ The `max` is 8× the P95, and it is ONE named board — read this before sizing anything
+>
+> **`81904064|0|decision|17` (`mega_starmie`) costs ~52 ms in a corpus whose P95 is ~6.6.** The
+> second-worst leaf in the whole corpus is `85058574|1|decision|109` at ~15 ms, so this frame is a
+> **3.5× outlier over the next-worst and ~8× the P95.**
+>
+> **It is not a warm-up artifact**, which was the first hypothesis and was tested rather than assumed:
+> it sits at index 141 of 371, well inside the `mega_starmie` block, and `mega_starmie`'s own first
+> scored frame (`81785223|0|decision|12`) costs 5.49 ms. It is not noise either — it is the max on
+> **every** run measured, at 51.8 / 52.2 / 53.2 / 53.9 / 59.9 ms.
+>
+> **Why Issue #263 needs this and cannot recover it from the P95.** The derived per-decision figure
+> below multiplies two P95s, so it describes a typical-worst decision. A decision whose menu contains
+> *this* board costs ~52 ms for that candidate alone — comparable to the entire derived per-decision
+> budget — and no percentile-based number can warn you about it. This is exactly why Issue #291 §3a
+> asks for P50 **and P95 and max** rather than a tail alone.
+>
+> **What it is not:** diagnosed. Nothing here explains WHY that board is slow, and this issue did not
+> chase it. It is named so Issue #263 can profile one frame instead of a corpus.
 
 **Post-OEC menu width** — the multiplier from unit cost to per-decision cost, over 372 frames.
 Reported as a distribution because the tail is the whole point:
@@ -1012,12 +1032,17 @@ Reported as a distribution because the tail is the whole point:
 | 6 | 16 | **6** | **12** | **23** |
 
 293 options collapse under ADR-0091. Fate split across 2726 options: **1690 modelled, 510 terminal,
-526 refused, 0 engine-resolved** (0 because `fate()` refuses the engine route with no `_search_api`
-wired, which is the correct reading of a decision taken outside a search).
+526 refused, 0 engine-resolved, 0 unclassified.** Two of those zeros are load-bearing rather than
+filler: `engine-resolved` is 0 because `fate()` refuses the engine route with no `_search_api` wired,
+which is the correct reading of a decision taken outside a search; and `unclassified` is 0, so every
+option in the corpus got a real seam verdict and none of the counts above is padded by an instrument
+failure.
 
-**Derived per-decision P95 = post-OEC P95 × leaf P95 = 12 × 6.44 = `77.3 ms`**, and across the 7
-runs **`76.5 – 84.8 ms`**. Round it to *"of order 80 ms per decision, leaf-only"* — the precision the
-measurement actually supports.
+**Derived per-decision P95 = post-OEC P95 × leaf P95 = 12 × 6.57 = `78.8 ms`**, and across the runs
+**`76.5 – 86.4 ms`**. Round it to *"of order 80 ms per decision, leaf-only"* — the precision the
+measurement actually supports. **Then read the `max` box above before sizing against it**: a single
+menu containing `81904064|0|decision|17` spends ~52 ms on that one candidate, which this figure
+cannot see.
 
 **The worst frames, by name** (post-OEC of raw):
 
@@ -1098,7 +1123,7 @@ structurally refuse to consider.
 (2026-08-04) accepts that `state_value` must not carry the prize value of cashing an attack boost —
 that belongs to `attack_ev` under `score(sequence) = state_value(end board) + EV(terminal action)` —
 and states the cost outright: **enabling cards such as Boss's Orders and Premium Power Pro may be
-underplayed until Issue #263 lands.** A ruled, accepted, temporary blindness owned by **#263**, with
+underplayed until Issue #263 lands.** A ruled, accepted, temporary blindness owned by **Issue #263**, with
 no `blind_to` entry because the term that would carry it is the one Issue #263 wires. Listed here so
 composer meets it before it writes a beam.
 

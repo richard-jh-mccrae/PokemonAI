@@ -87,43 +87,51 @@ def menu_profile(correction) -> dict:
     precisely the shape where the drift would not show up as a disagreement, only as a wrong number.
 
     `refused` options are counted and kept separate because Issue #263 makes a refusal a one-action
-    terminal candidate: it is ranked, so it costs a leaf, but it is never transitioned through."""
-    from common.apply_option import fate, is_terminal
+    terminal candidate: it is ranked, so it costs a leaf, but it is never transitioned through.
+
+    An option the seam cannot classify at all lands in `unclassified` — its OWN bucket, never folded
+    into `refused`. Both keep the WIDTH honest (nothing is dropped, so the multiplier stays right),
+    but only the split keeps the FATE totals honest: `refused` is a seam verdict Issue #263 acts on,
+    and silently swelling it with instrument failures would report coverage the seam never gave.
+    Same doctrine as :func:`score_frame` one function down — the finding IS the exception."""
+    from common.apply_option import ENGINE_RESOLVED, MODELLED, REFUSED, fate, is_terminal
     from common.option_equivalence import class_representatives, option_equivalence
+
+    #: The fates this instrument counts, keyed by the constant `fate` actually returns — compared by
+    #: EQUALITY against the exported names, never by substring. `"refus" in resolved` would bin any
+    #: future fate whose name happens to contain those letters, and the seam owns this vocabulary.
+    buckets = {MODELLED: "modelled", ENGINE_RESOLVED: "engine", REFUSED: "refused"}
 
     obs = correction.obs or {}
     options = (obs.get("select") or {}).get("option") or []
     row = {"key": frame_key(correction), "agent": getattr(correction, "agent", None),
            "menu": len(options), "post_oec": 0,
-           "terminal": 0, "modelled": 0, "refused": 0, "engine": 0}
+           "terminal": 0, "modelled": 0, "refused": 0, "engine": 0, "unclassified": 0}
     row["post_oec"] = len(class_representatives(option_equivalence(options, obs), len(options)))
     for option in options:
         try:
             if is_terminal(option):
                 row["terminal"] += 1
                 continue
-            resolved = str(fate(option))
-        except Exception:                    # noqa: BLE001 — an unclassifiable option is REFUSED,
-            row["refused"] += 1              # never dropped: dropping it would understate the width
+            resolved = fate(option)
+        except Exception:                    # noqa: BLE001 — reported, never dropped and never
+            row["unclassified"] += 1         # laundered into a seam verdict the seam did not give
             continue
-        if "engine" in resolved:
-            row["engine"] += 1
-        elif "refus" in resolved:
-            row["refused"] += 1
-        else:
-            row["modelled"] += 1
+        row[buckets.get(resolved, "unclassified")] += 1
     return row
 
 
 def _percentile(values: list, q: float):
-    """One order-statistic rule for every number in the menu block.
+    """**The** order-statistic rule for this module — `p95_ms` and every menu figure call it.
 
-    Deliberately the same index arithmetic `value_lab_report` already uses for `p95_ms`, because the
-    derived per-decision figure MULTIPLIES the two tails and a product of two different percentile
-    conventions is not a percentile of anything. The P50 it returns is therefore an order statistic
-    rather than `statistics.median`'s two-element mean — they can differ by one element on an
-    even-length corpus, and having all four menu numbers come from one rule is worth more here than
-    matching the leaf block's median exactly."""
+    One spelling, because the derived per-decision figure MULTIPLIES the leaf tail by the menu tail,
+    and a product of two hand-written percentile conventions is not a percentile of anything.
+
+    ⚠️ `median_ms` is the ONE field that does not come from here: it is `statistics.median`, which
+    averages the middle pair on an even-length corpus, so it can differ from `_percentile(x, 0.50)`
+    by one element. That is deliberate — `median_ms` is a long-standing published field and silently
+    changing what it means would be a data change wearing a refactor's clothes. `menu_p50` and
+    `post_oec_p50` therefore use THIS rule, and the two are not interchangeable to a hair."""
     if not values:
         return None
     ordered = sorted(values)
@@ -151,8 +159,8 @@ def menu_report(rows: list, *, leaf_p95_ms: float | None) -> dict:
         "post_oec_p95": p95,
         "post_oec_max": max(post) if post else None,
         "collapsed_options": sum(r["menu"] - r["post_oec"] for r in rows),
-        "fate_totals": {k: sum(r[k] for r in rows)
-                        for k in ("terminal", "modelled", "refused", "engine")},
+        "fate_totals": {k: sum(r.get(k, 0) for r in rows)
+                        for k in ("terminal", "modelled", "refused", "engine", "unclassified")},
         "per_decision_p95_ms": (round(p95 * leaf_p95_ms, 2)
                                 if p95 is not None and leaf_p95_ms is not None else None),
         "per_decision_p95_ms_is_lower_bound": True,
@@ -218,7 +226,15 @@ def value_lab_report(pilot_for, corrections) -> dict:
     return {"n": len(rows), "scored": len(scored), "failed": len(failed),
             "skipped_agent": skipped,
             "median_ms": statistics.median(times) if times else None,
-            "p95_ms": times[max(0, int(0.95 * len(times)) - 1)] if times else None,
+            # `_percentile`, not a second copy of its index arithmetic: the menu block multiplies
+            # this figure by its own P95, and two hand-written spellings of one convention is the
+            # drift that makes such a product meaningless. `median_ms` stays `statistics.median` —
+            # it is the long-standing published field and moving it would be a silent data change.
+            "p95_ms": _percentile(times, 0.95),
+            # The WORST single leaf, beside the tail. P95 is what a beam is sized against; `max_ms`
+            # is what one pathological board costs, and the two diverge on a long-tailed corpus —
+            # Issue #291 §3a asks for both by name and a P95 alone cannot be read back into a max.
+            "max_ms": max(times) if times else None,
             "term_means": {name: (statistics.mean([r["working"][name] for r in scored])
                                   if scored else None) for name in FAMILIES},
             "rows": rows}
@@ -238,7 +254,10 @@ def _print_menu(menu: dict) -> None:
           f"   ({menu['collapsed_options']} options collapsed by ADR-0091)")
     totals = menu["fate_totals"]
     print(f"  fate split    modelled {totals['modelled']}  terminal {totals['terminal']}"
-          f"  refused {totals['refused']}  engine {totals['engine']}")
+          f"  refused {totals['refused']}  engine {totals['engine']}"
+          # Printed even at 0, and named separately from `refused`: a non-zero here is the
+          # instrument failing to classify, not the seam declining to model.
+          f"  unclassified {totals['unclassified']}")
     if menu["per_decision_p95_ms"] is not None:
         print(f"\n  derived per-decision P95: {menu['per_decision_p95_ms']:.1f} ms"
               "   <- LOWER BOUND, leaf evaluations only")
@@ -253,6 +272,7 @@ def _print_report(rpt, *, top_term=None, frame=None) -> None:
           f"({rpt['scored']} scored, {rpt['failed']} FAILED, {rpt['skipped_agent']} agent-skip) ===")
     if rpt["median_ms"] is not None:
         print(f"state_value cost: median {rpt['median_ms']:.2f} ms | P95 {rpt['p95_ms']:.2f} ms"
+              f" | max {rpt['max_ms']:.2f} ms"
               "   <- Issue #263 sizes its beam against the P95, not the median")
     if rpt["scored"]:
         print("\nmean contribution per term (the shape of the scalar over the whole corpus):")

@@ -496,7 +496,7 @@ Zeraora ×1) — and it applies to a plain gust-and-KO too, which every deck has
 > > non-empty inputs, because this is a SUM over up to six targets while the divisor is ONE target's
 > > ceiling; *"the cap never binds"* must not be asserted anywhere.
 >
-> Row 5 of the coverage matrix above and #6's footnote were **left as audited on purpose** — Issue
+> Row 5 of the coverage matrix above and row 6's footnote were **left as audited on purpose** — Issue
 > #291 owns reconciling the report, and every sibling in this track recorded its outcome the same
 > way, in the finding's own BUILT note rather than in the ledger. **RECONCILED 2026-08-04 by Issue
 > #291:** row 5 is now **PARTIAL** `[R]`, its surviving residue being *standing* chip that does not

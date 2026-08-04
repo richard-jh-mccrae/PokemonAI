@@ -22,8 +22,10 @@ wrong rather than visibly absent:
 from __future__ import annotations
 
 import sys
+import time
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 for sub in ("tools", "src"):
@@ -36,7 +38,10 @@ for sub in ("tools", "src"):
 from common.option_equivalence import (  # noqa: E402
     AREA_BENCH, AREA_DECK, AREA_HAND, class_representatives, option_equivalence,
 )
-from train.value_lab import APPLY_SEAM_UNMEASURED, menu_profile, menu_report  # noqa: E402
+from common.state_value import FAMILIES  # noqa: E402
+from train.value_lab import (  # noqa: E402
+    APPLY_SEAM_UNMEASURED, menu_profile, menu_report, value_lab_report,
+)
 
 
 def _energy(index, recipient_index):
@@ -103,12 +108,43 @@ def test_an_unfingerprintable_option_joins_no_class():
 
 # ── the fate split, and the absent term ───────────────────────────────────────────────────────────
 
+_BUCKETS = ("terminal", "modelled", "refused", "engine", "unclassified")
+
+
 def test_the_fate_split_counts_every_option_once():
     frame = _frame([60])
     options = [_energy(0, 0), {"type": 14}, {"type": 3, "area": 1, "index": 0}]
     prof = menu_profile(_correction(options, frame))
-    assert prof["terminal"] + prof["modelled"] + prof["refused"] + prof["engine"] == prof["menu"]
+    assert sum(prof[b] for b in _BUCKETS) == prof["menu"]
     assert prof["terminal"] == 1
+
+
+def test_the_fate_split_bins_by_the_seams_own_constants():
+    """The bucket keys are `apply_option`'s exported fates, matched by EQUALITY.
+
+    Asserted against the constants rather than against the literals they happen to hold, so this
+    fails if the seam renames a fate instead of silently mis-binning it — which is exactly what a
+    substring test (`"refus" in resolved`) would do."""
+    from common.apply_option import MODELLED, REFUSED, fate
+
+    frame = _frame([60])
+    modelled_opt, refused_opt = _energy(0, 0), {"type": 3, "area": 1, "index": 0}
+    assert fate(modelled_opt) == MODELLED and fate(refused_opt) == REFUSED   # positive control
+    prof = menu_profile(_correction([modelled_opt, refused_opt], frame))
+    assert (prof["modelled"], prof["refused"]) == (1, 1)
+
+
+def test_an_unclassifiable_option_is_its_own_bucket_never_refused():
+    """An instrument failure must not be laundered into a seam verdict.
+
+    `refused` is a fate Issue #263 acts on — it makes a refusal a one-action terminal candidate — so
+    folding "the profiler threw" into it would report seam coverage that never happened. The width
+    still counts the option, because dropping it would understate the per-decision multiplier."""
+    frame = _frame([60])
+    prof = menu_profile(_correction([{"type": "not-an-int-kind"}], frame))
+    assert prof["menu"] == 1
+    assert prof["unclassified"] == 1
+    assert prof["refused"] == 0
 
 
 def test_the_report_names_the_apply_seam_as_UNMEASURED():
@@ -119,6 +155,37 @@ def test_the_report_names_the_apply_seam_as_UNMEASURED():
     assert rpt["apply_option_ms"] is None
     assert rpt["per_decision_p95_ms_is_lower_bound"] is True
     assert APPLY_SEAM_UNMEASURED in rpt["apply_option_note"]
+
+
+def test_the_leaf_report_carries_max_beside_the_tail():
+    """Issue #291 §3a asks for leaf **P50 and P95 and max** by name, and max is not recoverable from
+    a percentile. It earns its place on this corpus: the worst leaf runs ~8x the P95 and ~3.5x the
+    second-worst, so a beam sized on the tail alone gets no warning about the board that costs most.
+
+    Driven through `value_lab_report` with a stub scorer rather than the real Pilot — the field under
+    test is the aggregation, and a DLL-backed corpus walk would be measuring `state_value` instead."""
+    class _Pilot:
+        def __init__(self, ms): self.ms = ms
+        def _leaf_state_model(self, obs, my_index):
+            time.sleep(self.ms / 1000.0)
+            return object()
+
+    def _score(model, *, working):
+        working.update(dict.fromkeys(FAMILIES, 0.0))     # every family, as the real scorer emits
+        return 0.0
+
+    with mock.patch("train.value_lab.state_value", side_effect=_score):
+        rpt = value_lab_report(lambda agent: _Pilot(20), [_correction([], _frame([60]))])
+    assert rpt["max_ms"] is not None
+    assert rpt["max_ms"] >= rpt["p95_ms"], "max can never sit below the tail it is reported beside"
+    assert rpt["max_ms"] >= 20.0, "the stub slept 20ms; a max that misses it is not reading the rows"
+
+
+def test_an_empty_corpus_reports_max_as_None_not_a_crash():
+    """The same fail-shape the other aggregates already have — `max()` on empty raises, and this
+    module's whole doctrine is that it REPORTS rather than gates."""
+    rpt = value_lab_report(lambda agent: None, [])
+    assert (rpt["max_ms"], rpt["p95_ms"], rpt["median_ms"]) == (None, None, None)
 
 
 def test_the_derived_per_decision_figure_is_the_tail_not_the_mean():
