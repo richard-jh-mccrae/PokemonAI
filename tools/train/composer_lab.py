@@ -76,9 +76,11 @@ COLUMN_CAVEAT = (
     "**`composer` is not what the agent did.** It is `common.composer.compose`'s best sequence, and "
     "the composer is DARK at this commit — nothing in production calls it. `chosen` is the committed "
     "decision read off the Correction (the whole Pilot ladder, of which the leaf is one rung), and "
-    "`ruled` is the human's `correct` picks. Agreement is reported against both because they are "
-    "different questions: matching `chosen` means the composer reproduces today's agent, matching "
-    "`ruled` means it plays better.")
+    "`ruled` is the human's judgement — taken from the committed FIXTURE where one has re-ruled the "
+    "frame (`ruled_from`), because a re-ruling never rewrites the `data/corrections/` record and the "
+    "record's own `correct` is then the stale one. Agreement is reported against both `chosen` and "
+    "`ruled` because they are different questions: matching `chosen` means the composer reproduces "
+    "today's agent, matching `ruled` means it plays better.")
 
 #: Issue #263's five named acceptance targets, located by Issue #291 §3c — *"they are NOT missing"* —
 #: with the fixture each one is ruled in. Frame keys are the `gates.correction_frame_key` form.
@@ -104,22 +106,68 @@ RETREAT_RULING = ("Issue #392 — a `_RETREAT` option is TARGETLESS (5807/5807 i
 # ── Issue #291 §3c's index, consumed rather than re-derived ──────────────────────────────────────
 
 
+def fixture_rulings() -> dict:
+    """``{frame key: [ruled option index]}`` from the committed FIXTURES — the authoritative ruling
+    where one exists, overriding the `data/corrections/` record.
+
+    **This is not defensive plumbing; it is a defect this lab shipped with.** A Correction's
+    ``correct`` is the record as first tagged, and a re-ruling lands in the fixture store as a
+    ``claims.decision`` block rather than by rewriting the record — `gates.ruling_index`'s own
+    docstring says so outright: *"Read-only. No Correction record is rewritten."* So a frame that has
+    been re-ruled reads TWO ways, and the store's way is the stale one.
+
+    **f32 is exactly that frame, and it is one of Issue #263's three named acceptance targets.**
+    `dragapult_hammer_over_develop_f32.json` rules `correct: [3]` — the `_RETREAT`, labelled *"Retreat
+    Dreepy → promote Budew (sacrificial item-lock wall)"* — and records that it *"is a 2026-07-10
+    REFRAME of that record's correct=[1]"*. Reading the store gave `[1]`, an `_EVOLVE`, which made
+    this lab grade the acceptance criterion against an option the developer had superseded, and made
+    a session conclude Issue #392's blocking premise was false when it is true.
+
+    Read through `gates.iter_keyed_fixtures` — *"THE one corpus walk"* — rather than a second glob,
+    for the reason that module gives: a hand-built second reader is the drift ADR-0087 charges for one
+    store over, and it already cost the Decision Gate 203 of its 372 keys."""
+    from train.gates import iter_keyed_fixtures
+    out = {}
+    for _path, _fx, key, claims in iter_keyed_fixtures():
+        if claims.decision and claims.decision.correct:
+            out[key] = list(claims.decision.correct)
+    return out
+
+
 def ideal_index(path: Path = RULINGS) -> dict:
     """``{frame key: {"kind", "agent"}}`` from Issue #291 §3c's INDEX table.
 
     Consumed, never re-derived: the classification rule (*"an entry is a `sequence` when the
     developer's line names two or more ordered actions"*) is a ruling recorded in that file, and a
     second implementation of it here would drift while both stayed internally consistent. Parsed off
-    the table because the table IS the artifact Issue #291 delivered."""
+    the table because the table IS the artifact Issue #291 delivered.
+
+    **SCOPED to that one section, not swept over the file.** The `| n | frame | ... |` row shape is
+    not unique in `wave3-rulings.md` — an unscoped sweep returned **48** rows against the artifact's
+    own stated **41**, silently folding in the closeout batch's owner tables. The count mismatch is
+    the only tell, which is why `test_composer_lab.py` asserts Issue #291's exact 22 / 3 / 16 split
+    rather than merely that some rows parsed: an instrument that over-collects still looks like it
+    works."""
     rows = {}
     if not path.exists():
         return rows
-    for line in path.read_text(encoding="utf-8").splitlines():
-        hit = re.match(r"^\|\s*\d+\s*\|\s*`([^`]+)`\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|", line)
-        if hit:
-            key = hit.group(1).replace("\\|", "|")
-            kind = re.sub(r"[*⚠]", "", hit.group(2)).strip()
-            rows[key] = {"kind": kind, "agent": hit.group(3).strip()}
+    section = path.read_text(encoding="utf-8").split("### INDEX", 1)
+    if len(section) < 2:
+        return rows
+    for line in section[1].split("\n### ", 1)[0].splitlines():
+        if not re.match(r"^\|\s*\d+\s*\|", line):
+            continue
+        # Split on UNESCAPED pipes only. A frame key is `<ep>|<seat>|<scope>|<subject>`, which
+        # Markdown forces to be written `\|` inside a table cell — and three of these rows are
+        # pointers whose KIND column embeds another frame key. A plain `[^|]+` column match therefore
+        # stops inside that key and shifts every later column: it parsed the agent of those three
+        # rows as `0\`, which is the middle of an episode id. Caught because the agent column stopped
+        # being one of the two decks the artifact says it is.
+        cells = [c.replace("\\|", "|").strip() for c in re.split(r"(?<!\\)\|", line)]
+        if len(cells) < 5:
+            continue
+        key = cells[2].strip("`")
+        rows[key] = {"kind": re.sub(r"[*⚠️]", "", cells[3]).strip(), "agent": cells[4]}
     return rows
 
 
@@ -141,8 +189,12 @@ def ideal_sequences(path: Path = RULINGS) -> dict:
 # ── one frame ────────────────────────────────────────────────────────────────────────────────────
 
 
-def compose_frame(pilot, correction, *, k=None, epsilon=None, depth=None) -> dict:
+def compose_frame(pilot, correction, *, rulings=None, k=None, epsilon=None, depth=None) -> dict:
     """Run the composer on ONE corpus frame and record all three answers plus the telemetry.
+
+    ``rulings`` is :func:`fixture_rulings`' map and OVERRIDES the Correction's own ``correct`` where a
+    committed fixture has re-ruled the frame. Not optional in practice — see that function for the
+    acceptance target this lab graded against a superseded ruling until it existed.
 
     Builds the model through `pilot._leaf_state_model` — the SAME seam the planner leaf uses and the
     same one `value_lab.py` builds through — rather than assembling one here. A harness that built its
@@ -157,9 +209,13 @@ def compose_frame(pilot, correction, *, k=None, epsilon=None, depth=None) -> dic
     obs = correction.obs or {}
     options = (obs.get("select") or {}).get("option") or []
     my_index = ((obs.get("current") or {}).get("yourIndex")) or 0
-    row = {"key": correction_frame_key(correction), "agent": getattr(correction, "agent", None),
+    key = correction_frame_key(correction)
+    ruled = (rulings or {}).get(key)
+    row = {"key": key, "agent": getattr(correction, "agent", None),
            "options": len(options),
-           "chosen": list(correction.chosen or []), "ruled": list(correction.correct or []),
+           "chosen": list(correction.chosen or []),
+           "ruled": list(ruled if ruled is not None else (correction.correct or [])),
+           "ruled_from": "fixture" if ruled is not None else "correction",
            "composer": None, "steps": None, "score": None, "margin": None, "ruled_margin": None,
            "gaps": [], "ms": None, "leaf_evals": None, "blocks": None, "coverage_gap": "",
            "no_scorable": False, "error": None}
@@ -213,6 +269,7 @@ def _agrees(row, column: str) -> bool | None:
 def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
     """Aggregate over the corpus: agreement against both columns, margins, wall-clock, gaps."""
     rows, skipped = [], 0
+    rulings = fixture_rulings()
     for c in corrections:
         if not (getattr(c, "obs", None) or {}):
             continue
@@ -220,7 +277,7 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
         if pilot is None:
             skipped += 1
             continue
-        rows.append(compose_frame(pilot, c, **kwargs))
+        rows.append(compose_frame(pilot, c, rulings=rulings, **kwargs))
     ran = [r for r in rows if r["error"] is None and r["composer"] is not None]
     times = sorted(r["ms"] for r in ran)
     margins = [r["margin"]["margin_to_kth"] for r in ran
@@ -258,12 +315,11 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
     }
 
 
-def _percentile(values: list, q: float):
-    """The same order-statistic rule `value_lab.py` uses, so the two labs' tails are comparable."""
-    if not values:
-        return None
-    ordered = sorted(values)
-    return ordered[max(0, int(q * len(ordered)) - 1)]
+#: `value_lab`'s order-statistic rule, IMPORTED rather than re-spelled. The two labs' tails have to be
+#: comparable — this one reports the composer's per-decision wall-clock against the leaf unit cost
+#: that one reports — and `value_lab._percentile`'s own docstring argues for exactly one spelling,
+#: because a product of two hand-written percentile conventions is not a percentile of anything.
+from train.value_lab import _percentile                        # noqa: E402
 
 
 def epsilon_sweep(pilot_for, corrections, bands) -> list:
@@ -346,7 +402,8 @@ def _print_frame(row, index: dict, verbatim: dict) -> None:
     print(f"    composer  first action {row['composer']}   sequence {row['steps']}   "
           f"score {row['score']:+.4f} prizes")
     print(f"    chosen    {row['chosen']}      <- what the agent ACTUALLY did (the Correction)")
-    print(f"    ruled     {row['ruled']}      <- the human's judgement")
+    print(f"    ruled     {row['ruled']}      <- the human's judgement "
+          f"(from the {row['ruled_from']})")
     print(f"    margin(composer) {row['margin']}")
     print(f"    margin(RULED)    {row['ruled_margin']}"
           "   <- did the beam REACH the human's first step")
@@ -389,7 +446,8 @@ def _print_acceptance(rpt) -> None:
               f"margin {margin.get('margin_to_kth')}"
               + ("   (always-expand: a terminal/refusal, delta 0.0 by construction)"
                  if margin.get("always_expand") else ""))
-        print(f"        ruled {row['ruled']}   composer {row['composer']} (sequence {row['steps']})")
+        print(f"        ruled {row['ruled']} (from the {row['ruled_from']})   "
+              f"composer {row['composer']} (sequence {row['steps']})")
         print(f"        {where}")
         if not margin.get("admitted"):
             print(f"        ⚠️ {RETREAT_RULING}")

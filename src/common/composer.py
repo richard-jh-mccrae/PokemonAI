@@ -174,8 +174,8 @@ from common.strategy.context import _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RET
 #: between boxes, so a cap keyed to a wall-clock figure is a property of whoever ran it last.
 #:
 #: **Then measured end to end rather than left as arithmetic** — `python tools/train/composer_lab.py`
-#: over the 371 corpus frames at these caps: per-decision wall-clock **median 10.0 ms, P95 152 ms,
-#: max 684 ms**. The bound above held (the max lands at the predicted 0.70 s), and the whole
+#: over the 371 corpus frames at these caps: per-decision wall-clock **median 10.3 ms, P95 155 ms,
+#: max 737 ms**. The bound above held (the max lands at the predicted 0.70 s), and the whole
 #: distribution sits under the grader's >= 3.0 s per-decision floor — the max at ~23%, the P95 at ~5%.
 BEAM_WIDTH = 4
 
@@ -197,7 +197,7 @@ SEQUENCE_DEPTH = 4
 #: load-bearing here** (`python tools/train/composer_lab.py --epsilon-sweep`, 371 frames, 278
 #: composed). Over epsilon in {0.0, 0.001, 0.005, 0.01, 0.05} the counts do not move at all —
 #: 153 first steps earn a scored top-k slot, **39** are admitted by the band alone, agreement with
-#: the human's ruling holds at 77/270 and with the committed decision at 54/278. Only at 0.1 does
+#: the human's ruling holds at 79/270 and with the committed decision at 54/278. Only at 0.1 does
 #: anything shift (40 band-only, one reordered top-k), and no answer changes there either. So those
 #: 39 are EXACT ties with the k-th rather than near-ties, which is what a corpus dominated by
 #: unmoved terms looks like: on `85046350|0|decision|32` all five options price exactly 0.0.
@@ -207,6 +207,20 @@ SEQUENCE_DEPTH = 4
 #: tested. Re-sweep when the apply seam's coverage widens (246 of 278 frames still carry a refusal),
 #: because that is what would make the deltas separate in the first place.
 EPSILON = 0.005
+
+def _bench_max(model) -> int:
+    """The engine's own ``benchMax`` for my side, or `board_delta`'s fallback.
+
+    Read from the observation rather than assumed, and the fallback is `board_delta`'s so the two
+    halves of "is this deploy legal" cannot disagree about the cap — a second constant here is
+    exactly the drift ADR-0087 charges for one store over."""
+    from common.board_delta import _BENCH_MAX
+    obs = getattr(model, "source_obs", None) or {}
+    players = ((obs.get("current") or {}).get("players")) or []
+    seat = int(getattr(model, "my_index", 0))
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+    return int(me.get("benchMax") or _BENCH_MAX)
+
 
 # ── the canonical in-block order (ADR-0095 decision 1's tiers, over board facts) ──────────────────
 
@@ -243,9 +257,12 @@ class Step:
     """One applied action inside a candidate sequence.
 
     ``option`` is the dict **as applied** — re-resolved against the board it actually hit, never the
-    stored depth-0 dict replayed from a permuted position (see :func:`resolve_against`). ``index`` is
-    the depth-0 menu index of the Option-Equivalence class this step came from, which is what the
-    composer would COMMIT if this sequence wins."""
+    stored depth-0 dict replayed from a permuted position (see :func:`resolve_against`) — and it is
+    STRIPPED of the composer's private origin stamp, because a `Step` is the shape that leaves this
+    module and the stamp is not an engine field. Stripping at construction rather than at each
+    consumer is what makes that a property of the type instead of a convention three call sites could
+    each forget. ``index`` is the depth-0 menu index of the Option-Equivalence class this step came
+    from, which is what the composer would COMMIT if this sequence wins."""
 
     option: Mapping
     index: int
@@ -457,8 +474,8 @@ def _still_legal(model, option: Mapping) -> bool:
     `apply_option` models a transition rather than policing one — so without this the beam would
     happily sequence two manual Energy attaches, or evolve a Basic it benched on the same step.
 
-    Every limit is read at source, not recalled (`docs/rules.md` §3 *Action economy* and §4
-    *Evolution timing*, both rulebook-cited):
+    Every limit checked here is read at source, not recalled (`docs/rules.md` §3 *Action economy* and
+    §4 *Evolution timing*, both rulebook-cited):
 
     * **Energy attach 1 per turn** — the manual attachment only; a Tool is an ordinary Trainer play
       and `docs/rules.md` §3 caps it not at all beyond one per Pokémon, so a Tool `_ATTACH` is gated
@@ -466,6 +483,17 @@ def _still_legal(model, option: Mapping) -> bool:
     * **Supporter 1**, **Stadium 1** (*"and only if it differs from the one in play"*), **Retreat 1**.
     * **Evolution** — *"Cannot evolve a Pokémon the turn it was played/put into play"*, read off the
       engine's own `appearThisTurn` bit through `BodyView.new_in_play`.
+    * **Bench capacity** — a deploy onto a full Bench. `board_delta._play` already refuses it, but as
+      an `Unmodellable`, and the composer turns an `Unmodellable` into a COVERAGE GAP. That would put
+      a phantom entry in the modelling backlog for a move that is merely illegal, so the legality
+      check has to catch it first. The cap is the engine's own ``benchMax``.
+
+    **What §4 says that this does NOT check, named rather than left to be discovered:** *"Cannot
+    evolve on either player's very first turn of the game."* It is safe by construction rather than by
+    omission — every candidate descends from an option the ENGINE offered at depth 0, and the engine
+    does not offer an illegal evolve, so a first-turn evolve can never enter the tree for this
+    function to re-reject. The four limits above are different: each is spent by an EARLIER STEP of
+    the composer's own sequence, which is state the depth-0 menu could not have known about.
 
     Fail closed: an unreadable card, an unresolvable target or an unrecognised kind is NOT sequenced.
     A phantom option is a candidate the composer will happily rank."""
@@ -490,7 +518,9 @@ def _still_legal(model, option: Mapping) -> bool:
             return not model.supporter_played
         if getattr(card, "is_stadium", False):
             return not model.stadium_played and model.stadium_id != card.cardId
-        return True                              # an Item / a Basic deploy — no per-turn allowance
+        if getattr(card, "is_pokemon", False) and not getattr(card, "evolvesFrom", None):
+            return len(model.mine.bench) < _bench_max(model)
+        return True                              # an Item — no per-turn allowance and no capacity
     return True                                  # terminal kinds and anything the seam refuses
 
 
@@ -554,9 +584,17 @@ def _reveal_rides(model, option: Mapping) -> bool:
     * **120 Drakloak** — its `draw` clause carries ``condition: once_per_turn_ability`` and the CSV
       prints it as *"[Ability] Recon Directive"*. The Ability is its OWN `_ABILITY` option; evolving
       into Drakloak reveals nothing, and `board_delta._evolve` models that evolve exactly. Routing on
-      the footprint refused it — which is `85046350|0|decision|32` (Issue #263's **f32**), whose
-      RULED first step is that very evolve, so the composer could not price the human's own line.
-      Same shape for 66 Dudunsparce, 140 Fezandipiti ex and 675 Lunatone.
+      the footprint refused it, unpriced, on a live acceptance board — option 1 of
+      `85046350|0|decision|32` (Issue #263's **f32**) is exactly that evolve. Same shape for
+      66 Dudunsparce, 140 Fezandipiti ex and 675 Lunatone.
+
+      ⚠️ An earlier draft of this note called that evolve *"f32's RULED first step"*. **It is not** —
+      f32's ruling was REFRAMED on 2026-07-10 and the authoritative record is
+      `tests/fixtures/corrections/dragapult_hammer_over_develop_f32.json`, whose
+      ``claims.decision.correct`` is `[3]`, the `_RETREAT` (*"Retreat Dreepy → promote Budew
+      (sacrificial item-lock wall)"*). The superseded `data/corrections/` record still carries `[1]`,
+      and reading THAT is how the wrong claim got written. The routing fix stands on its own merits;
+      only the sentence justifying it was wrong.
     * **19 Telepath Psychic Energy** — its `fetch` clause carries ``trigger: "on_attach"``, and the
       CSV prints *"When you attach this card from your hand to a {P} Pokemon, search your deck for up
       to 2 Basic {P} Pokemon and put them onto your Bench."* The reveal DOES ride the attach, and
@@ -804,6 +842,16 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
     Wall-clock is recorded in ``stats`` rather than enforced. A composer that silently gave up at a
     time limit would produce an under-explored line that looks confidently valued, which is the
     no-silent-caps failure; the caps that DO bind are structural and their truncation is reported."""
+    if int(k) < 1 or int(depth) < 0:
+        # Caller error, so it RAISES where a modelling gap refuses — the same split
+        # `board_expectation.expectation` draws for its own `cap < 1`. And it is not pedantry: both
+        # `_admit` and `_prune_nodes` index the k-th as `[k - 1]`, so a `k` of 0 indexes the WORST
+        # candidate from the end and admits the entire menu. A beam that silently stops being a beam
+        # is the exact shape of failure the no-silent-caps discipline exists against.
+        raise ValueError(
+            f"k={k!r}, depth={depth!r}: a beam must keep at least one candidate and cannot search a "
+            f"negative number of plies. k=0 would index the k-th candidate as [-1] and admit "
+            f"everything, which reads as a working beam while being none.")
     t0 = time.perf_counter()
     obs = getattr(model, "source_obs", None) or {}
     options = list(options or [])
@@ -1056,7 +1104,8 @@ def _expand(state: _Run, node: _Node, ranked: list) -> list:
         commutes = all(ao.footprints_commute(entry.footprint, fp) for fp in node.block_prints)
         if commutes and node.block and not _admissible_in_block(entry.key, node.block):
             continue                             # this subset already exists in canonical order
-        step = Step(option=entry.option, index=entry.index, tier=entry.key[0], fate=entry.fate)
+        step = Step(option=strip_origin(entry.option), index=entry.index, tier=entry.key[0],
+                    fate=entry.fate)
         children.append(_Node(
             model=entry.after, steps=node.steps + (step,), used=node.used | {entry.index},
             block=(node.block + (entry.key,)) if commutes else (entry.key,),
@@ -1092,7 +1141,8 @@ def _gap_or_reveal_candidate(node: _Node, entry: _Ranked) -> Candidate:
     A refusal keeps the node's own leaf: the option was never applied, so nothing about the board
     moved, and the flag is what carries the fact that its value is UNKNOWN rather than zero. A reveal
     keeps its Expectation's `expected()` — a strict lower bound on the choice node's true max."""
-    step = Step(option=entry.option, index=entry.index, tier=entry.key[0], fate=entry.fate)
+    step = Step(option=strip_origin(entry.option), index=entry.index, tier=entry.key[0],
+                fate=entry.fate)
     leaf = node.leaf if entry.refused else node.leaf + entry.delta
     return Candidate(steps=node.steps + (step,), terminal=None, leaf=leaf, terminal_ev=0.0,
                      score=leaf, coverage_gap=entry.gap,

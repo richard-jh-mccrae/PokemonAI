@@ -377,7 +377,7 @@ WHITELIST: tuple[SoundRule, ...] = (
                "native traces). A full run costs at most (1 + 3 x 4) x 12 = 156 leaf evaluations "
                "~ 0.70 s, i.e. ~23% of that floor — then MEASURED end to end at those caps over "
                "the 371 corpus frames (`python tools/train/composer_lab.py`): per-decision "
-               "median 10.0 ms, P95 152 ms, max 684 ms, so the arithmetic bound held and the whole "
+               "median 10.3 ms, P95 155 ms, max 737 ms, so the arithmetic bound held and the whole "
                "distribution sits under the grader floor. Anchored on the WIDTH half deliberately, for the "
                "reason `BRANCH_CAP` records: the width is exactly 12 on every run while the "
                "millisecond half moves ~10% run-to-run and ~45% between boxes, so a cap keyed to a "
@@ -388,7 +388,7 @@ WHITELIST: tuple[SoundRule, ...] = (
                "than assumed (`composer_lab.py --epsilon-sweep`) and the sweep says the band is not "
                "load-bearing at this seam coverage: over {0.0, 0.001, 0.005, 0.01, 0.05} nothing "
                "moves — 153 first steps earn a scored top-k slot, 39 are admitted by the band alone, "
-               "agreement holds at 77/270 ruled and 54/278 committed — so the 39 are EXACT ties "
+               "agreement holds at 79/270 ruled and 54/278 committed — so the 39 are EXACT ties "
                "rather than near-ties. The value is chosen inside that flat region at the measured "
                "noise floor.",
         reconciliation="Re-measured on GRADER hardware post-POC (Issue #273, POC-B3) — the figures "

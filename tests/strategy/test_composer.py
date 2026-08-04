@@ -203,12 +203,24 @@ def test_a_consumed_card_makes_its_option_UNRESOLVABLE_rather_than_re_pointed():
 @pytest.mark.req("REQ-COMPOSER-0002")
 def test_the_stamp_never_leaves_the_module():
     """The origin key rides the option dict so it cannot get out of step with a permuted sequence,
-    and `strip_origin` is what hands a clean dict back to the engine."""
+    and `strip_origin` is what hands a clean dict back to the engine.
+
+    Asserted on the shapes that actually LEAVE — every `Step.option` and every `Candidate.terminal`
+    reachable from a real `compose` — not only on `strip_origin` in isolation. Testing the helper
+    alone passes while a construction site forgets to call it, which is exactly the asymmetry that
+    was there: `_terminal_candidate` stripped and the two `Step` constructors did not, so
+    `result.chosen.steps[i].option` carried `_composer_origin` out to every consumer."""
     obs = _obs(_player(active=_body(RIOLU), hand=[E_F]))
     stamped = cp.stamp_origin(_model(obs), {"type": _PLAY, "index": 0})
-    assert cp._ORIGIN in stamped
-    assert cp._ORIGIN not in cp.strip_origin(stamped)
+    assert cp._ORIGIN in stamped                     # positive control: the stamp is really applied
     assert cp.strip_origin(stamped) == {"type": _PLAY, "index": 0}
+
+    menu_obs, options = _menu_obs()
+    result = cp.compose(_model(menu_obs), options, k=99, depth=4)
+    escaped = [c for c in result.candidates
+               if any(cp._ORIGIN in s.option for s in c.steps)
+               or (c.terminal is not None and cp._ORIGIN in c.terminal)]
+    assert escaped == [], f"the composer's private stamp escaped on {len(escaped)} candidate(s)"
 
 
 # ── legality re-checked on a synthesized board ───────────────────────────────────────────────────
@@ -244,6 +256,36 @@ def test_a_body_benched_this_turn_cannot_be_evolved_in_the_same_sequence():
                                    "inPlayArea": BENCH, "inPlayIndex": 0}) is False
     assert cp._still_legal(after, {"type": _EVOLVE, "area": HAND, "index": 0,
                                    "inPlayArea": ACTIVE, "inPlayIndex": 0}) is True
+
+
+@pytest.mark.req("REQ-COMPOSER-0003")
+def test_a_deploy_onto_a_FULL_bench_is_illegal_rather_than_a_coverage_gap():
+    """`board_delta._play` already refuses it — but as an `Unmodellable`, which the composer turns
+    into a COVERAGE GAP. That would file a phantom entry in the modelling backlog for a move that is
+    merely illegal, and the backlog is grouped by those strings. The legality check has to catch it
+    first, off the engine's own ``benchMax``."""
+    full = _player(active=_body(RIOLU), bench=[_body(MUNKIDORI, serial=i) for i in range(2, 7)],
+                   hand=[RIOLU])
+    model = _model(_obs(full))
+    deploy = {"type": _PLAY, "index": 0}
+    assert len(model.mine.bench) == 5 and cp._still_legal(model, deploy) is False
+    assert cp.compose(model, [deploy, {"type": _END}]).gaps == ()
+
+    room = _player(active=_body(RIOLU), bench=[_body(MUNKIDORI, serial=2)], hand=[RIOLU])
+    assert cp._still_legal(_model(_obs(room)), deploy) is True   # positive control
+
+
+@pytest.mark.req("REQ-COMPOSER-0003")
+def test_a_beam_that_keeps_no_candidates_is_CALLER_ERROR_and_raises():
+    """`_admit` and `_prune_nodes` both index the k-th as ``[k - 1]``, so ``k=0`` indexes the WORST
+    candidate from the end and admits the entire menu — a beam that silently stops being a beam.
+    Raises rather than refuses, the same split `board_expectation.expectation` draws for its own
+    ``cap < 1``: a modelling gap refuses, a caller error raises."""
+    obs, options = _menu_obs()
+    model = _model(obs)
+    for bad in ({"k": 0}, {"k": -1}, {"depth": -1}):
+        with pytest.raises(ValueError, match="beam must keep at least one candidate"):
+            cp.compose(model, options, **bad)
 
 
 @pytest.mark.req("REQ-COMPOSER-0003")
@@ -504,6 +546,24 @@ def test_the_canonical_order_is_the_information_before_commitment_tier_order():
     assert cp.canonical_tier(model, options[1]) == cp.TIER_COMMITMENT    # a Tool IS an `_ATTACH`
     assert cp.canonical_tier(model, options[3]) == cp.TIER_ENDER         # end turn
     assert cp.canonical_tier(model, {"type": _RETREAT}) == cp.TIER_ENDER
+
+
+@pytest.mark.req("REQ-COMPOSER-0008")
+def test_the_composers_tiers_ARE_the_pilots_tiers():
+    """The tier NUMBERS are ADR-0095 decision 1's and live in `pilot._TIER_*`; the composer re-states
+    them because its input differs (`pilot._tier` reads a scored `OptionTrace`, which no StateModel
+    supplies) — but a re-stated constant that nobody checks is a renumbering waiting to go
+    half-applied, which is the exact edit ADR-0095's own comment says is invisible in bare integers.
+
+    Every other cross-store constant in this module is asserted the same way (`EPSILON` against
+    `DECIDER_FLOOR`, `_TRIGGER_KIND` against `CLAUSE_SELECTORS`, `BRANCH_CAP` not re-declared at
+    all); this closes the one that was missing."""
+    from common import pilot
+
+    assert (cp.TIER_INFORMATIVE, cp.TIER_COMMIT_FREE, cp.TIER_SUPPORTER, cp.TIER_COMMITMENT,
+            cp.TIER_SHUFFLE, cp.TIER_ENDER) == (
+        pilot._TIER_INFORMATIVE, pilot._TIER_COMMIT_FREE, pilot._TIER_SUPPORTER,
+        pilot._TIER_COMMITMENT, pilot._TIER_SHUFFLE, pilot._TIER_ENDER)
 
 
 @pytest.mark.req("REQ-COMPOSER-0008")

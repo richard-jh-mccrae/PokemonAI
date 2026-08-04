@@ -1774,7 +1774,13 @@ if no it is a planner defect. Verified empirically on `81905522|0|decision|64` �
 `+10.0` instead of `0.0`, changing nothing else, makes the greedy rollout reach the evolve from BOTH
 candidate openings.
 _Avoid_: sequence / line (a **Maneuver** is the ordered, dependent kind — say which), combo, turn
-plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a pricing bug)
+plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a pricing bug),
+**Commutative Block** (the near-twin, and the two are NOT interchangeable: a Commutative Set is the
+DEFECT-OWNERSHIP test — *"do these actions commute, so is this an equation-pricing bug or a planner
+bug?"* — and it is decided by reading the rules. A Block is the composer's structural unit, decided
+by PROVING read/write footprint disjointness per pair and failing closed. A Set can be asserted from
+the rulebook; a Block has to be earned from `apply_option.footprints_commute`, which is why the
+worked triple both terms use was unprovable until the 2026-08-04 element-granularity ruling)
 
 **Option Equivalence Class**:
 A set of select-menu options that are **the same decision** — the board cannot tell them apart, so
@@ -1827,8 +1833,12 @@ permuted position applies a *different play* — silently, because a shifted ind
 legal card. Every block member is therefore re-resolved by its `(hand serial, body serial)` instance
 key (`apply_option.option_serials` → `composer.resolve_against`) against the board it is actually
 applied to.
-_Avoid_: transposition table (a block is generated a-priori; a transposition table merges after paying
-full generation cost, and needs a canonical state hash a block never forms), Option Equivalence Class
-(the other axis — siblings at one ply, not orderings across depth), commutativity as a per-KIND fact
-(`commutes()` answers by kind and licenses almost nothing; the per-OPTION footprint is what proves a
-block, since element-level granularity is what separates two writes to distinct instances)
+_Avoid_: **Commutative Set** (the near-twin, defined above — that term is the DEFECT-OWNERSHIP test,
+read off the rules to decide whether a missed action is an equation-pricing bug or a planner bug. A
+Block is this module's structural unit and must be PROVED per pair from footprints, fail-closed, so
+the same three actions can be a Set by the rulebook and not a Block by the seam), transposition table
+(a block is generated a-priori; a transposition table merges after paying full generation cost, and
+needs a canonical state hash a block never forms), Option Equivalence Class (the other axis —
+siblings at one ply, not orderings across depth), commutativity as a per-KIND fact (`commutes()`
+answers by kind and licenses almost nothing; the per-OPTION footprint is what proves a block, since
+element-level granularity is what separates two writes to distinct instances)
