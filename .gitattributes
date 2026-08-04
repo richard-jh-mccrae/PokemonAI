@@ -18,6 +18,16 @@
 # Committed data/ruling stores are byte-stable records, not text to normalize.
 data/** -text !eol
 
+# Same contract, same reason: recorded fixtures (correction/parity/replay stores)
+# and generated tuning-run reports are RECORDS, written by whichever OS produced
+# them. `* text=auto` above was already leaving them alone — but only by the
+# grandfathering rule that spares blobs already committed with CRLF, which is an
+# accident of history rather than a declared intent, and which a repo-wide
+# `git add --renormalize .` would override in one stroke. Stated explicitly so the
+# protection survives that command.
+tests/fixtures/** -text !eol
+docs/tuning/runs/** -text !eol
+
 # Native engine wrapper is vendored/off-limits; preserve bytes exactly.
 src/cg/** -text !eol
 

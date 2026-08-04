@@ -1,0 +1,44 @@
+# EditorConfig — https://editorconfig.org
+#
+# The companion to `.gitattributes`, and both are needed: `.gitattributes` governs
+# what git STORES and checks out, this governs what the EDITOR writes on save. Dev
+# runs on Windows and Linux simultaneously and the Kaggle grader is Linux, so an
+# editor that helpfully saves CRLF re-opens the exact hole the renormalize closed.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{py,pyi}]
+indent_style = space
+indent_size = 4
+
+[*.{yml,yaml,json,toml,cfg,ini}]
+indent_style = space
+indent_size = 2
+
+# Markdown gives two trailing spaces a MEANING (a hard line break), so trimming
+# them silently edits prose. Line endings stay LF.
+[*.md]
+trim_trailing_whitespace = false
+
+# Byte-stable committed record stores — correction/parity/tuning-run records and
+# the vendored native-engine wrapper. These mirror the `-text !eol` rules in
+# `.gitattributes`: an editor must not rewrite a record it merely opened.
+[{data,tests/fixtures}/**]
+end_of_line = unset
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[docs/tuning/runs/**]
+end_of_line = unset
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[src/cg/**]
+end_of_line = unset
+insert_final_newline = false
+trim_trailing_whitespace = false
