@@ -325,6 +325,126 @@ these: the whole point is that T4's turn plan is checked against the human's own
 against someone's reading of them. Quoted blocks are the developer quoting the Correction's own
 recorded rationale.
 
+### INDEX — added 2026-08-04 by Issue #291's closeout. **Read this before grading against the list.**
+
+41 entries, and they are not 41 gradeable turn plans. Issue #263 needs to know which is which before
+it writes an acceptance harness, because a "sequence" that reads *"same as above"* grades nothing on
+its own and a suite that counted it would report coverage it does not have.
+
+**The classification rule, stated so it can be audited rather than trusted:** an entry is a
+**`sequence`** when the developer's line names **two or more ordered actions**; a **`pointer`** when
+it defers to another frame's line (*"same as above"*, *"exact same as above"*); **`verdict-only`**
+when it names one action, a decline, or a bare judgement. A pointer's sequence is real — it just
+lives on the frame it names, so grading it means resolving the pointer first.
+
+| | frame | kind | agent |
+|---|---|---|---|
+| 1 | `81785223\|0\|decision\|32` | **sequence** ⚠️ carries an open discrepancy | mega_starmie |
+| 2 | `81785223\|0\|decision\|44` | pointer → `81785223\|0\|decision\|32` | mega_starmie |
+| 3 | `81904064\|0\|decision\|44` | **sequence** | mega_starmie |
+| 4 | `81904064\|0\|decision\|59` | **sequence** | mega_starmie |
+| 5 | `81904451\|0\|decision\|24` | **sequence** | mega_starmie |
+| 6 | `81904451\|0\|decision\|37` | **sequence** | mega_starmie |
+| 7 | `81904451\|0\|decision\|50` | pointer → `81904451\|0\|decision\|24` | mega_starmie |
+| 8 | `81904451\|0\|decision\|53` | pointer → `81904451\|0\|decision\|24` (+ a Mega Signal) | mega_starmie |
+| 9 | `81905522\|0\|decision\|28` | **sequence** | mega_starmie |
+| 10 | `81905522\|0\|decision\|64` | **sequence** — the richest line in the file | mega_starmie |
+| 11 | `81906131\|1\|decision\|25` | **sequence** | mega_starmie |
+| 12 | `81906755\|1\|decision\|93` | **sequence** | mega_starmie |
+| 13 | `81906755\|1\|decision\|9` | **sequence** (Batch 8) | mega_starmie |
+| 14 | `82225138\|0\|decision\|82` | **sequence** — with an explicit re-decide point | mega_starmie |
+| 15 | `82225643\|1\|decision\|57` | **sequence** (quoted rationale) | mega_starmie |
+| 16 | `82227388\|0\|decision\|43` | **sequence** | mega_starmie |
+| 17 | `82227388\|0\|decision\|50` | **sequence** (pointer + its own ordering) | mega_starmie |
+| 18 | `82228017\|0\|decision\|16` | **sequence** (quoted rationale) | mega_starmie |
+| 19 | `82228017\|0\|decision\|4` | **sequence** | mega_starmie |
+| 20 | `82229122\|0\|decision\|17` | **sequence** | mega_starmie |
+| 21 | `82229122\|0\|decision\|33` | verdict-only | mega_starmie |
+| 22 | `82522698\|1\|decision\|36` | **sequence** | mega_starmie |
+| 23 | `82522698\|1\|decision\|62` | **sequence** (a lethal decider) | mega_starmie |
+| 24 | `82522726\|1\|decision\|7` | verdict-only | mega_starmie |
+| 25 | `82525101\|1\|decision\|69` | **sequence** | mega_starmie |
+| 26 | `82750161\|1\|decision\|60` | verdict-only | mega_starmie |
+| 27 | `82752604\|0\|decision\|16` | verdict-only | mega_starmie |
+| 28 | `82866415\|0\|decision\|43` | verdict-only | mega_starmie |
+| 29 | `82867148\|0\|decision\|62` | verdict-only | mega_starmie |
+| 30 | `83007714\|1\|decision\|8` | verdict-only | mega_starmie |
+| 31 | `83037962\|0\|decision\|49` | verdict-only | mega_starmie |
+| 32 | `83038055\|0\|decision\|51` | verdict-only (a hold, then the attack) | mega_starmie |
+| 33 | `83053965\|1\|decision\|6` | verdict-only — but a **sound-rule** candidate, see below | mega_starmie |
+| 34 | `83054602\|1\|decision\|32` | verdict-only (a reasoned END) | mega_starmie |
+| 35 | `83456015\|0\|decision\|38` | verdict-only | mega_starmie |
+| 36 | `83457493\|1\|decision\|33` | **sequence** | mega_starmie |
+| 37 | `83966968\|0\|decision\|45` | verdict-only | mega_starmie |
+| 38 | `85046350\|0\|decision\|21` | **sequence** — with a redecide and an explicit *don't* | dragapult_ex |
+| 39 | `85163634\|1\|decision\|17` | verdict-only (a hold, reasoned forward a turn) | mega_starmie |
+| 40 | `86089638\|0\|decision\|18` | verdict-only | dragapult_ex |
+| 41 | `86090164\|1\|turn\|2` | **sequence** — the only entry that is a recorded TURN PLAN | dragapult_ex |
+
+**Totals: 22 sequences, 3 pointers, 16 verdict-only.**
+
+**Two concentrations Issue #263 must not discover after building against this list.**
+
+- **By agent: 38 `mega_starmie`, 3 `dragapult_ex`, 0 `mega_lucario`.** The acceptance corpus is one
+  deck's turn plans plus a rounding error. A composer that grades green here has been graded on
+  `mega_starmie` sequencing — not on Mega Lucario's economy-vs-lock attack choice, which is Issue
+  #263's own acceptance requirement 3 and has **no sequence in this file at all**.
+- **By shape: 16 of 41 grade a single action.** Useful as decision cases, but they cannot falsify a
+  *sequence* composer — the thing this corpus exists to grade — because any ordering that ends in the
+  named action satisfies them.
+
+### The COVERAGE GAP against Issue #263's named acceptance targets — the point of this index
+
+Issue #263 names five maneuvers it will be graded on. **None of the five has a sequence in this file.**
+Verified by grep with a positive control (the same query finds `f43` and `f48`, which are present):
+
+| Issue #263's named target | in this file? | where its rationale actually lives |
+|---|---|---|
+| **f32** retreat-to-sacrificial-item-lock-wall | **no** | **the best-documented maneuver in the repo, in four places.** `docs/plans/turn-planner-retreat-to-item-lock-wall.md` is a 73-line handoff giving the five steps, the full board, and the threat arithmetic verified at source (Gabite Dragonslice 40 + Roserade's Cheer On to Glory 30 = 70 vs Dreepy's 70 HP). Anchored on `tests/fixtures/corrections/dragapult_hammer_over_develop_f32.json`, frame `85046350\|0\|decision\|32`, `claims.decision` `owner=#165`, ruled 2026-07-25. Restated in Issue #165's body and again in the `xfail(strict)` reason at `tests/strategy/test_blunder_20260710_split_fixes.py:66` |
+| **f35** (paired with f32 by Issue #263; an **Endorsement Claim**) | **no** | `tests/fixtures/corrections/dp_hold_evolve_until_typed_ready_f35.json`, frame `86091435\|0\|decision\|35`, `owner=#165`, re-ruled 2026-07-26. Carries a `decision` claim, an `endorsement` claim, **and a `turn_plan.intended_line`** — the only fixture in the whole store that has one (see below). Its `why` also already contains the horizon argument (*"`_engine_leaf_value` compares END-OF-TURN boards … cannot represent 'resolve the deterministic tutor FIRST, then branch'"*) |
+| **f82** Adrena-Brain KO line | **no** | `tests/fixtures/corrections/dp_evolve_energized_line_body_first_f82.json`, frame `85785609\|0\|turn\|8`, `owner=#165`, ruled 2026-07-25 — full five-step chain in Issue #165's body (ADR-0070 §C); the DECISION half is already satisfied (ADR-0071 / Issue #163 promoted it from `xfail` to a passing regression test), the LEAF half is what still holds it out |
+| **`stabilize-then-KO`** corpus frames (retired into the composer) | **no** | two anchors, both outside this file: the **`e1db` / f47** episode (`tests/fixtures/.../pilot_e1db`, exercised at `tests/strategy/test_blunder_20260703.py:104` — *"Wally's Compassion, THEN attach Ignition, THEN Nebula Beam for the 3-prize KO"*, a human-acked sequence recorded on the turn-8 pre-attach state), and the synthetic **`0cbc`** shape at `tests/strategy/test_planner.py:307` |
+| **`forgo-KO`** corpus frames (retired into the composer) | **no** | the SAME `e1db` episode read from the other side — `test_blunder_20260703.py:143` pins the refutation (at f47 the attach is already spent, so the heal would forfeit a certain 3-prize KO). ADR-0045 S4 is the gate's ruling |
+
+**So the answer to the question Issue #291 was asked is: they exist, and they are NOT missing — they
+are in a different store.** This file holds 41 sequences Issue #263 did not ask for; the five it did
+ask for are ruled, dated and reasoned in `tests/fixtures/corrections/`, keyed by frame, under
+`owner=#165`. **Issue #263 must not re-derive them.** No developer ruling is owed for their rationale.
+
+> **The single most useful artifact for Issue #263 is not in this file, and almost nothing points at
+> it.** `dp_hold_evolve_until_typed_ready_f35.json` carries a **`turn_plan.intended_line`** — a
+> 666-character CONDITIONAL multi-step maneuver with an explicit branch, written as structured data
+> rather than prose:
+>
+> > *"1) Poké Pad -> fetch Drakloak. 2) Evolve a bench Dreepy -> Drakloak (2nd Recon body). 3) Recon
+> > Directive x2 (see 4, keep 2). **4a) If a {P} appears:** attach it (active -> {R}{D}{P}), evolve
+> > active Drakloak -> Dragapult ex, Phantom Dive {R}{P} 200 + 6 counters spread onto the two
+> > Duraludon. **4b) If no {P}:** retreat the active Drakloak (cost 1, discard the dead {D}), promote
+> > Budew, Itchy Pollen (No cost) -> 10 dmg + opponent cannot play Item cards next turn. The 4b branch
+> > is the retreat-to-sacrificial-item-lock-wall maneuver of
+> > `docs/plans/turn-planner-retreat-to-item-lock-wall.md` — **f32 and f35 are the SAME class.**"*
+>
+> Three reasons this matters more than any entry in the 41:
+>
+> 1. **It is the ONLY `turn_plan.intended_line` in the entire fixture store** — walked recursively over
+>    every fixture, one hit. Every other acceptance case is prose in a `why` field.
+> 2. **It settles what f35 IS.** Issue #263 pairs *"f32 + f35 retreat-to-sacrificial-item-lock-wall"*
+>    without saying why f35 — a *hold-the-evolve* frame — belongs to a retreat maneuver. This line says
+>    it outright: its **4b branch** is that maneuver. Two `*_f35.json` fixtures exist in the store
+>    (`dp_hold_evolve_until_typed_ready_f35` and `dp_doom_guard_archaludon_1e_f35`) and this is the
+>    evidence for which one Issue #263 means.
+> 3. **It is a CONDITIONAL plan**, so it grades something the other 41 cannot: a composer that must
+>    branch on information revealed mid-turn. Issue #263's commutative-block rule makes reveals block
+>    boundaries — this is that rule's acceptance case, already written.
+
+**What IS owed, and it is a different and smaller thing.** Issue #263 *"Merges old Issue #165"*, and
+Issue #165 is **closed** (`completed`, 2026-07-31) while **9 fixture owner fields still carry
+`owner=#165`** — f32, f35 and f82 among them. Those three are exactly the frames Issue #263 will
+grade itself against, so the owner they name should be the issue that owns them. That is a
+repointing ruling (`#165 → #263`), not a rationale ruling, and Issue #291 has deliberately **not**
+made it: this issue was authorised to repoint one named frame off one closed owner, and re-owning
+eight frames it was not asked about would be conforming a ruling rather than making one. See the
+closed-owner census in the closeout batch below.
 - `81785223|0|decision|32` — "The hand has pretty much all of our supporters, so PokeGear is actually
   not the play. its evolve staryu->mega starmie, play Hilda to fetch energy, attach energy to active
   starmie. attack jetting blow, snipe Wellspring Mask Ogerpon ex"
@@ -702,3 +822,307 @@ Energy on their Active, which reads 30 + 3×30 = **120** with our Active bare, o
 the developer's point — that our attached Energy is not what protects us — holds at every one of
 them. Flagged in the same spirit as Batch 1's invalid snipe target: the sequence stands, the
 arithmetic is queried.
+
+---
+
+# Batch 9 (2026-08-04) — Issue #291, the T3.5 CLOSEOUT
+
+**Measured at `bb9bd69`** (`main`, Python 3.11.15, Linux x86_64, 4 vCPU Intel Xeon @ 2.80 GHz).
+**Both gates PASS at that commit**, checked before any measurement was taken and again after the one
+fixture edit below: Leaf gate *0 unruled, 67 ruled, 3 voided*; Decision gate *0 unruled*. **Neither
+`data/leaf_lab/baseline.json` nor `data/decider_lab/baseline.json` was re-captured**, and no verdict
+was sought for one. The Leaf gate's standing *"corpus has moved since baseline was captured"* warning
+is left standing — it is a prompt for a deliberate ruled re-capture, not a licence, and this issue
+was not the place to take it.
+
+## The 15 deferred frames — 7 re-measured, 6 consumed, 2 confirmed
+
+Issue #262's wave-3 packet flagged 15 flips as REVERT-worthy and the developer deferred them rather
+than ruling them into the baseline, because they might have been measuring Issues #280/#281's bugs
+rather than a preference. Issue #370 then ruled Issue #369 authoritative for the overlap. The routing
+below was **verified against `tests/fixtures/corrections/*.json`'s own `claims.decision.owner`**, not
+inferred from either issue's prose.
+
+### 2a · Owned by Issue #369 — CONSUMED, not re-measured (6 frames)
+
+Reported as Issue #369's results and cited to it. No fresh measurement, no fresh ruling.
+**Issue #370's ruling names five; the real overlap is six** — `83966968|0|decision|45` reads
+`owner=#369` in the fixture store and sits in this issue's 15. Confirmed at source; not dropped.
+
+| frame | owner | Issue #369's disposition |
+|---|---|---|
+| `81904451\|0\|decision\|50` | #369 | Pilot-correct, no work |
+| `82225643\|1\|decision\|57` | #369 | Pilot-correct, no work — Pokégear first accepted |
+| `82227388\|0\|decision\|43` | #369 | Pilot-correct, no work — Pokégear, then Wally's Compassion |
+| `83966968\|0\|decision\|45` | #369 | Pilot-correct, no work |
+| `82522698\|1\|decision\|36` | #369 | **still a real miss** — ruled *attach Basic {W} to benched Mega Starmie ex*; Pilot plays Night Stretcher |
+| `83053965\|1\|decision\|6` | #369 | **still a real miss** — ruled *Mega Signal*; Pilot ends turn. First player T1 cannot attack |
+
+The two live misses stay blocked on Issue #263 per Issue #369's own dependency. Not circular: this
+issue only reports them.
+
+### 2b · Owned here — RE-MEASURED (7 frames)
+
+`tools/train/family_diag.py --keys … --source decider` at `bb9bd69`, after Issues #280, #281, #329,
+#332, #351 and #362 had all landed.
+
+**THE ANSWER: passivity PERSISTS.** All 7 still fail, and `survival` is the decider on **7 of 7**.
+
+| frame | decider | ruled | leaf | Δ development | Δ hand | Δ prize_race | Δ readiness | Δ survival | Δ threat |
+|---|---|---|---|---|---|---|---|---|---|
+| `81904064\|0\|decision\|44` | **survival** | Lillie's Determination | Retreat | +0.0000 | +0.0000 | +0.0000 | −0.0883 | **−0.9980** | +0.0000 |
+| `81904064\|0\|decision\|59` | **survival** | Salvatore | End | +0.0548 | +0.0000 | +1.2500 | −0.0004 | **−1.4551** | +0.0010 |
+| `82225138\|0\|decision\|82` | **survival** | Buddy-Buddy Poffin | Retreat | +0.0000 | +0.0000 | +0.0000 | −0.0004 | **−0.9961** | +0.0000 |
+| `82227388\|0\|decision\|50` | **survival** | Pokégear 3.0 | Retreat | +0.0000 | +0.0000 | +0.0000 | −0.0818 | **−0.5078** | +0.0267 |
+| `82752604\|0\|decision\|61` | **survival** | Basic {W} → benched Staryu | Retreat | +0.0000 | +0.0000 | +0.0000 | −0.0477 | **−0.5986** | +0.0264 |
+| `82866415\|0\|decision\|48` | **survival** | Hero's Cape → benched Staryu | Retreat | +0.0000 | +0.0000 | +0.0000 | +0.0664 | **−0.5254** | +0.1000 |
+| `83664991\|0\|decision\|25` | **survival** | Mega Starmie ex → BENCH0 Staryu | Turbo Flare | +0.0548 | +0.0000 | +1.0156 | +0.0209 | **−2.0000** | +0.0010 |
+
+**Both outcomes were written down in advance, and this is the first one.** Passivity survives on a
+level field — correct combat math (Issues #280/#281), an anchored `threat` (Issue #329), a fixed
+`readiness` (Issues #332/#351). It is therefore a **real signal and not an artifact of the fixed
+bugs**. The audit's warning that a damping constant fitted before F1/F2 landed would be fitted to a
+measurement artifact is discharged: they have landed, and `survival` still wins.
+
+**And phase damping is still the wrong knob** — for a reason the count alone would have hidden.
+Every one of the 7 is categorised `sequencing_error`, and the shape is *order of operations*, not
+*passive versus aggressive*: the ruled line and the leaf's line reach the **same end board** and
+differ only in the order they reach it. No damping constant can express that. Issue #263's composer
+can, which is why all 7 carry `owner=#263` and keep it.
+
+**The single-deck concentration, reported because a count would hide it.** All 7 are
+**`mega_starmie`** — 0 `dragapult_ex`, 0 `mega_lucario` — while the CONFORM camp spans all three.
+They survived AND stayed single-deck, so per this issue's own advance criterion the cause is
+somewhere other than the combat-math blockers. It is: within-turn ordering, which no term of a board
+valuation can price.
+
+**Positive control** (required before writing *"nothing moved"*): the instrument is not silent. It
+returns non-zero deltas across five families on these same frames, up to 2.0 prizes, and reports
+`hand` as inert on 7/7 — which is `hand.blind_to` entry 3 firing exactly as ruled, on the simulated
+end board, while `value_lab` measures the same family contributing a mean of **+0.3261** across the
+371-frame corpus on real boards. A dead instrument could not produce both readings.
+
+### 2c · The 2 `hand`-blind frames — CONFIRMED unchanged, and one LABEL corrected
+
+| frame | prior owner | now | result |
+|---|---|---|---|
+| `82522698\|1\|decision\|62` | #263 | #263 | unchanged — no decider; every delta ≥ 0 (total **+0.1826**) |
+| `82749168\|1\|decision\|88` | **#332 (CLOSED)** | **#263** | unchanged — no decider; total **+0.0684**. Repointed |
+
+Both were predicted unchanged and both are, which is the correct outcome rather than a failure. On
+each, **the ruled option is weakly better on every single family and still loses** — no family
+opposes it — so neither frame is attributable to a `state_value` term at all. That is Issue #263's,
+whose composer decides an ordering the leaf's argmax cannot express.
+
+`82749168|1|decision|88` is repointed off closed Issue #332 **on a re-measurement, not on the closure
+alone**: `readiness` — its recorded cause — now moves it by exactly **0.0000**. The recorded cause is
+discharged; the frame still fails. The original Issue #332 rationale is preserved verbatim in the
+fixture rather than overwritten.
+
+> ### ⚠️ Open discrepancy — the `hand`-blind LABEL is wrong on both frames
+>
+> Issue #291 §2c describes these two as sitting on a ruled `blind_to` entry where *"`hand` prices 0
+> on a simulated end board."* **Measured, `hand` is not 0 on either.**
+>
+> | frame | `hand` on the ruled board | on the leaf's board | Δ |
+> |---|---|---|---|
+> | `82522698\|1\|decision\|62` | 0.3275 | 0.2158 | **+0.1117** |
+> | `82749168\|1\|decision\|88` | 0.3502 | 0.3075 | **+0.0427** |
+>
+> Recorded, not resolved, and recorded on both sides per this file's standing convention. Three
+> things make it worth carrying rather than correcting away:
+>
+> 1. **It is a known anomaly, not a new one.** Issue #332's own body flagged `82749168|1|decision|88`
+>    as *"the only frame in either set where `hand` is non-zero — worth understanding why a hand
+>    reached the model here when it does not elsewhere"*, and asked for ten minutes with
+>    `frame_view.py`. That question was never answered and Issue #332 closed.
+> 2. **It is LIVE — the number has moved.** Issue #332 measured Δ `hand` = +0.0944; it is **+0.0427**
+>    at `bb9bd69`. The leaf's own pick moved too (Issue #332 recorded Harlequin; it is Boss's Orders
+>    now). Something changed it and nothing recorded what.
+> 3. **`hand.blind_to` entry 3 asserts "22 for 22" inert** across the frames the T3 layer owns. These
+>    two are decider-corpus frames outside that 22, so the entry is **not refuted** — but it is also
+>    no longer the whole story, and a reader taking "the whole family prices 0 there" as universal
+>    would be wrong on exactly these boards.
+>
+> **What this does NOT change:** the disposition. Both frames are unchanged and unattributable either
+> way; Issue #263 § *Parity + retirement* retires the develop rollout's sim path and makes them moot.
+
+### Closed-owner census — REPORTED, deliberately not acted on
+
+Issue #291 §2c gives the goal *"so the fixture store has no closed owners"* and authorises exactly
+one repoint. Walking every `claims.*.owner` in `tests/fixtures/corrections/` shows the goal is not
+met by that one edit: **24 owner fields still name a closed issue.** Every state below was read from
+the GitHub issue, not inferred from the number's age.
+
+⚠️ **Count `owner` RECURSIVELY or you will undercount.** A first pass over `claims.*` alone reported
+23 and was wrong: `owner` also appears on **`turn_plan`**, and the one fixture that has a `turn_plan`
+is `dp_hold_evolve_until_typed_ready_f35` — i.e. exactly one of Issue #263's named acceptance targets.
+The numbers below are from a recursive walk of every fixture with `obs` excluded.
+
+| owner | owner fields | state |
+|---|---:|---|
+| `#332` | 9 (was 10) | CLOSED `completed` 2026-08-03 |
+| `#165` | **9** (8 × `claims.decision` + 1 × `turn_plan`) | CLOSED `completed` 2026-07-31 — **merged into Issue #263**, and includes f32 / f35 / f82 |
+| `#262` | 3 | CLOSED 2026-08-02 |
+| `#145` | 1 | CLOSED `completed` 2026-07-31 |
+| `#161` | 1 | CLOSED `completed` 2026-07-29 |
+| `#143` | 1 | CLOSED **`not_planned`** 2026-07-27 — the worst case in the table: the work was abandoned, so this frame's owner will never act on it |
+| `#272` | 1 | **OPEN** (`status:1-grilling`) — *not* a closed owner; listed so the next reader does not re-derive it as one |
+| `#263` 38 · `#369` 22 · `#329` 3 · `#351` 1 | 64 | all **OPEN** — the healthy majority, listed for completeness |
+
+**Not repointed here, and that is the ruling-not-conforming discipline rather than an omission.**
+Every owner is a developer verdict about *why* a frame fails; re-owning 24 of them off a closure date
+would be adjusting the record to make a goal come out. The one frame this issue was authorised to
+move was moved, and only after a measurement showed its recorded cause discharged. The remaining 24
+are an owed repointing ruling, in this priority order:
+
+1. **The 9 `#165` owner fields** (8 claims + the `turn_plan`) — Issue #263 merges Issue #165 and will grade itself against f32, f35 and
+   f82 specifically. Highest urgency, and the target is unambiguous (`#165 → #263`).
+2. **The 1 `#143` claim** (`ms_deny_wasted_on_doomed_active_f41`, frame `85163634|1|decision|41`) —
+   closed `not_planned`, so unlike the others there is no successor issue implied by the closure. It
+   needs a fresh owner, not a redirect.
+3. The 9 `#332` and 3 `#262` claims, whose successors (#369 / #263) are at least identifiable.
+
+## The Issue #263 hand-off package — three artifacts
+
+### 3a · The budget — DERIVED per-decision P95, and it is a LOWER BOUND
+
+Issue #263 sizes its beam, expectation-branch cap and commutative-block depth against this. **No new
+timing tool was built**: `tools/train/value_lab.py` already times the leaf and names Issue #263 as its
+consumer, so it was run, and the two legs it did not have were added to it.
+
+**Leaf unit cost** (`state_value` + `_leaf_state_model`, 371 frames, 371 scored, 0 failed):
+
+| | P50 | P95 |
+|---|---|---|
+| committed artifact run | **3.56 ms** | **6.44 ms** |
+| observed across 7 runs | 3.44 – 3.66 ms | **6.37 – 7.06 ms** |
+
+⚠️ **Quote the RANGE, not the point.** This is wall-clock on a shared 4-vCPU container and it moves
+about 10% run to run. A beam sized against `6.44` as though it were exact would be sized against
+noise. The **width** half of the derivation below has no such problem — it is a property of the
+boards, and came out at exactly 12 on every one of the 7 runs.
+
+**Post-OEC menu width** — the multiplier from unit cost to per-decision cost, over 372 frames.
+Reported as a distribution because the tail is the whole point:
+
+| raw P50 | raw P95 | post-OEC P50 | post-OEC P95 | post-OEC max |
+|---|---|---|---|---|
+| 6 | 16 | **6** | **12** | **23** |
+
+293 options collapse under ADR-0091. Fate split across 2726 options: **1690 modelled, 510 terminal,
+526 refused, 0 engine-resolved** (0 because `fate()` refuses the engine route with no `_search_api`
+wired, which is the correct reading of a decision taken outside a search).
+
+**Derived per-decision P95 = post-OEC P95 × leaf P95 = 12 × 6.44 = `77.3 ms`**, and across the 7
+runs **`76.5 – 84.8 ms`**. Round it to *"of order 80 ms per decision, leaf-only"* — the precision the
+measurement actually supports.
+
+**The worst frames, by name** (post-OEC of raw):
+
+`85058574|1|decision|71` 23 of 23 · `84890060|1|decision|48` 22 of 22 · `86090164|1|turn|6` 19 of 27 ·
+`83966336|0|decision|9` 17 of 17 · `81904451|0|decision|50` 17 of 20 · `83967841|1|decision|14` 16 of 16 ·
+`81904451|0|decision|58` 16 of 19 · `82225643|1|decision|57` 16 of 16 · `81904451|0|decision|53` 15 of 18 ·
+`85045840|0|decision|14` 14 of 14
+
+> **⚠️ THIS IS A LOWER BOUND, AND THE MISSING TERM IS UNMEASURABLE BEFORE ISSUE #263 ITSELF.**
+> Issue #291 §3a asks for *"the apply-seam transition cost, which `value_lab.py` does not time."*
+> **It cannot be timed at this commit.** `apply_option` is POC-T0's frozen contract and raises
+> `NotImplementedError` for every MODELLED fate — measured, **1690 of 1690** MODELLED options over
+> the committed corpus, zero successes. **Positive control:** `fate()` itself resolves those same
+> 1690 options to MODELLED without error, so the probe is sound and the seam is genuinely absent
+> rather than mis-invoked. Issue #263 builds that transition, so the seam its own budget depends on
+> does not exist to be measured before it. `84.8 ms` counts **leaf evaluations only**.
+>
+> Carried in the artifact as `menu.per_decision_p95_ms_is_lower_bound: true` and
+> `menu.apply_option_ms: null`, not only in this prose — a consumer reading the JSON meets the
+> omission there.
+
+**This is a DEV-MACHINE number**, stated plainly as Issue #291 requires: Python 3.11.15, Linux
+x86_64, 4 vCPU Intel Xeon @ 2.80 GHz. The Kaggle grader is **2 vCPUs × ~10 min/match** — quoted from
+Issue #263 § *The composer* and Issue #273, **and not independently confirmed against the competition
+page here**, so treat it as cited rather than verified. Issue #273 (POC-B3) does the deeper read on
+the grader's own hardware after Issue #263 lands.
+
+Re-derive with: `python tools/train/value_lab.py --menu --out reports/value.json`
+
+### 3b · The consolidated blind-spot checklist
+
+Issue #263's ceiling #2 says to consume Issue #262's registry list as the blind-spot checklist. **It
+has moved under this track and nobody had re-read it whole.** Below is every entry of `blind_to`
+across `REGISTRY` + `TERMINAL_REGISTRY` at `bb9bd69` — **35 entries, 7 families** — each mapped to the
+Issue #263 family the blindness would silently zero. Under uniform 1-ply differencing a 0 delta is
+**never explored**, not merely undervalued, so this is the list of plays the composer will
+structurally refuse to consider.
+
+| # | family | blindness (abbrev. — the module carries the full text) | still blind? | which #263 family it silently zeroes |
+|---|---|---|---|---|
+| 1 | `prize_race` | deck_count / deck-out proximity | **blind** | fetch/search, draw supporters — a mill or heavy-draw line |
+| 2 | `prize_race` | turn number / who went first | **blind** | the whole beam: a line trading a turn for position prices the trade at 0 |
+| 3 | `survival` | the MARGIN below the case-1 win-condition test | **blind, OWNED** (Issue #283 POC ruling — binary on purpose) | terminal-action valuation: crossing that margin |
+| 4 | `survival` | special_conditions | **blind** — snapshot zone OWED (T1 / Issue #260) | heal / status-cure plays price 0 |
+| 5 | `survival` | attached_tools (defensive) | **blind** — same owner | **Tools** (the 5-rung equip band retires here) |
+| 6 | `survival` | sub-turn healing (below one turn of incoming) | **blind, accepted at POC bar** | **Heal** — the family that motivated differencing |
+| 7 | `threat` | SPREAD riders as a bench route | **blind, fail-closed under-read** | counter-placement + `EV(attack)`'s spread rider |
+| 8 | `threat` | a multi-target snipe's COUNT | **blind, and now an OVER-read** | `EV(attack)` — Kyurem/Greninja multi-target |
+| 9 | `threat` | the bench leg's reach beyond the snipe rider | **narrowed** (Issue #284 + #329) | gust whether-to-play; counter-placement |
+| 10 | `threat` | the denial credit's SIZE | **narrowed** (Issue #329: 0 → 296 calls) | gust / snipe target choice |
+| 11 | `threat` | the PRIZE a denied line would have yielded | **blind, and ⚠️ UNOWNED** — answers in damage, doctrine asks in prizes; Issue #329 discharged its only stated prerequisite and the entry names no owner | gust whether-to-play — *"trade 1 prize for a denied 3"* |
+| 12 | `threat` | THEIR DECKLIST on the denial credit | **blind, deliberate over-read** | any line whose value is denial |
+| 13 | `threat` | BACKWARD topology on the denial credit | **blind** — no opponent hand exists | denial lines against an unevolvable body |
+| 14 | `threat` | the SCALING half of a denied payoff | **blind** — reads printed `maxDamage` | denial against scaling attackers (Alakazam) |
+| 15 | `threat` | the non-Tera BENCH-IMMUNITY set | **blind** — no `CardStat` field (ADR-0020) | `EV(attack)`'s snipe rider — over-credits immune bodies |
+| 16 | `threat` | an {ex}-restricted bench rider | **blind, fail-closed** | `EV(attack)` on `slowking`'s Zeraora line |
+| 17 | `threat` | CONVERTING exposure into a prize | **by design** — `attack_ev`'s | none: this is the `score = state_value + EV(terminal)` split working |
+| 18 | `threat` | their Energy denial / resource strip | **blind** — `deny_relevance` still dark (T2) | energy-denial plays (Crushing Hammer) price 0 |
+| 19 | `threat` | their hand and deck AS A RESOURCE | **narrowed, not closed** (Issue #280 took the clock half) | **hand disruption** — Judge / Stamp / Harlequin |
+| 20 | `threat` | CHIP DAMAGE — progress toward a KO I cannot yet complete | **blind** — reachability is a STEP | multi-turn KO plans; `dragapult_ex`'s whole engine |
+| 21 | `threat` | the SURVIVAL half of `opponent_target_value` | **blind** — passed as 0; T1 owns the accessor | gust: a removal that buys turns without yielding prizes |
+| 22 | `readiness` | the VALUE of the Active slot | **narrowed** (Issue #351 took the legality half) | retreat/promote sequencing |
+| 23 | `readiness` | a board condition that is not a bench-partner condition | **blind ×12 attacks; exposure 0 across shipped decks** | `EV(attack)` — a deck change makes it live |
+| 24 | `readiness` | **Ability readiness** | **blind** — no model supplies an Ability payoff | evolve-to-switch-an-engine-on. Named by the module as *"the largest single regression risk in this swap"* |
+| 25 | `readiness` | an Energy that EVAPORATES on the now-leg | **VERDICT, not a gap** (Issue #351; bounded at 21 frames) | `EV(attack)` — partly-spent Ignition |
+| 26 | `readiness` | what a DOOMED body could still do THIS turn | **blind** — `attack_payoff` names ONE attack | `EV(attack)` — the lesser swing off a doomed body |
+| 27 | `hand` | hand SIZE as such | **by design** — measured, not missing | none |
+| 28 | `hand` | information already revealed | **structural, whitelisted** | the commutative-block boundary rule already handles it |
+| 29 | `hand` | **MY HAND on a simulated end board** | **blind on the SIM path; fully live on real boards** | the develop rollout — which Issue #263 RETIRES, closing it. ⚠️ see the §2c discrepancy above: measured non-zero on 2 decider frames |
+| 30 | `hand` | DECK THINNING as a reason to spend a card | **blind** — no term reads deck composition | fetch/search + draw supporters — playing a card that covers nothing |
+| 31 | `development` | the STADIUM | **blind** — supplier, no reader | **Stadium** (the deck-rung retires here) |
+| 32 | `development` | their board topology | **blind, accepted POC asymmetry** | any line answering their development |
+| 33 | `attack_ev` | the opponent's REPLY | **by design** — 1-ply (Issue #150 owns depth-2) | the beam's terminal valuation |
+| 34 | `attack_ev` | opponent-choice riders | **blind** — no opponent model; apply-seam refuses the same class | `EV(attack)` riders |
+| 35 | `attack_ev` | opponent ACTION-ECONOMY locks | **blind, declared** (Issue #290) | `EV(attack)` — Budew's Itchy Pollen, the 1-of that set `preferred_start="second"` |
+
+**36 — the entry that is NOT in the registry, and must be.** Issue #376's developer ruling
+(2026-08-04) accepts that `state_value` must not carry the prize value of cashing an attack boost —
+that belongs to `attack_ev` under `score(sequence) = state_value(end board) + EV(terminal action)` —
+and states the cost outright: **enabling cards such as Boss's Orders and Premium Power Pro may be
+underplayed until Issue #263 lands.** A ruled, accepted, temporary blindness owned by **#263**, with
+no `blind_to` entry because the term that would carry it is the one #263 wires. Listed here so the
+composer meets it before it writes a beam.
+
+**Reading guide for Issue #263.** Six entries are *by design* (3, 17, 27, 28, 33, and half of 29) and
+need no work — they are the double-counting rule and the 1-ply bound doing their jobs. Four are
+**closed by this track's own scope**: 29 dies with the develop rollout, and 9/10/22/25 were narrowed
+by Issues #284/#329/#351. The **live list is the rest**, and its centre of gravity is `threat` — 15
+of 35 entries, of which entries 11, 20 and 21 are the three that would each silently zero a family
+Issue #263 explicitly retires a rung into (gust, counter-placement, denial).
+
+### 3c · The acceptance corpus
+
+Delivered as an **INDEX** at the head of § *Ideal turn sequences* above, with the classification rule
+stated so it can be audited. Headline results:
+
+- **41 entries = 22 sequences + 3 pointers + 16 verdict-only.** Not 41 gradeable turn plans.
+- **38 `mega_starmie`, 3 `dragapult_ex`, 0 `mega_lucario`.**
+- **Issue #263's five named acceptance targets — f32, f35, f82, `stabilize-then-KO`, `forgo-KO` —
+  appear in this file ZERO times.** They are **not missing**: all five are ruled, dated and reasoned
+  in `tests/fixtures/corrections/` and in named tests, located by frame key in the index's coverage
+  table. **Issue #263 must not re-derive them, and no rationale ruling is owed.**
+- What IS owed is a **repointing ruling** for the 9 owner fields still carrying closed `owner=#165` (8 claims + f35's `turn_plan`) — f32,
+  f35 and f82 among them — since Issue #263 merges Issue #165 and will grade itself against exactly
+  those frames.
+
+No sequence in this file was rewritten, reordered or tidied, and the file's open-discrepancy
+convention is carried forward: §2c above records a developer-line-versus-measurement disagreement on
+both sides rather than adopting or correcting either.
