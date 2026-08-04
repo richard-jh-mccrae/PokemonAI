@@ -13,28 +13,53 @@ from meta_tracker.card_effects import (
     _union_overrides, accumulate_effects, apply_overrides, build_effect_table,
     classify_effect_clauses, merge_clauses)
 
-#: The printed sentence that makes a `cost` a PLAYABILITY GATE rather than a price, in the two forms
-#: the pool prints it. Quoted from the engine dump `tools/meta_tracker/cards.json`
-#: (`all_card_data()`), never recalled:
+#: The printed sentence that gates PLAYABILITY on paying a COST, in the two forms the pool prints it.
+#: Quoted from the engine dump `tools/meta_tracker/cards.json` (`all_card_data()`), never recalled:
 #:
 #: * *"You can use this card only if you discard 2 other cards from your hand."* — 1121 Ultra Ball
 #: * *"…(If you can't put 2 cards from your hand on the bottom of your deck, you can't use this
 #:   card.)"* — 1200 Kofu, which states the same restriction the other way round
 #:
-#: The apostrophe is U+2019 in the dump, not the ASCII one it is tempting to type, so the pattern
-#: accepts both — a detail worth spelling out because getting it wrong yields an instrument that
-#: matches NOTHING and a guard that passes vacuously.
+#: **Both arms are narrow on purpose, and the narrowing is the whole design.** "Playability
+#: restriction" is far wider than "cost gate", and the wide reading has three separate ways to be
+#: wrong — each one a real card in this pool, not a hypothetical:
 #:
-#: **This lives in the test, deliberately, and must not migrate into `src/`.** The compendium is
-#: hand-authored against the engine's card text and read back as data; `effect_overrides.json`'s own
-#: `_note_fetch` says the runtime *"never parses card text at runtime OR build time"*. So this is a
-#: rot-guard that grades the authored store against the printed card — the same job
-#: `tests/scouting/test_tool_holder_facts.py` does for holder facts — not a production parser.
-_PRINTED_GATE = re.compile(r"only if you (?:discard|put)|can[’']t use this card", re.I)
+#: * *"You can use this card only if you go second"* (1101 Call Bell), *"…only if your opponent has
+#:   exactly 2 Prize cards remaining"* (1201 Briar) and eight more are BOARD conditions. They pay no
+#:   cost, so they take a `condition`, not this flag — hence `only if you (discard|put)` rather than
+#:   a bare `only if`.
+#: * *"You can't use this card during your first turn"* — 1079 Rare Candy, 1230 Grimsley's Move. A
+#:   TURN restriction wearing the same words.
+#: * *"(If you can't DRAW any cards in this way, you can't use this card.)"* — 1239 Naveen. The
+#:   nastiest of the three, because it is Kofu's exact sentence shape: the inability that gates it is
+#:   about the EFFECT succeeding, and Naveen's discard is *"you MAY discard any number"*, optional.
+#:   So the inverse arm requires the inability to name a payment **from your hand**, which is what
+#:   separates Kofu's *"if you can't put 2 cards from your hand"* from Naveen's *"if you can't draw"*.
+#:
+#: None of those three carries a `cost` today, so a loose pattern would sit inert — but the guard
+#: below grades BOTH directions, and Issue #302 names Naveen's optional pre-discard as its one
+#: unmodelled leg. The day that leg is authored, a loose pattern would demand `cost_required` on a
+#: card whose gate is not about paying. The exclusions are asserted, not just described.
+#:
+#: The apostrophe is U+2019 in the dump, not the ASCII one it is tempting to type, so the pattern
+#: accepts both — worth spelling out because getting it wrong yields an instrument that matches
+#: NOTHING and a guard that passes vacuously.
+#:
+#: **This lives in the test, deliberately.** It is a rot-guard that grades the authored store against
+#: the printed card — the same job `tests/scouting/test_tool_holder_facts.py` does for holder facts —
+#: not a production parser: the COMPENDIUM is hand-authored and read back as data, never derived from
+#: card text (`effect_overrides.json`'s `_note_fetch`). That claim is about the compendium and must
+#: not be widened to the repo: `tools/parity/seed_chains.py`'s rule `R-T08` parses this very sentence
+#: at BUILD time for the cgpy twin. See the guard's docstring — that twin is also the corroboration.
+_PRINTED_GATE = re.compile(r"only if you (?:discard|put)\b"
+                           r"|if you can[’']t (?:discard|put) [^.]{0,60}from your hand", re.I)
 
 
 def _printed_text(card: dict) -> str:
-    """Every Ability line the engine prints for a card, joined — a Trainer's whole effect."""
+    """Every Ability line the engine prints for a card, joined — a Trainer's whole effect.
+
+    Two siblings read the same field the same way (`apply_seam_coverage._text`, `arena.decks`); they
+    are not shared because importing either here would drag a CLI module in by path for two lines."""
     return "\n".join(a.get("text") or "" for a in card.get("abilities") or [])
 
 
@@ -429,17 +454,33 @@ def test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card()
     **The split was scope, not a ruling.** Issue #302 minted `cost_required` while rewriting *the 14
     partial DRAW clauses*, and its §3 named exactly Morty's Conviction, Iris's Fighting Spirit, Kofu
     and Carmine. The three FETCH cards printing the same gate — 1121 Ultra Ball, 1092 Secret Box,
-    1233 Canari — were never in that issue's 14, so they were never looked at. #302 even quotes
+    1233 Canari — were never in that issue's 14, so they were never looked at. Issue #302 even quotes
     *"Ultra Ball's `discard_2`"* as its example of the `cost` field that already existed. The store's
     own prose had already reached the right reading and only the DATA lagged: this file's `_covers`
     reason for 1233 says *"the `discard_1` cost the card is gated on"*, and `_note_fetch_family`
     writes both Canari and Secret Box as *"gated on"* their discard.
 
-    So the invariant graded here is the one the printed card states, not the one #302 happened to
-    author: **a `cost` carries `cost_required: true` if and only if the card prints a playability
-    gate.** It bites in both directions, which is what makes it a guard rather than a record —
-    adding the flag to a card that merely charges a price fails it exactly as omitting it from a
-    gated one does.
+    **And a second subsystem had already ruled it, which is the strongest evidence there is** — it
+    was reached independently, by a different pipeline, and it disagreed with the compendium about
+    the same card. The cgpy twin encodes playability as a `legal` predicate, and
+    `src/cgpy/defs/generated_chains.json` gives **1233 Canari** `legal: [{"op": "handOthers",
+    "n": 1}]` (seeded by `tools/parity/seed_chains.py`'s `R-T08`, which regexes this exact sentence),
+    while `src/cgpy/defs/chain_overrides.json` gives **1121 Ultra Ball** a hand-authored
+    `legal: [{"op": "handOthers", "n": 2}]`. `cgpy/chain.py` checks it at runtime — *"discard-cost
+    needs n OTHER hand cards"*. So the twin refused an unpayable Ultra Ball while the compendium
+    priced it as merely expensive: one repo, two answers, and the compendium was the outlier.
+
+    So the invariant graded here is the one the printed card states, not the one Issue #302 happened
+    to author: **a `cost` carries `cost_required: true` if and only if the card prints a restriction
+    on PAYING THAT COST.** Not "prints a playability restriction", which is wider and would be false:
+    ten cards print *"You can use this card only if…"* about the BOARD (1101 Call Bell's *"only if
+    you go second"*, 1201 Briar's *"only if your opponent has exactly 2 Prize cards remaining"*, and
+    eight more), and those take a `condition`. `_PRINTED_GATE` carries that narrowing and its own
+    module comment carries the three ways the wide reading goes wrong.
+
+    It bites in both directions, which is what makes it a guard rather than a record — adding the
+    flag to a card that merely charges a price fails it exactly as omitting it from a gated one
+    does.
 
     Two negatives are asserted rather than left implicit, because a sweep over *"every card with a
     `cost`"* would wrongly catch them: 1192 Carmine's *"Discard your hand and draw 5 cards."* and
@@ -456,12 +497,23 @@ def test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card()
     cards = load_cards()
     eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
 
-    # (0) CONTROLS, before any conclusion is drawn from a silence.
-    #     The instrument must FIRE on both printed phrasings and stay QUIET on the two instructions.
+    # (0) CONTROLS, before any conclusion is drawn from a silence. The instrument must FIRE on both
+    #     printed phrasings and stay QUIET on every near-miss the pool actually contains — the two
+    #     instructions, the two turn restrictions, the board conditions, and Naveen, whose sentence
+    #     is Kofu's shape but whose inability is about DRAWING rather than paying.
     assert _PRINTED_GATE.search(_printed_text(cards[1187]))          # "only if you discard another…"
-    assert _PRINTED_GATE.search(_printed_text(cards[1200]))          # "…you can’t use this card."
-    assert not _PRINTED_GATE.search(_printed_text(cards[1192]))      # "Discard your hand and draw 5"
-    assert not _PRINTED_GATE.search(_printed_text(cards[1206]))      # "Discard your hand and search"
+    assert _PRINTED_GATE.search(_printed_text(cards[1200]))          # "If you can’t put 2 cards…"
+    for ungated in (1192,   # Carmine — "Discard your hand and draw 5 cards.", an instruction
+                    1206,   # Larry's Skill — "Discard your hand and search your deck…", ditto
+                    1079,   # Rare Candy — "You can’t use this card during your first turn."
+                    1230,   # Grimsley's Move — the same turn restriction
+                    1239,   # Naveen — "(If you can’t DRAW any cards in this way…)"; discard is "may"
+                    1101,   # Call Bell — "only if you go second", a BOARD condition
+                    1201):  # Briar — "only if your opponent has exactly 2 Prize cards remaining"
+        assert not _PRINTED_GATE.search(_printed_text(cards[ungated])), ungated
+    # …and the instrument is not merely quiet on those: it finds exactly the seven real cost gates.
+    assert {cid for cid in cards if _PRINTED_GATE.search(_printed_text(cards[cid]))} == \
+        {1092, 1121, 1148, 1187, 1200, 1208, 1233}
 
     costed = {cid: eff.clauses(cid) for cid in sorted(cards)
               if any("cost" in c for c in eff.clauses(cid))}

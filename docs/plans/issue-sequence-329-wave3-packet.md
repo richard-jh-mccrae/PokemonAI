@@ -1,4 +1,4 @@
-# Wave-3 packet — issue-sequence run (329, 332, 362, 351, 350, 349)
+# Wave-3 packet — issue-sequence run (329, 332, 362, 351, 350, 349, 374, 375, 372)
 
 Gate flips from this batch, pending developer ruling. None conformed into either baseline.json —
 a baseline is a ruling record, not something a sub-issue may recapture on its own recognisance.
@@ -551,3 +551,64 @@ field.
 
 `data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json` are untouched by this issue's work
 as well. Verified with `git status`.
+
+## Issue #372 — the playability gate: ZERO gate flips, and this was the batch's likeliest flipper
+
+**No rows were added to the Flips table.** That matters more here than it did for Issue #349,
+because this issue was sequenced LAST specifically on the expectation that it *would* flip something:
+it adds `cost_required: true` to 1121 Ultra Ball, which our decks run **17 copies** of across five of
+our six agent decks, plus 1092 Secret Box (2 copies) and 1233 Canari (0). `card_effects.json` is read
+live by `planner.py` / `combat.py` / `pilot.py`. A flip here would have been cleanly attributable to
+this one cause, which is why it went last. It produced none.
+
+### Gate arithmetic
+
+| gate | before | after |
+|---|---|---|
+| leaf (Discrimination) | 7 unruled, 59 held out, 4 voided; `agree 182/249 -> 126/249`, 82 picks moved | **byte-identical output**, frame for frame and rank for rank |
+| decider (Decision) | PASS, 0 unruled; `agree 250/347 -> 250/347`, 0 picks moved | **byte-identical output** |
+
+`diff` over the two gates' FULL stdout — not just the summary lines — reports zero differing lines
+in both directions.
+
+### The 7 unruled leaf flips are unchanged and none of them is this issue's
+
+`81904451|0|decision|9` · `81906755|1|decision|9` · `83457493|1|decision|20` ·
+`83661649|0|decision|54` · `85046350|0|decision|85` · `85785606|0|decision|19` · `|21`
+
+That is the same standing set Issue #349's section lists, measured here from a BEFORE control taken
+at the tip of the batch — i.e. **after** Issues #350, #374 and #375 had all landed. So the batch's
+whole compendium-and-registry half (Issue #350's `cost` vocabulary, Issue #349's board-scaled
+magnitudes, Issue #374's selector values, Issue #375's retired `stall` tag, Issue #372's playability
+gate) contributed **zero** unruled flips between them; every outstanding flip belongs to the T3.5
+`state_value` track (Issues #329, #332 and #351) or predates the batch.
+
+### How the BEFORE control was taken
+
+Issue #349's recipe exactly, and for its reason — **not `git stash`**, which shares one stack across
+worktrees so a "reverted" measurement can silently still run the diff. The three files under `src/`
+(`card_effects.json`, `snapshot_coverage.py`, `CONTEXT.md`) were checked out from the HEAD blobs and
+the revert **proved** by `git diff --stat -- src/` printing nothing at all before either gate ran.
+The saved copies were restored afterwards and verified byte-for-byte by SHA-256, each still at a CRLF
+count of 0 — this repo has no `.gitattributes` (Issue #367).
+
+### Why zero was the expected result
+
+`cost_required` **has no runtime reader.** Measured by parsing, not grepping: an `ast` walk over
+every `.py` under `src/` (excluding `src/cg/`) collecting string constants used as dict subscripts,
+`.get()` arguments or `in` tests finds **0** sites for `cost_required`, against **5** each for `kind`
+/ `target` / `zone` and **3** for `amount` as the positive control. `apply_option()` raises
+`NotImplementedError` — T0 freezes the contract — so nothing prices the field today. The exposure
+that made a flip plausible is real and is why the issue was worth doing; it simply lands at T4, where
+this stops being a pricing error and becomes a LEGALITY one.
+
+Census re-run: **zero movement**, which is likewise a measurement and not a skipped step.
+`cost_required` is a boolean PARAMETER, so it enters neither the write-set-health table (which counts
+VOCABULARY values) nor the selector-value table, and all three edited cards were already
+`covers: full`.
+
+## Neither baseline was recaptured (Issue #372)
+
+`data/leaf_lab/baseline.json` and `data/decider_lab/baseline.json` are untouched by this issue's work
+as well, and so is `data/corrections/reviewed.json` — no correction was ruled, refuted or otherwise
+reviewed by this issue. Verified with `git status` and an empty `git diff --stat data/`.

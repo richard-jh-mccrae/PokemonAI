@@ -574,11 +574,13 @@ CLAUSE_PARAMETERS: dict[str, str] = {
     "cost_required": "TRUE when failing to pay `cost` makes the card UNPLAYABLE, which is a "
                      "different fact from the cost merely being expensive (Issue #302). A "
                      "PARAMETER, not vocabulary: its value is a boolean, so it names no write. "
-                     "Authored IF AND ONLY IF the card prints a playability restriction — *\"You "
-                     "can use this card only if you...\"*, or Kofu's parenthetical inverse *\"(If "
-                     "you can't ..., you can't use this card.)\"* — a biconditional Issue #372 "
-                     "ruled and `tests/cards/test_card_effects.py` grades against the engine's own "
-                     "card text in both directions",
+                     "Authored IF AND ONLY IF the card prints a restriction on PAYING THAT COST — "
+                     "*\"You can use this card only if you discard/put…\"*, or Kofu's parenthetical "
+                     "inverse naming the same payment — and NOT for the wider \"prints a "
+                     "playability restriction\", which ten board-condition cards would satisfy "
+                     "(1101 Call Bell's *\"only if you go second\"* takes a `condition`). A "
+                     "biconditional Issue #372 ruled and `tests/cards/test_card_effects.py` grades "
+                     "against the engine's own card text in both directions",
     # ── shape ─────────────────────────────────────────────────────────────────────────────────────
     "type": "the card type a clause names, where `target` would be ambiguous",
     "choice": "the clause is one alternative of a choose-one card",
