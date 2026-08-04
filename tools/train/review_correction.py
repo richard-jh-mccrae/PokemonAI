@@ -99,6 +99,14 @@ def _save(path: Path, data: dict) -> None:
     path.write_bytes(body.encode("utf-8").replace(b"\n", newline))
 
 
+def _replacement_refused(existing: dict, new_disposition: str, *, supersede: bool) -> bool:
+    from train.gates import voiding_disposition
+
+    return (voiding_disposition(existing.get("disposition"))
+            and not voiding_disposition(new_disposition)
+            and not supersede)
+
+
 def main(argv=None) -> int:
     try:
         sys.stdout.reconfigure(encoding="utf-8")          # reasons carry em-dashes -> cp1252 would crash
@@ -111,6 +119,8 @@ def main(argv=None) -> int:
     ap.add_argument("--round", default=date.today().isoformat(), help="round/date tag (default: today)")
     ap.add_argument("--list", action="store_true", help="print the ledger and exit")
     ap.add_argument("--remove", metavar="LOCATOR", help=f"delete an entry (un-review). {_LOCATOR_HELP}")
+    ap.add_argument("--supersede", action="store_true",
+                    help="allow replacing a voiding disposition with a non-voiding one; reason required")
     ap.add_argument("--path", default=str(DEFAULT_REVIEWED))
     ap.add_argument("--store", default=str(DEFAULT_ROOT),
                     help="corrections corpus root a locator resolves against (default: the committed one)")
@@ -129,6 +139,10 @@ def main(argv=None) -> int:
     locator = args.remove or args.locator
     if not locator or not (args.remove or args.disposition):
         ap.error("provide '<locator> <disposition> [reason]', or --list / --remove")
+    if args.supersede and args.remove:
+        ap.error("--supersede only applies when recording a disposition")
+    if args.supersede and not args.reason.strip():
+        ap.error("--supersede requires a non-empty reason")
 
     if args.remove:
         # Removal is an operation on the LEDGER, so the ledger's own keys are a legitimate second
@@ -150,6 +164,16 @@ def main(argv=None) -> int:
     key = _resolve_or_report(locator, args.store)
     if key is None:
         return 1
+
+    existing = data.get(key)
+    if existing is not None:
+        print(f"replacing {key} [{existing.get('disposition', '?')}] from round "
+              f"{existing.get('round', '?')}")
+        if _replacement_refused(existing, args.disposition, supersede=args.supersede):
+            print(f"refusing to replace voiding disposition {existing.get('disposition')!r} with "
+                  f"non-voiding disposition {args.disposition!r}; pass --supersede with a reason "
+                  f"to override. Nothing written.")
+            return 1
 
     data[key] = {"disposition": args.disposition, "reason": args.reason, "round": args.round}
     _save(path, data)
