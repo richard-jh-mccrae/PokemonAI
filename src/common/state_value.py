@@ -899,8 +899,11 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
                     "never new math: the KO band / `predicted_damage` with coin branches entering "
                     "as an EXPECTATION rather than a printed floor, the target's prize value, "
                     "snipe/spread RIDER value priced against THEIR board, Effect-Clause economy "
-                    "riders (energy recycle), and the next-turn clock cost a `nextTurnSelfLock`-"
-                    "class attack imposes on ME. Readiness is deliberately absent: whether I CAN "
+                    "riders (energy recycle), and the next-turn clock cost an attacker-side lock "
+                    "imposes on ME — BOTH fields, `nextTurnSelfLock` ('can't use attacks') and "
+                    "`nextTurnSameAttackLock` ('can't use THIS attack'), which price differently "
+                    "and which this line conflated until Issue #384. Readiness is deliberately "
+                    "absent: whether I CAN "
                     "attack is `readiness`'s question about the board, and asking it twice would "
                     "multiply the same probability into the same prize.",
         blind_to=(
@@ -926,11 +929,15 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
             "and ceiling and, where only that mean crosses the target's HP, credits the Knock Out at "
             "a DECLARED equiprobable 0.5 (`_COIN_KO_BOUND`). A policy, not a derivation: "
             "`AttackStat` carries `damageMin`/`damageMax` and NOTHING about what lies between them, "
-            "in neither the parsed record nor the 99-attack engine-audit override table. Measured "
-            "over the pool — 1787 attack rows, 138 carrying bounds, 148 printing a coin in their "
-            "text, only 38 in both — so 110 coin attacks carry no bounds at all, and Team Rocket's "
-            "Kangaskhan ex's Comet Punch ('Flip 4 coins. This attack does 30 damage for each heads') "
-            "is unrepresentable in two numbers however they are read. Right for the pool's commonest "
+            "in neither the parsed record nor the 99-attack engine-audit override table. MEASURED "
+            "over a stated population — one row per (card, attack) in `data/EN_Card_Data.csv` with a "
+            "`Move Name` that is not an `[Ability]`, put through `provider.build_attack_stats`, "
+            "which is 1787 rows (the population is spelled out because a reviewer could not "
+            "reproduce the figure from the bare number, and a count nobody can re-run is not "
+            "evidence): 138 carry bounds, 148 print a coin in their `Effect Explanation`, only 38 "
+            "are in both — so 110 coin attacks carry no bounds at all, and Team Rocket's Kangaskhan "
+            "ex's Comet Punch ('Flip 4 coins. This attack does 30 damage for each heads') is "
+            "unrepresentable in two numbers however they are read. Right for the pool's commonest "
             "shape (one fair coin, 'if heads, N more damage'), wrong in BOTH directions for a "
             "multi-flip one. Closing it needs a parsed flip count, which is a card-data change and "
             "not this term's.",
@@ -940,7 +947,20 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
             "its ceiling clears it takes the CHIP branch and the Knock Out is never credited at all. "
             "An UNDER-read, the fail-closed direction for an offensive estimate and the same choice "
             "`threat.blind_to` makes one seam over — but it does mean a coin attack that COULD win "
-            "the exchange can rank below one that certainly chips.",
+            "the exchange can rank below one that certainly chips. The MIRROR of it is an OVER-read "
+            "and is recorded here rather than left as the flattering half: on the Knock Out branch "
+            "`attack_ev` sets `chip = 0.0` by construction, so at `ko_probability = 0.5` the losing "
+            "branch contributes NOTHING — a coin attack that misses the kill still lands its floor "
+            "damage on the real board, and half a prize is credited where 'half a prize plus the "
+            "tails-branch chip' is the honest expectation. Both halves are the frozen shape's, not "
+            "the extractor's: `attack_ev`'s branch is corpus-ruled and this issue may not retune it.",
+            "a rider carrying BOTH a snipe and a spread — `_attack_rider_value` sums the two "
+            "knapsacks independently over the same Bench, so a body finishable by either would be "
+            "paid for twice. MEASURED unreachable rather than argued safe: over the population "
+            "above, 23 attacks print `benchSnipe` only and 3 print `benchSpread` only, and NOT ONE "
+            "prints both — which is also why `threat.blind_to` can split the same pair without "
+            "double-counting. Unguarded rather than impossible: a future set printing both would "
+            "over-read, and the fix then is one shared allocation, not two sums.",
             "SELF-DAMAGE — `AttackStat.recoil` (ADR-0022 #2) reaches no leg of this term and no "
             "board either. Attack is TERMINAL, so there is no post-attack board for the apply-seam "
             "to hand back and nothing for `survival` to price the recoil on, and the term takes no "
@@ -1911,7 +1931,9 @@ class AttackEV:
     riders: float = 0.0
     #: Effect-Clause economy riders (energy recycling and its relatives).
     economy: float = 0.0
-    #: What a `nextTurnSelfLock`-class attack costs ME next turn. A COST: already subtracted.
+    #: What an attacker-side next-turn lock costs ME next turn — either field
+    #: (`nextTurnSelfLock` *"can't use attacks"* or `nextTurnSameAttackLock` *"can't use THIS
+    #: attack"*), which price differently. A COST: already subtracted.
     next_turn_cost: float = 0.0
     #: The sum. In prizes.
     total: float = 0.0
@@ -1946,9 +1968,19 @@ def attack_ev(*, damage: float, target_hp: float, target_prizes: float,
     makes "less than a Knock Out is worth less than a Knock Out" a fact about the arithmetic rather
     than a cap someone remembered to add. The median rate remains the fallback for an unreadable HP.
 
-    ``next_turn_cost`` is a COST and is SUBTRACTED. A `nextTurnSelfLock`-class attack (Mega Lucario's
-    Mega Brave — no Mega Brave next turn) buys damage now against a clock cost later, and an EV that
-    omitted the second half would recommend it every time.
+    ``next_turn_cost`` is a COST and is SUBTRACTED. A next-turn-locking attack buys damage now
+    against a clock cost later, and an EV that omitted the second half would recommend it every time.
+
+    **Two lock FIELDS, not one, and the worked example was on the wrong one until Issue #384.** This
+    line used to read *"a `nextTurnSelfLock`-class attack (Mega Lucario's Mega Brave — no Mega Brave
+    next turn)"*, which pairs the wrong field with the right card: Mega Brave prints *"During your
+    next turn, this Pokémon can't use Mega Brave"* — it names ITSELF — so the shipped parser reads
+    ``nextTurnSameAttackLock``, verified by running `provider.build_attack_stats` over card 678's own
+    row in `data/EN_Card_Data.csv`. `nextTurnSelfLock` is the OTHER thing, *"this Pokémon can't use
+    attacks"* (Blood Moon), and the two cost differently by construction — `strategy/sequence.py`
+    argues it: 270 + 130 == 130 + 270, so a same-attack lock often forfeits nothing at all, while a
+    full lock forfeits a whole turn of offense. The flat `_LOCK_COST = 40` this replaced charged one
+    number for both, which is precisely the conflation this note now refuses to repeat.
 
     Readiness is deliberately absent from the signature. Whether I can afford this attack at all is
     `readiness`'s question about the BOARD, and multiplying it in here would put the same
@@ -1999,10 +2031,15 @@ class AttackLegs(NamedTuple):
 #: distribution between them: no flip count, no probability, neither in the parsed record
 #: (`scouting/card_text.parse_attack_damage_bounds`) nor in the engine-audit override table
 #: (`attack_overrides.json` corrects `damageMin`/`damageMax` for 99 attacks and adds no third field).
-#: Measured over the pool: of 1787 attack rows, 138 carry bounds and 148 print a coin in their text —
-#: and only 38 of those 148 are in both sets, so 110 coin attacks carry no bounds at all. Team
-#: Rocket's Kangaskhan ex's Comet Punch (*"Flip 4 coins. This attack does 30 damage for each
-#: heads"*) is the shape that cannot be recovered even in principle from two numbers.
+#:
+#: Measured, over a population stated so it can be re-run: **one row per (card, attack) in
+#: `data/EN_Card_Data.csv` whose `Move Name` is not an `[Ability]`, put through
+#: `provider.build_attack_stats`** — 1787 rows. Of those, **138** carry bounds and **148** print a
+#: coin in their `Effect Explanation`, and only **38** are in both sets, so **110** coin attacks
+#: carry no bounds at all. Team Rocket's Kangaskhan ex's Comet Punch (*"Flip 4 coins. This attack
+#: does 30 damage for each heads"*) is the shape that cannot be recovered even in principle from two
+#: numbers. The filter is spelled out because the bare counts were not reproducible without it, and
+#: a measurement nobody else can re-run is an assertion wearing a number's clothes.
 #:
 #: So this is a POLICY: where the mean crosses the target's HP but the FLOOR does not, the Knock Out
 #: is credited at the equiprobable two-branch reading. It is right for the commonest shape in the
@@ -2069,7 +2106,7 @@ def attack_ev_legs(model: "StateModel") -> tuple:
     # The follow-up menu, MATCHUP-FREE: the lock leg asks what this Pokémon could do NEXT turn, and
     # the defender next turn is not this one, so it reads `printed` rather than the vs-defender leg.
     followups = {p.attack_id: p.printed for p in profiles if p.attack_id is not None}
-    lock_free = _lock_free(model, body, followups)
+    costless = _lock_is_costless(model, body, followups)
     return tuple(AttackLegs(p.attack_id, {
         "damage": _attack_damage(p),
         "target_hp": hp,
@@ -2077,7 +2114,7 @@ def attack_ev_legs(model: "StateModel") -> tuple:
         "ko_probability": _attack_ko_probability(p, hp),
         "rider_value": _attack_rider_value(p),
         "economy_value": _attack_economy_value(p),
-        "next_turn_cost": 0.0 if lock_free else _attack_next_turn_cost(p, followups),
+        "next_turn_cost": 0.0 if costless else _attack_next_turn_cost(p, followups),
     }) for p in profiles)
 
 
@@ -2160,8 +2197,13 @@ def _attack_economy_value(profile) -> float:
     return float(profile.recover_units) * ENERGY_RECOVER / currency.PRIZE_DAMAGE_RATE
 
 
-def _lock_free(model: "StateModel", body, followups: dict) -> bool:
-    """Is a next-turn lock free on this board? — the two shipped guards on `_lock_sequence_cost`.
+def _lock_is_costless(model: "StateModel", body, followups: dict) -> bool:
+    """Does a next-turn lock cost NOTHING on this board? — the two shipped guards on
+    `_lock_sequence_cost`.
+
+    Named for the BOARD condition rather than for the attack: "lock-free" one function down means
+    *a pick that carries no lock at all*, which is a different fact, and one word for two facts is
+    how a reader comes to believe the wrong one.
 
     **A lone affordable attack is never charged.** The cost is the gap between the follow-up a
     LOCK-FREE pick would have left and the one this pick leaves; with a single attack on the menu

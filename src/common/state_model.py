@@ -423,6 +423,13 @@ class AttackProfile(NamedTuple):
     #: worth.
     rider_targets: tuple
     #: The energy-recycle rider's printed ceiling (Aura Jab: *"attach up to 3"*), and…
+    #:
+    #: Carried BESIDE ``recover_units`` rather than folded into it, though only the latter is
+    #: priced. `recover_units` is a min of three bounds and cannot say WHICH one bound, and that is
+    #: the first question a human ruling a gate flip asks — an Aura Jab worth 1 because the discard
+    #: is thin is a different board from one worth 1 because the Bench is nearly fed. The pair is
+    #: also what `attack_ev`'s substrate test asserts, since a printed ceiling that survives the
+    #: board bounds is the evidence the rider FACTS reached the model at all.
     recover_n: int
     #: …the Energy it would ACTUALLY attach that a recipient can ACTUALLY use — the min of that
     #: ceiling, the matching Basic-Energy fuel in the rider's source zone, and the recipients'
@@ -2394,7 +2401,15 @@ class StateModel(_Lazily):
            EMPTY Bench credit 0, which preserves the old empty-Bench guard as a special case.
 
         The forward closure comes off :attr:`MySide.forward_index` — MY decklist, so a form I do not
-        run is not a form my line can reach — and never off a universal card index."""
+        run is not a form my line can reach — and never off a universal card index.
+
+        ⚠️ **This is a SECOND implementation of those bounds and the duplication is real**, recorded
+        rather than glossed. `Pilot._recover_units` takes a `Board` and a raw observation, which
+        `state_value` may not be handed (the sole-supplier ruling), so the two cannot share a body
+        today without a Pilot-side refactor this issue is not scoped for. They can drift, and the
+        honest note is that nothing but this paragraph stops them. The scheduled resolution is Issue
+        #386's deletion pass, which retires the Pilot rungs that call the incumbent; if that lands
+        and the Pilot copy survives, unifying them is owed work rather than a tidy-up."""
         ceiling = int(getattr(stat, "recoverN", 0) or 0)
         if not ceiling:
             return 0.0
@@ -2416,7 +2431,16 @@ class StateModel(_Lazily):
 
         Scope is the rider's own ``recoverTarget`` (*"…to your Benched Pokémon"* -> ``"bench"``), so
         a bench-scoped rider on an empty Bench reads 0 and a self-scoped one never credits the
-        Bench. An unresolvable attack contributes 0 rather than a guessed cost."""
+        Bench.
+
+        **One DELIBERATE divergence from the Pilot's twin**: an attack the table cannot resolve
+        contributes cost 0 here, where `_recover_recipient_need` takes `_attack_cost`'s default of
+        99. That default is the caller's epistemics ("99 fail-closed / 0 tiebreak-neutral"), and 99
+        is fail-closed for an INCOMING read while being fail-OPEN for this one — a single unreadable
+        attack would push the need past any plausible ceiling, so the need bound would silently stop
+        binding and the rider would credit the full `min(recoverN, fuel)`. A phantom credit is worse
+        than a missing one for a term that competes against ending the turn, so this leg makes no
+        claim about an attack it cannot read."""
         pool = []
         if scope in (None, "any", "bench"):
             pool += list(self.mine.bench)

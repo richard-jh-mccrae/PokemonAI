@@ -238,12 +238,13 @@ _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped En
                            # forces 0.154 < _DENIAL_FORWARD < 0.8.
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
-_FOLLOWUP_W = FOLLOWUP_W   # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
-                           # The VALUE moved to `strategy/context.py` (Issue #384) — `state_value`'s
-                           # terminal `next_turn_cost` leg prices the same forfeited follow-up as
-                           # `_lock_sequence_cost` below, and two copies of one weight is what nothing
-                           # stops drifting. Same number, one owner; the rationale lives at the leaf.
-                           # Kept under the old private spelling so no expression here moved.
+# `_FOLLOWUP_W` is GONE (Issue #384). ADR-0061's weight on the FORCED follow-up a locking attack
+# leaves behind now lives — value unchanged — as `FOLLOWUP_W` in `strategy/context.py`, imported by
+# this module's star import above, because `state_value`'s terminal `next_turn_cost` leg prices the
+# same forfeited follow-up as `_lock_sequence_cost` below and two copies of one weight is what
+# nothing stops drifting. A local alias was written first and DELETED on review: it preserved
+# exactly the two-spellings state the move existed to end, which is the `_DENIAL_ITEM_COST` lesson
+# (a rate that never meets an expression is a rate nothing stops drifting) one level up.
 _LOCK_KO = 0.3             # KO-branch sub-prize variant: among equal-prize KOs keep the nuke off cooldown
 _RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Active doomed (Wild Press at
                            # 80 HP) — combat-scale; a KO/snipe-KO or already-doomed Active is never charged
@@ -6372,7 +6373,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         - **full lock** (Blood Moon 240, "can't use attacks"): 240 + 0 loses to a lock-free 130/turn's
           260 — cost **~240**, not 40.
 
-        Cost = `_FOLLOWUP_W * (best follow-up a lock-free pick would leave − the follow-up THIS pick
+        Cost = `FOLLOWUP_W * (best follow-up a lock-free pick would leave − the follow-up THIS pick
         leaves)`, so a lock-free attack is always 0 and the term never inflates an attack's score (it is
         a cost, never a credit — attacks keep their scale against develops).
 
@@ -6391,7 +6392,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         mine = followup_damage(attack_id, affordable=affordable,
                                full_lock=bool(getattr(st, "nextTurnSelfLock", False)),
                                same_attack_lock=bool(getattr(st, "nextTurnSameAttackLock", False)))
-        return _FOLLOWUP_W * max(0.0, max(affordable.values()) - mine)
+        return FOLLOWUP_W * max(0.0, max(affordable.values()) - mine)
 
     def _damage_context(self, obs: dict, *, attacker_is_me: bool = True) -> dict:
         """Visible-state counts for the oracle's scaling term (ADR-0032 Damage Formula),

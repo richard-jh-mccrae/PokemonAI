@@ -231,17 +231,6 @@ _STATS = {
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
-    #: Added for ADR-0064 Amendment B's BENCH leg (Issue #283) — the only opponent in this fixture
-    #: whose attack reaches my Bench at all. Verified at source, and carried WHOLE rather than
-    #: trimmed to the one attack the test needs: Mega Starmie ex (1031) Stage 1 HP 330, {W},
-    #: `Mega Pokémon ex` -> 3 prizes, evolvesFrom **Staryu**, Jetting Blow ``{W}`` 120 *"also does
-    #: 50 damage to 1 of your opponent's Benched Pokémon"* and Nebula Beam ``●●●`` 210. A fixture
-    #: that quietly drops the second attack would carry a `maxDamage` the real card contradicts.
-    #: Referenced by exactly one test, so no existing assertion moves.
-    MEGA_STARMIE: CardStat(MEGA_STARMIE, synthetic=True, name='Mega Starmie ex', hp=330, megaEx=True,
-                           energyType=WATER, evolvesFrom="Staryu", maxDamage=210, maxDamageCost=3,
-                           minAttackCost=1, minCostDamage=120,
-                           attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),

@@ -48,6 +48,15 @@ COLORLESS, GRASS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 5, 6, 7, 
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 JET_HEADBUTT, PHANTOM_DIVE = 9121, 9122
 AURA_JAB, MEGA_BRAVE = 982, 983
+#: Riolu's ONLY attack, and this cast used to drop it. `data/EN_Card_Data.csv` Card ID 677:
+#: **Accelerating Stab ``{F}`` 30**, *"During your next turn, this Pokémon can't use Accelerating
+#: Stab."* -> ``nextTurnSameAttackLock``, by the shipped parser (Issue #384).
+ACCELERATING_STAB = 9677
+#: An OFF-POOL body carrying the shape a PARTIALLY-KNOWN attack table produces: a `maxDamage`
+#: roll-up with an empty `attacks` tuple. Not a card, deliberately — no id in `data/EN_Card_Data.csv`
+#: — so it makes no card-fact claim that could be wrong, which is exactly what went wrong when this
+#: case rode on Riolu's incorrectly-empty attack list (Issue #384).
+PARTIAL = 990001
 CRISPIN = 1198
 E_R, E_P, E_D, E_F = 2, 5, 7, 6
 # The two bench-GATED attackers in the whole card set (`parse_attack_bench_requirement` over
@@ -64,8 +73,14 @@ _STATS = {
                         minAttackCost=1, minCostDamage=70,
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
     MUNKIDORI: CardStat(MUNKIDORI, synthetic=True, name='Munkidori', hp=70, energyType=DARKNESS, cardType=0),
-    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=2,
-                    maxDamage=30, attacks=(), cardType=0),
+    # ``attacks``/``minAttackCost`` corrected by Issue #384 for the reason the module docstring
+    # gives: Riolu really does print an attack — **Accelerating Stab ``{F}`` 30**, *"During your next
+    # turn, this Pokémon can't use Accelerating Stab"* — so its cheapest cost is 1, not the 2 this
+    # row used to claim, and its attack list is not empty. The sibling cast in `test_state_value.py`
+    # was corrected in the same change; leaving one of the two behind is how the pair drifts.
+    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=1,
+                    maxDamage=30, maxDamageCost=1, minCostDamage=30,
+                    attacks=(ACCELERATING_STAB,), cardType=0),
     MEGA_LUC: CardStat(MEGA_LUC, synthetic=True, name='Mega Lucario ex', hp=340, megaEx=True, energyType=FIGHTING,
                        evolvesFrom="Riolu", maxDamage=270, minAttackCost=1, minCostDamage=130,
                        attacks=(AURA_JAB, MEGA_BRAVE), cardType=0),
@@ -85,6 +100,8 @@ _STATS = {
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
+    PARTIAL: CardStat(PARTIAL, synthetic=True, name='Partial Table Body', hp=80,
+                      energyType=FIGHTING, minAttackCost=2, maxDamage=30, attacks=(), cardType=0),
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
@@ -97,6 +114,8 @@ _ATTACKS = {
                          recoverSource="discard"),
     MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING),
                            nextTurnSameAttackLock=True),
+    ACCELERATING_STAB: AttackStat(ACCELERATING_STAB, damage=30, cost=1, energyTypes=(FIGHTING,),
+                                  nextTurnSameAttackLock=True),
     COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, energyTypes=(FIGHTING,),
                             requiresBench=("Lunatone",), ignoresWeakness=True,
                             ignoresResistance=True),
@@ -928,13 +947,20 @@ def test_the_payoff_of_an_unreadable_CARD_makes_no_claim():
 
 
 def test_an_UNRESOLVABLE_attack_table_degrades_to_the_card_level_roll_up():
-    """A partial provider must not silently zero a real attacker. This fixture's Riolu carries
-    `maxDamage` 30 with an EMPTY attack tuple — the shape a partially-known table produces — and the
-    read then answers with the card-level roll-up under a null attack id, exactly as
+    """A partial provider must not silently zero a real attacker. `PARTIAL` carries `maxDamage` 30
+    with an EMPTY attack tuple — the shape a partially-known table produces — and the read then
+    answers with the card-level roll-up under a null attack id, exactly as
     `CombatMath.predicted_max_damage` falls back and exactly the pair the retired `payoff_attack`
     gave. The gate is a new REASON to price 0, never a new way to reach one; and an attack whose
-    record is missing is an attack whose condition is unreadable, so no gate is being waived."""
-    m = _model(_player(active=_poke(RIOLU, hp=80), prize=4),
+    record is missing is an attack whose condition is unreadable, so no gate is being waived.
+
+    **It carries an OFF-POOL card id on purpose** (Issue #384). This case used to ride on Riolu,
+    whose row declared `attacks=()` — and that was not a partial table, it was a card fact the
+    fixture had wrong: Riolu really does print Accelerating Stab. Correcting the row broke this
+    test, which is the tell that the test was leaning on the error rather than on the shape it
+    means. A body that is in no card set cannot have its card facts be wrong, so the data shape is
+    now stated directly instead of borrowed from a real card."""
+    m = _model(_player(active=_poke(PARTIAL, hp=80), prize=4),
                _player(active=_pult(serial=3), prize=6))
     assert m.mine.active.stat.maxDamage == 30 and not m.mine.active.stat.attacks
     assert m.mine.attack_payoff(m.mine.active) == (None, 30.0)
@@ -1049,9 +1075,11 @@ def test_attack_profile_recover_units_is_the_min_of_the_three_closed_form_bounds
     """`Pilot._recover_units` re-derived from StateModel facts (Issue #384): the printed ceiling,
     the matching Basic-Energy fuel in the rider's SOURCE zone, and the recipients' remaining NEED.
 
-    Riolu declares no attacks in this cast, so its need is its FORWARD form's — Mega Lucario ex's
-    dearest attack is Mega Brave at {F}{F} = 2, and Riolu holds none. Four {F} sit in my discard. So
-    the three bounds are 3 / 4 / 2 and the NEED binds."""
+    Riolu's own Accelerating Stab costs {F} = 1, but need is measured against the FORWARD form too,
+    and Mega Lucario ex's dearest attack is Mega Brave at {F}{F} = 2 — which is the point of that
+    leg: a Riolu counts the Energy its Mega Brave will cost, not the Energy its own attack costs
+    today. Riolu holds none, and four {F} sit in my discard. So the three bounds are 3 / 4 / 2 and
+    the NEED binds."""
     m = _luc_model(bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4)
     assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 2.0
 
