@@ -25,11 +25,31 @@ worlds share MY half. Sharing is always guarded by :attr:`StateModel.opponent_fi
 WHOLESALE from their entire side rather than from an enumerated field list, so a disruption play
 nobody anticipated invalidates by construction (a hand-picked list silently misses Judge's hand/deck
 counts and a gust's Active/bench swap — it fails OPEN, the one direction this codebase never
-accepts). A general ``apply(action)`` delta path is deliberately ABSENT: the engine already hands us
-an authoritative post-action board at every simulated leaf, so such a path would re-predict in
-Python what the simulator just computed (a second rules engine, whose failure mode is silent
-divergence in every downstream equation), and the my-side affordability cluster invalidates wholesale
-under one manual attach anyway.
+accepts).
+
+**A general ``apply(action)`` delta path is still absent, and there is now exactly ONE sanctioned
+route to a hypothetical board — through the apply seam** (`common.apply_option`, ADR-0098; the
+transitions landed with POC-T4/1, Issue #382). Recorded here because the paragraph this replaces
+refused such a path outright, and a later reader meeting :meth:`StateModel.rebuilt` would otherwise
+conclude the rule was silently violated. It was not; the premise moved:
+
+* The OLD refusal rested on *"the engine already hands us an authoritative post-action board at every
+  simulated leaf"*. That was true while every hypothetical came from a forked simulation. The
+  differencing composer (Issue #263) is precisely the caller for which it is not: it prices a play by
+  ``state_value(after) − state_value(before)`` at 1 ply for every option on the menu, and forking the
+  native engine per candidate is what ADR-0098 declined on measurement (no deal-seed, and 0 of 372
+  gate frames carry `search_begin_input`, so an engine-routed decision is un-gradeable).
+* What survives unchanged is the reason the refusal was worth writing down: a hand-written delta
+  applied IN PLACE is a second rules engine whose failure mode is silent divergence. So the seam
+  never mutates a model. It synthesizes a fresh post-action observation (copy-on-write over the
+  pre-state's zones, `common.board_delta`) and calls :meth:`build` again — a fresh model owns a fresh
+  memo, which is what makes the ``("state_value",)`` memo staleness hazard impossible by construction
+  rather than by discipline. The my-side affordability cluster still invalidates wholesale under one
+  manual attach, which is an argument for a fresh model, not against one.
+* And the silent-divergence risk is answered by measurement rather than by prohibition: the seam's
+  parity lane replays committed native traces one step at a time and diffs the synthesized model
+  against the model built from the next recorded frame, with a divergence a ruled seam bug that
+  QUARANTINES the option kind (`tests/parity/test_apply_seam_parity.py`).
 
 Composes the knowledge seams (the Stat Provider ADR-0056, ``CardFunctions``, ``CombatMath``
 ADR-0052, the Read) and takes per-decision facts as explicit arguments. It never imports or reads a
@@ -336,6 +356,103 @@ class AttackPayoff(NamedTuple):
     #: That attack's damage on this board, matchup-free — printed, with the attack's own board
     #: conditions applied (a bench-partner condition unmet reads 0). Never negative.
     damage: float
+
+
+class AttackProfile(NamedTuple):
+    """Everything ONE named attack of mine is worth asking about — :meth:`StateModel.attack_profile`.
+
+    The substrate `attack_ev` needs and the model did not have (POC-T4/3, Issue #384). Its sibling
+    :class:`AttackPayoff` answers *which attack pays best, matchup-free*, in two fields; the
+    terminal-action term asks a larger question about ONE attack it has already named — its damage
+    against the body actually in front of me, whether I can pay for it at all, and the rider /
+    economy / lock facts `AttackStat` carries. **None of those last three had ANY model surface**:
+    `attack_payoff` drops them by construction, so a `state_value`-side extractor would have had to
+    reach past the model to `AttackStat`, which the sole-supplier ruling forbids
+    (`docs/plans/value-system-poc-plan.md` §4-T0).
+
+    ONE record rather than a family of accessors, for `AttackPayoff`'s own reason one abstraction
+    down: these fields are only sound TOGETHER. The lock legs are priced against the damages of the
+    attacks they lock out, and the rider legs against the bodies the damage leg is NOT aimed at — a
+    consumer free to fetch one without the others is free to pair a rider's allocation with a
+    different attack's lock, which is a phantom line rather than a small error.
+
+    **Facts, never prices.** Every field here is a board or card quantity; the crossing into prizes
+    is `state_value`'s and stays there. The two knapsack fields are the exception that proves it —
+    they are the answers of shipped ORACLES (`CombatMath.spread_ko_prizes` / `snipe_ko_prizes`)
+    about where a rider's payload lands, which is a question about the board and not about value.
+    """
+
+    #: The attack this profile is about — echoed back so a caller holding a tuple of profiles never
+    #: has to re-associate them with the ids it asked for.
+    attack_id: int | None
+    #: Can the attacker pay this attack's cost and legally use it this turn, under the FULL Attach
+    #: Budget? :meth:`MySide.reachable_attach`'s answer — never a raw energy count.
+    affordable: bool
+    #: Damage against THEIR Active through the damage model at ``bound="exact"`` — Weakness,
+    #: Resistance, a prevention Ability, my live boosts and the Damage Formula's scalers all applied.
+    damage: float
+    #: The same read at ``bound="min"`` and ``bound="max"``: a conditional or coin attack's sound
+    #: FLOOR and its CEILING. A deterministic attack reads its printed damage under every bound, so
+    #: the three collapse and a caller needs no archetype branch.
+    damage_floor: float
+    damage_ceiling: float
+    #: Does the RECORD carry a conditional clause — ``damageMin`` or ``damageMax`` set? The
+    #: discriminator a bound policy needs, and it is a fact about the card rather than about the
+    #: three numbers above, which is why it is carried and not inferred from them: a `requiresBench`
+    #: attack whose partner is absent ALSO spreads its bounds (0 at exact/min, printed at max, by the
+    #: oracle's own Incoming rule), and reading that spread as a coin would average a board gate.
+    conditional: bool
+    #: Damage MATCHUP-FREE (no defender), board conditions applied — `attack_payoff`'s read, per
+    #: attack. What a NEXT-turn quantity must use: the defender next turn is not this one.
+    printed: float
+    #: The attack's own bench riders. ``bench_snipe`` is the INDIVISIBLE single-target rider
+    #: (Jetting Blow's *"also does 50 damage to 1 of your opponent's Benched Pokémon"*);
+    #: ``bench_spread`` is the DISTRIBUTABLE counter total (Phantom Dive's 6 counters -> 60). Both
+    #: ignore Weakness and Resistance by rule (ADR-0022).
+    bench_snipe: int
+    bench_spread: int
+    #: Prizes each rider's OWN allocation takes on their Bench — the shipped knapsacks, not a
+    #: re-derivation. The spread leg is `CombatMath.spread_ko_prizes` (a SHARED budget across the
+    #: whole Bench, so the subset question is a knapsack); the snipe leg is `snipe_ko_prizes` (one
+    #: indivisible unit, so the best single body).
+    snipe_ko_prizes: int
+    spread_ko_prizes: int
+    #: ``((hp_remaining, prize_value), …)`` for the benched bodies of theirs a rider can actually
+    #: reach — bench-immune bodies (`docs/rules.md` §11) and empty slots excluded. The substrate for
+    #: the caller's sub-Knock-Out band; the model says WHICH bodies, the term says what they are
+    #: worth.
+    rider_targets: tuple
+    #: The energy-recycle rider's printed ceiling (Aura Jab: *"attach up to 3"*), and…
+    #:
+    #: Carried BESIDE ``recover_units`` rather than folded into it, though only the latter is
+    #: priced. `recover_units` is a min of three bounds and cannot say WHICH one bound, and that is
+    #: the first question a human ruling a gate flip asks — an Aura Jab worth 1 because the discard
+    #: is thin is a different board from one worth 1 because the Bench is nearly fed. The pair is
+    #: also what `attack_ev`'s substrate test asserts, since a printed ceiling that survives the
+    #: board bounds is the evidence the rider FACTS reached the model at all.
+    recover_n: int
+    #: …the Energy it would ACTUALLY attach that a recipient can ACTUALLY use — the min of that
+    #: ceiling, the matching Basic-Energy fuel in the rider's source zone, and the recipients'
+    #: remaining need. `Pilot._recover_units`' three closed-form bounds, re-derived from model
+    #: facts (Issue #384); fractional for a whole-deck-search rider, whose fuel is an EXPECTED count.
+    recover_units: float
+    #: The ATTACKER-side next-turn locks (ADR-0033's vocabulary). ``self_lock`` is *"this Pokémon
+    #: can't use attacks"*; ``same_attack_lock`` is *"can't use <THIS attack>"*. Two structurally
+    #: different things — `strategy/sequence.py` prices them apart, because 270+130 == 130+270 makes
+    #: a same-attack lock forfeit nothing while a full lock forfeits a turn of offense.
+    self_lock: bool
+    same_attack_lock: bool
+
+
+#: The fail-closed profile — every leg at its zero, no claim made about anything. Returned for an
+#: attack whose record does not resolve and for an absent body, so a caller never has a ``None``
+#: branch to forget and never reads a plausible number the board does not support. The attack id is
+#: filled in per call so telemetry can still name what was asked about.
+_EMPTY_ATTACK_PROFILE = AttackProfile(
+    attack_id=None, affordable=False, damage=0.0, damage_floor=0.0, damage_ceiling=0.0,
+    conditional=False, printed=0.0, bench_snipe=0, bench_spread=0, snipe_ko_prizes=0,
+    spread_ko_prizes=0, rider_targets=(), recover_n=0, recover_units=0.0, self_lock=False,
+    same_attack_lock=False)
 
 
 class BodyView(_Lazily):
@@ -1464,6 +1581,44 @@ class MySide(_SideBase):
                 index.setdefault(base, []).append(cid)
         return {name: tuple(sorted(ids)) for name, ids in index.items()}
 
+    def forward_form_ids(self, card_id) -> frozenset:
+        """Every card id in ``card_id``'s forward closure — the forms this line can still BECOME,
+        multi-hop, from MY decklist (POC-T4/3, Issue #384).
+
+        The flat sibling of :meth:`forward_payoff`, which walks the same closure but needs each
+        node's hop count and reachability and so cannot hand back a set. Extracted rather than
+        inlined at its one caller because "what can this body become" now has two askers and the
+        Riolu -> Mega Lucario ex SINGLE hop is exactly the kind of fact two walks would be free to
+        disagree about.
+
+        **MY deck, not the universal pool** — the divergence from the Pilot's
+        `_forward_card_ids` (`CardStatProvider.forward_card_ids`, every printing in the set) is
+        deliberate and is :attr:`forward_index`'s own standing doctrine: *"a forward form I do not
+        run is not a form my line can reach"*. The universal read is right for the Pilot's question
+        (what can THEIR benched pre-evolution become — their deck is untracked); it is wrong for
+        mine, where the decklist is declared.
+
+        Cycle-guarded for :meth:`_forward_payoff`'s reason: the rules cannot produce an evolution
+        cycle, but a data slip must not hang a value equation on the grader."""
+        return self._memoized(("forward_form_ids", card_id),
+                              lambda: self._forward_form_ids(card_id))
+
+    def _forward_form_ids(self, card_id) -> frozenset:
+        stat = self._combat._card_stat(card_id) if card_id is not None else None
+        if stat is None:
+            return frozenset()
+        out: set = set()
+        frontier = [getattr(stat, "name", None)]
+        while frontier:
+            for nxt in self.forward_index.get(frontier.pop() or "", ()):
+                if nxt in out:
+                    continue
+                out.add(nxt)
+                nstat = self._combat._card_stat(nxt)
+                if nstat is not None:
+                    frontier.append(getattr(nstat, "name", None))
+        return frozenset(out)
+
     def forward_payoff(self, card_id) -> "ForwardPayoff":
         """:class:`ForwardPayoff` for ``card_id``'s line — what evolving it still OWES.
 
@@ -1873,6 +2028,12 @@ class StateModel(_Lazily):
 
     _probe_prefix = "model"
 
+    #: The observation :meth:`build` was handed, and the knowledge seams it was handed WITH — the
+    #: only thing a successor snapshot needs that the snapshot itself does not already carry. Set by
+    #: :meth:`build`; ``(None, {})`` on a model constructed directly, which is why :meth:`rebuilt`
+    #: raises rather than silently rebuilding a model with no Stat Provider.
+    _origin: tuple = (None, {})
+
     def __init__(self, *, mine: MySide, theirs: TheirSide, state: dict, my_index: int = 0,
                  carried: CarriedState = CarriedState(), probe=None):
         super().__init__(probe=probe)
@@ -1932,7 +2093,97 @@ class StateModel(_Lazily):
             matchup_coverage=matchup_coverage, opponent=opponent, forward_ids=forward_ids,
             charged=charged, probe=probe,
             turn_boosts=() if boosts_for is None else tuple(boosts_for(1 - mi)))
-        return cls(mine=mine, theirs=theirs, state=state, my_index=mi, carried=carried, probe=probe)
+        model = cls(mine=mine, theirs=theirs, state=state, my_index=mi, carried=carried, probe=probe)
+        model._origin = (obs, {
+            "combat": combat, "my_index": mi, "deck": deck, "deck_empty": deck_empty,
+            "needs": needs, "role_worth": role_worth, "read": read, "brief": brief,
+            "matchup_plan": matchup_plan, "posture_confidence": posture_confidence,
+            "favorability": favorability, "matchup_coverage": matchup_coverage,
+            "opponent": opponent, "forward_ids": forward_ids, "charged": charged,
+            "carried": carried, "probe": probe, "turn_boosts": turn_boosts,
+        })
+        return model
+
+    def rebuilt(self, obs: dict, *, reuse_their_side: bool = False) -> "StateModel":
+        """**The ONE sanctioned route to a hypothetical board** — a FRESH model over ``obs``, built
+        with exactly the knowledge seams this one was (POC-T4/1, Issue #382).
+
+        Not an ``apply(action)`` path and deliberately not one: it takes a whole observation, so the
+        rules arithmetic lives in the apply seam (`common.board_delta`) where the parity lane can
+        diff it against a recorded native trace, and this method contributes no rules knowledge of
+        its own. See this module's header for why the older blanket refusal of a delta path does not
+        cover it.
+
+        **Fresh, never patched.** ``state_value`` memoizes its per-family dict onto the model under
+        ``("state_value",)`` and nothing invalidates that key, so a patched model would return a
+        stale scalar in silence. A new model owns a new memo; staleness is impossible by
+        construction rather than by discipline. :meth:`build` is *"cheap, because it computes nothing
+        yet"*, so the fresh model costs three dict allocations plus whatever the caller then reads.
+
+        ``reuse_their_side`` passes this model's already-built (and possibly already-derived)
+        :class:`TheirSide` through, which is the sharing mechanism :meth:`shares_opponent_with`
+        exists to guard. **The caller must have established that the transition never touched their
+        `PlayerState` nor the shared Stadium** — `board_delta.Delta.shares_opponent` is what answers
+        that, from the synthesis itself rather than from a hash of the result. Default False: a
+        reused side that is stale fails OPEN, and this codebase never takes that direction by
+        default.
+
+        Raises `ValueError` on a model that was constructed directly rather than through
+        :meth:`build` — it carries no Stat Provider to rebuild with, and a model built with
+        ``combat=None`` would answer every card question "unknown" while looking like a board."""
+        kwargs = self._origin[1]
+        if not kwargs:
+            raise ValueError(
+                "rebuilt() needs the knowledge seams `build()` was handed; this model was "
+                "constructed directly, so there is no Stat Provider to rebuild with")
+        if reuse_their_side:
+            kwargs = dict(kwargs, their_side=self.theirs)
+        return type(self).build(obs, **kwargs)
+
+    @property
+    def source_obs(self) -> dict:
+        """The observation :meth:`build` was handed, or ``{}``.
+
+        The snapshot holds ``current`` (as :attr:`state`) and each side's `PlayerState`, but the
+        apply seam needs the whole envelope — the live ``select`` whose menu an option came from, and
+        the ``own_prizes`` anchor `MySide._deck_facts` reads. Exposed as a read rather than re-derived
+        because there is nothing to derive it from.
+
+        **Costs nothing to retain**: `state` and both `PlayerState`s are already sub-objects of this
+        dict, so holding it adds a reference rather than a copy. Measured cost of the whole
+        :attr:`_origin` capture (the 18-key kwargs dict plus this tuple), 60 corpus frames x 200
+        passes on this box: **0.40 us against a 3.80 us build** — 10.5% of construction, and 0.016%
+        of the ~2.5 ms `state_value` evaluation the build exists to feed."""
+        return self._origin[0] or {}
+
+    # -- the knowledge seams, as public reads -------------------------------------------------
+    #
+    # Three accessors rather than a caller reaching for `model.mine._combat` / `mine._deck`. The
+    # sides hold them privately because the sides are what USE them; the apply seam is the first
+    # module outside this one that needs them, and a private reach across a module boundary is how
+    # a refactor inside `MySide` breaks a caller nothing warned about.
+    @property
+    def combat(self):
+        """The `CombatMath` oracle this snapshot was built with (ADR-0052 / ADR-0056's Stat
+        Provider seam behind it). The apply seam needs it to answer *"what card is this?"* about a
+        card that is not on the board yet — the one in hand being played."""
+        return self.mine._combat
+
+    @property
+    def deck(self) -> tuple:
+        """My DECKLIST as declared to :meth:`build` — the 60 cards, not what is left in the deck.
+
+        ``()`` when none was threaded, which is the honest answer and not an empty deck: the
+        Count Triple's emptiness question is :attr:`MySide.deck_count`'s."""
+        return self.mine._deck
+
+    def card_stat(self, card_id):
+        """This card's `CardStat`, or None — the model's own door onto the Stat Provider.
+
+        Exists so the seam's telemetry can name a card (`"1182 Boss's Orders: …"`) without reaching
+        two levels into another object's privates. Not a `lazy` field: it is parameterised and
+        stateless, and the provider memoizes its own table."""
+        return self.mine._combat._card_stat(card_id)
 
     # -- turn / quota facts (observation reads, not Carried State) ------------------------------
     #
@@ -2037,6 +2288,173 @@ class StateModel(_Lazily):
             raise ValueError(f"attacker must be 'mine' or 'theirs', got {attacker!r}")
         return self._memoized(("damage_context", attacker),
                               lambda: _assemble_damage_context(atk.damage_facts, dfn.damage_facts))
+
+    # -- the terminal action's substrate (POC-T4/3, Issue #384) ---------------------------------
+    def attack_profile(self, body: "BodyView | None", attack_id) -> AttackProfile:
+        """:class:`AttackProfile` for ONE attack of one of MY bodies — the substrate `attack_ev`
+        takes and the model did not have.
+
+        Issue #384's body proposes this on :class:`MySide`. It lives on :class:`StateModel` instead
+        and the reason is structural rather than stylistic: the damage leg needs THEIR Active, the
+        rider legs need THEIR Bench, and the scaler context needs both sides at once. A side cannot
+        see the other side, so a `MySide` version would have to be handed the opponent's bodies by
+        its caller — which is a second data supplier reaching into `state_value`, exactly what the
+        sole-supplier ruling forbids. :meth:`damage_context` sits here for the same reason.
+
+        **ONE accessor, not a family.** Issue #384's constraint, and it is also the sound shape: the
+        fields are only sound together (see :class:`AttackProfile`), and a per-field accessor set
+        would let a caller pair one attack's rider with another's lock.
+
+        **Everything routes through a shipped oracle.** ``affordable`` is
+        :meth:`MySide.reachable_attach` (the full Attach Budget — `threat.blind_to` forbids a raw
+        energy-count second opinion outright); the four damage reads are
+        :meth:`~common.strategy.combat.CombatMath.predicted_damage`, three against their Active and
+        one matchup-free; the two knapsack answers are `spread_ko_prizes` / `snipe_ko_prizes`; the
+        rider/lock/economy FACTS come off ``AttackStat`` through ``self.combat.attack_stat``, which
+        is the same door :meth:`_SideBase.attack_payoff` already uses. Nothing here is new math.
+
+        ``attacker="mine"`` on the context is not boilerplate — the Damage Formula's variables are
+        named relative to the attacker, so handing this the survival direction's dict would read
+        THEIR hand as MY damage scaler.
+
+        Fails closed at an all-zero profile: an unresolvable attack, an absent body and an empty
+        opponent seat each make NO claim rather than a plausible one. The record is still returned
+        so a caller has no ``None`` branch to forget.
+
+        Memoized by VALUE — card, area, attached Energy, the attack, and the opponent's whole
+        fingerprint — because every leg but the two card-knowledge ones moves with their board, and
+        :attr:`opponent_fingerprint` is the model's own wholesale answer to *did their side change*.
+        """
+        if body is None:
+            return _EMPTY_ATTACK_PROFILE._replace(attack_id=attack_id)
+        key = ("attack_profile", body.card_id, body.is_active, body.energy_key, attack_id,
+               self.opponent_fingerprint)
+        return self._memoized(key, lambda: self._attack_profile(body, attack_id))
+
+    def _attack_profile(self, body: "BodyView", attack_id) -> AttackProfile:
+        stat = self.combat.attack_stat(attack_id)
+        if stat is None:                       # no record, no claim — the standing direction
+            return _EMPTY_ATTACK_PROFILE._replace(attack_id=attack_id)
+        defender = self.theirs.active
+        target = defender.body if defender is not None else None
+        context = self.damage_context(attacker="mine")
+        attacker_id = body.card_id
+
+        def _dmg(bound: str, against) -> float:
+            return float(self.combat.predicted_damage(attacker_id, attack_id, against,
+                                                      bound=bound, context=context))
+
+        snipe, spread = int(stat.benchSnipe or 0), int(stat.benchSpread or 0)
+        # Their Bench as the rider oracles want it: (card id, remaining HP) pairs. The oracles apply
+        # the bench rules themselves (HP within the payload, bench-immune bodies take none), so this
+        # hands them the zone and forms no second opinion about who is reachable.
+        bench_pairs = [(v.card_id, v.hp_remaining) for v in self.theirs.bench if v.hp_remaining]
+        return AttackProfile(
+            attack_id=attack_id,
+            affordable=bool(self.mine.reachable_attach(body, attack_id)),
+            damage=_dmg("exact", target),
+            damage_floor=_dmg("min", target),
+            damage_ceiling=_dmg("max", target),
+            conditional=(stat.damageMin is not None or stat.damageMax is not None),
+            printed=_dmg("exact", None),
+            bench_snipe=snipe,
+            bench_spread=spread,
+            snipe_ko_prizes=int(self.combat.snipe_ko_prizes(bench_pairs, snipe)) if snipe else 0,
+            spread_ko_prizes=int(self.combat.spread_ko_prizes(bench_pairs, spread)) if spread else 0,
+            rider_targets=self._rider_targets(bench_pairs) if (snipe or spread) else (),
+            recover_n=int(stat.recoverN or 0),
+            recover_units=self._recover_units(stat),
+            self_lock=bool(stat.nextTurnSelfLock),
+            same_attack_lock=bool(stat.nextTurnSameAttackLock),
+        )
+
+    def _rider_targets(self, bench_pairs) -> tuple:
+        """``((hp_remaining, prize_value), …)`` for the benched bodies of theirs a rider can reach.
+
+        The bench-immunity rule is read through the SAME predicate the rider oracles use
+        (`CombatMath.is_tera` — `docs/rules.md` §11 scopes a Tera body's immunity to the Bench), so
+        this list and the knapsack answers beside it can never disagree about who is on the board.
+        """
+        return tuple((hp, int(self.combat.prize_value({"id": cid})))
+                     for cid, hp in bench_pairs if not self.combat.is_tera(cid))
+
+    def _recover_units(self, stat) -> float:
+        """`Pilot._recover_units`' three closed-form bounds, re-derived from model facts.
+
+        The shipped pricer takes a ``Board`` and a raw observation and has no model route at all, so
+        the BOUNDS are the spec and the Pilot's plumbing is not (Issue #384). They are, unchanged:
+
+        1. ``recoverN`` — the card's printed ceiling (Aura Jab: *"attach up to 3"*).
+        2. the matching Basic-Energy FUEL in the rider's SOURCE zone. ``"discard"`` reads
+           :attr:`_SideBase.discard_energy_counts` — a PUBLIC zone in both directions, so a sound
+           count and never an estimate; ``"deck"`` reads :attr:`MySide.deck_energy_counts`'
+           ``CountTriple.expected`` off the ONE Count Triple derivation (ADR-0077 decision 3 — a
+           ranked count consumer reads ``expected``, and anchored the leg collapses to the exact
+           integer). An untyped rider takes the cross-type union, which is EXACT rather than a
+           second instrument because every type's leg divides the same ``(deck_count,
+           prizes_hidden)``.
+        3. the recipients' remaining NEED (ADR-0061). Energy nobody can pay an attack with is not
+           development: three {F} onto a support Bench is worth nothing, and that is exactly the
+           margin that tips Aura Jab over Mega Brave. Need is measured against each recipient's
+           FORWARD form too, so a Riolu counts the {F}{F} its Mega Brave will cost rather than the
+           {F} its Accelerating Stab costs today. The same gate makes a bench-scoped rider on an
+           EMPTY Bench credit 0, which preserves the old empty-Bench guard as a special case.
+
+        The forward closure comes off :attr:`MySide.forward_index` — MY decklist, so a form I do not
+        run is not a form my line can reach — and never off a universal card index.
+
+        ⚠️ **This is a SECOND implementation of those bounds and the duplication is real**, recorded
+        rather than glossed. `Pilot._recover_units` takes a `Board` and a raw observation, which
+        `state_value` may not be handed (the sole-supplier ruling), so the two cannot share a body
+        today without a Pilot-side refactor this issue is not scoped for. They can drift, and the
+        honest note is that nothing but this paragraph stops them. The scheduled resolution is
+        Issue #386's deletion pass, which retires the Pilot rungs that call the incumbent; if it lands
+        and the Pilot copy survives, unifying them is owed work rather than a tidy-up."""
+        ceiling = int(getattr(stat, "recoverN", 0) or 0)
+        if not ceiling:
+            return 0.0
+        etype = getattr(stat, "recoverEnergyType", None)
+        if getattr(stat, "recoverSource", None) == "deck":
+            counts = self.mine.deck_energy_counts
+            fuel = (float(sum(c.expected for c in counts.values())) if etype is None
+                    else float(counts[etype].expected) if etype in counts else 0.0)
+        else:
+            by_type = self.mine.discard_energy_counts or {}
+            fuel = float(sum(by_type.values()) if etype is None else by_type.get(etype, 0))
+        return max(0.0, min(float(ceiling), fuel,
+                            float(self._recover_need(getattr(stat, "recoverTarget", None)))))
+
+    def _recover_need(self, scope) -> int:
+        """Total Energy the rider's recipients still LACK to pay an attack — their own or their
+        forward evolution's, whichever is dearer, since that is what the line is being built
+        toward. 0 when the scope holds no recipient at all.
+
+        Scope is the rider's own ``recoverTarget`` (*"…to your Benched Pokémon"* -> ``"bench"``), so
+        a bench-scoped rider on an empty Bench reads 0 and a self-scoped one never credits the
+        Bench.
+
+        **One DELIBERATE divergence from the Pilot's twin**: an attack the table cannot resolve
+        contributes cost 0 here, where `_recover_recipient_need` takes `_attack_cost`'s default of
+        99. That default is the caller's epistemics ("99 fail-closed / 0 tiebreak-neutral"), and 99
+        is fail-closed for an INCOMING read while being fail-OPEN for this one — a single unreadable
+        attack would push the need past any plausible ceiling, so the need bound would silently stop
+        binding and the rider would credit the full `min(recoverN, fuel)`. A phantom credit is worse
+        than a missing one for a term that competes against ending the turn, so this leg makes no
+        claim about an attack it cannot read."""
+        pool = []
+        if scope in (None, "any", "bench"):
+            pool += list(self.mine.bench)
+        if scope in (None, "any", "self") and self.mine.active is not None:
+            pool.append(self.mine.active)
+        total = 0
+        for view in pool:
+            forms = {view.card_id} | set(self.mine.forward_form_ids(view.card_id))
+            costs = [self.combat.attack_cost(aid, default=0)
+                     for form in forms
+                     for aid in (getattr(self.card_stat(form), "attacks", None) or ())]
+            if costs:
+                total += max(0, max(costs) - view.energy_count)
+        return total
 
     # -- the sharing guard ----------------------------------------------------------------------
     @lazy

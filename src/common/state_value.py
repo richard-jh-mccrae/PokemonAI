@@ -127,7 +127,8 @@ from typing import TYPE_CHECKING, Iterable, Mapping, NamedTuple, Sequence
 from common import currency, needs as _needs
 from common.card_worth import ROLE_TIER
 from common.grading import HORIZON, halve
-from common.strategy.context import _BENCH_MAX
+from common.strategy.context import ENERGY_RECOVER, FOLLOWUP_W, _BENCH_MAX
+from common.strategy.sequence import followup_damage
 
 if TYPE_CHECKING:                      # the seam, expressed without importing the Pilot's world at
     from common.state_model import StateModel   # runtime — `deploy_value`'s "no engine, no obs" rule
@@ -898,8 +899,11 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
                     "never new math: the KO band / `predicted_damage` with coin branches entering "
                     "as an EXPECTATION rather than a printed floor, the target's prize value, "
                     "snipe/spread RIDER value priced against THEIR board, Effect-Clause economy "
-                    "riders (energy recycle), and the next-turn clock cost a `nextTurnSelfLock`-"
-                    "class attack imposes on ME. Readiness is deliberately absent: whether I CAN "
+                    "riders (energy recycle), and the next-turn clock cost an attacker-side lock "
+                    "imposes on ME — BOTH fields, `nextTurnSelfLock` ('can't use attacks') and "
+                    "`nextTurnSameAttackLock` ('can't use THIS attack'), which price differently "
+                    "and which this line conflated until Issue #384. Readiness is deliberately "
+                    "absent: whether I CAN "
                     "attack is `readiness`'s question about the board, and asking it twice would "
                     "multiply the same probability into the same prize.",
         blind_to=(
@@ -920,6 +924,56 @@ TERMINAL_REGISTRY: tuple[TermFamily, ...] = (
             "cannot attack turn 1) — a 1-of that moved a deck-level parameter. Pricing it needs a "
             "THEIR-side extension of `transient_grants`, the same OWED-zone class Issue #282 needs "
             "for damage-boost Trainers; declaring it here is free and honest now (Issue #290).",
+            # ── added with the extractor (POC-T4/3, Issue #384) ──────────────────────────────
+            "a COIN's actual distribution — `attack_ev_legs` averages a conditional record's floor "
+            "and ceiling and, where only that mean crosses the target's HP, credits the Knock Out at "
+            "a DECLARED equiprobable 0.5 (`_COIN_KO_BOUND`). A policy, not a derivation: "
+            "`AttackStat` carries `damageMin`/`damageMax` and NOTHING about what lies between them, "
+            "in neither the parsed record nor the 99-attack engine-audit override table. MEASURED "
+            "over a stated population — one row per (card, attack) in `data/EN_Card_Data.csv` with a "
+            "`Move Name` that is not an `[Ability]`, put through `provider.build_attack_stats`, "
+            "which is 1787 rows (the population is spelled out because a reviewer could not "
+            "reproduce the figure from the bare number, and a count nobody can re-run is not "
+            "evidence): 138 carry bounds, 148 print a coin in their `Effect Explanation`, only 38 "
+            "are in both — so 110 coin attacks carry no bounds at all, and Team Rocket's Kangaskhan "
+            "ex's Comet Punch ('Flip 4 coins. This attack does 30 damage for each heads') is "
+            "unrepresentable in two numbers however they are read. Right for the pool's commonest "
+            "shape (one fair coin, 'if heads, N more damage'), wrong in BOTH directions for a "
+            "multi-flip one. Closing it needs a parsed flip count, which is a card-data change and "
+            "not this term's.",
+            "a CEILING-ONLY Knock Out — a consequence of the entry above, stated separately because "
+            "it is the one that costs prizes. `attack_ev` consults `ko_probability` on its Knock Out "
+            "branch alone, so an attack whose AVERAGED damage falls short of the target's HP while "
+            "its ceiling clears it takes the CHIP branch and the Knock Out is never credited at all. "
+            "An UNDER-read, the fail-closed direction for an offensive estimate and the same choice "
+            "`threat.blind_to` makes one seam over — but it does mean a coin attack that COULD win "
+            "the exchange can rank below one that certainly chips. The MIRROR of it is an OVER-read "
+            "and is recorded here rather than left as the flattering half: on the Knock Out branch "
+            "`attack_ev` sets `chip = 0.0` by construction, so at `ko_probability = 0.5` the losing "
+            "branch contributes NOTHING — a coin attack that misses the kill still lands its floor "
+            "damage on the real board, and half a prize is credited where 'half a prize plus the "
+            "tails-branch chip' is the honest expectation. Both halves are the frozen shape's, not "
+            "the extractor's: `attack_ev`'s branch is corpus-ruled and this issue may not retune it.",
+            "a rider carrying BOTH a snipe and a spread — `_attack_rider_value` sums the two "
+            "knapsacks independently over the same Bench, so a body finishable by either would be "
+            "paid for twice. MEASURED unreachable rather than argued safe: over the population "
+            "above, 23 attacks print `benchSnipe` only and 3 print `benchSpread` only, and NOT ONE "
+            "prints both — which is also why `threat.blind_to` can split the same pair without "
+            "double-counting. Unguarded rather than impossible: a future set printing both would "
+            "over-read, and the fix then is one shared allocation, not two sums.",
+            "SELF-DAMAGE — `AttackStat.recoil` (ADR-0022 #2) reaches no leg of this term and no "
+            "board either. Attack is TERMINAL, so there is no post-attack board for the apply-seam "
+            "to hand back and nothing for `survival` to price the recoil on, and the term takes no "
+            "kwarg for it. So a recoiling attack's cost to my own body prices at exactly 0. The "
+            "Pilot's `_recoil_flips_doom` is a BOOLEAN doom read on the tactical scale rather than a "
+            "prize-denominated cost, so there is nothing to compose — pricing it is new math at a "
+            "seam this issue may not open, and the direction is an OVER-read of the attack.",
+            "a SPREAD that chips several bodies without felling any — `_attack_rider_value` credits "
+            "the best SINGLE body's band when the knapsack finishes nothing, because splitting a "
+            "shared counter budget to maximise FRACTIONAL progress is an allocation nothing ships: "
+            "`CombatMath.spread_ko_prizes` answers the kill question and there is no oracle for the "
+            "chip one. Under-reads Phantom Dive's pre-loading turn — which `dragapult_ex`'s doctrine "
+            "calls its win plan — in the fail-closed direction.",
         ),
     ),
 )
@@ -1877,7 +1931,9 @@ class AttackEV:
     riders: float = 0.0
     #: Effect-Clause economy riders (energy recycling and its relatives).
     economy: float = 0.0
-    #: What a `nextTurnSelfLock`-class attack costs ME next turn. A COST: already subtracted.
+    #: What an attacker-side next-turn lock costs ME next turn — either field
+    #: (`nextTurnSelfLock` *"can't use attacks"* or `nextTurnSameAttackLock` *"can't use THIS
+    #: attack"*), which price differently. A COST: already subtracted.
     next_turn_cost: float = 0.0
     #: The sum. In prizes.
     total: float = 0.0
@@ -1912,9 +1968,19 @@ def attack_ev(*, damage: float, target_hp: float, target_prizes: float,
     makes "less than a Knock Out is worth less than a Knock Out" a fact about the arithmetic rather
     than a cap someone remembered to add. The median rate remains the fallback for an unreadable HP.
 
-    ``next_turn_cost`` is a COST and is SUBTRACTED. A `nextTurnSelfLock`-class attack (Mega Lucario's
-    Mega Brave — no Mega Brave next turn) buys damage now against a clock cost later, and an EV that
-    omitted the second half would recommend it every time.
+    ``next_turn_cost`` is a COST and is SUBTRACTED. A next-turn-locking attack buys damage now
+    against a clock cost later, and an EV that omitted the second half would recommend it every time.
+
+    **Two lock FIELDS, not one, and the worked example was on the wrong one until Issue #384.** This
+    line used to read *"a `nextTurnSelfLock`-class attack (Mega Lucario's Mega Brave — no Mega Brave
+    next turn)"*, which pairs the wrong field with the right card: Mega Brave prints *"During your
+    next turn, this Pokémon can't use Mega Brave"* — it names ITSELF — so the shipped parser reads
+    ``nextTurnSameAttackLock``, verified by running `provider.build_attack_stats` over card 678's own
+    row in `data/EN_Card_Data.csv`. `nextTurnSelfLock` is the OTHER thing, *"this Pokémon can't use
+    attacks"* (Blood Moon), and the two cost differently by construction — `strategy/sequence.py`
+    argues it: 270 + 130 == 130 + 270, so a same-attack lock often forfeits nothing at all, while a
+    full lock forfeits a whole turn of offense. The flat `_LOCK_COST = 40` this replaced charged one
+    number for both, which is precisely the conflation this note now refuses to repeat.
 
     Readiness is deliberately absent from the signature. Whether I can afford this attack at all is
     `readiness`'s question about the BOARD, and multiplying it in here would put the same
@@ -1933,6 +1999,248 @@ def attack_ev(*, damage: float, target_hp: float, target_prizes: float,
     return AttackEV(knockout=knockout, chip=chip, riders=float(rider_value),
                     economy=float(economy_value), next_turn_cost=float(next_turn_cost),
                     total=total)
+
+
+# ── the terminal-action term's EXTRACTOR (POC-T4/3, Issue #384) ───────────────────────────────────
+#
+# The board families each have one of these (`_exposed_bodies` and its four siblings above); the
+# terminal family had none, so `attack_ev` shipped complete, tested and unreachable — nothing in
+# `src/` produced the seven floats it takes. This is that missing bridge, and it is the whole of
+# what Issue #384 builds: the SUM (a caller that actually invokes `attack_ev`) is the composer's,
+# and `attack_ev` still has zero production callers when this lands.
+
+
+class AttackLegs(NamedTuple):
+    """One affordable attack, and the kwargs `attack_ev` takes for it.
+
+    The kwargs travel as a dict rather than as named fields so the bridge is a SPLAT
+    (``attack_ev(**leg.kwargs)``) and the two can never drift out of step — a kwarg added to the
+    term is a `TypeError` at the call site rather than a silent default applied to every attack in
+    the game. The attack id rides alongside rather than inside for the same reason: it is not one of
+    the term's inputs, and putting it in the dict would break the splat."""
+
+    #: The attack these kwargs price.
+    attack_id: int | None
+    #: Exactly :func:`attack_ev`'s parameters. Splat it.
+    kwargs: dict
+
+
+#: **The declared coin bound**, and the word "declared" is doing the work.
+#:
+#: `AttackStat` carries ``damageMin`` / ``damageMax`` — a floor and a ceiling — and NOTHING about the
+#: distribution between them: no flip count, no probability, neither in the parsed record
+#: (`scouting/card_text.parse_attack_damage_bounds`) nor in the engine-audit override table
+#: (`attack_overrides.json` corrects `damageMin`/`damageMax` for 99 attacks and adds no third field).
+#:
+#: Measured, over a population stated so it can be re-run: **one row per (card, attack) in
+#: `data/EN_Card_Data.csv` whose `Move Name` is not an `[Ability]`, put through
+#: `provider.build_attack_stats`** — 1787 rows. Of those, **138** carry bounds and **148** print a
+#: coin in their `Effect Explanation`, and only **38** are in both sets, so **110** coin attacks
+#: carry no bounds at all. Team Rocket's Kangaskhan ex's Comet Punch (*"Flip 4 coins. This attack
+#: does 30 damage for each heads"*) is the shape that cannot be recovered even in principle from two
+#: numbers. The filter is spelled out because the bare counts were not reproducible without it, and
+#: a measurement nobody else can re-run is an assertion wearing a number's clothes.
+#:
+#: So this is a POLICY: where the mean crosses the target's HP but the FLOOR does not, the Knock Out
+#: is credited at the equiprobable two-branch reading. It is right for the commonest shape in the
+#: pool (Eevee's Quick Attack: one fair coin, *"if heads, 20 more damage"*), wrong in both directions
+#: for a multi-flip attack, and recorded in `attack_ev`'s `blind_to` rather than left implicit.
+#: **Never inferred from memory about how a card flips** — the record is the only source, and where
+#: the record is silent the policy is stated instead of guessed.
+_COIN_KO_BOUND = 0.5
+
+
+def attack_ev_legs(model: "StateModel") -> tuple:
+    """:func:`attack_ev`'s kwargs for every attack my Active can actually pay for — the model→term
+    bridge (POC-T4/3, Issue #384).
+
+    ``score(sequence) = state_value(end board) + EV(terminal action)`` and this produces the inputs
+    of the second summand, one :class:`AttackLegs` per affordable attack. It does NOT call
+    :func:`attack_ev`: the sum belongs to the composer, and keeping the two apart is what lets this
+    land inert with `attack_ev` still uncalled in production.
+
+    **Every leg composes a shipped oracle; none of it is new math.** All of it arrives through the
+    ONE model accessor :meth:`~common.state_model.StateModel.attack_profile` — the sole-supplier
+    ruling means `state_value` may read the model and nothing else, so the rider/lock/economy facts
+    had to gain a model surface before this could be written at all (they had none: `attack_payoff`
+    returns ``(attack_id, damage)`` and drops the rest).
+
+    * **damage / target_hp / target_prizes** — the damage model against the body actually in front of
+      me (Weakness and Resistance in rules order, prevention, my live boosts, the Damage Formula's
+      scalers), and the defender's own remaining HP and prize value.
+    * **ko_probability** — 1.0 unless the record is conditional and only the MEAN crosses; see
+      :data:`_COIN_KO_BOUND` for why that case is a declared bound rather than a derivation.
+    * **rider_value** — snipe and spread priced against THEIR Bench, allocation by the shipped
+      knapsacks, in the SAME prize band the core leg uses. Deliberately **not** through
+      `needs.opponent_target_value`: that fact is `threat`'s, this family names it in
+      ``does_not_read``, and :func:`double_counted` is the guard. `snipe_relevance` is excluded by
+      its own note — it answers *which body to aim at*, a Pilot question whose inputs no StateModel
+      supplies; what this prices is the rider's value on the board.
+    * **economy_value** — the energy-recycle rider's units at ``ENERGY_RECOVER``, crossed into
+      prizes by ``PRIZE_DAMAGE_RATE``. The rate is consumed, never touched: it is already flagged as
+      the ~8x currency outlier in this module's own reconciliation note.
+    * **next_turn_cost** — the forfeited follow-up an attacker-side lock leaves behind, through
+      `strategy/sequence.followup_damage` at ADR-0061's ``FOLLOWUP_W``.
+
+    ⚠️ **`AttackEV.working()`'s shape is FROZEN and it is ASYMMETRIC**: it omits ``total`` and emits
+    ``next_turn_cost`` POSITIVE while ``total`` subtracts it, so summing the dict returns
+    ``total + 2 x next_turn_cost``. A consumer of these legs must read ``AttackEV.total`` and NEVER
+    the dict-sum. Documented here because this is where a consumer arrives.
+
+    Returns ``()`` when there is nothing to attack with — no Active, no resolvable card, no
+    affordable attack, or the rules forbid an attack outright (`MySide.attack_blocked`: Asleep,
+    Paralyzed, or the starting player on turn 1). Fail-closed: an unofferable line is worse than no
+    line, because a phantom option is a candidate the composer will happily rank."""
+    body = model.mine.active
+    if body is None or model.mine.attack_blocked:
+        return ()
+    stat = body.stat
+    profiles = [p for p in (model.attack_profile(body, aid)
+                            for aid in (getattr(stat, "attacks", None) or ()))
+                if p.affordable]
+    if not profiles:
+        return ()
+    defender = model.theirs.active
+    hp = float(defender.hp_remaining) if defender is not None else 0.0
+    prizes = float(defender.prize_value) if defender is not None else 0.0
+    # The follow-up menu, MATCHUP-FREE: the lock leg asks what this Pokémon could do NEXT turn, and
+    # the defender next turn is not this one, so it reads `printed` rather than the vs-defender leg.
+    followups = {p.attack_id: p.printed for p in profiles if p.attack_id is not None}
+    costless = _lock_is_costless(model, body, followups)
+    return tuple(AttackLegs(p.attack_id, {
+        "damage": _attack_damage(p),
+        "target_hp": hp,
+        "target_prizes": prizes,
+        "ko_probability": _attack_ko_probability(p, hp),
+        "rider_value": _attack_rider_value(p),
+        "economy_value": _attack_economy_value(p),
+        "next_turn_cost": 0.0 if costless else _attack_next_turn_cost(p, followups),
+    }) for p in profiles)
+
+
+def _attack_damage(profile) -> float:
+    """The damage MODEL's answer, with a conditional attack's branches already averaged.
+
+    The mean of the oracle's floor and ceiling is ADR-0039's shipped ranking convention (`pilot.py`:
+    *"a coin/conditional CHIP ranks by its mean"*), composed rather than re-derived — and a
+    deterministic record's bounds collapse onto its printed damage, so the same expression absorbs a
+    coin attack with no archetype branch, which is the point of stating attack value as a random
+    variable in the first place.
+
+    The ``exact > 0`` guard is what keeps a BOARD gate out of the coin family. A `requiresBench`
+    attack whose partner is absent reads 0 at ``exact`` and ``min`` while ``max`` deliberately keeps
+    printed (Incoming is a worst case and they can bench the partner first) — so the bounds spread
+    for a reason that has nothing to do with chance, and averaging them would credit half of an
+    attack that does literally nothing on this board."""
+    if profile.conditional and profile.damage > 0:
+        return (float(profile.damage_floor) + float(profile.damage_ceiling)) / 2.0
+    return float(profile.damage)
+
+
+def _attack_ko_probability(profile, target_hp: float) -> float:
+    """The residual uncertainty the bound policy leaves — the term's own words for this input.
+
+    Certain (1.0) in two cases and they are different: a deterministic attack has no branch, and a
+    conditional attack whose FLOOR already kills lands the Knock Out whatever the coin does. That
+    second case is what keeps the policy from taxing a certain kill for being printed on a coin.
+
+    Otherwise :data:`_COIN_KO_BOUND`, the declared equiprobable reading. Note it only reaches the
+    answer when the AVERAGED damage crosses HP — :func:`attack_ev` consults ``ko_probability`` on its
+    Knock Out branch alone. A ceiling-only kill (mean below HP, ceiling above) therefore takes the
+    CHIP branch and is never credited as a Knock Out at all: an under-read, the fail-closed direction
+    for an offensive estimate, and named in this family's ``blind_to``."""
+    if not (profile.conditional and target_hp):
+        return 1.0
+    return 1.0 if float(profile.damage_floor) >= target_hp else _COIN_KO_BOUND
+
+
+def _attack_rider_value(profile) -> float:
+    """Snipe and spread riders, priced against THEIR Bench in prizes.
+
+    Two routes because they are two different objects, exactly as `threat`'s bench leg has to
+    distinguish them: ``bench_snipe`` is ONE indivisible unit landing entirely on one body, and
+    ``bench_spread`` is a SHARED counter budget that may be split *"in any way you like"*. Their
+    allocation questions are correspondingly different — best single body, versus a knapsack over
+    subsets — and both are already answered by shipped oracles, which the profile carries.
+
+    When a rider FINISHES something, the knapsack's prize total is the value: those prizes are taken
+    this turn. When it finishes nothing it is still not worthless — damage that does not kill is
+    progress toward one — so it prices as the best single body's band, ``prize_value x min(1,
+    reach/hp)``. That is :func:`attack_ev`'s own chip arithmetic applied one body over rather than a
+    second scale, which is what keeps a sub-Knock-Out rider strictly under a finishing one by
+    construction instead of by a remembered cap.
+
+    **UNDER-reads a spread that chips several bodies without felling any** — only the best single
+    body's band is credited, because splitting a shared budget to maximise fractional progress is an
+    allocation nothing ships and this issue may not invent. Under-reading my own damage is the
+    fail-closed direction and is the same choice `threat.blind_to` records one seam over."""
+    value = 0.0
+    for reach, ko_prizes in ((profile.bench_snipe, profile.snipe_ko_prizes),
+                             (profile.bench_spread, profile.spread_ko_prizes)):
+        if not reach:
+            continue
+        value += (float(ko_prizes) if ko_prizes
+                  else max((prize * min(1.0, reach / hp)
+                            for hp, prize in profile.rider_targets if hp), default=0.0))
+    return value
+
+
+def _attack_economy_value(profile) -> float:
+    """The energy-recycle rider, in prizes.
+
+    ``recover_units`` is the model's re-derivation of `Pilot._recover_units`' three closed-form
+    bounds — printed ceiling, matching fuel in the source zone, recipients' remaining need — and this
+    only crosses the scale: ``ENERGY_RECOVER`` is damage-per-Energy, ``PRIZE_DAMAGE_RATE`` is
+    damage-per-prize. Both constants are consumed and neither is touched; ``ENERGY_RECOVER`` is
+    already flagged in this module's reconciliation note as the ~8x currency outlier, and re-deriving
+    it here would be a second opinion about a DERIVED rate (ADR-0100 §3)."""
+    return float(profile.recover_units) * ENERGY_RECOVER / currency.PRIZE_DAMAGE_RATE
+
+
+def _lock_is_costless(model: "StateModel", body, followups: dict) -> bool:
+    """Does a next-turn lock cost NOTHING on this board? — the two shipped guards on
+    `_lock_sequence_cost`.
+
+    Named for the BOARD condition rather than for the attack: "lock-free" one function down means
+    *a pick that carries no lock at all*, which is a different fact, and one word for two facts is
+    how a reader comes to believe the wrong one.
+
+    **A lone affordable attack is never charged.** The cost is the gap between the follow-up a
+    LOCK-FREE pick would have left and the one this pick leaves; with a single attack on the menu
+    there is no lock-free pick, so the "gap" is just the attack's own damage counted against it, and
+    chipping must still beat passing.
+
+    **A doomed Active pays nothing either.** There is no next turn for this Pokémon, so the lock
+    never materialises and front-loading is correct. Doom is read as the survival CLOCK at one turn
+    — :func:`_survival_clock` is THE clock this module calls (Issue #332), so the lock leg and
+    `survival` cannot come to hold different opinions about when the same body dies."""
+    return len(followups) <= 1 or _survival_clock(model, body) <= 1
+
+
+def _attack_next_turn_cost(profile, followups: dict) -> float:
+    """What an attacker-side lock costs ME next turn, in prizes.
+
+    ADR-0061's horizon-2 oracle, composed: `followup_damage` answers what this Pokémon can still
+    deal next turn having used this attack, and the COST is the difference from the best a lock-free
+    pick would have left, weighted by ``FOLLOWUP_W`` because damage this turn is certain and next
+    turn's is not. Never a credit — floored at 0, so a lock-free attack reads exactly 0 and the leg
+    can only ever subtract.
+
+    The two lock kinds are structurally different and the oracle keeps them apart: a SAME-attack lock
+    (Mega Brave — *"can't use Mega Brave"*) leaves the best OTHER attack, and 270 + 130 == 130 + 270
+    means it often forfeits nothing at all; a FULL lock (*"can't use attacks"*) leaves nothing and
+    forfeits a whole turn of offense. The flat constant this replaced charged one number for both.
+
+    This prices the lock this attack WOULD IMPOSE. A lock already LIVE on a body is a different fact
+    with a different home — `BodyView.grant`, the ADR-0033 transient tracker — and the profile's
+    affordability leg is where that one already bites."""
+    if not (profile.self_lock or profile.same_attack_lock):
+        return 0.0
+    left = followup_damage(profile.attack_id, affordable=followups,
+                           full_lock=profile.self_lock,
+                           same_attack_lock=profile.same_attack_lock)
+    forfeited = max(0.0, max(followups.values(), default=0.0) - float(left))
+    return FOLLOWUP_W * forfeited / currency.PRIZE_DAMAGE_RATE
 
 
 # ── the coverage map, executable ──────────────────────────────────────────────────────────────────

@@ -133,6 +133,22 @@ KO_SCORE = 1000            # a KO option dominates a mere chip
 #: retreating INTO Cinderace must credit what attacking WITH Cinderace credits), and `pilot` imports
 #: that equation — so one leaf owner is what keeps the two readings from drifting apart.
 ENERGY_RECOVER = 160 / 3
+
+#: Weight on the FORCED follow-up a locking attack leaves behind (ADR-0061). ``< 1`` because damage
+#: THIS turn is certain and next turn's is not — the opponent moves in between — so at equal
+#: two-turn totals the front-loaded nuke wins, which is the right default.
+#:
+#: It replaced a flat ``_LOCK_COST = 40`` that charged one number for two structurally different
+#: locks: a phantom charge on a SAME-ATTACK lock (Mega Brave 270 + Aura Jab 130 == 130 + 270, so the
+#: lock forfeits nothing) and a 5x under-charge on a FULL lock (Blood Moon 240 + NOTHING loses to a
+#: lock-free 130/turn's 260).
+#:
+#: Lives HERE rather than in `pilot` for `ENERGY_RECOVER`'s reason one line up, and it became true of
+#: this constant the moment `attack_ev`'s extractor needed it (POC-T4/3, Issue #384): the Pilot's
+#: `_lock_sequence_cost` and `state_value`'s terminal `next_turn_cost` leg price the SAME forfeited
+#: follow-up, and two copies of one weight is exactly what nothing stops drifting apart. Moved
+#: unchanged in value — `pilot` imports it under its old private spelling so no expression moved.
+FOLLOWUP_W = 0.5
 _SUPPORTER = 3             # CardType.SUPPORTER — gust on this card costs the one-per-turn Supporter slot
 _TOOL_CARD = 2             # CardType.TOOL — a Pokémon Tool. Arrives as OptionType.ATTACH exactly like an
                            # Energy, so the Energy hypotheses must test `attach_is_energy` (ml f87)
@@ -180,7 +196,7 @@ __all__ = [
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_SHUFFLE", "_DRAW", "_DRAW_REVERSE",
     "_MOVE_CARD", "_MOVE_CARD_REVERSE",
-    "KO_SCORE", "ENERGY_RECOVER", "_METAL",
+    "KO_SCORE", "ENERGY_RECOVER", "FOLLOWUP_W", "_METAL",
     "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
     "_OPENER_TAG", "_WINCON_ROLES", "_ENGINE_TAGS", "_ATTACKER_ROLES",
     "_UTILITY_TAGS", "_EVOLVING_THREAT_DMG",

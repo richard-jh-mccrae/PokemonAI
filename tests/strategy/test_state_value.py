@@ -104,6 +104,12 @@ ALAKAZAM = 743
 SLOWKING, BRAVE_BANGLE = 163, 1175
 STARYU, DREEPY, DRAKLOAK = 1030, 119, 120
 JET_HEADBUTT, PHANTOM_DIVE, AURA_JAB, MEGA_BRAVE = 9121, 9122, 982, 983
+#: Riolu's ONLY attack, and the cast used to drop it (`attacks=()`). Verified at
+#: `data/EN_Card_Data.csv` Card ID 677: **Accelerating Stab ``{F}`` 30**, *"During your next turn,
+#: this Pokémon can't use Accelerating Stab."* -> ``nextTurnSameAttackLock``, by the shipped parser.
+#: It is the cast's ONE body whose only affordable attack locks, which makes it the only honest
+#: instrument for the lone-attack guard on the next-turn clock cost (Issue #384).
+ACCELERATING_STAB = 9677
 SUPER_PSY_BOLT = 214
 JETTING_BLOW, NEBULA_BEAM, SUPERB_SCISSORS, CLUTCH = 91031, 91032, 9345, 91008
 WATER_GUN = 91030          # Staryu's only attack (Issue #286)
@@ -125,6 +131,18 @@ COSMIC_BEAM, POWER_GEM = 9676, 9675
 #: at source. `slowking` runs 2x and neither partner, so the bonus is unpayable for the whole match.
 METAGROSS = 276
 WRACK_DOWN, CONJOINED_BEAMS = 9276, 9277
+#: Issue #384's COIN attacker, and it is a real card rather than a shaped one. Eevee (43) Basic
+#: HP 50, **{C}**, Weakness **{F}**, no Resistance, Retreat 1 — verified at
+#: `data/EN_Card_Data.csv`. Two attacks: Ascension ``●`` (damage *n/a* -> 0, *"Search your deck for
+#: a card that evolves from this Pokémon…"*) and **Quick Attack ``●●●`` 20**, *"Flip a coin. If
+#: heads, this attack does 20 more damage."*
+#:
+#: Run through the SHIPPED parser (`provider.build_attack_stats` over that exact sentence) the coin
+#: clause reads ``damageMin=20, damageMax=40`` — a floor and a ceiling, and **no flip count and no
+#: probability anywhere in the record**. That absence is the whole reason `attack_ev_legs` needs a
+#: declared bound policy, so the instrument for it is a card that really prints a coin.
+EEVEE = 43
+ASCENSION, QUICK_ATTACK = 9043, 9044
 
 _STATS = {
     DRAGAPULT: CardStat(DRAGAPULT, synthetic=True, name='Dragapult ex', hp=320, ex=True, stage2=True,
@@ -133,8 +151,12 @@ _STATS = {
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
     MUNKIDORI: CardStat(MUNKIDORI, synthetic=True, name='Munkidori', hp=110, energyType=PSYCHIC,
                         weakness=DARKNESS, resistance=FIGHTING, retreatCost=1, cardType=0),
-    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=2,
-                    maxDamage=30, maxDamageCost=2, attacks=(), cardType=0),
+    # ``attacks``/``minAttackCost``/``maxDamageCost`` corrected by Issue #384: Riolu really does
+    # print an attack — Accelerating Stab ``{F}`` 30 — so cost 1, not the 2 this row used to claim,
+    # and the attack list is not empty. Measured behaviour-neutral for every other test in this file.
+    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=1,
+                    maxDamage=30, maxDamageCost=1, minCostDamage=30,
+                    attacks=(ACCELERATING_STAB,), cardType=0),
     MEGA_LUC: CardStat(MEGA_LUC, synthetic=True, name='Mega Lucario ex', hp=340, megaEx=True, energyType=FIGHTING,
                        evolvesFrom="Riolu", maxDamage=270, maxDamageCost=2, minAttackCost=1,
                        minCostDamage=130,
@@ -201,27 +223,40 @@ _STATS = {
     METAGROSS: CardStat(METAGROSS, synthetic=True, name='Metagross', hp=170, stage2=True, evolvesFrom="Metang",
                         energyType=PSYCHIC, minAttackCost=1, maxDamage=130, maxDamageCost=2,
                         minCostDamage=60, attacks=(WRACK_DOWN, CONJOINED_BEAMS), cardType=0),
+    EEVEE: CardStat(EEVEE, synthetic=True, name='Eevee', hp=50, energyType=COLORLESS,
+                    weakness=FIGHTING, retreatCost=1, maxDamage=20, maxDamageCost=3,
+                    minAttackCost=1, minCostDamage=0, attacks=(ASCENSION, QUICK_ATTACK),
+                    cardType=0),
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
-    #: Added for ADR-0064 Amendment B's BENCH leg (Issue #283) — the only opponent in this fixture
-    #: whose attack reaches my Bench at all. Verified at source, and carried WHOLE rather than
-    #: trimmed to the one attack the test needs: Mega Starmie ex (1031) Stage 1 HP 330, {W},
-    #: `Mega Pokémon ex` -> 3 prizes, evolvesFrom **Staryu**, Jetting Blow ``{W}`` 120 *"also does
-    #: 50 damage to 1 of your opponent's Benched Pokémon"* and Nebula Beam ``●●●`` 210. A fixture
-    #: that quietly drops the second attack would carry a `maxDamage` the real card contradicts.
-    #: Referenced by exactly one test, so no existing assertion moves.
-    MEGA_STARMIE: CardStat(MEGA_STARMIE, synthetic=True, name='Mega Starmie ex', hp=330, megaEx=True,
-                           energyType=WATER, evolvesFrom="Staryu", maxDamage=210, maxDamageCost=3,
-                           minAttackCost=1, minCostDamage=120,
-                           attacks=(JETTING_BLOW, NEBULA_BEAM), cardType=0),
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
-    PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC)),
-    AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
-    MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    # ── Issue #384: the three riders/locks the fixture used to DROP ──────────────────────────
+    # Each was verified by running the shipped parsers (`provider.build_attack_stats`) over the
+    # card's own `Effect Explanation` text in `data/EN_Card_Data.csv` — not recalled, and not
+    # hand-derived from the sentence either, so the fixture carries what the runtime carries.
+    #   Phantom Dive (121)  *"Put 6 damage counters on your opponent's Benched Pokémon in any way
+    #                       you like."*                     -> benchSpread 60 (6 counters x 10)
+    #   Aura Jab (678)      *"Attach up to 3 Basic {F} Energy cards from your discard pile to your
+    #                       Benched Pokémon in any way you like."*
+    #                       -> recoverN 3, recoverEnergyType {F}, recoverTarget "bench",
+    #                          recoverSource "discard"
+    #   Mega Brave (678)    *"During your next turn, this Pokémon can't use Mega Brave."*
+    #                       -> nextTurnSameAttackLock. **NOT `nextTurnSelfLock`** — the card names
+    #                          ITSELF, so the lock forbids one attack and not the turn. Issue #384's
+    #                          body (and `attack_ev`'s docstring) call it "`nextTurnSelfLock`-class",
+    #                          which is the CLASS; the field is the other one, and the two price
+    #                          differently by design (`strategy/sequence.py`: 270+130 == 130+270).
+    PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC),
+                             benchSpread=60),
+    AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,),
+                         recoverN=3, recoverEnergyType=FIGHTING, recoverTarget="bench",
+                         recoverSource="discard"),
+    MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING),
+                           nextTurnSameAttackLock=True),
     JETTING_BLOW: AttackStat(JETTING_BLOW, damage=120, cost=1, energyTypes=(WATER,), benchSnipe=50),
     WATER_GUN: AttackStat(WATER_GUN, damage=20, cost=1, energyTypes=(WATER,)),
     NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3,
@@ -249,6 +284,14 @@ _ATTACKS = {
     # through the oracle's "max" bound and must not be reachable through this read.
     CONJOINED_BEAMS: AttackStat(CONJOINED_BEAMS, damage=130, cost=2,
                                 energyTypes=(PSYCHIC, PSYCHIC), damageMax=280),
+    # Eevee's pair (Issue #384). The bounds on Quick Attack are the SHIPPED parser's output for its
+    # printed sentence, not a hand-reading of it — see the constant's note above.
+    ACCELERATING_STAB: AttackStat(ACCELERATING_STAB, damage=30, cost=1, energyTypes=(FIGHTING,),
+                                  nextTurnSameAttackLock=True),
+    ASCENSION: AttackStat(ASCENSION, damage=0, cost=1, energyTypes=(COLORLESS,)),
+    QUICK_ATTACK: AttackStat(QUICK_ATTACK, damage=20, cost=3,
+                             energyTypes=(COLORLESS, COLORLESS, COLORLESS),
+                             damageMin=20, damageMax=40),
 }
 DECK = [E_F] * 6 + [RIOLU] * 3 + [MEGA_LUC] * 3 + [MUNKIDORI]
 #: `mega_lucario`'s single-prize core beside the Mega line — the deck the Solrock cases score
@@ -1027,6 +1070,385 @@ def test_attack_ev_working_decomposes_the_total_rather_than_narrating_it():
                       economy_value=0.1, next_turn_cost=0.5)
     w = ev.working()
     assert sum(w.values()) - 2 * w["next_turn_cost"] == pytest.approx(ev.total)
+
+
+# ── the terminal-action term's EXTRACTOR (POC-T4/3, Issue #384) ───────────────────────────────────
+#
+# `attack_ev` above takes seven plain floats and, until this issue, NOTHING in `src/` produced them.
+# Every board family has a model->kwargs extractor (`_exposed_bodies`, `_reachable_target_values`,
+# `_ready_bodies`, `_hand_legs`, `_development_legs`); the terminal family had none, so the term was
+# complete, tested and unreachable. `attack_ev_legs` is that missing bridge.
+#
+# It lands INERT. Nothing calls `attack_ev` in production when this closes — the SUM is the
+# composer's (Issue #385/#386) — and `test_attack_ev_still_has_zero_production_callers` asserts that
+# rather than assuming it.
+
+def _starmie_rider_board(*, bench_hp=50):
+    """MY Mega Starmie ex against their Dragapult ex, with a 3-prize body on THEIR Bench.
+
+    The Issue #263 acceptance shape "rider beats raw damage", built at source: Jetting Blow ``{W}``
+    120 *"also does 50 damage to 1 of your opponent's Benched Pokémon"* against Nebula Beam ``●●●``
+    210, which prints no rider at all. Neither knocks out a 320 HP Dragapult ex, so the straight
+    hit is 90 damage BIGGER and the question is whether the rider's board value beats that."""
+    return _model(
+        _player(active=_poke(MEGA_STARMIE, hp=330, energies=[E_W, E_W, E_W]), prize=4),
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9),
+                bench=[_poke(MEGA_LUC, hp=bench_hp, serial=10)], prize=4),
+        energy_attached=True)
+
+
+def _dive_board(*, bench):
+    """MY Dragapult ex against their Mega Lucario ex — the Phantom Dive allocation fixture.
+
+    Phantom Dive ``{R}{P}`` 200, *"Put 6 damage counters on your opponent's Benched Pokémon in any
+    way you like"* -> a SHARED, distributable 60-counter budget. Jet Headbutt ``●`` 70 is the
+    rider-free alternative on the same body."""
+    return _model(
+        _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P]), prize=4),
+        _player(active=_poke(MEGA_LUC, hp=340, serial=9), bench=list(bench), prize=4),
+        energy_attached=True)
+
+
+def _eevee_board(*, their_hp):
+    """MY Eevee against their Dragapult ex — the COIN fixture.
+
+    Quick Attack ``●●●`` 20, *"Flip a coin. If heads, this attack does 20 more damage."* Eevee is
+    {C} and Dragapult ex prints neither Weakness nor Resistance, so nothing modifies the bounds and
+    the floor/ceiling pair reaching the policy is the record's own 20/40."""
+    return _model(
+        _player(active=_poke(EEVEE, hp=50, energies=[E_F, E_F, E_F]), prize=4),
+        _player(active=_poke(DRAGAPULT, hp=their_hp, serial=9), prize=4),
+        energy_attached=True)
+
+
+def _leg(model, attack_id):
+    """The one leg for ``attack_id``, or None."""
+    return next((l for l in sv.attack_ev_legs(model) if l.attack_id == attack_id), None)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_attack_ev_legs_produces_exactly_attack_evs_kwargs():
+    """The bridge's contract: what comes out SPLATS into the term. Asserted against the signature
+    itself rather than a copied key list, so a kwarg added to `attack_ev` fails here rather than
+    silently defaulting for every attack in the game."""
+    import inspect
+    expected = set(inspect.signature(sv.attack_ev).parameters)
+    legs = sv.attack_ev_legs(_lucario_board(my_energies=[E_F, E_F]))
+    assert legs, "no legs on a board with an affordable attack — the extractor is inert"
+    for leg in legs:
+        assert set(leg.kwargs) == expected
+        sv.attack_ev(**leg.kwargs)          # splats without a TypeError, which is the whole point
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_attack_ev_legs_covers_the_affordable_attacks_and_only_those():
+    """One leg per attack my Active can actually PAY for. Affordability is the shipped Attach
+    Budget's answer — `threat.blind_to` forbids a raw energy-count second opinion — so an attack
+    off the menu produces no leg and cannot be scored into a line I could not play."""
+    both = {l.attack_id for l in sv.attack_ev_legs(_lucario_board(my_energies=[E_F, E_F]))}
+    assert both == {AURA_JAB, MEGA_BRAVE}
+    # One {F} with the turn's attach already spent: Aura Jab {F} is payable, Mega Brave {F}{F} is not.
+    one = {l.attack_id for l in sv.attack_ev_legs(
+        _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F]), prize=4),
+               _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
+               energy_attached=True))}
+    assert one == {AURA_JAB}
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_attack_ev_legs_is_empty_when_there_is_nothing_to_attack_with():
+    """Fail-closed at both ends: no Active, and an Active the rules forbid an attack to. Turn 1 for
+    the starting player is the second one (`docs/rules.md` §first-turn), and it is `attack_blocked`'s
+    question rather than a cost — an extractor that answered it in Energy would offer a line the
+    engine will not present."""
+    assert sv.attack_ev_legs(
+        _model(_player(prize=4), _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4))) == ()
+    assert sv.attack_ev_legs(
+        _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]), prize=4),
+               _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4), turn=1)) == ()
+
+
+# ── acceptance fixture 1 — the rider beats raw damage ─────────────────────────────────────────────
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_snipe_rider_outprices_the_bigger_straight_hit_on_a_real_board():
+    """Issue #263 acceptance 1, end to end through the extractor rather than at the term.
+
+    Mega Starmie ex, both attacks affordable, against a 320 HP Dragapult ex neither can knock out.
+    Nebula Beam is 90 damage bigger — worth ``2 x 90/320 = 0.5625`` prizes of chip — while Jetting
+    Blow's 50-damage rider finishes a benched **Mega Lucario ex** sitting at 50 HP, which is 3
+    prizes. The rider wins by more than five times the damage gap, and it wins because of WHERE it
+    lands rather than how hard it hits."""
+    m = _starmie_rider_board()
+    jetting, nebula = _leg(m, JETTING_BLOW), _leg(m, NEBULA_BEAM)
+    assert jetting is not None and nebula is not None
+    assert jetting.kwargs["rider_value"] == pytest.approx(3.0)
+    assert nebula.kwargs["rider_value"] == 0.0
+    assert nebula.kwargs["damage"] > jetting.kwargs["damage"]          # the straight hit IS bigger
+    assert sv.attack_ev(**jetting.kwargs).total > sv.attack_ev(**nebula.kwargs).total
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_snipe_rider_that_finishes_nothing_prices_as_a_FRACTION_not_a_prize():
+    """Out of reach, the rider is not worthless — it is worth the fraction of the body it removes,
+    the SAME band the core leg uses (`prize_value x min(1, dmg/hp)`). One 3-prize body at 250 HP
+    takes 50: ``3 x 50/250 = 0.6`` prizes, strictly under the 3 a finish would pay."""
+    m = _starmie_rider_board(bench_hp=250)
+    jetting = _leg(m, JETTING_BLOW)
+    assert jetting.kwargs["rider_value"] == pytest.approx(3.0 * 50.0 / 250.0)
+    assert jetting.kwargs["rider_value"] < 3.0
+
+
+# ── acceptance fixture 2 — the bench-counter allocation ───────────────────────────────────────────
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_bench_spread_is_priced_by_WHERE_the_counters_land():
+    """Issue #263 acceptance 2. The SAME 60 counters, the same two attacks, the same everything but
+    one benched body's remaining HP — and the rider is worth 3 prizes or 1.
+
+    `benchSpread` is a SHARED budget across their whole Bench, so which bodies it can finish is a
+    knapsack, and the knapsack is shipped (`CombatMath.spread_ko_prizes` over `best_ko_subset`).
+    With their Mega Lucario ex at 60 HP the budget buys it outright — 3 prizes, beating the 2 that
+    spending the same 60 on a Riolu (40) plus a Staryu (20) would take. Ten more HP on that body and
+    the only affordable set is the two singles."""
+    reachable = _leg(_dive_board(bench=[_poke(RIOLU, hp=40, serial=10),
+                                        _poke(STARYU, hp=20, serial=11),
+                                        _poke(MEGA_LUC, hp=60, serial=12)]), PHANTOM_DIVE)
+    assert reachable.kwargs["rider_value"] == pytest.approx(3.0)
+    walled = _leg(_dive_board(bench=[_poke(RIOLU, hp=40, serial=10),
+                                     _poke(STARYU, hp=20, serial=11),
+                                     _poke(MEGA_LUC, hp=70, serial=12)]), PHANTOM_DIVE)
+    assert walled.kwargs["rider_value"] == pytest.approx(2.0)
+    # …and the rider-free alternative on the same body reads 0 on both boards.
+    assert _leg(_dive_board(bench=[_poke(MEGA_LUC, hp=60, serial=12)]),
+                JET_HEADBUTT).kwargs["rider_value"] == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_bench_immune_body_is_no_rider_target_at_all():
+    """`docs/rules.md` §11 — a Tera body takes NO damage from attacks while BENCHED, so a spread
+    that could otherwise finish it credits nothing. Dragapult ex's own `[Tera]` ability
+    (*"As long as this Pokémon is on your Bench, prevent all damage done to this Pokémon by
+    attacks"*) is the case, verified at source in this file's header, and it is the fail-closed
+    direction: a phantom bench prize is exactly what could lock a false lethal."""
+    immune = _leg(_dive_board(bench=[_poke(DRAGAPULT, hp=30, serial=12)]), PHANTOM_DIVE)
+    assert immune.kwargs["rider_value"] == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_the_rider_converts_where_threat_only_stands_and_neither_pays_twice():
+    """The no-double-count half of acceptance 2, asserted at the registry AND on a board.
+
+    Since Issue #284 `threat` reads their Bench too — but it prices the STANDING position (chip
+    already sitting there makes a body one rider from dead) and never the CONVERSION, which is this
+    term's. The registries are walked together for exactly this seam, so the rule is executable:
+    `attack_ev` names `opponent_target_value` in its `does_not_read` and never reads it."""
+    assert sv.double_counted() == []
+    assert set(sv.TERMINAL_FAMILIES["attack_ev"].reads).isdisjoint(sv.FAMILIES["threat"].reads)
+    assert "opponent_target_value" in sv.TERMINAL_FAMILIES["attack_ev"].does_not_read
+    # And on a board: the rider's prizes are the terminal term's; the board scalar does not move
+    # with the attack I happen to be pricing, because it is a function of the board alone.
+    m = _dive_board(bench=[_poke(MEGA_LUC, hp=60, serial=12)])
+    assert sv.state_value(m) == sv.state_value(m)
+
+
+# ── acceptance fixture 3 — the economy rider against the next-turn lock ───────────────────────────
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_recycle_rider_and_a_next_turn_lock_BOTH_appear_in_the_two_EVs():
+    """Issue #263 acceptance 3, and the requirement is that both legs are VISIBLE — not merely that
+    the right attack wins.
+
+    Mega Lucario ex, verified at source: Aura Jab ``{F}`` 130 *"Attach up to 3 Basic {F} Energy
+    cards from your discard pile to your Benched Pokémon"* versus Mega Brave ``{F}{F}`` 270
+    *"During your next turn, this Pokémon can't use Mega Brave."*
+
+    Aura Jab's rider is bounded three ways and the NEED binds at 2: my Riolu holds no Energy and its
+    forward form's dearest attack is Mega Brave at {F}{F}. Mega Brave's lock forfeits the gap
+    between the best follow-up a lock-free pick would leave (270) and the one it leaves (130), at
+    ADR-0061's ``FOLLOWUP_W`` — ``0.5 x 140 = 70`` damage, 0.7 prizes."""
+    m = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]),
+                       bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4, prize=4),
+               _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+               energy_attached=True)
+    jab, brave = _leg(m, AURA_JAB), _leg(m, MEGA_BRAVE)
+    # Aura Jab: the economy rider APPEARS, and it carries no clock cost.
+    assert jab.kwargs["economy_value"] == pytest.approx(2.0 * (160 / 3) / 100.0)
+    assert jab.kwargs["next_turn_cost"] == 0.0
+    # Mega Brave: the clock cost APPEARS, and it carries no economy.
+    assert brave.kwargs["economy_value"] == 0.0
+    assert brave.kwargs["next_turn_cost"] == pytest.approx(0.5 * (270.0 - 130.0) / 100.0)
+    # ADR-0061's own ruling, reproduced through the composed term: fuelled Aura Jab beats bare
+    # Mega Brave, and it does so on the two legs above rather than on the damage.
+    assert brave.kwargs["damage"] > jab.kwargs["damage"]
+    assert sv.attack_ev(**jab.kwargs).total > sv.attack_ev(**brave.kwargs).total
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_the_recycle_rider_is_bounded_by_the_fuel_and_by_the_need():
+    """The three closed-form bounds, each shown to BIND. Energy nobody can pay an attack with is not
+    development (ADR-0061): three {F} onto an empty Bench credit nothing at all."""
+    def jab_economy(*, discard, bench):
+        m = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]),
+                           bench=list(bench), discard=list(discard), prize=4),
+                   _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
+                   energy_attached=True)
+        return _leg(m, AURA_JAB).kwargs["economy_value"]
+
+    riolu = [_poke(RIOLU, hp=80, serial=2)]
+    rate = (160 / 3) / 100.0
+    assert jab_economy(discard=[E_F] * 4, bench=riolu) == pytest.approx(2 * rate)   # NEED binds
+    assert jab_economy(discard=[E_F], bench=riolu) == pytest.approx(1 * rate)       # FUEL binds
+    assert jab_economy(discard=[E_F] * 4, bench=()) == 0.0            # no recipient in scope at all
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_lone_affordable_attack_is_never_charged_for_its_own_lock():
+    """The invariant `_lock_sequence_cost` holds and this leg preserves: chipping must still beat
+    passing. A lock forfeits the gap between the best follow-up a LOCK-FREE pick would have left and
+    the one this pick leaves — and with a single attack on the menu there is no lock-free pick to
+    forfeit anything to, so the gap is not a cost, it is the attack's own damage counted against it.
+
+    **Riolu is the real case**, and it is the only one in this cast: Accelerating Stab ``{F}`` 30,
+    *"During your next turn, this Pokémon can't use Accelerating Stab"* — its ONLY attack, verified
+    at `data/EN_Card_Data.csv`. Beside it, the two-attack charge on the same lock kind, so the test
+    shows the guard biting rather than merely a zero."""
+    lone = _model(_player(active=_poke(RIOLU, hp=80, energies=[E_F]), prize=4),
+                  _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
+                  energy_attached=True)
+    stab = _leg(lone, ACCELERATING_STAB)
+    assert stab is not None and stab.kwargs["next_turn_cost"] == 0.0
+    two = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]), prize=4),
+                 _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4),
+                 energy_attached=True)
+    assert _leg(two, MEGA_BRAVE).kwargs["next_turn_cost"] == pytest.approx(0.5 * 140.0 / 100.0)
+
+
+# ── the coin bound policy — DECLARED, because the record cannot recover the distribution ──────────
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_coin_attacks_damage_is_the_MEAN_of_its_two_bounds():
+    """`attack_ev`'s docstring says *"coin branches already averaged by the caller"* and this IS
+    that caller. The mean of the model's floor and ceiling is ADR-0039's shipped ranking convention
+    (`pilot.py`: *"a coin/conditional CHIP ranks by its mean"*), composed rather than re-invented.
+
+    Quick Attack's record reads 20/40, so the averaged damage is 30 — and a DETERMINISTIC attack's
+    bounds collapse, so the same expression returns its printed damage with no branch."""
+    coin = _leg(_eevee_board(their_hp=320), QUICK_ATTACK)
+    assert coin.kwargs["damage"] == pytest.approx(30.0)
+    flat = _leg(_lucario_board(my_energies=[E_F, E_F]), MEGA_BRAVE)
+    assert flat.kwargs["damage"] == pytest.approx(270.0)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_the_ko_probability_is_1_when_the_FLOOR_already_kills():
+    """No residual uncertainty to carry: whatever the coin does, the body falls. This is the leg
+    that keeps the policy from taxing a certain Knock Out for being printed on a coin attack."""
+    leg = _leg(_eevee_board(their_hp=20), QUICK_ATTACK)
+    assert leg.kwargs["ko_probability"] == 1.0
+    assert sv.attack_ev(**leg.kwargs).knockout == pytest.approx(2.0)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_the_ko_probability_is_the_DECLARED_bound_when_only_the_mean_kills():
+    """**The declared bound, and it is declared because nothing else is available.**
+
+    `AttackStat` carries `damageMin` / `damageMax` and NOTHING about the distribution between them —
+    no flip count, no probability, in the parsed record or in the engine-audit override table. So
+    the equiprobable two-branch reading is a POLICY rather than a derivation, it is written down in
+    `attack_ev`'s `blind_to` where a reader will find it, and it is asserted here so it cannot drift
+    into an unstated default.
+
+    At 30 HP the averaged 30 crosses and the floor of 20 does not, so the Knock Out is worth half a
+    2-prize body."""
+    leg = _leg(_eevee_board(their_hp=30), QUICK_ATTACK)
+    assert leg.kwargs["ko_probability"] == sv._COIN_KO_BOUND == 0.5
+    assert sv.attack_ev(**leg.kwargs).knockout == pytest.approx(1.0)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_ceiling_only_knockout_UNDER_reads_and_that_is_the_declared_direction():
+    """The cost of the policy, stated as a test rather than left to be discovered.
+
+    At 35 HP the ceiling (40) would finish the body and the mean (30) does not, so the term takes
+    its chip branch and the Knock Out is never credited at all. That is an UNDER-read — the
+    fail-closed direction for an offensive estimate, and the same direction `threat.blind_to`
+    already chooses one seam over. It is recorded in `attack_ev.blind_to`."""
+    leg = _leg(_eevee_board(their_hp=35), QUICK_ATTACK)
+    ev = sv.attack_ev(**leg.kwargs)
+    assert ev.knockout == 0.0
+    assert ev.chip == pytest.approx(2.0 * 30.0 / 35.0)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_the_coin_policy_and_the_recoil_gap_are_both_in_the_blind_spot_checklist():
+    """Issue #263's Ceiling 2 consumes `blind_spots()` as its checklist, so a knowingly-uncovered
+    dimension that is NOT written down is invisible to the thing that exists to catch it.
+
+    Two go in with this issue: the declared coin bound above, and self-damage — `AttackStat.recoil`
+    is on no board the apply-seam hands back (attack is TERMINAL, so there is no post-attack board)
+    and is in no kwarg of `attack_ev`, so a recoiling attack's cost to me prices at exactly 0."""
+    entries = " ".join(sv.blind_spots()["attack_ev"]).lower()
+    assert "coin" in entries and "recoil" in entries
+    assert sv.registry_gaps() == []
+
+
+# ── the frozen shape asymmetry, and the inertness this issue must not break ───────────────────────
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_a_consumer_must_read_total_and_never_the_working_dicts_sum():
+    """`AttackEV.working()` is FROZEN in a shape that does not add up: it omits `total` and emits
+    `next_turn_cost` POSITIVE while `total` SUBTRACTS it, so summing the dict returns
+    ``total + 2 x next_turn_cost``. Shown here on real extractor output, on the one attack in the
+    fixture that actually carries a lock, because that is the case where the gap is not zero."""
+    m = _model(_player(active=_poke(MEGA_LUC, hp=340, energies=[E_F, E_F]),
+                       bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4, prize=4),
+               _player(active=_poke(DRAGAPULT, hp=320, energies=[E_R, E_P], serial=9), prize=4),
+               energy_attached=True)
+    ev = sv.attack_ev(**_leg(m, MEGA_BRAVE).kwargs)
+    assert ev.next_turn_cost > 0
+    assert "total" not in ev.working()
+    assert sum(ev.working().values()) == pytest.approx(ev.total + 2 * ev.next_turn_cost)
+    assert sv.attack_ev_legs.__doc__ and "working()" in sv.attack_ev_legs.__doc__
+
+
+@pytest.mark.req("REQ-STATEVALUE-0007")
+def test_attack_ev_still_has_zero_production_callers():
+    """Issue #384's acceptance, ASSERTED rather than assumed. This issue builds the extractor; the
+    SUM is the composer's (Issue #385/#386), so `attack_ev` must still be uncalled in `src/` and
+    `tools/` when it closes — and the day the composer wires it, this test is the reminder to
+    retire this line rather than a mystery failure.
+
+    **A negative result needs a positive control**, so the same scan is pointed at `survival`, which
+    MUST match (`state_value.py`'s `_terms` calls it). If the control goes quiet the instrument is
+    broken and the empty result means nothing. `src/cg/` is excluded — the native-engine wrapper is
+    off-limits to every sweep in this repo.
+
+    Parsed rather than grepped, and that is not fastidiousness: a line-level scan for ``attack_ev(``
+    matches this very module's own docstrings (it fired on one while this test was being written)
+    and would miss a call spelled through `getattr`. `ast` sees CALLS, which is what the claim is
+    about."""
+    import ast
+    from pathlib import Path
+
+    def _called(tree, name):
+        return [node.lineno for node in ast.walk(tree)
+                if isinstance(node, ast.Call)
+                and (getattr(node.func, "id", None) == name
+                     or getattr(node.func, "attr", None) == name)]
+
+    root = Path(__file__).resolve().parents[2]
+    hits, controls = [], []
+    for base in ("src", "tools"):
+        for path in sorted((root / base).rglob("*.py")):
+            rel = path.relative_to(root)
+            if rel.parts[:2] == ("src", "cg"):
+                continue
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            hits += [f"{rel}:{n}" for n in _called(tree, "attack_ev")]
+            controls += [f"{rel}:{n}" for n in _called(tree, "survival")]
+    assert controls, "positive control silent: the scan is broken, not the tree"
+    assert hits == [], f"attack_ev gained a production caller: {hits}"
 
 
 # ── the scalar over a real StateModel ─────────────────────────────────────────────────────────────

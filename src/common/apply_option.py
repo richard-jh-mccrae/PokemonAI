@@ -6,11 +6,29 @@ the StateModel, stepping no engine. It is what lets the Turn Planner price a pla
 (`state_value(after) − state_value(before)`) and compose a candidate sequence without spending the
 2-vCPU grader budget on a forked simulation per branch.
 
-**INERT.** T0 ships the option-kind table, the signatures and the docstrings; T4 (Issue #263)
-implements the transitions. Every modelled transition raises `NotImplementedError` rather than
-returning the model unchanged — an identity stub would price every play at exactly 0.0, which is a
-real and plausible answer, so an unimplemented build would read as "this play is worthless" rather
-than as "this play is unimplemented".
+**Still INERT AT RUNTIME, but no longer a stub.** T0 froze the option-kind table, the signatures and
+the docstrings; POC-T4/1 (Issue #382) implemented the transitions, the ENGINE-RESOLVED execution path
+and the parity lane that proves them; POC-T4/2 (Issue #383) added the per-OPTION footprint
+(:func:`option_footprint`) and, in `common.board_expectation`, the enumeration that fills an
+:class:`Expectation`'s outcome classes. Nothing in production calls this yet — the composer arms at
+T4/4-5 (Issues #385/#386) — so the module ships measured and unwired.
+
+The **arithmetic** lives one module out on both halves: `common.board_delta` for the deterministic
+point transitions, `common.board_expectation` for the stochastic ones. This module stays the
+CONTRACT, in one file, over plain data — which is also why :func:`apply_option`'s dispatch is
+unchanged by T4/2: routing a revealing option to an Expectation is a behaviour change, and the
+composer is what makes it.
+
+Where a transition used to `raise NotImplementedError`, it now either returns a board or returns a
+`Refusal` naming what it could not write. The distinction the old stub existed to protect is
+unchanged and is now the transitions' own rule: **a seam that cannot model an option must never
+return the model unchanged.** An identity return prices the play at exactly 0.0, which is a real and
+plausible answer, so it would read as *"this play is worthless"* rather than as *"this play is
+unmodelled"* — and at ordering time those are the difference between never explored and undervalued.
+
+The arithmetic itself lives in `common.board_delta` (the closed-form observation synthesis) and
+`common.apply_engine` (the one-step engine drive), so this module stays what it was designed to be:
+the CONTRACT, in one file, over plain data.
 
 ## Three fates, and a silent no-op is never one of them (Issue #259 §3b, ruled 2026-08-01)
 
@@ -302,7 +320,21 @@ class Footprint:
     #: Does taking this option REVEAL information (draw / search / reveal)? A revealer changes the
     #: OPTION SET, not only the board, so it can never join a commutative block whatever its
     #: read/write sets say — reordering around a reveal changes what the later choices are.
+    #:
+    #: **No entry in :data:`FOOTPRINTS` sets it, and that is correct rather than an omission**: it is
+    #: a property of the CARD, so it is armed per-option by :func:`option_footprint` off
+    #: `snapshot_coverage.REVEALING_CLAUSES` (POC-T4/2, Issue #383). A KIND does not reveal; a
+    #: Pokégear does.
     reveals_information: bool = False
+    #: ``{(zone, serial)}`` — WHICH instances this option reads, for the zones
+    #: `snapshot_coverage.ELEMENT_ZONES` declares instance-separable (developer ruling 2026-08-04,
+    #: recorded in ADR-0098 Amendment D). Empty means UNRESOLVED, which conflicts: being
+    #: element-level is a licence to speak instance-wise, never an obligation to.
+    read_elements: frozenset[tuple[str, int]] = frozenset()
+    #: ``{(zone, serial)}`` — the same for writes. A KIND has no instance, so every entry in
+    #: :data:`FOOTPRINTS` leaves both empty and :func:`commutes` is unchanged by the ruling.
+    #: :func:`option_footprint` is where instances exist, and therefore where the refinement lives.
+    write_elements: frozenset[tuple[str, int]] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -359,17 +391,35 @@ class Refusal:
 #: a card's text. Everything else defaults to the fail-closed `Footprint()` — incomplete, so it
 #: commutes with nothing. `_PLAY` is the fourth closed-form kind and is deliberately INCOMPLETE: a
 #: Trainer play writes whatever its Effect Clauses write, which is per-card, so the KIND cannot
-#: claim a complete footprint. T4 supplies the per-option footprint by unioning
-#: `snapshot_coverage.CLAUSE_WRITES` over the card's clauses, on top of `_PLAY`'s structural floor.
+#: claim a complete footprint. :func:`option_footprint` is the per-OPTION answer (POC-T4/2,
+#: Issue #383) — it unions `snapshot_coverage.CLAUSE_WRITES` over the card's clauses on top of this
+#: floor and arms `reveals_information` off `REVEALING_CLAUSES`. **This table is unchanged by that**,
+#: and deliberately so: a KIND still cannot claim what a CARD writes, so `commutes` licenses exactly
+#: what it licensed before.
 #:
 #: **A kind whose footprint touches an `owed` zone must not be trusted as MODELLED until that zone is
 #: homed** — that is §3c's "hard, loud failure rather than a silent zero" as a rule T4 can check, via
 #: :func:`footprints_writing_unhomed`. Modelling a transition whose write-set the snapshot cannot
 #: hold produces a delta that under-reports, and an under-reported delta is a pruned option.
 FOOTPRINTS: dict[int, Footprint] = {
+    # `attached_tools` joined at T4/1 (Issue #382) and is not a widening of what the kind does — it
+    # is the declaration catching up with a card type the kind always carried. A Pokémon Tool
+    # *"arrives as OptionType.ATTACH exactly like an Energy"* (`common/strategy/context.py`), and it
+    # writes the TOOL zone rather than the Energy one and spends no allowance. Declaring only the
+    # Energy leg made this footprint under-report for every Tool equip, which is the direction
+    # :class:`Footprint` calls *"worse than none"*. It changes no `commutes()` answer — `_ATTACH`
+    # already conflicts with every complete footprint on `my_hand_ids` / `bodies_in_play` — and
+    # `attached_tools` is HOMED, so `footprints_writing_unhomed()` stays empty.
+    #
+    # `damage_counters` joined for the same reason and from the same measurement: a Tool's flat HP
+    # grant lands the instant it is attached, on both the current and the maximum — `ms_mirror_1000`
+    # f13, Hero's Cape (1159) taking a Staryu from 70/70 to 170/170 — and `damage_counters` is the
+    # zone that homes the HP read (`…active.hp_remaining`), exactly as `snapshot_coverage` already
+    # reads Gravity Mountain's `hp_delta`.
     _ATTACH: Footprint(
         reads=frozenset({"my_hand_ids", "bodies_in_play", "allowance_energy_attached"}),
-        writes=frozenset({"attached_energy", "my_hand_ids", "allowance_energy_attached"}),
+        writes=frozenset({"attached_energy", "attached_tools", "damage_counters", "my_hand_ids",
+                          "allowance_energy_attached"}),
         complete=True),
     _EVOLVE: Footprint(
         reads=frozenset({"my_hand_ids", "bodies_in_play"}),
@@ -450,14 +500,20 @@ def footprints_writing_unhomed() -> dict:
 
     ⚠️ **What this guard cannot reach, so no later reader trusts it further than it goes**
     (Issue #282). It is keyed on :data:`FOOTPRINTS`, which is per-KIND, and the one kind whose whole
-    content is a card effect — `_PLAY` — is deliberately absent from that table, with T4 to supply a
-    per-OPTION footprint by unioning `snapshot_coverage.CLAUSE_WRITES` over the card's clauses. **A
-    card with no clauses unions to the empty set**, so a `_PLAY` whose effect the compendium has
-    never heard of reads as writing NOTHING and passes here in silence. That is not hypothetical:
-    Premium Power Pro (1141), Black Belt's Training (1211) and Brave Bangle (1175) all return `None`
-    from `card_effects.json`, and their whole effect is the parsed `CardStat.damageBoost` triple.
-    `snapshot_coverage.clauses_writing_unhomed()` has the same blind spot for the same reason — it
-    walks the compendium, and these cards are not in it.
+    content is a card effect — `_PLAY` — carries only a structural FLOOR there. The per-OPTION answer
+    is :func:`option_footprint` (POC-T4/2, Issue #383).
+    **A card with no clauses unions to the empty set**, so a `_PLAY` whose effect the compendium has
+    never heard of writes NOTHING as far as any clause walk can tell and passes here in silence. That
+    is not hypothetical: Premium Power Pro (1141), Black Belt's Training (1211) and Brave Bangle
+    (1175) all return `None` from `card_effects.json`, and their whole effect is the parsed
+    `CardStat.damageBoost` triple. `snapshot_coverage.clauses_writing_unhomed()` has the same blind
+    spot for the same reason — it walks the compendium, and these cards are not in it.
+
+    **What DID close for those cards is one level up, and only there.** :func:`option_footprint`
+    refuses to call such a footprint complete — an absent compendium entry leaves ``clauses_cover``
+    at `None`, which fails closed — so the three cards commute with nothing instead of reading as
+    "writes nothing, therefore conflicts with nobody". That protects the COMMUTATIVITY licence; it
+    does not put a zone in any registry, so this function is exactly as blind to them as it was.
 
     So this function answers *"does a declared write-set name a zone with no home?"*, never *"is the
     write-set declared at all?"*. The second question belongs to the ENUMERATION
@@ -475,20 +531,321 @@ def footprints_writing_unhomed() -> dict:
     return out
 
 
-def commutes(kind_a: int, kind_b: int) -> bool:
-    """May Issue #263 collapse these two orderings into one candidate?
+def footprints_commute(a: Footprint, b: Footprint) -> bool:
+    """**The disjointness test itself**, over two footprints — the ONE home of Issue #263's
+    commutativity rule.
 
     True iff **both** footprints are complete, **neither** reveals information, neither reads what
     the other writes, and they do not both write the same field. Every clause is a veto, and the
-    default answer is False — an unknown footprint commutes with nothing, including itself."""
-    a, b = footprint(kind_a), footprint(kind_b)
+    default answer is False — an unknown footprint commutes with nothing, including itself.
+
+    Two doors open onto this and neither re-spells it: :func:`commutes` asks it per KIND (the
+    kind-table answer) and :func:`option_footprint` produces the per-OPTION footprints a caller pairs
+    here. A second copy of the rule is the drift ADR-0087 charges for one store over, and it would be
+    invisible — each copy would stay internally consistent while disagreeing about one pair.
+
+    **Granularity is ELEMENT-level for the zones that hold instances** — the T0 §3b contract
+    extension the developer GRANTED on 2026-08-04 (Issue #383 §B item 2, requested as a wave-packet
+    ruling line on Issue #263; the ruling is recorded in ADR-0098 Amendment D). For a zone
+    in `snapshot_coverage.ELEMENT_ZONES`, two writes collide only when they name the SAME instance;
+    every other zone stays whole-zone, which is what keeps the spec's own required rejections:
+    ``bench_occupancy`` still refuses two Basics contending for the last Bench slot, and
+    ``allowance_energy_attached`` still refuses two Energy attaches.
+
+    **Unresolved beats precise.** A footprint that names an element zone without naming an instance
+    is an UNKNOWN there and conflicts with every other write to it, however precisely the other side
+    named itself. That is what keeps a targetless `_RETREAT` and a whole-hand shuffle
+    non-commutative, and it is why the refinement widens what can be PROVED disjoint without widening
+    what is ASSUMED disjoint."""
     if not (a.complete and b.complete):
         return False
     if a.reveals_information or b.reveals_information:
         return False
-    if a.reads & b.writes or b.reads & a.writes:
+    if _collides(a.reads, a.read_elements, b.writes, b.write_elements):
         return False
-    return not (a.writes & b.writes)
+    if _collides(b.reads, b.read_elements, a.writes, a.write_elements):
+        return False
+    return not _collides(a.writes, a.write_elements, b.writes, b.write_elements)
+
+
+def _collides(zones_x, elements_x, zones_y, elements_y) -> bool:
+    """Do these two zone-sets touch, once element granularity is applied?
+
+    One helper for all three of :func:`footprints_commute`'s comparisons, so the read-vs-write and
+    write-vs-write questions cannot drift apart — they are the same disjointness question asked over
+    different pairs of sets.
+
+    A shared zone collides unless BOTH sides resolved it to instances AND those instances are
+    disjoint. Three ways to collide, in the order they are checked: the zone is not
+    instance-separable at all; one side left it unresolved; or they named the same instance."""
+    for zone in zones_x & zones_y:
+        if zone not in snapshot_coverage.ELEMENT_ZONES:
+            return True
+        here = {s for z, s in elements_x if z == zone}
+        there = {s for z, s in elements_y if z == zone}
+        if not here or not there or (here & there):
+            return True
+    return False
+
+
+def commutes(kind_a: int, kind_b: int) -> bool:
+    """May Issue #263 collapse these two orderings into one candidate, judging by KIND alone?
+
+    The kind-level door onto :func:`footprints_commute`. `_PLAY` can never pass here, because a
+    Trainer play writes whatever its Effect Clauses write and the KIND cannot claim a complete
+    footprint for that — :func:`option_footprint` is the per-option answer."""
+    return footprints_commute(footprint(kind_a), footprint(kind_b))
+
+
+def option_footprint(model, option: Mapping, *, clauses_cover: bool | None = None) -> Footprint:
+    """**The per-OPTION footprint** — the kind's structural floor plus this card's own clause writes
+    (POC-T4/2, Issue #383; the design named at :data:`FOOTPRINTS`).
+
+    ``clauses_cover`` is the SAME tri-state :func:`fate` takes and means the same thing:
+    `True` = the card's Effect Clauses cover its whole printed effect, `False` = Issue #300's
+    *partial* verdict, `None` = no compendium verdict (which includes *"this card has no printed
+    effect at all"*, a distinction only the caller can make — see :func:`fate`'s closing paragraph).
+
+    **Three fail-closed rules, each of which has already cost something somewhere:**
+
+    1. **A card with NO clauses is UNKNOWN, never an empty write-set.** A union over no clauses is
+       ``frozenset()``, which reads as *"conflicts with nobody"* and would license every reorder
+       involving the card. That is not hypothetical — Premium Power Pro (1141), Black Belt's Training
+       (1211) and Brave Bangle (1175) return nothing from `card_effects.json` while their whole effect
+       is the parsed `CardStat.damageBoost` triple, and it is the same blind spot
+       :func:`footprints_writing_unhomed` records. **An empty clause list therefore cannot be
+       completed by ``clauses_cover=True`` either**, which is a real gate and not a restatement of
+       the `None` one: `CardEffects.clauses_cover` returns `None` for a card it has never heard of,
+       but a CALLER may pass `True` (its own join, which :func:`fate` requires it to make), and
+       without this gate that would complete a footprint over the compendium's silence.
+    2. **A clause value nobody declared makes the whole footprint unknown.** Contributing no zones
+       and calling the result exhaustive is the under-report :class:`Footprint` calls *worse than
+       none*; `snapshot_coverage.CLAUSE_WRITES` is the registry and its audit test is what catches a
+       new clause kind at the source.
+    3. **Every zone a clause WRITES is also declared READ.** `CLAUSE_WRITES` is a write registry and
+       §3b's per-clause read-set is not shipped, so the reads are over-reported. That direction can
+       only make :func:`footprints_commute` refuse a block it might have allowed; under-reporting a
+       read is the direction that silently collapses two genuinely different lines into one
+       candidate.
+
+    Never raises — it runs on the ordering hot path, where a raise is a forfeited grader match over
+    an option we merely could not characterise. An unresolvable card yields the kind's floor, marked
+    incomplete."""
+    from common.board_delta import card_clauses      # the ONE home of the clause walk
+    if is_terminal(option):
+        return Footprint()                    # no transition, so no footprint to have
+    kind = transition_kind(option)
+    base = footprint(kind)
+    card = _option_card(model, option)
+    clauses = card_clauses(getattr(model, "combat", None), card[0]) if card is not None else ()
+    # A separate walk from `board_delta._clause_writes`, and deliberately so: that one RAISES on an
+    # undeclared value, on RNG and on a reveal, because a transition that cannot write the board must
+    # refuse. A footprint has no board to write — it must still DESCRIBE a revealing option, since
+    # describing one is how :func:`footprints_commute` vetoes it. Same registry, opposite policies,
+    # which is why the walk is not shared while the clause lookup (`card_clauses`) is.
+    #
+    # `clause_zones` is tracked apart from the floor so rule 3 can reach a zone the floor ALREADY
+    # writes: `_PLAY` writes `bodies_in_play` structurally and declares no read of it, while a `gust`
+    # clause both writes and reads it. Folding the two sets first would drop exactly that overlap.
+    clause_zones, reveals, undeclared = set(), False, False
+    for clause in clauses:
+        for value in snapshot_coverage.clause_values(clause):
+            zones = snapshot_coverage.CLAUSE_WRITES.get(value)
+            if zones is None:
+                undeclared = True
+                continue
+            clause_zones |= zones
+            reveals = reveals or value in snapshot_coverage.REVEALING_CLAUSES
+    # Rule 1, enforced rather than merely described: `clauses_cover is True` completes the `_PLAY`
+    # floor only when there are CLAUSES for it to have covered. A caller asserting coverage over an
+    # empty clause list is asserting it over the compendium's silence, and that silence is exactly
+    # what makes 1141 / 1211 / 1175 read as writing nothing.
+    complete = ((base.complete or (clauses_cover is True and bool(clauses)))
+                and clauses_cover is not False
+                and not undeclared
+                and card is not None)
+    # The narrowing applies to the FLOOR, and the clause union goes on TOP of the result — never the
+    # other way round, or a Supporter's `gust` would have its `bodies_in_play` write stripped back off
+    # by the sub-case narrowing that knows nothing about it.
+    drop = _structural_drop(model, kind, card)
+    reads = (set(base.reads) - drop) | clause_zones
+    writes = (set(base.writes) - drop) | clause_zones
+    hand_serial, body_serial = _option_serials(model, option)
+    body_serial = _deployed_body_serial(model, kind, card, hand_serial, body_serial)
+    return Footprint(reads=frozenset(reads), writes=frozenset(writes), complete=bool(complete),
+                     reveals_information=reveals,
+                     read_elements=_elements(reads, hand_serial, body_serial),
+                     write_elements=_elements(writes, hand_serial, body_serial))
+
+
+def _elements(zones, hand_serial, body_serial) -> frozenset:
+    """``{(zone, serial)}`` for the element zones this option can actually RESOLVE.
+
+    Which serial keys which zone comes from `snapshot_coverage`'s own split
+    (:data:`~common.snapshot_coverage.CARD_KEYED_ZONES` /
+    :data:`~common.snapshot_coverage.BODY_KEYED_ZONES`, from which `ELEMENT_ZONES` is derived) rather
+    than from a second list here — the two serials come from different halves of the option
+    (``area``/``index`` vs ``inPlayArea``/``inPlayIndex``) and mixing them up would be silent: a
+    footprint would still look precise while naming the wrong instance.
+
+    A zone whose key is unavailable — a `_RETREAT` names no body, a `_PLAY` names no in-play target —
+    is simply left out, which makes it *unresolved* and therefore conflicting. Silence here is the
+    fail-closed answer, never an assertion that the zone is untouched."""
+    out = set()
+    for zone in zones & snapshot_coverage.ELEMENT_ZONES:
+        serial = (hand_serial if zone in snapshot_coverage.CARD_KEYED_ZONES
+                  else body_serial if zone in snapshot_coverage.BODY_KEYED_ZONES else None)
+        if serial is not None:
+            out.add((zone, serial))
+    return frozenset(out)
+
+
+def _deployed_body_serial(model, kind: int, card, hand_serial, body_serial):
+    """A Basic deploy's new body carries the HAND CARD's serial, so `bodies_in_play` is resolvable
+    for a `_PLAY` that names no in-play target at all.
+
+    Read at source rather than assumed — `board_delta._play` builds the benched body as
+    ``{"id": card_id, "serial": card.get("serial"), ...}`` from the very card it took out of my hand.
+
+    **Narrow on purpose, and the narrowness is the soundness.** This fires ONLY for a Basic Pokémon.
+    A Trainer's `_PLAY` also declares `bodies_in_play` in the structural floor, but a Trainer that
+    moves a body moves someone ELSE's — a `gust` writes the OPPONENT's Active — so keying that write
+    by my hand card's serial would be false precision, and false precision is the one direction that
+    licenses a reorder which changes the board. A Trainer therefore leaves the zone UNRESOLVED, which
+    conflicts.
+
+    Without this, two Basic deploys are refused by an unresolved `bodies_in_play` rather than by
+    `bench_occupancy` — still the right answer, but for the wrong reason, which would leave the
+    ruling's named last-Bench-slot rejection doing no actual work. Found by mutating
+    `ELEMENT_ZONES` and watching the rejection test stay green."""
+    if body_serial is not None or kind != _PLAY or card is None or hand_serial is None:
+        return body_serial
+    stat = model.card_stat(card[0])
+    is_basic = bool(getattr(stat, "is_pokemon", False)) and not getattr(stat, "evolvesFrom", None)
+    return hand_serial if is_basic else None
+
+
+def _option_serials(model, option: Mapping):
+    """``(hand card serial, targeted body serial)``, either of which may be None.
+
+    The engine's ``serial`` is the instance number, and it is the SAME field ADR-0091's Option
+    Equivalence deliberately IGNORES. That is not a contradiction and is worth stating once: the
+    fingerprint drops it because two indistinguishable bodies are ONE decision, while commutativity
+    keeps it because two writes to indistinguishable bodies are still TWO writes. Same field,
+    opposite questions.
+
+    Never raises — it runs on the ordering hot path, and an unresolvable reference must degrade to
+    *unresolved* (which conflicts) rather than to a crash.
+
+    **The seat is honoured, not assumed.** An option carries `playerIndex` (the field
+    `option_equivalence.option_fingerprint` reads for exactly this), and an option naming the
+    OPPONENT's board must resolve to None here rather than to my own body at that index — a serial
+    from the wrong side is FALSE PRECISION, which is the one direction that can license a bad
+    reorder. Unreachable today (only `_ATTACH` and `_EVOLVE` carry complete footprints and both
+    target my own bodies), and guarded anyway: the cost is one comparison and the failure mode is
+    silent."""
+    from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND
+    obs = getattr(model, "source_obs", None) or {}
+    players = ((obs.get("current") or {}).get("players")) or []
+    seat = int(getattr(model, "my_index", 0))
+    named = option.get("playerIndex")
+    if named is not None and int(named) != seat:
+        return None, None                     # the option is about THEIR board; I key nothing here
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+
+    def serial_at(cards, index):
+        if not isinstance(index, int) or not 0 <= index < len(cards) or not cards[index]:
+            return None
+        return (cards[index] or {}).get("serial")
+
+    # A `_PLAY` names its hand index bare, with no `area` at all — the same default `_option_card`
+    # takes, and the reason this cannot just filter on `area == AREA_HAND`.
+    hand = serial_at(me.get("hand") or (), option.get("index")) \
+        if option.get("area") in (None, AREA_HAND) else None
+    area, index = option.get("inPlayArea"), option.get("inPlayIndex")
+    if area == AREA_ACTIVE:
+        body = serial_at(me.get("active") or (), index)
+    elif area == AREA_BENCH:
+        body = serial_at(me.get("bench") or (), index)
+    else:
+        body = None
+    return hand, body
+
+
+def _structural_drop(model, kind: int, card) -> frozenset:
+    """Zones to DROP from the KIND's structural floor, narrowing it to the ONE sub-case this option
+    actually takes.
+
+    **Why a kind footprint over-declares at all.** `_ATTACH` and `_PLAY` each cover several sub-cases
+    that never co-occur, and a KIND cannot know which one a given option is — so its entry is the
+    UNION, which is the right answer for a table and the wrong one for an option. The per-OPTION
+    answer can tell them apart, and it must: while `_PLAY` declared every sub-case's zones, two Basic
+    deploys collided on `stadium`, both discards and two allowances that neither of them writes, so
+    the last-Bench-slot rejection the 2026-08-04 ruling NAMES was never the thing doing the
+    rejecting. Found by mutating `snapshot_coverage.ELEMENT_ZONES` and watching the test stay green.
+
+    **Applied to the FLOOR only, never to the clause union.** A Supporter's `gust` writes
+    `bodies_in_play`, which the Pokémon sub-case's narrowing would otherwise strip back off — so the
+    caller subtracts this from ``base`` and unions the clause zones on top of the result, in that
+    order. Reversing them would delete a real card effect's write.
+
+    Every sub-case below is the write-set `common.board_delta` actually returns, read off that module
+    rather than reasoned about:
+
+    * `_ATTACH` **Tool leg** — `attached_tools` (+ `damage_counters` for a flat HP grant); spends no
+      allowance, since `docs/rules.md` §3 caps only the MANUAL Energy attachment
+      (*"Attach Energy from hand | **1** (manual attachment; card effects can add more)"*) and a Tool
+      is an ordinary Trainer play.
+    * `_ATTACH` **Energy leg** — `attached_energy` + `allowance_energy_attached`.
+    * `_PLAY` **Basic Pokémon deploy** — exactly
+      ``{"my_hand_ids", "bodies_in_play", "bench_occupancy"}``.
+    * `_PLAY` **Stadium** — `my_hand_ids`, `stadium`, `allowance_stadium_played`, and whichever
+      discard owned the displaced one (`docs/rulebook.txt` L78 — *"Each player has their own discard
+      pile"*), so BOTH discards stay declared: which one is written depends on whose Stadium it was,
+      and that is not decidable from the option.
+    * **Anything else** — no narrowing at all. A Trainer's `_PLAY` has no measured structural
+      write-set (`board_delta._play` refuses it outright), so the full floor stands. Fail closed.
+
+    `damage_counters` is kept for EVERY Tool rather than only one whose `hpBonus` clears
+    `applies_to_holder` — the deliberate over-report, since an extra declared write can only make
+    :func:`footprints_commute` refuse a block while a missing one would license a bad reorder.
+
+    :data:`FOOTPRINTS`'s `_ATTACH` entry is the UNION of two legs that never both fire, because a
+    KIND cannot know which card is being attached. The per-OPTION answer can, and it must: without
+    this split an Energy and a Tool would collide on `allowance_energy_attached` and Issue #263's own
+    worked triple could not commute even under the element ruling.
+
+    Read at source rather than inferred — `board_delta._attach` branches on `CardStat.cardType`:
+
+    * **Tool leg** — writes `attached_tools`, plus `damage_counters` for a flat HP grant. Spends no
+      allowance: `docs/rules.md` §3 caps only the MANUAL Energy attachment, and *"a Tool is an
+      ordinary Trainer play with no such cap"*.
+    * **Energy leg** — writes `attached_energy` and `allowance_energy_attached`.
+    * Both write `my_hand_ids`.
+
+    `damage_counters` is kept for EVERY Tool rather than only for one whose `hpBonus` clears
+    `applies_to_holder`, which is the deliberate over-report: an extra declared write can only make
+    :func:`footprints_commute` refuse a block, while a missing one would license a bad reorder."""
+    if card is None or kind not in (_ATTACH, _PLAY):
+        return frozenset()
+    stat = model.card_stat(card[0])
+    if stat is None:
+        return frozenset()                      # unknown card — keep the union, fail closed
+    floor = footprint(kind)
+    everything = floor.reads | floor.writes
+    if kind == _ATTACH:
+        if getattr(stat, "is_tool", False):
+            return frozenset({"attached_energy", "allowance_energy_attached"})
+        if getattr(stat, "is_energy", False):
+            return frozenset({"attached_tools", "damage_counters"})
+        return frozenset()                      # neither leg — `board_delta._attach` refuses it
+    # `_PLAY`, and only for the two sub-cases `board_delta._play` actually models.
+    if getattr(stat, "is_pokemon", False) and not getattr(stat, "evolvesFrom", None):
+        return frozenset(everything - {"my_hand_ids", "bodies_in_play", "bench_occupancy"})
+    if getattr(stat, "is_stadium", False):
+        return frozenset(everything - {"my_hand_ids", "stadium", "allowance_stadium_played",
+                                       "my_discard_contents", "their_discard_contents"})
+    return frozenset()                          # a Trainer play — no measured floor, so keep it all
 
 
 @dataclass(frozen=True)
@@ -500,8 +857,14 @@ class OutcomeClass:
     decisions the reveal actually poses rather than the number of cards it could name."""
 
     #: Probability of this class, from `common.deck_odds` hypergeometrics. Never an engine shuffle.
+    #:
+    #: For a SEARCH it is an availability weight normalised over the matching pool, not a chance-node
+    #: probability — the deck is revealed to the searcher, so the only chance it rides is the prize
+    #: split (`common.board_expectation`'s header carries the epistemics and the consequence: a
+    #: search's :meth:`Expectation.expected` is a LOWER bound on the choice node's true max).
     probability: float
-    #: The resulting StateModel for this branch. `None` until T4 (Issue #263).
+    #: The resulting StateModel for this branch. Filled by `common.board_expectation.expectation`
+    #: (POC-T4/2, Issue #383); `None` on a hand-built class.
     model: object | None = None
     #: The Option-Equivalence fingerprint this class collapses.
     fingerprint: tuple = ()
@@ -520,9 +883,12 @@ class Expectation:
     An expectation shape usable only inside a sequence expansion would leave every draw Supporter
     unranked, which is the pruning failure the ordering amendment exists to fix.
 
-    **Branching is capped** — the cap value is T4's (Issue #263); this seam promises only the shape.
-    Whatever cap is chosen, the truncation must be REPORTED rather than silent: a capped enumeration
-    that reads as a complete one is the "no silent caps" failure, and it would make an
+    **Branching is capped**, and this seam promises only the shape: the cap VALUE is
+    `common.board_expectation.BRANCH_CAP` (POC-T4/2, Issue #383), a structural constant chosen from
+    the measured post-Option-Equivalence menu-width P95 rather than a tuned strategy weight — that
+    module's header carries the derivation and the cross-check against the grader's own per-decision
+    floor. Whatever cap is chosen, the truncation must be REPORTED rather than silent: a capped
+    enumeration that reads as a complete one is the "no silent caps" failure, and it would make an
     under-explored line look confidently valued."""
 
     classes: Sequence[OutcomeClass] = field(default_factory=tuple)
@@ -740,8 +1106,13 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     turn. Callers test `is_terminal` first; that is the contract. (A terminal option is an API
     misuse, not a modelling gap, which is why it raises where a gap refuses.)
 
-    Raises `NotImplementedError` for a MODELLED or ENGINE-RESOLVED fate until T4 (Issue #263)
-    implements them — never an identity return, for the reason in this module's header.
+    **The MODELLED transition may still refuse, at :data:`OPTION_SCOPE`** (POC-T4/1, Issue #382).
+    The fate answers *"is this option's card effect resolvable?"*; the transition answers *"can the
+    seam WRITE the resulting board?"*, and those are different questions for a kind whose structural
+    half is uniform. A Supporter's `_PLAY` is the worked case: the card leaving my hand is structural
+    for every play, but the effect IS the play, and the engine does not even move the card to the
+    discard on the same step when the effect opens a select. `common.board_delta` names what it
+    cannot write, and the refusal carries that sentence to the telemetry line.
 
     **Quarantine** (ADR-0098 decision 4): when the parity lane finds a divergence for an option kind,
     that kind is marked unverified and refuses here, so the planner degrades to always-expand and the
@@ -759,12 +1130,13 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     if how == UNDECLARED:
         return refuse(option, f"option kind {kind} is not in the seam's coverage table",
                       scope=UNDECLARED_SCOPE)
-    # The FATE is `fate`'s to decide — asked, never re-derived. A second copy of the resolution
+    # The FATE is `fate`'s to decide — asked ONCE, never re-derived. A second copy of the resolution
     # order here is the drift ADR-0087 charges for one store over, and it would be invisible: the
     # census mirrors `fate` while the composer calls this, so a disagreement would price the same
     # option two ways with nothing to say so. What this function adds is only the SCOPE.
-    if fate(option, depth=depth, search_api=search_api, deterministic=deterministic,
-            clauses_cover=clauses_cover) == REFUSED:
+    resolved = fate(option, depth=depth, search_api=search_api, deterministic=deterministic,
+                    clauses_cover=clauses_cover)
+    if resolved == REFUSED:
         # Quarantine, TERMINAL and UNDECLARED already returned above, so a refusal here is an ENGINE
         # precondition — and exactly which one is the work owed. Each gets its OWN scope, because the
         # coverage report needs to tell "we never proved this deterministic" from "the caller wired
@@ -786,21 +1158,119 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
         if search_api is None:
             return refuse(option, "no `_search_api` seam supplied, so there is no engine to resolve "
                                   "through", scope=NO_ENGINE_SCOPE)
-    raise NotImplementedError("apply_option is POC-T4 (Issue #263); T0 freezes the contract only")
+    if resolved == ENGINE_RESOLVED:
+        from common import apply_engine
+        after = apply_engine.resolve(model, option, search_api=search_api)
+        if after is None:
+            return refuse(
+                option,
+                "the engine route was eligible but produced no board — the observation carries no "
+                "`search_begin_input` (0 of 372 gate frames do), the option is not on this menu, or "
+                "the engine raised",
+                scope=NO_ENGINE_SCOPE)
+        return EngineResolved(model=after, kind=kind, clause_gap=_clause_gap(model, option))
+    return _modelled(model, option)
+
+
+def _modelled(model, option: Mapping):
+    """The closed-form transition: synthesize the post-action observation, then build a FRESH model.
+
+    Fresh rather than patched, for the memo-staleness reason `StateModel.rebuilt` spells out —
+    ``state_value`` caches its per-family dict on the model and nothing invalidates that key. The
+    rules arithmetic is `common.board_delta`'s, so this function contributes no card or rule
+    knowledge of its own and the parity lane has exactly one thing to diff.
+
+    Their side is REUSED when the synthesis never reached across the table, which is most of the
+    time: the delta reports that from what it actually wrote, rather than the caller re-deriving it
+    from a hash of the result."""
+    from common import board_delta
+    obs = getattr(model, "source_obs", None)
+    if not obs:
+        return refuse(option, "the model carries no source observation to transition from — it was "
+                              "constructed directly rather than through `StateModel.build`")
+    context = ((obs.get("select") or {}).get("context"))
+    try:
+        delta = board_delta.transition(obs, option, seat_index=getattr(model, "my_index", 0),
+                                       combat=model.combat, context=context)
+    except board_delta.Unmodellable as gap:
+        return refuse(option, str(gap))
+    return model.rebuilt(delta.obs, reuse_their_side=delta.shares_opponent)
+
+
+def _clause_gap(model, option: Mapping) -> str:
+    """The ENGINE-RESOLVED telemetry line: ``"<card id> <card name>: <what the vocabulary cannot
+    say>"``.
+
+    It must name the CARD (Issue #299): with the route open to every declared non-terminal kind, a
+    backlog line reading *"kind 7"* covers 699 corpus `_PLAY` options at once and is unreadable as
+    work. The card is resolved through the option's own zone references — the same
+    ``(area, index)`` / ``(inPlayArea, inPlayIndex)`` pair `common.option_equivalence` fingerprints —
+    so an option shape that carries no resolvable reference degrades to naming the kind, which is
+    strictly better than naming nothing."""
+    card = _option_card(model, option)
+    kind = transition_kind(option)
+    if card is None:
+        return (f"option kind {kind}: no Effect Clause covers this option's card effect, so the "
+                f"engine resolved it")
+    cid, name = card
+    return f"{cid} {name}: no Effect Clause covers this effect, so the engine resolved it"
+
+
+def _option_card(model, option: Mapping):
+    """``(card id, card name)`` for the card an option names, or None.
+
+    Prefers the HAND reference (the card being played/attached/evolved into) over the in-play one,
+    because that is the card whose effect the vocabulary is missing. A `_PLAY` names its hand index
+    bare, with no ``area`` at all, which is why the first pass defaults to the hand rather than
+    skipping. Never raises: it runs on the telemetry path of the ordering hot loop."""
+    from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_DISCARD, AREA_HAND
+    obs = getattr(model, "source_obs", None) or {}
+    players = ((obs.get("current") or {}).get("players")) or []
+    seat = int(getattr(model, "my_index", 0))
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+    zones = {AREA_HAND: "hand", AREA_DISCARD: "discard",
+             AREA_ACTIVE: "active", AREA_BENCH: "bench"}
+    for area_key, index_key in (("area", "index"), ("inPlayArea", "inPlayIndex")):
+        area = option.get(area_key)
+        index = option.get(index_key)
+        zone = zones.get(area) if area is not None else ("hand" if area_key == "area" else None)
+        if zone is None or not isinstance(index, int) or index < 0:
+            continue
+        cards = me.get(zone) or ()
+        if index >= len(cards) or not cards[index]:
+            continue
+        cid = cards[index].get("id")
+        stat = model.card_stat(cid)
+        return cid, (getattr(stat, "name", None) or "?")
+    return None
+
+
+#: Option kinds the parity lane has found diverging. **Empty, and that is a MEASUREMENT** — the lane
+#: over the committed 377-trace corpus replays every modelled kind divergence-free
+#: (`tests/parity/test_apply_seam_parity.py`). It is a ruling record, not a scratch pad: an entry is
+#: added only with the divergence filed, exactly as a gate baseline is only re-captured on a verdict.
+QUARANTINED_KINDS: frozenset[int] = frozenset()
 
 
 def quarantined_kinds() -> frozenset[int]:
     """Option kinds the parity lane has found diverging — the planner must not enumerate through
     these (ADR-0098 decision 4).
 
-    Empty until T4 wires the parity lane. The registry lives here rather than in the planner because
-    the seam is what diverges: the planner is one consumer of that fact, and a second consumer (the
-    coverage gate's report, the telemetry line) must read the same answer.
+    Reads :data:`QUARANTINED_KINDS`, which the lane's findings populate. The registry lives here
+    rather than in the planner because the seam is what diverges: the planner is one consumer of that
+    fact, and a second consumer (the coverage gate's report, the telemetry line) must read the same
+    answer.
 
     **Telemetry is not optional.** A quarantined kind must be named, with its reason, wherever the
     agent reports what it did — a degraded agent that looks merely bad is indistinguishable from a
-    broken one, and the whole point of quarantine is that the difference is visible."""
-    return frozenset()
+    broken one, and the whole point of quarantine is that the difference is visible.
+
+    **Two names for two jobs**, which is why this is a function over a constant rather than either
+    alone: :data:`QUARANTINED_KINDS` is the RULING RECORD — the data a human edits when a divergence
+    is filed — while this is the READ every consumer makes, and a read is what a test can
+    `monkeypatch` to exercise the degraded path without touching a ruling record. Both are exported
+    for that reason, not by oversight."""
+    return QUARANTINED_KINDS
 
 
 # Two exported names changed MEANING in Issue #299 without changing spelling, and both are called
@@ -815,8 +1285,8 @@ __all__: Sequence[str] = (
     "KIND_SCOPE", "OPTION_SCOPE", "UNDECLARED_SCOPE", "QUARANTINE_SCOPE", "DEPTH_SCOPE",
     "NONDETERMINISM_SCOPE", "NO_ENGINE_SCOPE",
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",
-    "Footprint", "FOOTPRINTS", "footprint", "commutes",
+    "Footprint", "FOOTPRINTS", "footprint", "commutes", "footprints_commute", "option_footprint",
     "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "UnsupportedTransition",
     "transition_kind", "coverage", "fate", "is_terminal", "refuse", "must_expand", "require_model",
-    "apply_option", "quarantined_kinds",
+    "apply_option", "quarantined_kinds", "QUARANTINED_KINDS",
 )

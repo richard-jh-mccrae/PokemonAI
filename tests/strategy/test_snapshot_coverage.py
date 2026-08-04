@@ -714,6 +714,32 @@ def test_a_this_turn_damage_boost_is_ENUMERATED_and_homed_on_both_sides():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0003")
+def test_element_zones_are_real_zones_and_the_required_rejections_stay_whole_zone():
+    """`ELEMENT_ZONES` is the developer-GRANTED element-level granularity (2026-08-04, Issue #263 /
+    Issue #383 §B item 2; ruling line in ADR-0098 Amendment D). Two properties, and the
+    second one IS the ruling's teeth.
+
+    1. **Every member is a zone this registry actually declares.** A footprint that spoke about a
+       zone `WRITABLE` has never heard of would look like analysis while corresponding to nothing —
+       the same one-vocabulary rule `test_footprints_speak_the_coverage_registrys_field_vocabulary`
+       keeps one module over.
+    2. **The zones that must NOT be instance-separable are absent, by name.** The ruling granted the
+       refinement *on condition* that these stay whole-zone, because each is what refuses a case the
+       spec requires refused: `bench_occupancy` refuses two Basics contending for the last Bench slot
+       (the orders reach different boards), and the four per-turn allowances refuse a second Energy
+       attach, a second Supporter and a second Stadium (`docs/rules.md` §3 caps each at 1).
+       `special_conditions` joins them because `docs/rules.md` §8 puts conditions on the Active alone
+       and the engine holds the five flags on `PlayerState`, so there is no per-body instance at all.
+    """
+    assert sc.ELEMENT_ZONES <= set(sc.BY_ID), sorted(sc.ELEMENT_ZONES - set(sc.BY_ID))
+    must_stay_whole = {"bench_occupancy", "allowance_energy_attached", "allowance_supporter_played",
+                       "allowance_stadium_played", "allowance_retreat_used", "special_conditions",
+                       "stadium"}
+    assert must_stay_whole <= set(sc.BY_ID)              # positive control: they are real zones
+    assert sc.ELEMENT_ZONES & must_stay_whole == set()
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0003")
 def test_the_unhomed_guard_cannot_see_a_card_with_no_clauses_at_all():
     """**The limitation Issue #282 asks to be recorded, as a test rather than only a docstring.**
 

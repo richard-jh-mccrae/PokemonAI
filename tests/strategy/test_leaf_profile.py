@@ -230,6 +230,42 @@ KO_LINE_PROFILE = frozenset({
 #: scalar replaces all of that with reads that memoize on the ONE model. The field count went up
 #: because the model is now doing the work that used to happen beside it.
 #:
+#: ── RECONCILED 2026-08-04 (POC-T4/1, Issue #382) ─────────────────────────────────────────────────
+#: The **247 us** row above and the **8.14 ms** row further down were both labelled *"`state_value`
+#: on a FRESH model"* and read as a 33x contradiction. They are not in conflict: they measure
+#: different BOARDS built with different SUPPLIERS, and nothing said so. Measured on this box,
+#: dragapult_ex, 54 committed corpus frames, 5 passes each — the three conditions isolated:
+#:
+#:     mid-game corpus board, `needs` resolver live (a LIVE decision)      2.46 ms median / 4.39 p95
+#:     mid-game corpus board, `needs` -> None                              0.88 ms median / 2.16 p95
+#:     turn-1-SHAPED board (no bench either side, no hand), `needs` None    0.35 ms median / 0.47 p95
+#:
+#: Two multiplicative factors, both nameable:
+#:
+#: 1. **Board population** (~2.5x). Bodies on both Benches, attachments and discards are what the
+#:    per-body walks cost. The 247 us row was taken on a real turn-1 engine drive
+#:    (`test_planner_engine.py`), whose end board is nearly empty; the ms-scale rows are mid-game
+#:    correction frames. `STATE_VALUE_PROFILE`'s Issue #281 block already hints at this — it calls
+#:    the 40-frame corpus *"much richer boards"* — but never joined it to the 247 us figure.
+#: 2. **The `needs` DP** (~2.8x). `mine.needs` is LAZY and its resolver returns None on a board with
+#:    no injected hand, so the assignment never runs — which is exactly the condition of the develop
+#:    rollout's simulated end board (`planner._leaf_needs_resolution`). A live decision has a real
+#:    hand, so the DP fires. This is the factor the 247 us row's own note omits, and it is the larger
+#:    of the two.
+#:
+#: The residual to 33x is machine and era: the 8.14 ms row predates two of this file's later
+#: re-measures and names only *"this box"*. The canonical figure on THIS box, via the shipped
+#: instrument over the whole corpus (`python tools/train/value_lab.py`, 371 frames):
+#: **median 2.89 ms | P95 6.44 ms | max 30.87 ms** — consistent with Issue #291's P95 6.57 ms at
+#: `bb9bd69`, and with the 0.88 ms `needs`-free row above once the DP is added back.
+#:
+#: **Which one Issue #385 must size its beam against: the CORPUS figure (P95 ~6.4 ms), not 247 us.**
+#: The composer's 1-ply ordering runs on the LIVE decision board with the Pilot's suppliers threaded
+#: — the condition `value_lab` measures — once per candidate option. The 247 us figure is real but
+#: describes a stripped simulated end board reached through the develop rollout, which is the path
+#: Issue #386 deletes. Sizing against it would under-budget the composer by an order of magnitude.
+#: ─────────────────────────────────────────────────────────────────────────────────────────────────
+#:
 #: Every row below is a read some family in the registry is on record as making:
 #:   * `mine.attack_payoff` / `mine.bench_names` — `readiness` prices the best attack a body can actually
 #:     pay off with ON THIS BOARD, not the printed `CardStat.maxDamage` roll-up (Issue #287,
@@ -238,7 +274,10 @@ KO_LINE_PROFILE = frozenset({
 #:     attach that completes it. `bench_names` is the bench-partner condition's input, and it
 #:     REPLACED an inline comprehension inside `damage_facts` rather than adding a walk.
 #:
-#:     Re-pinned with a measurement, as this pin's own rule demands (60 corpus frames, this box):
+#:     Re-pinned with a measurement, as this pin's own rule demands (60 corpus frames, this box).
+#:     **See the RECONCILED block above before comparing these to the 247 us row** — they measure a
+#:     different board with a different `needs` supplier, and the ~33x gap is accounted for there
+#:     rather than being the contradiction it reads as:
 #:
 #:         `state_value` on a FRESH model   before 8.37 ms median / 17.28 ms p95
 #:                                           after 8.14 ms median / 13.79 ms p95

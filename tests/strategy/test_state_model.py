@@ -17,7 +17,21 @@ Card facts VERIFIED at source (`data/EN_Card_Data.csv`, re-verified for this fil
   * Boss's Orders (1182, Supporter): "Switch in 1 of your opponent's Benched Pokémon to the Active
     Spot." — moves WHICH of their bodies is Active and nothing else.
   * Riolu (677) Basic HP 80; Mega Lucario ex (678) — Aura Jab ``{F}`` 130 / Mega Brave ``{F}{F}`` 270.
-  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}.
+  * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}, and Issue #384 adds 6 = {F}.
+
+Issue #384 corrects three attack records this cast used to carry INCOMPLETE. Each was re-verified by
+running the shipped parsers (`provider.build_attack_stats`) over the card's own ``Effect
+Explanation`` text in `data/EN_Card_Data.csv`, so the fixture carries what the runtime carries rather
+than a hand-reading of the sentence:
+  * **Phantom Dive** — *"Put 6 damage counters on your opponent's Benched Pokémon in any way you
+    like."* → ``benchSpread=60`` (6 counters x 10).
+  * **Aura Jab** — *"Attach up to 3 Basic {F} Energy cards from your discard pile to your Benched
+    Pokémon in any way you like."* → ``recoverN=3``, ``recoverEnergyType={F}``,
+    ``recoverTarget="bench"``, ``recoverSource="discard"``.
+  * **Mega Brave** — *"During your next turn, this Pokémon can't use Mega Brave."* →
+    ``nextTurnSameAttackLock=True``. **NOT ``nextTurnSelfLock``**: the sentence names the attack
+    ITSELF, so the lock forbids one attack rather than the turn, and `strategy/sequence.py` prices
+    the two differently on purpose (270+130 == 130+270, so a same-attack lock forfeits nothing).
 """
 import pytest
 
@@ -34,8 +48,17 @@ COLORLESS, GRASS, FIRE, PSYCHIC, FIGHTING, DARKNESS, DRAGON = 0, 1, 2, 5, 6, 7, 
 DRAGAPULT, MUNKIDORI, RIOLU, MEGA_LUC = 121, 112, 677, 678
 JET_HEADBUTT, PHANTOM_DIVE = 9121, 9122
 AURA_JAB, MEGA_BRAVE = 982, 983
+#: Riolu's ONLY attack, and this cast used to drop it. `data/EN_Card_Data.csv` Card ID 677:
+#: **Accelerating Stab ``{F}`` 30**, *"During your next turn, this Pokémon can't use Accelerating
+#: Stab."* -> ``nextTurnSameAttackLock``, by the shipped parser (Issue #384).
+ACCELERATING_STAB = 9677
+#: An OFF-POOL body carrying the shape a PARTIALLY-KNOWN attack table produces: a `maxDamage`
+#: roll-up with an empty `attacks` tuple. Not a card, deliberately — no id in `data/EN_Card_Data.csv`
+#: — so it makes no card-fact claim that could be wrong, which is exactly what went wrong when this
+#: case rode on Riolu's incorrectly-empty attack list (Issue #384).
+PARTIAL = 990001
 CRISPIN = 1198
-E_R, E_P, E_D = 2, 5, 7
+E_R, E_P, E_D, E_F = 2, 5, 7, 6
 # The two bench-GATED attackers in the whole card set (`parse_attack_bench_requirement` over
 # `data/EN_Card_Data.csv` finds exactly these two), so the payoff gate is tested on both shapes:
 # a single named partner and an "and" list that needs BOTH.
@@ -50,8 +73,14 @@ _STATS = {
                         minAttackCost=1, minCostDamage=70,
                         attacks=(JET_HEADBUTT, PHANTOM_DIVE), cardType=0),
     MUNKIDORI: CardStat(MUNKIDORI, synthetic=True, name='Munkidori', hp=70, energyType=DARKNESS, cardType=0),
-    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=2,
-                    maxDamage=30, attacks=(), cardType=0),
+    # ``attacks``/``minAttackCost`` corrected by Issue #384 for the reason the module docstring
+    # gives: Riolu really does print an attack — **Accelerating Stab ``{F}`` 30**, *"During your next
+    # turn, this Pokémon can't use Accelerating Stab"* — so its cheapest cost is 1, not the 2 this
+    # row used to claim, and its attack list is not empty. The sibling cast in `test_state_value.py`
+    # was corrected in the same change; leaving one of the two behind is how the pair drifts.
+    RIOLU: CardStat(RIOLU, synthetic=True, name='Riolu', hp=80, energyType=FIGHTING, minAttackCost=1,
+                    maxDamage=30, maxDamageCost=1, minCostDamage=30,
+                    attacks=(ACCELERATING_STAB,), cardType=0),
     MEGA_LUC: CardStat(MEGA_LUC, synthetic=True, name='Mega Lucario ex', hp=340, megaEx=True, energyType=FIGHTING,
                        evolvesFrom="Riolu", maxDamage=270, minAttackCost=1, minCostDamage=130,
                        attacks=(AURA_JAB, MEGA_BRAVE), cardType=0),
@@ -70,12 +99,23 @@ _STATS = {
     E_R: CardStat(E_R, name="Basic {R} Energy", cardType=5, energyType=FIRE),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=5, energyType=PSYCHIC),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=5, energyType=DARKNESS),
+    E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
+    PARTIAL: CardStat(PARTIAL, synthetic=True, name='Partial Table Body', hp=80,
+                      energyType=FIGHTING, minAttackCost=2, maxDamage=30, attacks=(), cardType=0),
 }
 _ATTACKS = {
     JET_HEADBUTT: AttackStat(JET_HEADBUTT, damage=70, cost=1, energyTypes=(COLORLESS,)),
-    PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC)),
-    AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
-    MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING)),
+    # The three riders/locks corrected by Issue #384 — see the module docstring for each sentence
+    # and the parser run that produced these fields.
+    PHANTOM_DIVE: AttackStat(PHANTOM_DIVE, damage=200, cost=2, energyTypes=(FIRE, PSYCHIC),
+                             benchSpread=60),
+    AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,),
+                         recoverN=3, recoverEnergyType=FIGHTING, recoverTarget="bench",
+                         recoverSource="discard"),
+    MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2, energyTypes=(FIGHTING, FIGHTING),
+                           nextTurnSameAttackLock=True),
+    ACCELERATING_STAB: AttackStat(ACCELERATING_STAB, damage=30, cost=1, energyTypes=(FIGHTING,),
+                                  nextTurnSameAttackLock=True),
     COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, energyTypes=(FIGHTING,),
                             requiresBench=("Lunatone",), ignoresWeakness=True,
                             ignoresResistance=True),
@@ -143,7 +183,9 @@ def _obs(me, opp, *, energy_attached=False, supporter_played=False, turn=5, own_
 
 def _model(me, opp, **kw):
     probe = kw.pop("probe", None)
-    return StateModel.build(_obs(me, opp, **kw), combat=_combat(), deck=DECK, probe=probe)
+    deck = kw.pop("deck", None)
+    return StateModel.build(_obs(me, opp, **kw), combat=_combat(),
+                            deck=DECK if deck is None else deck, probe=probe)
 
 
 def _pult(**kw):
@@ -905,13 +947,20 @@ def test_the_payoff_of_an_unreadable_CARD_makes_no_claim():
 
 
 def test_an_UNRESOLVABLE_attack_table_degrades_to_the_card_level_roll_up():
-    """A partial provider must not silently zero a real attacker. This fixture's Riolu carries
-    `maxDamage` 30 with an EMPTY attack tuple — the shape a partially-known table produces — and the
-    read then answers with the card-level roll-up under a null attack id, exactly as
+    """A partial provider must not silently zero a real attacker. `PARTIAL` carries `maxDamage` 30
+    with an EMPTY attack tuple — the shape a partially-known table produces — and the read then
+    answers with the card-level roll-up under a null attack id, exactly as
     `CombatMath.predicted_max_damage` falls back and exactly the pair the retired `payoff_attack`
     gave. The gate is a new REASON to price 0, never a new way to reach one; and an attack whose
-    record is missing is an attack whose condition is unreadable, so no gate is being waived."""
-    m = _model(_player(active=_poke(RIOLU, hp=80), prize=4),
+    record is missing is an attack whose condition is unreadable, so no gate is being waived.
+
+    **It carries an OFF-POOL card id on purpose** (Issue #384). This case used to ride on Riolu,
+    whose row declared `attacks=()` — and that was not a partial table, it was a card fact the
+    fixture had wrong: Riolu really does print Accelerating Stab. Correcting the row broke this
+    test, which is the tell that the test was leaning on the error rather than on the shape it
+    means. A body that is in no card set cannot have its card facts be wrong, so the data shape is
+    now stated directly instead of borrowed from a real card."""
+    m = _model(_player(active=_poke(PARTIAL, hp=80), prize=4),
                _player(active=_pult(serial=3), prize=6))
     assert m.mine.active.stat.maxDamage == 30 and not m.mine.active.stat.attacks
     assert m.mine.attack_payoff(m.mine.active) == (None, 30.0)
@@ -937,3 +986,155 @@ def test_bench_names_is_the_bench_and_only_the_bench():
                _player(active=_pult(serial=9), prize=6))
     assert m.mine.bench_names == ("Lunatone", "Riolu")
     assert m.mine.damage_facts.bench_names == m.mine.bench_names
+
+
+# ── the ATTACK PROFILE — Issue #384's ONE new accessor ─────────────────────────────────────────
+#
+# `attack_payoff` above answers *which attack pays best, matchup-free*, and returns
+# `(attack_id, damage)`. `attack_ev`'s extractor needs a different and larger answer about ONE named
+# attack: its damage against the body actually in front of me at all three bounds, whether I can pay
+# for it, and the rider / economy / lock facts `AttackStat` carries and NOTHING on the model used to
+# expose. So this is a sibling of `attack_payoff`, not a widening of it.
+#
+# It lives on `StateModel` rather than on `MySide` (Issue #384's body suggests the latter) because
+# the rider legs read THEIR Bench and the damage leg reads THEIR Active — a two-sided question, and
+# `damage_context` already sits on the model for exactly that reason.
+
+#: My Mega Lucario ex line, so `forward_index` can see Riolu -> Mega Lucario ex (the SINGLE hop,
+#: `docs/rulebook.txt` Appendix 1) and the recover rider's recipient-need leg has a forward form to
+#: measure against.
+LUC_DECK = [E_F] * 4 + [RIOLU] * 3 + [MEGA_LUC] * 3
+
+
+def _luc_model(*, my_energies=(E_F, E_F), bench=(), discard=(), their_active=None,
+               their_bench=(), energy_attached=True):
+    """MY Mega Lucario ex Active against THEIR Dragapult ex — the profile fixture.
+
+    ``energy_attached=True`` by default so the Attach Budget adds nothing and affordability is a
+    fact about what is attached rather than about what the deck might still supply."""
+    return _model(
+        _player(active=_poke(MEGA_LUC, hp=340, energies=list(my_energies)), bench=list(bench),
+                discard=list(discard), prize=4),
+        _player(active=their_active or _pult(serial=9), bench=list(their_bench), prize=4),
+        deck=LUC_DECK, energy_attached=energy_attached)
+
+
+def test_attack_profile_carries_the_rider_and_lock_fields_attack_payoff_drops():
+    """The substrate gap Issue #384 exists to close, stated as an assertion.
+
+    `attack_payoff` returns `(attack_id, damage)` and the model exposed NOTHING else off
+    `AttackStat` — no `benchSnipe`, no `benchSpread`, no `recoverN`, neither next-turn lock. Every
+    one of those is an input `attack_ev` takes, so `state_value` could not have produced its kwargs
+    without reaching past the model, which the sole-supplier ruling forbids."""
+    m = _luc_model()
+    jab = m.attack_profile(m.mine.active, AURA_JAB)
+    brave = m.attack_profile(m.mine.active, MEGA_BRAVE)
+    assert jab.attack_id == AURA_JAB and brave.attack_id == MEGA_BRAVE
+    assert jab.recover_n == 3                                   # Aura Jab: the recycle rider…
+    assert (jab.self_lock, jab.same_attack_lock) == (False, False)      # …and no lock
+    assert brave.recover_n == 0                                 # Mega Brave: no rider…
+    assert (brave.self_lock, brave.same_attack_lock) == (False, True)   # …and a SAME-ATTACK lock,
+    #                            not a full self lock — the card's sentence names the attack ITSELF
+
+
+def test_attack_profile_prices_damage_against_their_active_at_all_three_bounds():
+    """The bound triple is what the caller's coin policy reads. A DETERMINISTIC attack reads its
+    printed damage under every bound (`strategy/damage.py`: *"A deterministic attack (bounds None)
+    reads printed under every bound"*), so floor == exact == ceiling here and the policy has nothing
+    to decide — the degenerate case that must not need a branch."""
+    m = _luc_model()
+    jab = m.attack_profile(m.mine.active, AURA_JAB)
+    assert (jab.damage, jab.damage_floor, jab.damage_ceiling) == (130.0, 130.0, 130.0)
+    brave = m.attack_profile(m.mine.active, MEGA_BRAVE)
+    assert (brave.damage, brave.damage_floor, brave.damage_ceiling) == (270.0, 270.0, 270.0)
+
+
+def test_attack_profile_carries_a_matchup_free_printed_read_beside_the_matchup_one():
+    """Two damage reads, and they are different questions rather than one read twice.
+
+    ``damage`` asks the damage model against the body in front of me, so Weakness, Resistance and a
+    prevention Ability all reach it; ``printed`` is matchup-FREE, and it is what the horizon-2
+    follow-up leg must use — the defender next turn is not this one. Neither Dragapult ex (no
+    Weakness, no Resistance in this set) nor Lunatone (Weakness **{G}**) doubles a {F} attacker, so
+    the pair agrees on both boards here; the point of asserting both is that a later disagreement is
+    diagnostic rather than noise."""
+    m = _luc_model(their_active=_poke(LUNATONE, hp=110, serial=9))
+    jab = m.attack_profile(m.mine.active, AURA_JAB)
+    assert jab.damage == 130.0 and jab.printed == 130.0
+
+
+def test_attack_profile_affordability_is_the_attach_budgets_answer():
+    """A COST question, answered by the shipped Budget rather than by a raw energy count —
+    `threat.blind_to` forbids a second opinion about affordability outright."""
+    m = _luc_model(my_energies=(E_F,))
+    assert m.attack_profile(m.mine.active, AURA_JAB).affordable is True        # {F}: paid
+    assert m.attack_profile(m.mine.active, MEGA_BRAVE).affordable is False     # {F}{F}: not
+
+
+def test_attack_profile_recover_units_is_the_min_of_the_three_closed_form_bounds():
+    """`Pilot._recover_units` re-derived from StateModel facts (Issue #384): the printed ceiling,
+    the matching Basic-Energy fuel in the rider's SOURCE zone, and the recipients' remaining NEED.
+
+    Riolu's own Accelerating Stab costs {F} = 1, but need is measured against the FORWARD form too,
+    and Mega Lucario ex's dearest attack is Mega Brave at {F}{F} = 2 — which is the point of that
+    leg: a Riolu counts the Energy its Mega Brave will cost, not the Energy its own attack costs
+    today. Riolu holds none, and four {F} sit in my discard. So the three bounds are 3 / 4 / 2 and
+    the NEED binds."""
+    m = _luc_model(bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4)
+    assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 2.0
+
+
+def test_attack_profile_recover_units_binds_on_the_fuel_when_the_discard_is_thin():
+    """The SOURCE-zone bound, isolated. Aura Jab sources from the discard pile — PUBLIC in both
+    directions, so this is a sound count and never an estimate — and one {F} there caps it at one."""
+    m = _luc_model(bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F])
+    assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 1.0
+
+
+def test_attack_profile_recover_units_is_zero_with_no_recipient_in_scope():
+    """Aura Jab's ``recoverTarget`` is **"bench"** (*"…to your Benched Pokémon"*), so an empty Bench
+    attaches nothing however full the discard is. The empty-Bench guard `_recover_units` keeps as a
+    special case of the need bound, kept here too."""
+    m = _luc_model(discard=[E_F] * 4)
+    assert m.attack_profile(m.mine.active, AURA_JAB).recover_units == 0.0
+
+
+def test_attack_profile_recover_units_is_zero_for_an_attack_with_no_rider():
+    m = _luc_model(bench=[_poke(RIOLU, hp=80, serial=2)], discard=[E_F] * 4)
+    assert m.attack_profile(m.mine.active, MEGA_BRAVE).recover_units == 0.0
+
+
+def test_attack_profile_reports_their_reachable_bench_and_the_riders_own_allocation():
+    """The rider legs. ``rider_targets`` is the (hp, prize) of their benched bodies a rider can
+    actually reach; ``spread_ko_prizes`` is the shipped knapsack's answer about WHERE the counters
+    land. The accessor answers about MY Active's attacks, so this board hands my seat the
+    Dragapult."""
+    m = _model(
+        _player(active=_pult(energies=[E_R, E_P]), prize=4),
+        _player(active=_poke(RIOLU, hp=80, serial=9),
+                bench=[_poke(RIOLU, hp=40, serial=10), _poke(MEGA_LUC, hp=60, serial=11)],
+                prize=4),
+        deck=DECK, energy_attached=True)
+    dive = m.attack_profile(m.mine.active, PHANTOM_DIVE)
+    assert dive.bench_spread == 60 and dive.bench_snipe == 0
+    assert sorted(dive.rider_targets) == [(40, 1), (60, 3)]
+    # 60 counters: Mega Lucario ex alone (cost 60, 3 prizes) beats Riolu alone (cost 40, 1 prize).
+    assert dive.spread_ko_prizes == 3
+    assert dive.snipe_ko_prizes == 0
+
+
+def test_attack_profile_fails_closed_on_an_attack_that_does_not_resolve():
+    """No record, no claim — the model's standing direction. A profile is still returned so the
+    caller has no None branch to forget, and every leg reads its zero."""
+    m = _luc_model()
+    ghost = m.attack_profile(m.mine.active, 999999)
+    assert ghost.attack_id == 999999 and ghost.affordable is False
+    assert (ghost.damage, ghost.damage_floor, ghost.damage_ceiling, ghost.printed) == (0.0,) * 4
+    assert (ghost.bench_snipe, ghost.bench_spread, ghost.recover_n,
+            ghost.recover_units) == (0, 0, 0, 0.0)
+
+
+def test_attack_profile_fails_closed_on_a_body_that_is_not_there():
+    m = _luc_model()
+    empty = m.attack_profile(None, AURA_JAB)
+    assert empty.affordable is False and empty.damage == 0.0 and empty.rider_targets == ()

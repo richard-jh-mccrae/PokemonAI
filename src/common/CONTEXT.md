@@ -521,6 +521,22 @@ evolved end-card a development line aims at), `maxDamage` (the printed roll-up t
 "the payoff attack" for the printed-max attack (`BodyView.payoff_attack` is DELETED — it could not
 see the Bench)
 
+**Attack Profile**:
+Everything ONE named attack of mine is worth asking about, as one record: `AttackProfile`, from
+`StateModel.attack_profile(body, attack_id)` (POC-T4/3, Issue #384). The **Attack Payoff** above
+answers *which* attack pays best and answers it matchup-free in two fields; this answers a larger
+question about an attack the caller has ALREADY named — its damage against the body actually in
+front of me at all three oracle bounds, whether the Attach Budget can pay for it, its bench riders
+and their allocation, its energy-recycle units, and its attacker-side next-turn locks. It exists
+because none of that last group had ANY model surface: `attack_payoff` drops them by construction,
+so `attack_ev`'s extractor would have had to reach past the model to `AttackStat`, which the
+sole-supplier ruling forbids. It lives on `StateModel` rather than on a side because the damage leg
+reads THEIR Active and the rider legs read THEIR Bench — a two-sided question, like
+`damage_context`. Fields are FACTS, never prices; the crossing into prizes is `state_value`'s.
+_Avoid_: "profile" for the **Read**'s opponent archetype recognition (that is Scouting's word),
+"attack profile" for `CardStat`'s printed roll-up (that is `maxDamage`), and using it as a second
+answer to *which attack is best* — that question has one home and it is the Attack Payoff
+
 **Stranded Payoff**:
 An evolved win-condition (a Stage-1/2/Mega) fetched or held with **no deployable base** — no Line
 pre-evolution in play **or hand** to evolve it from. A dead card until a base appears, so at a search
@@ -1572,12 +1588,40 @@ approximations, doom vs threat-clock re-expressions) and the substrate for the s
 scalar (#145). Holds two **SideState**s plus the cross-side facts (prize race, the matched Read). Fields
 are **lazy** — derived on first access and memoized — so the model is *maximal* in what it OFFERS while
 each consumer pays only for what it READS; adding a field costs an unrelated consumer nothing. Derived
-from the obs, never mutated by an `apply(action)` delta path: the engine's simulated obs already IS the
-authoritative post-action state, so a Python action-applier would be a second rules engine (rejected —
-ADR-0059's trace-verification cost is the precedent).
+from the obs, and **never mutated at all** — there is still no `apply(action)` delta path, and since
+POC-T4/1 (Issue #382) there is exactly ONE sanctioned route to a hypothetical board:
+`StateModel.rebuilt(obs)`, which takes a whole synthesized observation from the **Board Delta** and
+builds a FRESH model over it. The older phrasing here rejected a delta path outright *"because the
+engine's simulated obs already IS the authoritative post-action state"*; that premise held while every
+hypothetical came from a forked simulation, and the differencing composer (Issue #263) is precisely the
+caller for which it does not (ADR-0098 declined the fork on measurement). What survives is the reason
+the rejection was worth writing down — an IN-PLACE applier is a second rules engine whose failure mode
+is silent divergence — and it is answered by a fresh model per hypothetical plus the parity lane, not
+by prohibition.
 _Avoid_: Board (the flat 129-field dataclass it supersedes — Board becomes a derived adapter over it),
 obs / game state (the raw engine dict the StateModel derives FROM), belief (a StateModel is derived fact
-plus the Read; a *sampled world* is #150's unit and carries its own StateModel)
+plus the Read; a *sampled world* is #150's unit and carries its own StateModel), patched model /
+incremental update (there is none: a hypothetical is a fresh build, because `state_value` memoizes its
+per-family dict onto the model and nothing invalidates that key)
+
+**Board Delta**:
+The **closed-form transition** the apply seam performs: one engine STEP, synthesized arithmetically as
+a fresh observation, copy-on-write over the pre-state's zones (`common/board_delta.py`, POC-T4/1,
+Issue #382). It is what lets the Turn Planner price a play by differencing without spending the
+2-vCPU grader budget on a forked simulation per branch. Three properties are load-bearing: it never
+mutates its input (the planner holds the pre-state while it evaluates alternatives), it shares every
+untouched zone by reference (so a hypothetical and its pre-state share the opponent's whole side
+whenever the transition never crossed the table, which is what licenses `their_side=` reuse), and what
+it cannot write it REFUSES rather than approximating — a silently-unchanged board prices the option at
+exactly 0.0 delta, which at 1-ply ordering reads as *never explore this*.
+**The unit is the ENGINE's step, not the human notion of a play**, and that distinction is the module's
+single most load-bearing fact: a retreat OPTION carries no target and spends only the once-per-turn
+allowance (the cost and the promotion are separate selects), and a Trainer whose effect opens a select
+does not even reach the discard on the same step. Both were measured on the committed native traces,
+not assumed.
+_Avoid_: apply / transition (bare — `apply_option` is the SEAM and owns the fate resolution; the Board
+Delta is the arithmetic underneath it), simulation / rollout (an engine steps those; this steps
+nothing), diff (that is the **parity lane**'s comparison, one layer up)
 
 **SideState**:
 One side's half of the **StateModel** — mine or theirs — and the unit of **reuse**. Asymmetric by

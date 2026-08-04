@@ -300,6 +300,69 @@ WRITABLE: tuple[Zone, ...] = (
 #: id -> Zone.
 BY_ID = {z.id: z for z in WRITABLE}
 
+#: Zones that are CONTAINERS OF INSTANCES, so two writes to *different* instances do not collide —
+#: the element-level granularity the developer GRANTED for Issue #263's commutativity licence on
+#: 2026-08-04 (Issue #383 §B item 2; the ruling line is in ADR-0098 Amendment D).
+#:
+#: The instance key is the engine's own ``serial`` — the SAME field ADR-0091's Option Equivalence
+#: ignores, which is not a coincidence and is worth stating: `option_equivalence` drops `serial`
+#: because two indistinguishable bodies are ONE decision, while this registry keeps it because two
+#: writes to indistinguishable bodies are still TWO writes. Same field, opposite questions.
+#:
+#: **Membership is the whole ruling, so read the exclusions as deliberate.** A zone is here only when
+#: it holds separable instances; anything a turn or a player owns as a WHOLE stays out, and that is
+#: what preserves the two rejections the spec requires:
+#:
+#: * ``bench_occupancy`` — OUT. Two Basics competing for the last Bench slot must not commute: the
+#:   orders reach different boards (one of them is not a legal play at all). The Bench's *slot count*
+#:   is one number, not a container of instances, even though the bodies in it are.
+#: * ``allowance_energy_attached`` / ``allowance_supporter_played`` / ``allowance_stadium_played`` /
+#:   ``allowance_retreat_used`` — OUT. Per-turn scalars: `docs/rules.md` §3 prints
+#:   *"Attach Energy from hand | **1** (manual attachment; card effects can add more)"*,
+#:   *"Play a Supporter | **1**"*, *"Play a Stadium | **1**"* and *"Retreat (manual) | **1**"*. Two
+#:   Energy attaches must not commute for exactly this reason.
+#: * ``special_conditions`` — OUT. `docs/rules.md` §8 puts them on the Active alone, and the engine
+#:   holds the five flags on `PlayerState`, so there is no per-body instance to key on.
+#: * ``stadium`` — OUT. One shared slot for the whole board (`docs/rulebook.txt` L135-137).
+#: * ``transient_grants`` — OUT, fail-closed rather than reasoned: ADR-0033 grants are scoped to a
+#:   turn and a side, and nothing has established that two grant writes are separable by body.
+#: * every deck / prize / hand-SIZE count — OUT. They are counts, not containers.
+#:
+#: Being element-level is a LICENCE, never an obligation: a footprint that names no instance for a
+#: zone in here is UNRESOLVED and conflicts with everything, which is how a `_RETREAT` (targetless —
+#: all 5807 offered occurrences in the parity corpus are the bare ``{"type": 12}``) or a
+#: whole-hand shuffle stays correctly non-commutative. `apply_option.footprints_commute` owns that
+#: rule; this store owns only *which zones can be spoken about instance-wise*.
+#: Element zones keyed by the serial of the CARD the option names in hand.
+CARD_KEYED_ZONES: frozenset[str] = frozenset({"my_hand_ids"})
+
+#: Element zones keyed by the serial of the BODY the option targets in play.
+BODY_KEYED_ZONES: frozenset[str] = frozenset({
+    "bodies_in_play", "attached_energy", "attached_tools", "damage_counters"})
+
+#: **DERIVED, never listed twice.** A consumer needs both *"is this zone instance-separable?"* and
+#: *"which serial keys it?"*, and a hand-kept second copy of the membership is exactly the drift
+#: ADR-0087 charges for one store over — a zone added to one set and forgotten in the other would
+#: resolve to no key and silently stop being separable.
+ELEMENT_ZONES: frozenset[str] = CARD_KEYED_ZONES | BODY_KEYED_ZONES
+
+#: ⚠️ **Both discard zones are deliberately OUT, and this narrows the ruling as delivered.** The
+#: 2026-08-04 grant reads *"hand cards by `serial`, bodies by target `serial`, discard arrivals by
+#: `serial`"*, but the seam **cannot resolve the third** — and declaring a zone element-level while
+#: keying it wrongly is unsound in the one direction this whole registry exists to prevent (it would
+#: license a reorder that changes the board):
+#:
+#: * ``their_discard_contents`` — a card arriving in the OPPONENT's discard is never a card from my
+#:   hand, so my option's hand serial is simply the wrong key for it.
+#: * ``my_discard_contents`` — right for *"the Trainer I played lands in my discard"*, wrong for
+#:   every `cost` clause (`discard_1` / `discard_2` / `discard_3` / `discard_hand`) and for
+#:   `discard_own_energy`, where WHICH card is discarded is chosen at a follow-up select and is not
+#:   the played card at all.
+#:
+#: Left whole-zone until an option shape carries the arriving card's identity. Fail-closed costs
+#: nothing today: no two `_PLAY`s can commute anyway, because `_PLAY` writes whole-zone
+#: ``bench_occupancy`` and ``stadium``.
+
 #: The Effect Clause vocabulary (`card_effects.json`, ADR-0032) -> the zones each clause WRITES.
 #: Keys are the committed `kind`, `rider`, `effect` **and** `cost` values — all four, because all
 #: four are vocabulary a card can be written in. The audit test walks the compendium
