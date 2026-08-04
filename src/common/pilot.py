@@ -5135,6 +5135,26 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 return True
         return False
 
+    def _is_spent_utility_liability(self, card_id: int | None) -> bool:
+        """True for an in-play one-shot utility ex whose value is already cashed.
+
+        Meowth ex is the motivating source-verified case: id 1071's Last-Ditch Catch fires only when
+        played from hand onto the Bench, while Tuck Tail is 3 Energy for 60 damage and the body gives
+        up 2 prizes. This is not the broad utility-body read: Lunatone-style engines may still bank
+        mobility through Retreat Equity. It is the narrower "do not turn a spent support ex into a
+        larger giveaway while a real attacker can take the Energy" ruling."""
+        if card_id is None or not self.functions or not self.stats:
+            return False
+        stat = self.stats.get(card_id)
+        if stat is None or not getattr(stat, "is_ex_body", False):
+            return False
+        roles = set(self._roles_of(card_id))
+        if roles & _ATTACKER_ROLES:
+            return False
+        if card_id in (self._line_preevo_set() | self._wincon_set()):
+            return False
+        return "supporter_tutor" in set(self.functions.tags(card_id))
+
     def _attach_retreat_equity(self, target: dict | None, units: int, burst: bool) -> float:
         """**Retreat Equity** — the mobility an attach buys by paying toward the body's printed
         Retreat cost (ADR-0069 §1; glossary in `common/CONTEXT.md`).
@@ -5188,9 +5208,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
           * `evaporation_loss` — a `discard_eot` Energy that leaves play UNCASHED costs its own worth,
                                so ending the turn genuinely beats torching an Ignition on turn 1.
         Gates land PER-AXIS: the board-evaluated role gate and the overkill cap zero the ATTACK AXIS
-        only (a role-gated body still banks mobility and fuel); the survival gate zeroes `build` for a
-        doomed Active EXCEPT a wincon-Line pre-evolution (the evolution-escape: Energy carries through
-        evolution, and a Mega evolving does not end the turn); evaporation is GLOBAL.
+        only (a role-gated body still banks mobility and fuel). A spent one-shot utility liability is
+        narrower and harsher: while a real attacker can take the Energy, it banks no attack, mobility
+        or fuel value. The survival gate zeroes `build` for a doomed Active EXCEPT a wincon-Line
+        pre-evolution (the evolution-escape: Energy carries through evolution, and a Mega evolving
+        does not end the turn); evaporation is GLOBAL.
 
         `tactical` is what the option actually scores: the marginal scaled into the rung band, less
         the sub-band resource tie-break that spends the renewable card among equals. It MAY be
@@ -5299,7 +5321,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             self._is_utility_body(tcid) or self._is_draw_engine_body(tcid)
             or self._partner_absent(tcid, obs)
             or (bool(declared) and not (_ATTACKER_ROLES & declared)))
-        role_gated = non_attacking and self._attacker_alternative_in_play(obs, target)
+        attacker_alternative = self._attacker_alternative_in_play(obs, target)
+        role_gated = non_attacking and attacker_alternative
+        spent_utility_gated = self._is_spent_utility_liability(tcid) and attacker_alternative
         # The OVERKILL cap: once the ACTIVE already KOs the opponent's Active AND what it can afford
         # RIGHT NOW already covers the biggest body on their board, a bigger attack buys nothing more
         # this game-state — develop a second threat instead (82750161-59). Opponent-aware, so it
@@ -5315,15 +5339,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 overkill = True
         # The EVAPORATION gate, global: a `discard_eot` Energy that buys nothing before it is
         # discarded at end of turn banks nothing durable — and costs what it was worth.
-        cashed = this_turn > 0 and not role_gated and not overkill
+        gated_off = role_gated or spent_utility_gated
+        cashed = this_turn > 0 and not gated_off and not overkill
         evaporates = burst and not cashed
         resource_cost = self._role_value(ecid) if (is_attach and ecid is not None) else 0.0
         evaporation_loss = resource_cost if evaporates else 0.0
         # -- the axes-sum -------------------------------------------------------------------------
-        attack_axis = 0.0 if (role_gated or overkill or evaporates) else max(
+        attack_axis = 0.0 if (gated_off or overkill or evaporates) else max(
             this_turn, build, accel_value, 0.0)
-        retreat_equity = self._attach_retreat_equity(target, units, burst)
-        ability_fuel = (_ATTACH_ABILITY_FUEL if (not burst and is_attach
+        retreat_equity = 0.0 if spent_utility_gated else self._attach_retreat_equity(target, units, burst)
+        ability_fuel = (_ATTACH_ABILITY_FUEL if (not spent_utility_gated and not burst and is_attach
                                                 and self._attach_fuels_dormant_ability(estat, target))
                         else 0.0)
         marginal = attack_axis + retreat_equity + ability_fuel - evaporation_loss
@@ -5342,9 +5367,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "build": round(build, 2), "accel_value": round(accel_value, 2),
                 "retreat_equity": round(retreat_equity, 2), "ability_fuel": round(ability_fuel, 2),
                 "evaporation_loss": round(evaporation_loss, 2), "units": units,
-                "role_gated": role_gated, "overkill": overkill, "doomed": not survives,
+                "role_gated": role_gated, "spent_utility_gated": spent_utility_gated,
+                "overkill": overkill, "doomed": not survives,
                 "burst": burst, "evaporates": evaporates,
-                "line_value": round(0.0 if role_gated else self._role_value(tcid), 1),
+                "line_value": round(0.0 if gated_off else self._role_value(tcid), 1),
                 "resource_cost": round(resource_cost, 1)}
 
     def _burst_capped_tonight(self, obs: dict, view, this_turn: float,

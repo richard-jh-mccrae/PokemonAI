@@ -31,7 +31,7 @@ _TOOL, _BASIC_ENERGY, _SPECIAL_ENERGY = 2, 5, 6
 # EnergyType codes (src/cg/api.py): 3 = WATER, 5 = PSYCHIC, 6 = FIGHTING, 7 = DARKNESS.
 WATER, PSYCHIC, FIGHTING, DARK = 3, 5, 6, 7
 
-MEGA, STARYU, IGNITION, CAPE = 1031, 1030, 17, 1100
+MEGA, STARYU, MEOWTH, IGNITION, CAPE = 1031, 1030, 1071, 17, 1100
 W_ENERGY, P_ENERGY, F_ENERGY, D_ENERGY = 3, 5, 6, 7
 LUNATONE, SOLROCK = 675, 676        # the co-dependent engine pair (deck-declared partners)
 MUNKIDORI, DUNSPARCE = 112, 65      # the Ability-fuel body / the free-retreat draw engine
@@ -44,7 +44,7 @@ WATER_GUN = 103                     # Staryu: {W} 20
 POWER_GEM = 104                     # Lunatone: {F}{F} 50
 COSMIC_BEAM = 105                   # Solrock: {F} 70
 MIND_BEND = 106                     # Munkidori: {P}● 60 (Adrena-Brain wants a {D})
-GNAW = 107                          # TEF Dunsparce: ● 10, NO retreat cost
+GNAW, TUCK_TAIL = 107, 108          # TEF Dunsparce Gnaw / Meowth ex Tuck Tail
 
 
 def _attach(hand_idx, area, in_idx):
@@ -69,6 +69,9 @@ def _stats():
                             abilityEnergyTypes=(DARK,), attacks=(MIND_BEND,)),
         DUNSPARCE: CardStat(DUNSPARCE, synthetic=True, name='Dunsparce', hp=60, maxDamage=10, minCostDamage=10,
                             minAttackCost=1, maxDamageCost=1, retreatCost=0, attacks=(GNAW,)),
+        MEOWTH: CardStat(MEOWTH, name="Meowth ex", hp=170, ex=True, maxDamage=60,
+                         minCostDamage=60, minAttackCost=3, maxDamageCost=3, hasAbility=True,
+                         retreatCost=1, attacks=(TUCK_TAIL,)),
         W_ENERGY: CardStat(W_ENERGY, synthetic=True, name="Water", cardType=_BASIC_ENERGY, energyType=WATER),
         P_ENERGY: CardStat(P_ENERGY, synthetic=True, name="Psychic", cardType=_BASIC_ENERGY, energyType=PSYCHIC),
         F_ENERGY: CardStat(F_ENERGY, synthetic=True, name="Fighting", cardType=_BASIC_ENERGY, energyType=FIGHTING),
@@ -85,6 +88,7 @@ def _stats():
         COSMIC_BEAM: AttackStat(COSMIC_BEAM, damage=70, cost=1, energyTypes=(FIGHTING,)),
         MIND_BEND: AttackStat(MIND_BEND, damage=60, cost=2, energyTypes=(PSYCHIC, 0)),
         GNAW: AttackStat(GNAW, damage=10, cost=1, energyTypes=(0,)),
+        TUCK_TAIL: AttackStat(TUCK_TAIL, damage=60, cost=3, energyTypes=(0, 0, 0)),
     })
 
 
@@ -102,7 +106,8 @@ def _pilot(*, roles=None, partners=None, lines=_LINES, attach_value=True, functi
                      else {SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
                      lines=list(lines))
     funcs = functions if functions is not None else CardFunctions(
-        {IGNITION: ["discard_eot"], SHUFFLE: ["shuffle_hand"]})
+        {MEOWTH: ["search", "supporter_tutor"], IGNITION: ["discard_eot"],
+         SHUFFLE: ["shuffle_hand"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=funcs, attach_value=attach_value)
 
@@ -268,6 +273,39 @@ def test_the_role_gate_zeros_the_attack_axis_only():
     assert lunatone["role_gated"] is True and lunatone["attack_axis"] == 0.0
     assert lunatone["retreat_equity"] > 0.0                  # mobility survives the attack-axis gate
     assert p.explain(obs).chosen == [1]                      # the Staryu attacker still wins
+
+
+@pytest.mark.req("REQ-ATTACH-DECIDER-0010")
+def test_spent_supporter_tutor_liability_banks_no_mobility_when_an_attacker_exists():
+    """Meowth ex's Last-Ditch Catch is an on-play Bench ability, verified at source
+    (`data/EN_Card_Data.csv` id 1071). Once the body is already in play, its utility value is spent:
+    funding its 3-Energy / 60-damage Tuck Tail or its 1-Retreat mobility must not compete with a real
+    attacker that can use the Energy."""
+    p = _pilot(roles={STARYU: ["starter"]}, partners={}, lines=_LINES)
+    bench = [{"id": MEOWTH, "energies": [], "hp": 170},
+             {"id": STARYU, "energies": [], "hp": 70}]
+    obs = _obs(bench, [{"id": W_ENERGY}], [_attach(0, BENCH, 0), _attach(0, BENCH, 1)])
+    w = p.explain(obs).attach_working
+    meowth, staryu = _row_for(w, 0), _row_for(w, 1)
+    assert meowth["spent_utility_gated"] is True
+    assert (meowth["attack_axis"], meowth["retreat_equity"],
+            meowth["ability_fuel"], meowth["marginal"]) == (0.0, 0.0, 0.0, 0.0)
+    assert staryu["build"] > 0.0
+    assert p.explain(obs).chosen == [1]
+
+
+@pytest.mark.req("REQ-ATTACH-DECIDER-0010")
+def test_spent_supporter_tutor_desperation_floor_still_exists_when_no_attacker_can_take_it():
+    """The ruling is not a veto. If the spent utility body is the only legal Energy home, the
+    existing desperation floor still lets the decider attach rather than pretend the card cannot be
+    spent."""
+    p = _pilot(roles={MEOWTH: []}, partners={}, lines=())
+    active = {"id": MEOWTH, "energies": [], "hp": 170}
+    obs = _obs([], [{"id": W_ENERGY}], [_attach(0, ACTIVE, 0), {"type": END}], active=active)
+    row = _row_for(p.explain(obs).attach_working, 0)
+    assert row["spent_utility_gated"] is False
+    assert row["tactical"] > 0.0
+    assert p.explain(obs).chosen == [0]
 
 
 @pytest.mark.req("REQ-ATTACH-DECIDER-0011")
