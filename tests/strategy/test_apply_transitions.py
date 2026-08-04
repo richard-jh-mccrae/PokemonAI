@@ -267,6 +267,25 @@ def test_evolving_RE_EVALUATES_a_special_energys_provision_against_the_new_stage
 
 
 @pytest.mark.req("REQ-APPLY-0002")
+def test_the_EVOLVED_body_is_itself_new_in_play_so_it_cannot_evolve_again_this_turn():
+    """The other half of `docs/rules.md` §4, and the one a reader is likelier to miss: the body that
+    ARRIVES by evolving is new in play too, so a Stage 1 played this turn cannot become a Stage 2 on
+    the same turn. Measured on the engine before it was modelled — `alakazam_9000` f127 shows the
+    evolved body carrying ``appearThisTurn: true`` — and undeclared until Issue #391 enumerated the
+    zone, which is why the parity lane could not have caught it going missing.
+
+    The precondition is the same rule read forward: the Riolu being evolved must NOT be new in play,
+    or the option would not be legal at all."""
+    obs = _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC]))
+    assert obs["current"]["players"][0]["active"][0].get("appearThisTurn") in (None, False)
+    after = _apply(obs, {"type": _EVOLVE, "area": HAND, "index": 0,
+                         "inPlayArea": ACTIVE, "inPlayIndex": 0})
+    assert after.mine.active.card_id == MEGA_LUC
+    assert after.mine.active.new_in_play is True
+    assert after.mine.active_raw["appearThisTurn"] is True
+
+
+@pytest.mark.req("REQ-APPLY-0002")
 def test_evolving_the_ACTIVE_clears_its_special_conditions():
     """`docs/rules.md` §4 and §8 — Special Conditions live on the Active alone and are cleared when
     it leaves the Active spot **or evolves**. The evolve half is the one easy to miss, because the
@@ -321,13 +340,22 @@ def test_the_retreat_option_carries_no_target_and_the_module_says_so_where_it_is
 def test_playing_a_basic_benches_it_fresh_and_marks_it_as_new_in_play():
     """A deploy lands a full-HP body on the Bench flagged `appearThisTurn`, which is what makes it
     unevolvable this turn (`docs/rules.md` §4 — *"Cannot evolve a Pokémon the turn it was
-    played"*)."""
+    played"*).
+
+    Asserted through the SNAPSHOT (`BodyView.new_in_play`, Issue #391) as well as off the raw dict.
+    The raw assertion was here first and was the whole check, which is precisely the gap that issue
+    closed: the transition was right and only a reader holding the raw board could tell. The two are
+    kept side by side so they cannot drift into disagreeing about one body."""
     obs = _obs(_player(active=_body(RIOLU), hand=[MUNKIDORI]))
     after = _apply(obs, {"type": _PLAY, "index": 0})
     assert [b.card_id for b in after.mine.bench] == [MUNKIDORI]
     assert after.mine.bench[0].hp_remaining == 110
+    assert after.mine.bench[0].new_in_play is True
     assert after.mine.bench_raws[0]["appearThisTurn"] is True
     assert after.mine.hand_ids == ()
+    # The body it was benched BESIDE has been in play since before this turn and stays that way — a
+    # deploy writes the bit on ONE body, which is what the zone means.
+    assert after.mine.active.new_in_play is False
 
 
 @pytest.mark.req("REQ-APPLY-0005")
@@ -535,14 +563,19 @@ def test_every_transition_writes_exactly_its_declared_set():
         ("HP-granting Tool attach", _ATTACH, _obs(_player(active=_body(RIOLU), hand=[CAPE])),
          {"type": _ATTACH, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0},
          {"my_hand_ids", "attached_tools", "damage_counters"}),
+        # `new_in_play` on BOTH evolve cases and unconditionally: the evolved body arrives with
+        # `appearThisTurn: True` and the body it replaced necessarily had it False, since
+        # `docs/rules.md` §4 forbids evolving a body the turn it was played. It went undeclared
+        # until Issue #391 enumerated the zone — the write was always real, and nothing in the tree
+        # could see it.
         ("evolve the Active under a condition", _EVOLVE,
          _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC], conditions=("asleep",))),
          {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0},
-         {"my_hand_ids", "bodies_in_play", "special_conditions"}),
+         {"my_hand_ids", "bodies_in_play", "special_conditions", "new_in_play"}),
         ("evolve a benched body (no condition to clear)", _EVOLVE,
          _obs(_player(active=_body(MUNKIDORI, serial=9), bench=[_body(RIOLU)], hand=[MEGA_LUC])),
          {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": BENCH, "inPlayIndex": 0},
-         {"my_hand_ids", "bodies_in_play"}),
+         {"my_hand_ids", "bodies_in_play", "new_in_play"}),
         ("retreat", _RETREAT,
          _obs(_player(active=_body(RIOLU), bench=[_body(MUNKIDORI, serial=2)])),
          {"type": _RETREAT}, {"allowance_retreat_used"}),
@@ -565,7 +598,8 @@ def test_the_PLAY_footprint_is_a_FLOOR_and_the_real_writes_stay_inside_it():
     assert floor.complete is False
     deploy = bd.transition(_obs(_player(active=_body(RIOLU), hand=[MUNKIDORI])),
                            {"type": _PLAY, "index": 0}, seat_index=0, combat=combat, context=MAIN)
-    assert deploy.writes == frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy"})
+    assert deploy.writes == frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy",
+                                       "new_in_play"})
     assert deploy.writes <= floor.writes
     stadium = bd.transition(
         _obs(_player(active=_body(RIOLU), hand=[BATTLE_CAGE]),

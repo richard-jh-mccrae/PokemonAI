@@ -269,6 +269,41 @@ def test_an_empty_discard_reads_as_empty_rather_than_unknown():
     assert m.theirs.discard_ids == () and m.mine.discard_ids == ()
 
 
+# ── the new-in-play bit is readable off the SNAPSHOT, both sides (POC-T4/3 / Issue #391) ───────
+
+def test_the_new_in_play_bit_is_readable_on_every_body_on_BOTH_sides():
+    """`docs/rules.md` §4 — *"Cannot evolve a Pokémon **the turn it was played/put into play**"*. The
+    engine spells it ``appearThisTurn`` and 12 sites across 5 modules read it off a RAW body dict;
+    what did not exist until Issue #391 is a read off the SNAPSHOT, which is all the value layer, the
+    apply seam's parity lane and the composer's ply-≥1 legality filter are allowed
+    (`docs/plans/value-system-poc-plan.md` §4-T0's sole-supplier ruling).
+
+    Both sides, per body, Active and Bench alike — the fact is symmetric and fully visible (the
+    engine carries the bit on the opponent's bodies too), and §4 gates their evolutions on it exactly
+    as it gates mine."""
+    fresh = {**_poke(MUNKIDORI, hp=70, serial=2), "appearThisTurn": True}
+    m = _model(_player(active=_pult(), bench=[fresh]),
+               _player(active={**_poke(RIOLU, hp=80), "appearThisTurn": True},
+                       bench=[_poke(MEGA_LUC, hp=340, serial=3)]))
+    assert m.mine.active.new_in_play is False
+    assert m.mine.bench[0].new_in_play is True
+    assert m.theirs.active.new_in_play is True
+    assert m.theirs.bench[0].new_in_play is False
+
+
+def test_a_body_with_no_appear_bit_reads_as_IN_PLAY_SINCE_LAST_TURN():
+    """Absent reads False — agreement with the tree rather than a fail-closed choice. All 12 raw
+    reads treat a missing key as *"in play since last turn"*, in two equivalent polarities (6
+    ``not b.get(...)``, 6 ``if b.get(...): skip``), so a model field answering differently about the
+    same body would be a second answer to one question.
+
+    Only a hand-built board (this one) ever reaches it: a real observation carries the bit."""
+    body = _poke(RIOLU, hp=80)
+    assert "appearThisTurn" not in body                # the positive control on the premise
+    m = _model(_player(active=body), _player(active=_pult()))
+    assert m.mine.active.new_in_play is False
+
+
 # ── the survival clock carries what the bypasses carry (POC-T0 / Issue #259) ───────────────────
 
 def test_the_survival_clock_accepts_the_kwargs_the_bypasses_carry():

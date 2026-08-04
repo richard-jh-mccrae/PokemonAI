@@ -421,12 +421,33 @@ FOOTPRINTS: dict[int, Footprint] = {
         writes=frozenset({"attached_energy", "attached_tools", "damage_counters", "my_hand_ids",
                           "allowance_energy_attached"}),
         complete=True),
+    # `new_in_play` joined at T4/3 (Issue #391) on BOTH sides of the footprint, and each side is a
+    # different sentence in `docs/rules.md` §4:
+    #
+    #   READ  — *"Cannot evolve a Pokémon **the turn it was played/put into play**"*. The bit is the
+    #           legality input for this whole kind, which is what makes `[play Basic, evolve it]`
+    #           illegal — Issue #263's own worked 2-ply sequence. Declaring the read is what lets
+    #           `footprints_commute` refuse that ordering for the reason the rule gives, rather than
+    #           incidentally via `my_hand_ids`.
+    #   WRITE — the evolved body arrives new-in-play itself. Measured, not reasoned: `board_delta`'s
+    #           `_evolve` sets `appearThisTurn: True` on the substituted body (`alakazam_9000` f127),
+    #           and a COMPLETE footprint that omitted it would under-report, which
+    #           :class:`Footprint` calls *worse than none*.
+    #
+    # It changes no `commutes()` answer: `_ATTACH` and `_RETREAT` write neither, and two `_EVOLVE`s
+    # already collide on whole-zone `special_conditions`.
+    #
+    # ⚠️ `board_delta._evolve` does not literally look the bit up — the engine only OFFERS a legal
+    # evolve, so the transition never has to re-check it. A footprint's `reads` is the state the
+    # kind's legality and result DEPEND on, not the lines the Python executes; `_RETREAT` already
+    # declares `allowance_retreat_used` as a read it likewise never consults. Under-declaring a read
+    # is the direction that silently collapses two genuinely different lines into one candidate.
     _EVOLVE: Footprint(
-        reads=frozenset({"my_hand_ids", "bodies_in_play"}),
+        reads=frozenset({"my_hand_ids", "bodies_in_play", "new_in_play"}),
         # "Evolving keeps attached cards + damage counters; CLEARS Special Conditions and attack
         # effects" (`docs/rules.md` §4, rulebook-sourced). So this writes a zone that is still OWED —
         # which `footprints_writing_unhomed()` reports rather than letting it price 0.
-        writes=frozenset({"bodies_in_play", "my_hand_ids", "special_conditions"}),
+        writes=frozenset({"bodies_in_play", "my_hand_ids", "special_conditions", "new_in_play"}),
         complete=True),
     _RETREAT: Footprint(
         reads=frozenset({"bodies_in_play", "attached_energy", "allowance_retreat_used"}),
@@ -466,12 +487,17 @@ FOOTPRINTS: dict[int, Footprint] = {
     #   allowance_supporter_played   the same pair for a Supporter play
     #   bodies_in_play               a Basic deploy puts a body on the Bench
     #   bench_occupancy              read (is the Bench full?) and written by that deploy
+    #   new_in_play                  that same deploy — the body arrives NEW IN PLAY, so it cannot
+    #                                evolve this turn (`docs/rules.md` §4). Written, never read: a
+    #                                play's own legality does not depend on it. Joined at T4/3
+    #                                (Issue #391); `board_delta._play` already set the bit and no
+    #                                declaration named it.
     _PLAY: Footprint(
         reads=frozenset({"my_hand_ids", "stadium", "allowance_stadium_played",
                          "allowance_supporter_played", "bench_occupancy"}),
         writes=frozenset({"my_hand_ids", "my_discard_contents", "their_discard_contents",
                           "stadium", "allowance_stadium_played", "allowance_supporter_played",
-                          "bodies_in_play", "bench_occupancy"}),
+                          "bodies_in_play", "bench_occupancy", "new_in_play"}),
         complete=False),
 }
 
@@ -798,7 +824,9 @@ def _structural_drop(model, kind: int, card) -> frozenset:
       is an ordinary Trainer play.
     * `_ATTACH` **Energy leg** — `attached_energy` + `allowance_energy_attached`.
     * `_PLAY` **Basic Pokémon deploy** — exactly
-      ``{"my_hand_ids", "bodies_in_play", "bench_occupancy"}``.
+      ``{"my_hand_ids", "bodies_in_play", "bench_occupancy", "new_in_play"}``. The fourth joined at
+      T4/3 (Issue #391) from the same source as the other three: it is `board_delta._play`'s own
+      returned write-set, and the deployed body arrives with ``appearThisTurn: True``.
     * `_PLAY` **Stadium** — `my_hand_ids`, `stadium`, `allowance_stadium_played`, and whichever
       discard owned the displaced one (`docs/rulebook.txt` L78 — *"Each player has their own discard
       pile"*), so BOTH discards stay declared: which one is written depends on whose Stadium it was,
@@ -841,7 +869,8 @@ def _structural_drop(model, kind: int, card) -> frozenset:
         return frozenset()                      # neither leg — `board_delta._attach` refuses it
     # `_PLAY`, and only for the two sub-cases `board_delta._play` actually models.
     if getattr(stat, "is_pokemon", False) and not getattr(stat, "evolvesFrom", None):
-        return frozenset(everything - {"my_hand_ids", "bodies_in_play", "bench_occupancy"})
+        return frozenset(everything - {"my_hand_ids", "bodies_in_play", "bench_occupancy",
+                                       "new_in_play"})
     if getattr(stat, "is_stadium", False):
         return frozenset(everything - {"my_hand_ids", "stadium", "allowance_stadium_played",
                                        "my_discard_contents", "their_discard_contents"})
