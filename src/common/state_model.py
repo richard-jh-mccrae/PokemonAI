@@ -2407,8 +2407,8 @@ class StateModel(_Lazily):
         rather than glossed. `Pilot._recover_units` takes a `Board` and a raw observation, which
         `state_value` may not be handed (the sole-supplier ruling), so the two cannot share a body
         today without a Pilot-side refactor this issue is not scoped for. They can drift, and the
-        honest note is that nothing but this paragraph stops them. The scheduled resolution is Issue
-        #386's deletion pass, which retires the Pilot rungs that call the incumbent; if that lands
+        honest note is that nothing but this paragraph stops them. The scheduled resolution is
+        Issue #386's deletion pass, which retires the Pilot rungs that call the incumbent; if it lands
         and the Pilot copy survives, unifying them is owed work rather than a tidy-up."""
         ceiling = int(getattr(stat, "recoverN", 0) or 0)
         if not ceiling:
