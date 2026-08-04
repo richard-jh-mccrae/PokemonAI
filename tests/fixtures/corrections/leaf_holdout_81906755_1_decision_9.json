@@ -1,0 +1,13 @@
+{
+  "frame_key": "81906755|1|decision|9",
+  "claims": {
+    "decision": {
+      "correct": [
+        1
+      ],
+      "owner": "#332",
+      "ruled": "2026-08-03",
+      "why": "Developer-ruled REVERT in data/leaf_lab/wave3-rulings.md Batch 8: do not retreat; the Active is doomed and the attach belongs on the benched successor. The ruling STANDS; this is the same readiness-on-the-successor shape owned by Issue #332."
+    }
+  }
+}

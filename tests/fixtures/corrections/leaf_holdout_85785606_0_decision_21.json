@@ -1,0 +1,13 @@
+{
+  "frame_key": "85785606|0|decision|21",
+  "claims": {
+    "decision": {
+      "correct": [
+        0
+      ],
+      "owner": "#329",
+      "ruled": "2026-08-02",
+      "why": "Developer-routed in data/leaf_lab/wave3-rulings.md and docs/plans/issue-sequence-329-wave3-packet.md. The ruling STANDS; Issue #329 owns the threat saturation gap."
+    }
+  }
+}

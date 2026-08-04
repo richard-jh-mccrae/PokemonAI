@@ -1,0 +1,13 @@
+{
+  "frame_key": "85046350|0|decision|85",
+  "claims": {
+    "decision": {
+      "correct": [
+        3
+      ],
+      "owner": "#351",
+      "ruled": "2026-08-03",
+      "why": "Developer-routed in docs/plans/issue-sequence-329-wave3-packet.md. The ruling STANDS; Issue #351 owns this standing leaf flip."
+    }
+  }
+}
