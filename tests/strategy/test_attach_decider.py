@@ -44,8 +44,7 @@ WATER_GUN = 103                     # Staryu: {W} 20
 POWER_GEM = 104                     # Lunatone: {F}{F} 50
 COSMIC_BEAM = 105                   # Solrock: {F} 70
 MIND_BEND = 106                     # Munkidori: {P}● 60 (Adrena-Brain wants a {D})
-GNAW = 107                          # TEF Dunsparce: ● 10, NO retreat cost
-TUCK_TAIL = 108                     # Meowth ex: ●●● 60, returns itself and attached cards to hand
+GNAW, TUCK_TAIL = 107, 108          # TEF Dunsparce Gnaw / Meowth ex Tuck Tail
 
 
 def _attach(hand_idx, area, in_idx):
