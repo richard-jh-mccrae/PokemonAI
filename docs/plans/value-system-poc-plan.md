@@ -383,6 +383,16 @@ discrimination on the develop corpus does not regress unruled; flips → wave 3.
 
 ### T4 — Turn Planner (critical path; old Issue #165 merged)
 
+**Broken into seven sub-issues 2026-08-04** (developer-requested spec review; breakdown comment on
+Issue #263): Issue #382 (apply-seam transitions + parity lane) → Issue #383 (expectation nodes +
+per-option footprints) ∥ Issue #384 (`attack_ev` extractor) → Issue #385 (composer core, dark +
+composer lab; consumes Issue #291's three artifacts) → Issue #386 (arm at MAIN; the deletion pass;
+leaf-gate re-point) → Issue #387 (every fresh decision point; fetch ladder + counter-arming rungs
+die) → Issue #388 (closeout: every turn-planner-marked frame verified SEQUENCE-level against the
+ruled ideal turns in `data/leaf_lab/wave3-rulings.md`). Landing is serial for gate attribution;
+Issues #382–#385 land inert (gates byte-identical), Issues #386–#387 are the live swaps, and the
+swap remains the deletion — each family's rungs die in the sub-issue that takes its decision over.
+
 The sequence composer: enumerate candidate within-turn sequences over Option-Equivalence classes
 (beam with per-class top-k by local marginal; attack/end terminal; budget-aware for the 2-vCPU
 grader), evaluate `state_value(end)` through the apply-seam, commit the argmax sequence's first
