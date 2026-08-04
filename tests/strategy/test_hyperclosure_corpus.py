@@ -118,6 +118,10 @@ TARGETS = {
     # (`test_deploy_now_drakloak_is_not_pitched`) — the card must not be pitched, whatever fills the
     # other slot. (the whether-to-play / hold-the-fetch family is fully pinned: 86091728-19 by the
     #  attach-target-priority seam, 85163634-17 by the held-card-risk build)
+    "83661652-31": "discard/fetch: Ultra Ball discarded Riolu, then fetched Riolu — the sequence is "
+                   "the blunder, reopened by Issue #347 ruling",
+    "85058574-114": "hold: don't play Poke Pad when not fetching a Pokemon; keep it as Ultra Ball "
+                    "fodder, reopened by Issue #347 ruling",
 }
 # The tagged blunder is DEAD (scores ≤ 0, not chosen) but strict `correct`-equality can't hold —
 # the residue is a DIFFERENT, adjudicated or deliberately-designed line. Assert the substance: the
@@ -138,13 +142,11 @@ SUBSTANCE_PINS = {
 # Provably out (spec: refuted/covered don't become fixtures; one record is unreplayable).
 EXCLUDED = {
     "82524455-6":   "refuted",
-    "85058574-114": "refuted",
     "82756664-9":   "refuted",
     "86091435-68":  "refuted",    # 2026-07-19 user re-review: the label's 2nd slot was wrong (keep the
                                   # Hammer for the opponent's Active); the equation's pick endorsed. The
                                   # surviving substance = `test_deploy_now_drakloak_is_not_pitched`.
-    "83661652-30":  "covered",
-    "83661652-31":  "covered",
+    "83661652-30":  "refuted",
     "83967840-54":  "covered",
 }
 

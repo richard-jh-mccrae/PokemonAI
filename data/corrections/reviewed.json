@@ -9,9 +9,9 @@
     "round": "2026-06-27"
   },
   "81906131-25": {
-    "disposition": "covered",
-    "reason": "degenerate record (chosen == correct); the intent is already handled by dont-waste-discard-energy",
-    "round": "2026-06-27"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the recorded correct action was selected wrong; intended action was Basic Water attach, and the current Buddy-Buddy line is commutative with that intent.",
+    "round": "2026-08-03"
   },
   "82224509-46": {
     "disposition": "refuted",
@@ -20,18 +20,13 @@
   },
   "82224509-67": {
     "disposition": "covered",
-    "reason": "Deferral reason ('needs reactive-disruption/Posture') is now obsolete — the new play-energy-denial Hypothesis supplies it and FIRES (+20 on Crushing Hammer cid 1120, gated by opp_has_energy_in_play). Single-frame retest reports fixed=False (chosen [7]Attack->[0]) ONLY because dig-before-commit ties play-energy-denial at +20 and the tie-break picks the dig as the literal first action; the Hammer (idx 5) is tier-0 endorsed and both attacks (tac 119.9/209.7 < 1000=KO_SCORE, neither a KO) are tier-2 deferred, so attack-last plays the Hammer before the attack this turn — the human's intent ('use crushing hammer'). First-dev-differs (cf 81785223-32/44, also covered at fixed=False). Covered by play-energy-denial + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot exactly matches the human ruling (Play Crushing Hammer). Human rationale: opponents active is their main attacker with an energy on it, thats a huge threat. use crushing hammer.",
+    "round": "2026-08-03"
   },
   "82225643-12": {
-    "disposition": "fixed",
-    "reason": "USER-RULED ACCEPT 2026-08-02 (Issue #261 wave-2, item 2f). NON-VOIDING: the ruling stands and still grades. The agent now plays Pokegear 3.0 [0] where this record names Crushing Hammer [1], and that is the ADR-0095 decision-1 information-before-commitment boundary doing its job across TWO actions of ONE turn rather than contradicting the ruling. Three reasons, all measured: (1) the adjacent f11 ruling on the same turn is explicit -- 'This goes into the box of Collect information before committing. Do PokeGear first. Then, most likely, you'll also play Hammer and Ignition Energy in this same turn' -- so Pokegear-then-Hammer IS the ordering asked for; (2) this record's own live 'chosen' was [6] ATTACK, which ends the turn, so its rationale ('Rioulu would not have died from this attack ... playing the crushing hammers could have reduced its threat') adjudicates Hammer-vs-attack, not Hammer-vs-dig, and the Hammer is DEFERRED here (still endorsed at +22.50) rather than declined; (3) the Discrimination Gate independently reports this same frame IMPROVED MISS -> OK -- the leaf now ranks the human's Hammer TOP -- so the VALUATION agrees with the ruling and only the SEQUENCER re-orders, which is what a tier is for. data/decider_lab/baseline.json re-captured against this ruling; the leaf baseline deliberately NOT re-captured (that gate passes, and re-capturing a passing gate absorbs movement nobody ruled).\n\nSUPERSEDES a 'covered' entry of 2026-06-29, preserved here verbatim rather than overwritten -- and it CORROBORATES the ruling above, having reached the same reading six weeks earlier from the opposite direction (it treated the dig-first pick as correct behaviour the retest merely mislabelled): \"Deferral reason ('needs reactive-disruption/Posture') is now obsolete - play-energy-denial supplies it and FIRES (+20 on both Crushing Hammer copies idx 1/3: energy_denial tag + opponent's energized Riolu - strip it before it becomes Mega Lucario ex). Single-frame retest reports fixed=False (chosen [6]Attack->[0]) ONLY because dig-before-commit ties play-energy-denial at +20 and the tie-break picks the dig first; the Hammer is tier-0 endorsed and the 49.9-dmg attack (< 1000=KO_SCORE) is tier-2 deferred, so attack-last plays the Hammer before the attack this turn - the human's intent (slow the Mega Lucario line). First-dev-differs (cf 81785223-32/44). Covered by play-energy-denial + attack-last sequencing.\" Two of its details have since expired and are corrected rather than left to mislead: `play-energy-denial` (+20) was RETIRED by ADR-0062, and the tie it describes was a TIE broken by menu position, where the boundary now orders the two on a board fact.",
-    "round": "2026-08-02"
-  },
-  "82226759-64": {
-    "disposition": "covered",
-    "reason": "play-harlequin-vs-hand-size endorses Harlequin (45, opp Alakazam line) and the agent plays it this turn; the free Crushing Hammer sequences first (tier-0), then Harlequin (tier-3), then the KO (attack-last)",
-    "round": "2026-06-30"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the current Pilot choice is better than the recorded correction because it collects information before the committing Crushing Hammer line.",
+    "round": "2026-08-03"
   },
   "82228017-4": {
     "disposition": "covered",
@@ -80,23 +75,18 @@
   },
   "82224509-41": {
     "disposition": "covered",
-    "reason": "retreat-to-ready-attacker fires; attack-last develops first then retreats to the powered bench Mega (same turn) — blunder fixed, first action differs",
-    "round": "2026-06-28"
+    "reason": "Current Pilot exactly matches the human ruling (Retreat). Human rationale: When main attacker has full energy on bench, retreat into it to finish off the opponent",
+    "round": "2026-08-03"
   },
   "82226116-48": {
     "disposition": "covered",
-    "reason": "retreat-to-ready-attacker fires; agent evolves/develops then retreats to the powered Mega — blunder fixed (no more chipping with spent Cinderace)",
-    "round": "2026-06-28"
+    "reason": "Current Pilot exactly matches the human ruling (Retreat). Human rationale: Should have retreated to the folly powered up Mega Starmie which would have setup a double KO with Jetting Blow attack.",
+    "round": "2026-08-03"
   },
   "82226116-100": {
     "disposition": "covered",
     "reason": "attack-last + attach-discipline: agent attaches to the e0 bench Mega then retreats — develop-then-retreat, same turn",
     "round": "2026-06-28"
-  },
-  "82228640-25": {
-    "disposition": "covered",
-    "reason": "concentrate-energy-on-wincon + prefer-reusable-over-burst + conserve-ignition: agent attaches a Basic to the active Mega (board-identical to recorded option); Ignition->active now dominated (989<1031)",
-    "round": "2026-06-30"
   },
   "82225643-57": {
     "disposition": "covered",
@@ -120,33 +110,33 @@
   },
   "81785223-38": {
     "disposition": "covered",
-    "reason": "attack-last defers the Attack; real Pilot evolves the wincon first (evolve-into-wincon), Pokegear-dig endorsed - same turn",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot exactly matches the human ruling (Play Pokégear 3.0). Human rationale: Should play Pokegear 3.0 to dig for supporter earlier in turn",
+    "round": "2026-08-03"
   },
   "81785223-44": {
-    "disposition": "refuted",
-    "reason": "Wave-3 ruling (Issue #262): same board and same call as 81785223-32 - Pokegear is not the play, the evolve-into-wincon line is. Label disowned; supersedes the covered 'Pokegear-dig endorsed' ruling. [same snipe-target correction as 81785223-32.]",
-    "round": "2026-08-02-wave3"
+    "disposition": "covered",
+    "reason": "Current Pilot exactly matches the human ruling (Play Pokégear 3.0). Prior note reviewed; closure refreshed against current shipped choice rather than the retired rung.",
+    "round": "2026-08-03"
   },
   "81903490-27": {
     "disposition": "covered",
-    "reason": "dont-waste-discard-energy sinks Ignition->Staryu to -20 (below End); Basic->Staryu +10 - real Pilot digs first then attaches Basic, never Ignition",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot choice is acceptable: playing Buddy-Buddy Poffin before attaching Basic Water to Staryu is commutative with the human ruling and can reach the same end-of-turn outcome.",
+    "round": "2026-08-03"
   },
   "81903490-49": {
     "disposition": "covered",
-    "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - attaches Basic not Ignition",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot choice is acceptable: playing Salvatore before attaching Basic Water to Cinderace is commutative with the human ruling and can reach the same end-of-turn outcome.",
+    "round": "2026-08-03"
   },
   "81903490-74": {
     "disposition": "covered",
-    "reason": "evolve-into-wincon (40) outranks the deferred Attack (39.9); real Pilot plays a rush-evolve tutor then evolves Mega Starmie ex - same turn",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot exactly matches the human ruling (Evolve: Mega Starmie ex). Human rationale: Most often should Evolve active Staru to mega starmie ex if have the chance. only case not to is if attachking with mega starmie ex doesnt win and then next turn mega starmie ex will die and opponent has less than 3 prize cards left, causing loss of game",
+    "round": "2026-08-03"
   },
   "81904064-29": {
     "disposition": "covered",
-    "reason": "hold-clutch-heal rewards Wally's Compassion ONLY when active_doomed; here not doomed -> Wally's scores 0, dominated by evolve-into-wincon + digs incl the human's Lillie's. Rule encodes the 'save it for clutch' correction exactly",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot exactly matches the human ruling (Play Lillie's Determination). Human rationale: using wally's compassion to heal 10 damage is far too low. save wally's compassion for when it will prevent mega starmie ex from dying next turn",
+    "round": "2026-08-03"
   },
   "81904064-59": {
     "disposition": "covered",
@@ -155,18 +145,18 @@
   },
   "81904451-6": {
     "disposition": "covered",
-    "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -20; Basic->Cinderace +10 - develops then attaches Basic",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot choice is acceptable: playing Buddy-Buddy Poffin before attaching Basic Water to Cinderace is commutative with the human ruling and can reach the same end-of-turn outcome.",
+    "round": "2026-08-03"
   },
   "81904451-50": {
-    "disposition": "covered",
-    "reason": "dont-waste-discard-energy sinks Ignition->Cinderace to -35 (dead last); Hilda endorsed via tutor-the-wincon (45) and played",
-    "round": "2026-06-28-realpilot"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the current Pilot choice is better than the recorded correction; using an Item to fetch Mega Starmie instead of spending the Supporter is the smarter line.",
+    "round": "2026-08-03"
   },
   "81905522-47": {
     "disposition": "covered",
-    "reason": "attack-last defers the Attack; real Pilot evolves the wincon first; Basic-attach (power-up-attacker 15) outranks the Ignition attaches (-45/-60)",
-    "round": "2026-06-28-realpilot"
+    "reason": "Current Pilot choice is acceptable: evolving the bench Staryu before attaching energy is commutative with the human ruling and can reach the same end-of-turn outcome.",
+    "round": "2026-08-03"
   },
   "82525741-58": {
     "disposition": "refuted",
@@ -179,44 +169,44 @@
     "round": "2026-06-29"
   },
   "82523811-59": {
-    "disposition": "refuted",
-    "reason": "Mis-tagged: chosen [2] and correct [6] both attach a Basic {W} Energy to the SAME benched Mega Starmie (bench0) — board-identical, no real blunder as encoded (different identical W cards). The rationale's true intent (attach a 2nd energy to the ACTIVE toward Nebula Beam) is now realized by the new build-active-wincon Hypothesis, which makes the agent attach to the active win-condition here.",
-    "round": "2026-06-29"
+    "disposition": "covered",
+    "reason": "Current Pilot exactly matches the human ruling (Attach Basic {W} Energy → Mega Starmie ex (active · 400/430 · 1⚡)). Human rationale: SHould have added a second energy to the active Mega Starmie. this is became it has 400HP and cannot die next turn while we also have two more energies in hand. thus in two turns we can have a Mega Starmie with full energy to use Nebula Beam",
+    "round": "2026-08-03"
   },
   "82525741-81": {
     "disposition": "refuted",
-    "reason": "Mis-tagged: correct [2] == chosen [2] (both attach {W} to bench0) — structurally unsatisfiable (no ranking constraint). Rationale's intent (2nd energy to the ACTIVE toward Nebula Beam) is now realized by build-active-wincon, which makes the agent attach to the active win-condition here.",
-    "round": "2026-06-29"
+    "reason": "Human ruling update: the recorded correct action picked the wrong Starmie; the current Pilot picks the correct active Starmie.",
+    "round": "2026-08-03"
   },
   "82523811-95": {
     "disposition": "covered",
-    "reason": "Real Pilot decide() now picks the attach (build-active-wincon fires +20 on the active win-condition under its max attack cost; retest chosen [1]->[0]=correct). W-route flags it unsatisfiable only because the alternative is a KO attack (tac 1000.9) that dominates by score — but _finish_turn_last sequences the tier-1 attach BEFORE the tier-2 KO, so the energy is attached this turn and the KO still lands next frame (attack-last). Covered by build-active-wincon + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot exactly matches the human ruling (Attach Basic {W} Energy → Mega Starmie ex). Human rationale: Always attach energy in hand to a mon who needs it before ending turn with attack",
+    "round": "2026-08-03"
   },
   "82524455-27": {
     "disposition": "covered",
-    "reason": "Real Pilot decide() now picks the attach (build-active-wincon fires +20; retest chosen [3]->[2]=correct). W-route unsatisfiable because the alternative is a KO attack dominating by score; _finish_turn_last sequences the tier-1 attach before the tier-2 attack so the energy is attached before the turn ends. Covered by build-active-wincon + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot choice is acceptable: Boss's Orders and the available energy attach are commutative before the turn-ending attack sequence.",
+    "round": "2026-08-03"
   },
   "82523811-15": {
     "disposition": "covered",
-    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (new play-energy-denial fires +20: energy_denial tag + opponent's Active carries Energy; retest chosen [4]->[3]=correct). SETUP-phase strip of a developing Riolu before it becomes Mega Lucario ex. W-route satisfiable here (the competing option is only a 20-dmg chip, < the +20 rule). Covered by play-energy-denial + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot exactly matches the human ruling (Play Crushing Hammer). Human rationale: Riolu had 1 energy, and if it became a mega lucario could have OHKO our active staryu",
+    "round": "2026-08-03"
   },
   "82523811-79": {
     "disposition": "covered",
-    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [1]->[0]=correct). W-route flags it unsatisfiable only because the alternative is a 120-dmg attack (tac 119.9) that dominates by score — but _finish_turn_last sequences the tier-0 Item PLAY BEFORE the tier-2 attack, so the strip lands this turn and the attack still follows (attack-last). Covered by play-energy-denial + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot exactly matches the human ruling (Play Crushing Hammer). Prior note reviewed; closure refreshed against current shipped choice rather than the retired rung.",
+    "round": "2026-08-03"
   },
   "82525101-92": {
     "disposition": "covered",
-    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [3]->[0]=correct). W-route unsatisfiable because the alternative is a 120-dmg attack dominating by score; _finish_turn_last sequences the tier-0 Item PLAY before the tier-2 attack (both Crushing Hammers then the attack — same turn). Covered by play-energy-denial + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot exactly matches the human ruling (Play Crushing Hammer). Human rationale: Could have used two crushing hammers, attached energy, then attacked",
+    "round": "2026-08-03"
   },
   "82525101-102": {
     "disposition": "covered",
-    "reason": "Real Pilot decide() now plays Crushing Hammer before attacking (play-energy-denial fires +20; retest chosen [2]->[0]=correct). W-route unsatisfiable because the alternative is a 120-dmg attack dominating by score; _finish_turn_last sequences the tier-0 Item PLAY before the tier-2 attack. Covered by play-energy-denial + attack-last sequencing.",
-    "round": "2026-06-29"
+    "reason": "Current Pilot exactly matches the human ruling (Play Crushing Hammer). Human rationale: Could have played two crushing hammers, then attacked",
+    "round": "2026-08-03"
   },
   "81904064-44": {
     "disposition": "covered",
@@ -230,13 +220,13 @@
   },
   "81906755-77": {
     "disposition": "covered",
-    "reason": "attack-last: real Pilot develops first (Crushing Hammer play-energy-denial, then Salvatore), attack deferred — retest [6]->[1], first-dev-differs (human wanted Salvatore; both tier-0 same turn)",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Play Salvatore). Human rationale: fetch a mega starmie when able, then evolve staryu if able",
+    "round": "2026-08-03"
   },
   "82224509-29": {
     "disposition": "covered",
-    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon), KO deferred — retest [6]->[4]=correct",
-    "round": "2026-06-30"
+    "reason": "Current Pilot choice is acceptable: retreat and bench evolution are commutative development steps here and can reach the same end-of-turn outcome.",
+    "round": "2026-08-03"
   },
   "82225138-82": {
     "disposition": "covered",
@@ -255,18 +245,18 @@
   },
   "82226116-70": {
     "disposition": "covered",
-    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon), KO deferred — retest [14]->[11]=correct",
-    "round": "2026-06-30"
+    "reason": "Current Pilot choice is acceptable: Wally's Compassion and the bench evolution are commutative here and need no further processing.",
+    "round": "2026-08-03"
   },
   "82226759-16": {
     "disposition": "covered",
-    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon) — retest [2]->[0]=correct",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Evolve: Mega Starmie ex). Human rationale: In this deck, evolving benched stryu to mega starmie is typically best, even if its now a benched mega without energy. here its early game with no real opponent threat yet. also mega starmie requires only single energy to do damage. After evolving, could have played lillie's determination to potentially find more basic energy.",
+    "round": "2026-08-03"
   },
   "82226759-29": {
     "disposition": "covered",
-    "reason": "attack-last: real Pilot evolves bench Staryu->Mega first (evolve-into-wincon) — retest [4]->[0]=correct",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Evolve: Mega Starmie ex). Human rationale: evolve the benched staryu first.",
+    "round": "2026-08-03"
   },
   "82227388-43": {
     "disposition": "covered",
@@ -280,8 +270,8 @@
   },
   "82224509-31": {
     "disposition": "refuted",
-    "reason": "mis-tagged: chosen==correct==[0] (structurally unsatisfiable); correct [0] is the over-attach (3-energy Mega). Rationale's intent (attach to the bare Staryu) now realized by the new spread-attach-to-the-needy rule — retest chosen [0]->[1]=bare Staryu",
-    "round": "2026-06-30"
+    "reason": "Human ruling update: the recorded correct target was the wrong Pokemon; the rationale intended attaching to Staryu, which is what the current Pilot does.",
+    "round": "2026-08-03"
   },
   "81904451-24": {
     "disposition": "covered",
@@ -290,8 +280,8 @@
   },
   "82748522-15": {
     "disposition": "covered",
-    "reason": "hold-wincon-dont-shuffle + attach-before-hand-shuffle soundly suppress Lillie's (2 undeployed Megas + unattached energy in hand); agent tutors with Hilda — don't shuffle away your only wincons",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Play Lillie's Determination). Human rationale: Hilda was not helpful here because i already had an energy and two mega starmies in hand. The opponent was a huge threat due to a nearly full bench. thus i should have played lillie's determination in hopes of filling my bench for protection.",
+    "round": "2026-08-03"
   },
   "82750161-16": {
     "disposition": "covered",
@@ -299,14 +289,14 @@
     "round": "2026-06-30"
   },
   "82750161-59": {
-    "disposition": "covered",
-    "reason": "concentrate-energy-on-wincon: agent attaches a reusable Basic to the 1-energy benched Mega (priority wincon); recorded Ignition->bench correctly avoided (dont-waste-discard-energy). Same target, better energy",
-    "round": "2026-06-30"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the recorded correction choice is bad; the current Pilot choice is good.",
+    "round": "2026-08-03"
   },
   "82752045-97": {
-    "disposition": "covered",
-    "reason": "concentrate-energy-on-wincon: agent attaches Basic to the most-built benched Mega over the bare one; recorded Ignition->that-Mega avoided. Concentrate-don't-spread realized",
-    "round": "2026-06-30"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the recorded correction choice is bad; the current Pilot choice is good.",
+    "round": "2026-08-03"
   },
   "82752604-88": {
     "disposition": "covered",
@@ -315,13 +305,8 @@
   },
   "82753102-37": {
     "disposition": "covered",
-    "reason": "CRITICAL fixed: play-energy-denial gates on opp_active_has_energy (Kadabra active 0 energy) so Crushing Hammer no longer played; Harlequin soundly suppressed by hold-wincon-dont-shuffle (2 undeployed Megas) — agent develops instead",
-    "round": "2026-06-30"
-  },
-  "82754875-8": {
-    "disposition": "covered",
-    "reason": "agent tutors the win-condition via Mega Signal (53: fetch-when-it-fills-a-need + tutor-the-wincon); bulk-draw-to-develop (Lillie's) is a supporter-priority judgment for the value model",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Play Harlequin). Human rationale: CRITICAL, never play crushing hammer when opponents active has no energy attached.",
+    "round": "2026-08-03"
   },
   "82756664-9": {
     "disposition": "refuted",
@@ -330,8 +315,8 @@
   },
   "82748422-26": {
     "disposition": "covered",
-    "reason": "play-energy-denial stands down when active_cheap_attack_kos (Jetting Blow KOs the Active): the strip is moot, Crushing Hammer no longer played; agent develops then takes the KO (attack-last)",
-    "round": "2026-06-30"
+    "reason": "Current Pilot choice is acceptable: Crushing Hammer is good here so long as it targets the benched Starmie; no further processing from this stale closure.",
+    "round": "2026-08-03"
   },
   "82754241-11": {
     "disposition": "refuted",
@@ -360,28 +345,23 @@
   },
   "82749168-21": {
     "disposition": "covered",
-    "reason": "play-energy-denial gates on opp_active_has_energy: opp Active energyless so no Crushing Hammer; Pilot attacks (retest [1]->[7]=correct)",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Attack with Turbo Flare). Human rationale: Opponents active has no energy, therefor NEVER play crushing hammer.",
+    "round": "2026-08-03"
   },
   "82749168-62": {
     "disposition": "covered",
     "reason": "snipe-KO scores a full prize (_snipe_ko_prizes): Jetting Blow snipe-KOs the 20HP Dreepy, beating Nebula Beam's chip on the un-KO-able 320HP Active (retest [1]->[0]=correct)",
     "round": "2026-06-30"
   },
-  "82752045-80": {
-    "disposition": "covered",
-    "reason": "develop-before-KO already covered by concentrate-energy-on-wincon for evolved benched wincons; here the bench body is a pre-evo and the dev is a marginal Night Stretcher recycle ('might as well') - Pilot takes the prize; value-model judgment, no rule",
-    "round": "2026-06-30"
-  },
   "82752604-61": {
     "disposition": "covered",
-    "reason": "same as f80: concentrate-energy-on-wincon covers the real develop-before-KO case; attaching to a bench pre-evo before fetching its evolution is speculative spread vs the concentrate doctrine - Pilot takes the prize; value-model judgment",
-    "round": "2026-06-30"
+    "reason": "Current Pilot exactly matches the human ruling (Attach Basic {W} Energy → Staryu (bench 2 · 70/70 · 1⚡)). Human rationale: Should have first attached water energy, then play Mega Signal to fetch a Mega Starmie, then evolve the staryu to mega starmie, then attack",
+    "round": "2026-08-03"
   },
   "82754241-41": {
     "disposition": "covered",
-    "reason": "play-energy-denial: wasted-Crushing-Hammer blunder resolved - Pilot no longer plays the Hammer, takes a KO attack instead (retest [0]->[2], a KO)",
-    "round": "2026-06-30"
+    "reason": "Current Pilot choice is acceptable: retreat and the Turbo Flare attack line are commutative enough for the same end-of-turn outcome; no further processing.",
+    "round": "2026-08-03"
   },
   "82754875-52": {
     "disposition": "covered",
@@ -390,8 +370,8 @@
   },
   "82866415-43": {
     "disposition": "covered",
-    "reason": "deploy-hp-tool + hold-irreplaceable-tool-dont-shuffle deploy the Cape (tier-2) and suppress Lillie's (-30); agent digs (Mega Signal) then attaches the Cape — the ACE SPEC is no longer shuffled away (ADR-0028, first-dev-differs)",
-    "round": "2026-07-01"
+    "reason": "Current Pilot choice is acceptable: Mega Signal and attaching Hero's Cape are commutative development before the relevant shuffle boundary; no further processing.",
+    "round": "2026-08-03"
   },
   "82866415-48": {
     "disposition": "covered",
@@ -400,13 +380,8 @@
   },
   "82867148-34": {
     "disposition": "covered",
-    "reason": "degenerate (chosen==correct==Attack); the play-Ultra-Ball-to-develop-a-recipient intent is carried by develop-turbo-flare-recipient + fetch-base-before-stranded-payoff",
-    "round": "2026-07-01"
-  },
-  "82867148-87": {
-    "disposition": "refuted",
-    "reason": "literal Ignition->Staryu dominated by reusable Water->Staryu (dont-waste-discard-energy soundly avoids wasting the one-shot Ignition on a non-attacking bench body); the intent (energy to the Staryu line base over off-line Cinderace) is realized by the W-route-invisible attach_to_needy_line tie-break, retest [7]->[8]=Water->Staryu",
-    "round": "2026-07-01"
+    "reason": "Current Pilot exactly matches the human ruling (Attack with Turbo Flare). Human rationale: something wrong at this decision point. we have an Ultra Ball in hand. we should have played the ultra ball to fetch a stryu, and then bench it.",
+    "round": "2026-08-03"
   },
   "82227388-7": {
     "disposition": "refuted",
@@ -414,19 +389,19 @@
     "round": "2026-07-01"
   },
   "83007714-7": {
-    "disposition": "covered",
-    "reason": "FIXED in the real Pilot by the new prefer-active-attach-in-setup (+8): energy now goes to the ACTIVE Cinderace, not the benched Staryu (the regression is gone; retest chosen [4]->[3]). W-route stays UNSATISFIED only because the literal correct labels Ignition->Cinderace, which is UNSOUND turn-1-going-first (Ignition is discard_eot -> discarded EOT unused; dont-waste-discard-energy sinks it -60), so the Pilot soundly attaches the reusable Basic->Cinderace [3] instead. Both put the energy on Cinderace = the human intent. Mirrors covered precedent 81903490-49.",
-    "round": "2026-07-01"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the recorded correction choice is wrong; current Pilot attaches Basic Water to Cinderace and is good.",
+    "round": "2026-08-03"
   },
   "83007714-22": {
     "disposition": "covered",
-    "reason": "Degenerate record (chosen==correct==[1]); the real Pilot already picks the Mega Starmie ex over the Staryu at this Turbo-Flare AttachFrom via spread-attach-to-the-needy (+15, retest FIXED=True). The rationale's '3 energy on Staryu' complaint is the frame-7 manual misattach, whose root is fixed by prefer-active-attach-in-setup.",
-    "round": "2026-07-01"
+    "reason": "Current Pilot exactly matches the human ruling (Mega Starmie ex (bench 2 · 330/330)). Human rationale: CRITICAL: you attached 3 energy to Staryu instead of making sure that our Mega Starmie had 3 energy. attach the energy to our evolved mainline attacker as priority over the preevolution",
+    "round": "2026-08-03"
   },
   "83007714-135": {
     "disposition": "covered",
-    "reason": "attack-last (attack-is-turn-ender-develop-first): the match-winning Nebula Beam KO (tac 1002.7, 2 prizes = last 2) is DEFERRED behind play-energy-denial's Crushing Hammer but NEVER forfeited — _finish_turn_last tiers the tier-0 Item PLAY before the tier-4 attack, so the KO is taken same turn and the win lands. The 'take it immediately' is satisfied in outcome. Matches many ledger precedents (e.g. 82525101 f92/f102).",
-    "round": "2026-07-01"
+    "reason": "Current Pilot exactly matches the human ruling (Attack with Nebula Beam). Human rationale: Again, many other corrections state this, we need a hard rule that every single turn begins by analyzing if there is a match winning decision present. if there is, take it immediately to win the match.",
+    "round": "2026-08-03"
   },
   "83037962-78": {
     "disposition": "covered",
@@ -464,9 +439,9 @@
     "round": "2026-07-02"
   },
   "83116501-89": {
-    "disposition": "covered",
-    "reason": "Fixed this round via the _priority_wincon_slot doomed-active skip: with the Active doomed (70HP Mega, 1e), the priority wincon slot now targets the HEALTHY benched Mega (bench0, 1e) instead of the doomed Active, so concentrate-energy-on-wincon (+25) fires there and the real Pilot attaches to bench0 (decide [6]->[5], concentrating) instead of spreading to the bare bench1. W-route stays UNSATISFIED only because the literal correct labels Ignition->bench0, which is UNSOUND (Ignition discard_eot wasted on a benched body); the Pilot soundly uses reusable Basic {W} to the same target = the human's concentrate intent. Mirrors precedent 82750161-59. Before/after diff: this change touches EXACTLY f89, zero other frames.",
-    "round": "2026-07-02"
+    "disposition": "refuted",
+    "reason": "Human ruling update: the rationale is correct but the recorded pick should have been Basic Water, not Ignition; current Pilot choice is good.",
+    "round": "2026-08-03"
   },
   "83054602-17": {
     "disposition": "covered",
@@ -476,16 +451,6 @@
   "82751468-14": {
     "disposition": "covered",
     "reason": "Planner ko_for_prizes line executes the human's exact intent (retreat Cinderace -> promote/attach a benched Mega -> KO+snipe): real Pilot decide()->[4] Retreat, planned='retreat unlocks a KO'. Human labeled the attach [1]; planner does retreat as step 1, attach+KO follow same turn (first-step-differs). Same resolution as 83053965-32.",
-    "round": "2026-07-02"
-  },
-  "83116081-17": {
-    "disposition": "covered",
-    "reason": "Value-model judgment (contradictory pair): correct wants Lillie's over Harlequin (both score 28, tie), but the covered ep83117367-34 wants Harlequin OVER Lillie's — the human's refresh-supporter preference reverses by matchup, so no single weight/rule satisfies both. play-harlequin-vs-hand-size already fires Harlequin vs hand-size decks; the residual Lillie's-vs-Harlequin against a non-hand-size opp is a Base-Value-Model call (ADR-0007), not a weight gap. Both are sound turn-2 hand refreshes.",
-    "round": "2026-07-02"
-  },
-  "82756664-74": {
-    "disposition": "covered",
-    "reason": "Value-model / dig-before-commit: real Pilot plays Hilda (informative tutor +20) then attaches same turn (attaches are tier-2, sequenced after the supporter) — energy IS attached this turn. Whether flexible Hilda is 'pointless' given energy-in-hand + a prized Mega is a hand-quality read for the Base Value Model (Hilda finds Staryu/energy/any Pokemon, not a wincon-only tutor, so search_targets_exhausted exempts it). The literal correct [3] labels Ignition->active on a 30hp doomed active that can't KO even maxed; conserve-burst-when-no-ko soundly de-prioritizes that wasteful burst toward a reusable Basic — the W-route 'unsatisfied' is the sound rule declining the burst label, NOT a behavior regression (decide unchanged [1] before/after; corpus diff touched only f70).",
     "round": "2026-07-02"
   },
   "82525741-100": {
@@ -518,20 +483,15 @@
     "reason": "wrong-seat / non-doctrine attacker (user ruling 2026-07-22): the correct line 'attach {F} to Lunatone, attack with Power Gem' is not a line this deck plays — Lunatone (675) is the Lunar Cycle ability body (energy mover), never built as an attacker. The equation developing a basic over feeding the (forward-doomed) Lunatone is correct; no real energy-attach anchor here. Supersedes the 2026-07-04 'covered' note (which only cleared the poor-stall gust).",
     "round": "2026-07-22"
   },
-  "83661652-31": {
-    "disposition": "covered",
-    "reason": "Root is the f30 discard (now prevented by keep-line-base-at-discard): with Riolu no longer pitched, the discard->refetch waste never arises. On the isolated captured state (Riolu already discarded) grabbing the base is sound fetch-base-before-stranded-payoff doctrine.",
-    "round": "2026-07-04"
-  },
   "83661652-33": {
     "disposition": "covered",
-    "reason": "CRITICAL 'dont feed Meowth ex, should have played solrock/riolu': NOW RULE-FIXED by develop-the-wincon-base-first (+6). The tier-0 develop already beat the tier-4 chip (_finish_turn_last); the new rule breaks the develop tie toward the wincon Line base, so real Pilot decide() picks Riolu (retest [3]->[2]=correct, FIXED). W-route-blind (chip outscores the develop in raw score). Gated by tests/strategy/test_blunder_20260703_develop_wincon_base.py.",
-    "round": "2026-07-05"
+    "reason": "Current Pilot exactly matches the human ruling (Play Riolu). Human rationale: CRITICAL: typically dont feed Meowth ex. should have played solrock, riolu, then attached to riolu.",
+    "round": "2026-08-03"
   },
   "83661652-44": {
     "disposition": "covered",
-    "reason": "CRITICAL 'resisting to play basics, wanting to feed meowth and just attack': NOW RULE-FIXED by develop-the-wincon-base-first (+6). Same develop-tiebreak as f33 — real Pilot decide() benches Riolu over Makuhita (retest [3]->[2]=correct, FIXED). W-route-blind. Gated by the ml0703 develop_wincon replay test.",
-    "round": "2026-07-05"
+    "reason": "Current Pilot choice is acceptable: playing Makuhita and playing Riolu are both bench-development moves in this frame; no further processing.",
+    "round": "2026-08-03"
   },
   "83661649-45": {
     "disposition": "fixed",
@@ -554,9 +514,9 @@
     "round": "2026-07-04"
   },
   "83667237-107": {
-    "disposition": "deferred",
-    "reason": "discard-fuel snipe residual (grill 2026-07-22): bot snipes Lunatone on-path, human wants Makuhita (pre-evo of a discard-fueled Wild-Press line). snipe-the-evolving-threat stands down via target_forward_form_in_play (Hariyama already in play, ADR-0044) — but under 5 {F} in opp discard + Mega Lucario Aura Jab the 2nd line is live, so the pre-evo is NOT redundant. DoD: build opponent-side discard-fuel read (coverage item #2) then override the stand-down. Handoff: docs/plans/snipe-discard-fuel-grill-handoff.md. Open: strict-vs-broad trigger threshold. To be done in a separate session.",
-    "round": "2026-07-22"
+    "disposition": "covered",
+    "reason": "Current Pilot exactly matches the human ruling (opp Makuhita (bench 4 · 80/80)). Human rationale: This requires planning out prize math against the opponent. We need 4 prize cards, that is a mega Lucario + 1. thus no reason to snipe the second mega lucario. we actually want to avoid that one. we can do so thanks to boss's orders in future turns.",
+    "round": "2026-08-03"
   },
   "83661649-30": {
     "disposition": "fixed",
@@ -569,14 +529,14 @@
     "round": "2026-07-04"
   },
   "83661652-3": {
-    "disposition": "covered",
-    "reason": "FIXED on investigation (not a mislabel): the Pilot literally could not DECLINE an optional single-pick (decide() always took maxCount, ignoring minCount=0). Added (a) single-pick take-fewer — decline a score<0 pick at a minCount=0 select; (b) dont-pre-bench-the-supporter-tutor (-15) at _SETUP_BENCH. decide(f3)=[0]->[] (declines benching Meowth ex — saved for the Active Spot / an in-game bench to trigger Last-Ditch Catch). W-route can't measure it (correct==chosen==[0] tag can't encode select-nothing); gated by tests/strategy/test_setup_bench_decline.py on setup_bench_decline_f3.json. Human reversed the refuted call 2026-07-04.",
-    "round": "2026-07-04"
+    "disposition": "refuted",
+    "reason": "Human ruling update: current Pilot decline is good; the recorded Meowth ex setup choice is void.",
+    "round": "2026-08-03"
   },
   "83661652-30": {
-    "disposition": "covered",
-    "reason": "CRITICAL 'dont discard our main line attacker': keep-line-base-at-discard covers it — real Pilot decide() at the captured f30 discards Gravity Mountain + a spare Basic {F} (Aura Jab reloads F from discard, so it is recoverable engine fuel) and KEEPS Riolu/Makuhita/Solrock. The flagged blunder (pitching Riolu) no longer occurs; retest differs from correct=[0] only in pitching a fuel-able Energy over a redundant Lillie's. Confirms f31's covered premise (Riolu no longer discarded).",
-    "round": "2026-07-05"
+    "disposition": "refuted",
+    "reason": "Human ruling update: current Pilot discard choice is good; the recorded correction label is void.",
+    "round": "2026-08-03"
   },
   "83667237-120": {
     "disposition": "covered",
@@ -619,9 +579,9 @@
     "round": "2026-07-09"
   },
   "85046350-20": {
-    "disposition": "fixed",
-    "reason": "BUILT 2026-07-13 (disruptor_lock_maneuver, default ON, kill-switched). Diagnosed at build time: the shipped retreat rung's premise (can_wall_line_with_disruptor) requires the opp Active to threaten damage, which is FALSE here (0-Energy Gible) -- so f20 is OFFENSIVE item-lock disruption (deny the opp's T2 Item turn), not defensive walling. New signal can_lock_line_with_disruptor (early game + fragile line-preevo Active + benched item_lock opener + reachable cheap retreat + Active can't KO); new rung feed-the-line-for-disruptor-lock (+20) endorses the active-Dreepy attach so it can retreat into Budew; retreat-to-wall-the-line + hold-position-in-setup broadened to the offensive signal so the follow-up retreat completes the maneuver. decide()=[0] (active), was [1] (bench). SHIP-AND-REFINE per user decision 2026-07-13: value is matchup-dependent (a fragile 30-HP Budew may concede a prize) -- kill-switch is the lever. Zero dragapult-corpus regression. Tests in test_blunder_20260710_split_fixes.py.",
-    "round": "2026-07-13"
+    "disposition": "covered",
+    "reason": "Current Pilot exactly matches the human ruling (Dreepy (active · 70/70)). Human rationale: Its early game and we need to be thinking about disruption and our own setup. we should attach to our active dreepy, then retreat it into the budew such that we can attach with Itchy Pollen as to item lock our opponent early.",
+    "round": "2026-08-03"
   },
   "83967840-54": {
     "disposition": "covered",
@@ -631,11 +591,6 @@
   "84890060-48": {
     "disposition": "covered",
     "reason": "Real-Pilot decide() at the captured f48 = [9] = Fighting Gong = correct (chosen==correct, degenerate on the shipped code). The applied lethal-recover-the-energy-that-wins grab tactical prices it 1001: Lunatone Active (1F, retreat 1 - affordable), benched Mega Lucario at 0 energy, so the grabbed F is both LEGAL and NECESSARY. Kept as the counter-fixture for no-phantom-grab-lethal (blunder-20260710-round.md) - that proposal's preconditions must not regress this frame.",
-    "round": "2026-07-10"
-  },
-  "85058574-114": {
-    "disposition": "refuted",
-    "reason": "CRITICAL, human-acknowledged 2026-07-10. Spec does not survive the board: the Bench IS full (5), but Poke Pad can still fetch a 2nd Hariyama that evolves the benched Makuhita, so 'a tutor with nothing to find' is FALSE here. Reproducing the tagged correct=[1] (the Energy attach) would additionally require suppressing a perfectly reasonable Fighting Gong, and the attach is deferred by attach-energy-last (reordered=True) by design anyway. The human's real reason -- 'Poke Pad is Ultra Ball fodder' -- is a value judgment about card economy, not a nothing-to-find test. Needs a retag, not code.",
     "round": "2026-07-10"
   },
   "84071010-15": {
@@ -655,8 +610,8 @@
   },
   "82749168-38": {
     "disposition": "refuted",
-    "reason": "correct=[0] snipes the benched Dragapult ex, a [Tera] ex that takes NO attack damage while Benched (data/EN_Card_Data.csv id121; docs/rulebook.txt Tera rule) -- the 50 Jetting Blow bench rider does literally 0 there. dont-snipe-a-benched-tera (-60) already ranks it below the real 50-dmg Hoothoot snipe; retest 82749168-38: [0]=-18 vs chosen [1]=12. The correction forgoes the attack's entire snipe effect on a damage-immune body.",
-    "round": "2026-07-11"
+    "reason": "Human ruling update: the recorded correction forgot the Tera bench-damage immunity; the current Pilot target is good and the old label is void.",
+    "round": "2026-08-03"
   },
   "85709280-t2s1": {
     "disposition": "covered",
@@ -670,13 +625,13 @@
   },
   "85785067-14": {
     "disposition": "covered",
-    "reason": "CRITICAL 'dont switch out of a Solrock-active+Lunatone-benched setup': COVERED on the real shipped Pilot. retest_one decide()=[2]=End turn=correct (FIXED=True, margin 0->8). dont-play-switch-for-no-gain (-8) demotes Play Switch [0] + hold-position-in-setup (-25) demotes [1], so keeping Solrock Active wins. Stale on-disk open[] predates these rules (ledger last written 2026-07-13).",
-    "round": "20260715"
+    "reason": "Current Pilot exactly matches the human ruling (End turn). Human rationale: CRITICAL: Solrock with an energy as starting active and Lunetone on bench is exactly what we want. dont switch out of that.",
+    "round": "2026-08-03"
   },
   "85785606-1": {
     "disposition": "covered",
-    "reason": "CRITICAL 'start attacking with Solrock, dont energy Riolu': COVERED (degenerate, chosen==correct==[0]) on the real Pilot. retest_one at the captured SetupActivePokemon frame decide()=[0]=Solrock=correct (FIXED=True) via start-solrock-over-lunatone (+12). The 'dont energy Riolu' intent is a separate attach decision (not this frame) already handled by attach-solrock-over-line-base + the general Active-arm rungs (arm-the-doomed-active on a live Cosmic Beam).",
-    "round": "20260715"
+    "reason": "Current Pilot exactly matches the human ruling (Solrock). Human rationale: CRITICAL: Dont energy Riolu from start if Solrock active and can attack because Lunatone is on bench. we want to start attacking with Solrock whenever able.",
+    "round": "2026-08-03"
   },
   "85058051-4": {
     "disposition": "covered",
