@@ -137,8 +137,10 @@ def test_a_complete_clause_set_beats_the_kind_table():
     assert ao.fate({"type": _ABILITY}, clauses_cover=True) == ao.MODELLED
     # ...and with no engine wired and no determinism proof, which is the four cards' real situation.
     assert ao.fate({"type": _ABILITY}, clauses_cover=True, deterministic=False) == ao.MODELLED
-    with pytest.raises(NotImplementedError):                    # MODELLED means T4 owes a transition
-        ao.apply_option(object(), {"type": _ABILITY}, clauses_cover=True)
+    # MODELLED sends the call to the closed-form transition. `_ABILITY` has none — the kind IS its
+    # effect — so it refuses at OPTION scope: the KIND resolved, this option's board change did not.
+    r = ao.apply_option(object(), {"type": _ABILITY}, clauses_cover=True)
+    assert isinstance(r, ao.Refusal) and r.scope == ao.OPTION_SCOPE
 
 
 @pytest.mark.req("REQ-APPLY-0008")
@@ -259,15 +261,20 @@ def test_apply_option_resolves_the_same_way_fate_does():
                 for search in (api, None):
                     kw = dict(search_api=search, deterministic=det, clauses_cover=cover)
                     want = ao.fate({"type": kind}, **kw)
+                    r = ao.apply_option(object(), {"type": kind}, **kw)
+                    assert isinstance(r, ao.Refusal), (kind, kw)
+                    assert r.scope and r.reason.strip(), (kind, kw)
+                    # The SCOPE is where the two answers have to agree. A `fate` of REFUSED is a
+                    # kind/precondition refusal and never carries option scope; a non-REFUSED fate
+                    # that still cannot produce a board (this caller hands `object()`, which is not a
+                    # model) refuses at OPTION scope — the transition's own answer, on a kind the
+                    # table still calls resolvable. Collapsing those two would let a coverage report
+                    # blame the kind for what the option could not do, which is the distinction
+                    # `refuse`'s `scope=` exists to keep (POC-T4/1, Issue #382).
                     if want == ao.REFUSED:
-                        r = ao.apply_option(object(), {"type": kind}, **kw)
-                        assert isinstance(r, ao.Refusal), (kind, kw)
-                        assert r.scope and r.reason.strip(), (kind, kw)
+                        assert r.scope != ao.OPTION_SCOPE, (kind, kw)
                     else:
-                        # MODELLED and ENGINE-RESOLVED are both T4's to implement, so at T0 each
-                        # raises rather than returning the plausible answer an identity stub would.
-                        with pytest.raises(NotImplementedError):
-                            ao.apply_option(object(), {"type": kind}, **kw)
+                        assert r.scope in (ao.OPTION_SCOPE, ao.NO_ENGINE_SCOPE), (kind, kw, r.scope)
 
 
 @pytest.mark.req("REQ-APPLY-0008")
@@ -517,13 +524,23 @@ def test_applying_a_terminal_option_is_an_error_not_an_unchanged_model():
 
 
 @pytest.mark.req("REQ-APPLY-0002")
-def test_an_unimplemented_transition_refuses_rather_than_returning_the_model_unchanged():
-    """The stub that matters. Under differencing an identity transition prices the play at exactly
-    0.0 — a real, plausible answer — so an unimplemented build reads as a working one that thinks
-    nothing is worth doing."""
+def test_a_transition_that_cannot_be_computed_refuses_rather_than_returning_the_model_unchanged():
+    """The claim that matters, and it OUTLIVED the stub it was written for.
+
+    Until POC-T4/1 every modelled kind raised `NotImplementedError` here, because at T0 there was no
+    transition to run and an identity return would have priced the play at exactly 0.0 — a real,
+    plausible answer, so an unimplemented build would have read as a working one that thinks nothing
+    is worth doing.
+
+    The transitions exist now (`common.board_delta`), so the raise is gone; the property is not. Fed
+    a model it cannot transition from — here `object()`, which carries no observation — the seam
+    still must not hand back something that differences to zero. It returns a `Refusal`, which the
+    composer answers by always-expanding (`must_expand`), and which carries a sentence saying why."""
     for kind in sorted(ao.TRANSITION_KINDS):
-        with pytest.raises(NotImplementedError):
-            ao.apply_option(object(), {"type": kind})
+        r = ao.apply_option(object(), {"type": kind})
+        assert isinstance(r, ao.Refusal), kind
+        assert r.kind == kind and r.scope == ao.OPTION_SCOPE and r.reason.strip(), kind
+        assert ao.must_expand(r) is True, kind
 
 
 # ── the EXPECTATION shape ─────────────────────────────────────────────────────────────────────────

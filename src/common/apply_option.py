@@ -6,11 +6,21 @@ the StateModel, stepping no engine. It is what lets the Turn Planner price a pla
 (`state_value(after) − state_value(before)`) and compose a candidate sequence without spending the
 2-vCPU grader budget on a forked simulation per branch.
 
-**INERT.** T0 ships the option-kind table, the signatures and the docstrings; T4 (Issue #263)
-implements the transitions. Every modelled transition raises `NotImplementedError` rather than
-returning the model unchanged — an identity stub would price every play at exactly 0.0, which is a
-real and plausible answer, so an unimplemented build would read as "this play is worthless" rather
-than as "this play is unimplemented".
+**Still INERT AT RUNTIME, but no longer a stub.** T0 froze the option-kind table, the signatures and
+the docstrings; POC-T4/1 (Issue #382) implemented the transitions, the ENGINE-RESOLVED execution path
+and the parity lane that proves them. Nothing in production calls this yet — the composer arms at
+T4/4-5 (Issues #385/#386) — so the module ships measured and unwired.
+
+Where a transition used to `raise NotImplementedError`, it now either returns a board or returns a
+`Refusal` naming what it could not write. The distinction the old stub existed to protect is
+unchanged and is now the transitions' own rule: **a seam that cannot model an option must never
+return the model unchanged.** An identity return prices the play at exactly 0.0, which is a real and
+plausible answer, so it would read as *"this play is worthless"* rather than as *"this play is
+unmodelled"* — and at ordering time those are the difference between never explored and undervalued.
+
+The arithmetic itself lives in `common.board_delta` (the closed-form observation synthesis) and
+`common.apply_engine` (the one-step engine drive), so this module stays what it was designed to be:
+the CONTRACT, in one file, over plain data.
 
 ## Three fates, and a silent no-op is never one of them (Issue #259 §3b, ruled 2026-08-01)
 
@@ -367,9 +377,24 @@ class Refusal:
 #: :func:`footprints_writing_unhomed`. Modelling a transition whose write-set the snapshot cannot
 #: hold produces a delta that under-reports, and an under-reported delta is a pruned option.
 FOOTPRINTS: dict[int, Footprint] = {
+    # `attached_tools` joined at T4/1 (Issue #382) and is not a widening of what the kind does — it
+    # is the declaration catching up with a card type the kind always carried. A Pokémon Tool
+    # *"arrives as OptionType.ATTACH exactly like an Energy"* (`common/strategy/context.py`), and it
+    # writes the TOOL zone rather than the Energy one and spends no allowance. Declaring only the
+    # Energy leg made this footprint under-report for every Tool equip, which is the direction
+    # :class:`Footprint` calls *"worse than none"*. It changes no `commutes()` answer — `_ATTACH`
+    # already conflicts with every complete footprint on `my_hand_ids` / `bodies_in_play` — and
+    # `attached_tools` is HOMED, so `footprints_writing_unhomed()` stays empty.
+    #
+    # `damage_counters` joined for the same reason and from the same measurement: a Tool's flat HP
+    # grant lands the instant it is attached, on both the current and the maximum — `ms_mirror_1000`
+    # f13, Hero's Cape (1159) taking a Staryu from 70/70 to 170/170 — and `damage_counters` is the
+    # zone that homes the HP read (`…active.hp_remaining`), exactly as `snapshot_coverage` already
+    # reads Gravity Mountain's `hp_delta`.
     _ATTACH: Footprint(
         reads=frozenset({"my_hand_ids", "bodies_in_play", "allowance_energy_attached"}),
-        writes=frozenset({"attached_energy", "my_hand_ids", "allowance_energy_attached"}),
+        writes=frozenset({"attached_energy", "attached_tools", "damage_counters", "my_hand_ids",
+                          "allowance_energy_attached"}),
         complete=True),
     _EVOLVE: Footprint(
         reads=frozenset({"my_hand_ids", "bodies_in_play"}),
@@ -740,8 +765,13 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     turn. Callers test `is_terminal` first; that is the contract. (A terminal option is an API
     misuse, not a modelling gap, which is why it raises where a gap refuses.)
 
-    Raises `NotImplementedError` for a MODELLED or ENGINE-RESOLVED fate until T4 (Issue #263)
-    implements them — never an identity return, for the reason in this module's header.
+    **The MODELLED transition may still refuse, at :data:`OPTION_SCOPE`** (POC-T4/1, Issue #382).
+    The fate answers *"is this option's card effect resolvable?"*; the transition answers *"can the
+    seam WRITE the resulting board?"*, and those are different questions for a kind whose structural
+    half is uniform. A Supporter's `_PLAY` is the worked case: the card leaving my hand is structural
+    for every play, but the effect IS the play, and the engine does not even move the card to the
+    discard on the same step when the effect opens a select. `common.board_delta` names what it
+    cannot write, and the refusal carries that sentence to the telemetry line.
 
     **Quarantine** (ADR-0098 decision 4): when the parity lane finds a divergence for an option kind,
     that kind is marked unverified and refuses here, so the planner degrades to always-expand and the
@@ -759,12 +789,13 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     if how == UNDECLARED:
         return refuse(option, f"option kind {kind} is not in the seam's coverage table",
                       scope=UNDECLARED_SCOPE)
-    # The FATE is `fate`'s to decide — asked, never re-derived. A second copy of the resolution
+    # The FATE is `fate`'s to decide — asked ONCE, never re-derived. A second copy of the resolution
     # order here is the drift ADR-0087 charges for one store over, and it would be invisible: the
     # census mirrors `fate` while the composer calls this, so a disagreement would price the same
     # option two ways with nothing to say so. What this function adds is only the SCOPE.
-    if fate(option, depth=depth, search_api=search_api, deterministic=deterministic,
-            clauses_cover=clauses_cover) == REFUSED:
+    resolved = fate(option, depth=depth, search_api=search_api, deterministic=deterministic,
+                    clauses_cover=clauses_cover)
+    if resolved == REFUSED:
         # Quarantine, TERMINAL and UNDECLARED already returned above, so a refusal here is an ENGINE
         # precondition — and exactly which one is the work owed. Each gets its OWN scope, because the
         # coverage report needs to tell "we never proved this deterministic" from "the caller wired
@@ -786,21 +817,114 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
         if search_api is None:
             return refuse(option, "no `_search_api` seam supplied, so there is no engine to resolve "
                                   "through", scope=NO_ENGINE_SCOPE)
-    raise NotImplementedError("apply_option is POC-T4 (Issue #263); T0 freezes the contract only")
+    if resolved == ENGINE_RESOLVED:
+        from common import apply_engine
+        after = apply_engine.resolve(model, option, search_api=search_api)
+        if after is None:
+            return refuse(
+                option,
+                "the engine route was eligible but produced no board — the observation carries no "
+                "`search_begin_input` (0 of 372 gate frames do), the option is not on this menu, or "
+                "the engine raised",
+                scope=NO_ENGINE_SCOPE)
+        return EngineResolved(model=after, kind=kind, clause_gap=_clause_gap(model, option))
+    return _modelled(model, option)
+
+
+def _modelled(model, option: Mapping):
+    """The closed-form transition: synthesize the post-action observation, then build a FRESH model.
+
+    Fresh rather than patched, for the memo-staleness reason `StateModel.rebuilt` spells out —
+    ``state_value`` caches its per-family dict on the model and nothing invalidates that key. The
+    rules arithmetic is `common.board_delta`'s, so this function contributes no card or rule
+    knowledge of its own and the parity lane has exactly one thing to diff.
+
+    Their side is REUSED when the synthesis never reached across the table, which is most of the
+    time: the delta reports that from what it actually wrote, rather than the caller re-deriving it
+    from a hash of the result."""
+    from common import board_delta
+    obs = getattr(model, "source_obs", None)
+    if not obs:
+        return refuse(option, "the model carries no source observation to transition from — it was "
+                              "constructed directly rather than through `StateModel.build`")
+    context = ((obs.get("select") or {}).get("context"))
+    try:
+        delta = board_delta.transition(obs, option, seat_index=getattr(model, "my_index", 0),
+                                       combat=model.mine._combat, context=context)
+    except board_delta.Unmodellable as gap:
+        return refuse(option, str(gap))
+    return model.rebuilt(delta.obs, reuse_their_side=delta.shares_opponent)
+
+
+def _clause_gap(model, option: Mapping) -> str:
+    """The ENGINE-RESOLVED telemetry line: ``"<card id> <card name>: <what the vocabulary cannot
+    say>"``.
+
+    It must name the CARD (Issue #299): with the route open to every declared non-terminal kind, a
+    backlog line reading *"kind 7"* covers 699 corpus `_PLAY` options at once and is unreadable as
+    work. The card is resolved through the option's own zone references — the same
+    ``(area, index)`` / ``(inPlayArea, inPlayIndex)`` pair `common.option_equivalence` fingerprints —
+    so an option shape that carries no resolvable reference degrades to naming the kind, which is
+    strictly better than naming nothing."""
+    card = _option_card(model, option)
+    kind = transition_kind(option)
+    if card is None:
+        return (f"option kind {kind}: no Effect Clause covers this option's card effect, so the "
+                f"engine resolved it")
+    cid, name = card
+    return f"{cid} {name}: no Effect Clause covers this effect, so the engine resolved it"
+
+
+def _option_card(model, option: Mapping):
+    """``(card id, card name)`` for the card an option names, or None.
+
+    Prefers the HAND reference (the card being played/attached/evolved into) over the in-play one,
+    because that is the card whose effect the vocabulary is missing. Never raises: it runs on the
+    telemetry path of the ordering hot loop."""
+    obs = getattr(model, "source_obs", None) or {}
+    players = ((obs.get("current") or {}).get("players")) or []
+    seat = int(getattr(model, "my_index", 0))
+    me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
+    zones = {2: "hand", 3: "discard", 4: "active", 5: "bench"}
+    for area_key, index_key in (("area", "index"), ("inPlayArea", "inPlayIndex")):
+        area = option.get(area_key)
+        index = option.get(index_key)
+        zone = zones.get(area) if area is not None else ("hand" if area_key == "area" else None)
+        if zone is None or not isinstance(index, int) or index < 0:
+            continue
+        cards = me.get(zone) or ()
+        if index >= len(cards) or not cards[index]:
+            continue
+        cid = cards[index].get("id")
+        stat = model.mine._combat._card_stat(cid)
+        return cid, (getattr(stat, "name", None) or "?")
+    return None
+
+
+#: Option kinds the parity lane has found diverging. **Empty, and that is a MEASUREMENT** — the lane
+#: over the committed 377-trace corpus replays every modelled kind divergence-free
+#: (`tests/parity/test_apply_seam_parity.py`). It is a ruling record, not a scratch pad: an entry is
+#: added only with the divergence filed, exactly as a gate baseline is only re-captured on a verdict.
+QUARANTINED_KINDS: frozenset[int] = frozenset()
 
 
 def quarantined_kinds() -> frozenset[int]:
     """Option kinds the parity lane has found diverging — the planner must not enumerate through
     these (ADR-0098 decision 4).
 
-    Empty until T4 wires the parity lane. The registry lives here rather than in the planner because
-    the seam is what diverges: the planner is one consumer of that fact, and a second consumer (the
-    coverage gate's report, the telemetry line) must read the same answer.
+    Reads :data:`QUARANTINED_KINDS`, which the lane's findings populate. The registry lives here
+    rather than in the planner because the seam is what diverges: the planner is one consumer of that
+    fact, and a second consumer (the coverage gate's report, the telemetry line) must read the same
+    answer.
 
     **Telemetry is not optional.** A quarantined kind must be named, with its reason, wherever the
     agent reports what it did — a degraded agent that looks merely bad is indistinguishable from a
-    broken one, and the whole point of quarantine is that the difference is visible."""
-    return frozenset()
+    broken one, and the whole point of quarantine is that the difference is visible.
+
+    A FUNCTION rather than a bare constant read, deliberately: every caller goes through one name, so
+    a test can `monkeypatch` the answer and exercise the degraded path without editing a ruling
+    record."""
+    return QUARANTINED_KINDS
 
 
 # Two exported names changed MEANING in Issue #299 without changing spelling, and both are called
@@ -818,5 +942,5 @@ __all__: Sequence[str] = (
     "Footprint", "FOOTPRINTS", "footprint", "commutes",
     "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "UnsupportedTransition",
     "transition_kind", "coverage", "fate", "is_terminal", "refuse", "must_expand", "require_model",
-    "apply_option", "quarantined_kinds",
+    "apply_option", "quarantined_kinds", "QUARANTINED_KINDS",
 )

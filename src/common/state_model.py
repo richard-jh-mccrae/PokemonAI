@@ -25,11 +25,31 @@ worlds share MY half. Sharing is always guarded by :attr:`StateModel.opponent_fi
 WHOLESALE from their entire side rather than from an enumerated field list, so a disruption play
 nobody anticipated invalidates by construction (a hand-picked list silently misses Judge's hand/deck
 counts and a gust's Active/bench swap — it fails OPEN, the one direction this codebase never
-accepts). A general ``apply(action)`` delta path is deliberately ABSENT: the engine already hands us
-an authoritative post-action board at every simulated leaf, so such a path would re-predict in
-Python what the simulator just computed (a second rules engine, whose failure mode is silent
-divergence in every downstream equation), and the my-side affordability cluster invalidates wholesale
-under one manual attach anyway.
+accepts).
+
+**A general ``apply(action)`` delta path is still absent, and there is now exactly ONE sanctioned
+route to a hypothetical board — through the apply seam** (`common.apply_option`, ADR-0098; the
+transitions landed with POC-T4/1, Issue #382). Recorded here because the paragraph this replaces
+refused such a path outright, and a later reader meeting :meth:`StateModel.rebuilt` would otherwise
+conclude the rule was silently violated. It was not; the premise moved:
+
+* The OLD refusal rested on *"the engine already hands us an authoritative post-action board at every
+  simulated leaf"*. That was true while every hypothetical came from a forked simulation. The
+  differencing composer (Issue #263) is precisely the caller for which it is not: it prices a play by
+  ``state_value(after) − state_value(before)`` at 1 ply for every option on the menu, and forking the
+  native engine per candidate is what ADR-0098 declined on measurement (no deal-seed, and 0 of 372
+  gate frames carry `search_begin_input`, so an engine-routed decision is un-gradeable).
+* What survives unchanged is the reason the refusal was worth writing down: a hand-written delta
+  applied IN PLACE is a second rules engine whose failure mode is silent divergence. So the seam
+  never mutates a model. It synthesizes a fresh post-action observation (copy-on-write over the
+  pre-state's zones, `common.board_delta`) and calls :meth:`build` again — a fresh model owns a fresh
+  memo, which is what makes the ``("state_value",)`` memo staleness hazard impossible by construction
+  rather than by discipline. The my-side affordability cluster still invalidates wholesale under one
+  manual attach, which is an argument for a fresh model, not against one.
+* And the silent-divergence risk is answered by measurement rather than by prohibition: the seam's
+  parity lane replays committed native traces one step at a time and diffs the synthesized model
+  against the model built from the next recorded frame, with a divergence a ruled seam bug that
+  QUARANTINES the option kind (`tests/parity/test_apply_seam_parity.py`).
 
 Composes the knowledge seams (the Stat Provider ADR-0056, ``CardFunctions``, ``CombatMath``
 ADR-0052, the Read) and takes per-decision facts as explicit arguments. It never imports or reads a
@@ -1873,6 +1893,12 @@ class StateModel(_Lazily):
 
     _probe_prefix = "model"
 
+    #: The observation :meth:`build` was handed, and the knowledge seams it was handed WITH — the
+    #: only thing a successor snapshot needs that the snapshot itself does not already carry. Set by
+    #: :meth:`build`; ``(None, {})`` on a model constructed directly, which is why :meth:`rebuilt`
+    #: raises rather than silently rebuilding a model with no Stat Provider.
+    _origin: tuple = (None, {})
+
     def __init__(self, *, mine: MySide, theirs: TheirSide, state: dict, my_index: int = 0,
                  carried: CarriedState = CarriedState(), probe=None):
         super().__init__(probe=probe)
@@ -1932,7 +1958,62 @@ class StateModel(_Lazily):
             matchup_coverage=matchup_coverage, opponent=opponent, forward_ids=forward_ids,
             charged=charged, probe=probe,
             turn_boosts=() if boosts_for is None else tuple(boosts_for(1 - mi)))
-        return cls(mine=mine, theirs=theirs, state=state, my_index=mi, carried=carried, probe=probe)
+        model = cls(mine=mine, theirs=theirs, state=state, my_index=mi, carried=carried, probe=probe)
+        model._origin = (obs, {
+            "combat": combat, "my_index": mi, "deck": deck, "deck_empty": deck_empty,
+            "needs": needs, "role_worth": role_worth, "read": read, "brief": brief,
+            "matchup_plan": matchup_plan, "posture_confidence": posture_confidence,
+            "favorability": favorability, "matchup_coverage": matchup_coverage,
+            "opponent": opponent, "forward_ids": forward_ids, "charged": charged,
+            "carried": carried, "probe": probe, "turn_boosts": turn_boosts,
+        })
+        return model
+
+    def rebuilt(self, obs: dict, *, reuse_their_side: bool = False) -> "StateModel":
+        """**The ONE sanctioned route to a hypothetical board** — a FRESH model over ``obs``, built
+        with exactly the knowledge seams this one was (POC-T4/1, Issue #382).
+
+        Not an ``apply(action)`` path and deliberately not one: it takes a whole observation, so the
+        rules arithmetic lives in the apply seam (`common.board_delta`) where the parity lane can
+        diff it against a recorded native trace, and this method contributes no rules knowledge of
+        its own. See this module's header for why the older blanket refusal of a delta path does not
+        cover it.
+
+        **Fresh, never patched.** ``state_value`` memoizes its per-family dict onto the model under
+        ``("state_value",)`` and nothing invalidates that key, so a patched model would return a
+        stale scalar in silence. A new model owns a new memo; staleness is impossible by
+        construction rather than by discipline. :meth:`build` is *"cheap, because it computes nothing
+        yet"*, so the fresh model costs three dict allocations plus whatever the caller then reads.
+
+        ``reuse_their_side`` passes this model's already-built (and possibly already-derived)
+        :class:`TheirSide` through, which is the sharing mechanism :meth:`shares_opponent_with`
+        exists to guard. **The caller must have established that the transition never touched their
+        `PlayerState` nor the shared Stadium** — `board_delta.Delta.shares_opponent` is what answers
+        that, from the synthesis itself rather than from a hash of the result. Default False: a
+        reused side that is stale fails OPEN, and this codebase never takes that direction by
+        default.
+
+        Raises `ValueError` on a model that was constructed directly rather than through
+        :meth:`build` — it carries no Stat Provider to rebuild with, and a model built with
+        ``combat=None`` would answer every card question "unknown" while looking like a board."""
+        kwargs = self._origin[1]
+        if not kwargs:
+            raise ValueError(
+                "rebuilt() needs the knowledge seams `build()` was handed; this model was "
+                "constructed directly, so there is no Stat Provider to rebuild with")
+        if reuse_their_side:
+            kwargs = dict(kwargs, their_side=self.theirs)
+        return type(self).build(obs, **kwargs)
+
+    @property
+    def source_obs(self) -> dict:
+        """The observation :meth:`build` was handed, or ``{}``.
+
+        The snapshot holds ``current`` (as :attr:`state`) and each side's `PlayerState`, but the
+        apply seam needs the whole envelope — the live ``select`` whose menu an option came from, and
+        the ``own_prizes`` anchor `MySide._deck_facts` reads. Exposed as a read rather than re-derived
+        because there is nothing to derive it from."""
+        return self._origin[0] or {}
 
     # -- turn / quota facts (observation reads, not Carried State) ------------------------------
     #
