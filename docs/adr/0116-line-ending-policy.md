@@ -1,6 +1,6 @@
-# ADR-TEMP-367 - Committed line-ending policy
+# ADR-0116 - Committed line-ending policy
 
-**Status:** Accepted for Issue #367. Draft ADR; `/open-pr` assigns the final number.
+**Status:** Accepted; BUILT 2026-08-04 for Issue #367.
 
 ## Context
 
