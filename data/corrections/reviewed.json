@@ -114,9 +114,9 @@
     "round": "2026-08-03"
   },
   "81785223-44": {
-    "disposition": "covered",
-    "reason": "Current Pilot exactly matches the human ruling (Play Pokégear 3.0). Prior note reviewed; closure refreshed against current shipped choice rather than the retired rung.",
-    "round": "2026-08-03"
+    "disposition": "refuted",
+    "reason": "REFUTED by the developer 2026-08-02 in data/leaf_lab/wave3-rulings.md line 36 ('as 32'), applying here because the verdict was recorded and never landed. Its sibling 81785223|0|decision|32 WAS applied the same day with the same rationale: 'Pokegear is not the play with nearly every Supporter already in hand - evolve Staryu -> Mega Starmie ex, Hilda for Energy, attach to the Active, Jetting Blow'. The 2026-08-03 'covered' entry (quoted below) was written against the STALE correction target - it closes the frame on the grounds that the Pilot plays Pokegear 3.0, which is the very pick the developer had refuted the day before - so it silently un-did the refutation and the frame kept grading. SUPERSEDED 2026-08-03 REASON, verbatim: \"Current Pilot exactly matches the human ruling (Play Pokegear 3.0). Prior note reviewed; closure refreshed against current shipped choice rather than the retired rung.\"",
+    "round": "2026-08-04"
   },
   "81903490-27": {
     "disposition": "covered",
@@ -524,9 +524,9 @@
     "round": "2026-07-04"
   },
   "83661649-54": {
-    "disposition": "covered",
-    "reason": "_wins_now fix (gate on active_can_ko): Jetting Blow's KO-class score was a 1-prize BENCH snipe (20HP Staryu), mis-credited as a game-winning 3-prize ACTIVE KO -> taken immediately. Now the snipe defers behind the beneficial attach (attack-last): Pilot builds toward Nebula Beam AND takes the snipe-KO same turn. Gated by tests/strategy/test_incoming_affordability.py on wins_now_f54.json. Residual (attaches to bench vs active Mega, from the active_doomed Energy-affordability over-estimate) deferred: docs/todo/incoming-affordability.md. Human reversed the initial refuted call 2026-07-04; investigation found + fixed the primary bug.",
-    "round": "2026-07-04"
+    "disposition": "refuted",
+    "reason": "REFUTED 2026-08-04, superseding the 2026-07-04 'covered' entry (quoted below). The correction is UNREACHABLE BY THE AGENT: docs/todo/incoming-affordability.md records that 'the f54 correction relied on seeing the opponent's hand (replay), which the agent cannot'. ADR-0045 then ruled active_doomed STAYS WORST-CASE precisely because the mirror opponent can hold an unseen Ignition (3-Energy burst) firing Nebula Beam; the affordability-aware read was BUILT AND REVERTED as unsound. So feeding the bench Mega is the DESIGNED behaviour under shipped doctrine, not a blunder. Developer 2026-08-04: 'pilot makes better decision to attach to bench given our active might be doomed if opponent plays ignition energy.' SUPERSEDED 2026-07-04 REASON, verbatim: \"_wins_now fix (gate on active_can_ko): Jetting Blow's KO-class score was a 1-prize BENCH snipe (20HP Staryu), mis-credited as a game-winning 3-prize ACTIVE KO -> taken immediately. Now the snipe defers behind the beneficial attach (attack-last): Pilot builds toward Nebula Beam AND takes the snipe-KO same turn. Gated by tests/strategy/test_incoming_affordability.py on wins_now_f54.json. Residual (attaches to bench vs active Mega, from the active_doomed Energy-affordability over-estimate) deferred: docs/todo/incoming-affordability.md. Human reversed the initial refuted call 2026-07-04; investigation found + fixed the primary bug.\"",
+    "round": "2026-08-04"
   },
   "83661652-3": {
     "disposition": "refuted",
