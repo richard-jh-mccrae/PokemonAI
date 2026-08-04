@@ -85,8 +85,8 @@ def test_the_diff_BITES_when_a_transition_is_wrong():
 
     original = bd.TRANSITIONS[bd._RETREAT]
 
-    def _forgets_the_allowance(obs, option, *, seat_index, combat, context):
-        delta = original(obs, option, seat_index=seat_index, combat=combat, context=context)
+    def _forgets_the_allowance(obs, option, *, seat_index, combat):
+        delta = original(obs, option, seat_index=seat_index, combat=combat)
         delta.obs["current"]["retreated"] = False
         return delta
 

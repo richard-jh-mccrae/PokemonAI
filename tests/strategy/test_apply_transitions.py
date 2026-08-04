@@ -41,20 +41,26 @@ from common import board_delta as bd
 from common import state_value as sv
 from common.cards import CardFunctions
 from common.effects import CardEffects
+from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.state_model import StateModel
 from common.strategy.combat import CombatMath
 from common.strategy.context import _ATTACH, _EVOLVE, _PLAY, _RETREAT
 
-# EnergyType codes (cg.api.EnergyType); AreaType from `option_equivalence`'s pinned constants.
+# EnergyType codes (cg.api.EnergyType). The AreaType numbers come from `option_equivalence`, the
+# one module that holds them DLL-free with a test pinning them to the engine enum — a fourth spelling
+# in this file would be a fourth thing to keep true.
 COLORLESS, FIGHTING, PSYCHIC = 0, 6, 5
-HAND, ACTIVE, BENCH = 2, 4, 5
-MAIN = 0
+HAND, ACTIVE, BENCH = AREA_HAND, AREA_ACTIVE, AREA_BENCH
+MAIN = bd.CONTEXT_MAIN
 
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 AURA_JAB, MEGA_BRAVE = 982, 983
 E_F, IGNITION = 6, 17
-CAPE, BOSS, GRAVITY_MOUNTAIN, BATTLE_CAGE = 1159, 1182, 1252, 1264
+# Two Stadiums with NO Effect Clauses (`card_effects.json` returns [] for both) and one with an
+# `hp_delta` — so a displacement can be tested both ways round.
+CAPE, BOSS, GRAVITY_MOUNTAIN = 1159, 1182, 1252
+BATTLE_CAGE, JAMMING_TOWER = 1264, 1246
 
 #: Every row is a SOURCE claim, checked field-for-field against `data/EN_Card_Data.csv` by
 #: `tests/scouting/test_cardstat_fixture_facts.py`. Munkidori is HP **110** and Mega Lucario ex's
@@ -81,11 +87,12 @@ _STATS = {
     BOSS: CardStat(BOSS, name="Boss’s Orders", cardType=3),
     GRAVITY_MOUNTAIN: CardStat(GRAVITY_MOUNTAIN, name="Gravity Mountain", cardType=4),
     BATTLE_CAGE: CardStat(BATTLE_CAGE, name="Battle Cage", cardType=4),
+    JAMMING_TOWER: CardStat(JAMMING_TOWER, name="Jamming Tower", cardType=4),
 }
 _ATTACKS = {AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
             MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2,
                                    energyTypes=(FIGHTING, FIGHTING))}
-#: Ignition's two provisions, the pair `CardFunctions.energy_provision` reads (#142).
+#: Ignition's two provisions, the pair `CardFunctions.energy_provision` reads (Issue #142).
 _TAGS = {IGNITION: ["provides:1", "provides_evo:3"]}
 #: Boss's Orders' `gust` clause — the reason a Supporter's `_PLAY` refuses rather than pricing its
 #: structural floor as the whole play. Gravity Mountain's `hp_delta` is the Stadium gate's input.
@@ -352,15 +359,39 @@ def test_playing_a_stadium_swaps_the_one_in_play_and_discards_it_to_ITS_OWNER():
     """`docs/rulebook.txt` L135-137 — *"Only one Stadium can be in play at a time—if a new one comes
     into play, discard the old one and end its effects."* L78 — *"Each player has their own discard
     pile"*, which is why displacing THEIRS writes THEIR discard and not mine. `docs/rules.md` §3
-    spends the one-per-turn allowance."""
+    spends the one-per-turn allowance.
+
+    Displacing **Jamming Tower**, which has no Effect Clauses — the case the seam can model. A
+    Stadium whose effect WRITES refuses, and that is the test below."""
     theirs = _player(active=_body(MUNKIDORI, serial=50), seat=1)
     obs = _obs(_player(active=_body(RIOLU), hand=[BATTLE_CAGE]), theirs,
-               stadium=[{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}])
+               stadium=[{"id": JAMMING_TOWER, "serial": 55, "playerIndex": 1}])
     after = _apply(obs, {"type": _PLAY, "index": 0})
     assert after.stadium_id == BATTLE_CAGE
     assert after.stadium_played is True
-    assert after.theirs.discard_ids == (GRAVITY_MOUNTAIN,)
+    assert after.theirs.discard_ids == (JAMMING_TOWER,)
     assert after.mine.discard_ids == ()
+
+
+@pytest.mark.req("REQ-APPLY-0005")
+def test_DISPLACING_a_stadium_whose_effect_writes_refuses_because_the_effect_ENDS():
+    """The caller of the Stadium gate the parity lane could not have found, and the reason it is here
+    on the RULE rather than on the measurement.
+
+    *"…discard the old one and **end its effects**"* (`docs/rulebook.txt` L137). Gravity Mountain
+    leaving play gives every Stage 2 in play its 30 HP back — verified on the corpus rather than
+    reasoned: `ml_dx_2001` carries Dragapult ex at **290/290 at f172 while Gravity Mountain is out,
+    and 320/320 at f181 once it is gone**. A structural swap that only moved the `stadium` zone would
+    leave every one of those bodies at a stale maximum.
+
+    The committed corpus contains ZERO steps that play a quiet Stadium over a writing one — all four
+    displacements in it play a *writing* Stadium, which refuses on its own clause union — so the
+    parity lane's clean sweep is not evidence about this path, and this test is."""
+    obs = _obs(_player(active=_body(RIOLU), hand=[BATTLE_CAGE]),
+               stadium=[{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}])
+    r = _apply(obs, {"type": _PLAY, "index": 0})
+    assert isinstance(r, ao.Refusal) and r.scope == ao.OPTION_SCOPE
+    assert "1252" in r.reason and "DISPLACING" in r.reason
 
 
 @pytest.mark.req("REQ-APPLY-0005")
@@ -484,28 +515,44 @@ def test_the_post_state_is_a_FRESH_model_with_its_own_memo():
 
 
 @pytest.mark.req("REQ-APPLY-0009")
-def test_every_transition_writes_inside_the_kinds_declared_footprint():
-    """A footprint that under-reports is *"worse than none"* (`apply_option.Footprint`): it would
-    license a reorder that changes the board. Asserted against the DELTA's own write report rather
-    than by inspection, and over each kind's real transition, so a new write has to be declared
-    before it can ship."""
+def test_every_transition_writes_exactly_its_declared_set():
+    """Issue #382's test line asks for *"its declared write-set **and nothing else**"*, and the
+    "nothing else" half is what a subset assertion cannot give: `⊆` catches an EXTRA write and lets a
+    FORGOTTEN one through, which is the direction that matters (a delta that under-reports is a
+    pruned option).
+
+    So each case pins its exact write-set. The `⊆ FOOTPRINTS[kind]` check rides alongside and is a
+    different claim — a footprint that under-reports is *"worse than none"* (`apply_option.Footprint`)
+    because it would license a reorder that changes the board. **Equality against the FOOTPRINT is
+    deliberately NOT asserted**: a footprint is per-KIND and describes the widest board change the
+    kind can make, while a delta is per-OPTION — `_RETREAT`'s footprint names the whole maneuver's
+    five zones and the retreat OPTION spends one allowance."""
     combat = _combat()
     cases = [
-        (_ATTACH, _obs(_player(active=_body(RIOLU), hand=[E_F])),
-         {"type": _ATTACH, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0}),
-        (_ATTACH, _obs(_player(active=_body(RIOLU), hand=[CAPE])),
-         {"type": _ATTACH, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0}),
-        (_EVOLVE, _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC], conditions=("asleep",))),
-         {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0}),
-        (_RETREAT, _obs(_player(active=_body(RIOLU), bench=[_body(MUNKIDORI, serial=2)])),
-         {"type": _RETREAT}),
+        ("energy attach", _ATTACH, _obs(_player(active=_body(RIOLU), hand=[E_F])),
+         {"type": _ATTACH, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0},
+         {"my_hand_ids", "attached_energy", "allowance_energy_attached"}),
+        ("HP-granting Tool attach", _ATTACH, _obs(_player(active=_body(RIOLU), hand=[CAPE])),
+         {"type": _ATTACH, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0},
+         {"my_hand_ids", "attached_tools", "damage_counters"}),
+        ("evolve the Active under a condition", _EVOLVE,
+         _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC], conditions=("asleep",))),
+         {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0},
+         {"my_hand_ids", "bodies_in_play", "special_conditions"}),
+        ("evolve a benched body (no condition to clear)", _EVOLVE,
+         _obs(_player(active=_body(MUNKIDORI, serial=9), bench=[_body(RIOLU)], hand=[MEGA_LUC])),
+         {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": BENCH, "inPlayIndex": 0},
+         {"my_hand_ids", "bodies_in_play"}),
+        ("retreat", _RETREAT,
+         _obs(_player(active=_body(RIOLU), bench=[_body(MUNKIDORI, serial=2)])),
+         {"type": _RETREAT}, {"allowance_retreat_used"}),
     ]
-    for kind, obs, option in cases:
+    for name, kind, obs, option, expected in cases:
         delta = bd.transition(obs, option, seat_index=0, combat=combat, context=MAIN)
+        assert delta.writes == frozenset(expected), (name, sorted(delta.writes))
         declared = ao.footprint(kind)
-        assert declared.complete, kind
-        assert delta.writes <= declared.writes, (kind, sorted(delta.writes - declared.writes))
-        assert delta.writes, kind          # a transition that wrote nothing is an identity return
+        assert declared.complete, name
+        assert delta.writes <= declared.writes, (name, sorted(delta.writes - declared.writes))
 
 
 @pytest.mark.req("REQ-APPLY-0009")
@@ -518,13 +565,15 @@ def test_the_PLAY_footprint_is_a_FLOOR_and_the_real_writes_stay_inside_it():
     assert floor.complete is False
     deploy = bd.transition(_obs(_player(active=_body(RIOLU), hand=[MUNKIDORI])),
                            {"type": _PLAY, "index": 0}, seat_index=0, combat=combat, context=MAIN)
-    assert deploy.writes <= floor.writes and "bodies_in_play" in deploy.writes
+    assert deploy.writes == frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy"})
+    assert deploy.writes <= floor.writes
     stadium = bd.transition(
         _obs(_player(active=_body(RIOLU), hand=[BATTLE_CAGE]),
-             stadium=[{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}]),
+             stadium=[{"id": JAMMING_TOWER, "serial": 55, "playerIndex": 1}]),
         {"type": _PLAY, "index": 0}, seat_index=0, combat=combat, context=MAIN)
+    assert stadium.writes == frozenset({"my_hand_ids", "stadium", "allowance_stadium_played",
+                                        "their_discard_contents"})
     assert stadium.writes <= floor.writes
-    assert {"stadium", "allowance_stadium_played", "their_discard_contents"} <= stadium.writes
 
 
 # ── the ENGINE-RESOLVED execution path ────────────────────────────────────────────────────────────

@@ -47,7 +47,7 @@ delta, which at ordering time reads as *never explore this*.
 from __future__ import annotations
 
 
-def _seed_zones(obs: dict, me: dict, opp: dict, deck) -> tuple:
+def _seed_zones(me: dict, opp: dict, deck) -> tuple:
     """``(your_deck, your_prize, opp_deck, opp_prize, opp_hand)`` for `search_begin`.
 
     A decklist PREFIX sized to each zone's count — the sound fallback branch of
@@ -73,10 +73,12 @@ def _prune_none(value):
     **None-valued dict keys are dropped; None list ELEMENTS are kept** — a face-down Active or prize
     slot is a meaningful None carrying the zone's count.
 
-    The same rule as `planner._prune_none`, deliberately re-expressed rather than imported: pulling
-    it in would make this module import the planner, and the planner imports the world. The shape it
-    normalises is the engine's, not the planner's, so the duplication is of a fact about `asdict`
-    rather than of a decision."""
+    Five pure lines that `planner._prune_none` also has. Not shared, and the honest reason is a
+    judgement rather than a constraint: importing the planner from here would pull in the world, and
+    a third module holding one five-line function would be a module whose entire content is this
+    docstring. What it normalises is a fact about `dataclasses.asdict` meeting the engine's own
+    Observation, so the two copies cannot drift on anything but that — if a third caller ever appears,
+    that is when the shared home earns its keep."""
     if isinstance(value, dict):
         return {k: _prune_none(v) for k, v in value.items() if v is not None}
     if isinstance(value, list):
@@ -121,13 +123,11 @@ def resolve(model, option, *, search_api):
     seat = int(current.get("yourIndex", 0))
     me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
     opp = players[1 - seat] if 0 <= 1 - seat < len(players) and players[1 - seat] else {}
-    deck = getattr(getattr(model, "mine", None), "_deck", ())
-
     from dataclasses import asdict
     started = False
     try:
         engine_obs = search_api.to_observation_class(obs)
-        seeds = _seed_zones(obs, me, opp, deck)
+        seeds = _seed_zones(me, opp, getattr(model, "deck", ()))
         state = search_api.search_begin(engine_obs, *seeds, [], manual_coin=False)
         started = True
         state = search_api.search_step(state.searchId, [index])

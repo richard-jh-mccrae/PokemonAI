@@ -2012,8 +2012,43 @@ class StateModel(_Lazily):
         The snapshot holds ``current`` (as :attr:`state`) and each side's `PlayerState`, but the
         apply seam needs the whole envelope — the live ``select`` whose menu an option came from, and
         the ``own_prizes`` anchor `MySide._deck_facts` reads. Exposed as a read rather than re-derived
-        because there is nothing to derive it from."""
+        because there is nothing to derive it from.
+
+        **Costs nothing to retain**: `state` and both `PlayerState`s are already sub-objects of this
+        dict, so holding it adds a reference rather than a copy. Measured cost of the whole
+        :attr:`_origin` capture (the 18-key kwargs dict plus this tuple), 60 corpus frames x 200
+        passes on this box: **0.40 us against a 3.80 us build** — 10.5% of construction, and 0.016%
+        of the ~2.5 ms `state_value` evaluation the build exists to feed."""
         return self._origin[0] or {}
+
+    # -- the knowledge seams, as public reads -------------------------------------------------
+    #
+    # Three accessors rather than a caller reaching for `model.mine._combat` / `mine._deck`. The
+    # sides hold them privately because the sides are what USE them; the apply seam is the first
+    # module outside this one that needs them, and a private reach across a module boundary is how
+    # a refactor inside `MySide` breaks a caller nothing warned about.
+    @property
+    def combat(self):
+        """The `CombatMath` oracle this snapshot was built with (ADR-0052 / ADR-0056's Stat
+        Provider seam behind it). The apply seam needs it to answer *"what card is this?"* about a
+        card that is not on the board yet — the one in hand being played."""
+        return self.mine._combat
+
+    @property
+    def deck(self) -> tuple:
+        """My DECKLIST as declared to :meth:`build` — the 60 cards, not what is left in the deck.
+
+        ``()`` when none was threaded, which is the honest answer and not an empty deck: the
+        Count Triple's emptiness question is :attr:`MySide.deck_count`'s."""
+        return self.mine._deck
+
+    def card_stat(self, card_id):
+        """This card's `CardStat`, or None — the model's own door onto the Stat Provider.
+
+        Exists so the seam's telemetry can name a card (`"1182 Boss's Orders: …"`) without reaching
+        two levels into another object's privates. Not a `lazy` field: it is parameterised and
+        stateless, and the provider memoizes its own table."""
+        return self.mine._combat._card_stat(card_id)
 
     # -- turn / quota facts (observation reads, not Carried State) ------------------------------
     #

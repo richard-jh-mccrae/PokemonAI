@@ -850,7 +850,7 @@ def _modelled(model, option: Mapping):
     context = ((obs.get("select") or {}).get("context"))
     try:
         delta = board_delta.transition(obs, option, seat_index=getattr(model, "my_index", 0),
-                                       combat=model.mine._combat, context=context)
+                                       combat=model.combat, context=context)
     except board_delta.Unmodellable as gap:
         return refuse(option, str(gap))
     return model.rebuilt(delta.obs, reuse_their_side=delta.shares_opponent)
@@ -879,13 +879,16 @@ def _option_card(model, option: Mapping):
     """``(card id, card name)`` for the card an option names, or None.
 
     Prefers the HAND reference (the card being played/attached/evolved into) over the in-play one,
-    because that is the card whose effect the vocabulary is missing. Never raises: it runs on the
-    telemetry path of the ordering hot loop."""
+    because that is the card whose effect the vocabulary is missing. A `_PLAY` names its hand index
+    bare, with no ``area`` at all, which is why the first pass defaults to the hand rather than
+    skipping. Never raises: it runs on the telemetry path of the ordering hot loop."""
+    from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_DISCARD, AREA_HAND
     obs = getattr(model, "source_obs", None) or {}
     players = ((obs.get("current") or {}).get("players")) or []
     seat = int(getattr(model, "my_index", 0))
     me = players[seat] if 0 <= seat < len(players) and players[seat] else {}
-    zones = {2: "hand", 3: "discard", 4: "active", 5: "bench"}
+    zones = {AREA_HAND: "hand", AREA_DISCARD: "discard",
+             AREA_ACTIVE: "active", AREA_BENCH: "bench"}
     for area_key, index_key in (("area", "index"), ("inPlayArea", "inPlayIndex")):
         area = option.get(area_key)
         index = option.get(index_key)
@@ -896,7 +899,7 @@ def _option_card(model, option: Mapping):
         if index >= len(cards) or not cards[index]:
             continue
         cid = cards[index].get("id")
-        stat = model.mine._combat._card_stat(cid)
+        stat = model.card_stat(cid)
         return cid, (getattr(stat, "name", None) or "?")
     return None
 
@@ -921,9 +924,11 @@ def quarantined_kinds() -> frozenset[int]:
     agent reports what it did — a degraded agent that looks merely bad is indistinguishable from a
     broken one, and the whole point of quarantine is that the difference is visible.
 
-    A FUNCTION rather than a bare constant read, deliberately: every caller goes through one name, so
-    a test can `monkeypatch` the answer and exercise the degraded path without editing a ruling
-    record."""
+    **Two names for two jobs**, which is why this is a function over a constant rather than either
+    alone: :data:`QUARANTINED_KINDS` is the RULING RECORD — the data a human edits when a divergence
+    is filed — while this is the READ every consumer makes, and a read is what a test can
+    `monkeypatch` to exercise the degraded path without touching a ruling record. Both are exported
+    for that reason, not by oversight."""
     return QUARANTINED_KINDS
 
 

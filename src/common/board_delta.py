@@ -83,18 +83,16 @@ from dataclasses import dataclass
 
 from common import snapshot_coverage
 from common.board_cards import body_unit_codes
+# `cg.api.AreaType`, from the ONE module that already holds those numbers DLL-free and has them
+# pinned to the engine enum by a test (`test_area_constants_match_the_engine_enums`). Re-spelling
+# them here would be a second copy of the same constants in the same change.
+from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND
 from common.strategy.context import _ATTACH, _EVOLVE, _PLAY, _RETREAT
 
-#: `cg.api.AreaType` — the numbers `option_equivalence` already pins to the engine enum
-#: (`test_area_constants_match_the_engine_enums`). Written literally for the same reason it does:
-#: importing `cg.api` MAPS THE NATIVE LIBRARY, and this module must stay DLL-free.
-AREA_HAND = 2
-AREA_ACTIVE = 4
-AREA_BENCH = 5
-
-#: `cg.api.SelectContext.MAIN`. The one context at which an `_ATTACH` is the turn's manual Energy
-#: attachment; an attach posed from inside a card's effect (`_ATTACH_FROM` / `_ATTACH_TO`) is the
-#: card doing the work and spends no allowance — `docs/rules.md` §3 limits *manual* attachment.
+#: `cg.api.SelectContext.MAIN`. The only context this module transitions at — see :func:`transition`
+#: for the measurement behind that boundary. It matters most for `_ATTACH`: at MAIN an Energy attach
+#: is the turn's ONE manual attachment (`docs/rules.md` §3), while an attach posed from inside a
+#: card's effect (`_ATTACH_FROM` / `_ATTACH_TO`) is the card doing the work and spends no allowance.
 CONTEXT_MAIN = 0
 
 #: The five Special-Condition flags, on `PlayerState` rather than on the body (`docs/rules.md` §8:
@@ -134,8 +132,14 @@ class Delta:
 
     #: The synthesized observation. Structurally shared with the pre-state everywhere it could be.
     obs: dict
-    #: `snapshot_coverage` zone ids this step wrote. A FLOOR is not good enough here: the per-kind
-    #: transition tests assert equality, which is what makes a forgotten write a failure.
+    #: `snapshot_coverage` zone ids this step ASSIGNED. Exhaustive over assignments and asserted
+    #: EXACTLY, per case, by `test_every_transition_writes_exactly_its_declared_set` — which is what
+    #: makes a FORGOTTEN write a failure and not only an extra one.
+    #:
+    #: Assignments, not the closure of everything downstream: a Tool landing on the Active also moves
+    #: `this_turn_damage_boosts`, because `_SideBase.damage_boosts` DERIVES that zone from the
+    #: holder's tools. Declaring derived zones here would make this set a second, hand-kept model of
+    #: the snapshot's own dependency graph — the drift ADR-0087 charges for one store over.
     writes: frozenset[str]
     #: Their `PlayerState` and the shared Stadium are the pre-state's own objects.
     shares_opponent: bool = True
@@ -211,6 +215,27 @@ def _replace_body(seat: dict, area: int, index: int, body: dict) -> None:
     seat[zone] = bodies
 
 
+def _take_from_hand(seat: dict, index, what: str) -> dict:
+    """Remove and return my hand card at ``index``, resyncing ``handCount``.
+
+    Every transition that plays a card does exactly this, and each one used to spell the bounds
+    check and the count resync for itself — four copies of two lines, which is three chances for one
+    of them to forget the count and leave a snapshot claiming a card it no longer holds.
+
+    Raises :class:`Unmodellable` rather than `IndexError`: the ordering hot path visits every option
+    on a live menu, and a raise there is a forfeited grader match over an option we merely could not
+    resolve."""
+    hand = seat.get("hand") or ()
+    if not isinstance(index, int) or not 0 <= index < len(hand):
+        raise Unmodellable(f"{what} names hand index {index!r}, which this snapshot cannot resolve "
+                           f"(hand of {len(hand)})")
+    card = hand[index]
+    seat["hand"] = _without(hand, index)
+    if seat.get("handCount") is not None:
+        seat["handCount"] = len(seat["hand"])
+    return card
+
+
 def _clear_conditions(seat: dict) -> bool:
     """Clear the five Special-Condition flags; True when any was set.
 
@@ -239,7 +264,7 @@ def _provided_units(combat, card_id, stat, *, onto_evolution: bool) -> tuple:
     Composed, not invented: the colour is ``CardStat.energyType`` and the count is
     `CardFunctions.energy_provision` — the same pair `CombatMath._special_energy_groups` reads for
     the HAND leg of the Attach Budget, so a hypothetical attach and the real board it models agree
-    (#142). A Basic Energy is one unit of its own colour and carries no tag, which is the case that
+    (Issue #142). A Basic Energy is one unit of its own colour and carries no tag — the case that
     would otherwise fail closed to nothing.
 
     Ignition Energy (17) is the worked example the ``energies``/``energyCards`` split exists for:
@@ -317,13 +342,13 @@ def _clause_writes(combat, card_id) -> frozenset:
     return frozenset(out)
 
 
-def _stadium_gate(current: dict, combat) -> None:
+def _stadium_gate(current: dict, combat, *, why: str) -> None:
     """Refuse while a Stadium whose effect WRITES the board is in play.
 
-    **Measured, not anticipated.** The parity lane's first full sweep found 35 diverging steps and
-    every one of them was a live board-level effect re-writing a body the moment it entered or
-    changed — a class the option's own clauses cannot see, because the card doing the work belongs to
-    the board rather than to the play:
+    **Measured, not anticipated.** The parity lane's first full sweep found 82 divergences over 41
+    steps, and every one of them was a live board-level effect re-writing a body the moment it
+    entered or changed — a class the option's own clauses cannot see, because the card doing the work
+    belongs to the board rather than to the play:
 
     * **Risky Ruins (1260)**, a `stadium_trigger`: *"Whenever any player puts a Basic non-{D} Pokémon
       onto their Bench during their turn, place 2 damage counters on that Pokémon."* 28 deploys
@@ -336,7 +361,18 @@ def _stadium_gate(current: dict, combat) -> None:
     registry every other refusal here consults. A Stadium whose effects are `damage_reduction` /
     `damage_boost` / `prevent_damage` writes nothing (declared empty, deliberately — `CombatMath`
     reads those off the `stadium` zone when it prices an attack and stores nothing), so those do not
-    gate and the refusal stays narrow: 35 of 14581 modelled steps across the committed corpus.
+    gate. Cost of the gate, measured on the same corpus: **104 refused steps of 14581** (67 Risky
+    Ruins, 37 Gravity Mountain).
+
+    **Three callers, and the third is the one nobody would guess.** A body ENTERING play is what a
+    trigger fires on (`_play`'s deploy) and a body CHANGING stage is what a static HP delta re-reads
+    (`_evolve`) — but **displacing** the Stadium ENDS its effect (`docs/rulebook.txt` L137: *"discard
+    the old one and end its effects"*), which re-writes every body it was modifying. Verified on the
+    corpus rather than reasoned: `ml_dx_2001` carries Dragapult ex at **290/290 while Gravity Mountain
+    is in play (f172) and at 320/320 once it is gone (f181)**. The committed corpus happens to contain
+    zero steps that play a QUIET Stadium over a writing one — all four displacements play a writing
+    Stadium, which refuses on its own union — so the parity lane's clean sweep does not cover that
+    path, and the gate is here on the rule rather than on the measurement.
 
     Refused rather than modelled, and that is a scope ruling worth stating: applying a Stadium's
     trigger means reading its clause parameters and its restriction (*"Basic non-{D}"*) and deciding
@@ -355,15 +391,15 @@ def _stadium_gate(current: dict, combat) -> None:
         stat = _stat(combat, card_id)
         raise Unmodellable(
             f"{card_id} {getattr(stat, 'name', '?')} is in play and its effect writes "
-            f"{sorted(writes)} on bodies as they enter or change — the transition would produce a "
-            f"board the engine does not (measured: Risky Ruins' 2 counters on a benched Basic, "
-            f"Gravity Mountain's -30 on a Stage 2)")
+            f"{sorted(writes)}; {why} — the transition would produce a board the engine does not "
+            f"(measured: Risky Ruins' 2 counters on a benched Basic, Gravity Mountain's -30 on a "
+            f"Stage 2, and that same -30 coming BACK when the Stadium is displaced)")
 
 
 # ── the four transitions ──────────────────────────────────────────────────────────────────────────
 
 
-def _attach(obs, option, *, seat_index, combat, context) -> Delta:
+def _attach(obs, option, *, seat_index, combat) -> Delta:
     """Energy or Tool from hand onto a body in play.
 
     Both arrive as `OptionType.ATTACH` — *"a Pokémon Tool… arrives as OptionType.ATTACH exactly like
@@ -372,14 +408,9 @@ def _attach(obs, option, *, seat_index, combat, context) -> Delta:
 
     Only the Energy leg spends the allowance: `docs/rules.md` §3 limits the *manual* attachment to
     one per turn, while a Tool is an ordinary Trainer play with no such cap."""
-    hand_index = option.get("index")
     new_obs, current, players = _fork(obs)
     me = _fork_player(players, seat_index)
-    hand = me.get("hand") or ()
-    if not isinstance(hand_index, int) or not 0 <= hand_index < len(hand):
-        raise Unmodellable(f"attach names hand index {hand_index!r}, which this snapshot cannot "
-                           f"resolve (hand of {len(hand)})")
-    card = hand[hand_index]
+    card = _take_from_hand(me, option.get("index"), "attach")
     stat = _stat(combat, card.get("id"))
     if stat is None:
         raise Unmodellable(f"{card.get('id')}: no `CardStat` for the attached card")
@@ -389,9 +420,6 @@ def _attach(obs, option, *, seat_index, combat, context) -> Delta:
     if target is None:
         raise Unmodellable(f"attach names ({area!r}, {index!r}), which is not a body on my board")
 
-    me["hand"] = _without(hand, hand_index)
-    if me.get("handCount") is not None:
-        me["handCount"] = len(me["hand"])
     body = dict(target)
     writes = {"my_hand_ids"}
     if stat.is_tool:
@@ -429,7 +457,7 @@ def _attach(obs, option, *, seat_index, combat, context) -> Delta:
     return Delta(obs=new_obs, writes=frozenset(writes))
 
 
-def _evolve(obs, option, *, seat_index, combat, context) -> Delta:
+def _evolve(obs, option, *, seat_index, combat) -> Delta:
     """The Evolution card from hand REPLACES the body in play, keeping what it was carrying.
 
     `docs/rules.md` §4: *"Evolving keeps attached cards + damage counters; clears Special Conditions
@@ -442,14 +470,9 @@ def _evolve(obs, option, *, seat_index, combat, context) -> Delta:
     body has a different maximum, so ``hp = new max − damage already taken``. Measured shape,
     `alakazam_9000` f127: an undamaged 80 HP body evolving into a 140 HP one arrives at 140/140 with
     ``appearThisTurn: true`` and a two-deep ``preEvolution`` stack."""
-    hand_index = option.get("index")
     new_obs, current, players = _fork(obs)
     me = _fork_player(players, seat_index)
-    hand = me.get("hand") or ()
-    if not isinstance(hand_index, int) or not 0 <= hand_index < len(hand):
-        raise Unmodellable(f"evolve names hand index {hand_index!r}, which this snapshot cannot "
-                           f"resolve (hand of {len(hand)})")
-    card = hand[hand_index]
+    card = _take_from_hand(me, option.get("index"), "evolve")
     stat = _stat(combat, card.get("id"))
     if stat is None or not stat.hp:
         raise Unmodellable(f"{card.get('id')}: no `CardStat` HP for the Evolution card, so the "
@@ -459,7 +482,8 @@ def _evolve(obs, option, *, seat_index, combat, context) -> Delta:
     target = _body_at(me, area, index)
     if target is None:
         raise Unmodellable(f"evolve names ({area!r}, {index!r}), which is not a body on my board")
-    _stadium_gate(current, combat)      # the evolved body's maximum is a board-level fact
+    _stadium_gate(current, combat,
+                  why="a body CHANGING stage is what a static HP delta re-reads")
 
     tools = list(target.get("tools") or ())
     energy_cards = list(target.get("energyCards") or ())
@@ -500,9 +524,6 @@ def _evolve(obs, option, *, seat_index, combat, context) -> Delta:
         "tools": tools,
         "preEvolution": list(target.get("preEvolution") or ()) + [_card_ref(target, seat_index)],
     }
-    me["hand"] = _without(hand, hand_index)
-    if me.get("handCount") is not None:
-        me["handCount"] = len(me["hand"])
     _replace_body(me, area, index, body)
     writes = {"my_hand_ids", "bodies_in_play"}
     if area == AREA_ACTIVE and _clear_conditions(me):
@@ -510,7 +531,7 @@ def _evolve(obs, option, *, seat_index, combat, context) -> Delta:
     return Delta(obs=new_obs, writes=frozenset(writes))
 
 
-def _retreat(obs, option, *, seat_index, combat, context) -> Delta:
+def _retreat(obs, option, *, seat_index, combat) -> Delta:
     """Spend the turn's one manual retreat. **That is the whole step, and it is measured.**
 
     A retreat OPTION is the bare ``{"type": 12}`` — no promoted body, no Energy to pay with — in
@@ -533,10 +554,10 @@ def _retreat(obs, option, *, seat_index, combat, context) -> Delta:
     return Delta(obs=new_obs, writes=frozenset({"allowance_retreat_used"}))
 
 
-def _play(obs, option, *, seat_index, combat, context) -> Delta:
+def _play(obs, option, *, seat_index, combat) -> Delta:
     """Play a card from hand — the structural half, per card TYPE.
 
-    Three sub-cases settle inside one engine step and are modelled; everything else refuses.
+    Two sub-cases settle inside one engine step and are modelled; everything else refuses.
 
     * **A Basic Pokémon** goes to the Bench with a full HP bar and ``appearThisTurn: true``
       (measured: ~1720 deploys across the corpus move exactly ``hand`` + ``bench`` and return to
@@ -550,18 +571,32 @@ def _play(obs, option, *, seat_index, combat, context) -> Delta:
       even reach the discard on the same step, so a floor-only delta would be both incomplete and
       wrong. Those plays become Expectation / choice nodes in POC-T4/2 (Issue #383).
 
-    The clause union is a REFUSAL gate rather than an application: a card whose Effect Clauses write
-    any zone at all is not settled by the structural floor. It is deliberately not the only gate —
-    a card the compendium has never heard of unions to the empty set (see :func:`_clause_writes`),
-    which is exactly why the card-TYPE branch above decides first and the union only narrows it."""
-    hand_index = option.get("index")
+    **What the clause-union refusal actually costs, counted rather than waved at.** Issue #382's
+    design ruling 2 asks for *"the structural floor plus clause application over the audited
+    vocabulary"*, and this module applies NO clauses — any non-empty `CLAUSE_WRITES` union refuses.
+    Over the committed parity corpus that is 706 refused `_PLAY` steps of 2398, and they split three
+    ways:
+
+    * **~624 are stochastic or revealing** (`draw` / `fetch`) — Expectation nodes by construction,
+      which is Issue #383's scope and not a shortfall here.
+    * **63 have their write's TARGET chosen at a follow-up select**, so the `_PLAY` option does not
+      determine it — structurally the same case as `_RETREAT`. Boss's Orders ×30 poses `_SWITCH`
+      (context 3) to pick which of THEIR bodies is gusted; Crispin ×16 poses `_TO_HAND` (7); Wally's
+      Compassion ×14 poses (17); Rosa's Encouragement ×2 poses (22). No closed-form transition exists
+      for these at this step, whatever the clause vocabulary says.
+    * **19 resolve wholly at MAIN**, and of those 13 are the two writing Stadiums (whose effect is the
+      BOARD's, not the play's — see :func:`_stadium_gate`). That leaves **6 steps in the whole corpus**
+      — Cook ×4, Fennel ×1, Crispin ×1 — where a clause could genuinely be applied here and is not.
+      Deferred deliberately: a heal applier built for 6 corpus steps is the thin end of the clause
+      application the sub-issue split assigned to Issues #383/#386, and half of it here is exactly the
+      three-quarters-of-a-card modelling Issue #300's `_covers` verdict exists to refuse.
+
+    The union is deliberately not the ONLY gate — a card the compendium has never heard of unions to
+    the empty set (see :func:`_clause_writes`), which is why the card-TYPE branch decides first and
+    the union only narrows it."""
     new_obs, current, players = _fork(obs)
     me = _fork_player(players, seat_index)
-    hand = me.get("hand") or ()
-    if not isinstance(hand_index, int) or not 0 <= hand_index < len(hand):
-        raise Unmodellable(f"play names hand index {hand_index!r}, which this snapshot cannot "
-                           f"resolve (hand of {len(hand)})")
-    card = hand[hand_index]
+    card = _take_from_hand(me, option.get("index"), "play")
     card_id = card.get("id")
     stat = _stat(combat, card_id)
     if stat is None:
@@ -581,7 +616,8 @@ def _play(obs, option, *, seat_index, combat, context) -> Delta:
         if not stat.hp:
             raise Unmodellable(f"{card_id} {stat.name}: no `CardStat` HP, so the deployed body's "
                                f"maximum is unknown")
-        _stadium_gate(current, combat)   # a body ENTERING play is what a Stadium trigger fires on
+        _stadium_gate(current, combat,
+                      why="a body ENTERING play is what a Stadium trigger fires on")
         bench = list(me.get("bench") or ())
         if len(bench) >= int(me.get("benchMax") or _BENCH_MAX):
             raise Unmodellable(f"{card_id} {stat.name}: the Bench is full, so this deploy is not a "
@@ -596,9 +632,6 @@ def _play(obs, option, *, seat_index, combat, context) -> Delta:
             "energies": [], "energyCards": [], "tools": [], "preEvolution": [],
         })
         me["bench"] = bench
-        me["hand"] = _without(hand, hand_index)
-        if me.get("handCount") is not None:
-            me["handCount"] = len(me["hand"])
         return Delta(obs=new_obs,
                      writes=frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy"}))
 
@@ -607,6 +640,14 @@ def _play(obs, option, *, seat_index, combat, context) -> Delta:
         if old and old.get("id") == card_id:
             raise Unmodellable(f"{card_id} {stat.name}: a Stadium of the same name is already in "
                                f"play, so this is not a legal play (`docs/rulebook.txt` L137)")
+        # DISPLACEMENT ends the old Stadium's effect (`docs/rulebook.txt` L137), which re-writes every
+        # body it was modifying — a Gravity Mountain leaving play gives every Stage 2 its 30 HP back
+        # (`ml_dx_2001`: Dragapult ex 290/290 at f172 with GM out, 320/320 at f181 without it). So the
+        # gate belongs here as much as on the two body-moving transitions, and this is the caller the
+        # parity lane could NOT have found: the committed corpus contains no step that plays a QUIET
+        # Stadium over a writing one, so a clean sweep is not evidence about this path.
+        _stadium_gate(current, combat,
+                      why="DISPLACING it ends its effect on every body it was modifying")
         writes = {"my_hand_ids", "stadium", "allowance_stadium_played"}
         if old is not None:
             owner = old.get("playerIndex")
@@ -619,9 +660,6 @@ def _play(obs, option, *, seat_index, combat, context) -> Delta:
         played["playerIndex"] = card.get("playerIndex", seat_index)
         current["stadium"] = [played]
         current["stadiumPlayed"] = True
-        me["hand"] = _without(hand, hand_index)
-        if me.get("handCount") is not None:
-            me["handCount"] = len(me["hand"])
         # `shares_opponent=False` UNCONDITIONALLY, even when the displaced Stadium was my own. The
         # Stadium is a SHARED zone that their side's derivations read (a Gravity Mountain moves their
         # Stage 2s' HP), so a reused `TheirSide` would carry a stale one.
@@ -652,10 +690,12 @@ def transition(obs: dict, option: dict, *, seat_index: int, combat, context=None
     """The observation after ``option``, or :class:`Unmodellable`.
 
     **MAIN-menu options only, and that boundary is measured rather than chosen.** Over the whole
-    committed parity corpus, 14 575 of 14 576 modelled steps are posed at `SelectContext.MAIN`; the
-    single exception is a `_EVOLVE` posed at context 37 — **Rare Candy's** *"put that card onto the
-    Basic Pokémon to evolve it, skipping the Stage 1"* — and answering it does not only evolve the
-    body, it also puts the Rare Candy itself into the discard (`trcx_9100` f13).
+    committed parity corpus, **14 580 of 14 581** modelled steps are posed at `SelectContext.MAIN`;
+    the single exception is a `_EVOLVE` posed at context 37 — **Rare Candy's** *"put that card onto
+    the Basic Pokémon to evolve it, skipping the Stage 1"* — and answering it does not only evolve
+    the body, it also puts the Rare Candy itself into the discard (`trcx_9100` f13). (14 581 is the
+    same denominator `tools/train/apply_parity.py` reports as `modelled_steps`, so the two cannot
+    quote different populations for one claim.)
 
     That is the general shape and the reason for the gate: an option posed INSIDE a card's effect
     resolution is one leg of that CARD's step, so it carries writes that belong to the card rather
@@ -670,8 +710,7 @@ def transition(obs: dict, option: dict, *, seat_index: int, combat, context=None
     fn = TRANSITIONS.get(kind)
     if fn is None:
         raise Unmodellable(f"option kind {kind} has no closed-form transition in this module")
-    return fn(obs or {}, option or {}, seat_index=int(seat_index), combat=combat, context=context)
+    return fn(obs or {}, option or {}, seat_index=int(seat_index), combat=combat)
 
 
-__all__ = ("AREA_HAND", "AREA_ACTIVE", "AREA_BENCH", "CONTEXT_MAIN", "CONDITION_FLAGS",
-           "Unmodellable", "Delta", "TRANSITIONS", "transition")
+__all__ = ("CONTEXT_MAIN", "CONDITION_FLAGS", "Unmodellable", "Delta", "TRANSITIONS", "transition")

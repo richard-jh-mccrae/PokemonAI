@@ -34,6 +34,32 @@ to *"what state can a card effect write, and where does the snapshot hold it?"*,
 compares is a zone somebody declared, and a zone nobody declared cannot be silently skipped here —
 it is missing from the registry, which its own audit test is what catches.
 
+### DECLARED BLIND SPOTS — what a clean sweep does NOT cover
+
+Stated rather than discovered, because *"0 DIVERGED"* is exactly the result that invites over-reading.
+Each was found by injecting a defect and watching the lane stay green:
+
+* **`appearThisTurn`** — the new-in-play bit is in no `snapshot_coverage` zone, so it has no snapshot
+  home for the projection to read at all. A deploy that forgot it would pass. **Issue #391** owns it,
+  and its acceptance is a second control here that bites.
+* **`transient_grants`** — :func:`offline_combat` builds the oracle with ``transients=None``, so
+  `BodyView.grant` is `{}` on both sides and the zone compares a constant. Reconstructing the grant
+  tracker means replaying attack effects across the trace, which is a different instrument; no
+  modelled transition writes the zone today, which is why the gap is recorded rather than closed.
+* **`serial`** — :func:`_project` reads a body by identity-and-state (card id, HP, counters, energy,
+  tools, prizes) and not by engine instance number, deliberately: that is the same field ADR-0091's
+  Option Equivalence ignores, because two indistinguishable bodies are one decision. The cost is that
+  a transition which carried the WRONG instance of an identical card would pass here.
+
+**`my_deck_count` was on this list and is not any more.** The lane threads each trace's real 60-card
+decklist from `Trace.meta["decks"]` (see :func:`replay`), because `MySide.deck_count` is derived from
+*decklist − visible − prizes* rather than read off the observation's `deckCount`, so with ``deck=None``
+it was constant on both sides of every diff. Measured with a defect that drops an attached Energy
+CARD while keeping its units — the exact `board_cards` trap, one zone over — on 8 traces / 604 steps:
+**deck-threaded it is caught by `deck_odds` AND `my_deck_count` (792 divergences); deckless, only
+`deck_odds` sees it (396)**. So the threading bought one whole zone, and `deck_odds` was already live
+through `visible_counts`.
+
 ## Running it
 
     python tools/train/apply_parity.py                 # every committed trace
@@ -219,7 +245,8 @@ def _chosen_option(frame: dict):
 
 def _card_of(obs: dict, option: dict, seat: int):
     """The hand card an option names, for the report's backlog grouping. None when it names none."""
-    if "index" not in option or option.get("area") not in (None, 2):
+    from common.option_equivalence import AREA_HAND
+    if "index" not in option or option.get("area") not in (None, AREA_HAND):
         return None
     players = ((obs.get("current") or {}).get("players")) or []
     hand = (players[seat] or {}).get("hand") or () if 0 <= seat < len(players) else ()
@@ -232,6 +259,11 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
     report = report or Report()
     body = _load(path)
     frames = body.get("frames") or []
+    # Each seat's real 60-card decklist, off the trace's own meta (`Trace.decks`). Threaded into
+    # every model so `deck_odds` and `my_deck_count` COMPARE something: built with `deck=None` the
+    # Count Triple's chain is constant on both sides of the diff, and 2 of the 22 homed zones were
+    # silently vacuous. Verified by zeroing a synthesized `deckCount` and watching the lane go red.
+    decks = (body.get("meta") or {}).get("decks") or [[], []]
     report.traces += 1
     report.frames += len(frames)
     effects = combat.effects
@@ -252,7 +284,8 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
             tally["incomparable"] += 1
             continue
         card_id = _card_of(obs, option, seat)
-        pre = StateModel.build(obs, combat=combat, my_index=seat)
+        deck = decks[seat] if seat < len(decks) else []
+        pre = StateModel.build(obs, combat=combat, my_index=seat, deck=deck)
         result = seam.apply_option(
             pre, option, clauses_cover=(effects.clauses_cover(card_id) if card_id else None))
         if seam.must_expand(result):
@@ -262,7 +295,7 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
             report.refusal_reasons[reason] = report.refusal_reasons.get(reason, 0) + 1
             continue
         after = seam.require_model(result)
-        engine = StateModel.build(next_obs, combat=combat, my_index=seat)
+        engine = StateModel.build(next_obs, combat=combat, my_index=seat, deck=deck)
         ours, theirs = zone_facts(after), zone_facts(engine)
         bad = [z for z in theirs if ours.get(z) != theirs[z]]
         if bad:
