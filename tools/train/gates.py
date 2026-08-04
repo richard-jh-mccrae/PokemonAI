@@ -493,6 +493,15 @@ RECOGNISED_DISPOSITIONS = VOIDING_DISPOSITIONS | frozenset({
     "covered", "deferred", "deferred-multi-turn", "fixed", "held_out"})
 
 
+def voiding_disposition(disposition: str | None) -> bool:
+    """Whether a disposition voids the human label.
+
+    String-level sibling of :func:`voids_the_label`, for writers that are deciding whether a ledger
+    transition would destroy a voiding ruling before they have a ``Ruling`` object.
+    """
+    return disposition in VOIDING_DISPOSITIONS
+
+
 def voids_the_label(ruling) -> bool:
     """Does this **Ruling** void the human's label — the ONE predicate every grader keys on.
 
@@ -506,7 +515,7 @@ def voids_the_label(ruling) -> bool:
     different reason. Measured on `data/decider_lab/baseline.json` @ `e50735a`: **18 of 101 recorded
     disagreements were refuted labels**, so a build that corrected one of them failed `main` as a
     ``REGRESSION`` — a fix wearing a regression's label."""
-    return getattr(ruling, "disposition", None) in VOIDING_DISPOSITIONS
+    return voiding_disposition(getattr(ruling, "disposition", None))
 
 
 def voiding_ruling(rulings):

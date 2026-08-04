@@ -3,6 +3,8 @@
 Covers the loader/partition (`tools/train/blunder/reviewed.py`) and the maintenance CLI
 (`tools/train/review_correction.py`). Lib-free: Corrections are stubbed to (episode_id, frame)."""
 import json
+import ast
+from pathlib import Path
 
 import pytest
 
@@ -303,3 +305,83 @@ def test_cli_still_refuses_to_RECORD_under_an_unresolvable_key(tmp_path):
     before = p.read_text(encoding="utf-8")
     assert cli(["85046350-10", "refuted", "x", "--path", str(p), "--store", str(store)]) != 0
     assert p.read_text(encoding="utf-8") == before
+
+
+@pytest.mark.req("REQ-TUNE-0037")
+def test_cli_refuses_a_voiding_to_non_voiding_downgrade_and_writes_nothing(tmp_path, capsys):
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    p.write_text(json.dumps({
+        "81904451-37": {"disposition": "refuted", "reason": "bad label", "round": "old"}
+    }), encoding="utf-8")
+    before = p.read_bytes()
+
+    assert cli(["81904451-37", "covered", "now covered", "--path", str(p), "--store", str(store)]) != 0
+    assert p.read_bytes() == before
+    out = capsys.readouterr().out
+    assert "replacing 81904451-37 [refuted] from round old" in out
+    assert "Nothing written" in out
+
+
+@pytest.mark.req("REQ-TUNE-0037")
+def test_cli_supersede_allows_a_voiding_to_non_voiding_downgrade_with_a_reason(tmp_path, capsys):
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    p.write_text(json.dumps({
+        "81904451-37": {"disposition": "refuted", "reason": "bad label", "round": "old"}
+    }), encoding="utf-8")
+
+    assert cli(["81904451-37", "covered", "new evidence", "--supersede",
+                "--path", str(p), "--store", str(store)]) == 0
+    saved = json.loads(p.read_text(encoding="utf-8"))
+    assert saved["81904451-37"]["disposition"] == "covered"
+    assert saved["81904451-37"]["reason"] == "new evidence"
+    assert "replacing 81904451-37 [refuted] from round old" in capsys.readouterr().out
+
+
+@pytest.mark.req("REQ-TUNE-0037")
+def test_cli_supersede_requires_a_non_empty_reason(tmp_path):
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    p.write_text(json.dumps({
+        "81904451-37": {"disposition": "refuted", "reason": "bad label", "round": "old"}
+    }), encoding="utf-8")
+    before = p.read_bytes()
+
+    with pytest.raises(SystemExit):
+        cli(["81904451-37", "covered", "", "--supersede", "--path", str(p), "--store", str(store)])
+    assert p.read_bytes() == before
+
+
+@pytest.mark.req("REQ-TUNE-0037")
+def test_cli_allows_strengthening_voiding_to_voiding_new_entries_and_reclosures(tmp_path):
+    p, store = tmp_path / "reviewed.json", _cli_store(tmp_path)
+    p.write_text(json.dumps({
+        "81904451-37": {"disposition": "covered", "reason": "old", "round": "old"},
+        "86091435-t14s0": {"disposition": "refuted", "reason": "old", "round": "old"},
+    }), encoding="utf-8")
+
+    assert cli(["81904451-37", "covered", "covered again", "--path", str(p), "--store", str(store)]) == 0
+    assert cli(["81904451-37", "refuted", "stronger", "--path", str(p), "--store", str(store)]) == 0
+    assert cli(["86091435-t14s0", "transposition", "still voids",
+                "--path", str(p), "--store", str(store)]) == 0
+    assert cli(["81904451-37", "refuted", "re-close", "--path", str(p), "--store", str(store)]) == 0
+
+    saved = json.loads(p.read_text(encoding="utf-8"))
+    assert saved["81904451-37"]["reason"] == "re-close"
+    assert saved["86091435-t14s0"]["disposition"] == "transposition"
+
+
+@pytest.mark.req("REQ-TUNE-0037")
+def test_review_correction_uses_the_gates_voiding_vocabulary_not_a_literal_set(monkeypatch):
+    import train.gates as gates
+    import train.review_correction as review_correction
+
+    source = Path(review_correction.__file__).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    literal_sets = [node for node in ast.walk(tree) if isinstance(node, (ast.Set, ast.List, ast.Tuple))]
+    assert not any(
+        {getattr(elt, "value", None) for elt in node.elts} == set(gates.VOIDING_DISPOSITIONS)
+        for node in literal_sets
+    )
+
+    monkeypatch.setattr(gates, "VOIDING_DISPOSITIONS", frozenset({"refuted", "covered"}))
+    assert not review_correction._replacement_refused(
+        {"disposition": "refuted"}, "covered", supersede=False)
