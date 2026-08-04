@@ -29,6 +29,15 @@ Where the two disagree, the branch wins and it is flagged inline. `attack_ev` is
 extractor and is not summed into `state_value` — Issue #263 wires it. Verdicts naming `attack_ev`
 therefore read *"covered by spec, unwired"*, never *"covered"*.
 
+> **Update, 2026-08-04 (POC-T4/3, Issue #384): the extractor half of that sentence no longer holds.**
+> `state_value.attack_ev_legs(model)` now produces the term's seven kwargs for every affordable
+> attack, over one new model accessor (`StateModel.attack_profile`), and the audit's own §*Sources
+> read* claim that *"no symbol in `src/` produces the seven floats"* was re-verified true immediately
+> before it was closed. The SUM is still owed: `attack_ev` has **zero production callers** and the
+> composer (Issue #385/#386) is what calls it, so every *"covered by spec, unwired"* verdict below
+> stands unchanged. The audit is left as written rather than rewritten in place — it is a dated
+> measurement, and this note is how it stays honest.
+
 **Sources read** (every card fact and rule verified at source per CLAUDE.md's cardinal rule — none
 recalled): `data/EN_Card_Data.csv`; `docs/rules.md`; `src/common/card_functions.json`;
 `src/common/card_effects.json`; `src/common/snapshot_coverage.py`; `src/common/apply_option.py`;
@@ -46,7 +55,7 @@ recalled): `data/EN_Card_Data.csv`; `docs/rules.md`; `src/common/card_functions.
 | `readiness` | per MY body: printed `maxDamage` × `max(readiness_p, halve(turns_to_afford))` × role relevance | payoff is the body's **own printed form**; nothing reads who is Active |
 | `hand` | `needs` resolution: `assignment_coverage`, `re_access`, `latent_worth` | the `set_keep_v2` spine; all-zero when no resolution is supplied |
 | `development` | per MY body: deploy relevance, forward `owed_damage` hop-discounted, line reachability, escalating bench-slot price | **my side only**; reads *forward* topology, never *backward* (a missing pre-evolution) |
-| `attack_ev` *(terminal, unwired)* | `damage` (caller supplies, W/R applied), `target_hp`, `target_prizes`, `ko_probability`, riders, economy, `next_turn_cost` | a pure function; **no extractor exists**, so every rider value is whatever T4 passes |
+| `attack_ev` *(terminal, unwired)* | `damage` (caller supplies, W/R applied), `target_hp`, `target_prizes`, `ko_probability`, riders, economy, `next_turn_cost` | a pure function; **no extractor exists**, so every rider value is whatever T4 passes — *superseded 2026-08-04: `attack_ev_legs` is that extractor (Issue #384); still no CALLER, so "unwired" stands* |
 
 ## Coverage matrix — concept × deck exposure × verdict × owning term
 

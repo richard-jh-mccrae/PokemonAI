@@ -143,7 +143,8 @@ def _model_queries(src: str) -> set[str]:
 #: contract groups them: the two sides, the cross-side composite, and the top level.
 #:
 #: The bare handles (`model.mine`, `model.theirs`, `model.prize_race`) are here because the census
-#: reports them; they are navigation, not facts. The twenty-one FACTS are everything below them.
+#: reports them; they are navigation, not facts. The twenty-three FACTS are everything below them
+#: (13 + 6 + 2 + 2; Issue #384 added `theirs.active` and `attack_profile`, both reviewed in place).
 CONSUMED = frozenset({
     "model.mine", "model.theirs", "model.prize_race",
     # ── MySide (13) ──
@@ -162,12 +163,30 @@ CONSUMED = frozenset({
     # (`.get()` -> None -> False), but they are unreachable on an absent-turn board because the
     # turn leg short-circuits first, and on a real observation the engine always states them.
     "model.mine.attack_blocked",
-    # ── TheirSide (5) — the newly-threaded half ──
+    # ── TheirSide (6) — the newly-threaded half ──
     "model.theirs.active_raw", "model.theirs.bodies", "model.theirs.turns_to_ko_me",
     "model.theirs.reachable_incoming", "model.theirs.forward_payoff",
-    # ── the cross-side composite (2) and the top level (1) ──
+    # `theirs.active` joined at Issue #384 (`attack_ev_legs`, which needs the DEFENDER's remaining
+    # HP and prize value, not just the raw dict the clock reads). REVIEWED, and NOT a
+    # `RULED_COLLAPSES` case. Read at source: `_SideBase.active` is
+    # `next((p for p in (self.player.get("active") or []) if p), None)` wrapped in a `BodyView` —
+    # so an ABSENT Active seat reads **None**, a value no live body can take, and the extractor
+    # branches on it to price the target at 0 HP / 0 prizes. `attack_ev` then takes its own
+    # documented unreadable-HP fallback, which is capped by `target_prizes` and so returns exactly
+    # 0. Absence is therefore both DISTINGUISHABLE and fail-closed, which is the opposite of the
+    # three collapses below.
+    "model.theirs.active",
+    # ── the cross-side composite (2) and the top level (2) ──
     "model.prize_race.my_prizes_remaining", "model.prize_race.opp_prizes_remaining",
     "model.damage_context",
+    # `attack_profile` joined at Issue #384 — the ONE new accessor the terminal-action extractor
+    # needed, because `attack_payoff` returns `(attack_id, damage)` and the model exposed no rider,
+    # lock or economy field at all. REVIEWED: absence does not reach a number here. An unresolvable
+    # attack and an absent body both return `_EMPTY_ATTACK_PROFILE`, whose `affordable` is False —
+    # and `attack_ev_legs` FILTERS on that, so an unreadable attack produces no leg rather than a
+    # zero-valued one. The candidate disappears instead of competing at 0, which is the strongest
+    # fail-closed shape available to a query that answers in facts.
+    "model.attack_profile",
 })
 
 #: The three reads whose ABSENT value is INDISTINGUISHABLE from a measured zero, and how each one

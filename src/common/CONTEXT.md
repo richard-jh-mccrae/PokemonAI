@@ -521,6 +521,22 @@ evolved end-card a development line aims at), `maxDamage` (the printed roll-up t
 "the payoff attack" for the printed-max attack (`BodyView.payoff_attack` is DELETED — it could not
 see the Bench)
 
+**Attack Profile**:
+Everything ONE named attack of mine is worth asking about, as one record: `AttackProfile`, from
+`StateModel.attack_profile(body, attack_id)` (POC-T4/3, Issue #384). The **Attack Payoff** above
+answers *which* attack pays best and answers it matchup-free in two fields; this answers a larger
+question about an attack the caller has ALREADY named — its damage against the body actually in
+front of me at all three oracle bounds, whether the Attach Budget can pay for it, its bench riders
+and their allocation, its energy-recycle units, and its attacker-side next-turn locks. It exists
+because none of that last group had ANY model surface: `attack_payoff` drops them by construction,
+so `attack_ev`'s extractor would have had to reach past the model to `AttackStat`, which the
+sole-supplier ruling forbids. It lives on `StateModel` rather than on a side because the damage leg
+reads THEIR Active and the rider legs read THEIR Bench — a two-sided question, like
+`damage_context`. Fields are FACTS, never prices; the crossing into prizes is `state_value`'s.
+_Avoid_: "profile" for the **Read**'s opponent archetype recognition (that is Scouting's word),
+"attack profile" for `CardStat`'s printed roll-up (that is `maxDamage`), and using it as a second
+answer to *which attack is best* — that question has one home and it is the Attack Payoff
+
 **Stranded Payoff**:
 An evolved win-condition (a Stage-1/2/Mega) fetched or held with **no deployable base** — no Line
 pre-evolution in play **or hand** to evolve it from. A dead card until a base appears, so at a search

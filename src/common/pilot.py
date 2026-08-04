@@ -238,12 +238,12 @@ _DENIAL_FORWARD = 0.5      # ADR-0062 amendment: credit for what the stripped En
                            # forces 0.154 < _DENIAL_FORWARD < 0.8.
 _RECOVER_KO = 0.25         # KO-branch sub-prize variant: "the cheaper KO that also develops" —
 _RECOVER_KO_CAP = 0.75     # capped < 1, never overrides a real prize difference (like bench-snipe)
-_FOLLOWUP_W = 0.5          # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
-                           # < 1 because damage THIS turn is certain and next turn's is not (they move in
-                           # between) — so at equal two-turn totals the front-loaded nuke wins, which is
-                           # the right default. Replaces the flat _LOCK_COST = 40, which was a phantom
-                           # charge on a same-attack lock (270+130 == 130+270) and a 5x under-charge on a
-                           # full lock (Blood Moon 240 + NOTHING loses to a lock-free 130/turn's 260).
+_FOLLOWUP_W = FOLLOWUP_W   # ADR-0061: weight on the FORCED follow-up a locking attack leaves behind.
+                           # The VALUE moved to `strategy/context.py` (Issue #384) — `state_value`'s
+                           # terminal `next_turn_cost` leg prices the same forfeited follow-up as
+                           # `_lock_sequence_cost` below, and two copies of one weight is what nothing
+                           # stops drifting. Same number, one owner; the rationale lives at the leaf.
+                           # Kept under the old private spelling so no expression here moved.
 _LOCK_KO = 0.3             # KO-branch sub-prize variant: among equal-prize KOs keep the nuke off cooldown
 _RECOIL_DOOM = 100         # charge a NON-KO attack whose recoil FLIPS a safe Active doomed (Wild Press at
                            # 80 HP) — combat-scale; a KO/snipe-KO or already-doomed Active is never charged
