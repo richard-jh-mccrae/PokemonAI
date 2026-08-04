@@ -485,7 +485,7 @@ The refinement widens what can be **proved** disjoint; it widens nothing that is
 - **Nothing at runtime moved.** No production caller invokes `apply_option`, so both ADR-0072 gates
   were expected to be — and were — byte-identical.
 
-## Amendment E — the new-in-play bit gets a zone, a read, and two footprint declarations (Issue #391, built 2026-08-04)
+## Amendment E — the new-in-play bit gets a zone, a read, and two footprint declarations (built 2026-08-04, Issue #391)
 
 Not a ruling — no contract meaning changes and nothing was granted. It is recorded here because it
 **edits facts Amendments B and D state outright**, and an ADR that quietly rots is worse than one
@@ -509,8 +509,21 @@ the tree could hold them to it.
 This is the status Issue #282 named **ABSENT, not owed — the worse status**, with one difference that
 is the reason it took an issue rather than a line in Issue #382's diff: `this_turn_damage_boosts`
 already HAD a shipped `_SideBase` read, so enumerating it was documentation catching up with code.
-Here there was no read at all — 34 sites consult the bit off a RAW body dict and none off a snapshot
-— so the fix included **building** `BodyView.new_in_play`.
+Here there was no read at all — **12 sites across 5 modules** consult the bit off a RAW body dict and
+none off a snapshot — so the fix included **building** `BodyView.new_in_play`.
+
+⚠️ **That number is 12, and Issue #391's body says 33.** The issue counted grep LINES; this counts
+`.get("appearThisTurn")` in parsed CODE, which is the distinction `snapshot_coverage`'s
+`UNCONSUMED_SELECTORS` was re-measured for one axis over — *"a grep for each value over `src/`
+counted a string quoted in a COMMENT or a DOCSTRING as reached"*. At the merge-base: 34 matching
+lines, of which **12 reads** (`pilot` ×4, `planner` ×4, `doctrine_fetch`, `frame_view`, cgpy's
+`search` ×2), **4 dict-literal writes** (two of them `board_delta`'s own), and 18 lines of prose.
+*Positive control on the instrument:* the same walk finds 15 `.get("maxHp")` reads. **The issue's
+CONCLUSION survives** — none of the 12 is a snapshot read and `BodyView` had no such field — so this
+corrects the evidence, not the decision. Two smaller claims in the same section do not survive and
+are recorded so nobody re-derives from them: *"`grep -rn "appear" src/common/snapshot_coverage.py`
+returns nothing"* is false (line 979 carries the word *"appears"* in prose), and *"`sc.BY_ID` has 24
+entries"* was 23 before this change.
 
 ### E2. What changed
 

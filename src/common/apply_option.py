@@ -436,6 +436,12 @@ FOOTPRINTS: dict[int, Footprint] = {
     #
     # It changes no `commutes()` answer: `_ATTACH` and `_RETREAT` write neither, and two `_EVOLVE`s
     # already collide on whole-zone `special_conditions`.
+    #
+    # ⚠️ `board_delta._evolve` does not literally look the bit up — the engine only OFFERS a legal
+    # evolve, so the transition never has to re-check it. A footprint's `reads` is the state the
+    # kind's legality and result DEPEND on, not the lines the Python executes; `_RETREAT` already
+    # declares `allowance_retreat_used` as a read it likewise never consults. Under-declaring a read
+    # is the direction that silently collapses two genuinely different lines into one candidate.
     _EVOLVE: Footprint(
         reads=frozenset({"my_hand_ids", "bodies_in_play", "new_in_play"}),
         # "Evolving keeps attached cards + damage counters; CLEARS Special Conditions and attack

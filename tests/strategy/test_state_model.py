@@ -273,9 +273,9 @@ def test_an_empty_discard_reads_as_empty_rather_than_unknown():
 
 def test_the_new_in_play_bit_is_readable_on_every_body_on_BOTH_sides():
     """`docs/rules.md` §4 — *"Cannot evolve a Pokémon **the turn it was played/put into play**"*. The
-    engine spells it ``appearThisTurn`` and 34 sites read it off a RAW body dict; what did not exist
-    until Issue #391 is a read off the SNAPSHOT, which is all the value layer, the apply seam's
-    parity lane and the composer's ply-≥1 legality filter are allowed
+    engine spells it ``appearThisTurn`` and 12 sites across 5 modules read it off a RAW body dict;
+    what did not exist until Issue #391 is a read off the SNAPSHOT, which is all the value layer, the
+    apply seam's parity lane and the composer's ply-≥1 legality filter are allowed
     (`docs/plans/value-system-poc-plan.md` §4-T0's sole-supplier ruling).
 
     Both sides, per body, Active and Bench alike — the fact is symmetric and fully visible (the
@@ -292,10 +292,10 @@ def test_the_new_in_play_bit_is_readable_on_every_body_on_BOTH_sides():
 
 
 def test_a_body_with_no_appear_bit_reads_as_IN_PLAY_SINCE_LAST_TURN():
-    """Absent reads False — agreement with the tree rather than a fail-closed choice. Every one of
-    the raw sites spells the eligibility test ``not b.get("appearThisTurn")``, so a missing key
-    already means *"in play since last turn"* everywhere else, and a model field answering
-    differently about the same body would be a second answer to one question.
+    """Absent reads False — agreement with the tree rather than a fail-closed choice. All 12 raw
+    reads treat a missing key as *"in play since last turn"*, in two equivalent polarities (6
+    ``not b.get(...)``, 6 ``if b.get(...): skip``), so a model field answering differently about the
+    same body would be a second answer to one question.
 
     Only a hand-built board (this one) ever reaches it: a real observation carries the bit."""
     body = _poke(RIOLU, hp=80)

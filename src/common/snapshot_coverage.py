@@ -322,10 +322,14 @@ WRITABLE: tuple[Zone, ...] = (
     # `damage_counters` is left on the older spelling: migrating it is a real change to what the
     # parity lane compares and belongs to whoever measures it, not to this issue.
     Zone("new_in_play",
-         "whether a body ENTERED PLAY this turn, per body, both sides — the engine's own "
-         "`appearThisTurn`. `docs/rules.md` §4: *\"Cannot evolve a Pokemon the turn it was "
-         "played/put into play\"*, which is what makes the 2-ply sequence [play Basic, evolve it] "
-         "ILLEGAL rather than merely bad", HOMED,
+         "whether a body ENTERED PLAY this turn, per body — the engine's own `appearThisTurn`. "
+         "`docs/rules.md` §4: *\"Cannot evolve a Pokémon the turn it was played/put into play\"*, "
+         "which is what makes the 2-ply sequence [play Basic, evolve it] ILLEGAL rather than merely "
+         "bad. BOTH SIDES, and the reason is a READ one rather than the WRITE one its neighbours "
+         "carry: nothing writes the opponent's half (only my own _PLAY and _EVOLVE set the bit, on "
+         "my own bodies), but the engine carries it on their bodies too — measured across the "
+         "committed parity corpus — and §4 gates their evolutions on it exactly as it gates mine, "
+         "so *what can they field next turn* is the same read as *what can I*", HOMED,
          home="mine.active.new_in_play,mine.bench.new_in_play,"
               "theirs.active.new_in_play,theirs.bench.new_in_play"),
 

@@ -727,8 +727,10 @@ def test_the_new_in_play_bit_is_ENUMERATED_homed_per_body_and_written_by_both_tr
     The two are NOT the same shape, which is why this one needed an issue rather than a line in
     Issue #382's diff: `this_turn_damage_boosts` already had a shipped `_SideBase` read when it was
     enumerated, so that fix was documentation catching up with code. Here there was no read at all —
-    34 sites across `src/` and `tools/` consult `appearThisTurn` off a RAW body dict and none off a
-    snapshot — so the fix included building `BodyView.new_in_play`.
+    12 sites across 5 modules consult `appearThisTurn` off a RAW body dict and none off a snapshot —
+    so the fix included building `BodyView.new_in_play`. (12 READS, not the 34 matching LINES a grep
+    returns; the count comes from parsing for `.get("appearThisTurn")` in CODE, with 15
+    `.get("maxHp")` reads as the positive control on the instrument.)
 
     Three properties, and the second is the one that is easy to get wrong:
 
@@ -750,7 +752,10 @@ def test_the_new_in_play_bit_is_ENUMERATED_homed_per_body_and_written_by_both_tr
         "theirs.active.new_in_play", "theirs.bench.new_in_play"]
     assert hasattr(sm.BodyView, "new_in_play")
     # The registry's OTHER bench spelling, asserted so the difference above reads as deliberate
-    # rather than as an inconsistency somebody will "fix" in one direction or the other.
+    # rather than as an inconsistency somebody will "fix" in one direction or the other. It couples
+    # this test to a zone it is not about, and going RED on the migration ADR-0098 Amendment E
+    # leaves open is the point: the prose defending the difference — here, in `snapshot_coverage`
+    # and in `apply_parity._project` — would be stale on the same commit.
     assert "mine.bench" in sc.homes()["damage_counters"]
 
     play, evolve = ao.FOOTPRINTS[_PLAY_KIND], ao.FOOTPRINTS[_EVOLVE_KIND]

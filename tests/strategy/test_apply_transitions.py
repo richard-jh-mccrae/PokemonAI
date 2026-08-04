@@ -565,8 +565,9 @@ def test_every_transition_writes_exactly_its_declared_set():
          {"my_hand_ids", "attached_tools", "damage_counters"}),
         # `new_in_play` on BOTH evolve cases and unconditionally: the evolved body arrives with
         # `appearThisTurn: True` and the body it replaced necessarily had it False, since
-        # `docs/rules.md` §4 forbids evolving a body the turn it was played. Undeclared until Issue
-        # #391 enumerated the zone — the write was always real, and nothing in the tree could see it.
+        # `docs/rules.md` §4 forbids evolving a body the turn it was played. It went undeclared
+        # until Issue #391 enumerated the zone — the write was always real, and nothing in the tree
+        # could see it.
         ("evolve the Active under a condition", _EVOLVE,
          _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC], conditions=("asleep",))),
          {"type": _EVOLVE, "area": HAND, "index": 0, "inPlayArea": ACTIVE, "inPlayIndex": 0},

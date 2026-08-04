@@ -609,18 +609,28 @@ class BodyView(_Lazily):
         precisely the kind of sequence Issue #263's composer enumerates.
 
         Named for the rule rather than for the field, deliberately: the engine spells it
-        ``appearThisTurn`` and 34 sites across `src/` and `tools/` read it straight off the raw body
-        dict, which is fine for a reader that HAS the raw board. What could not be done before this
-        field is read it off a **snapshot** — and the value layer, the apply seam's parity lane and
-        the composer's ply-≥1 legality filter are restricted to exactly that
+        ``appearThisTurn`` and **12 sites across 5 modules** read it straight off the raw body dict,
+        which is fine for a reader that HAS the raw board. What could not be done before this field
+        is read it off a **snapshot** — and the value layer, the apply seam's parity lane and the
+        composer's ply-≥1 legality filter are restricted to exactly that
         (`docs/plans/value-system-poc-plan.md` §4-T0's sole-supplier ruling: `state_value` takes a
         `StateModel` and reads nothing else).
 
-        **Absent reads False**, and that is agreement rather than a fail-closed choice: every one of
-        the 34 raw sites spells the eligibility test ``not b.get("appearThisTurn")``, so a missing key
-        already means *"in play since last turn"* everywhere else in the tree, and a model field that
-        answered differently about the same body would be a second answer to one question. Only a
-        hand-built board reaches it — a real observation carries the bit on BOTH sides' bodies
+        ⚠️ **12 READS, not the 34 matching LINES a grep returns**, and the distinction is this
+        repo's own (`snapshot_coverage`'s `UNCONSUMED_SELECTORS` was re-measured for exactly this
+        reason: a string quoted in a comment is not a consumer). Measured by parsing each module and
+        counting `.get("appearThisTurn")` in CODE: 12 reads (`pilot` ×4, `planner` ×4,
+        `doctrine_fetch`, `frame_view`, and cgpy's `search` ×2 rebuilding `entered_turn`), 4
+        dict-literal WRITES, and 18 lines of prose about it. *Positive control on the instrument:*
+        the same walk finds 15 `.get("maxHp")` reads, so a small number here is the answer and not a
+        broken parser.
+
+        **Absent reads False**, and that is agreement rather than a fail-closed choice: all 12 raw
+        reads treat a missing key as *"in play since last turn"* — 6 spell it
+        ``not b.get("appearThisTurn")`` and 6 the inverse ``if b.get("appearThisTurn"): skip`` (the
+        cgpy pair is a ternary onto ``turn - 1``, the same direction). So a model field answering
+        differently about the same body would be a second answer to one question. Only a hand-built
+        board reaches the default — a real observation carries the bit on BOTH sides' bodies
         (measured across the committed parity corpus), which is why the zone is homed on both.
 
         ⚠️ Note the direction it leans: False is the PERMISSIVE reading for an evolve. A legality
