@@ -79,7 +79,7 @@
 },
 "1092": {
 "covers": "full",
-"reason": "all four search legs (Item, Pokemon Tool, Supporter, Stadium) + the `discard_3` cost"
+"reason": "all four search legs (Item, Pokemon Tool, Supporter, Stadium) + the `discard_3` cost AND its playability gate (`cost_required`, Issue #372) — the card prints *\"You can use this card only if you discard 3 other cards from your hand\"*, so a hand that cannot pay cannot play it at all. The flag rides on all four legs beside the cost it qualifies, which is this card's own shipped shape for one cost paid once across a multi-leg find"
 },
 "1094": {
 "covers": "full",
@@ -143,7 +143,7 @@
 },
 "1121": {
 "covers": "full",
-"reason": "fetch a Pokemon from deck + the `discard_2` cost"
+"reason": "fetch a Pokemon from deck + the `discard_2` cost AND its playability gate (`cost_required`, Issue #372) — the card prints *\"You can use this card only if you discard 2 other cards from your hand\"*, the same restriction 1187 / 1208 carry, so an Ultra Ball held with a 1-card hand is not a cheap Ultra Ball, it is not a legal play"
 },
 "1122": {
 "covers": "full",
@@ -343,7 +343,7 @@
 },
 "1233": {
 "covers": "full",
-"reason": "up to 4 {L} Pokemon + the `discard_1` cost the card is gated on"
+"reason": "up to 4 {L} Pokemon + the `discard_1` cost the card is gated on — and since Issue #372 that gate is a FIELD (`cost_required`) rather than only this sentence. Canari prints 1187 Morty's Conviction's restriction character for character, so the two cannot read it two ways"
 },
 "1236": {
 "covers": "full",
@@ -574,25 +574,29 @@
 "kind": "fetch",
 "target": "item",
 "zone": "deck",
-"cost": "discard_3"
+"cost": "discard_3",
+"cost_required": true
 },
 {
 "kind": "fetch",
 "target": "stadium",
 "zone": "deck",
-"cost": "discard_3"
+"cost": "discard_3",
+"cost_required": true
 },
 {
 "kind": "fetch",
 "target": "supporter",
 "zone": "deck",
-"cost": "discard_3"
+"cost": "discard_3",
+"cost_required": true
 },
 {
 "kind": "fetch",
 "target": "tool",
 "zone": "deck",
-"cost": "discard_3"
+"cost": "discard_3",
+"cost_required": true
 }
 ],
 "1094": [
@@ -740,7 +744,8 @@
 "kind": "fetch",
 "target": "pokemon",
 "zone": "deck",
-"cost": "discard_2"
+"cost": "discard_2",
+"cost_required": true
 }
 ],
 "1122": [
@@ -1218,7 +1223,8 @@
 "zone": "deck",
 "amount": 4,
 "energy_type": 4,
-"cost": "discard_1"
+"cost": "discard_1",
+"cost_required": true
 }
 ],
 "1236": [

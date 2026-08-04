@@ -311,7 +311,12 @@ grew three keys with Issue #302's conditional draw Supporters: `to_hand_size` (*
 N in hand"* is a REFILL, so it is mutually exclusive with `amount`), `amount_if` (the second
 magnitude that REPLACES the first when a named board predicate holds — 17 Ignition Energy's
 `amount_on_evolution` generalised), and `cost_required` (failing to pay makes the card UNPLAYABLE,
-which is a different fact from the cost merely being expensive).
+which is a different fact from the cost merely being expensive). `cost_required` is authored **iff**
+the card prints a playability restriction — *"You can use this card only if you…"*, or Kofu's
+parenthetical inverse — a biconditional Issue #372 ruled after finding the store holding two
+opposite readings of one sentence, and one `tests/cards/test_card_effects.py` now grades against the
+engine's card text in both directions. It bit because every other check on this axis is per-KEY or
+per-CARD: nothing asked whether two cards printing the same text read it the same way.
 It grew TWO more with Issue #349's board-scaled magnitudes: `amount_per` AGGREGATES (a string naming
 a board set whose COUNT multiplies `amount`, all of it landing in the clause's single destination —
 1187 Morty's Conviction draws one card per OPPONENT benched body into MY hand) and `each_of`

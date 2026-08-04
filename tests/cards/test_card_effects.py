@@ -5,12 +5,37 @@ Lib-free: synthetic probe records (shape mirrors cg/api.py ``Log``) -> clause di
 discard (heal amount, draw count) are kept here; tags stay boolean (ADR-0006).
 """
 import json
+import re
 
 import pytest
 
 from meta_tracker.card_effects import (
     _union_overrides, accumulate_effects, apply_overrides, build_effect_table,
     classify_effect_clauses, merge_clauses)
+
+#: The printed sentence that makes a `cost` a PLAYABILITY GATE rather than a price, in the two forms
+#: the pool prints it. Quoted from the engine dump `tools/meta_tracker/cards.json`
+#: (`all_card_data()`), never recalled:
+#:
+#: * *"You can use this card only if you discard 2 other cards from your hand."* — 1121 Ultra Ball
+#: * *"…(If you can't put 2 cards from your hand on the bottom of your deck, you can't use this
+#:   card.)"* — 1200 Kofu, which states the same restriction the other way round
+#:
+#: The apostrophe is U+2019 in the dump, not the ASCII one it is tempting to type, so the pattern
+#: accepts both — a detail worth spelling out because getting it wrong yields an instrument that
+#: matches NOTHING and a guard that passes vacuously.
+#:
+#: **This lives in the test, deliberately, and must not migrate into `src/`.** The compendium is
+#: hand-authored against the engine's card text and read back as data; `effect_overrides.json`'s own
+#: `_note_fetch` says the runtime *"never parses card text at runtime OR build time"*. So this is a
+#: rot-guard that grades the authored store against the printed card — the same job
+#: `tests/scouting/test_tool_holder_facts.py` does for holder facts — not a production parser.
+_PRINTED_GATE = re.compile(r"only if you (?:discard|put)|can[’']t use this card", re.I)
+
+
+def _printed_text(card: dict) -> str:
+    """Every Ability line the engine prints for a card, joined — a Trainer's whole effect."""
+    return "\n".join(a.get("text") or "" for a in card.get("abilities") or [])
 
 
 def _rec(logs, actor=0, contexts=None):
@@ -296,8 +321,17 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
       name on purpose: Billy & O'Nare prints *"Draw 2 cards. Then, if you have 10 or more…"*, so a
       reader testing the PRE-play hand fires the bonus two cards early.
     * `cost_required` — that failing to pay makes the card UNPLAYABLE, which is a different fact from
-      the cost merely being expensive. 1121 Ultra Ball's `discard_2` is the expensive kind and
-      deliberately carries no such flag.
+      the cost merely being expensive. 1192 Carmine's `discard_hand` is the expensive kind and
+      carries no such flag: *"Discard your hand and draw 5 cards."* is an instruction, always
+      payable, so a gate there would assert a restriction the card does not print.
+
+      **This bullet used to name 1121 Ultra Ball as the expensive kind, and that was wrong** —
+      Issue #372 corrected it. Ultra Ball prints *"You can use this card only if you discard 2 other
+      cards from your hand"*, the same restriction 1187 and 1208 carry, so it is a gate; it went
+      unflagged only because this issue's scope was the 14 partial DRAW clauses and Ultra Ball is a
+      `fetch`. The word *"deliberately"* stood in that sentence for a ruling nobody had made. The
+      biconditional that replaces it is graded against the engine's own card text in
+      `test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card`.
 
     The two coin cards keep `kind: "draw"` rather than 1120 Crushing Hammer's `kind: "coin"`, for a
     mechanical reason asserted below: `_union_overrides` replaces measured clauses BY KIND, so a
@@ -332,7 +366,11 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert eff.clauses(1200) == ({"kind": "draw", "amount": 4,                             # Kofu
                                   "cost": "bottom_2", "cost_required": True},)
     assert eff.clauses(1192) == ({"kind": "draw", "amount": 5, "cost": "discard_hand"},)   # Carmine
-    assert "cost_required" not in eff.clauses(1121)[0]                                 # Ultra Ball
+    # 1121 Ultra Ball is a GATE too, since Issue #372 — it prints the same restriction 1208 does and
+    # was missed only because it is a `fetch` and this issue's 14 were all `draw`. The assertion here
+    # used to be `"cost_required" not in ...`, which recorded that omission rather than grading it.
+    assert eff.clauses(1121) == ({"kind": "fetch", "target": "pokemon", "zone": "deck",
+                                  "cost": "discard_2", "cost_required": True},)     # Ultra Ball
     # Morty's Conviction stated NO magnitude until Issue #349, because "one card per opponent BENCHED
     # Pokemon" is a board-scaled count no clause field expressed. The fail-closed silence has been
     # REPLACED by the fact it stood in for — never by the flat 3 the probe measured, a number the card
@@ -375,6 +413,97 @@ def test_the_conditional_draw_supporters_state_the_card_and_not_the_probe_s_best
     assert [c["cost"] for c in eff.clauses(1206)] == ["discard_hand"] * 3
     assert [eff.covers(c) for c in (1206, 1214)] == ["full", "full"]
     assert [c["cost"] for c in eff.clauses(1092)] == ["discard_3"] * 4               # the precedent
+
+
+@pytest.mark.req("REQ-EFFECT-0004")
+def test_cost_required_agrees_with_the_printed_gate_on_every_cost_bearing_card():
+    """**Issue #372.** One store held two opposite readings of ONE sentence, and every existing check
+    was blind to it because every existing check is per-KEY or per-CARD.
+
+    `undeclared_clause_keys` asks *"is `cost_required` a declared key?"* (yes) and `covers_problems`
+    asks *"does this card have a verdict?"* (yes). Neither can ask *"do two cards printing the same
+    sentence read it the same way?"*, so 1233 Canari and 1187 Morty's Conviction carried the
+    character-for-character identical *"You can use this card only if you discard another card from
+    your hand."* and disagreed about whether that is a playability gate.
+
+    **The split was scope, not a ruling.** Issue #302 minted `cost_required` while rewriting *the 14
+    partial DRAW clauses*, and its §3 named exactly Morty's Conviction, Iris's Fighting Spirit, Kofu
+    and Carmine. The three FETCH cards printing the same gate — 1121 Ultra Ball, 1092 Secret Box,
+    1233 Canari — were never in that issue's 14, so they were never looked at. #302 even quotes
+    *"Ultra Ball's `discard_2`"* as its example of the `cost` field that already existed. The store's
+    own prose had already reached the right reading and only the DATA lagged: this file's `_covers`
+    reason for 1233 says *"the `discard_1` cost the card is gated on"*, and `_note_fetch_family`
+    writes both Canari and Secret Box as *"gated on"* their discard.
+
+    So the invariant graded here is the one the printed card states, not the one #302 happened to
+    author: **a `cost` carries `cost_required: true` if and only if the card prints a playability
+    gate.** It bites in both directions, which is what makes it a guard rather than a record —
+    adding the flag to a card that merely charges a price fails it exactly as omitting it from a
+    gated one does.
+
+    Two negatives are asserted rather than left implicit, because a sweep over *"every card with a
+    `cost`"* would wrongly catch them: 1192 Carmine's *"Discard your hand and draw 5 cards."* and
+    1206 Larry's Skill's *"Discard your hand and search your deck…"* are INSTRUCTIONS, always payable
+    — including on a hand holding nothing but the Supporter itself — so `cost_required` there would
+    assert a restriction the card does not print.
+
+    And the whole thing carries POSITIVE CONTROLS, because most of what it asserts is a negative: a
+    gate regex that matched nothing would make every clause "correctly ungated" and the guard would
+    pass while measuring air."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    from meta_tracker.cards import load_cards
+    cards = load_cards()
+    eff = CardEffects.load(Path(__file__).resolve().parents[2] / "src" / "common" / "card_effects.json")
+
+    # (0) CONTROLS, before any conclusion is drawn from a silence.
+    #     The instrument must FIRE on both printed phrasings and stay QUIET on the two instructions.
+    assert _PRINTED_GATE.search(_printed_text(cards[1187]))          # "only if you discard another…"
+    assert _PRINTED_GATE.search(_printed_text(cards[1200]))          # "…you can’t use this card."
+    assert not _PRINTED_GATE.search(_printed_text(cards[1192]))      # "Discard your hand and draw 5"
+    assert not _PRINTED_GATE.search(_printed_text(cards[1206]))      # "Discard your hand and search"
+
+    costed = {cid: eff.clauses(cid) for cid in sorted(cards)
+              if any("cost" in c for c in eff.clauses(cid))}
+    # The domain is non-empty and is the whole cost axis — an iteration that silently shrank to zero
+    # would satisfy every assertion below without measuring anything.
+    assert set(costed) == {1092, 1121, 1187, 1192, 1200, 1206, 1208, 1233}, sorted(costed)
+
+    # (1) THE INVARIANT, both directions.
+    for cid, clauses in costed.items():
+        gated = bool(_PRINTED_GATE.search(_printed_text(cards[cid])))
+        for clause in clauses:
+            if "cost" not in clause:
+                continue
+            assert clause.get("cost_required", False) is gated, (
+                f"card {cid} {cards[cid]['name']}: printed gate={gated}, "
+                f"cost_required={clause.get('cost_required')!r}")
+
+    # (2) One card, one reading — a multi-leg find must not gate some legs and price the others.
+    #     1092 Secret Box repeats its cost on all four search legs and 1206 Larry's Skill on all
+    #     three, which is the shipped shape for one cost paid once across a multi-leg card.
+    for cid, clauses in costed.items():
+        readings = {c.get("cost_required", False) for c in clauses if "cost" in c}
+        assert len(readings) == 1, f"card {cid} reads its own cost two ways: {readings}"
+    assert [c.get("cost_required") for c in eff.clauses(1092)] == [True] * 4
+    assert [c.get("cost_required") for c in eff.clauses(1206)] == [None] * 3
+
+    # (3) The five cards printing the SAME sentence end up with ONE reading — the issue's headline,
+    #     asserted on the sentence itself rather than on the ids, so a sixth printing joins it free.
+    same_sentence = {cid for cid in cards
+                     if "only if you discard" in _printed_text(cards[cid]).lower()}
+    assert same_sentence == {1092, 1121, 1148, 1187, 1208, 1233}, sorted(same_sentence)
+    assert all(c["cost_required"] is True
+               for cid in same_sentence - {1148} for c in eff.clauses(cid))
+
+    # (4) 1148 Blowtorch is the DEFERRAL, made into a tripwire instead of a TODO. It prints the gate
+    #     — *"You can use this card only if you discard a Basic {R} Energy card from your hand."* —
+    #     but has no compendium entry at all, because the cost it needs is a TYPED single-card
+    #     discard and no `cost` value expresses that; minting one is a `CLAUSE_WRITES` decision, not
+    #     this issue's. 0 copies across our 6 decks, so nothing is mispriced meanwhile. The moment it
+    #     gains a `cost`, it joins `costed` above and (1) grades it.
+    assert _PRINTED_GATE.search(_printed_text(cards[1148]))
+    assert eff.clauses(1148) == ()
 
 
 @pytest.mark.req("REQ-EFFECT-0004")

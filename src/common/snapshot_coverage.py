@@ -438,6 +438,14 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     #   discard_2     1121 Ultra Ball — *"…if you discard 2 other cards from your hand."*
     #   discard_3     1092 Secret Box (×4 legs) — *"…if you discard 3 other cards from your hand."*
     #   discard_hand  1192 Carmine, 1206 Larry's Skill (×3 legs) — *"Discard your hand…"*
+    #
+    # **The quoted sentences also settle `cost_required`, and the split is exactly the one above.**
+    # The first three print *"You can use this card ONLY IF…"* — a playability restriction, so all
+    # six clauses on those five cards carry `cost_required: true` (Issue #372). `discard_hand` prints
+    # an INSTRUCTION, always payable even on a hand holding nothing but the Supporter, so its two
+    # cards carry no flag. Which value a cost takes says nothing about the gate — `discard_1` and
+    # `discard_hand` both empty cards out of one hand — so the two halves are read off the printed
+    # text and nothing else; the split is not derivable from this table's keys.
     "discard_1": frozenset({"my_hand_ids", "my_discard_contents"}),
     "discard_2": frozenset({"my_hand_ids", "my_discard_contents"}),
     "discard_3": frozenset({"my_hand_ids", "my_discard_contents"}),
@@ -565,7 +573,12 @@ CLAUSE_PARAMETERS: dict[str, str] = {
             "the other three because `cost` and `cost_required` are one fact in two halves",
     "cost_required": "TRUE when failing to pay `cost` makes the card UNPLAYABLE, which is a "
                      "different fact from the cost merely being expensive (Issue #302). A "
-                     "PARAMETER, not vocabulary: its value is a boolean, so it names no write",
+                     "PARAMETER, not vocabulary: its value is a boolean, so it names no write. "
+                     "Authored IF AND ONLY IF the card prints a playability restriction — *\"You "
+                     "can use this card only if you...\"*, or Kofu's parenthetical inverse *\"(If "
+                     "you can't ..., you can't use this card.)\"* — a biconditional Issue #372 "
+                     "ruled and `tests/cards/test_card_effects.py` grades against the engine's own "
+                     "card text in both directions",
     # ── shape ─────────────────────────────────────────────────────────────────────────────────────
     "type": "the card type a clause names, where `target` would be ambiguous",
     "choice": "the clause is one alternative of a choose-one card",
