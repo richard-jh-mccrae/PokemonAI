@@ -25,6 +25,29 @@ find the boards a term is carrying.
 (`decider_lab.py`) grade DECISIONS against human rulings; this grades nothing. It reports what the
 scalar says. A metric nobody has ruled on must not start failing `main` — the doctrine `gates.py`
 already carries — and there is no ruling anywhere on what `development` ought to read on frame 97.
+
+**The menu job** (Issue #291's closeout, feeding Issue #263). The timing above is a LEAF UNIT COST —
+one `state_value` call on one board — and Issue #263's acceptance is stated *per decision*. Under its
+uniform 1-ply ordering a decision costs one leaf evaluation per surviving candidate, so the missing
+factor is the post-Option-Equivalence menu size and the DISTRIBUTION is what matters: a mean-sized
+decision is not what overruns a 2-vCPU budget.
+
+    python tools/train/value_lab.py --menu               # the menu-size distribution + derived P95
+
+`menu_profile` collapses each frame's menu through **`option_equivalence.class_representatives`**
+(ADR-0091) rather than re-deriving the classes — a second definition of *"these are one decision"*
+would drift from the composer this is sizing, silently, because each copy stays internally
+consistent. It also splits the menu by apply-seam FATE, since a REFUSED option is a one-action
+terminal candidate in Issue #263's design and does not cost a transition.
+
+**What this deliberately does NOT report, and why that is the finding rather than a gap.** The other
+half of a per-decision cost is the apply-seam transition, and it **cannot be timed at this commit**:
+`apply_option` is POC-T0's frozen contract and raises `NotImplementedError` for every MODELLED fate
+(measured — 1690 of 1690 MODELLED options over the committed corpus, while `fate()` itself resolves
+them fine, which is the positive control that the probe was not simply broken). Issue #263 builds
+that transition, so the seam its own budget depends on does not exist to be measured before it. The
+derived per-decision figure is therefore a **LOWER BOUND**, carried in the artifact as
+`per_decision_p95_ms_is_lower_bound` rather than as prose somewhere a consumer will not read.
 """
 from __future__ import annotations
 
@@ -39,6 +62,112 @@ REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from common.state_value import FAMILIES, state_value            # noqa: E402
+
+#: Why the per-decision figure is a lower bound, in the artifact rather than only in the docstring.
+#: A consumer reading `per_decision_p95_ms` off the JSON must meet the omission there, not have to
+#: come back to this module to learn that half the cost is missing.
+APPLY_SEAM_UNMEASURED = (
+    "`apply_option` raises NotImplementedError for every MODELLED fate at this commit (POC-T0's "
+    "frozen contract; Issue #263 builds the transition), so the transition half of a per-decision "
+    "cost cannot be measured BEFORE the issue that needs it. This figure counts leaf evaluations "
+    "only and is a LOWER BOUND."
+)
+
+
+def menu_profile(correction) -> dict:
+    """ONE frame's decision WIDTH — the menu, its ADR-0091 collapse, and the apply-seam fate split.
+
+    Width, never wall-clock: this is the multiplier that turns :func:`score_frame`'s leaf unit cost
+    into a per-decision one, and it is a property of the board rather than of the machine, so it is
+    the half of Issue #263's budget that stays comparable across hardware.
+
+    The collapse is `option_equivalence.class_representatives`' and is ASKED, never re-derived. Two
+    implementations of *"these are one decision"* drift invisibly — the fingerprint module's own
+    header makes the argument, and this instrument sizing a composer that uses the other copy is
+    precisely the shape where the drift would not show up as a disagreement, only as a wrong number.
+
+    `refused` options are counted and kept separate because Issue #263 makes a refusal a one-action
+    terminal candidate: it is ranked, so it costs a leaf, but it is never transitioned through.
+
+    An option the seam cannot classify at all lands in `unclassified` — its OWN bucket, never folded
+    into `refused`. Both keep the WIDTH honest (nothing is dropped, so the multiplier stays right),
+    but only the split keeps the FATE totals honest: `refused` is a seam verdict Issue #263 acts on,
+    and silently swelling it with instrument failures would report coverage the seam never gave.
+    Same doctrine as :func:`score_frame` one function down — the finding IS the exception."""
+    from common.apply_option import ENGINE_RESOLVED, MODELLED, REFUSED, fate, is_terminal
+    from common.option_equivalence import class_representatives, option_equivalence
+
+    #: The fates this instrument counts, keyed by the constant `fate` actually returns — compared by
+    #: EQUALITY against the exported names, never by substring. `"refus" in resolved` would bin any
+    #: future fate whose name happens to contain those letters, and the seam owns this vocabulary.
+    buckets = {MODELLED: "modelled", ENGINE_RESOLVED: "engine", REFUSED: "refused"}
+
+    obs = correction.obs or {}
+    options = (obs.get("select") or {}).get("option") or []
+    row = {"key": frame_key(correction), "agent": getattr(correction, "agent", None),
+           "menu": len(options), "post_oec": 0,
+           "terminal": 0, "modelled": 0, "refused": 0, "engine": 0, "unclassified": 0}
+    row["post_oec"] = len(class_representatives(option_equivalence(options, obs), len(options)))
+    for option in options:
+        try:
+            if is_terminal(option):
+                row["terminal"] += 1
+                continue
+            resolved = fate(option)
+        except Exception:                    # noqa: BLE001 — reported, never dropped and never
+            row["unclassified"] += 1         # laundered into a seam verdict the seam did not give
+            continue
+        row[buckets.get(resolved, "unclassified")] += 1
+    return row
+
+
+def _percentile(values: list, q: float):
+    """**The** order-statistic rule for this module — `p95_ms` and every menu figure call it.
+
+    One spelling, because the derived per-decision figure MULTIPLIES the leaf tail by the menu tail,
+    and a product of two hand-written percentile conventions is not a percentile of anything.
+
+    ⚠️ `median_ms` is the ONE field that does not come from here: it is `statistics.median`, which
+    averages the middle pair on an even-length corpus, so it can differ from `_percentile(x, 0.50)`
+    by one element. That is deliberate — `median_ms` is a long-standing published field and silently
+    changing what it means would be a data change wearing a refactor's clothes. `menu_p50` and
+    `post_oec_p50` therefore use THIS rule, and the two are not interchangeable to a hair."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    return ordered[max(0, int(q * len(ordered)) - 1)]
+
+
+def menu_report(rows: list, *, leaf_p95_ms: float | None) -> dict:
+    """Aggregate the widths and derive the per-decision P95 — **tail x tail, and a lower bound.**
+
+    P95 menu against P95 leaf rather than either mean: a budget is overrun by its worst decisions,
+    which is the same reason `value_lab_report` reports P95 beside the median at all. The product
+    over-states the *joint* P95 (the two tails need not co-occur on one frame) and that direction is
+    deliberate — a beam sized against an optimistic budget fails on the grader, where a beam sized
+    against a pessimistic one merely searches less than it could.
+
+    `widest` names the frames rather than counting them, the same discipline `_print_report` applies
+    to failures: "the tail is 40 options" is not actionable, a frame key is."""
+    post = [r["post_oec"] for r in rows]
+    p95 = _percentile(post, 0.95)
+    return {
+        "frames": len(rows),
+        "menu_p50": _percentile([r["menu"] for r in rows], 0.50),
+        "menu_p95": _percentile([r["menu"] for r in rows], 0.95),
+        "post_oec_p50": _percentile(post, 0.50),
+        "post_oec_p95": p95,
+        "post_oec_max": max(post) if post else None,
+        "collapsed_options": sum(r["menu"] - r["post_oec"] for r in rows),
+        "fate_totals": {k: sum(r.get(k, 0) for r in rows)
+                        for k in ("terminal", "modelled", "refused", "engine", "unclassified")},
+        "per_decision_p95_ms": (round(p95 * leaf_p95_ms, 2)
+                                if p95 is not None and leaf_p95_ms is not None else None),
+        "per_decision_p95_ms_is_lower_bound": True,
+        "apply_option_ms": None,
+        "apply_option_note": APPLY_SEAM_UNMEASURED,
+        "widest": sorted(rows, key=lambda r: -r["post_oec"])[:10],
+    }
 
 
 def score_frame(pilot, correction) -> dict:
@@ -97,10 +226,45 @@ def value_lab_report(pilot_for, corrections) -> dict:
     return {"n": len(rows), "scored": len(scored), "failed": len(failed),
             "skipped_agent": skipped,
             "median_ms": statistics.median(times) if times else None,
-            "p95_ms": times[max(0, int(0.95 * len(times)) - 1)] if times else None,
+            # `_percentile`, not a second copy of its index arithmetic: the menu block multiplies
+            # this figure by its own P95, and two hand-written spellings of one convention is the
+            # drift that makes such a product meaningless. `median_ms` stays `statistics.median` —
+            # it is the long-standing published field and moving it would be a silent data change.
+            "p95_ms": _percentile(times, 0.95),
+            # The WORST single leaf, beside the tail. P95 is what a beam is sized against; `max_ms`
+            # is what one pathological board costs, and the two diverge on a long-tailed corpus —
+            # Issue #291 §3a asks for both by name and a P95 alone cannot be read back into a max.
+            "max_ms": max(times) if times else None,
             "term_means": {name: (statistics.mean([r["working"][name] for r in scored])
                                   if scored else None) for name in FAMILIES},
             "rows": rows}
+
+
+def _print_menu(menu: dict) -> None:
+    """The width distribution and what it derives — printed as a distribution, never as a mean.
+
+    Issue #291 §3a asks for the distribution explicitly *"because the tail is the whole point"*, so a
+    single averaged number here would answer a question nobody asked with a number nobody can size a
+    beam against."""
+    print(f"\n=== menu width over {menu['frames']} frames "
+          "(the multiplier from leaf UNIT cost to per-DECISION cost) ===")
+    print(f"  raw menu      P50 {menu['menu_p50']}  P95 {menu['menu_p95']}")
+    print(f"  post-OEC      P50 {menu['post_oec_p50']}  P95 {menu['post_oec_p95']}"
+          f"  max {menu['post_oec_max']}"
+          f"   ({menu['collapsed_options']} options collapsed by ADR-0091)")
+    totals = menu["fate_totals"]
+    print(f"  fate split    modelled {totals['modelled']}  terminal {totals['terminal']}"
+          f"  refused {totals['refused']}  engine {totals['engine']}"
+          # Printed even at 0, and named separately from `refused`: a non-zero here is the
+          # instrument failing to classify, not the seam declining to model.
+          f"  unclassified {totals['unclassified']}")
+    if menu["per_decision_p95_ms"] is not None:
+        print(f"\n  derived per-decision P95: {menu['per_decision_p95_ms']:.1f} ms"
+              "   <- LOWER BOUND, leaf evaluations only")
+    print(f"  {menu['apply_option_note']}")
+    print("\n  widest decisions (named, not counted — a beam is sized against these):")
+    for r in menu["widest"][:10]:
+        print(f"    {r['key']:<28} post-OEC {r['post_oec']:>3} of {r['menu']:>3}")
 
 
 def _print_report(rpt, *, top_term=None, frame=None) -> None:
@@ -108,6 +272,7 @@ def _print_report(rpt, *, top_term=None, frame=None) -> None:
           f"({rpt['scored']} scored, {rpt['failed']} FAILED, {rpt['skipped_agent']} agent-skip) ===")
     if rpt["median_ms"] is not None:
         print(f"state_value cost: median {rpt['median_ms']:.2f} ms | P95 {rpt['p95_ms']:.2f} ms"
+              f" | max {rpt['max_ms']:.2f} ms"
               "   <- Issue #263 sizes its beam against the P95, not the median")
     if rpt["scored"]:
         print("\nmean contribution per term (the shape of the scalar over the whole corpus):")
@@ -156,6 +321,9 @@ def main(argv=None) -> int:
     ap.add_argument("--frame", default=None, help="print ONE frame's full per-term workings")
     ap.add_argument("--top", default=None, metavar="TERM",
                     help="rank the corpus by |contribution| of TERM")
+    ap.add_argument("--menu", action="store_true",
+                    help="also report the post-OEC menu-width distribution and the DERIVED "
+                         "per-decision P95 (a lower bound — see the module docstring)")
     ap.add_argument("--out", type=Path, default=None, help="write the report as JSON")
     args = ap.parse_args(argv)
 
@@ -168,9 +336,16 @@ def main(argv=None) -> int:
     rpt = value_lab_report(_cgpy_pilot_builder(), corrs)
     _print_report(rpt, top_term=args.top, frame=args.frame)
 
+    menu = None
+    if args.menu:
+        menu = menu_report([menu_profile(c) for c in corrs if (getattr(c, "obs", None) or {})],
+                           leaf_p95_ms=rpt["p95_ms"])
+        _print_menu(menu)
+
     if args.out:
         from train.gates import write_json_artifact
-        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
+        write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent,
+                                       "menu": menu, **rpt})
         print(f"-> {args.out}")
     # 0 even with failures: this REPORTS, it does not gate (see the module docstring). A non-zero
     # exit here would make it a gate nobody ruled on, which is the vacuous-gate failure one lab over.

@@ -698,16 +698,16 @@
   ],
   "chosen_label": "Play Pokégear 3.0",
   "correct_label": "Attack with Nebula Beam",
-  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / sequencing_error. Ruling unchanged; scope moved to #332.",
+  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / sequencing_error. Ruling unchanged; scope moved to #332, then repointed to #263 by Issue #291's closeout.",
   "frame_key": "82749168|1|decision|88",
   "claims": {
     "decision": {
       "correct": [
         8
       ],
-      "owner": "#332",
+      "owner": "#263",
       "ruled": "2026-08-02",
-      "why": "`readiness` prices payoff x odds x role per body and has no term for whether the body will survive to spend what is invested in it, so it funds a doomed Active over the benched successor. Frames whose decider fell below the 0.005-prize floor are here too — Issue #332 takes them explicitly rather than leaving them unowned. Measured by `tools/train/family_diag.py`. The ruling STANDS; Issue #332 owns it."
+      "why": "REPOINTED 2026-08-04 by Issue #291's closeout, from a CLOSED owner and on a re-measurement, not on the closure alone. The prior owner was Issue #332 with the rationale below; Issue #332 shipped and closed 2026-08-03, and re-running `tools/train/family_diag.py --keys ... --source decider` at bb9bd69 shows `readiness` now moves this frame by EXACTLY 0.0000 — its recorded cause is discharged while the frame still fails. What remains is what no family explains: every delta is >= 0 (the ruled option is weakly BETTER on every term, total +0.0684) and no family opposes it, so the frame cannot be attributed to a `state_value` term at all. That is Issue #263's, whose composer decides ordering the leaf's argmax cannot express. || Also correcting the record on this frame's LABEL: Issue #291 sec 2c calls it `hand`-blind, but `hand` is NOT 0 here (ruled 0.3502 vs leaf 0.3075, delta +0.0427). It is in fact the one frame in either T3 set where `hand` reaches the model at all -- Issue #332's own body flagged the same anomaly at delta +0.0944 and asked for it to be understood; it is still unexplained, and the delta itself has MOVED since, so the anomaly is live rather than settled. The leaf's pick has also moved (Issue #332 measured Harlequin; it is Boss's Orders at bb9bd69). Recorded, not resolved. || ORIGINAL Issue #332 rationale, preserved verbatim: \"`readiness` prices payoff x odds x role per body and has no term for whether the body will survive to spend what is invested in it, so it funds a doomed Active over the benched successor. Frames whose decider fell below the 0.005-prize floor are here too — Issue #332 takes them explicitly rather than leaving them unowned. Measured by `tools/train/family_diag.py`. The ruling STANDS; Issue #332 owns it.\""
     }
   }
 }

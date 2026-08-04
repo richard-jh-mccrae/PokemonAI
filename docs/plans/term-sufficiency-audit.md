@@ -60,8 +60,8 @@ concept already named on a `blind_to` deliberate-ignore list (recorded as ruled,
 | 2 | Opponent's hand size drives their damage (`handSizeDamage`) | — | — | — | — | **PARTIAL** `[N]` | `survival` |
 | 3 | Multi-prize body's loss is prize-**lethal** | 5 | 4 | 3 | 8 | **UNCOVERED** `[N]` | none (structural) |
 | 4 | Trainer damage-boost to cross a KO breakpoint | — | 7 | — | 1 | **UNCOVERED** `[N]` | none |
-| 5 | Standing chip on THEIR bench as a cross-turn asset | 6 | — | 3 | 4 | **UNCOVERED** `[N]` | `threat` (partly `[R]`) |
-| 6 | Snipe the pre-evo to deny a forward payoff | 6 | — | 3 | 4 | **UNCOVERED** `[R]`\* | `development` (my-side only) |
+| 5 | Standing chip on THEIR bench as a cross-turn asset | 6 | — | 3 | 4 | **PARTIAL** `[R]`† | `threat` (bench leg) |
+| 6 | Snipe the pre-evo to deny a forward payoff | 6 | — | 3 | 4 | **PARTIAL** `[R]`\*† | `threat.prize_advance` |
 | 7 | Deck-order manipulation (put known cards on top) | — | — | — | 8 | **UNCOVERED** `[N]` | none (`deck_order` = HIDDEN) |
 | 8 | End-of-turn energy decay (`discard_eot`) | — | — | 4 | — | **UNCOVERED** `[N]` | `readiness` |
 | 9 | Companion-body gated attack / ability | — | 5 | — | 4 | **UNCOVERED** `[N]` | `readiness` |
@@ -94,6 +94,31 @@ concept already named on a `blind_to` deliberate-ignore list (recorded as ruled,
 \* **#6 is ruled only in half.** `threat.blind_to` rules out *reaching* a benched body (deferred to
 `attack_ev`'s snipe rider). It says nothing about the **value of what is denied** — that the body
 sniped is a wincon pre-evolution. That half appears on no list; see **F5**.
+
+† **RECONCILED 2026-08-04 (Issue #291, at `bb9bd69`).** PR #359 left these two rows at their audited
+`UNCOVERED` on purpose, naming Issue #291 as the owner; this is that reconciliation. Both move to
+**PARTIAL**, both keep a named residue, and both residues are now `[R]` — on a `blind_to` list —
+where the audit found them on none.
+
+- **Row 5** (F6, Issue #284's bench leg, un-walled by Issue #329). Their benched bodies are targets
+  now and their removal is priced. What is still exactly 0 is the row's own subject — *standing*
+  chip as a cross-turn asset: reachability is a **step**, so bench chip that does not yet reach the
+  snipe rider contributes nothing at all. Ruled at `threat.blind_to` entry 14 (*"CHIP DAMAGE —
+  progress toward a Knock Out I cannot yet complete"*), which also names the accessor that would
+  close it (a my-side KO clock, T1 / Issue #260) and why deriving it inline would be a second opinion.
+- **Row 6** (F5, Issue #285's denial credit, likewise un-walled by Issue #329). The credit is read
+  and moves the family. What is still unread is the magnitude the doctrine actually asks for: the
+  credit answers in **damage**, and *"trade 1 prize for a denied 3"* is a sentence about **prizes**,
+  so a pre-evolution whose forward form is a 3-prize Mega ex and one whose forward form is a 1-prize
+  body of the same printed damage still price identically. Ruled at `threat.blind_to` entry 5, and
+  **re-checked rather than assumed at Issue #329** — the anchor scales the whole marginal and adds
+  no prize leg, so the gap survives it unchanged. Its old stated prerequisite (*"the parked scale
+  anchor first"*) is discharged, so it is now a plain `ForwardPayoff`-shape gap with nothing in
+  front of it.
+
+**Both are still invisible to both GATES, which is the audit's sharper prediction and it HELD** — see
+the verdict section. What changed is that they are no longer invisible to the **scalar**, and those
+are different claims.
 
 Counts for #1 are weakness-exposed bodies in that deck's own 60 (`mega_lucario` 16/16 and
 `mega_starmie` 10/10: every Pokémon in the list carries a printed weakness; `slowking` 18/20 —
@@ -374,9 +399,11 @@ limitation of that guard, not only of this term.
 > > front of it. Note also that the anchor's divisor is `TARGET_VALUE_CEILING` (3.9), not the
 > > `_MAX_PRIZE_VALUE` (3.0) named by every record written before Issue #329.
 >
-> Coverage-matrix **row 5** and **row 6**'s footnote are **left as audited on purpose** — Issue #291
+> Coverage-matrix **row 5** and **row 6**'s footnote were **left as audited on purpose** — Issue #291
 > owns reconciling the report, and every sibling in this track recorded its outcome the same way, in
-> the finding's own BUILT note rather than in the ledger.
+> the finding's own BUILT note rather than in the ledger. **RECONCILED 2026-08-04 by Issue #291:**
+> row 6 is now **PARTIAL** `[R]`, its surviving residue being the damage-versus-prizes gap named in
+> the paragraph above and ruled at `threat.blind_to` entry 5. See footnote † under the matrix.
 
 **Unread dimension.** Their board's **topology** — that the 70-HP body I can reach is the base of a
 330-HP, 3-prize payoff.
@@ -469,9 +496,12 @@ Zeraora ×1) — and it applies to a plain gust-and-KO too, which every deck has
 > > non-empty inputs, because this is a SUM over up to six targets while the divisor is ONE target's
 > > ceiling; *"the cap never binds"* must not be asserted anywhere.
 >
-> Row 5 of the coverage matrix above and #6's footnote are **left as audited on purpose** — Issue
+> Row 5 of the coverage matrix above and row 6's footnote were **left as audited on purpose** — Issue
 > #291 owns reconciling the report, and every sibling in this track recorded its outcome the same
-> way, in the finding's own BUILT note rather than in the ledger.
+> way, in the finding's own BUILT note rather than in the ledger. **RECONCILED 2026-08-04 by Issue
+> #291:** row 5 is now **PARTIAL** `[R]`, its surviving residue being *standing* chip that does not
+> yet reach — reachability remained a step through both fixes — ruled at `threat.blind_to` entry 14.
+> See footnote † under the matrix.
 
 **Unread dimension.** Damage already on the **opponent's benched** bodies.
 
@@ -789,6 +819,63 @@ already owed to T1 with named owners. That is a short list, and none of it is re
 > the word "argument". The claim that the three are ONE fact rather than three coincidences survived
 > the specification, which was the load-bearing half of the prediction.
 
+### Did the F1 + F2 + F4 prediction hold? — ANSWERED 2026-08-04 (Issue #291, at `bb9bd69`)
+
+The audit made a falsifiable prediction in two parts. **The structural half HELD. The sufficiency
+half did NOT.** Both answers are recorded, because Issue #278's body says outright that a failure
+here *"is a finding about the audit itself"* and is worth more than the tick-boxes.
+
+**YES — the three findings were ONE structural error.** F1, F2 and F4 were specified, built and
+discharged together off one shared damage context (Issue #278's S1 → S3/S2/S4; Issues #279 →
+#280/#281/#282). No sibling turned out to need its own equation, and the substrate the audit did not
+foresee as a step was the only thing added. The lens the audit used — *"is this a dropped argument or
+a missing equation?"* — sorted three symptoms into one cause correctly, and is the right lens to
+point at the next audit.
+
+**NO — the terms did not become sufficient for the combat game when they landed.** The prediction
+was *"If those land, the terms become sufficient for the combat game as well, and the residue is F3,
+F5 + F6, and a ruled ledger."* They landed; the residue is not what is deciding frames today.
+Re-measured over Issue #262's deferred passivity set at `bb9bd69`, **after** Issues #280, #281, #329,
+#332, #351 and #362 all landed (`tools/train/family_diag.py --source decider`):
+
+- **`survival` is the decider on 7 of the 7 frames this issue owns** — every one still failing, none
+  moved by the combat-math fixes.
+- **`threat`** — the family the shared damage context exists to arm — moves those frames by **+0.0000
+  to +0.1000** against `survival`'s **−0.5078 to −2.0000**. It is armed and it is outweighed by an
+  order of magnitude, so arming it did not change any of these outcomes.
+- **`hand` is inert on all 7**, reading exactly `0.0000` on both sides of every comparison, which is
+  its own ruled `blind_to` entry 3 firing rather than a new defect.
+
+**What that reveals about the verdict's shape, and it is the finding.** All 7 re-measure as
+`sequencing_error` — **within-turn ORDERING**, an insufficiency this paragraph does not name as a
+blocker at all. The verdict ranked the combat gap first because that is what the *decks* exposed; the
+*corpus* is decided by an axis the audit mentioned only in a subordinate clause. The paragraph below
+on the wave-3 passivity signal is the specific casualty: it offered F1 and F2 as the reason `survival`
+*"wins by default rather than by weight"* and warned that a damping constant fitted before they
+landed would be fitted to an artifact. F1 and F2 have landed, on a level field with an anchored
+`threat` and a fixed `readiness` — and `survival` still wins 7 of 7. **So the passivity is a real
+signal and not a measurement artifact — and phase damping is still the wrong knob**, because the
+frames are not passive-versus-aggressive calls, they are order-of-operations calls whose two lines
+reach the same end board. Issue #263's composer owns them; no damping constant can express them.
+
+**The denial findings (F5, F6) — the audit's sharper prediction — HELD.** It called them *"the two
+most likely to be invisible to both gates forever."* Issue #329 landed after the audit and moved
+exactly that machinery, so the claim was worth re-testing rather than assuming:
+
+- They are **no longer invisible to the scalar.** Issue #329's anchor lets the denial credit move
+  `threat`'s output on 296 of 2061 `threat()` calls and the bench leg on 336 (against 0 and 278
+  under the cap).
+- They are **still invisible to both gates.** The denial credit moves the family by **0.000115 to
+  0.002192 prizes** — the whole range sits *below* `family_diag.DECIDER_FLOOR` (0.005), the project's
+  own threshold for naming a term as a frame's decider, so by construction it cannot be the reason
+  any frame flips. Both gates are green at `bb9bd69` with **zero unruled** flips, and no fixture in
+  `tests/fixtures/corrections/` carries `owner=#284` or `owner=#285`. Nothing in the corpus is
+  waiting on either finding.
+
+That is a direct input to **Issue #271** (POC-B1, corpus representativeness), which exists precisely
+because the corpus cannot see the families differencing opens: a term can now be measurably alive and
+still be ungradeable, and the two denial findings are the worked example.
+
 ## Findings by disposition
 
 Issue #268 says findings become Issue #262 amendments or new issues, decided after this report lands.
@@ -810,6 +897,50 @@ column below records the audit's original suggestion against where each finding 
 | F9, F10 | No action — ruled | **Out of scope, tabulated with owners** in #278. Do not re-litigate |
 | F13 | Issue #262 amendment (documentation) | **#278 S12**, joined by the `deck_order` HIDDEN rationale and, if S11 is declined, `known_top` |
 | — | — | **#278 S13** — closeout: reconcile this report, re-measure the passivity signal, record the P95 for #263 |
+
+### Findings by OUTCOME — reconciled 2026-08-04 (Issue #291, at `bb9bd69`)
+
+The table above records where each finding was ROUTED. This one records what happened to it, which
+is the column the closeout owes: **done** / **deferred (with a LIVE owner)** / **collapsed**. The
+track shipped more than its 13 sub-issues, so this reconciles against the full landed set — Issues
+#279–#290 plus **#329** (the `_THREAT_W` scale anchor), **#332** (`readiness` funds the successor),
+**#351** (`readiness_p`'s missing legality leg) and **#362** (the leaf's dominant-WIN band).
+
+| Finding | Sub-issue | Outcome | What actually happened |
+|---|---|---|---|
+| **F1** printed damage in `threat`'s gate | #281 | **done** | `best_reachable_damage_vs` is damage-model aware. Armed and **outweighed**: on the 7 re-measured passivity frames it moves +0.0000 to +0.1000 against `survival`'s −0.5078 to −2.0000 |
+| **F2** `survival`'s clock without `context` | #280 | **done** | Both damage reads take `damage_context(attacker='theirs')`. Moved **0** of Issue #262's 15 deferred frames |
+| **F3** prize-lethality | #283 | **done** | Built as `predicted_loss`'s win-condition TEST, not race value. `survival.blind_to` entry 1 records the accepted BINARY residue (the margin below the test) as an OWNED zero |
+| **F4** damage-boost Trainers | #282 | **collapsed** | Central premise **refuted**. Residue was snapshot/test coverage for `this_turn_damage_boosts`; Gravity Mountain is HP modification, not a damage boost |
+| **F5** denied forward payoff | #285, then #329 | **deferred — ⚠️ UNOWNED** | Credit built and un-walled by #329 (0 → 296 of 2061 `threat()` calls). Residue: it answers in **damage** where the doctrine asks in **prizes**. Ruled at `threat.blind_to` entry 5, and below `DECIDER_FLOOR`, so still ungradeable. **The entry names no owner and, since #329 discharged its stated prerequisite (*"the parked scale anchor first"*), it no longer has one — a live gap with nothing in front of it and nobody behind it.** Contrast F6, whose residue at least names T1 / Issue #260 |
+| **F6** standing bench chip | #284, then #329 | **deferred → #260** | Bench reach leg built and un-walled by #329 (278 → 336 calls). Residue: reachability stayed a **step**, so chip that does not yet reach prices 0. Ruled at `threat.blind_to` entry 14; needs T1's my-side KO clock |
+| **F7** known top-of-deck | #289 | **done** (built) | The decision issue offered *build* vs *declare* and predicted it might collapse into F13. **It did not** — the developer ruled **build**, then took the widest scope at every subsequent fork, and it shipped: `known_top` has a producer (`Pilot._observe_known_top`, self-verifying against the logs) and a consumer (`_copy_top_tactical`), with `copy_top_value` defaulting **ON** in `runtime.py`. Built in the **Pilot** path rather than in `state_value`, the same routing F12 took |
+| **F8** end-of-turn energy decay | #286, then #351 | **done** | Issue #286 alone did **not** discharge it — Issue #351 unmasked and fixed `readiness_p`'s missing legality leg (`_may_attack_now`). `readiness.blind_to` entry 4 is now a **verdict** rather than a gap, bounded at 21 measured frames |
+| **F9, F10** | — | **out of scope** | Ruled out by the developer, tabulated with owners in Issue #278. Not re-litigated here |
+| **F11** | #287 | **done** | Built |
+| **F12** | #288 | **done** | Built **outside** `state_value`, in the Pilot's needs/playability path, so one fix serves both systems |
+| **F13** action-economy locks | #290 | **done** (documentation) | Declared rather than priced — `attack_ev.blind_to` entry 3 names Budew's Itchy Pollen and the THEIR-side `transient_grants` extension it would need. No scoring code, as ruled |
+
+**Three things the outcome column changes the reading of**, none of them visible in the routing table
+above, where all three look like ordinary sub-issues that closed:
+
+- **F4 is the only finding whose PREMISE was refuted** rather than discharged. What shipped under it
+  is snapshot and test coverage, not the reader the finding asked for.
+- **F7 was expected to collapse and did not.** Its own issue body said *"If the answer to 1 is
+  'declare it', close this as collapsed into #290"* — so the routing table's entry is a live question,
+  not a record. The developer ruled **build**; it shipped ON. A closeout that read the routing table
+  alone would have recorded the opposite outcome.
+- **F8 was NOT discharged by its own sub-issue.** Issue #286 built the end-of-turn decay read and left
+  a defect that only Issue #351 — outside the 13 — unmasked and fixed. The 13-sub-issue view scores
+  F8 done at Issue #286; the landed view scores it done at Issue #351.
+
+**One live blindness that belongs in this table and was ruled outside it.** Issue #376's developer
+ruling (2026-08-04) accepts that `state_value` must not carry the prize value of cashing an attack
+boost — it belongs to `attack_ev` under Issue #263's composer — and states the consequence outright:
+enabling cards such as Boss's Orders and Premium Power Pro *may be underplayed until Issue #263 lands*.
+That is a ruled, accepted, temporary blindness of exactly this table's kind, owned by **Issue #263**,
+and it is carried in the consolidated `blind_to` package in `data/leaf_lab/wave3-rulings.md` so the
+composer meets it before it writes a beam rather than after.
 
 ## Re-running this audit
 
