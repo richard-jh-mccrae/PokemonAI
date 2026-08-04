@@ -626,7 +626,7 @@ def test_a_predicted_loss_outscales_every_other_family_combined():
     assert sv.state_value(survivable) - sv.state_value(lethal) > sv.POSITIONAL_MAX
 
 
-# ── the band's OTHER half, owed and unbuilt: the prize-denominated pair (Issue #330) ──────────────
+# ── the band's OTHER half, owed and unbuilt: the prize-denominated pair (Issue #369, split from #330) ──
 #
 # The test directly above is `ko-score-band`'s terminal half, and it is ONE-SIDED: it asserts that
 # `LOSS_PRIZES` out-scales every other family, which is a bound on the term that is already derived
@@ -642,7 +642,8 @@ def test_a_predicted_loss_outscales_every_other_family_combined():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
-@pytest.mark.xfail(strict=True, reason="OPEN GAP (Issue #330), blocked on Issue #263's `attack_ev` "
+@pytest.mark.xfail(strict=True, reason="OPEN GAP (Issue #369, split from #330), blocked on "
+                                       "Issue #263's `attack_ev` "
                                        "wiring — see the test body for why it is xfail rather than "
                                        "a retune")
 def test_a_line_that_banks_a_prize_outscores_one_that_declines_it():
@@ -656,7 +657,8 @@ def test_a_line_that_banks_a_prize_outscores_one_that_declines_it():
     safer. That is the defect Issue #330 measured, and Issue #190 named before `state_value` existed.
 
     **Why this is `xfail` rather than a fix here.** Making it pass means bounding `survival` per-play
-    (Issue #330's option 2) or completing the composition the module header already claims — see
+    (Issue #369's per-play bound, née Issue #330's option 2) or completing the composition the module
+    header already claims — see
     lines 63-66, *"converting their exposure into a prize takes an ATTACK, and `attack_ev` prices
     that attack at the terminal action"* — which the developer ruled on 2026-08-02 belongs to
     Issue #263, not here. Hand-tuning either constant against the 12 corpus frames that exposed this
@@ -690,7 +692,8 @@ def test_a_line_that_banks_a_prize_outscores_one_that_declines_it():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0006")
-@pytest.mark.xfail(strict=True, reason="OPEN GAP (Issue #330), blocked on Issue #263's `attack_ev` "
+@pytest.mark.xfail(strict=True, reason="OPEN GAP (Issue #369, split from #330), blocked on "
+                                       "Issue #263's `attack_ev` "
                                        "wiring — the end board is the only thing scored today and "
                                        "it prices a non-lethal attack at <= `_THREAT_CAP`")
 def test_landing_an_attack_can_outprice_the_one_retreat_a_turn_allows():
