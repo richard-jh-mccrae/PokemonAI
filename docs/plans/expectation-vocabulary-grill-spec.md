@@ -177,9 +177,15 @@ blocked (C4). A new, more actionable gate is added for the 11 ability-clause ste
 a scope extension; on measurement it earned its own issue instead. Two findings moved it:
 its 43 bucket steps are **15** enumerable, not 30 — **Risky Ruins gates 15 of the 28 live-pool Poffin
 steps**, and all 17 gated steps are that one Stadium — and recovering them means APPLYING a Stadium
-trigger, which is a different kind of change from a reveal-vocabulary widening. #410 owns the
-destination, the trigger, and §3.4's two `board_delta` promotions (nothing left in this spec needs
-them — items 1 and 2 are hand writes). **This spec keeps item 3 hand-only: 4 corpus steps.**
+trigger, which is a different kind of change from a reveal-vocabulary widening.
+
+Grilling it further widened #410 well past this spec's reach: of the Stadium gate's **104** seam
+refusals, **73 are steps the in-play Stadium provably cannot affect** (19 evolutions into a Stage 1
+while a Stage-2-only modifier is out, and so on), so the dominant fix there is a gate that asks
+whether the clause reaches the body — not clause application at all. #410 now owns that, both
+appliers (Risky Ruins' trigger and Gravity Mountain's static delta), the bench destination, and
+§3.4's two `board_delta` promotions (nothing left in this spec needs them — items 1 and 2 are hand
+writes). **This spec keeps item 3 hand-only: 4 corpus steps.**
 
 The reasoning that made it look like one issue is still sound and is recorded there: the deploy floor
 already exists
@@ -639,9 +645,13 @@ what makes that legible.**
 `dest: "bench"` (Buddy-Buddy Poffin 41 steps, Precious Trolley 2) is **not built here**. It needs a
 deploy floor rather than a hand write, and — measured — **Risky Ruins gates 15 of the 28 live-pool
 Poffin steps**, so the destination alone is worth 15 and only applying that Stadium trigger takes it
-to 30. Applying a trigger is a different kind of change from widening a reveal vocabulary, and it
-wants the parity lane (via `board_delta._play`) to verify its arithmetic — neither of which this
-inert module can offer. Issue #410 owns all of it, including §3.4's two promotions.
+to 30. That applier wants the parity lane (via `board_delta._play`) to verify its arithmetic, which
+this inert module cannot offer.
+
+Issue #410 owns all of it — and, on grilling, considerably more: the Stadium gate refuses **104**
+seam steps and **73 of them are steps the Stadium cannot reach**, so #410's largest and cheapest part
+is narrowing that gate, with the two appliers and this destination on top. §3.4's promotions go with
+it.
 
 `dest: "in_play"` (17 Salvatore steps) stays refused in both places: `xDeckEvolveInPlayAndShuffle` is
 an evolve-in-place, so its floor is `_evolve`'s, not a deploy's.
