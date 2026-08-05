@@ -161,13 +161,39 @@ DEPLOY_WORTH_SCALE = max(_ROLE_TIER.values())     # == 30.0 (win_condition / pri
 DEPLOY_BAND = 25.0
 
 
+def worth_relevance(worth_marginal: float) -> float:
+    """A Worth-denominated ASSIGNMENT MARGINAL as a dimensionless, signed, saturating ratio.
+
+    The ratio half of the ratio-route crossing: divide by `DEPLOY_WORTH_SCALE`, clamp to [-1, 1].
+    Every consumer that crosses Worth → damage *as a ratio* — `deploy_value` (ADR-0086) and
+    `grab_value` (ADR-0121) — divides here rather than each spelling `marginal / SCALE` for itself.
+    One spelling, because two are how a re-pointed yardstick reaches one site and not the other,
+    and the scale-invariance tests that keep the crossing honest work by re-pointing exactly this
+    constant.
+
+    The yardstick is FIXED and board-independent on purpose (ADR-0086 amendment C): a marginal
+    competes against `End` (0) and against attacks, so the ratio must mean the same thing on every
+    board. Normalising per decision — dividing by the best candidate at THIS decision — was
+    rejected on correctness, because the best available candidate would read 1.0 whether it is
+    excellent or merely least-bad.
+
+    SIGNED, and the sign is not decoration: a deploy marginal can be negative (a body worth less
+    than what it displaces), which is how the optional-select take-fewer decline comes to refuse
+    one. A grab marginal cannot be — `keep_v2` is a counterfactual over a superset — but it shares
+    the clamp rather than a second, narrower one."""
+    scale = float(DEPLOY_WORTH_SCALE)
+    if scale <= 0:                                   # defensive: never divide by a re-banded zero
+        return 0.0
+    return max(-1.0, min(1.0, float(worth_marginal) / scale))
+
+
 def deploy_relevance_to_damage(relevance: float) -> float:
     """Convert a dimensionless deploy relevance in [0, 1] into the damage/tactical scale.
 
     The ONE place the Deploy Marginal's Worth-derived legs enter a `score` the damage-scale rungs
     also write to. Callers hand a RATIO (a Needs-assignment marginal already divided by
-    `DEPLOY_WORTH_SCALE`), never a raw worth value — handing this a worth magnitude would be
-    exactly the scale-boundary crossing ADR-0078 decision 2 forbids."""
+    `DEPLOY_WORTH_SCALE` — `worth_relevance`), never a raw worth value — handing this a worth
+    magnitude would be exactly the scale-boundary crossing ADR-0078 decision 2 forbids."""
     return float(relevance) * DEPLOY_BAND
 
 

@@ -114,15 +114,12 @@ class DeployValue:
 def _relevance(worth_marginal: float) -> float:
     """A Worth-denominated marginal as a dimensionless, signed, saturating ratio.
 
-    The yardstick is FIXED and board-independent on purpose (amendment C): the deploy marginal
-    competes against `End` (0) and against attacks, so the ratio must mean the same thing on every
-    board. Normalising per decision — dividing by the best candidate at THIS decision — was rejected
-    on correctness, because the best available deploy would read 1.0 whether it is excellent or
-    merely least-bad, and the agent would deploy every turn."""
-    scale = float(currency.DEPLOY_WORTH_SCALE)
-    if scale <= 0:                                   # defensive: never divide by a re-banded zero
-        return 0.0
-    return max(-1.0, min(1.0, float(worth_marginal) / scale))
+    Delegates to `currency.worth_relevance`, which owns the yardstick and the clamp. It moved there
+    when the GRAB equation (ADR-0121) needed the identical ratio: two spellings of one crossing is
+    how a re-pointed yardstick reaches one site and not the other, and the scale-invariance test
+    below works by re-pointing exactly that constant. Kept as a named local so this module's own
+    reading of the crossing stays readable at its two call sites."""
+    return currency.worth_relevance(worth_marginal)
 
 
 def deploy_value(inp: DeployInputs) -> DeployValue:

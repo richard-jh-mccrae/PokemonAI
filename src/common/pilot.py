@@ -1188,6 +1188,21 @@ class OptionTrace:
                                  # agreement bit: one emission path, one truth. `site` names which of
                                  # ADR-0100 §9's call sites priced it ("pick" | "whether"). Sparse:
                                  # None off a promote/retreat option or while the kill-switch is OFF.
+    grab_working: dict | None = None  # the GRAB DECIDER's legible working (ADR-0121, #406): the
+                                 # `_TO_HAND` add-marginal in Worth points, its dimensionless
+                                 # relevance and the damage-scale total. Same contract as
+                                 # `deploy_working` — the Decision Gate is ruled by reading it, and a
+                                 # bare total would make a flip unrulable. Sparse: None off a
+                                 # `_TO_HAND` card option or while the kill-switch is OFF.
+    grab_deck_priority: bool = False  # this option's card is the deck's declared `fetch_priority`
+                                 # head (`Board.top_fetch_priority_id`) — an ORDERING-ONLY leg on
+                                 # `_order_key` (ADR-0121 R10), never a weight. It was an additive
+                                 # `fetch-deck-priority` +40 Hypothesis, which beside a `[-1,1] x 25`
+                                 # equation does not tie-break but DOMINATES, inverting the intent:
+                                 # deck doctrine should break ties the board cannot, not overrule the
+                                 # board. Precedent one layer down is ADR-0106's `deadness`/`tiebreak`
+                                 # legs — "ordering-only … which is the property that lets a
+                                 # CATEGORICAL fact rank without being handed a magnitude."
 
 
 @dataclass
@@ -1272,6 +1287,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  enabler_item_composer=False,
                  develop_rollout=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
+                 grab_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
@@ -1413,6 +1429,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                     # keeps the raw-scoring substrate neutral;
                                                     # `make_agent` resolves the shipped ON from
                                                     # PROFILE, like every other switch.
+        self.grab_value = grab_value                # the GRAB DECIDER's emergency lever (ADR-0121,
+                                                    # Issue #406). NOT a rollback: the 23 `_TO_HAND`
+                                                    # rungs it replaced are DELETED, so OFF leaves
+                                                    # the grab with nothing to say and the pick falls
+                                                    # to `_order_key`'s canonical identity — which is
+                                                    # the very defect this equation exists to fix.
+                                                    # It is a MEASUREMENT lever (A/B the equation
+                                                    # against a silent seam), on the same terms as
+                                                    # `evolve_value`'s note four lines up.
         self.attach_value = attach_value                # the ATTACH DECIDER's emergency lever (ADR-0069 §9,
                                                         # shipped ON): the axes-sum marginal (`_attach_value`)
                                                         # IS the energy-attach decision, scaled into the rung
@@ -1563,6 +1588,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # — it then memoises for that Pilot's lifetime,
                                                         # which is the same contract every other
                                                         # per-decision cache gives such a caller.
+        self._grab_marginal_cache: dict = {}            # PER-DECISION (reset in `_board`), keyed by
+                                                        # (card id, deck_backed): the `_TO_HAND` grab's
+                                                        # add-marginal (ADR-0121). Same contract and same
+                                                        # reason as `_item_hold_cache` above — a menu asks
+                                                        # per option and the lookahead per reachable deck
+                                                        # card, each walking the whole hand.
         self._derived_accel_cache = None                # memo: derived bench-accel body ids (deck-fixed)
         self._discard_fuel_cache = None                 # memo: energy types a discard-source accel attack
                                                         # wants IN the discard (deck-fixed; Aura Jab class)
@@ -1793,9 +1824,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         (the needy-Line leg was in the sort and absent from the grab).
 
         Ascending, so every leg is negated where it should rank high: score DESC, the needy-Line
-        attach first, then the board-derived canonical identity, then the menu index — which now
-        separates only options that key EQUAL on everything above it."""
-        return (-trace.score, not trace.attach_to_needy_line, canon, index)
+        attach first, the deck's declared fetch priority, then the board-derived canonical identity,
+        then the menu index — which now separates only options that key EQUAL on everything above it.
+
+        **The fetch-priority leg is ORDERING-ONLY, and that is the whole reason it is here rather
+        than in `score`** (ADR-0121 R10). `Strategy.fetch_priority` is an authored per-deck list —
+        deck doctrine no board-derived assignment can re-derive, so it must survive the retirement of
+        the `_TO_HAND` rung ladder in SOME form. But it shipped as an additive Hypothesis at +40, and
+        an additive +40 sitting beside a `[-1, 1] x DEPLOY_BAND` equation does not tie-break: it
+        dominates every difference the equation can express, which inverts the intent — deck doctrine
+        should break ties the board cannot, not overrule the board. Sitting BELOW the score it
+        discriminates only where the equation prices two candidates exactly equal.
+
+        The precedent is one layer down and exact: ADR-0106 gave `needs.cheapest_removal` its
+        `deadness` / `tiebreak` legs, *"ordering-only: neither can make a removal look cheaper than
+        one that genuinely costs less, which is the property that lets a CATEGORICAL fact rank
+        without being handed a magnitude."* An authored priority list is precisely such a fact."""
+        return (-trace.score, not trace.attach_to_needy_line, not trace.grab_deck_priority,
+                canon, index)
 
     def _prefer_soonest_arming_evolve(self, order: list, options: list, traces: list) -> list:
         """Break an EXACT tie between EVOLVE options toward the body that arms soonest — i.e. put the
@@ -2163,6 +2209,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         evolve_row = self._evolve_decision(obs, board, ctx, option)      # the EVOLVE decider (ADR-0070)
         promote_row = self._promote_retreat_decision(obs, select, board, ctx, option)  # ADR-0100
         deploy_row = self._deploy_decision(obs, select, board, option)   # ADR-0086 (#197)
+        grab_row = self._grab_decision(obs, select, board, option)       # ADR-0121 (#406)
         tactical = (self._tactical(obs, board, option)
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
@@ -2189,7 +2236,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + (attach_row["tactical"] if attach_row is not None else 0.0)
                     + (evolve_row["tactical"] if evolve_row is not None else 0.0)
                     + (promote_row["tactical"] if promote_row is not None else 0.0)
-                    + (deploy_row["total"] if deploy_row is not None else 0.0))
+                    + (deploy_row["total"] if deploy_row is not None else 0.0)
+                    + (grab_row["total"] if grab_row is not None else 0.0))
         hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
         fired = [(h, self._weight(h)) for h in hyps if _fires(h, ctx)]
         # No attach fold set and no per-option suppression plumbing: the rungs the attach decider
@@ -2203,6 +2251,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                          if attach_row is not None else 0.0),
                            evolve_working=evolve_row,
                            deploy_working=deploy_row,
+                           grab_working=grab_row,
+                           grab_deck_priority=bool(ctx.card_is_top_fetch_priority
+                                                   and ctx.select_context == _TO_HAND),
                            promote_retreat_working=promote_row)
 
     def _evolve_side(self, obs: dict, board: Board, raw: dict | None, card_id, *,
@@ -4880,11 +4931,65 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         whole re-access + latency discount. Stacking ×(1−r) on top priced a general slot at
         ~0.45 × v1's own re-access model and flipped the sweep to the UNSAFE side (under-pricing
         19→62, sign-flips 13→17). Re-open only as a JOINT re-measure of W and r, never r alone."""
+        def window_of(s):
+            # fund_attack widens by its quota deadline; a LINE slot CLAMPS to its readiness deadline
+            # (piece 1) — a wincon one attach from live gets only its ~1-2-draw re-access window, not
+            # the whole refresh redraw, so its shed cost stays material; other slots take the window.
+            if s.kind == "fund_attack":
+                return draws + s.deadline
+            if s.kind == "line":
+                return min(draws, s.deadline)
+            return draws
+
+        return self._slot_reaccess_resupply(slots, elig, rows, obs, board, window_of=window_of,
+                                            pool_extra=len(rows), held_are_certain=True)
+
+    def _slot_reaccess_resupply(self, slots, elig, rows, obs: dict, board: Board, *,
+                                window_of, pool_extra: int, held_are_certain: bool,
+                                counts: dict | None = None) -> list:
+        """**The ONE re-access model**: per slot, P(the closure re-supplies it inside that slot's own
+        draw window) — the discount `needs.assignment_value` applies to a covered slot's marginal
+        (×(1−r)) and credits an uncovered one (×r).
+
+        Extracted from `_refresh_slot_resupply` when the GRAB decider (ADR-0121) needed the same
+        question over a different window. Written once because the alternative is what the
+        `_removal_ranking_legs` docstring already describes one layer down — *"a third leg reaches
+        one site and not the other, which is exactly how `Pilot._order_key` came to exist."* The
+        first draft of the grab DID write a second one, and it was wrong in a way this shape makes
+        unrepresentable: it asked `deck_contains_probability` (*"could a copy be prized?"*, ~1.0
+        whenever any copy remains) instead of *"will I draw one in time?"*, so every line slot the
+        deck still held a twin of discounted to ~0 and **16 of 30 ruled corpus frames moved off the
+        human ruling**. That is the defect ADR-0086 decision 2 already ruled at the deploy seam —
+        *"With the deck always holding a twin, that zeroed nearly every deploy in the corpus"* —
+        walking straight back in one seam over.
+
+        The outs are the slot's supplier CLASSES pointed backwards over the pool: deck copies plus
+        the tutors reaching any class (`fetch_closure.class_reaccess_outs` — each tutor once).
+
+        Three call-site facts are parameters because they genuinely differ, and nothing else does:
+
+        * ``window_of(slot)`` — how many draws stand between now and the slot's deadline. The REFRESH
+          knows its printed draw count; the GRAB has only the natural one-draw-per-turn clock.
+        * ``pool_extra`` — cards joining the deck. The refresh shuffles the whole hand back in; a
+          grab shuffles nothing, so its pool is the deck alone.
+        * ``held_are_certain`` — whether the slot's own eligible HELD copies count as outs. True for
+          the refresh (a shuffled hand card is never prize-assignable, so it is a certain re-draw);
+          false for the grab, where a card already in hand is not something the deck re-supplies.
+
+        Fail directions, all toward KEEP (a lower r → a higher price — the sweep's measured SAFE
+        side): ``deploy_now`` / ``answer_doom`` stay 0.0 (the closing edge,
+        `gate_library.closing_gate_reaccess` — re-access is not bankable against a this-turn
+        deadline), and so does ANY ``deny`` or ``line`` slot at deadline ≤ 0; ``general`` stays 0.0
+        on the MEASURED WP-N5 finding quoted by `_refresh_slot_resupply`; supplier classes are read
+        off the HELD eligibility only, so a deck-only filler class is not counted; unresolved deck
+        bookkeeping → all-0.0. Pre-anchor the outs are prize-split-weighted (`_prize_split_hit`),
+        anchored the plain window draw. Pitch-side (fuel) slots never enter the keep DP."""
         from common import fetch_closure
         from common.deck_odds import draw_hit_probability
         out = [0.0] * len(slots)
         me = self._my_player(obs)
-        counts = board.deck_known_counts
+        if counts is None:
+            counts = board.deck_known_counts
         if counts:
             deck_count = sum(counts.values())
             prizes_hidden = 0                                    # anchored: the split is resolved
@@ -4898,11 +5003,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             deck_count = sum(counts.values()) - prizes_hidden
             if deck_count <= 0 or not counts:
                 return out
-        pool = deck_count + len(rows)                            # the shuffle-grown pool: rows ARE
-        members: list = [[] for _ in slots]                      # the shuffled copies (refresh excluded)
+        pool = deck_count + int(pool_extra)
+        members: list = [[] for _ in slots]
         for k, js in enumerate(elig):
             for j in js:
-                members[j].append(k)
+                if 0 <= j < len(slots):
+                    members[j].append(k)
         for j, s in enumerate(slots):
             if (s.supplied_by_pitch or s.kind in ("deploy_now", "answer_doom", "general")
                     or (s.kind in ("deny", "line") and s.deadline <= 0) or not members[j]):
@@ -4911,16 +5017,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             classes = {rows[k]["cid"] for k in members[j]}
             u = fetch_closure.class_reaccess_outs(classes, counts, self._closure_stat_of,
                                                   self._closure_clauses_of)
-            certain = len(members[j])
-            # fund_attack widens by its quota deadline; a LINE slot CLAMPS to its readiness deadline
-            # (piece 1) — a wincon one attach from live gets only its ~1-2-draw re-access window, not
-            # the whole refresh redraw, so its shed cost stays material; other slots take the window.
-            if s.kind == "fund_attack":
-                window = draws + s.deadline
-            elif s.kind == "line":
-                window = min(draws, s.deadline)
-            else:
-                window = draws
+            certain = len(members[j]) if held_are_certain else 0
+            window = window_of(s)
             if prizes_hidden > 0:
                 r = self._prize_split_hit(u, deck_count, prizes_hidden, pool, window,
                                           certain=certain)
@@ -5647,6 +5745,193 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         )
         value = deploy_value(inp)
         return {"cid": cid, "capacity": capacity, **value.working()}
+
+    # ── the GRAB decider (ADR-0121, Issue #406) — the `_TO_HAND` sibling of the two above ─────────
+
+    @staticmethod
+    def _grab_candidate_is_deck_backed(option: dict) -> bool:
+        """Is this candidate physically IN my deck right now? — the one fact the grab's resupply
+        branches on (ADR-0121 R9).
+
+        Read off the option's **AreaType**, which is the engine stating first-hand where the card
+        it is offering me lives, rather than off the source card's `card_effects.json` ``zone``.
+        The clause route was the grill's own wording and it does not survive contact with the
+        corpus: **6 of the 31 ruled `_TO_HAND` frames are posed by cards with no `fetch` clause at
+        all** — Drakloak 120's ``draw`` clause (*"look at the top 2 … put 1 into your hand"*, 4
+        frames) and Crispin 1198's ``accel`` clause (2 frames) — so there is no ``zone`` field to
+        branch on. Pokégear 1122 adds a third zone the ruling never names, `_LOOKING`. The area is
+        defined for all of them.
+
+        ``_DECK`` and ``_LOOKING`` are both deck-backed: a top-N reveal is the top of my deck made
+        face-up, and the copy I take leaves the deck exactly as a searched one does. ``_DISCARD``
+        (Night Stretcher 1097 — the most frequent `_TO_HAND` card in the mega_starmie deck, and
+        mandatory) is not: those copies were never in the unseen-deck counts, so there is nothing to
+        remove and no re-draw to discount a mandatory pick against. `board_expectation.py` already
+        rules that zone's epistemics — *"a discard search carries no chance at all (the zone is
+        visible), so it is a pure CHOICE node"* — which is why this is a resupply question and never
+        an odds question.
+
+        Fails toward DECK-BACKED on an unknown area: that is the branch that removes the candidate's
+        own copy, so it can only ever LOWER the marginal, never inflate one on a guess."""
+        return option.get("area") != _DISCARD_AREA
+
+    def _grab_supplier_rows(self, obs: dict, board: Board, cid) -> tuple:
+        """``(rows, index)`` — my hand plus EXACTLY ONE candidate, and where the candidate sits.
+
+        **One candidate at a time is a correctness ruling before it is a performance one** (ADR-0121
+        R2). Putting every menu candidate in the rows at once makes them rivals for the same slot
+        under `needs`' sets-not-sums assignment, so each one's marginal is depressed by the presence
+        of the others — yet exactly one will be taken. Every candidate has to be priced against the
+        identical hand baseline, which is what makes the numbers comparable at all.
+
+        It is also the only variant that keeps the slot count at hand-slots + 1 — the same magnitude
+        `_needs_v2` already runs at, and clear of `needs._MAX_KEEP_SLOTS` truncation — and the only
+        one that does not multiply an unbounded-breadth DP by the menu width (see
+        `_keep_slot_dp`'s measured breadth curve).
+
+        The candidate row is built exactly as `_needs_hand_rows` builds a held one, over the SAME
+        `_unseen_deck_counts` object. Sharing the dict is not incidental: `_playability_zones`
+        memoises on its inputs' IDENTITY, so an adjusted per-candidate copy would rebuild the zone
+        sets once per option. The R9 adjustment therefore lives in `_grab_resupply`, which is the
+        only place it changes an answer."""
+        rows = list(self._needs_hand_rows(obs, board))
+        me = self._my_player(obs)
+        counts = self._unseen_deck_counts(me, board)
+        st = self.stats.get(cid) if self.stats else None
+        fuel_types = self._discard_fuel_types()
+        fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
+                    and (None in fuel_types or getattr(st, "energyType", None) in fuel_types))
+        index = len(rows)
+        rows.append({"i": index, "cid": cid, "worth": round(self._role_value(cid), 1),
+                     "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
+        return rows, index
+
+    def _grab_resupply(self, obs: dict, board: Board, slots: list, elig: list, rows: list,
+                       counts: dict) -> list:
+        """Per-slot RESUPPLY for a grab: how likely the deck fills each slot ANYWAY, so a candidate
+        covering a slot the deck would re-supply in time is discounted to ``v x (1 - r)``.
+
+        Resolves through the shared `_slot_reaccess_resupply`, on the NATURAL draw clock: the window
+        is the slot's own deadline, one draw per intervening turn (`gate_library.quota_window`'s
+        model, which `_refresh_slot_resupply` already re-derives). A grab opens no draw window of its
+        own — it is not a refresh — so the deadline IS the whole question, and the CLOSING EDGE R5
+        requires falls straight out of it rather than needing a separate grade: a deadline-0 slot has
+        a zero-draw window and takes resupply 0.0, because one needed THIS turn is not re-drawable in
+        time.
+
+        Nothing shuffles in (``pool_extra=0``) and held copies are not resupply
+        (``held_are_certain=False``) — a card already in my hand is not something the deck delivers.
+        Both are the grab's readings of the two facts the refresh reads the other way, which is
+        exactly why they are parameters of the shared core rather than a second implementation.
+
+        **Why the outs come from supplier CLASSES rather than deck ROWS**, unlike `_deploy_resupply`.
+        Handing `_resolve_needs` a row per unseen deck card (the `_deploy_decision` shape) would emit
+        a `general` slot per distinct id under the ``include_general=True`` this seam requires, blow
+        straight past `_MAX_KEEP_SLOTS = 16`, and drop the candidate's own slot in the truncation —
+        pricing it 0 for a reason that has nothing to do with the board. That is acceptance criterion
+        6's hazard, avoided by construction rather than tested around.
+
+        ``counts`` is the caller's deck read, already R9-adjusted — see `_grab_add_marginal`."""
+        return self._slot_reaccess_resupply(
+            slots, elig, rows, obs, board, counts=counts, pool_extra=0, held_are_certain=False,
+            window_of=lambda s: max(0, min(int(getattr(s, "deadline", 99) or 0), _HORIZON)))
+
+    def _grab_add_marginal(self, obs: dict, board: Board, cid, *, deck_backed: bool = True) -> float:
+        """What TAKING card ``cid`` into hand adds to the board's need coverage, in Worth points —
+        **the ONE grab oracle** (ADR-0121 R7).
+
+        ``keep_v2(hand u {X}, index=X) = V(hand u {X}) - V(hand)`` is exactly the add-marginal of
+        taking X, so this is the third reading of the assignment `deploy_marginal` and
+        `cheapest_removal` already read, not a fourth model. `_grab_decision` (the real grab) and
+        `_grab_value_of` (the whether-to-play lookahead, `_fetch_fills_a_need`) both resolve here,
+        which is the ADR-0023 shared-oracle invariant kept by construction rather than by two
+        implementations agreeing.
+
+        The three settings the grill ruled, each code-justified rather than chosen:
+
+        * ``capacity=None`` — `keep_v2`'s default, and `_keep_slot_dp` says why: *"the keep/discard
+          family has no capacity: holding a card costs no board slot."* A grab lands in HAND.
+          Contrast `_deploy_decision`, which passes ``_BENCH_MAX - my_bench``.
+        * ``include_general=True`` — the WP-N5c reason for `False` is that at end-of-turn a
+          generically-good card still IN hand is one I chose not to deploy, so crediting its latent
+          worth rewards HOARDING. A grab is not an end-of-turn leaf term: declining deploys nothing,
+          it leaves the card in the deck. Without general slots a win-condition with no live
+          specific need would tie at 0.0 against a random Item. Take-fewer still works free —
+          `_resolve_needs` emits ONE `general_worth_slot` per DISTINCT cid, so a candidate already
+          held shares its hand copy's slot, prices ~0 and correctly declines.
+        * ``intrinsic=0.0`` — the floor is the WP-N2 migration hedge against pricing below a shipped
+          decider. There is no shipped equation at this context to price below; that is the defect.
+
+        ``deck_backed`` removes the candidate's OWN copy from the deck counts before resupply, so a
+        card cannot discount itself against the very copy it is about to take (`_deploy_supplier_
+        rows`' rule). Only its own copy: the other revealed candidates stay in the deck when the
+        search shuffles back, so they genuinely do re-supply. That is exact at ``maxCount == 1``,
+        which is every `_TO_HAND` select this pool poses — see `_grab_decision` for the multi-pick
+        residue.
+
+        Memoised per DECISION (reset in `_board`): a ten-option menu asks per option, the lookahead
+        asks per reachable deck card, and each answer walks the whole hand. `_item_hold_cache`'s
+        pattern and its reason."""
+        from common import needs
+        key = (cid, bool(deck_backed))
+        cache = self._grab_marginal_cache
+        if key in cache:
+            return cache[key]
+        value = 0.0
+        if cid is not None:
+            me = self._my_player(obs)
+            rows, index = self._grab_supplier_rows(obs, board, cid)
+            slots, elig = self._resolve_needs(obs, board, rows, include_general=True)
+            # Re-stamp each LINE slot with the ACQUISITION deadline before the resupply window reads
+            # it — `_deploy_decision` does the identical thing for the identical reason, and
+            # `_deploy_line_deadline` states it: `_resolve_needs` supplies the held-PAYOFF direction,
+            # which "is structurally 99 for a held base. Correct for the shed question it was built
+            # for, and useless for this one — deploying a base is precisely what STARTS its clock."
+            # Taking a base into hand starts the same clock, one step earlier. Without this every
+            # base's line slot sat at deadline 99, took a 99-draw re-access window, and priced ~0
+            # against a deck that still held a twin — 16 of 30 ruled frames moved, measured.
+            slots = [dataclasses.replace(s, deadline=self._deploy_line_deadline(me, _slot_cid(s)))
+                     if _slot_cid(s) is not None else s for s in slots]
+            counts = self._unseen_deck_counts(me, board)
+            if deck_backed and counts.get(cid, 0) > 0:
+                counts = {**counts, cid: counts[cid] - 1}
+            resupply = self._grab_resupply(obs, board, slots, elig, rows, counts)
+            value = needs.keep_v2(slots, elig, resupply, index, intrinsic=0.0)
+        cache[key] = value
+        return value
+
+    def _grab_decision(self, obs: dict, select: dict, board: Board, option: dict):
+        """Price ONE candidate `_TO_HAND` grab — the Pilot half of ADR-0121. ``None`` when the
+        switch is off or the option is not a card reaching my hand.
+
+        Folded into `_option_trace`'s ``tactical`` beside `deploy_row["total"]`, **not** installed as
+        an override pick like `_discard_needs_pick`. The difference is the shape of the question:
+        `cheapest_removal` overrides because a forced discard is a SET problem solved jointly (Ultra
+        Ball's `_DISCARD` leg is ``minCount == maxCount == 2``), while a `_TO_HAND` grab at
+        ``maxCount == 1`` is a RANKING. Routing it through `tactical` preserves `_order_key`'s
+        canonical Option-Equivalence tie-break (ADR-0103) and leaves `_greedy_grab`'s re-score loop
+        usable if a card ever poses ``maxCount > 1`` here.
+
+        **The multi-pick residue, named rather than papered over.** No card in this pool poses a
+        multi-pick `_TO_HAND` select — measured over all 377 committed traces and all 31 ruled
+        corpus frames, every one is ``0/1`` or ``1/1`` — so `_greedy_grab` is never entered here
+        (`max_count > 1` gates it). If one ever ships, two things must close together:
+        `_virtual_grab_board` updates the BOARD but never ``obs["hand"]``, which is what
+        `_needs_hand_rows` reads, so a second candidate would re-price against an unchanged hand;
+        and the taken candidates' copies would need removing from the deck counts alongside this
+        one's. Both are the same thread — the acquired set has to reach this resolver."""
+        if not getattr(self, "grab_value", False):
+            return None
+        if select.get("context") != _TO_HAND or option.get("type") != _CARD:
+            return None
+        cid = self._option_card_id(obs, select, option)
+        if cid is None:
+            return None
+        from common.grab_value import GrabInputs, grab_value
+        marginal = self._grab_add_marginal(
+            obs, board, cid, deck_backed=self._grab_candidate_is_deck_backed(option))
+        value = grab_value(GrabInputs(add_marginal=marginal))
+        return {"cid": cid, "add_marginal": round(marginal, 2), **value.working()}
 
     def _supporter_fetch_need(self, obs: dict, board: Board):
         """``(worth marginal, odds)`` for a bench-drop Supporter tutor — decision 3's Ability leg.
@@ -6569,16 +6854,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         card_unplayable_this_turn = bool(
             select.get("context") == _TO_HAND and board.supporter_played
             and bool(stat and stat.is_supporter))
-        card_chain_value = (self._chain_grab_value(board, cid, plan)
+        card_chain_value = (self._chain_grab_value(obs, board, cid)
                             if select.get("context") == _TO_HAND and cid is not None else 0.0)
         card_spends_last_evolution_route = (
             card_chain_value > 0 and self._spends_last_evolution_route(select, board, cid))
         fetch_fills_a_need = (option.get("type") == _PLAY
-                              and self._fetch_fills_a_need(board, cid, plan))
+                              and self._fetch_fills_a_need(obs, board, cid))
         fetch_target_deferred = (fetch_fills_a_need
-                                 and self._fetch_target_deferred(obs, cid, board, plan))
+                                 and self._fetch_target_deferred(obs, cid, board))
         refresh_shuffles_deferred = (option.get("type") == _PLAY and "shuffle_hand" in tags
-                                     and self._held_fetch_deferred(obs, cid, board, plan))
+                                     and self._held_fetch_deferred(obs, cid, board))
         target_energy = self._target_energy(obs, select, option)
         target_hp = self._target_hp(obs, select, option)
         target_is_weakest = (target_hp is not None and board.weakest_bench_hp is not None
@@ -6636,7 +6921,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             and not board.accel_recipient_missing and not board.bench_wincon_ready)
         search_exhausted, redundant_wincon, baseless_wincon = self._search_signals(option, cid, board)
         search_unlikely = self._search_probable_whiff(option, cid, board)
-        search_confirmed = self._search_confirmed_hit(option, cid, board, plan)
+        search_confirmed = self._search_confirmed_hit(obs, option, cid, board)
         sheds_junk, sheds_live, sheds_key = self._shed_signals(obs, option, tags, board, plan)
         refresh_miss = self._refresh_probable_miss(option, cid, tags, board, obs, plan)
         attach_from_needs = self._attach_from_target_needs(obs, select, option)
@@ -7566,6 +7851,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                     # `_resolve_needs`, and the deciders that read it
                                                     # run per OPTION over a hand that routinely holds
                                                     # two copies of the same Item.
+        self._grab_marginal_cache = {}              # per-decision, keyed by (CARD ID, deck_backed) —
+                                                    # the `_TO_HAND` grab's add-marginal (ADR-0121).
+                                                    # Same walk and the same per-option pressure as the
+                                                    # hold price above, plus the whether-to-play
+                                                    # lookahead asking once per reachable deck card.
         self._snipe_relevance_cache = {}            # per-decision, keyed by id(body) — the curve
                                                     # reads are per BODY while `_context` runs per
                                                     # OPTION, and a DAMAGE select offers the same

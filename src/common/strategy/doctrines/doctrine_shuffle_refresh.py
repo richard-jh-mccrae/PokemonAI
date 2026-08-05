@@ -57,7 +57,7 @@ class ShuffleRefreshMixin:
         branches = _draw_branches(cid, board)
         if not counts or branches is None:
             return False
-        k = sum(n for c2, n in counts.items() if n > 0 and self._grab_value_of(board, c2, plan) > 0)
+        k = sum(n for c2, n in counts.items() if n > 0 and self._grab_value_of(obs, board, c2) > 0)
         state = obs.get("current") or {}
         players = state.get("players") or []
         yi = state.get("yourIndex", 0)

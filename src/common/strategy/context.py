@@ -73,6 +73,10 @@ _BENCH_PLACEMENT_CONTEXTS = frozenset({_TO_BENCH, _SETUP_BENCH})
 # ── AreaType (cg/api.py) ──
 _HAND = 2     # AreaType.HAND
 _DECK = 1     # AreaType.DECK — search candidate; ids revealed in select's `deck` list
+_DISCARD_AREA = 3  # AreaType.DISCARD — a recovery candidate (Night Stretcher). Named apart from the
+              # SelectContext `_DISCARD` (8) because they are different enums that both spell
+              # "discard": one is WHERE a card is, the other is WHAT the engine is asking. The grab
+              # decider's resupply branch (ADR-0121 R9) turns on the former.
 _ACTIVE = 4   # AreaType.ACTIVE
 _BENCH = 5    # AreaType.BENCH
 _LOOKING = 12  # AreaType.LOOKING — a face-up reveal (Pokégear/search top-N) in `current.looking`;
@@ -194,7 +198,8 @@ __all__ = [
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_TO_DECK", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
     "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
-    "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_SHUFFLE", "_DRAW", "_DRAW_REVERSE",
+    "_HAND", "_DECK", "_DISCARD_AREA", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_SHUFFLE", "_DRAW",
+    "_DRAW_REVERSE",
     "_MOVE_CARD", "_MOVE_CARD_REVERSE",
     "KO_SCORE", "ENERGY_RECOVER", "FOLLOWUP_W", "_METAL",
     "_SUPPORTER", "_TOOL_CARD", "_BASIC_ENERGY", "_SPECIAL_ENERGY", "_BENCH_MAX", "_THIN_BENCH",
