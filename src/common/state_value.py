@@ -1111,6 +1111,13 @@ def _exposed_bodies(model: "StateModel") -> tuple:
 def _survival_clock(model: "StateModel", body) -> int:
     """**THE** clock on one of my bodies — the single call two families read (Issue #332).
 
+    ⚠️ Not to be confused with `TheirSide.survival_clock`, which since ADR-TEMP-398 returns a
+    `SurvivalClock` carrying BOTH the integer and the interpolated crossing point. This function
+    keeps its name and its `int`: `survival` and `readiness` grade against scale anchors calibrated
+    on whole turns, and adopting the fractional reading here is a separate, unmeasured change that
+    ADR-TEMP-398 explicitly left out of scope. It reads `.turns` by going through
+    :meth:`TheirSide.turns_to_ko_me`, so it is still ONE accumulation, not a second opinion.
+
     Extracted from :func:`_exposed_bodies` rather than copied into the readiness path, and the
     extraction is the correctness rather than tidiness. `survival` grades exposure by this clock and
     `readiness` now discounts a body's FORWARD potential by it (:func:`_survives_to_spend`); asking

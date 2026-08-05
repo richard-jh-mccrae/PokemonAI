@@ -102,14 +102,30 @@ def test_the_removal_delta_follows_THEIR_hand():
     So the Δ is a ladder in their hand size, and the ladder is asserted value-by-value rather than as
     a trend — a trend alone would also pass on a term that moved for some other reason. Without the
     context Powerful Hand deals 0, the Alakazam never finishes inside the horizon, and every hand
-    size answers the SAME 7: the flat axis this issue removes."""
-    ladder = {1: 7, 2: 3, 3: 2, 4: 1, 6: 0}
+    size answers the SAME value: the flat axis this issue removes.
+
+    **Re-derived by hand for ADR-TEMP-398**, when this Δ became a difference of the **Fractional
+    Survival Clock** rather than of whole turns. Both bodies present, the Dunsparce line's ceiling
+    is 150/turn into my 200 HP, so the base crossing is ``1 + (200-150)/150 = 4/3``. Removing their
+    Active leaves ``20 x hand``/turn and the crossing interpolates the same way:
+
+        hand  incoming  dealt reaches 200 during  exact         shift = exact - 4/3
+        1     20        never (8 x 20 = 160)      9 (horizon+1) 23/3
+        2     40        t=5, exactly on it        5             11/3
+        3     60        t=4, a third in           3 + 20/60     2
+        4     80        t=3, half in              2 + 40/80     7/6
+        6     120       t=2, two thirds in        1 + 80/120    1/3
+
+    The last row is the whole point of the change: at hand 6 the integer clock said **0** — both
+    bodies "crossing at t=2" — and a Flat Tie is what the ranking then had to break by list order.
+    The board did not change; the resolution did."""
+    ladder = {1: 23 / 3, 2: 11 / 3, 3: 2.0, 4: 7 / 6, 6: 1 / 3}
     for hand, shift in ladder.items():
         rows = _rows(hand)
         active = next(r for r in rows if r["area"] == "active")
-        assert active["survival_shift"] == shift, (
+        assert active["survival_shift"] == pytest.approx(shift), (
             f"their hand {hand} => Alakazam deals {20 * hand}/turn into my 200 HP, so removing "
-            f"their Active buys {shift} turns")
+            f"their Active buys {shift:.4f} turns")
 
 
 @pytest.mark.req("REQ-TARGETROWS-CTX-0001")
@@ -120,11 +136,15 @@ def test_the_removal_delta_reads_THEIR_hand_and_never_MINE():
     dict answers a flat 7 at every one of their hand sizes.
 
     There is no assignment of the mine-direction dict to this call site that passes the ladder
-    above, which is what makes this a regression test rather than a restatement."""
+    above, which is what makes this a regression test rather than a restatement.
+
+    The flat control answers ``23/3`` rather than the old ``7`` for the same reason the ladder moved
+    (ADR-TEMP-398): a blind Alakazam deals 0, so it never crosses inside the horizon and the removal
+    Δ is ``9 - 4/3`` at every hand size. Flat is still flat — that is what this test asserts."""
     theirs = [_rows(h)[0]["survival_shift"] for h in (1, 2, 3, 4, 6)]
     mine = [_rows(h, attacker_is_me=True)[0]["survival_shift"] for h in (1, 2, 3, 4, 6)]
-    assert theirs == [7, 3, 2, 1, 0]
-    assert mine == [7, 7, 7, 7, 7], "the wrong direction cannot see their hand at all"
+    assert theirs == pytest.approx([23 / 3, 11 / 3, 2.0, 7 / 6, 1 / 3])
+    assert mine == pytest.approx([23 / 3] * 5), "the wrong direction cannot see their hand at all"
 
 
 @pytest.mark.req("REQ-TARGETROWS-CTX-0001")
@@ -191,15 +211,22 @@ def test_both_legs_of_each_delta_are_threaded_together():
     context the subtraction would compare two different questions and could even change SIGN.
 
     Asserted structurally, on the source, because a value test cannot distinguish "both legs
-    threaded" from "neither leg threaded" on a board where the context happens not to bite."""
+    threaded" from "neither leg threaded" on a board where the context happens not to bite.
+
+    BOTH clock method names count. `survival_clock` reports the same accumulation as
+    `turns_to_ko_me` at a finer resolution (ADR-TEMP-398) and `_opponent_target_rows` now reads it;
+    the invariant this test protects is that every clock leg of a Δ carries `context`, never which
+    of the two readings a call site took. The instrument guard below is what caught the rename when
+    the fractional reading landed, and it is kept for the next one."""
     src = (REPO / "src" / "common" / "pilot.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
+    clocks = {"turns_to_ko_me", "survival_clock"}
     for fname in ("_opponent_target_rows", "_strip_delta_terms"):
         fn = next(n for n in ast.walk(tree)
                   if isinstance(n, ast.FunctionDef) and n.name == fname)
         calls = [c for c in ast.walk(fn)
                  if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
-                 and c.func.attr == "turns_to_ko_me"]
+                 and c.func.attr in clocks]
         assert calls, f"{fname}: no clock call found — this test's instrument is broken"
         for call in calls:
             assert _threads_context(call, fn), (

@@ -89,6 +89,7 @@ from common import card_worth
 from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk / the ONE unit read
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
+from common.strategy.combat import SurvivalClock  # both readings of ONE accumulation (ADR-TEMP-398)
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
 from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
 from common.strategy.damage_context import bench_gate_context   # ...and its matchup-free slice
@@ -1960,14 +1961,37 @@ class TheirSide(_SideBase):
 
         Keyed by VALUE for the reason spelled out on :meth:`incoming` — the removal and strip Δs
         construct temporary body dicts, and an address-keyed memo can serve one temporary's answer for
-        the next one allocated at the same address."""
+        the next one allocated at the same address.
+
+        Reads :meth:`survival_clock`'s ``.turns``, so this route and the fractional one share ONE
+        memo entry and one accumulation (ADR-TEMP-398)."""
+        return self.survival_clock(
+            my_body, bodies=bodies, charged=charged, my_benched=my_benched, my_bench=my_bench,
+            key_ids=key_ids, reading=reading, opp_active=opp_active,
+            switch_enabler=switch_enabler, context=context).turns
+
+    def survival_clock(self, my_body: dict | None, *, bodies=None, charged=_THREADED,
+                       my_benched: bool = False, my_bench=(),
+                       key_ids=frozenset(), reading: str | None = None,
+                       opp_active: dict | None = None, switch_enabler: bool = False,
+                       context: dict | None = None) -> SurvivalClock:
+        """The ACTIVE-area survival clock at BOTH resolutions — :meth:`turns_to_ko_me`'s integer
+        plus the interpolated crossing point beside it (`CombatMath.SurvivalClock`, ADR-TEMP-398).
+
+        The model route exists so the fractional reading is memoised on the SAME key as the integer
+        rather than beside it: both fall out of one accumulation, and a second memo entry would pay
+        for that accumulation twice per decision to answer a question it already answered. Every
+        argument is in the key, for the reason :meth:`turns_to_ko_me` spells out.
+
+        ``.exact`` is opt-in and its callers say why at the call site. The integer stays the default
+        everywhere it already was."""
         opp_bodies = self._bodies(bodies)
         policy = self._charged_policy(charged)
-        key = ("turns_to_ko_me", self._key(my_body), self._key(opp_bodies), self._key(policy),
+        key = ("survival_clock", self._key(my_body), self._key(opp_bodies), self._key(policy),
                bool(my_benched), self._key(tuple(my_bench or ())), frozenset(key_ids or ()),
                reading, self._key(opp_active), bool(switch_enabler), self._key(context))
         extra = {} if reading is None else {"reading": reading}
-        return self._memoized(key, lambda: self._combat.turns_to_ko_me(
+        return self._memoized(key, lambda: self._combat.survival_clock(
             my_body, opp_bodies, charged=policy, my_benched=my_benched,
             my_bench=my_bench, key_ids=key_ids, opp_active=opp_active,
             switch_enabler=switch_enabler, context=context, **extra))
