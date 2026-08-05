@@ -167,7 +167,7 @@ class FetchMixin:
         best = max(board.deck_contains_probability(c) for c in reachable)
         return best < _WHIFF_PROB_THRESHOLD
 
-    def _search_confirmed_hit(self, obs: dict, option: dict, cid, board) -> bool:
+    def _search_confirmed_hit(self, option: dict, cid, board, plan) -> bool:
         """The POSITIVE deck-knowledge signal for a search/tutor PLAY (ADR-0029): True iff a card the
         search's fetch clause can pull is PROVABLY still in the deck (`Board.deck_definitely_has` —
         the tracker's exact post-anchor counts) AND fills a real need (positive grab value, the SAME
@@ -177,7 +177,7 @@ class FetchMixin:
         if option.get("type") != _PLAY or not board.deck_known_counts:
             return False
         fetch_set = self._search_deck_set(cid)
-        return any(board.deck_definitely_has(c) and self._grab_value_of(obs, board, c) > 0
+        return any(board.deck_definitely_has(c) and self._grab_value_of(board, c, plan) > 0
                    for c in fetch_set)
 
     def _fetch_target_matches(self, clause: dict, stat, *, deadness: bool = False) -> bool:
@@ -264,7 +264,7 @@ class FetchMixin:
             self._chain_target_cache[cid] = ids
         return self._chain_target_cache[cid]
 
-    def _chain_grab_value(self, obs: dict, board, cid) -> float:
+    def _chain_grab_value(self, board, cid, plan) -> float:
         """The discounted closure value of tutoring card ``cid`` into hand — spec Round 9 §3 ("a
         tutor's held value = the closure-reachable value, recursively free"), backing
         `grab-the-chain-opener`. δ × the best reachable target's `_grab_value_of` (MAX, never a sum
@@ -285,9 +285,9 @@ class FetchMixin:
             return 0.0
         if stat.is_supporter and board.supporter_played:
             return 0.0
-        return self._chain_value_from(obs, board, cid, _CHAIN_MAX_HOPS, {cid}, {})
+        return self._chain_value_from(board, cid, plan, _CHAIN_MAX_HOPS, {cid}, {})
 
-    def _chain_value_from(self, obs: dict, board, cid, hops: int, seen: set, memo: dict) -> float:
+    def _chain_value_from(self, board, cid, plan, hops: int, seen: set, memo: dict) -> float:
         """`_chain_grab_value`'s recursive leg: δ × max over card ``cid``'s reachable fetch targets
         of (the target's own grab value | one more Item hop). ``memo`` caches `_grab_value_of` per
         target for THIS call tree only — the value is board-bound, never cached across boards."""
@@ -301,10 +301,10 @@ class FetchMixin:
             if tid in board.hand_ids and not (tst is not None and tst.is_energy):
                 continue                                     # already held: not value you lack
             if tid not in memo:
-                memo[tid] = self._grab_value_of(obs, board, tid)
+                memo[tid] = self._grab_value_of(board, tid, plan)
             v = memo[tid]
             if tst is not None and tst.is_item:              # only an Item plays free the same turn
-                v = max(v, self._chain_value_from(obs, board, tid, hops - 1, seen | {tid}, memo))
+                v = max(v, self._chain_value_from(board, tid, plan, hops - 1, seen | {tid}, memo))
             best = max(best, v)
         return _CHAIN_HOP_DISCOUNT * best
 
@@ -350,28 +350,28 @@ class FetchMixin:
                 return True                           # no other free route to the wanted evolution
         return False
 
-    def _grab_value_of(self, obs: dict, board, cid: int) -> float:
-        """The grab comparator's value for fetching card `cid` into hand right now — **the same
-        quantity the real grab decides on** (the shared-oracle invariant, ADR-0023). The
-        whether-to-play lookahead's per-candidate term.
+    def _grab_value_of(self, board, cid: int, plan) -> float:
+        """The grab comparator's value for fetching card `cid` into hand right now — the sum of the
+        positive TO_HAND grab Hypotheses that fire for it, scored with the SAME rungs as the real grab
+        (the shared-oracle invariant, ADR-0023). The whether-to-play lookahead's per-candidate term."""
+        from common.pilot import Context, _fires   # lazy: Context/Board live in pilot (cycle-free import)
+        stat = self.stats.get(cid) if (self.stats and cid is not None) else None
+        tags = self.functions.tags(cid) if (self.functions and cid is not None) else []
+        roles = self.strategy.roles.get(cid, [])
+        ctx = Context(
+            plan=plan, select_context=_TO_HAND, option_type=_CARD, card_id=cid,
+            card_is_line_preevo=cid in self._line_preevo_set(),
+            card_is_wincon=cid in self._wincon_set(),
+            card_is_starter=bool(stat and stat.hp > 0 and not stat.evolvesFrom),
+            card_is_support=bool(stat and stat.hp > 0 and (_ENGINE_TAGS & set(tags))),
+            card_stranded_evolution=cid in self._stranded_evolution_set(),
+            card_is_top_fetch_priority=(cid == board.top_fetch_priority_id),
+            card_is_redundant=cid is not None and cid in board.in_play_ids,   # f14 breadth stand-down
+            roles=roles, tags=tags, stat=stat, board=board)
+        hyps = (*self.general.hypotheses, *self.strategy.hypotheses)
+        return sum(self._weight(h) for h in hyps if _fires(h, ctx) and self._weight(h) > 0)
 
-        Delegates to `Pilot._grab_add_marginal`: ``keep_v2(hand u {cid}) - keep_v2(hand)``, in Worth
-        points. Until ADR-0121 this summed the POSITIVE `_TO_HAND` Hypotheses over a reduced
-        `Context` — a faithful mirror of the grab as it then was, because the grab was that rung
-        ladder. Replacing the ladder without moving this too would have split the one oracle ADR-0023
-        exists to keep whole: the play-reason would still be endorsing what the grab no longer valued.
-
-        **The `> 0` gates its callers apply survive the swap, and read better than before.** A
-        `keep_v2` marginal is ``V(superset) - V(subset)`` over a monotone assignment, so it is never
-        negative and ``> 0`` means exactly *"this candidate covers a need nothing I already hold
-        covers"* — which is what every caller was reaching for when it asked whether a rung fired.
-
-        ``deck_backed`` is left at its default: every caller here is asking about a card still IN the
-        deck (the lookahead ranges over `_search_deck_set`, the refresh over `deck_known_counts`), so
-        the copy in question would leave the deck if taken."""
-        return self._grab_add_marginal(obs, board, cid)
-
-    def _fetch_fills_a_need(self, obs: dict, board, cid) -> bool:
+    def _fetch_fills_a_need(self, board, cid, plan) -> bool:
         """True iff the fetch ``cid`` can pull a card I currently LACK from the deck — any still-reachable
         candidate (its fetch-clause set minus the provably-gone `deck_empty_ids`) whose grab value is
         positive. The whether-to-play lookahead: it estimates `best_grab_value > 0` from the known deck
@@ -380,7 +380,7 @@ class FetchMixin:
         if not fetch_set:
             return False
         reachable = fetch_set - board.deck_empty_ids
-        return any(self._grab_value_of(obs, board, c) > 0 for c in reachable)
+        return any(self._grab_value_of(board, c, plan) > 0 for c in reachable)
 
     def _fetched_playable_this_turn(self, obs: dict, cid, board) -> bool:
         """Could the fetched Pokémon ``cid`` be PLAYED this turn once in hand? A Basic lands on the
@@ -437,7 +437,7 @@ class FetchMixin:
         return any((hs := self.stats.get(hid)) is not None and getattr(hs, "name", None) == base
                    for hid in board.hand_ids if self.stats)
 
-    def _fetch_target_deferred(self, obs: dict, cid, board) -> bool:
+    def _fetch_target_deferred(self, obs: dict, cid, board, plan) -> bool:
         """The DEADLINE leg of the held-card risk (spec §Round 8 §5): every still-reachable NEEDED
         target of fetch ``cid`` (positive grab value — the same set `_fetch_fills_a_need` endorses)
         is provably unplayable this turn BUT playable next turn — a concrete deadline, so fetching
@@ -450,19 +450,19 @@ class FetchMixin:
         if not fetch_set:
             return False
         reachable = fetch_set - board.deck_empty_ids
-        needed = [c for c in reachable if self._grab_value_of(obs, board, c) > 0]
+        needed = [c for c in reachable if self._grab_value_of(board, c, plan) > 0]
         if not needed:
             return False
         return all(not self._fetched_playable_this_turn(obs, c, board)
                    and self._fetched_playable_next_turn(obs, c, board) for c in needed)
 
-    def _held_fetch_deferred(self, obs: dict, refresh_cid, board) -> bool:
+    def _held_fetch_deferred(self, obs: dict, refresh_cid, board, plan) -> bool:
         """The fetch-LATE leg viewed from the hand: some fetch card I HOLD (other than the refresh
         being priced) still fills a need whose every target is deferred past this turn
         (`_fetch_target_deferred`). A self-refresh would shuffle that held plan-vehicle away — the
         very strip the deferral is guarding against — so `dont-shuffle-away-the-deferred-fetch`
         reads this to hold the hand instead. False with no such held fetch (fail-open)."""
-        return any(self._fetch_target_deferred(obs, hid, board)
+        return any(self._fetch_target_deferred(obs, hid, board, plan)
                    for hid in board.hand_ids if hid != refresh_cid)
 
     def _shed_signals(self, obs: dict, option: dict, tags: list, board, plan) -> tuple[bool, bool, bool]:
@@ -622,6 +622,89 @@ class FetchMixin:
 # ── the need-gated rungs: their additive scored sum IS `fetch_value` (grab A/B, then discard C) ──
 HYPOTHESES = [
     Hypothesis(
+        id="fetch-the-wincon",
+        rationale="At a hand-search, pull the win-condition / primary attacker first (universal "
+                  "`win_condition`/`primary_attacker` Role) — highest-value fetch, develop it on your own terms. "
+                  "Stands down once the payoff is in play, or when energy-starved (`fetch-energy-when-starved` "
+                  "wins there — an unpowered Pokémon does nothing).",
+        when=lambda c: c.select_context == _TO_HAND and bool(_WINCON_ROLES & set(c.roles))
+        and not c.board.wincon_in_play
+        and not (c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand),
+        weight=30, status="testing"),
+    Hypothesis(
+        id="prefer-payoff-over-preevo",
+        rationale="When both the win-condition payoff and a pre-evolution are on offer at a search, take the "
+                  "PAYOFF: `fetch-the-wincon` (+30) otherwise only TIES `prefer-wincon-line-piece` (+18) + "
+                  "`fetch-a-starter` (+12) on the pre-evolution, and the tie breaks to the wrong option. Gated "
+                  "like `fetch-the-wincon` (stands down once in hand/in play), so it never pulls a dead second copy.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_wincon
+        and not c.board.wincon_in_play and not c.board.wincon_in_hand,
+        weight=5, status="testing"),
+    Hypothesis(
+        id="fetch-base-before-stranded-payoff",
+        rationale="When the payoff isn't yet deployable (`wincon_base_deployable` False — the payoff's IMMEDIATE "
+                  "pre-evolution is neither in play nor in hand), prefer fetching the base: a payoff with nothing "
+                  "to evolve from strands a dead card (and starves a recipient like Cinderace's Turbo Flare), "
+                  "while the base unblocks the whole line. Inverse of `prefer-payoff-over-preevo`; lifts the "
+                  "pre-evolution above `fetch-the-wincon` (+30) but stays additive, so a payoff-only offer is "
+                  "still grabbed. Stands down once the win-condition is in play AND the Bench is already "
+                  "developed (`wincon_in_play and my_bench > 0`) — nothing is stranded then and a SECOND line is "
+                  "a luxury, so the +20 must not out-grab a genuinely needed engine piece (ml f39, CRITICAL: a "
+                  "spare Riolu over the Solrock that turns Lunatone's draw-3 on, energized Mega already benched). "
+                  "Two more BREADTH stand-downs (dragapult f14): a REDUNDANT base whose copy is already in play "
+                  "adds no line progression on a thin Bench (`card_is_redundant and my_bench < _THIN_BENCH` — grab "
+                  "a fresh body, not a 2nd of what's already down); and on an EMPTY Bench a mid-Line EVOLUTION "
+                  "(`evolvesFrom`) can only stack on the Active, leaving the Bench empty (a KO-then-lose risk) — "
+                  "develop a benchable Basic instead. (A Basic base on an empty Bench still fires — building the "
+                  "first developed body is a real need, the ADR-0048 2nd-line case.)",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_line_preevo
+        and not c.board.wincon_base_deployable
+        and not (c.board.wincon_in_play and c.board.my_bench > 0)
+        and not (c.card_is_redundant and c.board.my_bench < _THIN_BENCH)
+        and not (c.board.my_bench == 0 and bool(c.stat and c.stat.evolvesFrom)),
+        weight=20, status="testing"),
+    Hypothesis(
+        id="fetch-energy-when-starved",
+        rationale="With the Active unpowered and no Energy in hand, take a reusable Basic Energy at a search — "
+                  "you need to power an attack now, and neither a Pokémon nor a discard-at-EOT Energy (Ignition) "
+                  "does that. Also prefers a reusable Basic over a discard Energy at the same search. Seeded "
+                  "+35 (above `fetch-the-wincon` +30, which already stands DOWN when energy-starved) so energy "
+                  "DOMINATES every Pokémon grab in the famine — not just the wincon but a redundant engine "
+                  "piece (`fetch-the-engine-first` +20 + `fetch-a-starter` +12 = 32) or a line-piece "
+                  "(`prefer-wincon-line-piece` +18 + starter = 30): an unpowered board does nothing, so a 2nd "
+                  "Solrock/Lunatone never out-ranks the Energy that turns the game on (ep83966336 f9, "
+                  "ep83967841 f14). The old +25 sat BELOW the grabs it was meant to beat — the doctrine's own "
+                  "stated priority, now weighted to match.",
+        when=lambda c: c.select_context == _TO_HAND and c.board.my_active_energy == 0
+        and not c.board.reusable_energy_in_hand and _is_reusable_energy(c.stat, c.tags),
+        weight=35, status="testing"),
+    Hypothesis(
+        id="fetch-the-attack-color",
+        rationale="At an Energy search, break the `fetch-energy-when-starved` tie toward a color one of my "
+                  "IN-PLAY attackers actually needs (`board.in_play_attack_colors`, via AttackStat energy "
+                  "types) over an off-color utility Energy no body in play can use yet — grab the Fire for "
+                  "Phantom Dive [Fire, Psychic], and save the off-color {D} for when Munkidori is benched "
+                  "(dragapult f18). Tiny tie-break (+3) so a real need still dominates; silent for "
+                  "mono-color decks (every fetch is on-color) and when no in-play body has a typed attack.",
+        when=lambda c: c.select_context == _TO_HAND and bool(c.stat)
+        and getattr(c.stat, "hp", 1) == 0 and getattr(c.stat, "energyType", None) not in (None, 0)
+        and c.stat.energyType in c.board.in_play_attack_colors,
+        weight=3, status="testing"),
+    Hypothesis(
+        id="fetch-the-ability-fuel-color",
+        rationale="At an Energy search, prefer a colour that switches a DORMANT in-play Ability on over a "
+                  "plain attack colour — grab the {D} a bare Munkidori needs for Adrena-Brain (its damage-move "
+                  "engine, usable now) rather than the redundant {R}/{P} of a dragon line still two evolutions "
+                  "from attacking (dragapult f22). Keyed on `board.in_play_unfueled_ability_colors` (the fuel a "
+                  "body has an Ability for but LACKS attached), so it never fires for an already-fuelled Ability "
+                  "or a body whose Ability wants no energy. +5 to out-rank `fetch-the-attack-color` (+3): an "
+                  "Ability is repeatable free value that doesn't end the turn. Silent when Munkidori is in the "
+                  "deck (empty set) — the must-not-regress f18 anchor picks the attack colour there.",
+        when=lambda c: c.select_context == _TO_HAND and bool(c.stat)
+        and getattr(c.stat, "hp", 1) == 0 and getattr(c.stat, "energyType", None) not in (None, 0)
+        and c.stat.energyType in c.board.in_play_unfueled_ability_colors,
+        weight=5, status="testing"),
+    Hypothesis(
         id="attach-off-color-at-fixed-recipient",
         rationale="At an ATTACH_TO (the recipient is FIXED by the effect — a Crispin/attach where you only pick "
                   "WHICH Energy, and every option scores 0 today), DEMOTE an Energy whose colour NO in-play body "
@@ -736,6 +819,100 @@ HYPOTHESES = [
         and c.board.turn <= 1 and c.board.reusable_energy_in_hand,
         weight=-55, status="assumed"),
     Hypothesis(
+        id="prefer-wincon-line-piece",
+        rationale="At a hand-search, prefer a pre-evolution on a recognized ATTACKER Line over an off-line "
+                  "opener/accelerator. ADR-0048: at the FETCH seam the credit is broadened to ANY declared "
+                  "attacker Line (`card_is_recognized_line_preevo` — win-condition OR secondary-attacker), so "
+                  "a cheap secondary base (Makuhita) earns the same +18 as the wincon base (Riolu), letting "
+                  "`develop-the-cheap-prize-wall-line` tip the cheaper line on prize economy; it narrows back "
+                  "to the win-condition line when the kill-switch is off. At a PROMOTE it stays "
+                  "win-condition-only (`card_is_line_preevo`) and only when the payoff is in hand to evolve it "
+                  "THIS turn — else a bare pre-evolution just exposes a fragile base (see `promote-the-staller`); "
+                  "ranks below `fetch-the-wincon` and `fetch-energy-when-starved`. The TO_HAND credit carries "
+                  "the same two BREADTH stand-downs as `fetch-base-before-stranded-payoff` (dragapult f14): a "
+                  "redundant in-play base on a thin Bench, and an empty-Bench mid-Line evolution, both yield to "
+                  "developing a fresh benchable body.",
+        when=lambda c: (c.card_is_recognized_line_preevo and c.select_context == _TO_HAND
+                        and not (c.card_is_redundant and c.board.my_bench < _THIN_BENCH)
+                        and not (c.board.my_bench == 0 and bool(c.stat and c.stat.evolvesFrom)))
+        or (c.card_is_line_preevo and c.select_context == _TO_ACTIVE
+            and c.board.evolve_to_ready_wincon_available),
+        weight=18, status="testing"),
+    Hypothesis(
+        id="develop-the-cheap-prize-wall-line",
+        rationale="Once my MULTI-prize win-condition is in play (`wincon_in_play`; wincon_prize_value >= 2 "
+                  "follows from the < comparison), a fetch that develops a CHEAPER attacker Line — a "
+                  "recognized attacker pre-evo whose forward-payoff prize is LOWER than the win-condition's "
+                  "(`card_forward_payoff_prize` < `wincon_prize_value`: Makuhita→Hariyama 1 < Mega 3) — forces "
+                  "the opponent onto an eight-prizes-of-work path for a six-prize game (odd-prizing; the "
+                  "FETCH-seam mirror of the Interpose promote trio, ADR-0048). A small POSITIVE tie-break (+3) "
+                  "BELOW every real need (energy-starved +35 / fetch-wincon +30 / missing-piece +20 / engine "
+                  "+15) — the wincon Line is still developed first while offline; `prefer-wincon-line-piece`'s "
+                  "broadened credit equalizes the two line bases first, then this tips the cheaper one. Silent "
+                  "without a declared secondary attacker Line, off the FETCH seam, or with the kill-switch off "
+                  "(`card_is_recognized_line_preevo` narrows to the wincon base, which never satisfies the <).",
+        when=lambda c: c.select_context == _TO_HAND and c.board.wincon_in_play
+        and c.card_is_recognized_line_preevo
+        and 0 < c.card_forward_payoff_prize < c.board.wincon_prize_value,
+        weight=3, status="assumed"),
+    Hypothesis(
+        id="fetch-a-starter",
+        rationale="With an underdeveloped board (< 2 benched in SETUP), take a startable Basic at a search — "
+                  "the fallback grab rung beneath `fetch-the-wincon`/`prefer-wincon-line-piece`: no Line piece "
+                  "on offer still wants board presence over an off-need card. Gap-gated (stands down once the "
+                  "Bench is developed); 'starter' is structural (Basic: hp > 0, no `evolvesFrom`).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_starter
+        and not c.board.line_ready and c.board.my_bench < _THIN_BENCH,
+        weight=12, status="testing"),
+    Hypothesis(
+        id="develop-the-item-lock-opener",
+        rationale="At a hand-search with a thin Bench, prefer developing the deck's item-lock OPENER (Function "
+                  "Tag `item_lock`, e.g. Budew's Itchy Pollen — the opponent can't play Items next turn) over a "
+                  "redundant base or an evolution that only stacks on the Active. It is the sacrificial "
+                  "disruptor STARTER: it fills the empty Bench (survival), buys a tempo turn, and is the wall "
+                  "you hide the fragile win-condition line behind while it develops. The FETCH-seam sibling of "
+                  "the deck's `starter_priority` opening rank (the pregame Active pick, ADR-0079 — this "
+                  "rationale predates it and named the deleted `open-the-item-lock-starter`); keyed on the `item_lock` tag so it is "
+                  "silent for decks without such an opener. +30 clears the (breadth-stood-down) line-piece and "
+                  "support grabs so the ideal starter wins the empty-Bench develop (dragapult f14: grab Budew, "
+                  "not a 2nd Dreepy or a Drakloak that only stacks on the Active). Gated to a startable "
+                  "`item_lock` Basic on a thin Bench; stands down once the Bench is developed.",
+        when=lambda c: c.select_context == _TO_HAND and "item_lock" in c.tags
+        and c.card_is_starter and c.board.my_bench < _THIN_BENCH,
+        weight=30, status="assumed"),
+    # `bench-fill-a-basic` (+12) is DELETED (Issue #261 item 2d, ADR-0086 decision 6). Its whole
+    # reason was that "a CARD-target candidate is invisible to the `option_type==_PLAY` bench
+    # reflexes, so every candidate would score 0" — the Deploy Marginal now prices the `_TO_BENCH`
+    # entry point, so the invisibility it papered over is gone and a flat +12 that ties every
+    # candidate is exactly the indifference Issue #197 was opened to remove.
+    Hypothesis(
+        id="dont-fetch-the-setup-only-opener",
+        rationale="Never take a SETUP-ONLY opener into hand at a search: an `opener`-tagged Pokémon whose "
+                  "evolution chain is absent from the deck (`card_stranded_evolution`) can never be played from "
+                  "hand, so the fetched copy is dead — pull a live piece instead. Structural (stays fetchable if "
+                  "the line IS in-deck), gated to TO_HAND only; folded from mega_starmie `never-fetch-cinderace`.",
+        when=lambda c: c.select_context == _TO_HAND and _OPENER_TAG in c.tags
+        and c.card_stranded_evolution,
+        weight=-60, status="assumed"),
+    Hypothesis(
+        id="fetch-the-support",
+        rationale="With no engine/support Pokémon in play (Ability tagged `energy_accel`/`draw`/`search`/`dig`), "
+                  "take one at a search — an online engine multiplies every later turn, second only to the "
+                  "win-condition and energy-when-starved. Gap-gated off `Board.support_in_play`; never endorses "
+                  "a stranded evolution (`card_stranded_evolution`, cf `dont-fetch-the-setup-only-opener`). Also "
+                  "excludes a win-condition-LINE evolution (`card_is_line_preevo`, e.g. Drakloak's Recon "
+                  "Directive): you tutor a mid-Line piece to EVOLVE it, not to bench it as a standalone engine "
+                  "— crediting it as support double-counts its line-piece value and over-ranks it above a fresh "
+                  "body on an empty Bench (dragapult f14). STANDS DOWN at the energy famine (same predicate as "
+                  "`fetch-the-wincon`, honouring its own charter 'second only to … energy-when-starved': once "
+                  "Lunatone earned its `draw` tag (2026-07-17 audit) this stacked with a deck engine rung to 49 "
+                  "and out-ranked the +35 famine Energy, re-opening ml0705 f9).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_support
+        and not c.card_is_line_preevo
+        and not c.card_stranded_evolution and not c.board.support_in_play
+        and not (c.board.my_active_energy == 0 and not c.board.reusable_energy_in_hand),
+        weight=15, status="testing"),
+    Hypothesis(
         id="fetch-when-it-fills-a-need",
         rationale="Whether-to-PLAY a fetch (ADR-0023, decision A): play when the reachable deck set still holds "
                   "a card you LACK (`Context.fetch_fills_a_need`, same-rung lookahead). Fills the gap "
@@ -792,6 +969,162 @@ HYPOTHESES = [
     # yield (zero at `_SETUP_BENCH` by derivation, since a pregame placement never triggers the
     # bench-drop Ability — the hand-written stand-down, derived), and a redundant utility body
     # prices its own displacement against the slot it would occupy.
+    Hypothesis(
+        id="grab-a-gust-supporter-for-the-ko",
+        rationale="At a TO_HAND Supporter grab (Meowth ex Last-Ditch Catch, or any supporter tutor), "
+                  "take a `gust`-tagged Supporter (Boss's Orders) when a gust would KO/close NOW "
+                  "(`gust_best_ko_prizes > 0`) — the top rung of the context-ranked grab. The free "
+                  "Ability lets you grab it AND still play it + attack the same turn, so the closing "
+                  "gust is the highest-value fetch. Above the draw-supporter default so the gust wins "
+                  "when it pays.",
+        when=lambda c: c.select_context == _TO_HAND and "gust" in c.tags
+        and c.board.gust_best_ko_prizes > 0,
+        weight=20, status="assumed"),
+    Hypothesis(
+        id="grab-a-draw-supporter-in-setup",
+        rationale="The setup default of the context-ranked Supporter grab: with no closing gust "
+                  "available, take a `draw` Supporter (Lillie's / Judge) to keep digging. Below the "
+                  "gust rung (+20) so the closing gust still wins, and modest so `fetch-the-wincon` "
+                  "(+30) and a genuinely needed non-draw grab still outrank it. Gated to a Supporter "
+                  "CARD (`cardType`): a Pokémon carrying a `draw` ABILITY tag (Drakloak's Dig) is NOT a "
+                  "draw Supporter to fetch — that mis-fire made a dead mid-line Drakloak out-grab a live "
+                  "Basic (ep83686860 f33).",
+        when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "draw" in c.tags
+        and bool(c.stat and getattr(c.stat, "is_supporter", False)),
+        weight=10, status="assumed"),
+    Hypothesis(
+        id="grab-the-chain-opener",
+        rationale="At a TO_HAND grab, a tutor is worth what it REACHES: spec Round 9 §3, 'a tutor's "
+                  "held value = the closure-reachable value, recursively free' (seam C). "
+                  "`Context.card_chain_value` is the "
+                  "exactly-computed discounted closure (`_chain_grab_value`: δ=0.75/hop × MAX over "
+                  "reachable targets, 2-hop cap, Item-only descent, Supporter-slot fail-closed, "
+                  "shared-oracle end values); the rung fires only when it clears the flat "
+                  "draw-Supporter band it competes with (`_CHAIN_OPENER_FLOOR` = the +10 below). "
+                  "ml 85059103 f9 (CRITICAL): 'I would have fetched a Petrel, which can be used to "
+                  "fetch a Fighting Gong, which can be used to fetch a Solrock' — the chain opener "
+                  "(δ² × Solrock's missing-engine-half 22 ≈ 12.4) out-values a third draw Supporter "
+                  "(Judge +10). +15 sits above that band and below every real DIRECT need "
+                  "(`prefer-wincon-line-piece` +18, `fetch-base-before-stranded-payoff` +20, "
+                  "`fetch-the-wincon` +30, `fetch-energy-when-starved` +35) — the monotone-decay "
+                  "invariant: a target on offer always outranks a tutor that merely reaches it. One "
+                  "currency zone: excludes a draw-tagged Supporter (a card rides the draw band OR "
+                  "the chain band, never both); the PLAY-side tutor endorsements "
+                  "(`play-a-tutor-for-the-unfound-wincon` +25) are a different decision and never "
+                  "co-fire; `dont-grab-a-card-already-in-hand` (−12) still nets a held tutor below "
+                  "a fresh draw Supporter. Decays to silence in `_greedy_grab` re-scoring once the "
+                  "chain's END target is acquired (the virtual board kills the end value).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_chain_value > _CHAIN_OPENER_FLOOR
+        and not ("draw" in c.tags and bool(c.stat and getattr(c.stat, "is_supporter", False))),
+        weight=15, status="assumed"),
+    Hypothesis(
+        id="demote-the-costly-chain-opener",
+        rationale="The chain-opener TIE-BREAK: `grab-the-chain-opener`'s flat +15 cannot see a "
+                  "tutor's own play cost (the seam doc's documented optimism — the chain VALUE is "
+                  "cost-blind), so at Petrel's Trainer select the free Fighting Gong / Poké Pad and "
+                  "the discard-2 Ultra Ball all tie at +15 and the option INDEX picks the hop. −2 "
+                  "nets a `cost_discard` tutor below a free equivalent reaching the same closure "
+                  "(free hop ≻ costly hop), while a costly-ONLY chain still clears the draw band "
+                  "(13 > 10) and is still grabbed. Gated on the chain rung's own gate (fires only "
+                  "where the +15 does), so it can never touch a non-chain grab.",
+        when=lambda c: c.select_context == _TO_HAND and "cost_discard" in c.tags
+        and c.card_chain_value > _CHAIN_OPENER_FLOOR,
+        weight=-2, status="assumed"),
+    Hypothesis(
+        id="dont-spend-the-last-route-to-a-wanted-evolution",
+        rationale="The chain-hop PRESERVE tie-break (seam C hop audit, human-grilled): a chain hop "
+                  "isn't just spent — it's REMOVED from the deck's future closure, and the hops "
+                  "differ in what they alone still reach. With Makuhita in play/hand its Hariyama "
+                  "is the coming want, and Fighting Gong (`basic_pokemon {F}`) can never fetch a "
+                  "Stage 1 — so when the pool's LAST Poké Pad is on offer as the hop, spending it "
+                  "closes the only FREE route to Hariyama (`Context.card_spends_last_evolution_"
+                  "route`; Ultra Ball reaches it too but at discard-2). −2 breaks the +15 tie "
+                  "toward the closure-cheap hop (Petrel → Gong → Solrock, preserving Poké Pad); a "
+                  "last-route-ONLY chain still clears the draw band (13 > 10) and is grabbed. "
+                  "SCARCITY-gated by construction (count-aware over the revealed pool): while "
+                  "copies abound, spending one closes nothing and the rung is silent — the "
+                  "preference is only real at the last copy. Need-gated like every fetch rung: no "
+                  "base down → no wanted evolution → silent.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_chain_value > _CHAIN_OPENER_FLOOR
+        and c.card_spends_last_evolution_route,
+        weight=-2, status="assumed"),
+    Hypothesis(
+        id="dont-grab-a-card-already-in-hand",
+        rationale="Don't tutor a card an identical copy of which is ALREADY in my hand — the second copy "
+                  "does nothing the first doesn't, and the search is the scarce resource. The FETCH-side "
+                  "mirror of the shipped `discard-the-hand-duplicate`, with the same fungible-Energy "
+                  "exemption (a spare Basic Energy is always a future attach). `dont-fetch-the-redundant-"
+                  "piece` covers redundancy IN PLAY; this covers redundancy IN HAND. ml f9 (CRITICAL): "
+                  "already holding a Lillie's Determination, the agent spent Meowth ex's Last-Ditch Catch "
+                  "on another one (`grab-a-draw-supporter-in-setup` +10, three copies tied on the option "
+                  "index) instead of the Team Rocket's Petrel that opens the real chain (Petrel → Fighting "
+                  "Gong → Solrock → Lunar Cycle draws 3). −12 cancels the draw-Supporter rung without "
+                  "inverting the fetch order — a genuinely needed duplicate (`fetch-the-wincon` +30, "
+                  "`fetch-energy-when-starved` +35) still wins.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_already_in_hand,
+        weight=-12, status="assumed"),
+    Hypothesis(
+        id="grab-what-i-can-play-this-turn",
+        rationale="At a search, a card that CANNOT be played this turn loses to one that can. Concretely: "
+                  "once the one-per-turn Supporter is spent — often by the very tutor now resolving — a "
+                  "fetched Supporter is next-turn fuel, while an Item plays immediately. ml f71: Team "
+                  "Rocket's Petrel resolved with a DEAD hand (0 cards) and took a Lillie's Determination "
+                  "(+10) that could not be played, over the Fighting Gong that fetches a Basic {F} to "
+                  "discard to Lunar Cycle for 3 cards THIS turn. −12 cancels the draw-Supporter rung; a "
+                  "Supporter worth more than any playable Item still wins on its own merits.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_unplayable_this_turn,
+        weight=-12, status="assumed"),
+    Hypothesis(
+        id="dont-strand-the-evolving-engine",
+        rationale="Don't tutor a Stage-1 ENGINE into hand when you hold no base to evolve it onto: a "
+                  "`card_is_support` piece (hp>0 with an `energy_accel`/`draw`/`search`/`dig` Ability) "
+                  "that is itself an Evolution with `card_evolution_baseless` (no copy of its "
+                  "pre-evolution in play or hand) is unplayable this game — a dead grab that "
+                  "`fetch-the-support` (+15) would otherwise prefer OVER the base that enables it "
+                  "(Dudunsparce id 66 over base Dunsparce id 305, workflow wjzvrtwbk). The off-Line "
+                  "complement of `dont-grab-a-baseless-mid-evolution` (which is `card_is_line_preevo`-"
+                  "gated to the win-condition Line): gated to `not card_is_line_preevo` so the two never "
+                  "double-fire. −25 nets the stranded engine below the base (Dunsparce's `fetch-a-starter` "
+                  "+12). Board-SOUND (visible zones); silent once the base is in play/hand and for "
+                  "line-only decks whose engines are Basics (Solrock/Lunatone → not baseless). Excludes "
+                  "`card_stranded_evolution` (a setup-only engine like Cinderace whose whole chain is "
+                  "out of deck) — that dead grab is `dont-fetch-the-setup-only-opener`'s (−60), so the "
+                  "two never stack; this rung owns only the engine whose base IS reachable but not yet "
+                  "in play/hand (Dudunsparce, base Dunsparce in deck → not stranded).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_support
+        and not c.card_is_line_preevo and c.card_evolution_baseless
+        and not c.card_stranded_evolution,
+        weight=-25, status="assumed"),
+    Hypothesis(
+        id="dont-fetch-an-unplayable-evolution-payoff",
+        rationale="Don't tutor an EVOLUTION into hand when its pre-evolution base is provably UNREACHABLE "
+                  "this game (`card_base_unreachable`: not in play/hand AND absent from the search's "
+                  "revealed pool / provably empty from the deck) — it can't be played from hand and has "
+                  "no base to evolve onto, so it is a dead card. A Mega ex only enters play by evolving "
+                  "its Basic; grabbing Mega Lucario ex with every Riolu gone burns the fetch (ml f53: "
+                  "CRITICAL — took the Mega over Solrock, all options scored 0 → index took the Mega). "
+                  "The FETCH-side mirror of `hold-wincon-dont-shuffle`'s `wincon_in_hand_undeployable` "
+                  "stand-down (that HOLDS an undeployable payoff; this declines tutoring one UP). Uses "
+                  "the exact `search_deck_ids` within-frame reachability, so it holds under BOTH the "
+                  "prize-exact tracker and a single-frame fetch reveal. −25 nets the dead grab below a "
+                  "live one; unlike `dont-grab-a-baseless-mid-evolution` (`card_is_line_preevo`-gated, "
+                  "play/hand only) it also catches the PAYOFF and requires the base to be gone from the "
+                  "DECK too (a base still in-deck is drawable — not yet dead).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_base_unreachable,
+        weight=-25, status="assumed"),
+    Hypothesis(
+        id="dont-grab-a-baseless-mid-evolution",
+        rationale="Don't take a mid-Line EVOLUTION into hand at a search when you hold no base to evolve "
+                  "it onto — no copy of its pre-evolution in play or hand (`card_evolution_baseless`), so "
+                  "the grabbed card is dead weight (ep83686860 f33: a 3rd Drakloak with every Dreepy "
+                  "already evolved or discarded — take the playable Munkidori instead). Board-SOUND "
+                  "(visible zones only, no deck-content claim); gated to a `card_is_line_preevo` (a "
+                  "mid-Line piece — never a Basic base or the payoff), so single-hop lines with Basic "
+                  "bases (Riolu/Staryu) are untouched. −25 nets the baseless grab below "
+                  "`prefer-wincon-line-piece` (+18) so a live Basic wins the pick.",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_line_preevo
+        and c.card_evolution_baseless,
+        weight=-25, status="assumed"),
     Hypothesis(
         id="hold-costly-fetch-when-line-assembled",
         rationale="The GRAB-side net of a DISCARD-cost fetch (the shed side is the `fetch_sheds_*` rungs): once "
@@ -887,4 +1220,13 @@ HYPOTHESES = [
         and "search" in c.tags and not c.fetch_fills_a_need                # gate-ban migration:
         and bool(c.stat and getattr(c.stat, "is_supporter", False)),      # was plan==SETUP)
         weight=-20, status="assumed"),
+    Hypothesis(
+        id="fetch-deck-priority",
+        rationale="Tier-3 escape hatch (ADR-0023): when the deck declares `Strategy.fetch_priority`, grab the "
+                  "highest-priority present card (`card_is_top_fetch_priority`, resolved in "
+                  "`Board.top_fetch_priority_id`) — the combo deck's override of the derived importance ladder. "
+                  "Weighted above the derived grab rungs so the deck's stated order wins; silent on the empty "
+                  "list (most decks).",
+        when=lambda c: c.select_context == _TO_HAND and c.card_is_top_fetch_priority,
+        weight=40, status="testing"),
 ]

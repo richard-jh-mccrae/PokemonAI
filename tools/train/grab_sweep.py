@@ -1,21 +1,30 @@
-"""Replay every RULED `_TO_HAND` (ctx 7) correction frame through the real Pilot — ADR-0121's
-validation base, and the instrument acceptance criterion 7 is graded by.
+"""Replay every RULED `_TO_HAND` (ctx 7) correction frame through the real Pilot — the seam-scoped
+gate the grab has lacked (ADR-0121, Issue #406).
 
     python tools/train/grab_sweep.py                 # every agent, every ruled ctx-7 frame
     python tools/train/grab_sweep.py --agent mega_lucario
-    python tools/train/grab_sweep.py --breadth       # the eligibility-breadth census (criterion 8)
+    python tools/train/grab_sweep.py --breadth       # the eligibility-breadth census
 
 For each frame it prints the human ruling, the pick BEFORE (the live trace as recorded) and the pick
-AFTER (re-derived through the shipped Pilot), plus each option's grab working — the add-marginal in
-Worth points, its relevance and its damage-scale total. A human rules a MOVE by reading that working,
-which is why a bare total would not do (the `deploy_working` discipline, ADR-0086).
+AFTER (re-derived through the shipped Pilot), plus each option's score and the rungs that fired — or,
+when a grab EQUATION is wired, its legible working instead. A human rules a MOVE by reading that,
+which is why a bare pick would not do (the `deploy_working` discipline, ADR-0086).
 
 **Why a sweep of its own rather than `tune.py`.** The Discrimination Gate grades the develop-rung
 LEAF and the Decision Gate grades whatever frames its baseline happens to hold; neither is scoped to
 this context. ctx 7 is the second-largest non-MAIN population in the corpus (31 frames against
-MAIN's 279), so it can and should be graded at its own seam — and ctx 5, the seam the Deploy
-Marginal this equation is modelled on was validated at, has exactly ONE ruled frame. That is an
-argument for holding this equation to the stronger bar its own population affords.
+MAIN's 279, of which 30 name a `correct` option), so it can and should be graded at its own seam.
+
+**It exists because it caught something.** Issue #406 proposed replacing the 23 `_TO_HAND` rungs
+with a `needs.keep_v2` add-marginal. Built to spec and run here, the equation scored **17/30**
+against the incumbent ladder's **23/30** — and at four times its band, **14**, below doing nothing
+at all. Nothing about that was visible from the seam's own unit tests, which all passed. The build
+is preserved at commit `bd9187d7` and ADR-0121 records the five structural findings; this tool now
+grades whatever the successor proposes, and the incumbent in the meantime.
+
+Note the asymmetry ADR-0121 closes on, because it is the reason to run this at all: ctx 5 — the
+`_TO_BENCH` seam whose Deploy Marginal that equation was modelled on — has exactly ONE ruled corpus
+frame. A design validated at one frame was carried onto a seam with thirty.
 """
 from __future__ import annotations
 
@@ -77,13 +86,17 @@ def sweep(agent_filter: str | None, store: str) -> int:
             print(f"  before  : {before}   after: {after}   fixed: {r.get('fixed')}")
             dec = pilot.explain(c.obs)
             for t in dec.options:
-                w = t.grab_working or {}
+                # `grab_working` is populated only while a grab EQUATION is wired. It is absent on
+                # `main` (Issue #406's build was measured worse and reverted, ADR-0121), so the
+                # sweep degrades to score + fired rungs rather than breaking — which is exactly the
+                # view needed to grade the incumbent ladder it now measures.
+                w = getattr(t, "grab_working", None) or {}
                 mark = "*" if t.index in (after or []) else (
                     "+" if t.index in correct else " ")
+                extra = (f" add={w['add_marginal']:7.2f} tot={w['total']:7.2f}"
+                         if w else f" fired={[h.id for h, _ in t.fired]}")
                 print(f"   {mark} {_label(c.obs, t.index):22s} cid={t.card_id} "
-                      f"score={t.score:8.2f} add={w.get('add_marginal', 0.0):7.2f} "
-                      f"rel={w.get('add_relevance', 0.0):6.3f} tot={w.get('total', 0.0):7.2f}"
-                      f"{'  [deck-priority]' if t.grab_deck_priority else ''}")
+                      f"score={t.score:8.2f}{extra}")
             if not correct:
                 unruled.append((agent, key))
             elif r.get("fixed"):
@@ -132,7 +145,10 @@ def breadth(agent_filter: str | None, store: str) -> int:
                 cid = pilot._option_card_id(obs, sel, o)
                 if cid is None:
                     continue
-                rows, _i = pilot._grab_supplier_rows(obs, board, cid)
+                rows = pilot._needs_hand_rows(obs, board)
+                rows = rows + [{"i": len(rows), "cid": cid,
+                                "worth": round(pilot._role_value(cid), 1),
+                                "deploy": 1.0, "fuel": False}]
                 slots, elig = pilot._resolve_needs(obs, board, rows, include_general=True)
                 slot_counts.append(len(slots))
                 widths.extend(len(e) for e in elig)

@@ -122,17 +122,6 @@ PROFILE = {
                                     # already guards (ADR-0096 decision 2) — so OFF is DEGRADED MODE,
                                     # not a rollback: bench endorsements go silent and only that
                                     # filter speaks.
-    "grab_value": True,             # the GRAB DECIDER, shipped ON 2026-08-06 (ADR-0121, #406): the
-                                    # `_TO_HAND` add-marginal — `keep_v2` over hand u {one candidate},
-                                    # crossing as a dimensionless ratio through DEPLOY_BAND, exactly
-                                    # as the deploy marginal above does. It closes the last search
-                                    # context with no equation: `_TO_BENCH` had `deploy_marginal` and
-                                    # `_DISCARD` had `cheapest_removal`, while the grab had 23
-                                    # one-sided endorsement rungs and no way to say a candidate was
-                                    # merely NOT WORTH IT. All 23 are DELETED, so OFF is DEGRADED
-                                    # MODE and emphatically not a rollback: the grab goes silent and
-                                    # the pick falls to `_order_key`'s canonical identity — which is
-                                    # the defect, not a safe harbour. Kept as a MEASUREMENT lever.
     "attach_value": True,           # the ATTACH DECIDER, shipped ON 2026-07-25 (ADR-0069, the FIRST
                                     # no-shadow decider swap): the axes-sum marginal (`_attach_value`)
                                     # IS the energy-attach decision — attack axis (tonight's
