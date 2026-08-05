@@ -619,7 +619,8 @@ class Board:
                                           # (only strip when theirs exceeds mine, so we net-strip rather than hand them a fresh hand)
     # `opp_draw_engine_in_play` DELETED (ADR-0102) with `strip-the-stacked-engine-hand`, its only
     # reader. The general MatchupPlan tier survives as `_general_body_facts` (Issue #395 D4/D5,
-    # which superseded the id-set `_draw_engine_ids`) — the Read's deck-recognition consumes it.
+    # which superseded the id-set `_draw_engine_ids`); its ONE caller is `_matchup_plan`, which
+    # feeds it to `derive_general_roles`.
     # -- Opponent RESOURCES (ADR-0047) flattened onto the Board so a `when()` can trigger off them
     #    without reaching through `board.opponent.resources`. Sourced from the match-scoped tracker
     #    (opponent_resources.OpponentResourceModel); every value fails OPEN (unknown -> the no-fire
@@ -9226,7 +9227,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         return _SNIPE_RELEVANCE_K * got["relevance"]
 
-    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan, ctx=None) -> float:
+    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan, ctx) -> float:
         """This option's signed MatchupPlan/Brief priority, or 0.0 when nothing is briefed.
 
         One owner, because the tiebreak reads it twice — once for the candidate and once per peer —
@@ -9243,12 +9244,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         Latent before this issue — a Brief could always have named a Tera — and reached daily by
         widening the general tier, since a derived role now lands on nearly every in-play body. The
         asymmetry is preserved exactly: a NEGATIVE (`avoid`) priority is never gated, because a
-        booster must scale the oracle while a de-prioritizer may always apply."""
+        booster must scale the oracle while a de-prioritizer may always apply.
+
+        ``ctx`` is REQUIRED rather than defaulted: a caller that omitted it would silently skip the
+        stand-down and get the pre-fix reading back, which is the shape of defect this argument
+        exists to close."""
         cid = (self._option_pokemon(obs, select, option) or {}).get("id")
         if plan is None or cid is None:
             return 0.0
         priority = float(plan.priority(cid) or 0.0)
-        if priority > 0 and ctx is not None:
+        if priority > 0:
             from common import snipe_relevance as srel
             gated = srel.TheirPlanInputs(
                 prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),

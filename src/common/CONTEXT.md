@@ -242,6 +242,15 @@ derived set nor the curated overrides, so `build_card_functions.py --fresh` dele
 _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category), structural tag
 (ex/trainer-type — those come from `CardData`), embedding (a rejected approach — use exact tags)
 
+⚠️ **Two role vocabularies exist and they COLLIDE on one word.** OUR-side deck Roles
+(`card_worth.ROLE_TIER`: `win_condition`, `accel_source`, `engine`, …) say what OUR deck intends a
+card for; the OPPONENT role sheet (`scouting.matchup_plan.ROLE_REGISTRY`: `prize_liability`,
+`fragile_preevo`, `attacker`, `enabler`, `engine`, `avoid`, …) says how worth REMOVING one of THEIR
+bodies is. `engine` means opposite things in the two — `ROLE_TIER` 12.0 *a plan piece worth keeping*
+against `ROLE_REGISTRY` 0 *neutral, do not boost* — which is one of the three reasons ADR-0120 keeps
+them as separate tables rather than reusing either as the other's sheet. The our-side table is a
+WORTH in card-worth points; the opponent table is an ORDINAL PRIORITY and enters no currency.
+
 **Attack Effect**:
 The per-attack, machine-readable effect facts of a *single* attack — its damage and energy cost plus
 the **effect modifiers** that bend the closed-form damage math: ignores-Ability / ignores-Weakness /

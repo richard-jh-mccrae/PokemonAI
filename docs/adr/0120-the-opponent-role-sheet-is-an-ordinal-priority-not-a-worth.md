@@ -2,7 +2,9 @@
 
 **Status:** Accepted (design session on Issue #395, 2026-08-05); BUILT. **Amends ADR-0051** (its role
 table becomes a declared registry and gains four members) and **supersedes
-`docs/plans/gusting-keepcost-design.md` §2**, which designed the same sheet as a *worth*. Does **not**
+`docs/plans/gusting-keepcost-design.md` §2**, which designed the same sheet as a *worth*. Also
+completes `docs/card-functions.md`'s tag reference, which claimed to be the full vocabulary while
+ten shipped tags had no row — now asserted both ways against `TAG_REGISTRY`. Does **not**
 discharge ADR-0101's parked hand-disruption prerequisite — see Decision 7, which is the point of this
 ADR a later reader is most likely to get wrong.
 
@@ -82,8 +84,8 @@ implementation did not drift into a worth.
 
 ### 2. One closed role vocabulary, walked off the shipped artifacts.
 
-`ROLE_REGISTRY` declares each legal role's priority, a prose reason, and which provenance tiers may
-assign it; `_ROLE_PRIORITY` survives as a **derived view** of it so the numbers have one home. The
+`ROLE_REGISTRY` declares each legal role's priority, a prose reason, and which STORES may assign it;
+`_ROLE_PRIORITY` survives as a **derived view** of it so the numbers have one home. The
 mechanism is copied from the effects layer, which is the sibling that already does this correctly:
 **declare** → **walk the artifact, never a hand-kept list** (`roles_in_dossiers` / `roles_in_brief`,
 which live in the module because *a vocabulary the audit forgets to visit is an audit that passes by
@@ -93,7 +95,15 @@ control on the same run**.
 Two validators that existed and never ran are folded in: `brief.schema.json` declared the role enum
 and nothing in `src/` or `tests/` loaded it, and `validate_brief.py` genuinely enforces it but had no
 automated caller — so a hand-edited Brief with a typo'd role shipped green. A test now asserts the
-schema's enum equals the registry's matchup tier.
+schema's enum equals the registry's BRIEF-assignable half.
+
+**The assigners are three, not two, and a review caught why that matters.** Collapsing the Read and
+the Brief into one `matchup` name — mirroring the γ provenance, which really is binary — made
+`support` and `unknown` legal in `brief.schema.json`, so a hand-authored Brief could declare
+`role: "unknown"`. That is precisely the case the field exists to constrain. Provenance answers *does
+γ scale it?* and is a property of an ASSIGNMENT; `assigners` answers *may this store say it?* and is
+a property of the ROLE. Two questions, two vocabularies, and the walk now checks each store against
+its own permission.
 
 ### 3 + 4. The table, and the `avoid` prize gate.
 
@@ -102,11 +112,11 @@ schema's enum equals the registry's matchup tier.
 | `prize_liability` | 100 | — | the wincon body itself |
 | `fragile_preevo` | 90 | — | its pre-evolution — deny the wincon before it comes online |
 | `disruption_target` | 60 | — | Brief-curated "remove this"; an explicit human claim outranks a derived one |
-| **`attacker`** | **50** | **NEW** | 530 shipped assignments stop being inert |
+| **`attacker`** | **50** | **NEW** | 530 shipped dossier assignments stop resolving to 0 |
 | **`enabler`** | **40** | **NEW** | assists the key Pokémon in *how* it attacks (Solrock/Lunatone shape) |
 | `engine` | 0 | — | plain accelerant — neutral |
-| **`support`** | **0** | **NEW (declare)** | emitted by `Scout._target_role`; no claim, but silence must be a ruling |
-| **`unknown`** | **0** | **NEW (declare)** | same |
+| **`support`** | **0** | **NEW (declare)** | emitted by `Scout._target_role`; no claim, but silence must be a ruling. READ-ONLY — not Brief-assignable |
+| **`unknown`** | **0** | **NEW (declare)** | same, and read-only for the same reason |
 | `avoid` | −80 | **GATED** | applies only when `prize_value == 1`, off `CombatMath.prize_value` — no new constant |
 
 The **order** is the load-bearing part per Decision 1 and is asserted directly; the magnitudes are
@@ -133,6 +143,18 @@ spend removal there. `strategy/context.py` had already ruled that exact distinct
 mirror-image question (`_UTILITY_TAGS` excludes `energy_accel` *"because such a body accelerates BY
 attacking"*), so the gate reads the set carrying the ruling. `engine` keeps `_ENGINE_TAGS`, so only
 the −80 is narrowed. Both sets are imported from their one home rather than restated.
+
+**Two claims in the spec that verification did not support, recorded rather than inherited.**
+First, D5's table cited `engine` as `{draw, energy_accel, search, dig, supporter_tutor} & tags`
+*"already ships as `context.py:168 _ENGINE_TAGS`"* — false: `_ENGINE_TAGS` is a four-set and
+`supporter_tutor` lives in `_UTILITY_TAGS` one line below. The implementation reads the real
+`_ENGINE_TAGS`, and no shipped card carries `supporter_tutor` without `search`, so the behavioural
+impact is nil — but the spec's cited source did not say what it claimed. Second, *"the 530
+assignments are live"* over-states: what changed is that the string now resolves to a real priority
+instead of falling through `.get(role, 0)`. For a body IN PLAY the derived tier usually names it too
+and, being γ-independent, supersedes the dossier's claim; the dossier's 530 remain the live reading
+for the predicted entries the derivation cannot see. Both are corrections of the same defect, and
+the precise statement is the one in `ROLE_REGISTRY["attacker"]`.
 
 `prize_liability` derived from `prize_value >= 2` **over-claims on a 2-prize support ex** — the
 matchup-genie playbook's *"`prize_liability` means THE WINCON, not any fat multi-prize body"*. That is

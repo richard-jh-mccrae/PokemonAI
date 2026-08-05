@@ -16,8 +16,10 @@ import json
 import sys
 from pathlib import Path
 
+# The BRIEF-assignable roles only. `support`/`unknown` are legal role strings but READ-ONLY —
+# `Scout._target_role` emits them for "no claim", which a human author never writes.
 _TARGET_ROLES_FALLBACK = {"prize_liability", "fragile_preevo", "disruption_target", "attacker",
-                          "enabler", "engine", "support", "unknown", "avoid"}
+                          "enabler", "engine", "avoid"}
 _REQUIRED = ("slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets")
 
 

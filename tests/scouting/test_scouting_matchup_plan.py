@@ -14,8 +14,9 @@ from pathlib import Path
 
 from common.scouting.artifact import load_artifact
 from common.scouting.briefs import load_briefs
-from common.scouting.matchup_plan import (_GENERAL, _MATCHUP, ROLE_REGISTRY, BodyFacts,
-                                          build_matchup_plan, derive_general_roles, role_priority,
+from common.scouting.matchup_plan import (ASSIGNERS, BRIEF_BY, DERIVED_BY, READ_BY,
+                                          ROLE_REGISTRY, BodyFacts, build_matchup_plan,
+                                          derive_general_roles, role_priority,
                                           roles_in_brief, roles_in_dossiers, undeclared_roles)
 
 _SCOUTING = Path(__file__).resolve().parents[2] / "src" / "common" / "scouting"
@@ -127,9 +128,13 @@ def test_every_role_string_in_the_shipped_artifacts_is_declared():
     # The walk really reached `attacker` — the string the whole lint exists for. If the artifact is
     # ever rebuilt without it, this says so instead of quietly passing.
     assert "attacker" in dossier_roles, dossier_roles
-    # Both stores reach the MATCHUP tier, so nothing in them may be a general-only role.
-    for role in set(dossier_roles) | set(brief_roles):
-        assert _MATCHUP in ROLE_REGISTRY[role].tiers, (role, ROLE_REGISTRY[role].tiers)
+    # Each store may only carry roles it is DECLARED to be allowed to assign — and the two stores
+    # are checked separately, which is the point of splitting the assigners from the γ provenance:
+    # a role only the Read emits must not become legal in a hand-authored Brief.
+    for role in dossier_roles:
+        assert READ_BY in ROLE_REGISTRY[role].assigners, (role, ROLE_REGISTRY[role].assigners)
+    for role in brief_roles:
+        assert BRIEF_BY in ROLE_REGISTRY[role].assigners, (role, ROLE_REGISTRY[role].assigners)
 
 
 def test_the_role_vocabulary_audit_actually_bites_with_a_positive_control():
@@ -159,7 +164,11 @@ def test_the_brief_schemas_role_enum_equals_the_registrys_matchup_tier():
     schema = json.loads(_SCHEMA.read_text(encoding="utf-8"))
     enum = set(schema["properties"]["targets"]["items"]["properties"]["role"]["enum"])
     assert enum, "the schema's role enum is empty — the assertion below would pass vacuously"
-    assert enum == {r for r, e in ROLE_REGISTRY.items() if _MATCHUP in e.tiers}
+    assert enum == {r for r, e in ROLE_REGISTRY.items() if BRIEF_BY in e.assigners}
+    # …and the two READ-ONLY strings are NOT in it. `Scout._target_role` emits `support` and
+    # `unknown` for "I have no claim about this body", which is not a claim a human authors — and a
+    # schema that admitted them is exactly what a single collapsed `matchup` tier produced.
+    assert not ({"support", "unknown"} & enum), enum
 
 
 def test_the_registry_is_a_well_formed_ordinal_ladder():
@@ -171,7 +180,7 @@ def test_the_registry_is_a_well_formed_ordinal_ladder():
     # Every role says why it sits there, and names at least one tier allowed to assign it.
     assert [r for r, e in ROLE_REGISTRY.items() if not e.reason.strip()] == []
     assert [r for r, e in ROLE_REGISTRY.items()
-            if not e.tiers or set(e.tiers) - {_GENERAL, _MATCHUP}] == []
+            if not e.assigners or set(e.assigners) - set(ASSIGNERS)] == []
 
 
 def test_the_530_shipped_attacker_assignments_are_no_longer_inert():
@@ -267,7 +276,7 @@ def _body(prize=1, tags=(), own=0.0, fwd=0.0, boost=0, retreat=False, fuel=False
 
 
 def test_the_derived_tier_names_every_role_it_declares_a_general_tier_for():
-    """The registry says which roles the `_GENERAL` tier may assign; this is the other half of that
+    """The registry says which roles the derivation may assign; this is the other half of that
     claim — each one is actually reachable from card facts alone. A role declared general that no
     derivation can produce is the mirror of the defect this issue is about."""
     one_of_each = {
@@ -279,7 +288,7 @@ def test_the_derived_tier_names_every_role_it_declares_a_general_tier_for():
         6: _body(prize=1, tags=("energy_accel",)),               # engine
     }
     derived = set(derive_general_roles(one_of_each).values())
-    assert derived == {r for r, e in ROLE_REGISTRY.items() if _GENERAL in e.tiers}
+    assert derived == {r for r, e in ROLE_REGISTRY.items() if DERIVED_BY in e.assigners}
     # Every body in the fixture got a role, so the equality above is a match rather than a set that
     # happened to line up after some inputs fell through unread.
     assert len(derive_general_roles(one_of_each)) == len(one_of_each)

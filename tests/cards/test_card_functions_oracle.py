@@ -7,6 +7,7 @@ need refreshing — a failure means "a known tag disappeared", which is exactly 
 Stochastic tags (recycle/energy_denial/heal) are deliberately excluded; they vary per build.
 """
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -446,3 +447,23 @@ def test_the_shipped_store_is_byte_identical_to_what_the_builder_writes():
         "the committed card_functions.json is not in the builder's own output format — a rebuild "
         "would reformat the whole file and hide the real change inside it")
     assert b"\r\n" not in shipped
+
+
+@pytest.mark.req("REQ-FUNC-0018")
+def test_every_declared_tag_has_a_row_in_the_documented_reference():
+    """`docs/card-functions.md` calls its table *"the full behavioral vocabulary"*, and for ten tags
+    it was not — `supporter_tutor`, the three `tutor_*` refinements, `cost_discard`, `shuffle_hand`,
+    `item_lock`, `prevent_ex_damage`, `discard_energy_recur` and `tool` shipped with no row.
+
+    A doc that claims completeness and is not is worse than one that claims nothing, so the claim is
+    made checkable here rather than promised. The registry stays the machine-readable vocabulary of
+    record; the table is the narrative half, and this is what keeps them one vocabulary."""
+    doc = (Path(__file__).resolve().parents[2] / "docs" / "card-functions.md").read_text(
+        encoding="utf-8")
+    rows = set(re.findall(r"^\| `([a-z_]+)` \|", doc, flags=re.M))
+    assert len(rows) > 20, f"the reference table looks unread: {len(rows)} rows"
+    assert sorted(t for t in card_tags.TAG_REGISTRY if t not in rows) == [], (
+        "tags declared in card_tags.TAG_REGISTRY with no row in docs/card-functions.md")
+    # …and the other direction, so a row for a tag the registry does not declare is caught too — a
+    # documented tag nothing declares is a tag the vocabulary lint would reject on sight.
+    assert sorted(r for r in rows if r not in card_tags.TAG_REGISTRY) == []

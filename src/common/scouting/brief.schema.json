@@ -35,7 +35,7 @@
         "type": "object", "additionalProperties": false, "required": ["card", "role", "why"],
         "properties": {
           "card": {"type": "string"},
-          "role": {"type": "string", "enum": ["prize_liability", "fragile_preevo", "disruption_target", "attacker", "enabler", "engine", "support", "unknown", "avoid"], "description": "MUST equal the matchup-tier half of common/scouting/matchup_plan.ROLE_REGISTRY (Issue #395 D2). Nothing in src/ or tests/ loaded this enum before that issue, and validate_brief.py — which does enforce it — had no automated caller, so a typo'd role shipped green; tests/scouting/test_scouting_matchup_plan.py now asserts this list against the registry."},
+          "role": {"type": "string", "enum": ["prize_liability", "fragile_preevo", "disruption_target", "attacker", "enabler", "engine", "avoid"], "description": "MUST equal the BRIEF-assignable half of common/scouting/matchup_plan.ROLE_REGISTRY (Issue #395 D2). `support` and `unknown` are declared there but are READ-ONLY: Scout._target_role emits them for \"I have no claim about this body\", which is not a claim a human authors. Nothing in src/ or tests/ loaded this enum before that issue, and validate_brief.py — which does enforce it — had no automated caller, so a typo'd role shipped green; tests/scouting/test_scouting_matchup_plan.py now asserts this list against the registry."},
           "why": {"type": "string"}
         }
       }

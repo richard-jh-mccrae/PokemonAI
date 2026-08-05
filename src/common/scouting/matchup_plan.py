@@ -64,19 +64,33 @@ _MATCHUP = "matchup"     # a Read/Brief claim: only as strong as the recognition
 PROVENANCES = (_GENERAL, _MATCHUP)
 
 
+#: Who may ASSIGN a role — three assigners, deliberately NOT the two γ provenances above.
+#:
+#: The distinction is load-bearing and a review caught its absence: collapsing the Read and the Brief
+#: into one `matchup` name made `support` and `unknown` — strings only `Scout._target_role` emits —
+#: legal in `brief.schema.json`'s enum, so a hand-authored Brief could declare `role: "unknown"`.
+#: That is exactly the case the field exists to constrain. Provenance answers *does γ scale it?* and
+#: is a property of an ASSIGNMENT; this answers *may this store say it?* and is a property of the
+#: ROLE. Two questions, two vocabularies.
+DERIVED_BY = "derived"   # `derive_general_roles` — a deck-agnostic card fact
+READ_BY = "read"         # `Scout` Intel / the artifact's dossiers
+BRIEF_BY = "brief"       # a hand-authored Matchup Brief (`briefs/*.json`)
+ASSIGNERS = (DERIVED_BY, READ_BY, BRIEF_BY)
+
+
 @dataclass(frozen=True)
 class Role:
-    """One legal opponent role: its ordinal priority, why it sits there, and which provenance tiers
-    are allowed to assign it.
+    """One legal opponent role: its ordinal priority, why it sits there, and which stores are
+    allowed to assign it.
 
-    ``tiers`` is a claim about the shipped stores, and
+    ``assigners`` is a claim about the shipped stores, and
     `tests/scouting/test_scouting_matchup_plan.py` checks it against them — a role only a curated
-    human may assert (`disruption_target`) must not appear in a derivation, and a role only a
-    derivation produces must not appear in a hand-authored Brief."""
+    human may assert (`disruption_target`) must not appear in a dossier, and a role only the Read
+    emits (`support`, `unknown`) must not be legal in a Brief."""
 
     priority: int
     reason: str
-    tiers: tuple[str, ...]
+    assigners: tuple[str, ...]
 
 
 #: **The closed role vocabulary** — role -> ordinal priority. Positive = target sooner, negative =
@@ -87,45 +101,56 @@ class Role:
 #: measurement may re-rule them without re-ruling the order.
 ROLE_REGISTRY: dict[str, Role] = {
     "prize_liability": Role(
-        100, "the wincon body itself — KO/gust it", (_GENERAL, _MATCHUP)),
+        100, "the wincon body itself — KO/gust it", (DERIVED_BY, READ_BY, BRIEF_BY)),
     "fragile_preevo": Role(
-        90, "its pre-evolution — deny the wincon before it comes online", (_GENERAL, _MATCHUP)),
+        90, "its pre-evolution — deny the wincon before it comes online",
+        (DERIVED_BY, READ_BY, BRIEF_BY)),
     "disruption_target": Role(
         60, "their key supporter/enabler the Brief says to REMOVE (the 'hunt an engine' role). "
             "Curated ONLY: an explicit human claim about this matchup outranks a derived one, and "
-            "nothing derives it — that is what the role means.", (_MATCHUP,)),
+            "nothing derives it — that is what the role means.", (BRIEF_BY,)),
     "attacker": Role(
-        50, "a body whose line actually attacks. **530 shipped assignments resolved to 0 before "
-            "Issue #395** — the largest role population in the artifact, inert. Sits BELOW the "
-            "wincon and its pre-evo deliberately: a body that attacks is a real steer but not "
+        50, "a body whose line actually attacks. **530 shipped dossier assignments resolved to 0 "
+            "before Issue #395** — the largest role population in the artifact, inert. Stated "
+            "precisely, because the headline is easy to over-read: what changed is that the STRING "
+            "now resolves to a real priority instead of falling through `.get(role, 0)`. For a body "
+            "IN PLAY the derived tier usually names it too and, being γ-independent, supersedes the "
+            "dossier's claim; the dossier's own 530 remain the live reading for the predicted "
+            "entries the derivation cannot see. Both are corrections of the same defect. Sits BELOW "
+            "the wincon and its pre-evo deliberately: a body that attacks is a real steer but not "
             "automatically a better removal target than the wincon itself. The worked example is "
-            "Crustle, which is the Crustle / Mega Kangaskhan ex deck's main attacker *because* it "
-            "cannot be damaged by an ex attacker in an ex-dominated format.",
-        (_GENERAL, _MATCHUP)),
+            "Crustle, the Crustle / Mega Kangaskhan ex deck's main attacker *because* it cannot be "
+            "damaged by an ex attacker in an ex-dominated format.",
+        (DERIVED_BY, READ_BY, BRIEF_BY)),
     "enabler": Role(
         40, "a body that assists the key Pokémon in HOW it attacks — damage boosts, a free-retreat "
             "grant, ability fuel (the Solrock/Lunatone shape). Below `attacker` because removing "
             "the attacker is the more direct answer. Needs no new Function Tag: every input is "
-            "already a parsed `CardStat` field.", (_GENERAL, _MATCHUP)),
+            "already a parsed `CardStat` field. The Read does not emit it — no dossier does the "
+            "derivation — so it is derived-or-curated.", (DERIVED_BY, BRIEF_BY)),
     "engine": Role(
         0, "a plain accelerant/enabler (Cinderace class) — NEUTRAL: a poor snipe target, so do not "
            "boost it. `disruption_target` is how a Brief opts one in, and `avoid` is how the "
-           "general tier de-prioritizes the 1-prize utility class.", (_GENERAL, _MATCHUP)),
+           "general tier de-prioritizes the 1-prize utility class.",
+        (DERIVED_BY, READ_BY, BRIEF_BY)),
     "support": Role(
         0, "emitted by `Scout._target_role` for an in-play body with no printed damage. No claim — "
            "but it must be DECLARED or the vocabulary lint fails, which is the whole point of a "
-           "closed vocabulary: silence is a ruling, not an omission.", (_MATCHUP,)),
+           "closed vocabulary: silence is a ruling, not an omission. READ-ONLY: a hand-authored "
+           "Brief may not declare it, because \"I have no claim\" is not a claim a human is making.",
+        (READ_BY,)),
     "unknown": Role(
         0, "emitted by `Scout._target_role` when there is no CardStat at all, and by "
-           "`Scout._dossier_intel` for a dossier entry with no role. Same reading as `support`.",
-        (_MATCHUP,)),
+           "`Scout._dossier_intel` for a dossier entry with no role. Same reading as `support`, and "
+        "READ-ONLY for the same reason.", (READ_BY,)),
     "avoid": Role(
         -80, "decoy / self-shuffler — never spend removal here. **Gated on `prize_value == 1`** "
              "(D4): a 1-prize utility body (Dudunsparce / Budew class) is a poor place to spend "
              "removal, but a 2- or 3-prize engine is a PRIME one and the prizes are the reason. "
              "Before the gate this fired on Mega Kangaskhan ex (3 prizes) and Fezandipiti ex (2), "
              "unscaled by γ and written AFTER Read-Intel, so it overwrote the `prize_liability` the "
-             "dossier had correctly assigned.", (_GENERAL, _MATCHUP)),
+             "dossier had correctly assigned. The Read does not emit it; `Scout._target_role` has "
+             "no such branch.", (DERIVED_BY, BRIEF_BY)),
 }
 
 #: Role -> base priority. Kept as a name because `sound_rules.py`'s `firing-equation-constants`
@@ -321,7 +346,8 @@ def build_matchup_plan(*, brief_roles: dict[int, str] | None = None,
 
 
 __all__: Sequence[str] = (
-    "Role", "ROLE_REGISTRY", "PROVENANCES", "BodyFacts", "MatchupPlan",
+    "Role", "ROLE_REGISTRY", "PROVENANCES", "ASSIGNERS", "DERIVED_BY", "READ_BY", "BRIEF_BY",
+    "BodyFacts", "MatchupPlan",
     "role_priority", "undeclared_roles", "roles_in_dossiers", "roles_in_brief",
     "derive_general_roles", "build_matchup_plan",
 )
