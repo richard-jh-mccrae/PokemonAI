@@ -107,7 +107,7 @@ PER_DECISION_PROFILE = frozenset({
     "theirs.incoming",                # ← POC-T1: the FOLDED doom read, at the `UNCHARGED` policy
     "theirs.prizes_remaining",
     # ← POC-T1: `opponent_target_value`'s removal Δ. RENAMED from `theirs.turns_to_ko_me` by
-    # ADR-TEMP-398, and a rename is all it is: the integer route is that clock's `.turns` view.
+    # ADR-0117, and a rename is all it is: the integer route is that clock's `.turns` view.
     #
     # **Measured before re-pinning**, as this pin's own note demands — an argument that a rename
     # costs nothing is not the same as a measurement that it costs nothing, and this pin exists
@@ -299,7 +299,7 @@ KO_LINE_PROFILE = frozenset({
 #:     body-scoped twin this read replaces; it could not see the Bench, which is the whole bug.
 #:   * `mine.*.prize_value` + `theirs.survival_clock` — `survival`, both areas, Bench-Harvest-aware.
 #:     (`survival` reads that clock's INTEGER `.turns`; only the opponent-target ranking takes the
-#:     fractional `.exact` — ADR-TEMP-398.)
+#:     fractional `.exact` — ADR-0117.)
 #:   * `theirs.active.hp_remaining` — `threat`'s reachability filter (can I actually reach this KO).
 #:   * `mine.forward_index` / `forward_payoff` — `development`'s evolution topology, over MY decklist.
 #:   * `mine.mine_turns_to_afford` — the forward leg of `readiness`'s odds, so a mid-turn board with

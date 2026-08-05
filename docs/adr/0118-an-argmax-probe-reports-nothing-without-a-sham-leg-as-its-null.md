@@ -1,6 +1,4 @@
-# ADR-TEMP-398 - An argmax probe reports nothing without a sham leg as its null
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0118 - An argmax probe reports nothing without a sham leg as its null
 
 **Status:** Accepted (grill of Issue #398, 2026-08-05). Methodology; applies to every probe that
 reports "how often does the top pick move".
@@ -28,7 +26,7 @@ the real credit — over the same 241 bench-rankable frames:
 The real credit separates from a meaningless number of the same size by **five frames out of 241**.
 The headline was measuring *"a continuous term breaks flat ties"*, not *"this term discriminates
 correctly"* — and the underlying reason (73.2% of equal-prize groups are perfectly tied; see
-ADR-TEMP-398-CLOCK) guarantees that **any** term in that band scores similarly.
+ADR-0117) guarantees that **any** term in that band scores similarly.
 
 The A-vs-A null could not have caught this. It proves the comparison is *stable* — that the tie
 convention does not itself manufacture movement. It says nothing about whether the movement means

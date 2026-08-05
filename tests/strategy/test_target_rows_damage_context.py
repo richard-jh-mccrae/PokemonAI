@@ -104,7 +104,7 @@ def test_the_removal_delta_follows_THEIR_hand():
     context Powerful Hand deals 0, the Alakazam never finishes inside the horizon, and every hand
     size answers the SAME value: the flat axis this issue removes.
 
-    **Re-derived by hand for ADR-TEMP-398**, when this Δ became a difference of the **Fractional
+    **Re-derived by hand for ADR-0117**, when this Δ became a difference of the **Fractional
     Survival Clock** rather than of whole turns. Both bodies present, the Dunsparce line's ceiling
     is 150/turn into my 200 HP, so the base crossing is ``1 + (200-150)/150 = 4/3``. Removing their
     Active leaves ``20 x hand``/turn and the crossing interpolates the same way:
@@ -139,7 +139,7 @@ def test_the_removal_delta_reads_THEIR_hand_and_never_MINE():
     above, which is what makes this a regression test rather than a restatement.
 
     The flat control answers ``23/3`` rather than the old ``7`` for the same reason the ladder moved
-    (ADR-TEMP-398): a blind Alakazam deals 0, so it never crosses inside the horizon and the removal
+    (ADR-0117): a blind Alakazam deals 0, so it never crosses inside the horizon and the removal
     Δ is ``9 - 4/3`` at every hand size. Flat is still flat — that is what this test asserts."""
     theirs = [_rows(h)[0]["survival_shift"] for h in (1, 2, 3, 4, 6)]
     mine = [_rows(h, attacker_is_me=True)[0]["survival_shift"] for h in (1, 2, 3, 4, 6)]
@@ -214,7 +214,7 @@ def test_both_legs_of_each_delta_are_threaded_together():
     threaded" from "neither leg threaded" on a board where the context happens not to bite.
 
     BOTH clock method names count. `survival_clock` reports the same accumulation as
-    `turns_to_ko_me` at a finer resolution (ADR-TEMP-398) and `_opponent_target_rows` now reads it;
+    `turns_to_ko_me` at a finer resolution (ADR-0117) and `_opponent_target_rows` now reads it;
     the invariant this test protects is that every clock leg of a Δ carries `context`, never which
     of the two readings a call site took. The instrument guard below is what caught the rename when
     the fractional reading landed, and it is kept for the next one."""

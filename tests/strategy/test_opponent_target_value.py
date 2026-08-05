@@ -103,7 +103,7 @@ def test_turns_to_ko_me_and_the_survival_shift():
     assert c.turns_to_ko_me(MY_BODY, [_b(A)]) - base == 0
 
 
-# ---- the FRACTIONAL survival clock (ADR-TEMP-398, amending ADR-0071 decision 4) ---------------
+# ---- the FRACTIONAL survival clock (ADR-0117, amending ADR-0071 decision 4) ---------------
 def test_the_integer_clock_is_unchanged_by_the_fractional_reading():
     """The byte-identical guarantee, asserted literally rather than inferred from the diff.
 
@@ -155,7 +155,7 @@ def test_no_crossing_within_the_horizon_reads_the_same_both_ways():
     assert dead.turns == 5 and dead.exact == pytest.approx(5.0)
     # NEGATIVE hp is already past dead: `dealt >= hp` holds at t=1 before anything is dealt, so
     # there is no crossing to interpolate and the divisor would be that turn's zero damage. The
-    # integer route answered 1 before ADR-TEMP-398 and must still — this regressed to a
+    # integer route answered 1 before ADR-0117 and must still — this regressed to a
     # ZeroDivisionError once, which is a louder answer rather than a sharper one.
     past = c.survival_clock({"id": MY, "hp": -5}, [_b(A)], max_t=4)
     assert past.turns == 1 and past.exact == pytest.approx(1.0)
@@ -189,7 +189,7 @@ def test_a_flat_tie_the_integer_clock_cannot_see_and_the_fractional_one_can():
 
 
 def test_only_the_bodies_that_LEAD_the_per_turn_max_can_score():
-    """The **Structural Zero** itself, on the two boards ADR-TEMP-398 quotes.
+    """The **Structural Zero** itself, on the two boards ADR-0117 quotes.
 
     The ADR cited these as "confirmed analytically" while they existed only in a scratch run — the
     citation is what makes them real. `incoming()` is a per-turn MAX over their forms, so:

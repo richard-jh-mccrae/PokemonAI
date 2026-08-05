@@ -1,6 +1,4 @@
-# ADR-TEMP-398 - The survival clock is read fractionally, and the Flat Tie is measured to be STRUCTURAL
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0117 - The survival clock is read fractionally, and the Flat Tie is measured to be STRUCTURAL
 
 **Status:** Accepted (grill of Issue #398, 2026-08-05). Amends **ADR-0071 decision 4**.
 **Amended 2026-08-05, before merge**, by its own build-time measurement — see *Correction* below.
@@ -183,7 +181,7 @@ for Issue #398's re-grill, restated here with what survives of the original obje
   `tools/train/probes/fractional_clock_sweep.py`, which prints both arms and their denominators per
   run. **This is the bar this change clears**: 281 → 253 tied on value, 62 → 90 discriminated.
 - **The sham bar is reported and NOT cleared, and that is stated rather than buried.** Under
-  ADR-TEMP-398-SHAM, bench argmax movement:
+  ADR-0118, bench argmax movement:
 
   | arm | moves |
   |---|---|
@@ -196,7 +194,7 @@ for Issue #398's re-grill, restated here with what survives of the original obje
   83% that are structurally zero. Moving *less* than a sham is evidence the term is not noise; it
   is not evidence the term is good, and it is not a claim to have fixed Issue #398. A movement
   number is the wrong instrument for a leg whose correct behaviour is to leave most orderings
-  alone — which is itself a limit of the sham policy worth carrying into ADR-TEMP-398-SHAM.
+  alone — which is itself a limit of the sham policy worth carrying into ADR-0118.
 - Every current caller of `turns_to_ko_me` is byte-identical after the change, asserted **literally**
   in `test_the_integer_clock_is_unchanged_by_the_fractional_reading` rather than inferred from the
   diff being additive.

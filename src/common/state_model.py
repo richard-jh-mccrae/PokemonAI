@@ -89,7 +89,7 @@ from common import card_worth
 from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk / the ONE unit read
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
-from common.strategy.combat import SurvivalClock  # both readings of ONE accumulation (ADR-TEMP-398)
+from common.strategy.combat import SurvivalClock  # both readings of ONE accumulation (ADR-0117)
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
 from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
 from common.strategy.damage_context import bench_gate_context   # ...and its matchup-free slice
@@ -1964,7 +1964,7 @@ class TheirSide(_SideBase):
         the next one allocated at the same address.
 
         Reads :meth:`survival_clock`'s ``.turns``, so this route and the fractional one share ONE
-        memo entry and one accumulation (ADR-TEMP-398)."""
+        memo entry and one accumulation (ADR-0117)."""
         return self.survival_clock(
             my_body, bodies=bodies, charged=charged, my_benched=my_benched, my_bench=my_bench,
             key_ids=key_ids, reading=reading, opp_active=opp_active,
@@ -1976,7 +1976,7 @@ class TheirSide(_SideBase):
                        opp_active: dict | None = None, switch_enabler: bool = False,
                        context: dict | None = None) -> SurvivalClock:
         """The ACTIVE-area survival clock at BOTH resolutions — :meth:`turns_to_ko_me`'s integer
-        plus the interpolated crossing point beside it (`CombatMath.SurvivalClock`, ADR-TEMP-398).
+        plus the interpolated crossing point beside it (`CombatMath.SurvivalClock`, ADR-0117).
 
         The model route exists so the fractional reading is memoised on the SAME key as the integer
         rather than beside it: both fall out of one accumulation, and a second memo entry would pay

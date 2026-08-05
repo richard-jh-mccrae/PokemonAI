@@ -24,8 +24,8 @@ tie line reads lower now.** Re-run it before citing any figure here — and note
 draft of this docstring said the ties were *"`survival_shift` integer-quantized to 0 for every
 row"*; that was measured false — quantization was 10.0% of it. The rest is a **Structural Zero**:
 `incoming()` aggregates their forms with a per-turn MAX, so removing a body that is not the argmax
-moves nothing at any resolution. See ADR-TEMP-398 (fractional survival clock) for the correction and
-ADR-TEMP-398 (sham control) for why the sham arms are mandatory here.
+moves nothing at any resolution. See ADR-0117 (fractional survival clock) for the correction and
+ADR-0118 (sham control) for why the sham arms are mandatory here.
 
 ## Arms
 
@@ -74,7 +74,7 @@ from common.state_value import _READINESS_W, _forward_credit   # noqa: E402
 _CANDIDATES = (("B", "B damage credit"), ("C", "C prize leg, RAW"), ("D", "D prize leg, banded"))
 
 #: Band the shams are scaled into — the largest damage-credit value observed on the corpus. A sham
-#: an order of magnitude smaller would lose trivially and prove nothing (ADR-TEMP-398 sham policy).
+#: an order of magnitude smaller would lose trivially and prove nothing (ADR-0118 sham policy).
 _SHAM_BAND = 0.054
 
 
@@ -154,7 +154,7 @@ def main(argv=None) -> int:
         model = pilot._state_model
 
         # THE TIE POPULATION — the floor every leg clears for free. Reported because a movement
-        # percentage is uninterpretable without it (ADR-TEMP-398 sham policy).
+        # percentage is uninterpretable without it (ADR-0118 sham policy).
         by_prize: dict = {}
         for r in rows:
             by_prize.setdefault(r["prize"], []).append(r)

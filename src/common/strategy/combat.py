@@ -361,11 +361,11 @@ def _matched_slots(slots, units, caps=None) -> int:
 @dataclass(frozen=True)
 class SurvivalClock:
     """Both readings of ONE :meth:`CombatMath.survival_clock` accumulation — the **Fractional
-    Survival Clock** (ADR-TEMP-398, amending ADR-0071 decision 4).
+    Survival Clock** (ADR-0117, amending ADR-0071 decision 4).
 
     ``turns`` is the shipped integer: the first turn at which accumulated incoming damage reaches
     my HP, or ``max_t + 1`` when the body survives the horizon. Every consumer that existed before
-    ADR-TEMP-398 reads this and is unaffected by the field beside it.
+    ADR-0117 reads this and is unaffected by the field beside it.
 
     ``exact`` is where inside that turn the crossing actually falls, interpolated linearly:
 
@@ -378,12 +378,12 @@ class SurvivalClock:
     is a **Structural Zero** no resolution can touch, because :meth:`incoming` is a per-turn MAXIMUM
     over their forms — removing a body that never leads that maximum moves nothing, at any
     precision. Do not cite this class as the fix for Issue #398; it is a prerequisite for one.
-    Numbers, the counter-example that narrowed the claim, and the reasoning live in ADR-TEMP-398
+    Numbers, the counter-example that narrowed the claim, and the reasoning live in ADR-0117
     and are deliberately NOT restated here; the instrument is
     ``tools/train/probes/fractional_clock_sweep.py``.
 
     The two fields are produced by ONE loop rather than two passes, so they cannot drift — the
-    failure mode ADR-TEMP-398 explicitly rejected a second oracle to avoid. When there is no
+    failure mode ADR-0117 explicitly rejected a second oracle to avoid. When there is no
     crossing inside the horizon, ``exact`` repeats ``turns`` exactly rather than extrapolating past
     it: there is nothing to interpolate, and inventing a value beyond the window would be a claim
     the accumulation does not make.
@@ -1997,7 +1997,7 @@ class CombatMath:
             # A NEGATIVE hp is already past dead, and the accumulation cannot interpolate a crossing
             # it started on the far side of — `dealt >= hp` is true at t=1 before anything is dealt,
             # so the divisor would be the turn's zero damage. The integer route answered 1 here
-            # before ADR-TEMP-398 and still must: this is the byte-identical guarantee, and a
+            # before ADR-0117 and still must: this is the byte-identical guarantee, and a
             # regression to ZeroDivisionError on a body the caller already knows is dead is not a
             # sharper answer, just a louder one.
             return SurvivalClock(1, 1.0)

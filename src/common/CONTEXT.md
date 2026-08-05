@@ -90,7 +90,7 @@ now (`prize_value`). Two legs, and only one of them is new: the damage the body'
 line would have gone on to deal is already priced by `incoming()`, whose availability
 gate is all-descendants — so the clock sees it. The PRIZE the line would have yielded
 (a Staryu becomes a 3-prize Mega Starmie ex) is priced nowhere and is the leg
-`denial_value` owns. ADR-TEMP-398.
+`denial_value` owns. ADR-0117.
 _Avoid_: removal value, kill value
 
 **Flat Tie**:
@@ -108,7 +108,7 @@ _Avoid_: draw, tie-break (a tie-break RESOLVES a tie; this names the tie itself)
 integer turn at which accumulated damage reaches HP. The precision is already
 computed inside the accumulate loop and discarded by the threshold; the fractional
 reading recovers it. Opt-in — the integer stays the default. Fixes 10.0% of the
-Flat Tie and is a *prerequisite for*, never *the*, fix to Issue #398. ADR-TEMP-398.
+Flat Tie and is a *prerequisite for*, never *the*, fix to Issue #398. ADR-0117.
 _Avoid_: continuous clock, precise clock
 
 **Structural Zero**:
@@ -120,10 +120,10 @@ and 1036 of 1244 corpus bodies price at exactly 0. A body scores only where it i
 *unique* lead at some turn at or before the crossing; where two tie for the lead
 throughout, neither scores. It is **not** true that only one body per board can score
 — the lead can change across turns as energy budgets grow, and each turn's leader
-scores (ADR-TEMP-398 records the constructed counter-example that killed that
+scores (ADR-0117 records the constructed counter-example that killed that
 stronger claim). Distinct from a **Flat Tie**, which is the *symptom*; this is one of
 its causes, and the dominant one. A Δ under a `max` should be assumed to carry this
-until measured otherwise. ADR-TEMP-398.
+until measured otherwise. ADR-0117.
 _Avoid_: no-op, null result, zero signal (each suggests the BOARD said nothing;
 this says the EXPRESSION cannot say anything)
 
@@ -133,7 +133,7 @@ the same magnitude band as the term under test, used as the null for an argmax p
 Distinct from a **null control** (an arm against itself, expect 0), which proves the
 comparison is stable but introduces no term and so cannot show that observed movement
 is attributable. Both are required. A movement number published without its sham
-baseline is not evidence. ADR-TEMP-398.
+baseline is not evidence. ADR-0118.
 _Avoid_: placebo, dummy, random control (a sham need not be random — `cid % 7` is
 deterministic and card-derived; what makes it a sham is having no causal claim)
 
@@ -1425,7 +1425,7 @@ my death by a whole turn or more"*, and the gap is 128 of 218 relevance-positive
 (Issue #217, measured). Its one sound use is a LEXICOGRAPHIC TIEBREAK among options already equal on
 the primary read, where it orders without suppressing.
 
-**The two DELTAS are now at different resolutions, deliberately** (ADR-TEMP-398, 2026-08-05).
+**The two DELTAS are now at different resolutions, deliberately** (ADR-0117, 2026-08-05).
 `_opponent_target_rows`' `survival_shift` reads the **Fractional Survival Clock**, so the
 "whole turn or more" quantization above no longer applies to it. `_strip_delta_terms`' `strip_shift`
 still reads whole turns, and the 128-of-218 gap is still open there — it was not measured under the

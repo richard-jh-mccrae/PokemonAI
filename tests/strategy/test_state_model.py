@@ -330,7 +330,7 @@ def test_the_survival_clock_memo_keys_on_its_arguments():
     by giving one call a distinguishing argument and requiring the oracle to be consulted again.
 
     Counts consults of `CombatMath.survival_clock`, the method the model route reaches since
-    ADR-TEMP-398 — `turns_to_ko_me` is its `.turns` view, so ONE memo entry serves both readings and
+    ADR-0117 — `turns_to_ko_me` is its `.turns` view, so ONE memo entry serves both readings and
     this test covers both. Patching the old name here counted nothing at all and failed loudly,
     which is the instrument doing its job rather than a reason to weaken it."""
     m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)]),

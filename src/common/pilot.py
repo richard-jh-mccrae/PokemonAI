@@ -8796,7 +8796,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         the ONE place both the S3a diagnostic (deleted by Issue #261 item 2h) and the live
         `gust_target` slot emission (`_resolve_needs`) read it, so they cannot drift apart.
         `survival_shift` is the turns of survival bought by removing the body — a Δ of the
-        **Fractional Survival Clock** (`combat.survival_clock().exact`, ADR-TEMP-398), so it is a
+        **Fractional Survival Clock** (`combat.survival_clock().exact`, ADR-0117), so it is a
         real number rather than whole turns; at integer resolution most removals quantise to 0 and
         the ranking flat-ties. `prize_advance` is its prize value (the if-KO'd
         term); `phase` is the KO-race scale (`needs.phase_scale`). A THREAT read, so it keeps the
@@ -8860,7 +8860,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # threaded leg against a blind one — the two legs are one question by construction.
         clock = dict(bodies=bodies, charged=None, opp_active=opp_active, switch_enabler=enabler,
                      context=self._opp_attack_context)
-        # THE FRACTIONAL READING, opted into here and nowhere else (ADR-TEMP-398). `survival_shift`
+        # THE FRACTIONAL READING, opted into here and nowhere else (ADR-0117). `survival_shift`
         # is a Δ of this clock under removal of one of their bodies, and the integer reading threw
         # away the size of that move: where a removal DOES shift the clock, `dealt` already knows by
         # how much (`incoming` prices through the Damage Formula and its evolution reach is maximal
@@ -8872,7 +8872,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # never lead, and price at EXACTLY 0 at any resolution (a Structural Zero). The Active is
         # usually that lead, so on the BENCH, which is the only scope `gust_target_slot` reads, this
         # term still ranks almost nothing. That is Issue #398's open defect, not something this line
-        # claims to have solved. Numbers and derivation: ADR-TEMP-398, not restated here.
+        # claims to have solved. Numbers and derivation: ADR-0117, not restated here.
         #
         # The other clock families (`survival`, `readiness`, `threat`) keep the integer: each
         # carries scale anchors calibrated against it, and widening them is a separate, unmeasured
@@ -9453,7 +9453,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # `_board`, which reproduces exactly today's reading rather than raising — the same
         # fail-to-current-behaviour contract `_deny_rows` gives such a caller.
         #
-        # STAYS ON THE INTEGER READING, stated because the sibling Δ did not (ADR-TEMP-398).
+        # STAYS ON THE INTEGER READING, stated because the sibling Δ did not (ADR-0117).
         # `_opponent_target_rows`' `survival_shift` took the Fractional Survival Clock and this
         # `strip_shift` lands in the SAME row dict, so the asymmetry is visible and needs a reason
         # rather than a shrug. The reason is scope, not principle: this Δ's consumer is ADR-0084

@@ -1,7 +1,6 @@
-"""The ONE sham-arm vocabulary an argmax probe reports against — ADR-TEMP-398's mandatory null.
+"""The ONE sham-arm vocabulary an argmax probe reports against — ADR-0118's mandatory null.
 
-
-The sibling of `_corpus.py`, and it exists for the same reason that one does. ADR-TEMP-398 (sham
+The sibling of `_corpus.py`, and it exists for the same reason that one does. ADR-0118 (sham
 control) makes a sham arm **mandatory** for every probe that reports argmax movement:
 
     A probe that reports argmax movement MUST report, in the same table, the movement produced by
@@ -45,7 +44,7 @@ def legs(key: str, *, band: float, card_id, hp, index: int, of: int) -> float:
     """ONE sham arm's addend for ONE row, scaled into ``band``.
 
     ``band`` must be the measured magnitude of the term under test, not a guess: a sham an order of
-    magnitude smaller loses trivially and proves nothing, which is the failure ADR-TEMP-398's
+    magnitude smaller loses trivially and proves nothing, which is the failure ADR-0118's
     band-matching rule exists to prevent. Each leg lands in ``[0, band)``.
 
     Fails to 0 on an unreadable input rather than raising — a sham has no causal claim to protect,
@@ -64,7 +63,7 @@ def legs(key: str, *, band: float, card_id, hp, index: int, of: int) -> float:
 
 #: The closing note every argmax probe prints. Shared so the READING of the table cannot drift from
 #: the table: beating a sham shows a leg DISCRIMINATES, never that it discriminates CORRECTLY, and
-#: (ADR-TEMP-398-SHAM's 2026-08-05 amendment) a leg well BELOW its sham has not been falsified —
+#: (ADR-0118's 2026-08-05 amendment) a leg well BELOW its sham has not been falsified —
 #: leaving structurally-tied orderings alone is correct behaviour, not weakness.
 READING = (
     "READ THE CANDIDATE ROWS AGAINST THE SHAM ROWS, NOT AGAINST ZERO. A candidate that MATCHES "

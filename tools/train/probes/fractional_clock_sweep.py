@@ -1,16 +1,16 @@
 """Fractional-clock discrimination sweep. **Not a gate.**
 
-Answers the one question ADR-TEMP-398 owes its own change: does reading `turns_to_ko_me`'s crossing
+Answers the one question ADR-0117 owes its own change: does reading `turns_to_ko_me`'s crossing
 point fractionally recover REAL discrimination in the opponent-target ranking, or does it merely
 break Flat Ties the way any number of that size would?
 
-The bar is ADR-TEMP-398's sham policy, and it applies to this change exactly as it applied to the
+The bar is ADR-0118's sham policy, and it applies to this change exactly as it applied to the
 denial credit that change replaced: **a movement number published without its sham baseline is not
 evidence.** So every arm here is reported against a band-matched meaningless leg.
 
 ## Arms
 
-    INT    the pre-ADR-TEMP-398 ranking — `SurvivalClock.exact` collapsed back to `.turns`.
+    INT    the pre-ADR-0117 ranking — `SurvivalClock.exact` collapsed back to `.turns`.
            Reconstructed by patching the model route for the duration of the frame, so it is the
            shipped code path answering the OLD question, not a hand-rebuilt imitation of it.
     FRAC   the ranking as it now ships.
@@ -19,7 +19,7 @@ evidence.** So every arm here is reported against a band-matched meaningless leg
     S_pos  sham — position index. The degenerate case: a leg that cannot beat LIST ORDER is not
            ordering anything, and list order is precisely what a Flat Tie falls back to.
 
-Both control kinds are required and are not interchangeable (ADR-TEMP-398): the shams prove
+Both control kinds are required and are not interchangeable (ADR-0118): the shams prove
 movement is attributable, and the tie-population rows prove WHY the floor is as high as it is.
 
 Scoped BENCH-ONLY by default because that is the seam `gust_target_slot` actually reads — the
@@ -61,7 +61,7 @@ class _IntegerClock:
     """Collapses ``SurvivalClock.exact`` back onto ``.turns`` for the duration of a block.
 
     Patches the MODEL route rather than reimplementing the pre-change arithmetic, because a
-    hand-rebuilt "what it used to do" is exactly the kind of second oracle ADR-TEMP-398 exists to
+    hand-rebuilt "what it used to do" is exactly the kind of second oracle ADR-0117 exists to
     avoid — it would drift from the real prior behaviour and nothing would report it."""
 
     _real = None
