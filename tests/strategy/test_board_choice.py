@@ -21,6 +21,10 @@ Four properties carry the file:
 * **A registered-but-unappliable member refuses, and names WHY.** `gust` has a target space and a
   Target Ranker and no board synthesis, because no issue owns the apply-seam transition for it.
 
+The D7 combination — one sort key over an opponent-target menu — is asserted next door in
+`test_deferred_target_rank.py`: it is a property of an ordering rather than of a board, and nothing
+there builds one.
+
 Card facts VERIFIED at source (`data/EN_Card_Data.csv`), never recalled — quoted at each constant.
 Same primary seam as both sibling files: a dict-backed Stat Provider and hand-built zone dicts, no
 Pilot and no engine boot, so this runs DLL-free on both platforms.
@@ -355,7 +359,7 @@ def test_a_body_reaching_the_bench_recovers_from_every_special_condition():
     me = _player(active=_body(MUNKIDORI, serial=1, energies=(E_P,)),
                  bench=[_body(RIOLU, serial=2)], poisoned=True, confused=True)
     model = _model(_obs(me))
-    after, writes = bc._APPLIERS[_RETREAT][0](model, ((0,), 0), seat_index=0)
+    after, writes = bc.CHOICE_REGISTRY[_RETREAT].apply(model, ((0,), 0), seat_index=0)
     side = after["current"]["players"][0]
     assert not any(side[f] for f in bd.CONDITION_FLAGS)
     assert "special_conditions" in writes
@@ -370,7 +374,7 @@ def test_a_free_retreat_writes_no_energy_and_no_discard():
     try:
         me = _player(active=_body(MUNKIDORI, serial=1, energies=(E_P,)),
                      bench=[_body(RIOLU, serial=2)])
-        _after, writes = bc._APPLIERS[_RETREAT][0](_model(_obs(me)), ((), 0), seat_index=0)
+        _after, writes = bc.CHOICE_REGISTRY[_RETREAT].apply(_model(_obs(me)), ((), 0), seat_index=0)
     finally:
         object.__setattr__(_STATS[MUNKIDORI], "retreatCost", 1)
     assert writes == {"allowance_retreat_used", "bodies_in_play"}
@@ -427,6 +431,87 @@ def test_the_gust_target_space_resolves_their_bench_from_the_declared_clause():
     assert bc.target_space(model, option, seat_index=0) == (0, 1)
 
 
+def test_the_target_CLASS_resolver_is_driven_by_the_compendium_and_is_CLOSED_over_it():
+    """**ADR-TEMP-392 decision 2, as a test**: *"Expansion is data-driven off the compendium's target
+    vocabulary, never per-card. The class resolver reads `CLAUSE_SELECTORS["target"]` … a hand-written
+    expander per card hardcodes what is already data."*
+
+    So every one of the **24** values `snapshot_coverage` declares must route somewhere named — and
+    the three destinations are three different pieces of work, which is why they are three different
+    refusals rather than one:
+
+    * a **predicate** — 14 of them, the body classes a board can evaluate;
+    * a **category error** — 10 of them (`basic_energy`, `item`, `supporter`, …) name a CARD class,
+      and a space over bodies in play cannot evaluate one. Not work owed; a backlog that conflated
+      this with the next bucket would size work that does not exist;
+    * a **scoped gap** — declared vocabulary with no board predicate yet. Currently empty, which is
+      why the assertion is on the PARTITION rather than on a list: a value added to the compendium
+      lands here and says so, instead of raising `KeyError` inside an ordering loop.
+
+    The vacuity guard is the partition being exhaustive over a non-empty declared set."""
+    declared = sc.CLAUSE_SELECTORS["target"]
+    assert declared, "vacuity guard: an empty vocabulary would pass everything below"
+    buckets = {"predicate": set(), "category": set(), "gap": set()}
+    for value in declared:
+        try:
+            bc.target_predicate({"kind": "gust", "target": value})
+            buckets["predicate"].add(value)
+        except bd.Unmodellable as gap:
+            buckets["category" if "category error" in str(gap) else "gap"].add(value)
+    assert set().union(*buckets.values()) == set(declared)       # exhaustive: nothing raises KeyError
+    assert set(bc.BODY_PREDICATES) <= set(declared), sorted(set(bc.BODY_PREDICATES) - set(declared))
+    assert buckets["predicate"] == set(bc.BODY_PREDICATES)
+    assert "basic_energy" in buckets["category"] and "any" in buckets["predicate"]
+
+
+def test_the_resolver_fails_CLOSED_on_vocabulary_drift_in_BOTH_directions():
+    """A selector value the compendium never declared, and a clause KEY this resolver has not heard
+    of, are both drift — someone minted vocabulary nobody registered — and both refuse rather than
+    reading as *"everything"*. Same discipline `board_expectation._check_clause` keeps for its own
+    handled-key set, and the reason is the same: an unknown narrowing read as no narrowing is the one
+    failure that silently widens a target space."""
+    with pytest.raises(bd.Unmodellable, match="declares"):
+        bc.target_predicate({"kind": "gust", "target": "a_value_nobody_declared"})
+    with pytest.raises(bd.Unmodellable, match="handled set"):
+        bc.target_predicate({"kind": "gust", "target": "any", "unheard_of_key": 1})
+
+
+def test_the_predicates_read_CardStat_as_the_ENGINE_populates_it_not_as_the_CSV_prints_it():
+    """The trap this test exists for: the shipped provider leaves `CardStat.stage` **None** — verified
+    against the engine-backed provider, where Riolu, Mega Lucario ex and Munkidori all read
+    ``stage=None`` while `evolvesFrom` / `stage2` / `megaEx` are populated. A `basic` predicate keyed
+    on `stage == "Basic Pokémon"` would therefore match NOTHING and fail silently, in the widening
+    direction for a class the caller believed it had narrowed.
+
+    So Basic is *"a Pokémon that evolves from nothing"* and Stage 1 *"evolves from something and is
+    not Stage 2"*. Asserted against the fixture's own rows, whose facts
+    `tests/scouting/test_cardstat_fixture_facts.py` audits field-for-field against
+    `data/EN_Card_Data.csv`."""
+    place = bc._BodyPlace(active=False, mine=True)
+    riolu, mega = _STATS[RIOLU], _STATS[MEGA_LUC]
+    assert bc.BODY_PREDICATES["basic"](riolu, place) is True
+    assert bc.BODY_PREDICATES["basic"](mega, place) is False
+    assert bc.BODY_PREDICATES["evolution"](mega, place) is True
+    assert bc.BODY_PREDICATES["mega"](mega, place) is True and \
+        bc.BODY_PREDICATES["mega"](riolu, place) is False
+    # Mega Lucario ex evolves from Riolu and is NOT a Stage 2 (`docs/rulebook.txt` Appendix 1 — the
+    # single-hop line), so it is the Stage 1 predicate's positive case.
+    assert bc.BODY_PREDICATES["stage1"](mega, place) is True
+    assert bc.BODY_PREDICATES["stage2"](mega, place) is False
+    # Place, not card: the same body is `benched` or not depending on where it sits.
+    assert bc.BODY_PREDICATES["benched"](riolu, place) is True
+    assert bc.BODY_PREDICATES["benched"](riolu, bc._BodyPlace(active=True, mine=True)) is False
+
+
+def test_an_unreadable_body_matches_NO_class_rather_than_every_class():
+    """Fail CLOSED, the direction `combat._accel_target_ok` also takes: a card the compendium has
+    never heard of resolves to `None`, and a predicate that treated that as *"unconstrained"* would
+    widen a narrowed target space to the whole board."""
+    match = bc.target_predicate({"kind": "gust", "target": "any"})
+    assert match(_STATS[RIOLU], bc._BodyPlace(active=False, mine=False)) is True
+    assert match(None, bc._BodyPlace(active=False, mine=False)) is False
+
+
 def test_the_gust_entry_is_currently_UNREACHABLE_and_the_test_names_why():
     """**The acceptance criterion, as a test.** `gust` is a declared member of the deferred-target
     census with a built target space and a built Target Ranker, and `deferred_target` still refuses it
@@ -473,96 +558,17 @@ def test_the_declared_vocabulary_is_CLOSED_over_the_registries_that_consume_it()
     present in `CLAUSE_WRITES`, so a silent empty comparison would not pass it."""
     declared = set(bc.CHOICE_KINDS) | set(bc.CHOICE_CLAUSES)
     assert declared, "vacuity guard: an empty vocabulary would pass every assertion below"
-    for registry in (bc.TARGET_SPACES, bc.TARGET_RANKERS, bc._APPLIERS, bc._CANONICAL):
-        assert set(registry) <= declared, sorted(set(registry) - declared)
+    assert set(bc.CHOICE_REGISTRY) <= declared, sorted(set(bc.CHOICE_REGISTRY) - declared)
+    assert set(bc.TARGET_RANKERS) <= set(bc.CHOICE_REGISTRY)
     assert set(bc.CHOICE_CLAUSES) <= set(sc.CLAUSE_WRITES)          # the positive control
-    assert set(bc._APPLIERS) <= set(bc.TARGET_SPACES)               # nothing applies what it cannot enumerate
-
-
-# ── the D7 combination: `value` ordered, `role_priority` breaking exact ties ──────────────────────
-
-
-def _rows(values, roles=()):
-    roles = list(roles) + [0.0] * (len(values) - len(roles))
-    return [{"id": i, "value": float(v), "role_priority": float(r)}
-            for i, (v, r) in enumerate(zip(values, roles))]
-
-
-def test_a_role_can_NEVER_reorder_two_rows_whose_value_differs():
-    """**The D7 guarantee, asserted as a PROPERTY rather than as the arithmetic.**
-
-    Issue #395 D1 rules the role sheet an *ordinal priority, never a worth*, forced by a shipped test
-    (`tests/strategy/test_needs.py`'s `ROLE_TIER` ⊆ `SUPPLIES` lint). A formula that let a role flip a
-    real `value` difference would be treating the ordinal as a worth. So the claim under test is not
-    *"the quantum equals 0.5g"* — that is one implementation of it — but *"no pair differing in value
-    is ever reordered by any declared role"*, over generated menus that put the largest positive role
-    against the largest negative one on the tightest real gap."""
-    registry = matchup_plan.role_registry()
-    span = bc.role_span()
-    hi, lo = max(registry.values()), min(registry.values())
-    for gap in (0.001, 0.01, 0.1, 0.5, 0.9, 1.0, 2.9):
-        for base in (1.0, 2.0, 3.0):
-            rows = _rows([base, base + gap], [hi, lo])          # worst case for the ordering
-            key = bc.gust_rank_key(rows)
-            assert key(rows[1]) > key(rows[0]), (gap, base, hi, lo, span)
-            rows = _rows([base, base + gap], [lo, hi])          # and the aligned case
-            assert key(rows[1]) > key(rows[0]), (gap, base, hi, lo, span)
-
-
-def test_a_perfectly_flat_menu_orders_EXACTLY_by_the_role_ladder():
-    """The other half of the same guarantee, and the measured population it targets: Issue #398 closed
-    leaving **139 of 343 equal-prize groups perfectly flat**, because `incoming` is a per-turn maximum
-    so a non-leading body's removal Δ is a Structural Zero at any resolution.
-
-    When the menu draws no distinction at all, `currency.tiebreak_bonus` takes its ``1 / k`` fallback
-    and the ordering becomes purely the ladder — which is exactly the bench case
-    `_opponent_target_rows`' own comment says *"still ranks almost nothing."*"""
-    ladder = ["prize_liability", "avoid", "fragile_preevo", "engine"]
-    priorities = [matchup_plan.role_priority(r) for r in ladder]
-    rows = _rows([2.0] * len(ladder), priorities)
-    ordered = sorted(rows, key=bc.gust_rank_key(rows), reverse=True)
-    assert [r["role_priority"] for r in ordered] == sorted(priorities, reverse=True)
-
-
-def test_an_unrecognised_opponent_contributes_no_matchup_role_at_all():
-    """γ=0 is not a case this key handles — it is a case it cannot see, and that is the design.
-    `MatchupPlan.priority` is already γ-scaled for matchup provenance and γ-independent for general
-    card facts, so an unrecognised opponent arrives here as a row whose `role_priority` is 0 and the
-    ordering collapses to `value` alone. Asserted through the real `MatchupPlan` rather than by
-    passing 0.0 by hand, so it is a fact about the shipped scaling."""
-    plan = matchup_plan.build_matchup_plan(brief_roles={RIOLU: "prize_liability"}, gamma=0.0)
-    assert plan.priority(RIOLU) == 0.0
-    rows = _rows([2.0, 2.0], [plan.priority(RIOLU), plan.priority(MEGA_LUC)])
-    key = bc.gust_rank_key(rows)
-    assert key(rows[0]) == key(rows[1]) == 2.0
-
-
-def test_the_absent_role_field_degrades_to_value_only_ordering():
-    """`role_priority` is the row field Issue #395 D7 adds, and `_opponent_target_rows` does not carry
-    it at this commit. The 0.0 default is not a placeholder: D7 rules the field UNFUSED so each
-    consumer combines, and an absent ordinal contributing 0 is the same thing an unroled body
-    contributes once the field exists. So this key orders by `value` alone today and needs no change
-    when #395 lands."""
-    rows = [{"value": 3.0}, {"value": 1.0}, {"value": 2.0}]
-    assert [r["value"] for r in sorted(rows, key=bc.gust_rank_key(rows), reverse=True)] \
-        == [3.0, 2.0, 1.0]
-
-
-def test_the_role_span_is_DERIVED_from_the_registry_and_not_transcribed():
-    """`ROLE_SPAN` is what normalises the ordinal into `[-1, 1]`, and it must move when the sheet does
-    — Issue #395 D3/D4 is in flight to add `attacker` 50 and `enabler` 40 and to re-rule `avoid`. A
-    transcribed 100 would rot silently. The guard below is the one that matters: a registry gaining a
-    LARGER magnitude must widen the span, or the `|role / span| <= 1` bound the D7 proof rests on
-    stops holding."""
-    real = matchup_plan.role_registry()
-    assert bc.role_span() == max(abs(p) for p in real.values())
-    original = dict(matchup_plan._ROLE_PRIORITY)
-    try:
-        matchup_plan._ROLE_PRIORITY["a_future_role"] = -500
-        assert bc.role_span() == 500
-    finally:
-        matchup_plan._ROLE_PRIORITY.clear()
-        matchup_plan._ROLE_PRIORITY.update(original)
+    # ONE record per key is what makes the sync obligation structural rather than prose: every entry
+    # carries a space and a canonical form, and `apply`/`fingerprint` are one capability in two halves
+    # that `ChoiceKind.__post_init__` refuses to let drift apart. Asserted here as well as in the
+    # constructor so a key added with a half-filled record fails a reading, not only a construction.
+    for key, entry in bc.CHOICE_REGISTRY.items():
+        assert entry.space is not None and entry.canonical is not None, key
+        assert (entry.apply is None) == (entry.fingerprint is None), key
+        assert entry.apply is not None or entry.no_applier.strip(), key
 
 
 # ── the seam wiring ───────────────────────────────────────────────────────────────────────────────

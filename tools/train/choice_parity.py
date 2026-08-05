@@ -114,7 +114,7 @@ for _root in (REPO / "src", REPO / "tools"):
 # The sibling lane is IMPORTED, never re-spelled: `offline_combat`, the homed-zone projection, the
 # trace loader and the chosen-option reader are each the one answer to a question both lanes ask, and
 # a second copy would let the two report different numbers for one corpus.
-from train.apply_parity import (TRACES, _chosen_option, _load,             # noqa: E402
+from train.apply_parity import (TRACES, chosen_option, load,               # noqa: E402
                                 offline_combat, zone_facts)
 from common import board_choice, board_delta                               # noqa: E402
 from common.state_model import StateModel                                  # noqa: E402
@@ -272,13 +272,13 @@ TAKEN = {12: taken_retreat}          # `strategy.context._RETREAT`; imported via
 def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> Report:
     """Replay one trace's Deferred-Target Options through the choice node, into ``report``."""
     report = report or Report()
-    body = _load(path)
+    body = load(path)
     frames = body.get("frames") or []
     decks = (body.get("meta") or {}).get("decks") or [[], []]
     report.traces += 1
     report.frames += len(frames)
     for k in range(len(frames) - 1):
-        option = _chosen_option(frames[k])
+        option = chosen_option(frames[k])
         if not option:
             continue
         kind = int(option.get("type", -1))

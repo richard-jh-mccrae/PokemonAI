@@ -60,27 +60,41 @@ def test_expansion_makes_the_same_option_a_real_positive_comparable_number(probe
 
 
 @pytest.mark.req("REQ-APPLY-0002")
-def test_the_margin_to_the_kth_candidate_is_UNDEFINED_here_and_that_is_the_finding(probes):
-    """**The acceptance criterion this build does NOT discharge, asserted so it cannot be mistaken for
-    one it does.**
+def test_the_item3_MARGIN_telemetry_at_every_width_the_frame_can_support(probes):
+    """**Issue #263 § *Beam-quality package* item 3, and the criterion it discharges** — *"rank at
+    1-ply ordering relative to `k`, and score margin to the k-th candidate."*
 
-    Issue #392 asks that f32 and f35 *"reach the beam at the chosen width, demonstrated by § Beam-quality
-    package item-3 margin telemetry — rank at 1-ply ordering relative to `k`, and score margin to the
-    k-th candidate."* The rank half is measurable and is **1 on both frames**. The margin half is not:
-    at `k=3` there are fewer than three SCORED candidates on either menu, because the apply seam refuses
-    most of the rest (f32: 1 scored / 3 refused / 1 terminal; f35: 2 scored / 2 refused / 1 terminal).
+    **Rank: 1 on both frames, in both modes**, so the line survives any `k >= 1`. That is the whole
+    of the rank half.
 
-    A refusal is not a pruned option — `must_expand` makes it the always-expand path — so the shortfall
-    is not a defect in the ordering. It is a fact about apply-seam COVERAGE at this commit, and it means
-    the margin telemetry becomes computable when the seam covers more of a Trainer-heavy menu, not when
-    the composer lands. Pinned rather than described so that a later commit which widens coverage turns
-    this test red at the line that stopped being true, instead of leaving a stale claim in prose."""
-    for name, report in probes.items():
-        assert report["unexpanded"]["rank"] == 1, (name, report["unexpanded"])
-        assert report["expanded"]["rank"] == 1, (name, report["expanded"])
-        assert report["expanded"]["scored"] < report["expanded"]["k"], (name, report["expanded"])
-        assert report["expanded"]["margin_to_kth"] is None, (name, report["expanded"])
-        assert report["expanded"]["refused"] > 0, (name, report["expanded"])
+    **Margin: reported as a CURVE, because `k` is not derived anywhere.** Neither Issue #263 nor Issue
+    #392 fixes a beam width, so quoting one figure at an undefended `k` would report the caller's
+    choice as a property of the frame. `margin_by_k` therefore carries every width the menu actually
+    supports, and the width at which it stops is itself the finding.
+
+    * **f35 discharges the criterion.** Two scored candidates, so `k=2` is real: the margin to the
+      2nd candidate is **0.001125 unexpanded** and **0.002985 expanded** — expansion widens the line's
+      lead over its rival by **2.65x**. That is exactly the demonstration the criterion asks for.
+    * **f32 cannot, and the reason is coverage rather than ordering.** Its menu scores ONE candidate
+      (3 refused, 1 terminal), so no `k >= 2` margin exists to measure at any width. A refusal is not a
+      pruned option — `must_expand` makes it the always-expand path — so this is a fact about how much
+      of a Trainer-heavy menu the apply seam can price at this commit, and it will become computable
+      when that coverage grows rather than when Issue #385's composer lands.
+
+    Pinned as numbers so a commit that widens seam coverage turns this red at the line that stopped
+    being true, instead of leaving a stale claim in prose."""
+    f32, f35 = probes["f32"], probes["f35"]
+    for report in (f32, f35):
+        assert report["unexpanded"]["rank"] == 1 and report["expanded"]["rank"] == 1, report
+
+    assert f35["expanded"]["scored"] == 2, f35
+    assert f35["unexpanded"]["margin_by_k"][2] == pytest.approx(0.001125, abs=1e-6)
+    assert f35["expanded"]["margin_by_k"][2] == pytest.approx(0.002985, abs=1e-6)
+    assert f35["expanded"]["margin_by_k"][2] > f35["unexpanded"]["margin_by_k"][2] * 2
+
+    assert f32["expanded"]["scored"] == 1, f32
+    assert f32["expanded"]["refused"] == 3, f32
+    assert list(f32["expanded"]["margin_by_k"]) == [1], f32     # no k >= 2 exists on this menu
 
 
 @pytest.mark.req("REQ-APPLY-0002")

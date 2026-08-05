@@ -228,17 +228,30 @@ of the policy that recorded the trace rather than of the rules — `docs/ruleboo
 none, and every committed trace is our own self-play, so inferring it would be fitting to ourselves.
 Measured: **10 of 2254**, all in that zone, all identical multisets, every one a transposed pair.
 
-### 5. The margin-telemetry half of the f32/f35 criterion is NOT discharged, and why
+### 5. The f32/f35 margin telemetry: f35 discharges it, f32 cannot, and `k` is not derived
 
 The criterion asks for rank at 1-ply ordering relative to `k` **and** score margin to the k-th
-candidate. The rank half is **1 on both frames**. The margin half is undefined: at `k=3` there are
-fewer than three *scored* candidates on either menu, because the apply seam refuses most of the rest
-(f32: 1 scored / 3 refused / 1 terminal; f35: 2 scored / 2 refused / 1 terminal). A refusal is not a
-pruned option — `must_expand` makes it the always-expand path — so this is a fact about apply-seam
-COVERAGE at this commit, not a defect in the ordering, and the margin becomes computable when the seam
-covers more of a Trainer-heavy menu rather than when Issue #385's composer lands. Pinned as a test
-(`tests/train/test_choice_beam.py`) so a commit that widens coverage turns it red instead of leaving a
-stale claim in prose.
+candidate. The rank half is **1 on both frames, in both modes**, so the line survives any `k >= 1`.
+
+The margin half needed a correction the first pass got wrong. `k` is not derived anywhere — neither
+Issue #263 nor this issue fixes a beam width — so quoting one figure at an undefended `k` reports the
+caller's choice as a property of the frame. `tools/train/probes/choice_beam.py` therefore reports the
+margin as a **curve over every width the menu supports**, and the two frames then split:
+
+* **f35 DISCHARGES the criterion.** Two scored candidates, so `k=2` is real: margin to the 2nd
+  candidate **0.001125 unexpanded → 0.002985 expanded**, a **2.65x** widening of the line's lead over
+  its rival. That is exactly the item-3 demonstration asked for.
+* **f32 cannot, and the reason is COVERAGE not ordering.** Its menu scores one candidate (3 refused,
+  1 terminal), so no `k >= 2` margin exists at any width. A refusal is not a pruned option —
+  `must_expand` makes it the always-expand path — so this is a fact about how much of a Trainer-heavy
+  menu the apply seam can price at this commit, and it becomes computable when that coverage grows
+  rather than when Issue #385's composer lands.
+
+**The first pass asserted the margin was undefined on BOTH frames, at a hardcoded `k=3`.** That was a
+narrowing dressed as a finding: `/code-review`'s Spec axis recomputed it at `k=2` with this build's
+own tool and found f35's margin perfectly well defined. Recorded here because the failure mode is the
+one a self-filed spec is most prone to — the implementer choosing the parameter that makes their own
+criterion unmeasurable.
 
 ### Groundwork this build incurred, flagged rather than hidden
 
@@ -254,3 +267,20 @@ stale claim in prose.
 * **`.github/filters.yml`** — the apply-seam sources now trigger `tests/parity`. This closed a real
   gap rather than widening the filter: neither seam-parity lane was reachable from a source change on
   a PR, so `board_delta.py` could be rewritten without replaying a trace.
+* **`apply_parity.load` / `chosen_option` promoted to public** — the same second-consumer rule, applied
+  in `tools/` where the first pass had applied it only in `src/`.
+
+### Corrections the review forced, recorded because they are the self-filed spec's own failure modes
+
+* **Decision 2 was not implemented on the first pass.** It rules the class resolver *"data-driven off
+  the compendium's target vocabulary, never per-card"*, and `_gust_space` hardcoded
+  ``if target != "any": refuse`` — the per-card branch D2 forbids, dressed as fail-closed. It now
+  reads `CLAUSE_SELECTORS["target"]` and partitions all **24** declared values into 14 board
+  predicates, 10 category errors (a card class is not a body in play) and 0 scoped gaps, with
+  vocabulary drift refusing separately in both the value and the key dimension. The three are three
+  different sentences because they are three different pieces of work.
+* **The margin criterion was narrowed rather than measured** — see section 5.
+
+Both were caught by `/code-review`'s Spec axis, briefed that this spec was self-filed and told to
+grade the spec as well as the diff. Neither would have been caught by a scope-coverage reading: the
+first looked implemented, and the second looked like an honest negative result.

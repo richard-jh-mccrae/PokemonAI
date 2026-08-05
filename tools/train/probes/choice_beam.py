@@ -28,6 +28,13 @@ to. When the composer lands, its beam consumes this same ordering — so a rank 
 survives any `k >= 1`, and that IS the acceptance question. Reporting it as *ordering rank* rather
 than *beam rank* keeps the two apart.
 
+**`k` is NOT derived, so the margin is reported as a CURVE.** Issue #263 asks for the margin *"to the
+k-th candidate"* and neither it nor Issue #392 derives a width; `--k` merely defaults to 3. A single
+figure at an undefended `k` would report the caller's choice as if it were a property of the frame,
+and would read as *undefined* the moment that `k` overshoots how many candidates the menu actually
+scores. So `margin_by_k` carries every width the frame can support, and the point at which the curve
+stops IS the finding — it is the apply seam's coverage of that menu, not a limit of the ordering.
+
 ## Running it
 
     python tools/train/probes/choice_beam.py                 # both acceptance frames
@@ -165,6 +172,14 @@ def probe(name: str, *, k: int = 3) -> dict:
         rows = score_menu(model, options, expand=expand, effects=pilot.combat.effects)
         out[label] = margin_report(rows, retreat, k=k)
         out[label]["shape"] = next(sh for i, _s, sh in rows if i == retreat)
+        # The margin at EVERY width the menu can actually support, not only at the `k` this call was
+        # handed. `k` is Issue #263's beam width and no issue derives one, so a single figure would
+        # report the caller's choice as if it were a property of the frame — and the criterion's
+        # "at the chosen width" then reads as undefined whenever that arbitrary `k` overshoots the
+        # scored population. Reporting the whole curve makes the frame's own limit visible instead.
+        out[label]["margin_by_k"] = {
+            width: margin_report(rows, retreat, k=width)["margin_to_kth"]
+            for width in range(1, out[label]["scored"] + 1)}
     return out
 
 

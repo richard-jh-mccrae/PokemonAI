@@ -11,13 +11,17 @@ or three frames further on. `tools/train/choice_parity.py` walks there; this is 
 DLL-free by construction, exactly like its sibling — the trace IS the native side and cgpy's committed
 tables supply the card facts.
 
-**Budget-tagged**, same convention as the sibling: a session replays the first N traces in sorted
-order (reproducible without a seed), and the full 377-trace sweep runs on demand
-(``CHOICE_PARITY_FULL=1 python -m pytest tests/parity/test_choice_seam_parity.py``, or
-``python tools/train/choice_parity.py``).
+**NOT budget-tagged, unlike the sibling — measured, not assumed.** `test_apply_seam_parity.py` replays
+a 40-trace subset per session because its full sweep is minutes: it builds two `StateModel`s for each
+of 14 581 modelled steps. This lane's population is the **2254** `_RETREAT` steps alone, and the full
+377-trace sweep measures **~10 s** on this box. So it runs COMPLETE by default and the acceptance
+criterion — *"the resolution-parity lane is green over the 2254 retreat steps and gates in CI"* — is
+discharged literally rather than by a subset that happens to be green. Set ``CHOICE_PARITY_TRACES`` to
+an integer to shorten it locally.
 """
 from __future__ import annotations
 
+import dataclasses
 import os
 import sys
 from pathlib import Path
@@ -30,16 +34,29 @@ sys.path.insert(0, str(REPO / "tools"))
 from common import board_choice as bc                     # noqa: E402
 from train import choice_parity as lane                   # noqa: E402
 
-#: Traces replayed in an ordinary session. 40 is the sibling lane's own figure and buys the same
-#: thing here: four figures of frames and, measured, ~500 choice steps in a few seconds.
-CI_TRACES = 40
+#: Traces replayed per session — **all of them**. See the module docstring: the full sweep is ~10 s
+#: because this lane's population is the retreat steps alone, so subsetting would trade the criterion's
+#: own denominator for nothing. An integer in ``CHOICE_PARITY_TRACES`` shortens it for a local loop.
+CI_TRACES = int(os.environ["CHOICE_PARITY_TRACES"]) if os.environ.get("CHOICE_PARITY_TRACES") else None
 
-FULL = os.environ.get("CHOICE_PARITY_FULL") == "1"
+#: The full corpus's own numbers, so a subset run cannot quietly report as the gate the criterion
+#: names. Measured at this commit: 377 traces / 37 983 frames / 2254 choice steps.
+FULL_CHOICE_STEPS = 2254
+
+
+def _swap_applier(fn):
+    """Swap the retreat key's board synthesis, keeping every other leg of its `ChoiceKind` record.
+
+    `dataclasses.replace` rather than rebuilding the record by hand: a control that reconstructed it
+    would silently drop a leg added later, and then the injected-defect run would differ from the real
+    one for a reason that has nothing to do with the defect."""
+    bc.CHOICE_REGISTRY[bc._RETREAT] = dataclasses.replace(
+        bc.CHOICE_REGISTRY[bc._RETREAT], apply=fn)
 
 
 @pytest.fixture(scope="module")
 def report():
-    return lane.sweep(limit=None if FULL else CI_TRACES)
+    return lane.sweep(limit=CI_TRACES)
 
 
 @pytest.mark.req("REQ-APPLY-0004")
@@ -74,6 +91,10 @@ def test_the_lane_is_not_vacuous(report):
     assert report.choice_steps > 0
     assert report.verified > report.choice_steps * 0.9, str(report)
     assert set(lane.TAKEN) == set(bc.CHOICE_KINDS)
+    # The criterion names 2254 steps; assert the gate actually walked them rather than a subset that
+    # happened to be green. Skipped only when a local run deliberately shortened the corpus.
+    if CI_TRACES is None:
+        assert report.choice_steps == FULL_CHOICE_STEPS, str(report)
 
 
 @pytest.mark.req("REQ-APPLY-0004")
@@ -112,7 +133,7 @@ def test_the_diff_BITES_when_the_synthesis_puts_the_retreating_body_in_the_WRONG
     combat = lane.offline_combat()
     assert lane.sweep(combat=combat, traces=paths).clean           # the same subset, honest
 
-    original = bc._APPLIERS[bc._RETREAT][0]
+    original = bc.CHOICE_REGISTRY[bc._RETREAT].apply
 
     def _appends_instead_of_swapping(model, candidate, *, seat_index):
         obs, writes = original(model, candidate, seat_index=seat_index)
@@ -123,11 +144,11 @@ def test_the_diff_BITES_when_the_synthesis_puts_the_retreating_body_in_the_WRONG
             me["bench"] = [b for i, b in enumerate(bench) if i != promote_idx] + [bench[promote_idx]]
         return obs, writes
 
-    bc._APPLIERS[bc._RETREAT] = (_appends_instead_of_swapping, bc._APPLIERS[bc._RETREAT][1])
+    _swap_applier(_appends_instead_of_swapping)
     try:
         broken = lane.sweep(combat=combat, traces=paths)
     finally:
-        bc._APPLIERS[bc._RETREAT] = (original, bc._APPLIERS[bc._RETREAT][1])
+        _swap_applier(original)
     assert not broken.clean
     assert {d.zone for d in broken.divergences} == {"bodies_in_play", "damage_counters",
                                                     "new_in_play"}
@@ -155,7 +176,7 @@ def test_the_diff_BITES_when_the_DISCARDED_ENERGY_never_reaches_the_discard_pile
     combat = lane.offline_combat()
     assert lane.sweep(combat=combat, traces=paths).clean           # the same subset, honest
 
-    original = bc._APPLIERS[bc._RETREAT][0]
+    original = bc.CHOICE_REGISTRY[bc._RETREAT].apply
 
     def _never_discards(model, candidate, *, seat_index):
         obs, writes = original(model, candidate, seat_index=seat_index)
@@ -164,11 +185,11 @@ def test_the_diff_BITES_when_the_DISCARDED_ENERGY_never_reaches_the_discard_pile
         me["discard"] = list(pre.get("discard") or ())
         return obs, writes
 
-    bc._APPLIERS[bc._RETREAT] = (_never_discards, bc._APPLIERS[bc._RETREAT][1])
+    _swap_applier(_never_discards)
     try:
         broken = lane.sweep(combat=combat, traces=paths)
     finally:
-        bc._APPLIERS[bc._RETREAT] = (original, bc._APPLIERS[bc._RETREAT][1])
+        _swap_applier(original)
     assert not broken.clean
     assert {d.zone for d in broken.divergences} == {"my_discard_contents", "deck_odds",
                                                     "my_deck_count"}

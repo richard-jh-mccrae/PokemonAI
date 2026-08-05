@@ -2917,21 +2917,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         me = self._my_player(obs) or {}
         return [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
 
-    def _attached_tool_stats(self, body: dict | None):
-        """The ``CardStat`` of every Tool attached to ``body`` (`common.retreat_cost`)."""
-        return retreat_cost.attached_tool_stats(body, self._stat_of)
-
     def _attached_retreat_delta(self, body: dict | None) -> int:
         """Σ ``retreatReduction`` over the Tools attached to ``body`` — the SIGNED amount to SUBTRACT
         from a printed Retreat Cost (`common.retreat_cost`, Issue #306)."""
         return retreat_cost.attached_retreat_delta(body, self._stat_of)
-
-    def _retreat_free_granted(self, obs: dict, ma: dict, stat) -> bool:
-        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0100 §8,
-        `common.retreat_cost`)?"""
-        return retreat_cost.retreat_free_granted(
-            ma, stat, my_bodies=self._my_in_play_raws(obs), stat_of=self._stat_of,
-            combat=self.combat)
 
     def _valued_attack_types(self, cid) -> tuple:
         """The TYPED cost (per-slot EnergyType codes; 0 = colourless) of a card's biggest-damage attack

@@ -208,9 +208,11 @@ so it is tripped over rather than discovered.
 from __future__ import annotations
 
 import itertools
-from typing import NoReturn
+from dataclasses import dataclass
+from typing import NamedTuple, NoReturn
 
-from common import board_delta, board_expectation, currency, needs, retreat_cost
+from common import (board_delta, board_expectation, currency, needs, retreat_cost,
+                    snapshot_coverage)
 from common.board_delta import Unmodellable
 from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, option_fingerprint
 from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
@@ -223,10 +225,43 @@ from common.strategy.context import _PLAY, _RETREAT
 CHOICE_KINDS: frozenset[int] = frozenset({_RETREAT})
 
 #: Clause kinds whose write has a deferred target — the 63-step census `board_delta._play` records.
-#: Declared as the CLASS vocabulary; :data:`TARGET_SPACES` is what says which members have a resolver
-#: built, and :data:`_APPLIERS` which have a board synthesis. A member declared here with neither is a
+#: Declared as the CLASS vocabulary; :data:`CHOICE_REGISTRY` is what says which members have a
+#: resolver built and which have a board synthesis. A member declared here with neither is a
 #: recorded census entry, not a silent omission — see this module's header.
 CHOICE_CLAUSES: frozenset[str] = frozenset({"gust", "heal", "accel"})
+
+@dataclass(frozen=True)
+class ChoiceKind:
+    """Every leg of ONE deferred-target key, declared together (see :data:`CHOICE_REGISTRY`).
+
+    ``space``       — ``(model, option, *, seat_index) -> tuple`` of legal target instances.
+    ``canonical``   — ``(model, candidate, *, seat_index) -> hashable``: the equivalence ``space``
+                      enumerates one representative of. NOT the class fingerprint; see
+                      :func:`_retreat_space` for why the two vocabularies both exist.
+    ``rank``        — ``(model, candidate) -> float``, sorted DESCENDING, or None to enumerate in the
+                      space resolver's own deterministic order under the same cap.
+    ``apply``       — ``(model, candidate, *, seat_index) -> (observation, written zones)``, or None
+                      when no board synthesis exists for this key.
+    ``fingerprint`` — ``(observation, candidate, *, seat_index, kind) -> tuple``, the ADR-0091 class
+                      identity taken on the POST-choice board.
+    ``no_applier``  — why ``apply`` is None, for the telemetry line. Required whenever it is."""
+
+    space: object
+    canonical: object
+    rank: object = None
+    apply: object = None
+    fingerprint: object = None
+    no_applier: str = ""
+
+    def __post_init__(self):
+        if (self.apply is None) != (self.fingerprint is None):
+            raise ValueError("`apply` and `fingerprint` are one capability in two halves — a board "
+                             "nothing can fingerprint joins no class, and a fingerprint over a board "
+                             "nothing writes has nothing to take")
+        if self.apply is None and not self.no_applier.strip():
+            raise ValueError("a key with no board synthesis must say WHY — the message is destined "
+                             "for the telemetry line and the modelling backlog, which groups by it")
+
 
 #: The `needs.opponent_target_value` ceiling — `MAX_PRIZE_VALUE` (3) + `_SURVIVAL_CAP` (0.9). The
 #: yardstick that lets a prize-denominated marginal be read as a dimensionless `[0, 1]` relevance,
@@ -238,7 +273,7 @@ TARGET_VALUE_CEILING = needs.TARGET_VALUE_CEILING
 # ── the D7 combination: `value` and `role_priority`, on one sort key ───────────────────────────────
 
 
-def role_span() -> float:
+def role_span(registry: dict | None = None) -> float:
     """``max(abs(priority))`` over the CLOSED role registry — the normaliser that maps an ordinal role
     priority into ``[-1, 1]``.
 
@@ -246,11 +281,19 @@ def role_span() -> float:
     would be a second copy of that table's largest magnitude and would rot silently the first time a
     row is added or re-ruled — which Issue #395 D3/D4 is in flight to do (`attacker` 50, `enabler` 40,
     a prize-gated `avoid`). 1.0 on an empty or all-zero registry, so the division is total and a
-    degenerate sheet contributes exactly nothing rather than raising inside an ordering loop."""
-    return max((abs(float(p)) for p in role_registry().values()), default=0.0) or 1.0
+    degenerate sheet contributes exactly nothing rather than raising inside an ordering loop.
+
+    ``registry`` overrides the shipped sheet. It exists so the property that matters — *a sheet
+    gaining a LARGER magnitude widens the span, or the ``|role / span| <= 1`` bound the D7 proof rests
+    on stops holding* — can be asserted against a hypothetical future sheet without reaching across a
+    module boundary into `matchup_plan`'s private table. `role_registry()` deliberately returns a
+    COPY, so a caller that wanted to test that property otherwise had no handle but the private dict,
+    which is the cross-module private reach this repo forbids."""
+    return max((abs(float(p)) for p in (role_registry() if registry is None
+                                        else registry).values()), default=0.0) or 1.0
 
 
-def gust_rank_key(rows):
+def gust_rank_key(rows, *, registry: dict | None = None):
     """One sort key for a whole opponent-target MENU: `value`, tie-broken by `role_priority`.
 
     ``rows`` is `pilot._opponent_target_rows`' full candidate list — the menu, not one row — because
@@ -302,7 +345,7 @@ def gust_rank_key(rows):
     ceil = float(TARGET_VALUE_CEILING)
     values = [float((r or {}).get("value", 0.0)) for r in (rows or ())]
     quantum = currency.tiebreak_bonus([v / ceil for v in values], k=ceil) if values else 0.0
-    span = role_span()
+    span = role_span(registry)
 
     def key(row: dict) -> float:
         return float((row or {}).get("value", 0.0)) \
@@ -318,6 +361,33 @@ def _no(what, why) -> NoReturn:
     (`apply_option.EngineResolved.clause_gap`). The message is destined for the telemetry line and the
     modelling backlog, which is grouped by exactly this string."""
     raise Unmodellable(f"{what}: {why}")
+
+
+def _my_active(obs: dict, seat_index: int) -> dict | None:
+    """My Active body on ``obs``, or None. One spelling, because three call sites wanted it and a
+    fourth would have grown a fourth `next(...)` walk."""
+    return next((b for b in (_my_side(obs, seat_index).get("active") or ()) if b), None)
+
+
+def _after_discard(model, body: dict, discard_idx) -> tuple:
+    """``(the body minus the discarded Energy cards, the cards that went)``.
+
+    **ONE derivation, because two callers need it and they must not disagree**: the RANKER prices the
+    Build Standing A keeps, and the APPLIER writes the board A lands on — and if those two computed
+    the surviving Energy differently, the prefilter would be ordering boards the synthesis never
+    produces. Spelling it twice is the drift `board_delta.units_for_cards`' own docstring says that
+    function exists to prevent, one level up.
+
+    The surviving ``energies`` are RE-DERIVED from the cards that remain rather than subtracted,
+    because the provision is a property of the HOLDER as well as of the card (Ignition Energy is {C}
+    on a Basic and {C}{C}{C} on an Evolution)."""
+    cards = list(body.get("energyCards") or ())
+    drop = {int(i) for i in discard_idx}
+    kept = [c for i, c in enumerate(cards) if i not in drop]
+    stat = model.card_stat(body.get("id"))
+    after = dict(body, energyCards=kept, energies=board_delta.units_for_cards(
+        model.combat, kept, onto_evolution=getattr(stat, "evolvesFrom", None) is not None))
+    return after, [c for i, c in enumerate(cards) if i in drop]
 
 
 def _my_side(obs: dict, seat_index: int) -> dict:
@@ -399,6 +469,122 @@ def has_deferred_target(model, option: dict, *, seat_index: int) -> bool:
     return True
 
 
+# ── the target CLASS resolver, driven by the compendium's declared vocabulary ─────────────────────
+#
+# ADR-TEMP-392 decision 2: *"Expansion is data-driven off the compendium's target vocabulary, never
+# per-card. The class resolver reads `CLAUSE_SELECTORS["target"]` and its neighbours (`restriction`,
+# `zone`, `source`); a hand-written expander per card hardcodes what is already data."*
+#
+# So the VOCABULARY is `snapshot_coverage`'s and this module declares only which of its members it can
+# evaluate against a BOARD. That split is what keeps the two failure modes apart, and they are
+# different work: a value the compendium never declared is vocabulary DRIFT (someone minted a selector
+# nobody registered), while a declared value with no predicate here is a scoped GAP with a name.
+
+
+class _BodyPlace(NamedTuple):
+    """Where a candidate body sits — the facts a target class needs that its `CardStat` cannot say."""
+    active: bool
+    mine: bool
+
+
+#: Declared `target` values this module can evaluate against a body in play, as
+#: ``(CardStat, _BodyPlace) -> bool``. **A subset of `CLAUSE_SELECTORS["target"]` by construction**,
+#: and `tests/strategy/test_board_choice.py` asserts the containment with a vacuity guard — a
+#: predicate keyed by a value the compendium does not declare is dead code nothing else could catch.
+#:
+#: Read off `CardStat` as the engine actually populates it, verified rather than assumed: the shipped
+#: provider fills `evolvesFrom`, `stage2`, `ex`, `megaEx` and `tera`, and leaves `stage` **None**, so
+#: a predicate keyed on `stage` would silently match nothing. Basic is therefore *"a Pokemon that
+#: evolves from nothing"* and Stage 1 *"evolves from something and is not Stage 2"*.
+BODY_PREDICATES = {
+    "any":             lambda stat, place: True,
+    "pokemon":         lambda stat, place: bool(getattr(stat, "is_pokemon", False)),
+    "any_pokemon":     lambda stat, place: bool(getattr(stat, "is_pokemon", False)),
+    "basic":           lambda stat, place: bool(getattr(stat, "is_pokemon", False))
+                                           and getattr(stat, "evolvesFrom", None) is None,
+    "basic_pokemon":   lambda stat, place: bool(getattr(stat, "is_pokemon", False))
+                                           and getattr(stat, "evolvesFrom", None) is None,
+    "evolution":       lambda stat, place: getattr(stat, "evolvesFrom", None) is not None,
+    "stage1":          lambda stat, place: getattr(stat, "evolvesFrom", None) is not None
+                                           and not getattr(stat, "stage2", False),
+    "stage2":          lambda stat, place: bool(getattr(stat, "stage2", False)),
+    "mega":            lambda stat, place: bool(getattr(stat, "megaEx", False)),
+    "pokemon_ex":      lambda stat, place: bool(getattr(stat, "is_ex_body", False)),
+    "tera":            lambda stat, place: bool(getattr(stat, "tera", False)),
+    "benched":         lambda stat, place: not place.active,
+    "bench_only":      lambda stat, place: not place.active,
+    "opponent_active": lambda stat, place: place.active and not place.mine,
+}
+
+#: Declared `target` values that name a CARD class rather than a body in play — `basic_energy`,
+#: `item`, `supporter` and friends. Listed rather than merely absent from :data:`BODY_PREDICATES`, so
+#: the refusal can say *"that class is not a body"* instead of *"unimplemented"*: they are not work
+#: owed here, they are a category error for a space over bodies, and a backlog that conflated the two
+#: would size work that does not exist.
+_CARD_CLASS_TARGETS = frozenset({
+    "basic_energy", "energy", "item", "own_line", "own_type", "stadium", "supporter", "tool",
+    "trainer", "future",
+})
+
+#: Clause keys the class resolver honours. Anything else refuses, fail-closed against vocabulary
+#: drift — the same discipline `board_expectation._HANDLED_FETCH_KEYS` keeps for its own node. The
+#: neighbours ADR-TEMP-392 decision 2 names are here; `zone` and `source` are absent because they
+#: select a CARD ZONE, and a body already in play is in no such zone.
+_HANDLED_TARGET_KEYS = frozenset({"kind", "target", "target_type", "restriction"})
+
+#: `restriction` values this resolver can evaluate. `mega_only` is Wally's Compassion's.
+_RESTRICTIONS = {
+    "mega_only":   lambda stat, place: bool(getattr(stat, "megaEx", False)),
+    "active_only": lambda stat, place: place.active,
+}
+
+
+def target_predicate(clause: dict):
+    """``(CardStat, _BodyPlace) -> bool`` for one clause's declared target class, or a refusal.
+
+    The whole of ADR-TEMP-392 decision 2 in one function: the vocabulary is the compendium's, the
+    evaluation is this module's, and the three ways it can fail are three DIFFERENT sentences —
+    vocabulary drift, a category error, and a scoped gap — because they are three different pieces of
+    work and a backlog grouped by one message could not tell them apart."""
+    unknown = sorted(set(clause) - _HANDLED_TARGET_KEYS)
+    if unknown:
+        _no(f"clause {clause.get('kind')!r}",
+            f"key(s) {unknown} are not in this resolver's handled set — fail closed against "
+            f"vocabulary drift, exactly as `board_expectation._check_clause` does for its own")
+    declared = snapshot_coverage.CLAUSE_SELECTORS["target"]
+    target = clause.get("target")
+    if target is not None and target not in declared:
+        _no(f"target {target!r}",
+            "not a value `snapshot_coverage.CLAUSE_SELECTORS['target']` declares — the compendium "
+            "grew a selector nobody registered, so nothing here can know what it means")
+    if target in _CARD_CLASS_TARGETS:
+        _no(f"target {target!r}",
+            "names a CARD class, not a body in play — a target space over bodies cannot evaluate it, "
+            "and that is a category error rather than an unbuilt predicate")
+    if target is not None and target not in BODY_PREDICATES:
+        _no(f"target {target!r}",
+            "is declared vocabulary this resolver has no board predicate for yet — a scoped gap, not "
+            "drift and not a category error")
+    legs = [BODY_PREDICATES[target]] if target is not None else [lambda stat, place: True]
+    restriction = clause.get("restriction")
+    if restriction is not None:
+        if restriction not in snapshot_coverage.CLAUSE_SELECTORS.get("restriction", ()):
+            _no(f"restriction {restriction!r}", "not a declared `restriction` selector value")
+        if restriction not in _RESTRICTIONS:
+            _no(f"restriction {restriction!r}",
+                "is declared vocabulary this resolver has no board predicate for yet")
+        legs.append(_RESTRICTIONS[restriction])
+    energy_type = clause.get("target_type")
+    if energy_type is not None:
+        legs.append(lambda stat, place: getattr(stat, "energyType", None) == energy_type)
+
+    def match(stat, place) -> bool:
+        # Fail CLOSED on an unreadable body: a class we cannot evaluate must not silently widen to
+        # *every* body, which is the direction `combat._accel_target_ok` also refuses.
+        return stat is not None and all(leg(stat, place) for leg in legs)
+    return match
+
+
 # ── target spaces ─────────────────────────────────────────────────────────────────────────────────
 
 
@@ -431,7 +617,7 @@ def _retreat_space(model, option: dict, *, seat_index: int) -> tuple:
     first vocabulary (:func:`candidate_class`) and the arithmetic in the second."""
     obs = model.source_obs
     me = _my_side(obs, seat_index)
-    active = next((b for b in (me.get("active") or ()) if b), None)
+    active = _my_active(obs, seat_index)
     if active is None:
         _no("retreat", "no readable Active body on my side, so nothing is leaving the Active Spot")
     bench = list(me.get("bench") or ())
@@ -461,14 +647,13 @@ def _retreat_space(model, option: dict, *, seat_index: int) -> tuple:
 
 
 def _gust_space(model, option: dict, *, seat_index: int) -> tuple:
-    """A gust's space: the opponent BENCH indices its clause can name.
+    """A gust's space: the opponent in-play bodies its clause's declared target CLASS names.
 
     *"Switch in 1 of your opponent's Benched Pokémon to the Active Spot"* — Boss's Orders (1182),
-    quoted from `data/EN_Card_Data.csv`. The AREA is the clause KIND's (a gust reaches across the
-    table, onto their Bench, and switching in a body already Active is not a move); the `target`
-    SELECTOR narrows within it, and an undeclared selector value REFUSES rather than silently reading
-    as *"everything"* — the fail-closed rule `board_expectation._check_clause` keeps for its own
-    vocabulary, applied to this one.
+    quoted from `data/EN_Card_Data.csv`. The clause KIND supplies the SCOPE (a gust reaches across the
+    table, and switching in a body already Active is not a move); the `target` SELECTOR narrows within
+    it, through :data:`BODY_PREDICATES` — never a per-card branch, which is what ADR-TEMP-392 decision
+    2 rules out.
 
     Registered and exercised even though :func:`deferred_target` cannot synthesize the resulting board
     (see the header): the class resolver and :func:`gust_rank_key` are the two halves that ARE
@@ -479,12 +664,9 @@ def _gust_space(model, option: dict, *, seat_index: int) -> tuple:
     if not them:
         _no("gust", "this snapshot carries no opponent side to reach across to")
     clause = _clause_of(model, option, seat_index=seat_index)
-    target = clause.get("target")
-    if target != "any":
-        _no(f"gust target {target!r}",
-            "not a `target` selector value this resolver declares — fail closed against vocabulary "
-            "drift rather than read an unknown class as *every body*")
-    return tuple(i for i, b in enumerate(them.get("bench") or ()) if b)
+    match = target_predicate(clause)
+    return tuple(i for i, b in enumerate(them.get("bench") or ())
+                 if b and match(model.card_stat(b.get("id")), _BodyPlace(active=False, mine=False)))
 
 
 def _clause_of(model, option: dict, *, seat_index: int) -> dict:
@@ -498,28 +680,19 @@ def _clause_of(model, option: dict, *, seat_index: int) -> dict:
                 if c.get("kind") in CHOICE_CLAUSES)
 
 
-#: The class resolvers, keyed by :func:`choice_key`'s answer. A key declared in
-#: :data:`CHOICE_CLAUSES` with no entry here is a recorded census member whose resolver is not built.
-TARGET_SPACES = {
-    _RETREAT: _retreat_space,
-    "gust": _gust_space,
-}
-
-
 def target_space(model, option: dict, *, seat_index: int) -> tuple:
     """The legal target INSTANCES, resolved from the declared target CLASS against the board.
 
     A product space returns tuples — for a retreat, ``(discard set, promoted bench index)``. Empty is
     never returned: a resolver that finds no instance refuses, because a zero-class Expectation is an
     un-enumerated effect whose ``expected()`` raises inside the ordering loop."""
-    key = choice_key(model, option, seat_index=seat_index)
-    resolver = TARGET_SPACES.get(key)
-    if resolver is None:
-        _no(f"choice key {key!r}",
+    entry = CHOICE_REGISTRY.get(choice_key(model, option, seat_index=seat_index))
+    if entry is None:
+        _no(f"choice key {choice_key(model, option, seat_index=seat_index)!r}",
             "declared in `CHOICE_CLAUSES` as a member of the deferred-target census, but no target "
             "SPACE resolver is built for it (Issue #392 § Scope: `_RETREAT` is buildable now, the "
             "`_PLAY` members are not)")
-    space = resolver(model, option, seat_index=seat_index)
+    space = entry.space(model, option, seat_index=seat_index)
     if not space:
         _no(f"choice key {key!r}", "its target class resolves to no legal instance on this board")
     return tuple(space)
@@ -606,19 +779,12 @@ def rank_retreat(model, candidate) -> float:
     a sub-band tie-break scaled by a Pilot constant, and importing a decider's band into a common
     prefilter to order equals would buy nothing the leaf does not then settle."""
     discard_idx, promote_idx = candidate
-    obs = model.source_obs
-    seat = int(model.my_index)
-    me = _my_side(obs, seat)
-    active = next((b for b in (me.get("active") or ()) if b), None)
-    bench = list(me.get("bench") or ())
+    obs, seat = model.source_obs, int(model.my_index)
+    active = _my_active(obs, seat)
+    bench = list(_my_side(obs, seat).get("bench") or ())
     promo = promote_value(PromoteRetreatInputs(body=_promote_body(model, bench[promote_idx]))).total
     payoff = model.mine.attack_payoff(model.mine.view_of(active))
-    cards = list(active.get("energyCards") or ())
-    drop = set(int(i) for i in discard_idx)
-    kept = [c for i, c in enumerate(cards) if i not in drop]
-    a_stat = model.card_stat(active.get("id"))
-    after = dict(active, energyCards=kept, energies=board_delta.units_for_cards(
-        model.combat, kept, onto_evolution=getattr(a_stat, "evolvesFrom", None) is not None))
+    after, _went = _after_discard(model, active, discard_idx)
     return float(promo) + _build_standing(model, after, payoff.attack_id, payoff.damage)
 
 
@@ -632,9 +798,8 @@ def rank_retreat(model, candidate) -> float:
 #: PILOT derivation over the Read, the Brief and the KO clock, none of which a `StateModel` exposes. So
 #: the composer passes it in through ``ranker=`` at the call site that holds the rows; storing a
 #: menu-shaped callable in a per-candidate registry would make every reader check which shape they got.
-TARGET_RANKERS = {
-    _RETREAT: rank_retreat,
-}
+#: (Built from :data:`CHOICE_REGISTRY` below — one declaration, two names.)
+TARGET_RANKERS: dict = {}
 
 
 # ── board synthesis ───────────────────────────────────────────────────────────────────────────────
@@ -659,17 +824,11 @@ def _apply_retreat(model, candidate, *, seat_index: int) -> tuple:
     a = dict(actives[0])
     writes = {"allowance_retreat_used", "bodies_in_play"}
 
-    drop = set(int(i) for i in discard_idx)
-    if drop:
-        cards = list(a.get("energyCards") or ())
-        kept = [c for i, c in enumerate(cards) if i not in drop]
-        a_stat = model.card_stat(a.get("id"))
-        a["energyCards"] = kept
-        # RE-DERIVED, never subtracted: the provision is a property of the HOLDER as well as of the
-        # card, so `units_for_cards` is the one model of it (`board_delta`, public since Issue #392).
-        a["energies"] = board_delta.units_for_cards(
-            model.combat, kept, onto_evolution=getattr(a_stat, "evolvesFrom", None) is not None)
-        me["discard"] = list(me.get("discard") or ()) + [c for i, c in enumerate(cards) if i in drop]
+    if discard_idx:
+        # The SAME derivation the ranker prices, so the prefilter cannot order a board this never
+        # writes (`_after_discard`). `docs/rulebook.txt` L78 — the paid cards leave play.
+        a, went = _after_discard(model, a, discard_idx)
+        me["discard"] = list(me.get("discard") or ()) + went
         writes.update({"attached_energy", "my_discard_contents"})
 
     actives[0], bench[promote_idx] = bench[promote_idx], a
@@ -694,44 +853,53 @@ def _fingerprint_retreat(after_obs: dict, candidate, *, seat_index: int, kind: i
                  for area, index in ((AREA_ACTIVE, 0), (AREA_BENCH, promote_idx)))
 
 
-#: The board syntheses, keyed by :func:`choice_key`'s answer. **A key in :data:`TARGET_SPACES` with no
-#: entry here refuses**, and the refusal names the missing clause application rather than the missing
-#: entry — see this module's header on the unfiled `gust`/`heal`/`accel` apply-seam gap.
-_APPLIERS = {
-    _RETREAT: (_apply_retreat, _fingerprint_retreat),
-}
-
-#: Why each registered-but-unappliable key refuses, in `snapshot_coverage.CLAUSE_WRITES` terms. Spelled
-#: per key so the modelling backlog groups by an actionable sentence rather than by "not implemented".
-_NO_APPLIER = {
-    "gust": "`CLAUSE_WRITES['gust']` is non-empty ({bodies_in_play, special_conditions, "
-            "transient_grants}), so `board_delta._play` refuses the play and no apply-seam transition "
-            "writes those zones. The target SPACE and the Target Ranker are built and graded; only the "
-            "clause application is missing, and NO ISSUE CURRENTLY OWNS IT (Issue #392 § Scope — "
-            "#383 shipped chance nodes gated on REVEALING_CLAUSES, #303 minted the clause kind)",
-}
-
-
-# ── the node ──────────────────────────────────────────────────────────────────────────────────────
-
-
 def _canonical_retreat(model, candidate, *, seat_index: int) -> tuple:
     """A retreat candidate's equivalence key — ``(sorted discarded card ids, promoted bench index)``.
 
     The coordinates :func:`_retreat_space` dedupes in, so two index tuples naming the same Energy
     cards key alike whichever copies the picker happened to name."""
     discard_idx, promote_idx = candidate
-    cards = list((next((b for b in (_my_side(model.source_obs, seat_index).get("active") or ())
-                        if b), None) or {}).get("energyCards") or ())
+    cards = list((_my_active(model.source_obs, seat_index) or {}).get("energyCards") or ())
     return (tuple(sorted((cards[i] or {}).get("id") for i in discard_idx
                          if 0 <= int(i) < len(cards))), promote_idx)
 
 
-#: How a candidate reduces to the equivalence :func:`target_space` enumerates in. Keyed like every
-#: other registry here, so a kind gains this in the same shape it gains a space.
-_CANONICAL = {
-    _RETREAT: _canonical_retreat,
+def _canonical_identity(model, candidate, *, seat_index: int):
+    """The candidate IS its own equivalence key — for a space whose members are already the distinct
+    choices (a gust names one opposing body; there is no picker freedom to collapse)."""
+    return candidate
+
+
+#: **ONE registry entry per deferred-target key** — every leg of a key declared together.
+#:
+#: It was five parallel maps (space / ranker / apply / fingerprint / canonical / refusal-reason) kept
+#: in sync by prose, which is the shape where a key gains a space and silently never gains a canonical
+#: form. One record makes the sync obligation STRUCTURAL: adding a member is one literal, and a leg
+#: nobody filled is a `None` a reader can see rather than an absence in a map they did not think to
+#: check. The sibling modules each carry one dispatch table for the same reason
+#: (`board_delta.TRANSITIONS`).
+#:
+#: ``apply``/``fingerprint`` are ``None`` for a key whose board synthesis does not exist, and
+#: ``no_applier`` is why — spelled per key so the modelling backlog groups by an actionable sentence
+#: rather than by "not implemented".
+CHOICE_REGISTRY: dict = {
+    _RETREAT: ChoiceKind(
+        space=_retreat_space, canonical=_canonical_retreat, rank=rank_retreat,
+        apply=_apply_retreat, fingerprint=_fingerprint_retreat),
+    "gust": ChoiceKind(
+        space=_gust_space, canonical=_canonical_identity,
+        no_applier="`CLAUSE_WRITES['gust']` is non-empty ({bodies_in_play, special_conditions, "
+                   "transient_grants}), so `board_delta._play` refuses the play and no apply-seam "
+                   "transition writes those zones. The target SPACE and the Target Ranker are built "
+                   "and graded; only the clause application is missing, and NO ISSUE CURRENTLY OWNS "
+                   "IT (Issue #392 § Scope — Issue #383 shipped chance nodes gated on "
+                   "REVEALING_CLAUSES, Issue #303 minted the clause kind)"),
 }
+
+TARGET_RANKERS.update({key: k.rank for key, k in CHOICE_REGISTRY.items() if k.rank is not None})
+
+
+# ── the node ────────────────────────────────────────────────────────────────────────────────────────
 
 
 def candidate_class(model, option: dict, candidate, *, seat_index: int) -> tuple:
@@ -742,7 +910,7 @@ def candidate_class(model, option: dict, candidate, *, seat_index: int) -> tuple
     wrong — the space enumerates one representative per equivalence, so the engine naming an equivalent
     other representative would read as an enumeration hole that is not one. See :func:`_retreat_space`
     for why this vocabulary exists beside the fingerprint rather than instead of it."""
-    return _CANONICAL[choice_key(model, option, seat_index=seat_index)](
+    return CHOICE_REGISTRY[choice_key(model, option, seat_index=seat_index)].canonical(
         model, candidate, seat_index=seat_index)
 
 
@@ -752,7 +920,7 @@ def realise(model, option: dict, candidate, *, seat_index: int) -> tuple:
 
     `tools/train/choice_parity.py` is the reason it is public rather than an implementation detail:
     that lane holds the target a trace records as TAKEN and needs the board that instance produces, to
-    diff against the recorded one. Reaching into `_APPLIERS` for it would be the cross-module private
+    diff against the recorded one. Reaching into `CHOICE_REGISTRY` for it would be the cross-module private
     reach `board_delta`'s own promotions exist to avoid.
 
     The candidate is realised **verbatim**, in its own coordinates — not through
@@ -761,10 +929,10 @@ def realise(model, option: dict, candidate, *, seat_index: int) -> tuple:
     canonical representative instead would disagree with the recorded board on a difference the game
     does not make. Enumeration is checked in the equivalence vocabulary; arithmetic is checked here,
     on exactly what happened."""
-    apply_fn, fingerprint_fn = _APPLIERS[choice_key(model, option, seat_index=seat_index)]
-    after_obs, _writes = apply_fn(model, candidate, seat_index=seat_index)
-    return after_obs, fingerprint_fn(after_obs, candidate, seat_index=seat_index,
-                                     kind=int((option or {}).get("type", -1)))
+    entry = CHOICE_REGISTRY[choice_key(model, option, seat_index=seat_index)]
+    after_obs, _writes = entry.apply(model, candidate, seat_index=seat_index)
+    return after_obs, entry.fingerprint(after_obs, candidate, seat_index=seat_index,
+                                        kind=int((option or {}).get("type", -1)))
 
 
 def deferred_target(model, option: dict, *, seat_index=None, context=None,
@@ -817,14 +985,14 @@ def deferred_target(model, option: dict, *, seat_index=None, context=None,
             f"side's future")
 
     key = choice_key(model, option, seat_index=seat_index)
-    entry = _APPLIERS.get(key)
-    if entry is None:
-        _no(f"choice key {key!r}", _NO_APPLIER.get(
-            key, "no board synthesis is registered for it, so the resulting board cannot be written"))
-    apply_fn, fingerprint_fn = entry
+    entry = CHOICE_REGISTRY.get(key)
+    if entry is None or entry.apply is None:
+        _no(f"choice key {key!r}",
+            (entry.no_applier if entry is not None and entry.no_applier else
+             "no board synthesis is registered for it, so the resulting board cannot be written"))
 
     space = target_space(model, option, seat_index=seat_index)
-    rank = ranker if ranker is not None else TARGET_RANKERS.get(key)
+    rank = ranker if ranker is not None else entry.rank
     # Descending rank, then the candidate itself: the ordering must be a pure function of the board or
     # two processes enumerate different sets, which is the reproducibility guarantee
     # `option_equivalence.class_representatives` keeps for exactly the same reason.
@@ -838,8 +1006,8 @@ def deferred_target(model, option: dict, *, seat_index=None, context=None,
     # is built only for the classes that survive.
     distinct: dict = {}
     for candidate in ordered:
-        after_obs, _writes = apply_fn(model, candidate, seat_index=seat_index)
-        fingerprint = fingerprint_fn(after_obs, candidate, seat_index=seat_index, kind=kind)
+        after_obs, _writes = entry.apply(model, candidate, seat_index=seat_index)
+        fingerprint = entry.fingerprint(after_obs, candidate, seat_index=seat_index, kind=kind)
         distinct.setdefault(fingerprint, after_obs)
     total = len(distinct)
     kept = list(distinct.items())[:int(cap)]
@@ -854,7 +1022,7 @@ def deferred_target(model, option: dict, *, seat_index=None, context=None,
         truncated=total - len(kept))
 
 
-__all__ = ("CHOICE_KINDS", "CHOICE_CLAUSES", "TARGET_VALUE_CEILING", "TARGET_SPACES",
-           "TARGET_RANKERS", "role_span", "gust_rank_key", "choice_key", "target_space",
+__all__ = ("CHOICE_KINDS", "CHOICE_CLAUSES", "TARGET_VALUE_CEILING", "ChoiceKind",
+           "CHOICE_REGISTRY", "TARGET_RANKERS", "role_span", "gust_rank_key", "choice_key", "target_space",
            "rank_retreat", "has_deferred_target", "candidate_class", "realise",
            "deferred_target")
