@@ -87,8 +87,16 @@ _REFRESH_CYCLE = 20        # the DRAW side, flat: cards I have not seen are spec
 # cards we cannot see, i.e. an expectation over their representative build — and 59.4% of that build
 # prices `_role_value` 0 today, because role declarations come from OUR deck. The missing 59% is
 # exactly their attackers and wincons, so a "derived" GIFT would be biased DOWNWARD precisely where it
-# matters, making "Judge into their small hand" look cheap — ml f111's CRITICAL blunder. They retire
-# when `gusting-keepcost-design.md` §2's shared opponent role sheet exists, not before.
+# matters, making "Judge into their small hand" look cheap — ml f111's CRITICAL blunder.
+#
+# ⚠️ **The prerequisite is STILL UNMET, and Issue #395 did not discharge it** (D9). That issue built
+# the shared opponent role sheet `gusting-keepcost-design.md` §2 names — `matchup_plan.ROLE_REGISTRY`
+# plus `derive_general_roles` — and it is deliberately NOT the quantity these rates need. It is an
+# ORDINAL PRIORITY over bodies IN PLAY; grading a hand strip needs a WORTH over cards we cannot see,
+# an expectation across their representative build. The two are different quantities and citing the
+# first does not supply the second. `card_worth.role_value` is untouched, so the 59.4% figure above is
+# unchanged and remains exactly the reason. These retire when that worth exists, not before — and a
+# later reader must not read "the role sheet exists now" as the condition having been met.
 _REFRESH_OPPONENT_HAND_STRIP = 4   # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
 _REFRESH_OPPONENT_HAND_GIFT = 8    # per card HANDED to them: Judge into a 1-card opponent hand REFILLS
                            # them to 4. Priced like a shed — a card in their hand is as real as one in
