@@ -68,14 +68,14 @@ STRATEGY = Strategy(
     starter_priority=[CINDERACE, STARYU],
     params={"setup_energy_target": 3,    # aspirational target (Nebula Beam CCC) — future attach-priority
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
-                                          # functional consumer). The remaining engine sims
-                                          # (lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
+                                          # functional consumer). Tier-1 engine sims (planner_engine_rank,
+                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
                                           # hold the submission manifest at Tier-0 (test-pinned).
             "my_archetype": "Cinderace / Mega Starmie ex",   # Posture favorability key (ADR-0026 lever A)
             "reactivity": "solitaire",    # deck-personality (learnthetcg): turbo aggro plays its own
-                                          # game; don't over-react to the opponent. UNCONSUMED since
-                                          # POC-T4/5 (Issue #386): the planner forgo-KO rung that read it
-                                          # is DELETED. A DECLARATION, not a live lever.
+                                          # game; don't over-react to the opponent. CONSUMED by the
+                                          # planner forgo-KO rung (planner.py `_forgo_ko`: a "solitaire"
+                                          # deck takes the KO and never forgoes it) — LIVE, default-ON.
             "preferred_start": "second"},  # turbo: attack T1 -> general `honor-preferred-start` (-30 on YES)
     hypotheses=[],                        # empty by design — see fold table in the docstring
 )

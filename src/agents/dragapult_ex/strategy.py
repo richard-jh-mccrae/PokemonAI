@@ -92,16 +92,22 @@ HYPOTHESES = [
         when=lambda c: c.option_type == _PLAY and c.card_id == FEZANDIPITI_EX
         and c.board.line_ready and c.board.my_bench < 5,   # "entering the grind" (ADR-0040 migration:
         weight=18, status="assumed"),                      # was plan in (RACE, STABILIZE) — ≡ today
-    # `play-risky-ruins-when-net-positive` (+15) DELETED — POC-T4/5, Issue #386. It was a DECK rung
-    # standing in for one quantity the leaf now computes: what playing a Stadium does to the board.
-    # Risky Ruins is symmetric, so its worth is the difference between the chip it lands on THEIR
-    # future bench entries and the chip it lands on ours — a `state_value` delta, and the composer
-    # scores the Stadium play as an ordinary MODELLED option against every other line. Its two gates
-    # survive as facts rather than as a rung: `wincon_in_play` was a proxy for *"our fragile line is
-    # already through the vulnerable phase"*, which the leaf reads off the bodies themselves, and
-    # `opp_stadium_in_play` is a board fact the transition already applies (replacing their Stadium
-    # removes its effect). Issue #263 § *The families this prices*: *"Stadium (deck-rung retired; the
-    # play prices by its state effect)"*.
+    Hypothesis(
+        id="play-risky-ruins-when-net-positive",
+        rationale="Play Risky Ruins (SYMMETRIC bench-chip Stadium: 20 damage to any Basic non-{D} a player "
+                  "benches) only when net-positive for US: place ours to chip the opponent ONLY once our "
+                  "win-condition is in play (`board.wincon_in_play`). Before the payoff lands we are the "
+                  "bench-heavier side still laying our fragile 70-HP Dreepy line, so the symmetric chip damages "
+                  "US more (f24, CRITICAL: turn 2 vs a thin Cinderace/Mega Starmie set-up with ~no future "
+                  "bench-entries, Risky Ruins only bled our own developing spread). The OPPONENT's Stadium being "
+                  "up is a second, INDEPENDENT reason (replacing it denies them regardless of the chip). The "
+                  "engine enforces 'different from the Stadium in play', so this never re-plays our own Ruins. "
+                  "`wincon_in_play` is the sound board-only floor; the full opp-aware net-value (their remaining "
+                  "benchable non-{D} basics vs ours, via the Read) and the skip-vs-{D}-decks refinement are deferred.",
+        when=lambda c: c.option_type == _PLAY and c.card_id == RISKY_RUINS
+        and ((c.board.stadium_in_play is None and c.board.wincon_in_play)
+             or c.board.opp_stadium_in_play),
+        weight=15, status="assumed"),
 ]
 
 STRATEGY = Strategy(
@@ -131,8 +137,8 @@ STRATEGY = Strategy(
     starter_priority=[BUDEW, MUNKIDORI, DUNSPARCE, FEZANDIPITI_EX, DREEPY, MEOWTH_EX],
     params={"setup_energy_target": 2,     # FP for Phantom Dive
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
-                                          # functional consumer). The remaining engine sims
-                                          # (lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
+                                          # functional consumer). Tier-1 engine sims (planner_engine_rank,
+                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
                                           # hold the submission manifest at Tier-0 (test-pinned).
             "preferred_start": "second",  # Budew item-lock fires T1 only going 2nd (1st player can't attack
                                           # OR play a Supporter T1 — rules.md L72-73); guru-unanimous. (was "first")

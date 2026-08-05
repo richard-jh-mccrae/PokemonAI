@@ -378,19 +378,17 @@ STRATEGY = Strategy(
     starter_priority=[SOLROCK, RIOLU, MAKUHITA, LUNATONE, MEOWTH_EX],
     params={"setup_energy_target": 2,    # FF — toward the first Mega Brave (build-active-wincon target)
             "search_budget": 0,           # inert since ADR-0064 removed the Tier-6 escalation (its only
-                                          # functional consumer). The remaining engine sims
-                                          # (lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
+                                          # functional consumer). Tier-1 engine sims (planner_engine_rank,
+                                          # lethal_verify, lethal_family) run UNBUDGETED at 0. Kept at 0 to
                                           # hold the submission manifest at Tier-0 (test-pinned).
             "preferred_start": "first",  # setup-heavy evolution deck: take the develop turn
                                          # (general `honor-preferred-start` reads this at the coin toss)
             "reactivity": "solitaire",   # deck-personality (learnthetcg): a linear evolution-beatdown
                                          # prioritises its OWN setup; don't over-play-around the opponent.
-                                         # UNCONSUMED since POC-T4/5 (Issue #386): its one reader was the
-                                         # planner's forgo-KO gate, and that gate is DELETED — under
-                                         # differencing, declining a KO is one sequence out-scoring
-                                         # another, so no opt-out is needed to stop over-reacting. Kept as
-                                         # a DECLARATION (it is deck doctrine, and the Read layer is the
-                                         # natural next consumer), not as a live lever.
+                                         # WIRED: `_forgo_ko` (planner.py:860) reads this — a solitaire
+                                         # deck skips the develop/END over-reaction lines and races its own
+                                         # plan (the line-1 alt-attack exemption keeps Aura Jab reachable).
+                                         # NB the rung is only reached when `forgo_ko` is ON (defaults OFF).
             "my_archetype": "Hariyama / Mega Lucario ex / Solrock"},  # Posture favorability key (ADR-0026)
     hypotheses=HYPOTHESES,
 )
