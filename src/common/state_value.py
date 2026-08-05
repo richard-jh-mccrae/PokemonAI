@@ -718,8 +718,9 @@ REGISTRY: tuple[TermFamily, ...] = (
             "forbids exactly that). The accessor is substrate, owned by T1's completeness contract "
             "(Issue #260); named here rather than derived inline, because `ceil(hp / damage)` "
             "written in this module WOULD be the second opinion.",
-            "the SURVIVAL half of `opponent_target_value` — its `survival_shift` is a Δ of "
-            "`turns_to_ko_me` under REMOVAL of the body, and the model exposes no removal-delta "
+            "the SURVIVAL half of `opponent_target_value` — its `survival_shift` is a Δ of the "
+            "Fractional Survival Clock (`survival_clock().exact`, ADR-0117; it was a Δ of the "
+            "INTEGER `turns_to_ko_me` before) under REMOVAL of the body, and the model exposes no removal-delta "
             "route (the live consumer at `pilot.py` bypasses to CombatMath, which the sole-supplier "
             "ruling forbids here). Passed as 0, so this family prices prize_advance only and a body "
             "whose removal buys turns without yielding prizes reads flat. T1 (Issue #260) owns the "
@@ -1110,6 +1111,13 @@ def _exposed_bodies(model: "StateModel") -> tuple:
 
 def _survival_clock(model: "StateModel", body) -> int:
     """**THE** clock on one of my bodies — the single call two families read (Issue #332).
+
+    ⚠️ Not to be confused with `TheirSide.survival_clock`, which since ADR-0117 returns a
+    `SurvivalClock` carrying BOTH the integer and the interpolated crossing point. This function
+    keeps its name and its `int`: `survival` and `readiness` grade against scale anchors calibrated
+    on whole turns, and adopting the fractional reading here is a separate, unmeasured change that
+    ADR-0117 explicitly left out of scope. It reads `.turns` by going through
+    :meth:`TheirSide.turns_to_ko_me`, so it is still ONE accumulation, not a second opinion.
 
     Extracted from :func:`_exposed_bodies` rather than copied into the readiness path, and the
     extraction is the correctness rather than tidiness. `survival` grades exposure by this clock and

@@ -358,6 +358,45 @@ def _matched_slots(slots, units, caps=None) -> int:
     return 0
 
 
+@dataclass(frozen=True)
+class SurvivalClock:
+    """Both readings of ONE :meth:`CombatMath.survival_clock` accumulation — the **Fractional
+    Survival Clock** (ADR-0117, amending ADR-0071 decision 4).
+
+    ``turns`` is the shipped integer: the first turn at which accumulated incoming damage reaches
+    my HP, or ``max_t + 1`` when the body survives the horizon. Every consumer that existed before
+    ADR-0117 reads this and is unaffected by the field beside it.
+
+    ``exact`` is where inside that turn the crossing actually falls, interpolated linearly:
+
+        exact = (turns - 1) + (hp - dealt(turns - 1)) / incoming(turns)
+
+    The precision is not new information — ``dealt`` is continuous and the accumulation already
+    computes it; the integer threshold is simply where it was being discarded.
+
+    ⚠️ **This recovers a MINORITY of the Flat Tie.** Quantization was 10.0% of that defect; the rest
+    is a **Structural Zero** no resolution can touch, because :meth:`incoming` is a per-turn MAXIMUM
+    over their forms — removing a body that never leads that maximum moves nothing, at any
+    precision. Do not cite this class as the fix for Issue #398; it is a prerequisite for one.
+    Numbers, the counter-example that narrowed the claim, and the reasoning live in ADR-0117
+    and are deliberately NOT restated here; the instrument is
+    ``tools/train/probes/fractional_clock_sweep.py``.
+
+    The two fields are produced by ONE loop rather than two passes, so they cannot drift — the
+    failure mode ADR-0117 explicitly rejected a second oracle to avoid. When there is no
+    crossing inside the horizon, ``exact`` repeats ``turns`` exactly rather than extrapolating past
+    it: there is nothing to interpolate, and inventing a value beyond the window would be a claim
+    the accumulation does not make.
+
+    ``exact`` is opt-in. A caller taking it states why at the call site; the integer stays the
+    default, so ADR-0071 decision 4's accumulate semantics are unchanged for every family that was
+    not measured here (`survival`, `readiness`, `threat` each carry scale anchors calibrated
+    against the integer clock)."""
+
+    turns: int
+    exact: float
+
+
 class CombatMath:
     """The oracle instance the Pilot builds once and delegates to.
 
@@ -1922,10 +1961,46 @@ class CombatMath:
         ``my_bench`` / ``key_ids`` / ``reading`` are the harvest inputs; omitting ``my_bench`` reads
         the body ALONE, which reproduces the per-body answer for an undeclared caller, and the
         default ``reading`` is the conservative one. Removing an opponent body can only RAISE the
-        result, so the Δ across a removal is the turns of survival bought."""
+        result, so the Δ across a removal is the turns of survival bought.
+
+        Returns the INTEGER reading. :meth:`survival_clock` runs the identical accumulation and
+        additionally reports where INSIDE that turn the crossing falls; this method is defined as
+        its ``.turns`` field, so the two readings cannot disagree."""
+        return self.survival_clock(
+            my_body, opp_bodies, charged=charged, max_t=max_t, context=context,
+            my_benched=my_benched, my_bench=my_bench, key_ids=key_ids, reading=reading,
+            opp_active=opp_active, switch_enabler=switch_enabler).turns
+
+    def survival_clock(self, my_body: dict | None, opp_bodies, *, charged: dict | None = None,
+                       max_t: int = 8, context: dict | None = None, my_benched: bool = False,
+                       my_bench=(), key_ids=frozenset(), reading: str = HARVEST_POSSIBLE,
+                       opp_active: dict | None = None,
+                       switch_enabler: bool = False) -> SurvivalClock:
+        """:meth:`turns_to_ko_me`'s accumulation, reported at BOTH resolutions — see
+        :class:`SurvivalClock` for what each field means and why the fractional one exists.
+
+        Same arguments, same semantics, same answer in ``.turns``. The only addition is ``.exact``,
+        the interpolated crossing point, which is arithmetic over values this loop already
+        produces (``dealt``, ``incoming(t)``, ``hp``) — no new constant and no second oracle, so
+        there is nothing that could drift from the integer beside it.
+
+        The BENCH leg has no accumulation of its own to interpolate: :meth:`bench_harvest_clock`
+        answers a shared-budget ALLOCATION question in whole turns, and there is no running total
+        whose crossing could be read finer. It reports ``exact == turns``, which is honest rather
+        than lossy — that precision was never computed there in the first place. If the bench leg
+        ever needs the same discrimination, the fix is to widen the harvest clock, not to
+        manufacture a fraction here."""
         hp = (my_body or {}).get("hp", 0)
         if not hp:
-            return max_t + 1
+            return SurvivalClock(max_t + 1, float(max_t + 1))
+        if hp < 0:
+            # A NEGATIVE hp is already past dead, and the accumulation cannot interpolate a crossing
+            # it started on the far side of — `dealt >= hp` is true at t=1 before anything is dealt,
+            # so the divisor would be the turn's zero damage. The integer route answered 1 here
+            # before ADR-0117 and still must: this is the byte-identical guarantee, and a
+            # regression to ZeroDivisionError on a body the caller already knows is dead is not a
+            # sharper answer, just a louder one.
+            return SurvivalClock(1, 1.0)
         horizon = max(1, int(max_t))
         if my_benched:
             bench = list(my_bench) or [my_body]
@@ -1936,14 +2011,19 @@ class CombatMath:
             clock = self.bench_harvest_clock(bench, opp_bodies, charged=charged, max_t=horizon,
                                              key_ids=key_ids, reading=reading,
                                              opp_active=opp_active)
-            return clock.get(me, horizon + 1)
+            turns = clock.get(me, horizon + 1)
+            return SurvivalClock(turns, float(turns))
         dealt = 0
         for t in range(1, horizon + 1):
-            dealt += self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
-                                   opp_active=opp_active, switch_enabler=switch_enabler)
+            hit = self.incoming(my_body, opp_bodies, t, charged=charged, context=context,
+                                opp_active=opp_active, switch_enabler=switch_enabler)
+            dealt += hit
             if dealt >= hp:
-                return t
-        return horizon + 1
+                # ``hit`` is necessarily > 0 here — the running total was BELOW ``hp`` before it
+                # (0 at t=1, and ``hp`` is non-zero above), so ``hit`` is what crossed. A guard
+                # would only hide a future change to that invariant, so there isn't one.
+                return SurvivalClock(t, (t - 1) + (hp - (dealt - hit)) / hit)
+        return SurvivalClock(horizon + 1, float(horizon + 1))
 
 
     def discard_recur_fuel(self, body: dict | None, opp_discard_energy: dict | None, *,

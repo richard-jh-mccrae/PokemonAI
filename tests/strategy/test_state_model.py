@@ -327,19 +327,24 @@ def test_the_survival_clock_accepts_the_kwargs_the_bypasses_carry():
 def test_the_survival_clock_memo_keys_on_its_arguments():
     """A memo that ignores an argument is a trap the sibling `incoming` already had to be fixed for
     (Issue #213): two callers passing different harvest readings must not share one answer. Asserted
-    by giving one call a distinguishing argument and requiring the oracle to be consulted again."""
+    by giving one call a distinguishing argument and requiring the oracle to be consulted again.
+
+    Counts consults of `CombatMath.survival_clock`, the method the model route reaches since
+    ADR-0117 — `turns_to_ko_me` is its `.turns` view, so ONE memo entry serves both readings and
+    this test covers both. Patching the old name here counted nothing at all and failed loudly,
+    which is the instrument doing its job rather than a reason to weaken it."""
     m = _model(_player(active=_pult(), bench=[_poke(MUNKIDORI, hp=70, serial=2)]),
                _player(active=_poke(MEGA_LUC, hp=340, serial=3, energies=[E_R, E_R])))
     body = m.mine.active.body
 
     calls = []
-    real = m.theirs._combat.turns_to_ko_me
+    real = m.theirs._combat.survival_clock
 
     def counting(*a, **kw):
         calls.append(kw.get("my_benched"))
         return real(*a, **kw)
 
-    m.theirs._combat.turns_to_ko_me = counting
+    m.theirs._combat.survival_clock = counting
     m.theirs.turns_to_ko_me(body, my_benched=False)
     m.theirs.turns_to_ko_me(body, my_benched=False)          # memo hit — no second consult
     m.theirs.turns_to_ko_me(body, my_benched=True)           # different question — must re-consult

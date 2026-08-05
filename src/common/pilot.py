@@ -8795,8 +8795,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         phase × survival_shift` (`needs.opponent_target_value`) for every opponent in-play body —
         the ONE place both the S3a diagnostic (deleted by Issue #261 item 2h) and the live
         `gust_target` slot emission (`_resolve_needs`) read it, so they cannot drift apart.
-        `survival_shift` is the turns of survival bought by removing the body (Δ
-        `combat.turns_to_ko_me` via the S1 curve); `prize_advance` is its prize value (the if-KO'd
+        `survival_shift` is the turns of survival bought by removing the body — a Δ of the
+        **Fractional Survival Clock** (`combat.survival_clock().exact`, ADR-0117), so it is a
+        real number rather than whole turns; at integer resolution most removals quantise to 0 and
+        the ranking flat-ties. `prize_advance` is its prize value (the if-KO'd
         term); `phase` is the KO-race scale (`needs.phase_scale`). A THREAT read, so it keeps the
         conservative default reading; `opp_active` is passed for the promotion gate, which opens
         correctly when the loop removes it (the replacement Active is chosen from the Bench for
@@ -8858,7 +8860,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # threaded leg against a blind one — the two legs are one question by construction.
         clock = dict(bodies=bodies, charged=None, opp_active=opp_active, switch_enabler=enabler,
                      context=self._opp_attack_context)
-        base_t = model.theirs.turns_to_ko_me(ma, **clock)
+        # THE FRACTIONAL READING, opted into here and nowhere else (ADR-0117). `survival_shift`
+        # is a Δ of this clock under removal of one of their bodies, and the integer reading threw
+        # away the size of that move: where a removal DOES shift the clock, `dealt` already knows by
+        # how much (`incoming` prices through the Damage Formula and its evolution reach is maximal
+        # at t=1, so energy cost, scaled damage, riders, weakness and the full forward closure are
+        # all in there). This reads the crossing point instead of the turn it lands in.
+        #
+        # ⚠️ It fixes a MINORITY of the Flat Tie. `incoming` is a per-turn MAXIMUM, so a body scores
+        # only where it is the unique lead at some turn before the crossing — most opponent bodies
+        # never lead, and price at EXACTLY 0 at any resolution (a Structural Zero). The Active is
+        # usually that lead, so on the BENCH, which is the only scope `gust_target_slot` reads, this
+        # term still ranks almost nothing. That is Issue #398's open defect, not something this line
+        # claims to have solved. Numbers and derivation: ADR-0117, not restated here.
+        #
+        # The other clock families (`survival`, `readiness`, `threat`) keep the integer: each
+        # carries scale anchors calibrated against it, and widening them is a separate, unmeasured
+        # change.
+        base_exact = model.theirs.survival_clock(ma, **clock).exact
         # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once for the whole decision
         # rather than per body: which opponent bodies die to our Knock Out this turn, and so deny
         # nothing. Keyed by the row's own (area, bi) convention. Only built when the read is armed.
@@ -8870,8 +8889,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                       for j in self._bench_doomed_by_me(ma, bench_list)))
         rows = []
         for i, b in enumerate(bodies):
-            shift = model.theirs.turns_to_ko_me(
-                ma, **dict(clock, bodies=bodies[:i] + bodies[i + 1:])) - base_t
+            shift = model.theirs.survival_clock(
+                ma, **dict(clock, bodies=bodies[:i] + bodies[i + 1:])).exact - base_exact
             prize = model.theirs.view_of(b).prize_value
             val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
             area, bi = ("active", i) if i < len(active_list) else ("bench", i - len(active_list))
@@ -9433,6 +9452,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # `self._opp_attack_context` is `None` on a hand-built board that never went through
         # `_board`, which reproduces exactly today's reading rather than raising — the same
         # fail-to-current-behaviour contract `_deny_rows` gives such a caller.
+        #
+        # STAYS ON THE INTEGER READING, stated because the sibling Δ did not (ADR-0117).
+        # `_opponent_target_rows`' `survival_shift` took the Fractional Survival Clock and this
+        # `strip_shift` lands in the SAME row dict, so the asymmetry is visible and needs a reason
+        # rather than a shrug. The reason is scope, not principle: this Δ's consumer is ADR-0084
+        # decision 7's LEXICOGRAPHIC TIEBREAK, whose ordering was measured under whole turns, and
+        # the fractional reading has not been measured here. CONTEXT.md's Two Clocks entry records
+        # the open half — `strip_shift > 0` still means "delays my death by a whole turn or more",
+        # the 128-of-218 gap Issue #217 measured. Widening it is unscoped work, not an oversight.
         ctx = self._opp_attack_context
         base = model.theirs.turns_to_ko_me(ma, bodies=bodies, opp_active=opp_active,
                                            switch_enabler=enabler, charged=self._DENY_CHARGED,

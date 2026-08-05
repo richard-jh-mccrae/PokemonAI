@@ -84,6 +84,59 @@ ex/Mega bodies (prize math), with weakness/HP exposed as data. Which target *I* 
 exploit is the consumer's job.
 _Avoid_: weak point, mark
 
+**Denial Value**:
+What REMOVING an opponent body denies them, as distinct from what killing it yields
+now (`prize_value`). Two legs, and only one of them is new: the damage the body's
+line would have gone on to deal is already priced by `incoming()`, whose availability
+gate is all-descendants — so the clock sees it. The PRIZE the line would have yielded
+(a Staryu becomes a 3-prize Mega Starmie ex) is priced nowhere and is the leg
+`denial_value` owns. ADR-0117.
+_Avoid_: removal value, kill value
+
+**Flat Tie**:
+An equal-prize group of opponent bodies whose target value is *identical*, so the
+pick falls to list order — 81.9% of equal-prize groups on the correction corpus before
+the Fractional Survival Clock, 73.8% after. Tie on VALUE, which is what the ranking
+sorts on; ties on `survival_shift` alone are a strict sub-population (73.2%/63.8%)
+and measuring those instead understates the defect. The reason any continuous term
+appears to "improve" the ranking, see **Sham Leg**. A flat tie is a missing
+derivation, not a close call. Measured cause is a **Structural Zero**, not rounding.
+_Avoid_: draw, tie-break (a tie-break RESOLVES a tie; this names the tie itself)
+
+**Fractional Survival Clock**:
+`turns_to_ko_me` read as the interpolated crossing point rather than the first
+integer turn at which accumulated damage reaches HP. The precision is already
+computed inside the accumulate loop and discarded by the threshold; the fractional
+reading recovers it. Opt-in — the integer stays the default. Fixes 10.0% of the
+Flat Tie and is a *prerequisite for*, never *the*, fix to Issue #398. ADR-0117.
+_Avoid_: continuous clock, precise clock
+
+**Structural Zero**:
+A term that reads exactly 0 by the shape of its own arithmetic rather than by the
+board being uninteresting. The instance that named it: `survival_shift` differences
+`turns_to_ko_me` under removal of a body, and `incoming()` aggregates their forms
+with a per-turn **MAX** — so removing anything that is not the argmax moves nothing,
+and 1036 of 1244 corpus bodies price at exactly 0. A body scores only where it is the
+*unique* lead at some turn at or before the crossing; where two tie for the lead
+throughout, neither scores. It is **not** true that only one body per board can score
+— the lead can change across turns as energy budgets grow, and each turn's leader
+scores (ADR-0117 records the constructed counter-example that killed that
+stronger claim). Distinct from a **Flat Tie**, which is the *symptom*; this is one of
+its causes, and the dominant one. A Δ under a `max` should be assumed to carry this
+until measured otherwise. ADR-0117.
+_Avoid_: no-op, null result, zero signal (each suggests the BOARD said nothing;
+this says the EXPRESSION cannot say anything)
+
+**Sham Leg**:
+A deliberately MEANINGLESS term (`cid % 7`, `hp % 70`, a position index), scaled into
+the same magnitude band as the term under test, used as the null for an argmax probe.
+Distinct from a **null control** (an arm against itself, expect 0), which proves the
+comparison is stable but introduces no term and so cannot show that observed movement
+is attributable. Both are required. A movement number published without its sham
+baseline is not evidence. ADR-0118.
+_Avoid_: placebo, dummy, random control (a sham need not be random — `cid % 7` is
+deterministic and card-derived; what makes it a sham is having no causal claim)
+
 **Representative Build**:
 The recency-weighted most-common decklist of an Archetype — the baseline the Read
 predicts against (drives `expected_cards` and `evolution_paths`). The latest
@@ -1371,6 +1424,14 @@ either: `strip_shift > 0` reads as *"this strip does something"* but only measur
 my death by a whole turn or more"*, and the gap is 128 of 218 relevance-positive corpus rows wide
 (Issue #217, measured). Its one sound use is a LEXICOGRAPHIC TIEBREAK among options already equal on
 the primary read, where it orders without suppressing.
+
+**The two DELTAS are now at different resolutions, deliberately** (ADR-0117, 2026-08-05).
+`_opponent_target_rows`' `survival_shift` reads the **Fractional Survival Clock**, so the
+"whole turn or more" quantization above no longer applies to it. `_strip_delta_terms`' `strip_shift`
+still reads whole turns, and the 128-of-218 gap is still open there — it was not measured under the
+fractional reading and adopting it is unscoped work, not an oversight. Neither delta escapes the
+deeper limit: both difference a clock whose `incoming()` aggregates with a per-turn MAX, so both
+carry a **Structural Zero** for every body that is not the argmax, at any resolution.
 
 **ABSENT is not ZERO, and a categorical instrument makes the difference bite** (Issue #228,
 2026-07-31; ADR-0093). `_opponent_target_rows` returns `None` **mid-sim** by design — the

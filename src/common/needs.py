@@ -315,7 +315,7 @@ def survival_value(*, survival_shift: float, phase: float) -> float:
                min(_SURVIVAL_CAP, float(survival_shift) * float(phase) * _SURVIVAL_PER_TURN))
 
 
-def opponent_target_value(*, prize_advance: float, survival_shift: int, phase: float) -> float:
+def opponent_target_value(*, prize_advance: float, survival_shift: float, phase: float) -> float:
     """The two-term OPPONENT-TARGET marginal (ruling 1): what removing/damaging an opponent body is
     worth to MY match = ``prize_advance`` (prize-race progress) + the ``survival_shift`` (turns of
     survival bought — Δ `turns_to_ko_me` from removing the body) converted to prize-equivalents by the
