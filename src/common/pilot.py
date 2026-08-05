@@ -26,7 +26,8 @@ from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
-from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
+from common.scouting.matchup_plan import (BodyFacts, MatchupPlan, build_matchup_plan,
+                                          derive_general_roles)
 from common.option_equivalence import canonical_keys   # ADR-0103: the ordering tie-break is a board
                                                        # fact (the fingerprint), never the menu index
 
@@ -609,7 +610,8 @@ class Board:
     my_hand_size: int = 0                 # my current hand size — the don't-gift-a-refresh comparator
                                           # (only strip when theirs exceeds mine, so we net-strip rather than hand them a fresh hand)
     # `opp_draw_engine_in_play` DELETED (ADR-0102) with `strip-the-stacked-engine-hand`, its only
-    # reader. `_draw_engine_ids` survives — the Read's deck-recognition still consumes it.
+    # reader. The general MatchupPlan tier survives as `_general_body_facts` (Issue #395 D4/D5,
+    # which superseded the id-set `_draw_engine_ids`) — the Read's deck-recognition consumes it.
     # -- Opponent RESOURCES (ADR-0047) flattened onto the Board so a `when()` can trigger off them
     #    without reaching through `board.opponent.resources`. Sourced from the match-scoped tracker
     #    (opponent_resources.OpponentResourceModel); every value fails OPEN (unknown -> the no-fire
@@ -8361,14 +8363,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """Compose the ADR-0051 MatchupPlan for this decision — the unified opponent target-
         priority spine read by the snipe/gust consumers. Empty (inert) when the kill-switch is
         off. Curated ``brief_roles`` (already resolved to ids) is the top tier; ``read.targets``
-        Intel is the γ-gated speculative tier; the general ``draw``-engine card fact is the
-        always-on floor. Pure over the resolved inputs — the composition lives in
-        ``matchup_plan.build_matchup_plan``."""
+        Intel is the γ-gated speculative tier; the general card-fact derivation is the always-on
+        floor. Pure over the resolved inputs — the composition lives in
+        ``matchup_plan.build_matchup_plan`` and the general tier's RULES live in
+        ``matchup_plan.derive_general_roles``; this method only resolves the facts (Issue #395 D5)."""
         if not self.matchup_targeting:
             return MatchupPlan()
         read_roles = {t.cardId: t.role for t in (read.targets if read else [])}
+        general = derive_general_roles(self._general_body_facts(opp))
         return build_matchup_plan(brief_roles=brief_roles, read_roles=read_roles,
-                                  draw_engine_ids=self._draw_engine_ids(opp), gamma=gamma)
+                                  general_roles=general, gamma=gamma)
 
     # `_snipe_matchup_tactical` (ADR-0051's MatchupPlan snipe steer) was DELETED by ADR-0085
     # decision 5, which put it in the fold's scope alongside the six target rungs. Armed it was
@@ -8418,16 +8422,32 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `target_is_bench_tera` is already scoped to a bench target at a DAMAGE select."""
         return -KO_SCORE if ctx.target_is_bench_tera else 0.0
 
-    def _draw_engine_ids(self, opp: dict) -> frozenset:
-        """Opponent in-play body ids whose card carries the general ``draw`` Function Tag — a draw
-        ENGINE (Dudunsparce / Budew class) that is a poor target in EVERY deck (matchup-agnostic).
-        The general tier of the MatchupPlan; empty when no provider / no opponent."""
-        if not self.functions or not opp:
-            return frozenset()
-        ids = {(p or {}).get("id")
-               for p in (opp.get("active") or []) + (opp.get("bench") or [])
-               if p and p.get("id") is not None and "draw" in self.functions.tags(p["id"])}
-        return frozenset(ids)
+    def _general_body_facts(self, opp: dict) -> dict:
+        """``{card id: BodyFacts}`` for every opponent in-play body — the deck-agnostic card facts
+        the MatchupPlan's **general** tier derives its roles from (`matchup_plan.BodyFacts`).
+
+        The Pilot RESOLVES, the scouting layer DERIVES: that is `build_matchup_plan`'s existing
+        contract (*"Pure — the Pilot supplies the facts"*), and keeping it means the `avoid` prize
+        gate is testable at the scouting seam rather than stranded here.
+
+        Superseded `_draw_engine_ids`, which returned bare ids and therefore could express only one
+        rule and no gate. Empty when there is no provider or no opponent — no facts, no general
+        claim (fail-CLOSED, ADR-0067)."""
+        if not opp:
+            return {}
+        facts = {}
+        for p in (opp.get("active") or []) + (opp.get("bench") or []):
+            cid = (p or {}).get("id")
+            if cid is None or cid in facts:
+                continue
+            tags = frozenset(self.functions.tags(cid)) if self.functions else frozenset()
+            # `_prize_value` is the ONE adapter for "what does a KO here yield" (ADR-0056), and it
+            # is the POC-T1 census's already-ruled bypass: prize yield is CARD knowledge, constant
+            # all game, so it stays on the oracle while only the RACE lives on the model (ADR-0052).
+            # Going through it rather than `self.combat` directly is what keeps this off the census's
+            # undocumented list without minting a second licence for the same question.
+            facts[cid] = BodyFacts(tags=tags, prize_value=self._prize_value(p))
+        return facts
 
     def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0) -> float:
         """The select-independent threat-rank core behind `_target_threat_rank` — rank ANY benched

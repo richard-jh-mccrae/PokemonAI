@@ -16,7 +16,8 @@ import json
 import sys
 from pathlib import Path
 
-_TARGET_ROLES_FALLBACK = {"fragile_preevo", "prize_liability", "disruption_target", "engine", "avoid"}
+_TARGET_ROLES_FALLBACK = {"prize_liability", "fragile_preevo", "disruption_target", "attacker",
+                          "enabler", "engine", "support", "unknown", "avoid"}
 _REQUIRED = ("slug", "label", "covers", "authored", "summary", "opponent_properties", "threats", "targets")
 
 

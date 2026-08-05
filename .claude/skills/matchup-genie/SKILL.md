@@ -129,15 +129,23 @@ seam, one branch at a time, resolve: the **weakness** (tempo window, engine depe
 prize liability, donk vulnerability, dead-draw lines, bad type matchup) and the concrete **exploit**.
 Every seam must resolve to something a future Board lever or a threat/target could read — if it can't,
 flag it. In parallel, lock the **threats** (its attackers we must respect) and the **targets** (what to
-disrupt/snipe), using the role vocab (all five feed the ONE MatchupPlan target-priority spine, ADR-0051):
-`prize_liability` (the wincon body — KO/gust it) · `fragile_preevo` (its pre-evo — deny the line before
-it comes online) · `disruption_target` (their key supporter/enabler to REMOVE — the **explicit** "hunt an
-engine" role; use THIS when you want an agent to target it) · `engine` (a plain accelerant — now
-**NEUTRAL**, informational only, NOT targeted; use `disruption_target` to actually hunt one) · `avoid` (a
-matchup-specific decoy / untouchable body — a benched Tera-ex, a self-shuffler — never sink removal here).
-Attackers go in `threats`. **Don't** author a generic draw engine (Dudunsparce / Budew) as `avoid` — the
-general `draw`-tag tier de-prioritizes those matchup-agnostically already; reserve `avoid` for deck-specific
-decoys.
+disrupt/snipe), using the role vocab (every role feeds the ONE MatchupPlan target-priority spine, ADR-0051;
+the CLOSED registry with each role's priority and reason is `common/scouting/matchup_plan.ROLE_REGISTRY`,
+Issue #395 — a role NOT in it fails the vocabulary lint rather than silently resolving to 0, which is what
+530 shipped `attacker` assignments used to do):
+`prize_liability` 100 (the wincon body — KO/gust it) · `fragile_preevo` 90 (its pre-evo — deny the line
+before it comes online) · `disruption_target` 60 (their key supporter/enabler to REMOVE — the **explicit**
+"hunt an engine" role; use THIS when you want an agent to target it) · `attacker` 50 (a body whose line
+actually attacks — below the wincon and its pre-evo on purpose) · `enabler` 40 (a body that assists the key
+Pokémon in HOW it attacks — damage boosts, a free-retreat grant, ability fuel; the Solrock/Lunatone shape) ·
+`engine` 0 (a plain accelerant — **NEUTRAL**, informational only, NOT targeted; use `disruption_target` to
+actually hunt one) · `avoid` −80 (a matchup-specific decoy / untouchable body — a benched Tera-ex, a
+self-shuffler — never sink removal here).
+Attackers ALSO go in `threats`; `attacker` in `targets` is about REMOVAL order, not about respecting them.
+**Don't** author a generic 1-prize draw engine (Dudunsparce / Budew) as `avoid` — the general card-fact tier
+de-prioritizes those matchup-agnostically already; reserve `avoid` for deck-specific decoys. And note the
+general tier now fires **only on a 1-prize body** (Issue #395 D4): a 2- or 3-prize draw engine like Mega
+Kangaskhan ex is a PRIME removal target, not one to leave alone, and the prizes are the reason.
 
 ### Phase 4 · Brief-field reconciliation (interleaved with Phase 3)
 

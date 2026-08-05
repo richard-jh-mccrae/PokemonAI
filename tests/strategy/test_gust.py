@@ -423,8 +423,11 @@ def test_gust_matchup_priority_is_a_subprize_tiebreak_over_the_plan():
     # ADR-0051: the gust target tie-break reads the unified MatchupPlan — prefer dragging up the
     # higher-priority body (wincon > its pre-evo), sub-prize (never overrides a real prize gap), and
     # clamped to POSITIVE so a KO-able draw engine (`avoid`) is still worth its prize (0, not negative).
+    # `general_roles` (Issue #395 D5) replaced the old `draw_engine_ids` id-set: the general tier
+    # now carries a ROLE per body, so it can gate `avoid` on prize value instead of firing on every
+    # `draw` body. DEAD_END is a 1-prize engine, which is the case where `avoid` is still correct.
     plan = build_matchup_plan(brief_roles={WINCON: "prize_liability", PREEVO_THREAT: "fragile_preevo"},
-                              draw_engine_ids={DEAD_END}, gamma=1.0)
+                              general_roles={DEAD_END: "avoid"}, gamma=1.0)
     board = Board(matchup_plan=plan)
     p = _pilot()
     pl = p._gust_matchup_priority(board, {"id": WINCON})
