@@ -49,6 +49,12 @@ _DAMAGE_COUNTER = 13      # ADD a damage counter to a Pokémon — a counter-mov
 _REMOVE_DAMAGE_COUNTER = 16       # REMOVE a damage counter — the counter-mover's SOURCE (Munkidori
                                   # "from 1 of your Pokémon": self-owned options; removing = a heal)
 _REMOVE_DAMAGE_COUNTER_COUNT = 40 # how many counters to move (NUMBER options {1,2,3})
+_HEAL = 17        # pick WHICH of my Pokémon a heal card heals ("Heal all damage from 1 of your Mega
+                  # Evolution Pokémon ex" — Wally's Compassion; also Potion / Poké Vital A / Super
+                  # Potion / Bianca's Devotion / Jacinthe). Self-owned CARD options over my ACTIVE
+                  # **and** BENCH; `minCount`/`maxCount` 1/1 on every corpus step. Distinct from
+                  # `_REMOVE_DAMAGE_COUNTER` (16) above, which is a counter-MOVER's source — both
+                  # take damage off my own bodies, and the two want OPPOSITE rules (Issue #409 R2).
 _ABILITY = 10     # OptionType.ABILITY — use an in-play Ability at the MAIN menu (Adrena-Brain)
 _NUMBER = 0       # OptionType.NUMBER — a numeric choice option ({number: N})
 _ATTACH_FROM = 21 # pick the Pokémon to attach Energy to
@@ -193,7 +199,7 @@ __all__ = [
     "_ENERGY", "_DISCARD_ENERGY",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_TO_DECK", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
-    "_REMOVE_DAMAGE_COUNTER_COUNT", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
+    "_REMOVE_DAMAGE_COUNTER_COUNT", "_HEAL", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_SHUFFLE", "_DRAW", "_DRAW_REVERSE",
     "_MOVE_CARD", "_MOVE_CARD_REVERSE",
     "KO_SCORE", "ENERGY_RECOVER", "FOLLOWUP_W", "_METAL",

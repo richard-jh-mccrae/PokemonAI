@@ -2281,3 +2281,42 @@ class CombatMath:
                     val *= max(0.0, min(1.0, float(attack_p(aid))))   # ranked consumer: EV, not claim
                 best = max(best, val)
         return best
+
+    def best_affordable_damage(self, attacker_id: int | None, energy: int, defender: dict | None, *,
+                               body: dict | None = None, extra_type=None, extra_units: int = 0,
+                               bound: str = "exact", context: dict | None = None) -> float:
+        """The biggest damage ``attacker_id`` (carrying ``energy`` Energy) can actually land on
+        ``defender`` this turn — max over its attacks that are affordable in COUNT and payable in
+        COLOUR. 0 when nothing resolves or nothing is affordable.
+
+        The sibling of :meth:`best_affordable_ko_value` one rung down: that one asks *"does an
+        affordable attack KILL"* and answers on the KO band; this asks *"how hard does the best
+        affordable attack HIT"* and answers in raw damage. Both are needed, because the questions
+        differ wherever the answer is a non-lethal swing — which is the whole of
+        ``best_affordable(E) − best_affordable(E − 1)``, the deny oracle's own shape (ADR-0062) and
+        the shape :meth:`pilot.Pilot._heal_bounce_cost` prices a heal's Energy bounce with.
+
+        **Extracted rather than authored** (Issue #409): this exact loop was already spelled out at
+        two call sites — ``_attach_lethal_tactical``'s inner ``best_affordable`` and
+        ``_gamble_det_baseline``'s scan — and a third consumer arriving was the moment two spellings
+        became three. They differed in nothing but which kwargs they passed, so both now delegate
+        here and the affordability rule has ONE home. That matters more than the duplication: the
+        count gate and the colour gate must stay in lockstep, and a copy is free to gain one and not
+        the other.
+
+        ``body`` arms the colour gate exactly as it does on the KO twin — omitting it (the shape a
+        post-bounce re-attach takes, where the attached counts are stale by construction) counts the
+        Energy as WILD and so fails OPEN, which is the direction a *cost* estimate must err in."""
+        stat = self._card_stat(attacker_id)
+        if not stat:
+            return 0.0
+        best = 0.0
+        for aid in (stat.attacks or ()):
+            if self.attack_cost(aid) > energy:
+                continue                                  # can't afford this attack right now
+            if body is not None and not self.attack_type_payable(
+                    aid, body, extra_type=extra_type, extra_units=extra_units):
+                continue                                  # count met, a specific-type slot is not
+            best = max(best, float(self.predicted_damage(attacker_id, aid, defender,
+                                                         bound=bound, context=context)))
+        return best

@@ -451,9 +451,12 @@ string-valued keys that do the SELECTING — `target`, `condition`, `applies_to`
 `name_family`, `trigger` and eleven more, 17 keys carrying 74 values. `CLAUSE_WRITES` audits the
 values of the four VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a
 selector's value, so a mistyped `target` passed both audits and every consumer of it fails CLOSED
-(`combat._accel_target_ok`, `planner._heal_restriction_ok`, `planner._condition_holds` all
+(`combat._accel_target_ok`, `planner._heal_restriction_targets`, `planner._condition_holds_for` all
 `return False` on a string they do not know) — the clause funds nothing, reaches nothing, or never
-counts toward survival. `undeclared_selector_values` is its teeth. **Unlike the value namespace
+counts toward survival. `undeclared_selector_values` is its teeth. The two heal readers named there
+are the BODY-GENERIC cores (ADR-0122); `_heal_restriction_ok` / `_condition_holds` are their
+Active-spot wrappers and fail closed through them, so the vocabulary has one home per axis and not
+one per area. **Unlike the value namespace
 above it is keyed PER KEY, not flat**, and that is measured rather than aesthetic: `"basic"` means
 three different things across `target` / `applies_to` / `energy`, and `"deck"` / `"discard"` two
 each across `zone` / `source`, so one flat set would have to accept `{"zone": "basic"}`. The 33 of

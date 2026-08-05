@@ -1456,13 +1456,32 @@ class PlannerMixin:
         """Evaluate a clause's dynamic ``condition`` gate against the Board — TRUE only when the
         gate is absent or PROVABLY satisfied right now. The two board-checkable gates (Bianca's
         remaining-HP, Jumbo Ice Cream's attached-Energy) are evaluated; any other condition string
-        fails closed (never plan on an amount that might not materialise)."""
+        fails closed (never plan on an amount that might not materialise).
+
+        The Active-spot reading of :meth:`_condition_holds_for`, which is the same gate asked of an
+        arbitrary body — see there for why both gates are per-TARGET at the card text."""
+        return self._condition_holds_for(condition, cur_hp=board.my_active_hp,
+                                         attached=board.my_active_energy)
+
+    def _condition_holds_for(self, condition, *, cur_hp: int, attached: int) -> bool:
+        """:meth:`_condition_holds` asked of ONE body rather than of my Active (Issue #409) — same
+        vocabulary, same fail-closed default, the two board-checkable gates read against ``cur_hp``
+        and ``attached`` instead of the Board's Active fields.
+
+        **Both gates are per-TARGET at the card text, verified at source** (`EN_Card_Data.csv`), so
+        this is the reading the Active form was a special case of rather than a widening of scope:
+        1190 Bianca's Devotion is *"Heal all damage from 1 of your Pokémon that has 30 HP or less
+        remaining"* — the HP clause qualifies the CHOSEN Pokémon, not the Active; 1147 Jumbo Ice
+        Cream is *"Heal 80 damage from your Active Pokémon that has 3 or more Energy attached"*,
+        where the Energy clause likewise qualifies the target and the Active-spot half rides its own
+        ``restriction: active_only``. Reading either off the Active while healing a benched body
+        would answer a question about the wrong Pokémon."""
         if not condition:
             return True
         if condition == "remaining_hp_30_or_less":
-            return bool(board.my_active_hp) and board.my_active_hp <= 30
+            return bool(cur_hp) and cur_hp <= 30
         if condition == "energy_3_plus":
-            return board.my_active_energy >= 3
+            return attached >= 3
         return False
 
     def _heal_candidate(self, cid: int, board, active_stat) -> tuple[int, int] | None:
@@ -1485,28 +1504,69 @@ class PlannerMixin:
         UNDER-credits — this method's own stated error direction, so it stands down from a line that
         would have worked rather than committing to one that would not. No `heal` clause carries it
         today; `_heal_averts_doom` carries the same ruling for the same reason."""
-        max_hp = getattr(active_stat, "hp", 0) or 0
         attach = 0 if board.energy_attached else self._best_hand_attach_units(board.hand_ids, active_stat)
+        return self._heal_body_candidate(cid, active_stat, is_active=True,
+                                         cur_hp=board.my_active_hp,
+                                         attached=board.my_active_energy, attach_units=attach)
+
+    def _heal_body_candidate(self, cid: int, stat, *, is_active: bool, cur_hp: int, attached: int,
+                             attach_units: int, max_hp: int | None = None) -> tuple[int, int] | None:
+        """:meth:`_heal_candidate` asked of ANY of my bodies — Active **or** benched (Issue #409).
+        ``(healed_hp, energy_total)`` for the body described by ``stat`` / ``cur_hp`` / ``attached``,
+        or None when no clause of ``cid`` can reach it. The Active form above is this method with the
+        Board's Active fields, so the two readings cannot drift.
+
+        The generalization is forced by the HEAL target select (``SelectContext.HEAL``, 17): the
+        engine has already resolved the play and is asking WHICH body, so every term is per-target.
+        Restriction, condition, healed amount and the rider's Energy consequence are all clause facts
+        about the *chosen* Pokémon — Wally's Compassion puts the Energy attached to *that* Pokémon
+        into hand, Super Potion discards an Energy from *that* Pokémon — and the Active-only form
+        could only ever answer them for one of the candidates.
+
+        ``attach_units`` is the manual attach still available this turn, folded into ``energy_total``
+        exactly as the Active form folds it. For a BENCHED body it is what a re-attach could restore,
+        never what it can attack with — only the Active swings, which is why
+        :meth:`pilot.Pilot._heal_bounce_cost` prices a benched bounce at 0 rather than reading this.
+
+        Issue #349's ``each_of`` / ``amount_per`` stay unread here for the reason
+        :meth:`_heal_candidate` gives at length, and that ruling is INHERITED rather than reopened
+        (Issue #409 R4): an ``each_of`` card heals every body and so poses no target select at all,
+        which is why widening the reading to a second area does not widen the question.
+
+        ``max_hp`` is the CEILING a heal restores to, and it is a parameter because the card's printed
+        HP is not always it: a **Hero's Cape** (1159, *"+100 HP"*) puts a 330-HP Mega Starmie ex on a
+        board ``maxHp`` of 430, and ``amount: "all"`` heals to that. A caller holding the body dict
+        passes its ``maxHp`` and gets the right answer; the default is ``stat.hp``, which is what
+        :meth:`_heal_candidate` reads off the Board today and so leaves the shipped survival
+        consumers exactly where they were. Measured on `ms_mirror_1001` f90, where the printed
+        default under-heals a caped Active by 100."""
+        max_hp = int(max_hp) if max_hp else (getattr(stat, "hp", 0) or 0)
         for clause in (self.effects.clauses(cid) if self.effects else ()):
             if clause.get("kind") != "heal":
                 continue
-            if not self._condition_holds(clause.get("condition"), board):
+            if not self._condition_holds_for(clause.get("condition"), cur_hp=cur_hp,
+                                             attached=attached):
                 continue                              # gate fails / not board-checkable: fail-closed
-            restriction = clause.get("restriction")
-            if restriction == "mega_only" and not getattr(active_stat, "megaEx", False):
+            if not self._heal_restriction_targets(clause.get("restriction"), stat,
+                                                  is_active=is_active):
                 continue
             amount = clause.get("amount")
-            healed = max_hp if amount == "all" else min(max_hp, board.my_active_hp + int(amount or 0))
+            healed = max_hp if amount == "all" else min(max_hp, cur_hp + int(amount or 0))
             rider = clause.get("rider")
             if rider == "bounce_energy_to_hand":
-                energy_total = attach                 # all Energy bounced; only re-attach pays
+                energy_total = attach_units           # all Energy bounced; only re-attach pays
             elif rider == "discard_own_energy":
-                energy_total = max(0, board.my_active_energy - 1) + attach
+                energy_total = max(0, attached - 1) + attach_units
             else:
-                energy_total = board.my_active_energy + attach
+                energy_total = attached + attach_units
             return (healed, energy_total)
-        if self.functions and "clutch_heal" in self.functions.tags(cid):
-            return (max_hp, attach)                   # legacy tag path: full heal + Energy bounce
+        # The legacy Function-Tag fallback stays ACTIVE-ONLY, and deliberately (Issue #409 R3): the
+        # tag records "full heal + Energy bounce" and nothing about WHICH bodies the card may reach,
+        # so on a benched candidate it would be a guess at a restriction rather than a reading of one
+        # — Wally's `mega_only` is a clause fact the tag cannot carry. Fail closed instead; the
+        # Active path is unchanged, which is what keeps the shipped survival consumers still.
+        if is_active and self.functions and "clutch_heal" in self.functions.tags(cid):
+            return (max_hp, attach_units)             # legacy tag path: full heal + Energy bounce
         return None
 
     def _best_hand_attach_units(self, hand_ids, active_stat) -> int:
@@ -2575,13 +2635,38 @@ class PlannerMixin:
         """WP5 survival: can a heal clause with this ``restriction`` target my (doomed) Active
         ``astat``? None / ``active_only`` always can; ``mega_only`` needs a Mega ex; ``psychic_only``
         a {P} body. An unknown restriction fails CLOSED (under-count — the endorser never assumes a
-        heal it can't verify reaches my Active)."""
-        if restriction in (None, "active_only"):
+        heal it can't verify reaches my Active).
+
+        The Active-spot reading of :meth:`_heal_restriction_targets`, and byte-identical to it over
+        the whole shipped vocabulary — ``active_only`` is exactly the term this method could not
+        express, and it is trivially satisfied when the body IS the Active."""
+        return self._heal_restriction_targets(restriction, astat, is_active=True)
+
+    def _heal_restriction_targets(self, restriction, stat, *, is_active: bool) -> bool:
+        """:meth:`_heal_restriction_ok` asked of ANY of my bodies (Issue #409): can a heal clause
+        with this ``restriction`` target the body described by ``stat``, sitting in the Active spot
+        or on the Bench?
+
+        ``active_only`` is the whole reason this method exists. It is the one restriction whose
+        answer DEPENDS on where the body stands, and the Active-only form had to hardcode it True —
+        which is correct for its own caller and would silently offer a benched Cook / Lumiose Galette
+        / Jumbo Ice Cream target if reused unchanged. Everything else is a card-fact test that reads
+        the same from either area: ``mega_only`` a Mega ex (Wally's Compassion), ``psychic_only`` a
+        {P} body (Jacinthe; ``EnergyType.PSYCHIC`` = 5, `cg/api.py`).
+
+        An unknown restriction fails CLOSED, unchanged — the ``active_dragon_only`` (1105 Dragon
+        Elixir) and ``arvens_pokemon`` (1130 Arven's Sandwich) strings both land here, and
+        `snapshot_coverage.UNCONSUMED_SELECTORS` records the first of them as a known, deliberate
+        under-count. Fail-closed is Issue #409 R3's rule at the target select too: a body the term
+        cannot price contributes 0.0 rather than a guess."""
+        if restriction is None:
             return True
+        if restriction == "active_only":
+            return is_active
         if restriction == "mega_only":
-            return bool(getattr(astat, "megaEx", False))
+            return bool(getattr(stat, "megaEx", False))
         if restriction == "psychic_only":
-            return getattr(astat, "energyType", None) == 5
+            return getattr(stat, "energyType", None) == 5
         return False
 
     def _heal_averts_doom(self, cid, astat, cur_hp: int, incoming: int) -> bool:
@@ -2594,12 +2679,38 @@ class PlannerMixin:
         `_heal_candidate`'s docstring gives at length: this asks only what MY ACTIVE ends up on, and a
         per-body distribution gives it the same `amount` a single-target heal would. Reading `each_of`
         as a multiplier would promise a survival the board never delivers; ignoring `amount_per`
-        under-counts, which is the direction this method already says it errs in."""
-        max_hp = getattr(astat, "hp", 0) or 0
+        under-counts, which is the direction this method already says it errs in.
+
+        The Active-spot reading of :meth:`_heal_body_averts_doom`."""
+        return self._heal_body_averts_doom(cid, astat, is_active=True, cur_hp=cur_hp,
+                                           incoming=incoming)
+
+    def _heal_body_averts_doom(self, cid, stat, *, is_active: bool, cur_hp: int,
+                               incoming: int, max_hp: int | None = None) -> bool:
+        """:meth:`_heal_averts_doom` asked of ANY of my bodies (Issue #409): does a heal clause of
+        ``cid`` lift the body described by ``stat`` from ``cur_hp`` ABOVE the ``incoming`` that can
+        actually reach it, so the next swing no longer knocks it out?
+
+        This is Issue #409 R2's ``survival_gain`` predicate, and the ``incoming`` a caller hands it
+        is what makes it area-correct: for the Active that is the opponent's biggest attack; for a
+        BENCHED body it is the snipe/spread reach ONLY (printed damage lands on the Active —
+        `CombatMath.form_damage_vs`, ADR-0070 §9), which is usually zero, and a body nobody can hit
+        gains nothing from being healed. That asymmetry is derived from a shipped read rather than
+        authored, which is why it needs no constant of its own.
+
+        A gated heal (any ``condition``) still can't be promised, unchanged from the Active form —
+        this predicate feeds survival claims, and the fail direction it errs in is under-counting.
+        Note that is STRICTER than :meth:`_heal_body_candidate`, which evaluates the two
+        board-checkable gates; the difference is each caller's own policy and is deliberate.
+
+        ``max_hp`` is the restore ceiling, defaulting to the printed HP — see
+        :meth:`_heal_body_candidate` for why a +HP Tool makes that a parameter rather than a read."""
+        max_hp = int(max_hp) if max_hp else (getattr(stat, "hp", 0) or 0)
         for cl in (self.effects.clauses(cid) if self.effects else ()):
             if cl.get("kind") != "heal" or cl.get("condition"):
                 continue                                      # a gated heal can't be promised
-            if not self._heal_restriction_ok(cl.get("restriction"), astat):
+            if not self._heal_restriction_targets(cl.get("restriction"), stat,
+                                                  is_active=is_active):
                 continue
             amount = cl.get("amount")
             healed = max_hp if amount == "all" else min(max_hp, cur_hp + int(amount or 0))
@@ -2663,13 +2774,12 @@ class PlannerMixin:
         hand_ids = frozenset(c.get("id") for c in hand)
         units = self._best_hand_attach_units(hand_ids, stat)
         energy_after = board.my_active_energy + units
-        for aid in (stat.attacks or ()):
-            if (self._attack_cost(aid) <= energy_after
-                    and self._attack_type_payable(aid, ma, extra_type=0, extra_units=units)):
-                det = max(det, self.predicted_damage(board.my_active_id, aid, opp))
-                # extra_type=0: the held attach is priced as colourless — funds {C} slots only, the
-                # conservative read (a held TYPED enabler voids the gamble class upstream anyway)
-        return det
+        # extra_type=0: the held attach is priced as colourless — funds {C} slots only, the
+        # conservative read (a held TYPED enabler voids the gamble class upstream anyway). The scan
+        # is `combat.best_affordable_damage` (Issue #409), extracted so the affordability rule —
+        # count gate AND colour gate, which must stay in lockstep — has one home.
+        return max(det, self._best_affordable_damage(board.my_active_id, energy_after, opp,
+                                                     body=ma, extra_type=0, extra_units=units))
 
     def _retreat_snipe_candidate(self, me, others, target_hp: int, extra: int):
         """``active_survives`` (bool) for the best benched body that, once retreated INTO (its Energy
