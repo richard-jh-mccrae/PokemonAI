@@ -156,6 +156,11 @@ def main(argv=None) -> int:
             base = argmax([r["value"] for r in pre])
             if argmax([r["value"] for r in post]) != base:
                 moved[("LINE", scope)] += 1
+            # WHICH rows the real leg actually lifted. A band-matched sham perturbs EVERY row; this
+            # leg perturbs under a third of them, because most opponent bodies are dead-end lines.
+            # Matching on band alone therefore compares a sparse leg against a dense one and the
+            # sham wins on volume — see the SPARSITY-MATCHED arm below, which is the honest control.
+            lifted = [abs(a["value"] - b["value"]) > 1e-12 for a, b in zip(post, pre)]
             for k, _label in SHAMS:
                 # `opponent_target_value` is LINEAR in `prize_advance`, so adding the sham leg to the
                 # finished value is exactly adding it to that term.
@@ -164,6 +169,16 @@ def main(argv=None) -> int:
                            for i, r in enumerate(pre)]
                 if argmax(shammed) != base:
                     moved[(k, scope)] += 1
+                # ...and the same sham confined to the rows the real leg lifted: same band, same
+                # COUNT of perturbed rows, meaningless CHOICE of magnitude within them. This is the
+                # arm that isolates the only thing the leg claims — that WHICH bodies it lifts, and
+                # by how much, tracks something real.
+                masked = [r["value"] + (legs(k, band=band, card_id=r["id"],
+                                             hp=(r["body"] or {}).get("hp"), index=i, of=len(pre))
+                                        if lifted[i] else 0.0)
+                          for i, r in enumerate(pre)]
+                if argmax(masked) != base:
+                    moved[(k + "_spr", scope)] += 1
 
     print(f"corpus                              : {len(frames)} replayable corrections")
     print(f"frames ranked under BOTH arms       : {scanned}")
@@ -188,13 +203,19 @@ def main(argv=None) -> int:
     print(f"sham band (LINE's own max effect on `value`): {band:.6f}")
     print()
     b, a = counts["bench"], counts["all"]
-    print(f"{'arm':<22} {'BENCH (real seam)':<22} all rows")
-    for k, label in (("LINE", "line prize"),) + SHAMS:
+    arms = ((("LINE", "line prize"),)
+            + tuple((k + "_spr", label + " [sparsity]") for k, label in SHAMS)
+            + SHAMS)
+    print(f"{'arm':<28} {'BENCH (real seam)':<22} all rows")
+    for k, label in arms:
         bench = f"{moved[(k,'bench')]}/{b} ({100*moved[(k,'bench')]/b:.1f}%)" if b else "-"
         allr = f"{moved[(k,'all')]}/{a} ({100*moved[(k,'all')]/a:.1f}%)" if a else "-"
-        print(f"{label:<22} {bench:<22} {allr}")
+        print(f"{label:<28} {bench:<22} {allr}")
         if k == "LINE":
-            print(f"{'':-<22} {'':-<22} {'':-<18}")
+            print(f"  [sparsity] = same band AND same rows perturbed as the real leg — the matched "
+                  f"control.\n  The unmasked shams below perturb EVERY row and are reported for "
+                  f"continuity, not as the bar.")
+            print(f"{'':-<28} {'':-<22} {'':-<18}")
 
     print()
     print(READING)
