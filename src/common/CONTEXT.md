@@ -1734,7 +1734,7 @@ all four cards are `covers: "full"` (**Clause-Set Completeness**) and the compen
 CLASS (`CLAUSE_SELECTORS["target"]` — `any`, `any_pokemon`, `stage2`, `benched`, …). What is absent is
 the target INSTANCE, which only the board can supply. Before Issue #392 the class had two incoherent
 fates for one shape: a `_PLAY` REFUSED loudly (a surfaced coverage gap), while a `_RETREAT` priced at
-~0.0 and was pruned SILENTLY. The composer's answer (**ADR-TEMP-392**) is **Deferred-Target
+~0.0 and was pruned SILENTLY. The composer's answer (**ADR-0121**) is **Deferred-Target
 Expansion** — resolve the class against the board, emit one candidate per legal instance, prefilter
 with a cheap **Target Ranker**, and let the whole family hold ONE beam slot taken by its best child —
 never a widened seam, because modelling a swap the engine did not perform diverges from the recorded

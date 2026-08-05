@@ -1,5 +1,5 @@
 """The apply-seam's **choice nodes** (`common/board_choice.py`, POC-T4/5, Issue #392, under the seam
-contract ADR-0098 froze at POC-T0; ruling ADR-TEMP-392).
+contract ADR-0098 froze at POC-T0; ruling ADR-0121).
 
 Its two siblings are already covered: `test_apply_transitions.py` asserts the DETERMINISTIC
 transitions (one option, one board) and `test_board_expectation.py` the STOCHASTIC ones (one option, a
@@ -432,7 +432,7 @@ def test_the_gust_target_space_resolves_their_bench_from_the_declared_clause():
 
 
 def test_the_target_CLASS_resolver_is_driven_by_the_compendium_and_is_CLOSED_over_it():
-    """**ADR-TEMP-392 decision 2, as a test**: *"Expansion is data-driven off the compendium's target
+    """**ADR-0121 decision 2, as a test**: *"Expansion is data-driven off the compendium's target
     vocabulary, never per-card. The class resolver reads `CLAUSE_SELECTORS["target"]` … a hand-written
     expander per card hardcodes what is already data."*
 

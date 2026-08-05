@@ -434,7 +434,7 @@ unruled** — the `OK → MISS` the fuel fix alone had opened is gone, `leaf_cor
 
 ## Amendment (2026-08-05, Issue #392): two of this ADR's rulings are DEMOTED to prefilter roles
 
-Ruled by ADR-TEMP-392's grill (decisions 5 and 6) and recorded **here** rather than only there,
+Ruled by ADR-0121's grill (decisions 5 and 6) and recorded **here** rather than only there,
 because both change what a part of *this* equation is FOR, and a ruling that moves house without
 leaving a forwarding address is how one dies quietly. Neither is a bug fix; neither changes an
 arithmetic result at this commit.

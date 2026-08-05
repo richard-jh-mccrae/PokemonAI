@@ -1,5 +1,5 @@
 """**The resolution-parity lane** — the recorded native engine as the answer key for a CHOICE node
-(POC-T4/5, Issue #392; ADR-TEMP-392 decision 7).
+(POC-T4/5, Issue #392; ADR-0121 decision 7).
 
 `tools/train/apply_parity.py` diffs the seam's board against the **next** recorded frame, which is
 the right reference for a point transition: one option, one engine step, one frame. A Deferred-Target
@@ -31,7 +31,7 @@ per step:
    placement, a mis-derived ``energies`` list, a forgotten discard write, an uncleared Special
    Condition or a missed allowance is a CI failure rather than a runtime surprise.
 
-**This is also what makes ADR-TEMP-392 decision 6 checkable rather than asserted.** That decision has
+**This is also what makes ADR-0121 decision 6 checkable rather than asserted.** That decision has
 the follow-up select REPLAN through the same ranker and leaf rather than committing to the MAIN-site
 pick; its soundness rests on the two sites seeing the same board. One evaluator over two boards this
 lane proves equal cannot disagree, so a MAIN-site/select-site divergence becomes a CI condition.

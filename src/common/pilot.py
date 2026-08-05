@@ -1434,7 +1434,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # OFF = byte-identical to the pre-#247 rung.
         self.copy_top_value = copy_top_value            # Issue #289: Slowking's Seek Inspiration is valued
                                                         # only from a self-verified known top card.
-        self.deferred_target_expansion = deferred_target_expansion   # ADR-TEMP-392 (Issue #392),
+        self.deferred_target_expansion = deferred_target_expansion   # ADR-0121 (Issue #392),
                                                         # armed-OFF: the apply seam returns a
                                                         # `common.board_choice` CHOICE node — the
                                                         # boards a Deferred-Target Option's target can

@@ -1,5 +1,5 @@
 """THE resolution-parity gate: a CHOICE node's synthesized board must agree with the RECORDED NATIVE
-ENGINE at the frame the option's whole resolution SETTLES to (POC-T4/5, Issue #392; ADR-TEMP-392
+ENGINE at the frame the option's whole resolution SETTLES to (POC-T4/5, Issue #392; ADR-0121
 decision 7).
 
 `test_apply_seam_parity.py` beside this one diffs against the **next** recorded frame, which is the
@@ -162,7 +162,7 @@ def test_the_diff_BITES_when_the_DISCARDED_ENERGY_never_reaches_the_discard_pile
     Kept apart from the first deliberately: a single test asserting a union of zones would stay green
     if either half stopped working. That one proves the lane sees where a body LANDED; this proves it
     sees the Energy-discard leg, which is the dimension ADR-0100 §8's `build_after` is demoted to a
-    ranker over (ADR-TEMP-392 decision 5) and therefore the one this issue newly enumerates.
+    ranker over (ADR-0121 decision 5) and therefore the one this issue newly enumerates.
 
     The defect leaves the discard pile untouched while the retreat still strips the Energy off the
     body. **372 divergences over 6 traces, in three zones**: `my_discard_contents` directly, plus

@@ -147,7 +147,7 @@ EXPECTED_SHIPPED = {
                                     # 5 made a precondition, because gate 1 proved SIGN only and the
                                     # promotion gate inflates the rung's MAGNITUDE where it opens
                                     # (f79 55->95, f26 16.25->95, f24 17.5->100)
-    "deferred_target_expansion": False,  # ADR-TEMP-392 (Issue #392) armed-OFF: the CHOICE node
+    "deferred_target_expansion": False,  # ADR-0121 (Issue #392) armed-OFF: the CHOICE node
                                     # (`common.board_choice`). ON, the apply seam returns an
                                     # Expectation over the boards a Deferred-Target Option's target
                                     # can reach instead of the point transition. Its consumer — the

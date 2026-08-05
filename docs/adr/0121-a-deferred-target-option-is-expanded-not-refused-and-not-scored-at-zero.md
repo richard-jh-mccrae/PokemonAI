@@ -1,4 +1,4 @@
-# ADR-TEMP-392: A Deferred-Target Option is EXPANDED — not refused, and never scored at zero
+# ADR-0121: A Deferred-Target Option is EXPANDED — not refused, and never scored at zero
 
 **Status.** Accepted (grilled 2026-08-04, `/grill-with-docs` on Issue #392 — six locked decisions,
 two of them amendments to ADR-0100).
@@ -262,8 +262,14 @@ criterion unmeasurable.
   discharge the `_can_retreat` / `planner` divergence Issue #149 owns.
 * **`board_delta.clear_conditions` / `units_for_cards` promoted to public** — the same POC-T4/2 move
   that made `fork` / `fork_player` / `take_from_hand` / `card_clauses` public, for the same reason.
-* **`matchup_plan.role_registry()` (new, public)** — so decision 3's `ROLE_SPAN` is DERIVED from the
-  sheet rather than transcribed. Issue #395 D3/D4 is in flight to change that sheet.
+* **`role_span()` derives from `matchup_plan.ROLE_REGISTRY`** — so decision 3's span is read off the
+  sheet rather than transcribed. **The rebase proved the point**: Issue #395 merged to `main` mid-build
+  and did exactly what a transcribed constant could not survive — moved the table from a private
+  `_ROLE_PRIORITY` to a public closed registry, added `attacker` 50 and `enabler` 40, gated `avoid` on
+  prize value. The derivation absorbed it with no edit to the arithmetic and no change to the D7
+  guarantee, which is stated over `max(abs(·))` rather than over any row. (This build had added its own
+  `role_registry()` accessor for the private table; Issue #395's public `ROLE_REGISTRY` supersedes it,
+  and it was dropped at the rebase rather than kept as a second name for one thing.)
 * **`.github/filters.yml`** — the apply-seam sources now trigger `tests/parity`. This closed a real
   gap rather than widening the filter: neither seam-parity lane was reachable from a source change on
   a PR, so `board_delta.py` could be rewritten without replaying a trace.
@@ -284,3 +290,32 @@ criterion unmeasurable.
 Both were caught by `/code-review`'s Spec axis, briefed that this spec was self-filed and told to
 grade the spec as well as the diff. Neither would have been caught by a scope-coverage reading: the
 first looked implemented, and the second looked like an honest negative result.
+
+### What Issue #395's merge changed about this ADR, recorded at the rebase
+
+`role_priority` was a **forward dependency** for the whole of decision 3's their-side combination when
+this was built: `pilot._opponent_target_rows` did not carry the field, and `gust_rank_key` read it with
+a `0.0` default so the key could be written and graded before it existed. **Issue #395 D7 merged to
+`main` on 2026-08-05, mid-build.** The field is now live and this issue is its first composer consumer,
+as its own § *Prior art* predicted.
+
+The default is KEPT rather than removed, and that is a ruling rather than an oversight: `0.0` is
+exactly what an unroled body contributes on a live row, so ONE key orders a menu whose rows carry the
+field and a menu whose rows predate it, identically. `tests/strategy/test_deferred_target_rank.py` now
+also checks the field NAME against the shipped producer, which is the half that could not be asserted
+before the merge — every other test in that file builds its own rows, and a key reading
+`row["priority"]` would have passed all of them while ordering nothing on a live menu.
+
+### The composer-beam half of the f32/f35 criterion has an owner
+
+PR #399 (Issues #385/#386, open at this writing) builds `composer.Frame.margin_for(index)` and cites
+this issue's criterion verbatim as its reason — *"a claim about the option the HUMAN ruled, which is
+the one a beam would prune. Measuring the composer's own pick instead would answer a different
+question and would pass by construction whenever the composer picked at all."* That is the right home
+for the margin at a REAL beam, and it is not this issue's to build: no beam exists here.
+
+`tools/train/probes/choice_beam.py` therefore measures the half that does exist — the margin in the
+**1-ply ordering** — and reports it as a curve over every width the menu supports rather than at one
+undefended `k`. On that instrument f35 discharges the criterion (margin to the 2nd candidate
+**0.001125 → 0.002985**, a 2.65x widening) and f32 cannot, because its menu scores a single candidate
+at any width. The two instruments answer different questions and neither substitutes for the other.

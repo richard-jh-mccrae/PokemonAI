@@ -318,7 +318,7 @@ PROFILE = {
                                     # body per decision, resolved once behind
                                     # `_opponent_target_cache`. OFF is byte-identical: no fields
                                     # emitted, no gate computed, magnitude oracle still live.
-    "deferred_target_expansion": False,  # ADR-TEMP-392 (Issue #392) armed-OFF: the CHOICE node.
+    "deferred_target_expansion": False,  # ADR-0121 (Issue #392) armed-OFF: the CHOICE node.
                                     # ON, `apply_option` returns a `common.board_choice` Expectation
                                     # over the boards a Deferred-Target Option's target can reach —
                                     # a `_RETREAT`'s (which Energy to shed x which body to promote)

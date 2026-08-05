@@ -1,5 +1,5 @@
 """**The choice node** — the boards a Deferred-Target Option can reach (POC-T4/5, Issue #392, under
-the seam contract ADR-0098 froze at POC-T0; ruling: ADR-TEMP-392).
+the seam contract ADR-0098 froze at POC-T0; ruling: ADR-0121).
 
 Three modules now answer *"what board does this option produce?"*, and they differ by the KIND of node
 the option is:
@@ -93,7 +93,7 @@ promoted body)`` — and it collapses to one class whenever ``attached == cost``
 `promote_retreat_value.RetreatSide.build_after` already resolved that dimension — *"the greedy
 cheapest-to-lose typed choice, retreat slots being colourless so the set is genuinely ours to pick"* —
 a criterion chosen when A's future was not being searched. **It is DEMOTED here from answer to
-ranker** (ADR-0100 amendment, ADR-TEMP-392 decision 5), so expansion leads with the greedy set and
+ranker** (ADR-0100 amendment, ADR-0121 decision 5), so expansion leads with the greedy set and
 simply does not stop there.
 
 ## What the engine actually does, read off the traces rather than recalled
@@ -157,7 +157,7 @@ this node — is bounded by the follow-up select's REPLAN rather than silent.
 
 ## One evaluator at both sites: the follow-up select REPLANS
 
-*(ADR-0100 amendment, ADR-TEMP-392 decision 6.)* When the engine poses the `_SWITCH` /
+*(ADR-0100 amendment, ADR-0121 decision 6.)* When the engine poses the `_SWITCH` /
 `_DISCARD_ENERGY` / `_TO_HAND`, the composer re-decides through this identical ranker + `state_value`
 machinery, over the real board. ADR-0100's three call sites collapse to one evaluator at a different
 layer than that ADR describes.
@@ -216,7 +216,7 @@ from common import (board_delta, board_expectation, currency, needs, retreat_cos
 from common.board_delta import Unmodellable
 from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, option_fingerprint
 from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
-from common.scouting.matchup_plan import role_registry
+from common.scouting.matchup_plan import ROLE_REGISTRY
 from common.strategy.context import _PLAY, _RETREAT
 
 #: Option kinds whose target is STRUCTURALLY deferred — the engine's own resolution poses it at a
@@ -277,20 +277,27 @@ def role_span(registry: dict | None = None) -> float:
     """``max(abs(priority))`` over the CLOSED role registry — the normaliser that maps an ordinal role
     priority into ``[-1, 1]``.
 
-    DERIVED from `matchup_plan.role_registry()` on every call, never transcribed. A hardcoded 100
-    would be a second copy of that table's largest magnitude and would rot silently the first time a
-    row is added or re-ruled — which Issue #395 D3/D4 is in flight to do (`attacker` 50, `enabler` 40,
-    a prize-gated `avoid`). 1.0 on an empty or all-zero registry, so the division is total and a
-    degenerate sheet contributes exactly nothing rather than raising inside an ordering loop.
+    DERIVED from `matchup_plan.ROLE_REGISTRY` on every call, never transcribed — the CLOSED role
+    vocabulary Issue #395 D2 shipped, a ``{role: Role}`` map whose ordinal is ``Role.priority``.
+    1.0 on an empty or all-zero registry, so the division is total and a degenerate sheet contributes
+    exactly nothing rather than raising inside an ordering loop.
 
-    ``registry`` overrides the shipped sheet. It exists so the property that matters — *a sheet
-    gaining a LARGER magnitude widens the span, or the ``|role / span| <= 1`` bound the D7 proof rests
-    on stops holding* — can be asserted against a hypothetical future sheet without reaching across a
-    module boundary into `matchup_plan`'s private table. `role_registry()` deliberately returns a
-    COPY, so a caller that wanted to test that property otherwise had no handle but the private dict,
-    which is the cross-module private reach this repo forbids."""
-    return max((abs(float(p)) for p in (role_registry() if registry is None
-                                        else registry).values()), default=0.0) or 1.0
+    **Deriving it rather than transcribing it is the whole point, and the rebase proved it.** Issue
+    #395 merged to `main` while this work was in flight and did exactly what a transcribed constant
+    could not survive: it moved the table from a private ``_ROLE_PRIORITY`` to this public registry,
+    added `attacker` (50) and `enabler` (40), and gated `avoid` on prize value. A hardcoded 100 would
+    have been silently stale; the derivation absorbed the change with no edit to the arithmetic and no
+    change to the D7 guarantee, because that guarantee is stated over ``max(abs(·))`` rather than over
+    any particular row.
+
+    ``registry`` overrides the shipped sheet with a plain ``{role: priority}`` mapping. It exists so
+    the property that matters — *a sheet gaining a LARGER magnitude widens the span, or the
+    ``|role / span| <= 1`` bound the D7 proof rests on stops holding* — can be asserted against a
+    hypothetical FUTURE sheet without reaching across a module boundary into `matchup_plan`'s
+    internals."""
+    sheet = ({name: role.priority for name, role in ROLE_REGISTRY.items()}
+             if registry is None else registry)
+    return max((abs(float(p)) for p in sheet.values()), default=0.0) or 1.0
 
 
 def gust_rank_key(rows, *, registry: dict | None = None):
@@ -335,11 +342,16 @@ def gust_rank_key(rows, *, registry: dict | None = None):
     role ladder, which is the bench case `_opponent_target_rows`' own comment says *"still ranks almost
     nothing."*
 
-    ``role_priority`` is read off the row with a **0.0 default**, which is the field Issue #395 D7 adds
-    (`_opponent_target_rows` does not carry it yet at this commit). The default is not a placeholder:
-    D7 rules the field UNFUSED so each consumer combines, and an absent ordinal contributing 0 is the
-    same thing an unroled body contributes once the field exists — so this key orders by `value` alone
-    until #395 lands and needs no change when it does. `MatchupPlan.priority` is already γ-scaled for
+    ``role_priority`` is `pilot._opponent_target_rows`' own leg — `MatchupPlan.priority(cid)` attached
+    beside `prize_advance` / `survival_shift` / `value`, deliberately UNFUSED so that each consumer
+    combines. **Issue #395 D7 shipped it to `main` while this work was in flight**, and this is that
+    combination, its first composer consumer.
+
+    The ``0.0`` default is kept and is not a placeholder: it is exactly what an UNROLED body
+    contributes on a live row (`role_priority` resolves through the closed vocabulary's own
+    `.get(role, 0)`), so one key orders a menu whose rows carry the field and a menu whose rows
+    predate it, identically. That is what let this ranker be written and graded before Issue #395
+    merged, and absorb its arrival with no edit. `MatchupPlan.priority` is already γ-scaled for
     matchup provenance and γ-independent for general card facts, so an unrecognised opponent (γ=0)
     silently contributes only the derived tier. Nothing extra to handle."""
     ceil = float(TARGET_VALUE_CEILING)
@@ -471,7 +483,7 @@ def has_deferred_target(model, option: dict, *, seat_index: int) -> bool:
 
 # ── the target CLASS resolver, driven by the compendium's declared vocabulary ─────────────────────
 #
-# ADR-TEMP-392 decision 2: *"Expansion is data-driven off the compendium's target vocabulary, never
+# ADR-0121 decision 2: *"Expansion is data-driven off the compendium's target vocabulary, never
 # per-card. The class resolver reads `CLAUSE_SELECTORS["target"]` and its neighbours (`restriction`,
 # `zone`, `source`); a hand-written expander per card hardcodes what is already data."*
 #
@@ -528,7 +540,7 @@ _CARD_CLASS_TARGETS = frozenset({
 
 #: Clause keys the class resolver honours. Anything else refuses, fail-closed against vocabulary
 #: drift — the same discipline `board_expectation._HANDLED_FETCH_KEYS` keeps for its own node. The
-#: neighbours ADR-TEMP-392 decision 2 names are here; `zone` and `source` are absent because they
+#: neighbours ADR-0121 decision 2 names are here; `zone` and `source` are absent because they
 #: select a CARD ZONE, and a body already in play is in no such zone.
 _HANDLED_TARGET_KEYS = frozenset({"kind", "target", "target_type", "restriction"})
 
@@ -542,7 +554,7 @@ _RESTRICTIONS = {
 def target_predicate(clause: dict):
     """``(CardStat, _BodyPlace) -> bool`` for one clause's declared target class, or a refusal.
 
-    The whole of ADR-TEMP-392 decision 2 in one function: the vocabulary is the compendium's, the
+    The whole of ADR-0121 decision 2 in one function: the vocabulary is the compendium's, the
     evaluation is this module's, and the three ways it can fail are three DIFFERENT sentences —
     vocabulary drift, a category error, and a scoped gap — because they are three different pieces of
     work and a backlog grouped by one message could not tell them apart."""
@@ -591,7 +603,7 @@ def target_predicate(clause: dict):
 def _retreat_space(model, option: dict, *, seat_index: int) -> tuple:
     """A retreat's product space: ``((discarded energy-card indices), promoted bench index)``.
 
-    Both dimensions, per ADR-TEMP-392 decision 5. The Energy leg collapses to ONE member whenever
+    Both dimensions, per ADR-0121 decision 5. The Energy leg collapses to ONE member whenever
     ``attached == cost`` or the Retreat Cost is 0 — structurally, because ``C(n, n)`` and ``C(n, 0)``
     are both 1, rather than by a special case that could drift from the claim.
 
@@ -652,7 +664,7 @@ def _gust_space(model, option: dict, *, seat_index: int) -> tuple:
     *"Switch in 1 of your opponent's Benched Pokémon to the Active Spot"* — Boss's Orders (1182),
     quoted from `data/EN_Card_Data.csv`. The clause KIND supplies the SCOPE (a gust reaches across the
     table, and switching in a body already Active is not a move); the `target` SELECTOR narrows within
-    it, through :data:`BODY_PREDICATES` — never a per-card branch, which is what ADR-TEMP-392 decision
+    it, through :data:`BODY_PREDICATES` — never a per-card branch, which is what ADR-0121 decision
     2 rules out.
 
     Registered and exercised even though :func:`deferred_target` cannot synthesize the resulting board
@@ -771,7 +783,7 @@ def rank_retreat(model, candidate) -> float:
     to ``promote_value(B) + build_after(A | discard set)`` exactly. **No rate is invented and no term
     is re-weighted**: this is the shipped equation read as a ranking rather than as a value.
 
-    That is also precisely what ADR-TEMP-392 decision 5's demotion means in code — `build_after` stops
+    That is also precisely what ADR-0121 decision 5's demotion means in code — `build_after` stops
     being the ANSWER to *which Energy goes* and becomes the KEY the discard dimension is ordered by, so
     the greedy cheapest-to-lose set still ranks first and expansion simply does not stop there.
 
@@ -794,7 +806,7 @@ def rank_retreat(model, candidate) -> float:
 #:
 #: **`gust` is deliberately ABSENT rather than listed-and-empty.** Its ranker exists and is graded
 #: (:func:`gust_rank_key`), but it takes a MENU of `pilot._opponent_target_rows` rows — `value`,
-#: `prize_advance`, `survival_shift`, and the `role_priority` Issue #395 D7 adds — and those rows are a
+#: `prize_advance`, `survival_shift`, and the `role_priority` Issue #395 D7 shipped — and those rows are a
 #: PILOT derivation over the Read, the Brief and the KO clock, none of which a `StateModel` exposes. So
 #: the composer passes it in through ``ranker=`` at the call site that holds the rows; storing a
 #: menu-shaped callable in a per-candidate registry would make every reader check which shape they got.
