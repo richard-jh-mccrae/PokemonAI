@@ -184,7 +184,12 @@ REFUSED: it is the evolve transition, not a deploy.
 
 ---
 
-## 2.5 P0 — a BLOCKING prerequisite found while speccing: `CardStat.stage` is never populated
+## 2.5 P0 — a BLOCKING prerequisite, now **Issue #408**: `CardStat.stage` is never populated
+
+> **Filed as Issue #408 and specced there in full.** It lands as its own PR, merged BEFORE this one,
+> because it is a production behaviour change (it moves hydrapple's re-access outs) while everything
+> in this spec is inert — folding the two would leave one `score_diff` unable to attribute either.
+> Summarised here because §4.4 is unsound without it; the ruling detail lives in #408.
 
 **`fetch_target_matches`' `stage1` and `stage2` target classes match NOTHING, in production, and
 always have.** Found by sizing the conjunction legs pool-wide and getting two zeroes that no deck
@@ -242,11 +247,13 @@ exactly the failure `_covers` exists to prevent. The corpus cannot catch this (m
 is guarded by a TEST rather than by a measurement: a fixture board holding an unseen Stage 1 and
 Stage 2 must produce a three-leg product.
 
-**Lands as commit 0**, ahead of everything else, with its own test in
-`tests/scouting/test_cardstat_fixture_facts.py` (every Pokémon's `stage` agrees with the engine dump)
-and a `fetch_closure` test that a `stage1` clause matches a known Stage 1. It is a **production
-behaviour change** — it un-blinds 461 cards to two target classes — so it ships alone and
-`score_diff`-gated, not folded into item 1.
+**Lands as Issue #408's own PR, merged first.** It is a **production behaviour change** — it
+un-blinds 461 cards to two target classes, and measured, it moves exactly one agent (hydrapple: four
+line pieces gain +2 re-access outs from its 2× Dawn; all five other agents are unchanged) — so it
+ships alone and `score_diff`-gated rather than folded into item 1. #408 carries the full spec: the
+canonical derivation, the fixture-audit vocabulary mapping, and the instrument gap that let it
+survive (`test_cardstat_fixture_facts.py` cannot see helper-constructed `CardStat` rows, and the only
+fixtures using the production vocabulary are built through a helper).
 
 ---
 
@@ -774,10 +781,9 @@ is not an audit.
 
 ### Commit order (each independently revertible)
 
-0. **P0 — `stage_from_card` + `_build_cache` populates `stage`** (§2.5). A production behaviour
-   change (461 cards become visible to two target classes), so it ships ALONE and `score_diff`-gated,
-   ahead of everything. **Item 1's conjunction must not land before it** — §4.4's empty-leg SKIP is
-   unsound while a leg can be silently unmatchable.
+0. **P0 — Issue #408**, a SEPARATE PR merged before this branch (§2.5). **Item 1's conjunction must
+   not land before it** — §4.4's empty-leg SKIP is unsound while a leg can be silently unmatchable.
+   This branch rebases onto it, so item 1's `score_diff` is taken against #408's merged state.
 1. `deck_odds.p_contains_at_least` + delegation + tests — pure, no consumer
 2. `snapshot_coverage.COST_CARDS` + `choice_relation_problems` + audits
 3. compendium `choice` fix (1097, 1142) + re-stamp — **inert**, A7
