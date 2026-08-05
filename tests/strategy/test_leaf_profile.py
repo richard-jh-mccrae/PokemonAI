@@ -106,7 +106,11 @@ PER_DECISION_PROFILE = frozenset({
     "theirs.hand_size",               # ← POC-T1: THE supplier of the opponent hand count
     "theirs.incoming",                # ← POC-T1: the FOLDED doom read, at the `UNCHARGED` policy
     "theirs.prizes_remaining",
-    "theirs.turns_to_ko_me",          # ← POC-T1: `opponent_target_value`'s removal Δ
+    # ← POC-T1: `opponent_target_value`'s removal Δ. RENAMED from `theirs.turns_to_ko_me` by
+    # ADR-TEMP-398, and a rename is all it is: the integer route is now that clock's `.turns` view,
+    # so one logical read still registers ONE field and the per-side cost is unchanged. Re-pinned on
+    # that basis rather than re-measured, because nothing new is being computed.
+    "theirs.survival_clock",
 })
 
 #: The model fields the ATTACH DECIDER adds on any menu that offers an energy attach (#139,
@@ -287,7 +291,9 @@ KO_LINE_PROFILE = frozenset({
 #:     dominated three orders of magnitude over by the model's own lazy derivations. The two rows
 #:     that left (`mine.active.payoff_attack`, `mine.bench.payoff_attack`) were the printed-only
 #:     body-scoped twin this read replaces; it could not see the Bench, which is the whole bug.
-#:   * `mine.*.prize_value` + `theirs.turns_to_ko_me` — `survival`, both areas, Bench-Harvest-aware.
+#:   * `mine.*.prize_value` + `theirs.survival_clock` — `survival`, both areas, Bench-Harvest-aware.
+#:     (`survival` reads that clock's INTEGER `.turns`; only the opponent-target ranking takes the
+#:     fractional `.exact` — ADR-TEMP-398.)
 #:   * `theirs.active.hp_remaining` — `threat`'s reachability filter (can I actually reach this KO).
 #:   * `mine.forward_index` / `forward_payoff` — `development`'s evolution topology, over MY decklist.
 #:   * `mine.mine_turns_to_afford` — the forward leg of `readiness`'s odds, so a mid-turn board with
