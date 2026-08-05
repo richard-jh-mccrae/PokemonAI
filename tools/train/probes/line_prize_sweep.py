@@ -21,12 +21,20 @@ beside it rather than in place of it (see `fractional_clock_sweep._tied`).
     S_pos  sham — position index. The degenerate case: a leg that cannot beat LIST ORDER is not
            ordering anything, and list order is precisely what a Flat Tie falls back to.
 
-**This leg SHOULD clear its shams, and that expectation is worth stating before the run rather than
-after.** The fractional clock did not, and correctly so — it declines to break a Structural Zero,
-which is most of the population. This leg is different in kind: it separates bodies by a card fact
-that varies across them (what their line becomes) rather than by a removal Δ that is zero for every
-non-leading body. A LINE arm that merely matches `sham cid%7` would mean the corpus's opponent
-benches are mostly dead-end lines, and that is a finding about the corpus, not a vindication.
+**The pre-registration, and how it turned out.** Before the first run this docstring predicted the
+leg SHOULD clear its shams, on the reasoning that it separates bodies by a card fact that varies
+across them rather than by a removal Δ that is zero for every non-leading body. **It did not, and
+the prediction is left standing here rather than edited into agreement with the result.**
+
+Measured: 25.3% bench argmax movement against band-matched shams at 29.0% / 29.9%. That prompted
+ADR-0118's sparsity-match amendment, since a band-matched sham perturbs every row while this leg
+perturbs 29.2% of them. Under the corrected control the leg beats the two content shams by 8 and 14
+frames out of 241 and loses to the position sham. **Eight frames is not a pass** — ADR-0117's
+retraction turned on rejecting a five-frame separation, and that standard binds a leg we wanted to
+work exactly as hard as one we did not.
+
+What justifies the change is the TIE POPULATION (253 → 139 groups, directly counted, printed below)
+and the authored constants it deletes — not discrimination. Read the two halves separately.
 
     python tools/train/probes/line_prize_sweep.py
 

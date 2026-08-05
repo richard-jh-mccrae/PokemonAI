@@ -197,6 +197,45 @@ which is the very failure this decision exists to fix.
 - **Two consumers may spell one quantity differently when one differences and one does not.** Say
   so at both sites; do not converge them for symmetry.
 
+## Measured outcome — and the half of it that is weak
+
+`tools/train/probes/line_prize_sweep.py`, over 359 corpus frames producing target rows.
+
+**The Flat Tie population, which is what Issue #398 was filed on — decisive.** Counted on `value`,
+the field the ranking sorts on:
+
+| arm | equal-prize groups tied on VALUE |
+|---|---|
+| OWN (= the tree as PR (a) left it) | 253/343 (73.8%) |
+| LINE (as this PR ships) | **139/343 (40.5%)** |
+
+114 groups un-tied, against PR (a)'s 28. This is a direct count of the defect, not a proxy for it.
+
+**Argmax movement against the sham bar — WEAK, and stated as such.** The probe's own docstring
+pre-registered that this leg *should* clear its shams. Under ADR-0118's rule as written it did not
+(25.3% against 29.0% / 29.9%), which prompted that ADR's sparsity-match amendment — the band-matched
+sham perturbs 100% of rows while this leg perturbs 29.2%. Under the corrected, sparsity-matched
+control:
+
+| arm | bench argmax moves |
+|---|---|
+| line prize | 61/241 (25.3%) |
+| sham `cid % 7` [sparsity] | 53/241 (22.0%) |
+| sham `hp % 70` [sparsity] | 47/241 (19.5%) |
+| sham position [sparsity] | 89/241 (36.9%) |
+
+It beats the two content-derived shams by **8** and **14** frames, and LOSES to the position sham.
+**Eight frames is not a result this repo may accept**: ADR-0117's retraction turned on calling a
+**five**-frame separation "not evidence", and the same standard binds here even though this is the
+leg we wanted to work. The sparsity amendment is a real fix to a real methodological defect; it did
+not convert a failure into a pass, and it must not be read as having done so.
+
+**So the decision rests on the tie count and the constant deletions, NOT on discrimination.** The
+leg is kept because it prices a real card fact that nothing priced before, because it replaces three
+authored magnitudes with one derivation, and because the tie population moves by a directly counted
+114 groups — not because it demonstrably reorders targets better. A future proposal to tune or
+extend it should treat the discrimination question as OPEN.
+
 ## Verification
 
 - The rules claim (1 attack per turn) is `docs/rules.md` §3, sourced from `rulebook.txt` L150.
