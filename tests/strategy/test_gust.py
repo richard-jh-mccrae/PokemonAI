@@ -842,3 +842,32 @@ def test_the_printed_read_is_restored_exactly_when_the_lever_is_thrown():
     assert p._gust_forward_denial({"id": PREEVO_THREAT}) == dg._EVOLVING_GUST_DENIAL
     p.scaled_threat_rank = True
     assert p._gust_forward_denial({"id": SCALER_PREEVO}) > 0.0, "ON sees what OFF cannot"
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_the_evolving_threat_denial_discounts_by_the_hops_to_the_ATTACKER():
+    """The hop count must be the distance to the best-DAMAGE form, not the best-PRIZE one.
+
+    `reach` is `forward_threat_ceiling` — a damage quantity about the line's biggest ATTACKER — so
+    discounting it by `forward_line_prize`'s hop count asks how far away a different form is. The
+    two genuinely diverge, and the direction of the error is what makes this worth a test rather
+    than a comment: a line with NO prize gap reports 0 prize-hops, so a prize-hop discount would
+    vanish entirely on exactly the case ADR-TEMP-398 decision 5 is justified by — *"a 1-prize Basic
+    evolving into a 1-prize Stage 1 that hits hard"*.
+
+    `SCALER_PREEVO` is that case: Abra (1 prize) -> Alakazam (1 prize), so `forward_line_prize`
+    returns 0 hops while `forward_payoff_terms` returns 1. `halve(0)` is 1.0 and `halve(1)` is 0.5,
+    so the bug was a clean factor of two, undiscounted."""
+    p = _pilot()
+    p.scaled_threat_rank = True
+    p._opp_attack_context = {"atk_hand": 7}                       # 10 + 20x7 = 150
+
+    assert p.combat.forward_line_prize(SCALER_PREEVO) == (1, 0), (
+        "the premise: no prize gap, so the PRIZE hop count is 0 and would not discount at all")
+    assert p.combat.forward_payoff_terms(SCALER_PREEVO)[1] == 1, (
+        "...while the ATTACKER really is one hop away, which is the discount that belongs here")
+
+    reach = p.combat.forward_threat_ceiling(SCALER_PREEVO, context=p._opp_attack_context)
+    assert reach == 150
+    assert p._gust_forward_denial({"id": SCALER_PREEVO}) == pytest.approx(
+        (150 / 100.0) * 0.5), "one hop of discount, not zero"

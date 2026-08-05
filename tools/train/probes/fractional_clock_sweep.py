@@ -35,7 +35,6 @@ read-only, always exits 0.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import sys
 from collections import Counter
 from pathlib import Path
@@ -44,75 +43,23 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.probes._corpus import replay_agent                  # noqa: E402
-from train.probes._sham import READING, SHAMS, argmax, legs    # noqa: E402  THE sham vocabulary
+from train.probes._sham import (ArmPatch, READING, SHAMS, argmax, bench_subset,  # noqa: E402
+                                legs, tie_population, tune as _tune)   # THE shared probe seam
 from train.gates import keyed_corrections                      # noqa: E402
 from common.state_model import TheirSide                       # noqa: E402
 from common.strategy.combat import SurvivalClock               # noqa: E402
 
 
-def _tune():
-    spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
 
+class _IntegerClock(ArmPatch):
+    """Collapses ``SurvivalClock.exact`` back onto ``.turns`` — the pre-ADR-0117 reading."""
 
-class _IntegerClock:
-    """Collapses ``SurvivalClock.exact`` back onto ``.turns`` for the duration of a block.
+    target, name = TheirSide, "survival_clock"
 
-    Patches the MODEL route rather than reimplementing the pre-change arithmetic, because a
-    hand-rebuilt "what it used to do" is exactly the kind of second oracle ADR-0117 exists to
-    avoid — it would drift from the real prior behaviour and nothing would report it."""
+    @classmethod
+    def collapse(cls, clock):
+        return SurvivalClock(clock.turns, float(clock.turns))
 
-    _real = None
-
-    def __enter__(self):
-        if _IntegerClock._real is not None:
-            raise RuntimeError("_IntegerClock is not re-entrant — a nested enter would capture the "
-                               "PATCHED function as the real one and never restore it")
-        _IntegerClock._real = real = TheirSide.survival_clock
-
-        def integer_only(side, *a, **kw):
-            # `*a` rather than a named `my_body`: the shipped signature takes it positionally OR by
-            # keyword, and a wrapper that narrows that is a wrapper that changes behaviour.
-            clock = real(side, *a, **kw)
-            return SurvivalClock(clock.turns, float(clock.turns))
-
-        TheirSide.survival_clock = integer_only
-        return self
-
-    def __exit__(self, *exc):
-        TheirSide.survival_clock = _IntegerClock._real
-        _IntegerClock._real = None
-        return False                      # never swallow — restore, then let the frame's try see it
-
-
-def _subset(rows, scope: str):
-    return rows if scope == "all" else [r for r in rows if r["area"] == "bench" and r["value"] > 0]
-
-
-def _tied(rows) -> tuple[int, int, int]:
-    """``(equal-prize groups, tied on VALUE, tied on survival_shift)`` — the Flat Tie population.
-
-    **The first count is the Flat Tie; the second is a sub-population of it.** A Flat Tie is defined
-    by identical `value`, because `value` is what the ranking sorts on and therefore what falls
-    through to list order. Ties on `survival_shift` are strictly FEWER: equal prize plus equal shift
-    forces equal value, but the converse fails — `needs.opponent_target_value` floors the shift at
-    `max(0.0, shift)`, so two rows with DIFFERENT negative shifts collapse to the same value, and at
-    `phase == 0` the survival term vanishes entirely and every equal-prize row ties whatever its
-    shift.
-
-    Reporting only the shift count was this probe's own error, and it biased BOTH directions at
-    once: it understated the defect (fewer ties seen than exist) and overstated the fix (recovery
-    measured against the wrong denominator). Both are printed now so the gap between them stays
-    visible rather than having to be rediscovered."""
-    by_prize: dict = {}
-    for r in rows:
-        by_prize.setdefault(r["prize"], []).append(r)
-    groups = [g for g in by_prize.values() if len(g) >= 2]
-    return (len(groups),
-            sum(1 for g in groups if len({float(r["value"]) for r in g}) == 1),
-            sum(1 for g in groups if len({float(r["survival_shift"]) for r in g}) == 1))
 
 
 def main(argv=None) -> int:
@@ -145,7 +92,7 @@ def main(argv=None) -> int:
             continue
         scanned += 1
         for name, res in (("INT", before), ("FRAC", after)):
-            for i, n in enumerate(_tied(res[1])):
+            for i, n in enumerate(tie_population(res[1])):
                 ties[name][i] += n
         # The band is FRAC's OWN largest effect on `value`, so a sham cannot lose by being smaller.
         band = max(band, max((abs(a["value"] - b["value"])
@@ -157,7 +104,7 @@ def main(argv=None) -> int:
     counts: Counter = Counter()
     for _key, before, after in captured:
         for scope in ("all", "bench"):
-            pre, post = _subset(before, scope), _subset(after, scope)
+            pre, post = bench_subset(before, scope), bench_subset(after, scope)
             if len(pre) < 2:
                 continue
             counts[scope] += 1
@@ -181,7 +128,7 @@ def main(argv=None) -> int:
     print()
     print("THE FLAT TIE POPULATION — the defect, before and after")
     print("  (a Flat Tie is identical VALUE, which is what falls to list order. The `shift` column"
-          " is a SUB-population — see `_tied`.)")
+          " is a SUB-population — see `_sham.tie_population`.)")
     for name in ("INT", "FRAC"):
         g, v, t = ties[name]
         vpct = f"{100 * v / g:.1f}%" if g else "n/a"

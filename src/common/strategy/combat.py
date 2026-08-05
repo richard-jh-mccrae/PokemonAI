@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from itertools import combinations
+from typing import NamedTuple
 
 from common.board_cards import body_unit_codes   # the ONE read of a body's attached Energy UNITS
 from common.board_cards import card_id as body_card_id   # …and the ONE read of a card ENTRY's id
@@ -356,6 +357,26 @@ def _matched_slots(slots, units, caps=None) -> int:
             if _can_pay(tuple(slots[i] for i in subset), units, caps):
                 return k
     return 0
+
+
+class LinePrize(NamedTuple):
+    """The greatest prize value in a card's evolution line, and how far away that form is —
+    :meth:`CombatMath.forward_line_prize`'s answer (ADR-TEMP-398 decision 2).
+
+    NAMED rather than a bare 2-tuple, for the reason `state_model.ForwardPayoff` gives and MORE
+    sharply than that one needs it. `ForwardPayoff` argues a swap would be caught because two of its
+    three fields are numbers and the third is a flag. No such luck here: ``prize`` runs {0,1,2,3} and
+    ``hops`` runs {0..3}, so a transposed unpack is type-correct, range-correct, and silently wrong —
+    it would discount a line by its own prize value and price it by its distance. Six call sites
+    unpack this.
+
+    Deliberately NOT the same shape as `forward_payoff_terms`' bare ``(owed_damage, hops)`` twin:
+    that one's fields differ in type and magnitude, so it does not carry this hazard."""
+
+    #: Greatest `prize_value` anywhere in the line INCLUDING the card itself. 0 for an unknown card.
+    prize: int
+    #: Evolutions from the card to that form. 0 when the card already IS the best-prize form.
+    hops: int
 
 
 @dataclass(frozen=True)
@@ -1817,8 +1838,8 @@ class CombatMath:
                 best_owed, best_hops = owed, depths[s.name]
         return (best_owed, best_hops)
 
-    def forward_line_prize(self, card_id, *, forward_ids=None, max_hops: int = 3) -> tuple:
-        """``(best_prize, hops)`` — the greatest prize value anywhere in ``card_id``'s line
+    def forward_line_prize(self, card_id, *, forward_ids=None, max_hops: int = 3) -> LinePrize:
+        """:class:`LinePrize` — the greatest prize value anywhere in ``card_id``'s line
         INCLUDING itself, and how many evolutions away that form is (ADR-TEMP-398 decision 2).
 
         The prize a body's LINE ultimately presents, which its own `prize_value` cannot distinguish:
@@ -1837,7 +1858,7 @@ class CombatMath:
         sound answer to it anyway (`TheirSide.forward_payoff` fails OPEN for the same reason)."""
         st = self._card_stat(card_id) if card_id is not None else None
         if st is None:
-            return (0, 0)
+            return LinePrize(0, 0)
         fwd = forward_ids if forward_ids is not None else self.forward_card_ids
         # SORTED for the reason `forward_payoff_terms` states one method up: the closure is a
         # frozenset and the scan breaks ties on `>`, so set-iteration order would otherwise pick the
@@ -1853,7 +1874,7 @@ class CombatMath:
                 continue
             if int(s.prize_value) > best_prize:
                 best_prize, best_hops = int(s.prize_value), depths[s.name]
-        return (best_prize, best_hops)
+        return LinePrize(best_prize, best_hops)
 
     def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None,
                              switch_enabler: bool = False) -> set:

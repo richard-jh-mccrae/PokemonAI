@@ -427,3 +427,32 @@ def test_the_live_rows_run_mid_sim():
     assert mid is not None, "the LIVE rows must survive the rollout"
     assert [r["value"] for r in mid[1]] == [r["value"] for r in root[1]], (
         "and must value each body identically inside the rollout and outside it")
+
+
+def test_the_deleted_pilot_duplicate_read_the_same_number_on_every_real_card():
+    """`Pilot._forward_payoff_prize_value` was deleted and its one caller rerouted to
+    `CombatMath.forward_line_prize(cid)[0]`. The commit claimed "same number, same behaviour"; that
+    is true for every card in the pool and FALSE for an unknown id, so it is pinned rather than
+    asserted.
+
+    The old read was `max(_prize_value({'id': i}) for i in {cid} | forward_ids(cid))`, and
+    `CombatMath.prize_value` answers **1** for a card it does not know — so an unknown id used to
+    claim "a 1-prize line" where the new read claims nothing (0). Measured over the whole pool: 0
+    divergences. The divergence is also unreachable at the only consumer, whose Hypothesis conjoins
+    `card_is_recognized_line_preevo` — membership in a set built from declared real cards — with
+    `0 < card_forward_payoff_prize`, so an unknown id fails on the conjunct before the number is
+    read."""
+    from train.tune import _build_pilot
+    p = _build_pilot("mega_lucario")[0]
+
+    def old(cid):
+        ids = {cid} | p._forward_card_ids(cid)
+        return max((p.combat.prize_value({"id": i}) for i in ids), default=0)
+
+    known = [cid for cid in range(1, 1300) if p.stats.get(cid)]
+    assert len(known) > 200, "positive control: the pool really is loaded, so a clean sweep means something"
+    assert [cid for cid in known if old(cid) != p.combat.forward_line_prize(cid)[0]] == []
+
+    # ...and the one place they differ, stated rather than left to be discovered.
+    assert old(999999) == 1 and p.combat.forward_line_prize(999999)[0] == 0
+    assert 999999 not in p._recognized_line_preevo_set(), "so the consumer's gate never reaches it"

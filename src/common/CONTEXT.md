@@ -133,7 +133,12 @@ this says the EXPRESSION cannot say anything)
 
 **Sham Leg**:
 A deliberately MEANINGLESS term (`cid % 7`, `hp % 70`, a position index), scaled into
-the same magnitude band as the term under test, used as the null for an argmax probe.
+the same magnitude band as the term under test — and, when that term is SPARSE,
+confined to the same rows it lifts. Band alone is not a match: it fixes how hard the
+sham pushes and says nothing about how many rows it pushes, so a dense sham beats a
+sparse leg on volume and the loss reads as a refutation it is not (ADR-0118's
+2026-08-05 amendment; the line-prize leg lifts 29.2% of bodies against a sham's 100%).
+Used as the null for an argmax probe.
 Distinct from a **null control** (an arm against itself, expect 0), which proves the
 comparison is stable but introduces no term and so cannot show that observed movement
 is attributable. Both are required. A movement number published without its sham

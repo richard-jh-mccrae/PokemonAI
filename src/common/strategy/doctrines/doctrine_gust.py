@@ -23,8 +23,16 @@ _STALL_EX_BONUS = 3          # keystone bump: stranding an energyless opponent E
                              # more than a point of retreat cost (ml f41); << KO_SCORE so a KO still wins
                              # to discard -> can't pay ANY retreat cost (≥1) -> opponent must first
                              # spend a turn's attach to retreat it — real tempo cost even at 1 (ep82754875)
-_EVOLVING_GUST_DENIAL = 0.5  # sub-prize tie-break for gusting a latent evolving threat (< 1 prize, so
-                             # never overrides a real prize difference)
+_EVOLVING_GUST_DENIAL = 0.5  # OFF-BRANCH ONLY since ADR-TEMP-398 decision 5 — dead on the live path.
+                             # It was the flat sub-prize tie-break for gusting a latent evolving
+                             # threat, tripped by a PRINTED damage threshold. `_gust_forward_denial`
+                             # now reads the board-priced `forward_threat_ceiling` as a magnitude;
+                             # this survives solely to let `scaled_threat_rank=False` restore the
+                             # printed read byte-for-byte, which is what keeps that incident lever
+                             # honest. Do not tune it — it is a historical value, not a live one.
+                             # (`_EVOLVING_THREAT_DMG` is NOT in the same position: it lives in
+                             # `strategy/context.py` and is still read live by the snipe-relevance
+                             # forward leg and `baseline_snipe`.)
 _MATCHUP_GUST_SCALE = 0.004  # ADR-0051: scale a MatchupPlan role priority (base ≤100, γ-pre-scaled) into
                              # the gust sub-prize tie-break band — prize_liability 100 → 0.4, so the worst
                              # stack (0.5 evolving + 0.4 matchup) stays < 1 prize and never overrides a
@@ -210,7 +218,15 @@ class GustMixin:
             cid, context=getattr(self, "_opp_attack_context", None)) or 0.0)
         if reach <= 0.0:
             return 0
-        _, hops = self.combat.forward_line_prize(cid)
+        # DISCOUNT BY THE HOPS TO THE BEST-**DAMAGE** FORM, which is what `reach` measured.
+        # `forward_line_prize`'s hop count answers a different question — how far away the best
+        # PRIZE is — and the two genuinely diverge (a line whose biggest attacker sits at hop 1
+        # while its biggest prize sits at hop 2). Discounting a damage quantity by the prize
+        # distance was wrong in both directions: it under-discounted the very case decision 5 is
+        # justified by (a 1-prize Basic evolving into a 1-prize Stage 1 that hits hard has NO prize
+        # gap, so hops read 0 and the discount vanished entirely), and over-discounted any line
+        # whose prize form sits deeper than its attacker.
+        _, hops = self.combat.forward_payoff_terms(cid)
         return min(_SURVIVAL_CAP, (reach / PRIZE_DAMAGE_RATE) * halve(hops))
 
     def _gust_matchup_priority(self, board, target: dict) -> float:

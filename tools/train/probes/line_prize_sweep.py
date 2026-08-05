@@ -8,7 +8,7 @@ The bar is ADR-0118's sham policy — **a movement number published without its 
 evidence** — and this probe exists partly because the previous change on this seam published one
 that was not. It also fixes that measurement's OTHER error by default: the tie population is counted
 on `value`, the field the ranking actually sorts on, with the `survival_shift` sub-population printed
-beside it rather than in place of it (see `fractional_clock_sweep._tied`).
+beside it rather than in place of it (see `_sham.tie_population`).
 
 ## Arms
 
@@ -44,7 +44,6 @@ always exits 0.
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import sys
 from collections import Counter
 from pathlib import Path
@@ -53,62 +52,27 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.probes._corpus import replay_agent                  # noqa: E402
-from train.probes._sham import READING, SHAMS, argmax, legs    # noqa: E402  THE sham vocabulary
+from train.probes._sham import (ArmPatch, READING, SHAMS, argmax, bench_subset,  # noqa: E402
+                                legs, tie_population, tune as _tune)   # THE shared probe seam
 from train.gates import keyed_corrections                      # noqa: E402
 from common.state_model import TheirSide                       # noqa: E402
 
 
-def _tune():
-    spec = importlib.util.spec_from_file_location("tune_mod", REPO / "tools" / "train" / "tune.py")
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+
+class _OwnPrizeOnly(ArmPatch):
+    """Collapses `forward_line_prize` onto the body's OWN prize — the pre-ADR-TEMP-398 reading.
+
+    ``(0, 0)`` is what makes this the OLD reading EXACTLY rather than approximately:
+    `needs.line_prize_advance` floors its result at ``own_prize``, so a zero best-line-prize yields
+    the body's own value unchanged, which is precisely what `prize_value` returned before."""
+
+    target, name = TheirSide, "forward_line_prize"
+
+    @classmethod
+    def collapse(cls, value):
+        return (0, 0)
 
 
-class _OwnPrizeOnly:
-    """Collapses `forward_line_prize` onto the body's OWN prize for the duration of a block.
-
-    Patches the MODEL route rather than reimplementing the pre-change arithmetic: a hand-rebuilt
-    "what it used to do" is the second oracle ADR-0117 was written to avoid, and it would drift from
-    the real prior behaviour with nothing reporting it. Returning ``(0, 0)`` is what makes this the
-    OLD reading exactly — `needs.line_prize_advance` floors at `own_prize`, so a 0 best-line-prize
-    yields the body's own value unchanged, which is precisely `prize_value`."""
-
-    _real = None
-
-    def __enter__(self):
-        if _OwnPrizeOnly._real is not None:
-            raise RuntimeError("_OwnPrizeOnly is not re-entrant — a nested enter would capture the "
-                               "PATCHED function as the real one and never restore it")
-        _OwnPrizeOnly._real = TheirSide.forward_line_prize
-        TheirSide.forward_line_prize = lambda side, *a, **kw: (0, 0)
-        return self
-
-    def __exit__(self, *exc):
-        TheirSide.forward_line_prize = _OwnPrizeOnly._real
-        _OwnPrizeOnly._real = None
-        return False                      # never swallow — restore, then let the frame's try see it
-
-
-def _subset(rows, scope: str):
-    return rows if scope == "all" else [r for r in rows if r["area"] == "bench" and r["value"] > 0]
-
-
-def _tied(rows) -> tuple[int, int, int]:
-    """``(equal-prize groups, tied on VALUE, tied on survival_shift)``.
-
-    Grouped on the row's OWN `prize`, deliberately: that is the printed field an equal-prize group
-    means, and grouping on the new `prize_advance` would make the leg look like it dissolved ties it
-    had actually renamed. The first count is the Flat Tie — identical `value`, what falls through to
-    list order. The `shift` column is the strict sub-population `fractional_clock_sweep` documents,
-    printed so the gap between the two stays visible."""
-    by_prize: dict = {}
-    for r in rows:
-        by_prize.setdefault(r["prize"], []).append(r)
-    groups = [g for g in by_prize.values() if len(g) >= 2]
-    return (len(groups),
-            sum(1 for g in groups if len({float(r["value"]) for r in g}) == 1),
-            sum(1 for g in groups if len({float(r["survival_shift"]) for r in g}) == 1))
 
 
 def main(argv=None) -> int:
@@ -141,7 +105,7 @@ def main(argv=None) -> int:
             continue
         scanned += 1
         for name, res in (("OWN", before), ("LINE", after)):
-            for i, n in enumerate(_tied(res[1])):
+            for i, n in enumerate(tie_population(res[1])):
                 ties[name][i] += n
         # HOW MANY BODIES THE LEG CAN EVEN SPEAK ABOUT. A movement number is uninterpretable without
         # it: if most opponent bodies are dead-end lines, a leg that moves little has not failed.
@@ -157,7 +121,7 @@ def main(argv=None) -> int:
     counts: Counter = Counter()
     for _key, before, after in captured:
         for scope in ("all", "bench"):
-            pre, post = _subset(before, scope), _subset(after, scope)
+            pre, post = bench_subset(before, scope), bench_subset(after, scope)
             if len(pre) < 2:
                 continue
             counts[scope] += 1

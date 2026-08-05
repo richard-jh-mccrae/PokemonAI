@@ -95,9 +95,14 @@ counts. Recorded as an explicit `sound_rules` disjointness entry rather than lef
 
 The 11× gap is two correct answers to two different questions, not two opinions about one:
 
-- **`state_value` differences.** Its one live consumer is `planner.py`'s leaf evaluator
-  (`board_value = KO_SCORE × state_value(leaf_state_model(end))`), which scores end-of-turn boards.
-  Remove their body and `survival` recomputes; the clock improvement arrives for free.
+- **`state_value` is CONSUMED DIFFERENTIALLY**, which is not the same as "differences" and the
+  looser word was wrong in the first draft. Its one live consumer is `planner.py`'s leaf evaluator
+  (`board_value = KO_SCORE × state_value(leaf_state_model(end))`), and that call scores **one board
+  absolutely** — nothing subtracts a before-value. What makes the difference real is the planner's
+  **argmax across leaves**: a line that removes their body is scored against lines that do not, and
+  `survival` recomputes on each, so the clock improvement is already in the comparison the planner
+  actually makes. The conclusion stands; the mechanism is leaf-vs-leaf, not before-vs-after, and a
+  reader who took the original wording literally would look for a subtraction that does not exist.
 - **`pilot._opponent_target_rows` does not.** Its consumers are a one-shot ranking with no "after"
   to difference against — chiefly `gust_target_slot`, which prices *holding* a gust card in the
   Worth DP. That is the value of a play NOT made this turn, on a board that does not exist yet;
@@ -114,8 +119,18 @@ Therefore:
 - `state_value._denied_forward_payoff` is **DELETED**. Its damage leg is what `incoming()` already
   composes into the clock, and its prize leg is Decision 2's.
 
-A `sound_rules` entry records the differencing/ranking split, so a later reader does not "fix" the
-asymmetry back into existence.
+The differencing/ranking split is recorded so a later reader does not "fix" the asymmetry back into
+existence.
+
+**Where that record lives, corrected: `state_value`, not `sound_rules`.** The spec and this ADR's
+first draft both said `sound_rules.py` would gain two entries — a `prize_race` disjointness argument
+and this asymmetry. `sound_rules.py` was not touched, deliberately: it is a whitelist of runtime
+**deciders**, each with a retirement test and a reconciliation, while both of these are facts about
+which `state_value` TERM FAMILY prices what. That ledger is `TermFamily`, and it is executable —
+`double_counted()` reads `reads` and `registry_gaps()` reads `does_not_read`, both of which this
+change updates (`denied_forward_payoff` → `denied_line_prize`). A `sound_rules` entry would have
+been prose beside a contract rather than the contract. Recorded here because the spec's version is
+published and a reader comparing the two would otherwise find an unexplained gap.
 
 ## Decision 4 — reachability stays with the consumer; this ADR does not touch it
 
@@ -159,10 +174,18 @@ ranks at its forward index's 10"*), behind the `scaled_threat_rank` flag whose O
 *"restoring the printed-only read exactly"* as an incident lever. `_gust_forward_denial` is the same
 fact at a call site that migration left behind, so it belongs on the same lever: one fact, one
 switch. Deleting the constants would leave OFF unable to restore this call site, making the lever
-partial — and a lever that lies is worse than no lever. `_EVOLVING_GUST_DENIAL` and
-`_EVOLVING_THREAT_DMG` therefore survive as the OFF branch only, live-path dead. Net authored
-constants removed by this ADR: **two** (`_WINCON_DENIAL_PRIZES` deleted, `_denied_forward_payoff`
-retired), not the four an earlier draft claimed.
+partial — and a lever that lies is worse than no lever. Net authored constants removed by this ADR:
+**two** (`_WINCON_DENIAL_PRIZES` deleted, `_denied_forward_payoff` retired), not the four an earlier
+draft claimed.
+
+**Correction (review): "both constants survive as the OFF branch only, live-path dead" was wrong
+about one of them, and the spec's instruction to DELETE it would have broken two live consumers.**
+`_EVOLVING_GUST_DENIAL` is `doctrine_gust`'s own and is indeed OFF-branch-only now.
+`_EVOLVING_THREAT_DMG` is **not** — it lives in `strategy/context.py` as shared vocabulary and is
+read live by `pilot.py`'s snipe-relevance forward leg and by `baseline_snipe`. It was never this
+doctrine's to retire. Deleting it, as the spec's Implementation Decisions directed, would have
+broken both. The lever ruling protected against a real breakage rather than only a documentation
+gap, which is worth recording because the ruling was argued on the lever alone.
 
 **This is NOT the drift Decision 3 closed.** `survival_shift` answers *"does removing this move my
 clock"* and is lead-only by the rules, so it structurally cannot see a line that is dangerous but
