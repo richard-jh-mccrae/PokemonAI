@@ -2939,7 +2939,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         written, so the `"basic"` predicate below compared against None for every card in the pool.
         It was dead for TWO independent reasons — that, and the fact that the only deck carrying the
         grantor (`slowking`, 2× Latias ex) has no `strategy.py` and so is never built as a Pilot.
-        #408 removed the first; the second is #149's to close, and until it does this stays latent
+        Issue #408 removed the first; the second is Issue #149's to close, and until it does this stays latent
         rather than live. Worth stating plainly because the grant was modelled, covered by tests, and
         reachable by neither route — the tests declared `stage` themselves."""
         me = self._my_player(obs) or {}

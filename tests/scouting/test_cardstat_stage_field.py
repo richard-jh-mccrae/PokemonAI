@@ -90,7 +90,8 @@ def test_dump_cards_stage_of_delegates_rather_than_respelling(cards):
     two readings of the same question. Asserted by AGREEMENT over the whole pool, not by reading the
     source — a delegation that stopped delegating would still have to keep answering identically."""
     import sys
-    sys.path.insert(0, str(ROOT / "tools"))
+    if str(ROOT / "tools") not in sys.path:
+        sys.path.insert(0, str(ROOT / "tools"))
     from meta_tracker.dump_cards import stage_of
     assert all(stage_of(c) == stage_from_card(c) for c in cards.values())
 

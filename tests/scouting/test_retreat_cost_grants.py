@@ -24,12 +24,12 @@ against a board here, not a real one, because the only deck running Latias ex is
 be built as a Pilot and owns no corpus frames. The debt is named here rather than implied.
 
 ⚠️ **That exception had a cost, and Issue #408 collected it.** Every board test below declares its
-own `stage`, and `CardStat.stage` was declared-but-never-written until #408 — so the `grant ==
+own `stage`, and `CardStat.stage` was declared-but-never-written until Issue #408 — so the `grant ==
 "basic"` predicate compared against None for every card in the pool while this file stayed green.
 The synthetic seam did not merely under-test the grant; it actively concealed that the grant could
 not fire at all. `test_the_grant_predicate_reads_a_value_the_provider_actually_emits` is the guard
 added for it: a fixture is evidence only if production can emit the value it declares. Note the gate
-was dead for TWO independent reasons — the unwritten field and the missing `strategy.py` — and #408
+was dead for TWO independent reasons — the unwritten field and the missing `strategy.py` — and Issue #408
 removed only the first, so item 1 below still stands.
 
 **OWED TO #149 — two things, the second sharper than the first:**
@@ -198,7 +198,9 @@ def _pilot(*, grantor=None):
                                retreatReduction=1, retreatFreeAtHp=30),
         LATIAS_EX: CardStat(LATIAS_EX, synthetic=True, name='Latias ex', hp=210, ex=True, stage="basic",
                             retreatFreeGrant="basic"),
-        ARCHALUDON: CardStat(ARCHALUDON, synthetic=True, name='Archaludon', hp=300, stage="stage2",
+        # No `stage`: nothing reads it (TOWER carries the Stage 2 role), and card 170 is a
+        # Stage 1 at 180 HP — a dead kwarg is not a licence to state a card fact that is false.
+        ARCHALUDON: CardStat(ARCHALUDON, synthetic=True, name='Archaludon', hp=300,
                              retreatFreeGrant="metal_attached"),
     }, attacks={A_WALK: AttackStat(A_WALK, damage=60, cost=1),
                 A_WALL: AttackStat(A_WALL, damage=60, cost=2)})

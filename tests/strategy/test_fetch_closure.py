@@ -122,7 +122,7 @@ def test_the_widened_target_classes_each_match_exactly_their_class(target, hits)
 # ── the same two classes, against PRODUCTION rows (Issue #408) ────────────────────────────────────
 # The test above builds its own `CardStat`, which is how `stage1`/`stage2` stayed green for a year
 # while matching nothing on any real board: `CardStat.stage` was never written, so the fixture was
-# supplying a value the provider could not emit. A class predicate has to be pinned against a row the
+# supplying a value the provider could not emit. A class predicate has to be asserted against a row the
 # provider actually produced, or the fixture is grading itself.
 
 #: The hydrapple deck's own line — Dawn (1231), the one card in a shipped deck naming these classes,
