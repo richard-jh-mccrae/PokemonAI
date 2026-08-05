@@ -117,6 +117,21 @@ PER_DECISION_PROFILE = frozenset({
     # two share ONE memo entry (1 before, 1 after). `turns_to_ko_me` no longer calls `_memoized` at
     # all, so there is no second registration to find. Field-set cardinality is unchanged.
     "theirs.survival_clock",
+    # ← ADR-TEMP-398: `prize_advance` is the LINE's prize, so the rows ask what each opponent body
+    # BECOMES. Unlike the `survival_clock` rename above this is a genuinely NEW derivation, so it
+    # was measured rather than argued.
+    #
+    # **Measured before re-pinning**, the pin's own method (Issue #261 item 2d): an exact in-process
+    # A/B, the leg live vs neutered to `(0, 0)`, interleaved across three passes over the same 40
+    # frames so machine drift hits both arms equally. **3.116 ms live against 3.100 ms neutered —
+    # +0.016 ms per Board build, +0.52%** over 120 paired samples. Accepted on the same grounds as
+    # every re-measure above: card knowledge only (an `evolvesFrom` name-chain and `prize_value`,
+    # both already in the stat cache), memoised per card id for the life of the snapshot, and ~3
+    # orders below the per-match budget (grader: 2 vCPUs x ~10 min/match).
+    #
+    # The doubled "their" matches the sibling `their_forward_payoff` memo key rather than reading
+    # better — one naming convention, even where it is an ugly one.
+    "theirs.their_forward_line_prize",
 })
 
 #: The model fields the ATTACH DECIDER adds on any menu that offers an energy attach (#139,
