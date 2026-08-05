@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass, field
 from itertools import combinations
+from typing import NamedTuple
 
 from common.board_cards import body_unit_codes   # the ONE read of a body's attached Energy UNITS
 from common.board_cards import card_id as body_card_id   # …and the ONE read of a card ENTRY's id
@@ -356,6 +357,26 @@ def _matched_slots(slots, units, caps=None) -> int:
             if _can_pay(tuple(slots[i] for i in subset), units, caps):
                 return k
     return 0
+
+
+class LinePrize(NamedTuple):
+    """The greatest prize value in a card's evolution line, and how far away that form is —
+    :meth:`CombatMath.forward_line_prize`'s answer (ADR-0119 decision 2).
+
+    NAMED rather than a bare 2-tuple, for the reason `state_model.ForwardPayoff` gives and MORE
+    sharply than that one needs it. `ForwardPayoff` argues a swap would be caught because two of its
+    three fields are numbers and the third is a flag. No such luck here: ``prize`` runs {0,1,2,3} and
+    ``hops`` runs {0..3}, so a transposed unpack is type-correct, range-correct, and silently wrong —
+    it would discount a line by its own prize value and price it by its distance. Six call sites
+    unpack this.
+
+    Deliberately NOT the same shape as `forward_payoff_terms`' bare ``(owed_damage, hops)`` twin:
+    that one's fields differ in type and magnitude, so it does not carry this hazard."""
+
+    #: Greatest `prize_value` anywhere in the line INCLUDING the card itself. 0 for an unknown card.
+    prize: int
+    #: Evolutions from the card to that form. 0 when the card already IS the best-prize form.
+    hops: int
 
 
 @dataclass(frozen=True)
@@ -1816,6 +1837,44 @@ class CombatMath:
             if owed > best_owed:
                 best_owed, best_hops = owed, depths[s.name]
         return (best_owed, best_hops)
+
+    def forward_line_prize(self, card_id, *, forward_ids=None, max_hops: int = 3) -> LinePrize:
+        """:class:`LinePrize` — the greatest prize value anywhere in ``card_id``'s line
+        INCLUDING itself, and how many evolutions away that form is (ADR-0119 decision 2).
+
+        The prize a body's LINE ultimately presents, which its own `prize_value` cannot distinguish:
+        Staryu and a dead-end Basic are both 1-prize cards, but one of them is a Mega Starmie ex one
+        hop from now. ``(0, 0)`` for an unknown card — no claim, and no phantom credit.
+
+        **The hops are hops to the best-PRIZE form, and that is why this is not a reading of
+        :meth:`forward_payoff_terms`.** That one returns the distance to the best-DAMAGE form (Issue
+        #285), and the two diverge on any line whose biggest attacker is not its biggest prize. Both
+        take their depths from :meth:`_forward_hop_depths`, which stays the ONE home for *"how far is
+        that form"* — this is its third aggregation, not a fourth walk.
+
+        CARD KNOWLEDGE ONLY, like the damage twin: `evolvesFrom` chains and `prize_value`, both of
+        which the stat cache holds for every card in the set. No board, no zones, no reachability —
+        the availability question belongs to the caller, and on the opponent's side there is no
+        sound answer to it anyway (`TheirSide.forward_payoff` fails OPEN for the same reason)."""
+        st = self._card_stat(card_id) if card_id is not None else None
+        if st is None:
+            return LinePrize(0, 0)
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        # SORTED for the reason `forward_payoff_terms` states one method up: the closure is a
+        # frozenset and the scan breaks ties on `>`, so set-iteration order would otherwise pick the
+        # hops among two equal-prize forms at different depths. Here ties are NOT hypothetical the
+        # way they are for damage — prize values run {1, 2, 3}, so any line with two ex forms ties —
+        # and the sort makes the shallower one win deterministically, which is the reading that
+        # under-discounts least.
+        fwd_stats = [self._card_stat(f) for f in sorted(fwd(card_id) or ())]
+        depths = self._forward_hop_depths(st, fwd_stats, max_hops=max_hops)
+        best_prize, best_hops = int(st.prize_value), 0
+        for s in fwd_stats:
+            if s is None or not s.name or s.name not in depths:
+                continue
+            if int(s.prize_value) > best_prize:
+                best_prize, best_hops = int(s.prize_value), depths[s.name]
+        return LinePrize(best_prize, best_hops)
 
     def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None,
                              switch_enabler: bool = False) -> set:

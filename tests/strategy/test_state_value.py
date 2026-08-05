@@ -3042,8 +3042,17 @@ def test_the_dragapult_cross_turn_shape_is_priced_BEFORE_the_gust_and_not_only_a
 # whole point is that it erases three. Seven of the eight matchup docs make this their primary or
 # secondary lever (*"snipe/gust a Staryu before it rush-evolves … to trade 1 prize for a denied 3"*).
 #
-# The credit is `development.evolve_marginal`'s own expression — `_READINESS_W x (owed_damage /
-# PRIZE_DAMAGE_RATE) x halve(hops)` — against `TheirSide.forward_payoff`. No new constant.
+# The credit was `development.evolve_marginal`'s own expression — `_READINESS_W x (owed_damage /
+# PRIZE_DAMAGE_RATE) x halve(hops)` — against `TheirSide.forward_payoff`.
+#
+# **ADR-0119 replaced the QUANTITY and kept every claim.** That expression priced forward
+# DAMAGE, which `CombatMath.incoming` already credits all-descendants — so it was inside `survival`'s
+# clock, and this module differences, so it was one quantity counted twice at a band 11x off the
+# live ranking's. The leg that survives prices the LINE's PRIZE
+# (`needs.line_prize_advance` over `TheirSide.forward_line_prize`), which is the half nothing priced
+# and the half the doctrine docs are actually describing: *"trade 1 prize for a denied 3"* is a
+# statement about prizes. Still no new constant — `halve` is ADR-0070 §6's, and the bound is
+# `MAX_PRIZE_VALUE`.
 #
 # **These assertions are made at `_reachable_target_values`, not at `threat`, and that is deliberate
 # rather than a convenience.** Every appended target carries `prize_advance >= 1.0` (`prize_value` is
@@ -3060,14 +3069,24 @@ def _target_values(model) -> tuple:
 
 
 def _credit_for(model, card_id: int) -> float:
-    """The denial credit for the body carrying ``card_id``, off the SHIPPED helper.
+    """The denial credit for the body carrying ``card_id`` — how much MORE than its own prize its
+    LINE is worth, off the SHIPPED primitives.
 
-    Read rather than re-derived on purpose: a test that recomputed `_READINESS_W x (owed /
-    PRIZE_DAMAGE_RATE) x halve(hops)` would agree with a broken implementation as readily as with a
-    correct one. That the credit actually reaches `prize_advance` is a separate claim, asserted
-    against `_target_values` on boards with exactly one reachable target."""
+    **Re-pointed by ADR-0119.** It used to read `_denied_forward_payoff`, which priced the
+    forward DAMAGE a removal denies at the `_READINESS_W` band. That leg is deleted: `incoming()`'s
+    availability gate is all-descendants, so the damage was already inside `survival`'s clock and
+    this module DIFFERENCES, making it one quantity counted twice. The surviving denial leg is the
+    LINE's PRIZE, and every behavioural claim below is unchanged — a pre-evolution still outranks a
+    dead-end body, hops still discount, a best-form body still earns nothing.
+
+    Read rather than re-derived on purpose: a test that recomputed the formula would agree with a
+    broken implementation as readily as with a correct one. That the credit actually reaches
+    `prize_advance` is a separate claim, asserted against `_target_values` on boards with exactly
+    one reachable target."""
     body = next(b for b in model.theirs.bodies if b.card_id == card_id)
-    return sv._denied_forward_payoff(model, body)
+    best, hops = model.theirs.forward_line_prize(card_id)
+    own = float(body.prize_value)
+    return _needs.line_prize_advance(own_prize=own, max_line_prize=best, hops=hops) - own
 
 
 def _their_hops(model, card_id: int) -> int:
@@ -3098,27 +3117,34 @@ def test_a_pre_evolution_prices_above_an_identical_body_that_evolves_into_nothin
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
 def test_a_two_hop_base_prices_below_a_one_hop_base_on_the_SAME_terminal_payoff():
-    """The hop discount, isolated by a pair that INVERTS without it.
+    """The hop discount, on a pair that terminates on the same card.
 
-    Both bodies' lines terminate on the same card — Dragapult ex, `maxDamage` 200 — but Dreepy is two
-    hops from it and Drakloak is one (`data/EN_Card_Data.csv`: 120's `Previous stage` is ``Dreepy``,
-    121's is ``Drakloak``). Dreepy's own printed damage is LOWER (40 against Drakloak's 70), so it is
-    owed MORE: 160 against 130. Undiscounted, Dreepy would therefore price ABOVE Drakloak. The only
-    thing that can reverse that ordering is `halve(hops)`, which is why this pair is the test and a
-    same-owed pair would not be — a same-owed pair passes under any monotone discount, including one
-    applied to the wrong quantity."""
+    Both bodies' lines end at Dragapult ex — a 2-prize `ex` — but Dreepy is two hops from it and
+    Drakloak is one (`data/EN_Card_Data.csv`: 120's `Previous stage` is ``Dreepy``, 121's is
+    ``Drakloak``). Both are 1-prize Basics, so both are owed the SAME prize gap of 1, and the only
+    thing separating them is `halve(hops)`.
+
+    **This test got weaker when ADR-0119 changed the quantity, and that is stated rather than
+    papered over.** Against owed DAMAGE the pair genuinely inverted — Dreepy's own printed damage is
+    lower (40 vs 70), so it was owed MORE (160 vs 130) and would have priced ABOVE Drakloak
+    undiscounted, which made the ordering itself proof the discount was applied to the right
+    quantity. Prize gaps do not invert that way: this set has no two-hop line to a 3-prize Mega ex
+    (Riolu → Mega Lucario ex and Staryu → Mega Starmie ex are both ONE hop, `docs/rulebook.txt`
+    Appendix 1), so no real pair can reproduce the inversion. An equal-gap pair passes under any
+    monotone discount, so this now asserts that the discount is MONOTONE IN HOPS and no longer that
+    it is applied to the right quantity — the exact values below carry that second claim instead."""
     dreepy = _starmie_board(_poke(DREEPY, hp=70, serial=9))
     drakloak = _starmie_board(_poke(DRAKLOAK, hp=90, serial=9))
 
     assert _their_hops(dreepy, DREEPY) == 2 and _their_hops(drakloak, DRAKLOAK) == 1
     assert _credit_for(dreepy, DREEPY) > 0.0 and _credit_for(drakloak, DRAKLOAK) > 0.0
     assert _credit_for(drakloak, DRAKLOAK) > _credit_for(dreepy, DREEPY), (
-        "the two-hop base is owed MORE damage and must still price LESS — the discount, doing work")
+        "one hop from the same terminal form must price above two — the discount, doing work")
 
-    owed_dreepy = dreepy.theirs.forward_payoff(DREEPY).owed_damage
-    owed_drakloak = drakloak.theirs.forward_payoff(DRAKLOAK).owed_damage
-    assert owed_dreepy > owed_drakloak, (
-        "the premise of the inversion: without it this test would pass on the owed damage alone")
+    # The exact values, since the ordering alone no longer pins the quantity: a 1-prize Basic whose
+    # line reaches a 2-prize ex is owed a gap of exactly 1, discounted by halve(hops).
+    assert _credit_for(drakloak, DRAKLOAK) == pytest.approx(1 * 0.5)
+    assert _credit_for(dreepy, DREEPY) == pytest.approx(1 * 0.25)
 
 
 @pytest.mark.req("REQ-STATEVALUE-0013")
@@ -3163,6 +3189,10 @@ def test_reachability_fails_OPEN_on_their_side_and_CLOSED_on_mine():
         "the control: my side CAN prove this line dead — all three copies are in my discard")
     assert board.theirs.forward_payoff(RIOLU).reachable is True
     assert board.theirs.forward_payoff(RIOLU).owed_damage > 0.0
+    # The PRIZE leg inherits the same fail-OPEN, by construction rather than by a second decision:
+    # `TheirSide.forward_line_prize` is threaded through the identical closure and carries no
+    # reachability gate at all, so a line we cannot prove dead keeps its credit.
+    assert board.theirs.forward_line_prize(RIOLU) == (3, 1), "Riolu → Mega Lucario ex, one hop"
     assert _credit_for(board, RIOLU) > 0.0, "…and the credit survives: we cannot prove otherwise"
 
 

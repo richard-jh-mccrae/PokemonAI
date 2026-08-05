@@ -86,12 +86,16 @@ _Avoid_: weak point, mark
 
 **Denial Value**:
 What REMOVING an opponent body denies them, as distinct from what killing it yields
-now (`prize_value`). Two legs, and only one of them is new: the damage the body's
-line would have gone on to deal is already priced by `incoming()`, whose availability
-gate is all-descendants — so the clock sees it. The PRIZE the line would have yielded
-(a Staryu becomes a 3-prize Mega Starmie ex) is priced nowhere and is the leg
-`denial_value` owns. ADR-0117.
-_Avoid_: removal value, kill value
+now. Two legs, and only one is new. The DAMAGE the line would have dealt is already
+priced by `incoming()`, whose availability gate is all-descendants — the clock sees
+it, so denial never spells it a second time. The PRIZE the line would have yielded
+(a Staryu becomes a 3-prize Mega Starmie ex) is the new leg, and it lives INSIDE
+`prize_advance` as a line reading — `own + (max_line_prize − own) × halve(hops)` —
+rather than as a term beside it, because it is bounded by `MAX_PRIZE_VALUE` and so
+leaves `TARGET_VALUE_CEILING` (and the two rates derived from it) still.
+ADR-0119.
+_Avoid_: removal value, kill value, a separate `denial_value` term (it is a reading
+of `prize_advance`, not a fourth addend)
 
 **Flat Tie**:
 An equal-prize group of opponent bodies whose target value is *identical*, so the
@@ -129,7 +133,12 @@ this says the EXPRESSION cannot say anything)
 
 **Sham Leg**:
 A deliberately MEANINGLESS term (`cid % 7`, `hp % 70`, a position index), scaled into
-the same magnitude band as the term under test, used as the null for an argmax probe.
+the same magnitude band as the term under test — and, when that term is SPARSE,
+confined to the same rows it lifts. Band alone is not a match: it fixes how hard the
+sham pushes and says nothing about how many rows it pushes, so a dense sham beats a
+sparse leg on volume and the loss reads as a refutation it is not (ADR-0118's
+2026-08-05 amendment; the line-prize leg lifts 29.2% of bodies against a sham's 100%).
+Used as the null for an argmax probe.
 Distinct from a **null control** (an arm against itself, expect 0), which proves the
 comparison is stable but introduces no term and so cannot show that observed movement
 is attributable. Both are required. A movement number published without its sham

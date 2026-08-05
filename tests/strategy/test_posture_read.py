@@ -621,8 +621,16 @@ def _lever_stats(attacks=None):
                                maxDamage=270, evolvesFrom="Riolu"),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, maxDamage=70),
         KIRLIA: CardStat(KIRLIA, name="Kirlia", hp=80, maxDamage=0),
-        GARDEVOIR: CardStat(GARDEVOIR, name="Gardevoir ex", hp=310, maxDamage=190,
-                            evolvesFrom="Kirlia"),
+        # `megaEx` added by ADR-0119, which made the LINE's prize load-bearing and so reached
+        # this row for the first time. **This id is a STAND-IN, not the pool card** — `GARDEVOIR` is
+        # 101 (the pool's 101 is Jynx), so the claim below is that the fixture models Kirlia's real
+        # line faithfully, NOT that it is that card. What was verified at source is the line itself:
+        # the pool's **Mega Gardevoir ex** (747) has `evolvesFrom` Kirlia and yields **3** prizes,
+        # the same shape as Riolu -> Mega Lucario ex. That is what keeps the equal-pre-evos premise
+        # below TRUE — both lines reach a 3-prize Mega ex, so the Brief is genuinely the only thing
+        # separating Riolu from Kirlia. Left at 2 prizes the test would pass for the wrong reason.
+        GARDEVOIR: CardStat(GARDEVOIR, name="Mega Gardevoir ex", hp=310, maxDamage=190,
+                            evolvesFrom="Kirlia", megaEx=True),
         BRUISER: CardStat(BRUISER, synthetic=True, name="Bruiser", hp=120, maxDamage=120),
         EX_INERT: CardStat(EX_INERT, synthetic=True, name="Inert ex", hp=80, ex=True, maxDamage=120),
         SUPPORT_EX: CardStat(SUPPORT_EX, synthetic=True, name="Support ex", hp=80, ex=True, maxDamage=0),
@@ -864,10 +872,24 @@ def test_gust_prefers_the_damaged_wincon_over_an_equal_prize_support_ex():
 
 @pytest.mark.req("REQ-POSTURE-0011")
 def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
-    # ADR-0051 Phase 3b: a fragile-wincon matchup is won by denying the LINE, not prize count. The
-    # denial bump lifts a 1-prize wincon pre-evo (fragile_preevo) ABOVE a 2-prize inert ex in the gust
-    # target pick — drag up the crib wincon over the fatter inert prize. γ-scaled and role-scoped; a
-    # moderate ~1.5-prize nudge (not the ×5 snipe override), so it stays below the live-threat term.
+    """A 1-prize wincon pre-evo outranks a 2-prize INERT ex in the gust target pick — deny the line,
+    do not take the fatter prize.
+
+    **The γ=0 half of this test inverted at ADR-0119, deliberately, and that is the whole point
+    of the change rather than fallout from it.** Under ADR-0051 Phase 3b the lift was
+    `_WINCON_DENIAL_PRIZES` (1.5) × γ, role-scoped to a briefed `fragile_preevo` — so at γ=0, on any
+    opponent the Read did not recognise, it VANISHED and the bigger prize won. The lift is now the
+    LINE's own prize read from card facts (`needs.line_prize_advance`), which has no γ and no role
+    gate: Riolu is one hop from a 3-prize Mega Lucario ex, so it advances 1 + (3−1)×halve(1) = 2.0,
+    exactly tying the inert ex's own 2 — and the evolving-threat denial then breaks that tie toward
+    the line.
+
+    So the preference now holds on EVERY board, recognised or not. That is the improvement the ADR
+    claims (an authored, γ-gated constant becomes a derivation that cannot fall silent), and this is
+    where its cost is visible too: we will spend a gust taking ONE prize off a body whose line is
+    big, over TWO off a body whose line is dead. The tie on `prize_advance` is what makes that
+    defensible — a 1-hop 3-prize line is genuinely worth about what a standing 2-prize body is —
+    rather than a bare preference for pre-evolutions."""
     obs, select = _gust_obs(poke(RIOLU, hp=80), poke(EX_INERT, hp=80))
     p = _lever_pilot()
     hot = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
@@ -875,12 +897,21 @@ def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
                 matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=1.0))
     preevo = p._gust_target_tactical(obs, select, hot, select["option"][0])
     inert_ex = p._gust_target_tactical(obs, select, hot, select["option"][1])
-    assert preevo > inert_ex                                   # denial bump overrides the +1 prize gap
-    cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,   # γ=0 → bump vanishes
+    assert preevo > inert_ex                                   # denial lift overrides the +1 prize gap
+
+    cold = Board(my_active_id=SNIPER, my_active_energy=1, energy_attached=True,
                  opp_bench=((RIOLU, 80), (EX_INERT, 80)),
                  matchup_plan=build_matchup_plan(brief_roles={RIOLU: "fragile_preevo"}, gamma=0.0))
-    assert (p._gust_target_tactical(obs, select, cold, select["option"][1])         # prize-first restored:
-            > p._gust_target_tactical(obs, select, cold, select["option"][0]))       # the 2-prize ex wins
+    cold_preevo = p._gust_target_tactical(obs, select, cold, select["option"][0])
+    cold_inert = p._gust_target_tactical(obs, select, cold, select["option"][1])
+    assert cold_preevo > cold_inert, (
+        "the line reading is a CARD fact — it must survive an unrecognised opponent, which is "
+        "exactly what the γ-gated constant it replaced could not do")
+    # ...and the plan really is inert, so what survives is the derivation and not a live Brief.
+    assert p._gust_matchup_priority(cold, {"id": RIOLU}) == 0
+    # The advance ties at 2.0 either way; only the card-fact denial separates them. Asserted so a
+    # future change that made the pre-evo win by a LARGER margin than the prize gap is caught.
+    assert cold_preevo - cold_inert < 1.0
 
 
 # ---- ADR-0051 Phase 3b `strip-the-stacked-engine-hand` (+22): RETIRED (ADR-0102, Issue #261 2c) ---

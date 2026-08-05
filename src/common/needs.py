@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from common.card_worth import ROLE_TIER, ENERGY_TIER
+from common.grading import halve      # the ONE hop/turn discount convention (ADR-0070 §6)
 from common.strategy.context import (MAX_PRIZE_VALUE,   # the rules' own constants, one home (leaf
                                      PRIZE_CARDS)       # module)
 
@@ -313,6 +314,34 @@ def survival_value(*, survival_shift: float, phase: float) -> float:
     overrides a real prize difference (the gust-marginal discipline)."""
     return max(-_SURVIVAL_CAP,
                min(_SURVIVAL_CAP, float(survival_shift) * float(phase) * _SURVIVAL_PER_TURN))
+
+
+def line_prize_advance(*, own_prize: float, max_line_prize: float, hops: float) -> float:
+    """``prize_advance`` read as the LINE's prize rather than the body's own — **Denial Value**'s one
+    new leg (ADR-0119 decision 2).
+
+        own + (max_line_prize − own) × halve(hops)
+
+    A 1-prize Staryu one hop from a 3-prize Mega Starmie ex prices at 2, where its own `prize_value`
+    says 1 and cannot say otherwise. What removing it DENIES is the form that never arrives, and
+    that quantity was priced nowhere before this — three authored constants in two modules were
+    standing in for it at three different magnitudes.
+
+    ``halve`` is `EvolveBody.p_arrive`'s shipped hop-discount (ADR-0070 §6), reused rather than a
+    fourth decay rate invented here.
+
+    **Bounded by `MAX_PRIZE_VALUE` by construction, and that is load-bearing rather than tidy.**
+    `max_line_prize` is itself a `prize_value`, and the discount only ever shrinks the gap toward it,
+    so the result stays in ``[own, MAX_PRIZE_VALUE]`` — which leaves :data:`TARGET_VALUE_CEILING`
+    still, and with it BOTH rates derived from that ceiling in other modules
+    (`state_value._THREAT_W`, `currency.GUST_TARGET_WORTH_RATE`). An ADDITIVE denial leg would have
+    moved all three before the new reading did anything on the board.
+
+    FLOORED at ``own_prize``: a forward form worth fewer prizes owes nothing (the direction
+    `CombatMath.forward_payoff_terms` already floors owed damage), and an ABSENT supplier reads 0,
+    which must not drag a body below the prize it is plainly worth."""
+    gap = max(0.0, float(max_line_prize) - float(own_prize))
+    return float(own_prize) + gap * halve(hops)
 
 
 def opponent_target_value(*, prize_advance: float, survival_shift: float, phase: float) -> float:

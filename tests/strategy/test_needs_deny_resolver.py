@@ -50,7 +50,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 
 REPO = Path(__file__).resolve().parents[2]
 DISCARD = 8
-MEGA, HAMMER, BOSS, FILLER = 1031, 1120, 1182, 999
+MEGA, HAMMER, BOSS, FILLER, DREEPY = 1031, 1120, 1182, 999, 119   # Dreepy: 2 hops from Dragapult ex
 RIOLU, MLUC = 677, 660
 FIGHTING = 6                # EnergyType.FIGHTING (cg/api.py)
 FIGHTING_ENERGY = 6         # Basic {F} Energy (SVE 6). Card id and EnergyType coincide by
@@ -234,13 +234,22 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     strip at 35/4 ≈ 8.8 and lifted the Boss's above everything — the exact over-pricing the
     original ruling retired, and the ADR-0076 migration does not reopen.
 
-    **The slot is WORTH-denominated as of Issue #313 item 2g**, so the number below is the band
-    fraction (`10.0 x 1.0/3.9`) rather than the raw prize-equivalent it used to be. What the frame
-    pins is unchanged and is the reason it was chosen: on THIS board the only gustable body is a
-    1-prize Dreepy whose removal buys no survival turns — the MODAL corpus target — so it still
-    prices under the card's own general floor and still moves nothing. The denomination fix lifts
-    the slot where the target is worth more, not everywhere, and this frame is the "not everywhere"
-    half held down in a test."""
+    **The slot is WORTH-denominated as of Issue #313 item 2g**, so the number below is a band
+    fraction (`10.0 x prize_equivalents/3.9`) rather than the raw prize-equivalent it used to be.
+
+    **ADR-0119 moved this frame's number, and the old prose explaining WHY it was chosen no
+    longer describes it.** It read: *"the only gustable body is a 1-prize Dreepy whose removal buys
+    no survival turns — the MODAL corpus target"*, held up as the "not everywhere" half of the
+    denomination fix. The survival half of that is still true. The prize half is not: Dreepy is two
+    hops from **Dragapult ex**, so its LINE is worth 2 where its body is worth 1, and
+    `needs.line_prize_advance` reads `1 + (2−1) x halve(2)` = **1.25**. The frame is therefore no
+    longer a pure "nothing to see" board — it is a mild lift, which is exactly what a two-hop line
+    to a 2-prize ex should earn.
+
+    What the frame actually pins is unchanged, and survives the move: the slot still prices UNDER
+    the card's own general floor (3.21 against 4.5), so the held Boss's still never towers over its
+    own general worth and the decided pick still moves nothing. That claim is asserted below against
+    the floor directly, so it cannot silently become vacuous the next time the marginal moves."""
     # THE Corpus Reader, via the shared test helper (ADR-0087 / ADR-0089). The inline raw walk
     # this replaced `pytest.skip`ped when the frame was absent — a skip on a test that names a
     # literal frame it asserts real behaviour about is a green nobody can notice, so the helper
@@ -258,11 +267,16 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     gust_target = [x for x in slots if x.kind == "gust_target"]
     # EXACT, so the marginal's formula is pinned rather than merely bounded (the original assertion
     # here pinned deny's `10 / 2^t` grade the same way; a loose inequality would let the value drift
-    # anywhere below the floor unnoticed). Their bench holds one gustable body: a 1-prize Dreepy
-    # whose removal buys 0 survival turns, so `prize_advance 1 + phase x 0` = exactly 1.0 —
-    # denominated into Worth by `currency.target_value_to_worth` at the band fraction 1.0/3.9.
+    # anywhere below the floor unnoticed). Their bench holds one gustable body, a 1-prize Dreepy
+    # whose removal buys 0 survival turns — so the survival leg is `phase x 0` = 0 and the whole
+    # marginal is `prize_advance`. Since ADR-0119 that is the LINE's prize: Dreepy is two hops
+    # from Dragapult ex (2 prizes), so `1 + (2-1) x halve(2)` = 1.25, denominated into Worth by
+    # `currency.target_value_to_worth` at the band fraction 1.25/3.9. It read 1.0 while
+    # `prize_advance` was the body's own prize.
     assert len(gust_target) == 1
-    assert gust_target[0].value == pytest.approx(currency.target_value_to_worth(1.0))
+    assert pilot.combat.forward_line_prize(DREEPY) == (2, 2), (
+        "the premise of the number below — a two-hop line to a 2-prize ex, not a dead end")
+    assert gust_target[0].value == pytest.approx(currency.target_value_to_worth(1.25))
     assert gust_target[0].value < 4.5                        # ...and so below the card's own floor
     # `keep_v2` used to be read off `Decision.discard_shadow`, deleted with the other three by
     # Issue #261 item 2h. The number was never the shadow's — it is the decider's own keep, so it is

@@ -165,7 +165,20 @@ CONSUMED = frozenset({
     "model.mine.attack_blocked",
     # ── TheirSide (6) — the newly-threaded half ──
     "model.theirs.active_raw", "model.theirs.bodies", "model.theirs.turns_to_ko_me",
-    "model.theirs.reachable_incoming", "model.theirs.forward_payoff",
+    "model.theirs.reachable_incoming",
+    # `theirs.forward_payoff` LEFT at ADR-0119, which deleted `_denied_forward_payoff` — the
+    # forward DAMAGE a removal denies is already inside `survival`'s clock (`incoming()`'s
+    # availability gate is all-descendants) and this module differences, so pricing it here was one
+    # quantity counted twice. `theirs.forward_line_prize` takes its place: the forward PRIZE, which
+    # nothing priced.
+    #
+    # REVIEWED for the absent-fact question this list exists to ask, and it is NOT a
+    # `RULED_COLLAPSES` case. Read at source: `CombatMath.forward_line_prize` returns `(0, 0)` for
+    # an unknown card or an unreadable stat, and `needs.line_prize_advance` FLOORS its result at
+    # `own_prize` — so an absent fact yields the body's own printed prize, exactly the reading that
+    # shipped before this change. Absence therefore fails CLOSED, into no claim rather than into a
+    # number that looks like a measurement.
+    "model.theirs.forward_line_prize",
     # `theirs.active` joined at Issue #384 (`attack_ev_legs`, which needs the DEFENDER's remaining
     # HP and prize value, not just the raw dict the clock reads). REVIEWED, and NOT a
     # `RULED_COLLAPSES` case. Read at source: `_SideBase.active` is

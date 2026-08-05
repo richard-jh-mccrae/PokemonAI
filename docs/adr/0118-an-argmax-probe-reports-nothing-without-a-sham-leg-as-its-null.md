@@ -56,6 +56,17 @@ such.
   *list order* is not ordering anything.
 - **Band-match the sham to the term under test.** A sham an order of magnitude smaller trivially
   loses and proves nothing. Scale it to the real leg's measured range, which the probe already knows.
+- **SPARSITY-match it too, whenever the term under test is sparse** (amendment, 2026-08-05, from
+  this policy's second application). Band alone is not a match: it fixes how HARD the sham pushes
+  and says nothing about how MANY rows it pushes. Issue #398 PR (b)'s line-prize leg lifts 363 of
+  1244 opponent bodies (29.2%) — the rest are dead-end lines it correctly says nothing about —
+  while a band-matched sham perturbs 100% of rows by up to a full prize. The sham then "wins" on
+  volume alone (25.3% argmax movement against 29.0%), which reads as a refutation and is an
+  artefact of the control. The matched control confines the sham to **the same rows the real leg
+  lifted**, same band: identical count, identical magnitude range, meaningless CHOICE within them —
+  which isolates the only thing a sparse leg actually claims, that WHICH rows it lifts tracks
+  something real. Report the leg's sparsity in the same table; a movement number is uninterpretable
+  without it.
 - **Report the tie population.** A movement percentage is uninterpretable without knowing how much
   of the candidate set was tied before the term was added — that is what sets the floor any leg
   clears for free.
