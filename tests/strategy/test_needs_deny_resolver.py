@@ -50,8 +50,7 @@ from common.strategy.general_strategy import GENERAL_STRATEGY
 
 REPO = Path(__file__).resolve().parents[2]
 DISCARD = 8
-MEGA, HAMMER, BOSS, FILLER = 1031, 1120, 1182, 999
-DREEPY = 119     # the corpus frame's only gustable body: two hops from Dragapult ex
+MEGA, HAMMER, BOSS, FILLER, DREEPY = 1031, 1120, 1182, 999, 119   # Dreepy: 2 hops from Dragapult ex
 RIOLU, MLUC = 677, 660
 FIGHTING = 6                # EnergyType.FIGHTING (cg/api.py)
 FIGHTING_ENERGY = 6         # Basic {F} Energy (SVE 6). Card id and EnergyType coincide by

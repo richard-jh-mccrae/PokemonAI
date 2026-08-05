@@ -621,12 +621,14 @@ def _lever_stats(attacks=None):
                                maxDamage=270, evolvesFrom="Riolu"),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, maxDamage=70),
         KIRLIA: CardStat(KIRLIA, name="Kirlia", hp=80, maxDamage=0),
-        # `megaEx` verified at source: the pool's card 747 is **Mega Gardevoir ex**, `evolvesFrom`
-        # Kirlia, 3 prizes — the same shape as Riolu -> Mega Lucario ex. The flag was missing (and
-        # the name shortened) only because prize value never reached this fixture until
-        # ADR-TEMP-398 made the LINE's prize load-bearing. Correcting it is what keeps the
-        # equal-pre-evos premise below TRUE: both lines really do reach a 3-prize Mega ex, so the
-        # Brief is genuinely the only thing separating them.
+        # `megaEx` added by ADR-TEMP-398, which made the LINE's prize load-bearing and so reached
+        # this row for the first time. **This id is a STAND-IN, not the pool card** — `GARDEVOIR` is
+        # 101 (the pool's 101 is Jynx), so the claim below is that the fixture models Kirlia's real
+        # line faithfully, NOT that it is that card. What was verified at source is the line itself:
+        # the pool's **Mega Gardevoir ex** (747) has `evolvesFrom` Kirlia and yields **3** prizes,
+        # the same shape as Riolu -> Mega Lucario ex. That is what keeps the equal-pre-evos premise
+        # below TRUE — both lines reach a 3-prize Mega ex, so the Brief is genuinely the only thing
+        # separating Riolu from Kirlia. Left at 2 prizes the test would pass for the wrong reason.
         GARDEVOIR: CardStat(GARDEVOIR, name="Mega Gardevoir ex", hp=310, maxDamage=190,
                             evolvesFrom="Kirlia", megaEx=True),
         BRUISER: CardStat(BRUISER, synthetic=True, name="Bruiser", hp=120, maxDamage=120),
