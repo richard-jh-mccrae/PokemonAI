@@ -96,6 +96,18 @@ The human's ruling is Staryu. The model prices a second payoff it cannot deploy 
 would let it deploy the first. `fetch-base-before-stranded-payoff` (+20) is the rung that carried
 this, and its name is the finding.
 
+**The corpus states the rule in the other direction too, which is what pins its shape.** On
+`84889011-7` the human takes a **second Riolu while already holding one** — Poké Pad, engine already
+complete (Lunatone active, Solrock benched), Riolu in hand, and the menu offering Makuhita, Hariyama,
+Solrock, Lunatone and a second Riolu. The ladder took Makuhita (30.00) because
+`dont-grab-a-card-already-in-hand` (−12) had pushed Riolu down to 18.00. So the generic duplicate
+penalty is **actively fighting the correct pick**: a spare Supporter really is waste, a spare LINE
+BASE is not, because this deck runs more than one Mega Lucario ex and each needs its own Riolu.
+
+Together the two frames fix the model precisely: **a line needs one base per un-based PAYOFF copy**,
+counted over hand and play — not one per class, and not capped by a duplicate rule written for cards
+that saturate at one.
+
 ### F2 — `capacity=None` cannot see a full Bench
 
 R3 is right that a grab lands in HAND and costs no board slot — `_keep_slot_dp` says so: *"the
@@ -171,6 +183,31 @@ Acceptance criterion 3's ordering-invariance test passes, and is not evidence: i
 equation in isolation, where the menu really is homogeneous. **A band-invariance claim has to be
 made against the whole scored menu, not against one term of it.**
 
+### F7 — the search's OWN COST is invisible, and the fact is already in the obs
+
+`83661652-31`, in the human's words: *"we discarded a riolu to fetch a riolu. what a waste!"* Ultra
+Ball's `cost: discard_2` had just paid Riolu + Makuhita out of hand; the ladder then scored a fetched
+Riolu at 50.00 (`fetch-base-before-stranded-payoff` + `prefer-wincon-line-piece` + `fetch-a-starter`,
+all firing precisely because no Riolu is in play — which is true only because this search removed
+it), and took it. Two cards spent, one recovered, board unchanged. The human's pick is Mega Lucario
+ex, the payoff, which nothing else can supply.
+
+Neither the ladder nor the assignment can see this, and both would price the same. But **the fact
+needs no derivation at all** — it is in `obs["logs"]` at decision time, exactly and only:
+
+```json
+{"cardId": 677, "fromArea": 2, "toArea": 3, "type": 6, "serial": 25}   // Riolu,    HAND -> DISCARD
+{"cardId": 673, "fromArea": 2, "toArea": 3, "type": 6, "serial": 14}   // Makuhita, HAND -> DISCARD
+```
+
+`LogType.MOVE_CARD` with `fromArea` HAND and `toArea` DISCARD, and the log is a per-decision delta
+rather than a cumulative history, so it contains these two entries and nothing else. Four consumers
+already read `obs["logs"]` (`deck_tracker`, `pilot` twice, `scouting/scout`), so the plumbing exists.
+
+This is the **cheapest** finding here: one Context signal — *"this candidate is a card the current
+select's own cost just discarded"* — with no new slot kind, no `needs.py` change, and no perturbation
+of the discard decider or the refresh shed.
+
 ### F6 — 17 derived Board/Context signals lose their last consumer
 
 Retiring the 23 rungs leaves these read by nothing (measured by walking every `when=` clause in
@@ -223,8 +260,8 @@ frames, and they are a short list with short causes:
 |---|---|---|---|
 | `86091435-69` | Dudunsparce | Fezandipiti ex | **F2** — full Bench; all four tie at 0.0 |
 | `86091728-47` | Night Stretcher | Ultra Ball | **F4** — the recycle line (Drakloak → evolve → ability) is a chain the ladder prices at 0 |
-| `83661652-31` | Mega Lucario ex | Riolu | **F1** — a base is preferred over the payoff its line already has bases for |
-| `84889011-7` | Riolu | Makuhita | **F1** — two line bases tie; nothing ranks which line needs one |
+| `83661652-31` | Mega Lucario ex | Riolu | **F7** — the Ultra Ball's own `discard_2` had just paid the Riolu it then re-fetched |
+| `84889011-7` | Riolu | Makuhita | **F1** — `dont-grab-a-card-already-in-hand` (−12) demotes the second line base the line actually needs |
 | `86088989-29` | Lillie's Determination | Team Rocket's Petrel | **F4/F5** — `grab-the-chain-opener` (+15) out-scores `grab-a-draw-supporter-in-setup` (+10) |
 
 **Every one is a missing FACT, not a missing marginal.** That is the re-grill's actual agenda, and
@@ -284,25 +321,38 @@ Two things follow, neither of which needed the equation to be true:
 
 Decision 3 is the load-bearing one, and it inverts the shape of the work. The grab does not need an
 equation, because the ladder is not abstaining: it decides 29 of 31 frames and misses 5. The
-successor's job is **five frames and four facts**, in this order:
+successor's job is **five frames and five facts**, in ascending order of cost — each one is cheap,
+local, and independently measurable by `grab_sweep.py`:
 
-1. **F2 — bench capacity reaches the grab.** The narrowest and the highest-value: it is the sole
-   cause of one of the two genuine abstentions, and it wants no new slot kind. A Basic whose only
-   route to the board is a Bench slot that does not exist should read through the existing `deploy`
-   gate (`_deploy_odds` already owns exactly this class of question), not through `capacity`.
-2. **F3 — typed `fund_attack` slots plus an `ability_fuel` kind.** The other genuine abstention.
-   `state_model` is already fully typed and `fuel_slot` already filters by colour, so this is
-   removing an inconsistency rather than adding a model.
-3. **F1 — a line needs a base per un-based PAYOFF copy**, not one per class. Two of the five misses.
-4. **F4 — the tutor chain.** Two of the five misses, and the only one that needs a genuine model
-   extension (a per-(row, slot) factor). It is also the one whose knowledge already exists in code
-   (`_chain_grab_value`), so the cheaper first move may be to RANK with it rather than price with
-   it — `_order_key`'s ordering-leg shape, which by construction cannot dominate a working score.
+1. **F7 — the search's own cost.** The cheapest thing on this list: the fact is already in
+   `obs["logs"]` as a `MOVE_CARD` HAND → DISCARD delta, four consumers already read that log, and it
+   needs no slot kind, no `needs.py` change and no perturbation of the other two consumers. One
+   Context signal, one frame.
+2. **F2 — bench capacity reaches the grab.** Sole cause of one of the two genuine abstentions, and
+   it wants no new slot kind either. A Basic whose only route to the board is a Bench slot that does
+   not exist should read through the existing `deploy` gate (`_deploy_odds` already owns exactly this
+   class of question), not through `capacity`.
+3. **F1 — a line needs one base per un-based PAYOFF copy**, not one per class — and the fix must
+   also stand `dont-grab-a-card-already-in-hand` down for line bases, since that rung is what
+   demotes the correct pick on `84889011-7`. Note this one is reachable *without* touching
+   `line_slots` at all if the duplicate rung is narrowed first; try the narrow move and measure
+   before opening the slot model.
+4. **F3 — typed `fund_attack` slots plus an `ability_fuel` kind.** The other genuine abstention.
+   `state_model` is already fully typed and `fuel_slot` already filters by colour, so this removes an
+   inconsistency rather than adding a model — but it is the first item that changes `needs.py`, and
+   so the first that perturbs the discard decider and the refresh shed.
+5. **F4 — the tutor chain.** Two of the five misses, and the only one needing a genuine model
+   extension (a per-(row, slot) factor). Its knowledge already exists in code (`_chain_grab_value`),
+   so the cheaper first move is to RANK with it rather than price with it — `_order_key`'s
+   ordering-leg shape, which by construction cannot dominate a working score.
 
-**Each of 1–3 changes `needs.py`'s model, so each also perturbs the DISCARD decider and the REFRESH
-shed through the shared `_resolve_needs`.** Both main-watchdog gates must be re-measured for any of
-them, and `grab_sweep.py` run alongside. Take them ONE at a time with a measurement between; the
-failure recorded here is what happens when four model gaps are closed at once by a single new term.
+Items 1–3 touch no shared model at all, which is the point: **three of the five misses are reachable
+without going near `_resolve_needs`.**
+
+**Items 4 and 5 change `needs.py`'s model, so each also perturbs the DISCARD decider and the REFRESH
+shed through the shared `_resolve_needs`.** Both main-watchdog gates must be re-measured for those,
+and `grab_sweep.py` run alongside. Take every item ONE at a time with a measurement between; the
+failure recorded here is what happens when five gaps are closed at once by a single new term.
 
 **Do not** re-attempt the retirement as a bundle. The 23 rungs are worth ten frames over an empty
 seam and the assignment is worth two; any rung retired must be retired against the specific fact
