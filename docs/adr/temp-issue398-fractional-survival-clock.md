@@ -1,48 +1,92 @@
-# ADR-TEMP-398 - The survival clock is read fractionally; opponent-target discrimination is recovered, not authored
+# ADR-TEMP-398 - The survival clock is read fractionally, and the Flat Tie is measured to be STRUCTURAL
 
 ⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
 
 **Status:** Accepted (grill of Issue #398, 2026-08-05). Amends **ADR-0071 decision 4**.
+**Amended 2026-08-05, before merge**, by its own build-time measurement — see *Correction* below.
+Issue #398 is **NOT closed by this ADR**; the defect it names is still open.
+
+## Correction — what this ADR originally claimed, and what the measurement said
+
+The first draft of this ADR asserted:
+
+> The cause is quantization, not a missing feature. […] The discarded quantity is exactly the one
+> the discrimination needs.
+
+**That is false as a dominant cause, and it was the premise the whole decision rested on.** It was
+written from the shape of the accumulate loop, not from a differential measurement, and the
+differential measurement was only run when the change was built.
+
+`tools/train/probes/fractional_clock_sweep.py` runs the pre- and post-change rankings over the
+correction corpus, reconstructing the pre-change arm by patching the SHIPPED model route rather
+than reimplementing it (a reimplementation would be the second oracle this ADR elsewhere refuses):
+
+| arm | equal-prize groups | perfectly tied |
+|---|---|---|
+| integer clock (pre) | 343 | 251 (73.2%) |
+| fractional clock (post) | 343 | 219 (63.8%) |
+
+**Quantization was 12.7% of the Flat Tie, not the Flat Tie.** 32 groups recovered; 219 survive.
+
+Every one of the 219 survivors is tied at **exactly 0**, and 1036 of 1244 opponent bodies price at
+exactly 0:
+
+```
+equal-prize groups          : 343
+  discriminated             : 124
+  STILL TIED, all shifts = 0: 219
+  still tied at a non-zero  : 0
+per-body shift distribution : {exactly 0: 1036, fractional: 203, integral >0: 5}
+```
+
+### The real cause: `incoming()` is a per-turn MAXIMUM
+
+`CombatMath.incoming` takes `worst = max(worst, ...)` over their attacker forms — the sum of
+per-turn **maxima**, which ADR-0071 decision 4 chose deliberately as the bounded-pessimism reading.
+A removal Δ therefore has a structural consequence nobody had stated:
+
+> **Removing a body that is not the argmax leaves the maximum untouched, so its removal Δ is
+> exactly 0 at ANY resolution.** At most ONE body per board can carry a non-zero `survival_shift`,
+> and NONE can when two bodies tie for the lead.
+
+Confirmed analytically on a synthetic board with no corpus involved
+(`tests/strategy/test_opponent_target_value.py`):
+
+```
+board [C60, D90, A]     remove C60 -> +0.0000   (not the max)
+                        remove D90 -> +0.0000   (not the max)
+                        remove A   -> +0.1111   (the max)
+board [A, A]            shifts [0.0, 0.0]       (neither is the UNIQUE max)
+```
+
+The consequence for the live seam is sharper than the corpus average suggests: `gust_target_slot`
+reads the **Bench only**, and the opponent's Active is usually the per-turn maximum — so on the
+scope that actually decides, `survival_shift` is structurally incapable of ranking anything. **The
+missing feature this ADR originally argued was absent is real.**
 
 ## Context
 
 `pilot._opponent_target_rows` prices every opponent body as
 `needs.opponent_target_value(prize_advance, survival_shift, phase)`, where `prize_advance` is
 `CardStat.prize_value ∈ {1,2,3}` and `survival_shift` is `Δ turns_to_ko_me` under removal of that
-body.
+body. Measured over the corrections corpus, 251 of 343 equal-prize groups carried an identical
+value and the winner was decided by list order. Frame `81906755|1|decision|77` is the shape: five
+2-prize bodies, all valued exactly `2.0`.
 
-Measured over the correction corpus (359 frames producing target rows):
+Two causes were conflated in the original filing and are now separated:
 
-- **343** equal-prize groups exist — two or more opponent bodies whose `prize_advance` ties.
-- `survival_shift` breaks that tie in **92 (26.8%)**.
-- **251 (73.2%) remain perfectly tied**, every row carrying identical value; the winner is decided
-  by list order.
+1. **Quantization** (12.7%). `turns_to_ko_me` accumulates `incoming()` and returns the first integer
+   turn at which `dealt >= hp`. `dealt` is continuous; the integer is only where it crosses. Where a
+   removal *does* move the maximum, the size of that move was being rounded away. **This ADR fixes
+   this cause and only this cause.**
+2. **The max structure** (87.3%). Above. **Not addressed here.** It needs a term that is not a
+   removal-Δ of a maximum, and designing that is Issue #398's remaining work.
 
-Frame `81906755|1|decision|77` is the shape: five 2-prize bodies, all valued exactly `2.0`.
-
-The cause is quantization, not a missing feature. `CombatMath.turns_to_ko_me` accumulates
-`incoming()` and returns the first integer turn at which `dealt >= hp`. `dealt` is continuous;
-the integer is only where it crosses. Removing a body lowers `dealt` at every horizon, and that
-reduction is discarded unless it happens to move a threshold.
-
-The discarded quantity is exactly the one the discrimination needs. `incoming()` prices through
-`predicted_max_damage` — the Damage Formula, so scaling attacks are priced correctly — and its
-availability gate is all-descendants: *"the evolution reach is already MAXIMAL at `t=1`
-(`forward_card_ids` is all-descendants, existence-gated: every forward form is considered under the
-current energy budget)"*. So the clock already accounts for energy cost, printed and scaled damage,
-riders, weakness, live boosts, **and the forward evolution closure**. Dragapult ex (200 at
-`maxDamageCost` 2, plus a 60 spread) and Latias ex (200 at cost 3) are distinguishable today, and
-the distinction is rounded to zero.
-
-Two alternatives were considered and rejected during the grill:
-
-- **An authored feature blend** over `maxDamageCost` / `hp` / `tera` / `retreatCost` / riders. Every
-  weight would be a new authored constant requiring a sound-rule whitelist entry and eventual
-  reconciliation, and it would re-derive by hand what `incoming()` already composes from card data.
-- **Roles supplying the magnitude** (Issue #395's shape, and three successive proposals during this
-  grill). This makes the role system load-bearing for a class of card it has no special knowledge
-  about, and fails silently at γ = 0 — an unroled body in an unrecognised matchup gets nothing,
-  where the derivation would have priced it correctly with no Read at all.
+For cause 1 the fix is genuinely free: `incoming()` prices through `predicted_max_damage` (the
+Damage Formula, so scaling attacks are correct) and its availability gate is all-descendants —
+*"the evolution reach is already MAXIMAL at `t=1`"* — so energy cost, printed and scaled damage,
+riders, weakness, live boosts **and the forward evolution closure** are already composed into
+`dealt` before the threshold discards the remainder.
 
 ## Decision
 
@@ -52,37 +96,80 @@ Two alternatives were considered and rejected during the grill:
 t* = (t_cross − 1) + (hp − dealt(t_cross − 1)) / incoming(t_cross)
 ```
 
-One additional line in the existing accumulate loop. No new constant, no new composition, no new
-oracle. `survival_value` already takes turns, so units and `_SURVIVAL_CAP` are unchanged.
+One additional line in the existing accumulate loop, returned as `SurvivalClock(turns, exact)`.
+No new constant, no new composition, no new oracle. `survival_value` already takes turns, so units
+and `_SURVIVAL_CAP` are unchanged.
 
-The integer return is preserved byte-identically for every current caller; only the opponent-target
+The integer return is preserved byte-identically for every current caller — `turns_to_ko_me` is
+defined as `survival_clock(...).turns`, so the two readings cannot drift. Only the opponent-target
 equation opts into the fractional reading. A second oracle was rejected for the reason this issue
-exists at all — two answers to one question drift, and nothing reports it.
+exists at all: two answers to one question drift, and nothing reports it.
+
+**This decision is kept on its merits, not on its original rationale.** It is correct, costs
+nothing, recovers 32 real groups (92 → 124 discriminated), and any future fix that differences the
+clock wants the precision. It is a **prerequisite for** the fix to Issue #398, not the fix.
+
+## The two alternatives: RE-OPENED, not defeated
+
+The original draft rejected both. Each rejection was argued against the "quantization is the cause"
+premise, and that premise has failed. Neither rejection stands as written; both are open questions
+for Issue #398's re-grill, restated here with what survives of the original objection:
+
+- **An authored feature blend** over `maxDamageCost` / `hp` / `tera` / `retreatCost` / riders. The
+  original objection — *"it would re-derive by hand what `incoming()` already composes"* — is now
+  known to be wrong in the direction that matters: `incoming()` composes those facts into a
+  **maximum**, which discards every non-leading body by construction. What survives of the
+  objection is only the cost: each weight is a new authored constant needing a sound-rule whitelist
+  entry.
+- **Roles supplying the magnitude** (Issue #395's shape). The original objection — that it fails
+  silently at γ = 0, where *"the derivation would have priced it correctly with no Read at all"* —
+  assumed a derivation that prices unroled bodies correctly. Measured, that derivation prices 83%
+  of bodies at exactly 0. The γ = 0 objection is materially weakened.
 
 ## Policy
 
-- **Discrimination is recovered from the existing composition, never authored beside it.** A
-  proposal to add a weighted feature to opponent-target value must first show the quantity is not
-  already computed inside `incoming()` and discarded.
-- **Roles do not supply magnitude for anything card facts can price.** Their scope is the
-  non-damage ability dimension (see Issue #395 as re-scoped, and
-  `gusting-keepcost-design.md` §2), sourced from `card_functions.json` tags first so the general
-  tier stays γ-independent, with the Brief correcting rather than originating.
+- **A causal claim about a ranking requires a DIFFERENTIAL measurement, not a reading of the code
+  that produces it.** This ADR's original claim was derived from the shape of the accumulate loop
+  and was wrong by a factor of seven. The loop was read correctly; what was never measured is how
+  much of the observed effect it accounts for. Reading an implementation tells you what a term
+  *can* do, never what share of an outcome it *does*.
+- **State the aggregation when stating a removal Δ.** A Δ under a `max` is zero for every
+  non-leading element, and that is a property of the aggregation rather than of the elements. Any
+  future term defined as "the difference made by removing X" must say what it is differencing.
 - **The fractional reading is opt-in.** A caller taking it states why at the call site; the integer
-  stays the default so ADR-0071 decision 4's accumulate semantics are unchanged for every family
-  that was not measured here.
+  stays the default, so ADR-0071 decision 4's accumulate semantics are unchanged for every family
+  that was not measured here (`survival`, `readiness`, `threat` each carry scale anchors calibrated
+  against the integer clock).
+- **Discrimination is recovered from the existing composition where the composition HAS it.** The
+  original blanket form of this policy — never author beside the derivation — is narrowed to its
+  defensible core: before adding a term, check whether the quantity is already computed and
+  discarded. Here it was, for 12.7% of the problem. For the other 87.3% it is not computed at all,
+  and a policy forbidding new terms would forbid the fix.
 
 ## Verification
 
-- The 73.2% flat-tie measurement is reproducible from
-  `tools/train/probes/opponent_target_credit_sweep.py`; its denominators (359 frames with rows, 343
-  equal-prize groups) are printed per run.
-- A fractional `survival_shift` must beat the **sham leg** by a wide margin under
-  ADR-TEMP-398-SHAM's bar. It is the first leg in this area with a real null to clear, and a
-  fractional clock that only matches the sham has recovered nothing.
+- The pre/post tie population is reproducible from
+  `tools/train/probes/fractional_clock_sweep.py`, which prints both arms and their denominators per
+  run. **This is the bar this change clears**: 251 → 219 tied, 92 → 124 discriminated.
+- **The sham bar is reported and NOT cleared, and that is stated rather than buried.** Under
+  ADR-TEMP-398-SHAM, bench argmax movement:
+
+  | arm | moves |
+  |---|---|
+  | fractional clock | 8/241 (3.3%) |
+  | sham `cid % 7` | 64/241 (26.6%) |
+  | sham `hp % 70` | 59/241 (24.5%) |
+  | sham position | 147/241 (61.0%) |
+
+  The honest reading: the shams break ties **arbitrarily**, while the clock declines to break the
+  83% that are structurally zero. Moving *less* than a sham is evidence the term is not noise; it
+  is not evidence the term is good, and it is not a claim to have fixed Issue #398. A movement
+  number is the wrong instrument for a leg whose correct behaviour is to leave most orderings
+  alone — which is itself a limit of the sham policy worth carrying into ADR-TEMP-398-SHAM.
+- Every current caller of `turns_to_ko_me` is byte-identical after the change, asserted **literally**
+  in `test_the_integer_clock_is_unchanged_by_the_fractional_reading` rather than inferred from the
+  diff being additive.
 - `decider_lab.py diff --baseline data/decider_lab/baseline.json` runs on this change **alone**
   (Issue #398 landing sequence, PR (a)), so its flips are attributable to the clock and not to the
-  denial work that follows. The Decision Gate was measured GREEN on the unmodified tree at
-  `37f5975` (agree 251/340, 0 picks moved), which is the control this comparison needs.
-- Every current caller of `turns_to_ko_me` must be byte-identical after the change; the fractional
-  value is additive, not a replacement.
+  work that follows. The Decision Gate was measured GREEN on the unmodified tree at `37f5975`
+  (agree 251/340, 0 picks moved), which is the control this comparison needs.

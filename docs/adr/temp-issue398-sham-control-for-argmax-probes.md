@@ -64,6 +64,14 @@ such.
 - **Movement is still not merit.** Beating the sham shows a term *discriminates*; it does not show
   it discriminates *correctly*. The corpus rules chosen options, not internal orderings, so the
   decision test remains `decider_lab.py diff` against a pre-registered prediction.
+- **A movement number is the WRONG instrument for a term whose correct behaviour is to leave most
+  orderings alone** (amendment, 2026-08-05, from this policy's first application). The Fractional
+  Survival Clock moves the bench argmax on 8/241 against `sham cid%7`'s 64/241 — it *loses* to a
+  meaningless leg, and that is the term behaving correctly: the shams break ties arbitrarily, while
+  the clock declines to break the ones that are a **Structural Zero**. Under-movement therefore
+  falsifies nothing on its own. A leg that MATCHES its sham has discriminated nothing; a leg well
+  BELOW its sham needs a different question asked of it, not a verdict read off this table. Say
+  which case a number is before reading it as a result.
 
 ## Verification
 

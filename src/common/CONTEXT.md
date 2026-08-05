@@ -95,17 +95,31 @@ _Avoid_: removal value, kill value
 
 **Flat Tie**:
 An equal-prize group of opponent bodies whose target value is *identical*, so the
-pick falls to list order. 73.2% of equal-prize groups on the correction corpus, and
-the reason any continuous term appears to "improve" the ranking — see **Sham Leg**.
-A flat tie is a missing derivation, not a close call.
+pick falls to list order. 73.2% of equal-prize groups on the correction corpus before
+the Fractional Survival Clock, 63.8% after — and the reason any continuous term
+appears to "improve" the ranking, see **Sham Leg**. A flat tie is a missing
+derivation, not a close call. Measured cause is a **Structural Zero**, not rounding.
 _Avoid_: draw, tie-break (a tie-break RESOLVES a tie; this names the tie itself)
 
 **Fractional Survival Clock**:
 `turns_to_ko_me` read as the interpolated crossing point rather than the first
 integer turn at which accumulated damage reaches HP. The precision is already
 computed inside the accumulate loop and discarded by the threshold; the fractional
-reading recovers it. Opt-in — the integer stays the default. ADR-TEMP-398.
+reading recovers it. Opt-in — the integer stays the default. Fixes 12.7% of the
+Flat Tie and is a *prerequisite for*, never *the*, fix to Issue #398. ADR-TEMP-398.
 _Avoid_: continuous clock, precise clock
+
+**Structural Zero**:
+A term that reads exactly 0 by the shape of its own arithmetic rather than by the
+board being uninteresting. The instance that named it: `survival_shift` differences
+`turns_to_ko_me` under removal of a body, and `incoming()` aggregates their forms
+with a per-turn **MAX** — so removing anything that is not the argmax moves nothing,
+and 1036 of 1244 corpus bodies price at exactly 0. At most one body per board can
+score, none when two tie for the lead. Distinct from a **Flat Tie**, which is the
+*symptom*; this is one of its causes, and the dominant one. A Δ under a `max` should
+be assumed to carry this until measured otherwise. ADR-TEMP-398.
+_Avoid_: no-op, null result, zero signal (each suggests the BOARD said nothing;
+this says the EXPRESSION cannot say anything)
 
 **Sham Leg**:
 A deliberately MEANINGLESS term (`cid % 7`, `hp % 70`, a position index), scaled into

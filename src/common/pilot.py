@@ -8861,16 +8861,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         clock = dict(bodies=bodies, charged=None, opp_active=opp_active, switch_enabler=enabler,
                      context=self._opp_attack_context)
         # THE FRACTIONAL READING, opted into here and nowhere else (ADR-TEMP-398). `survival_shift`
-        # is a Δ of this clock under removal of one of their bodies, and at integer resolution most
-        # removals quantise to 0: 251 of 343 equal-prize groups on the correction corpus are a
-        # perfect Flat Tie, so the pick falls to LIST ORDER rather than to anything about the board.
-        # The precision that separates them is already computed inside the accumulation — `incoming`
-        # prices through the Damage Formula and its evolution reach is maximal at t=1, so energy
-        # cost, scaled damage, riders, weakness and the full forward closure are all in `dealt`
-        # before the threshold rounds them away. This reads the crossing point instead of the turn
-        # it lands in. The other clock families (`survival`, `readiness`, `threat`) keep the integer:
-        # each carries scale anchors calibrated against it, and widening them is a separate,
-        # unmeasured change.
+        # is a Δ of this clock under removal of one of their bodies, and the integer reading threw
+        # away the size of that move: where a removal DOES shift the clock, `dealt` already knows by
+        # how much (`incoming` prices through the Damage Formula and its evolution reach is maximal
+        # at t=1, so energy cost, scaled damage, riders, weakness and the full forward closure are
+        # all in there). This reads the crossing point instead of the turn it lands in.
+        #
+        # ⚠️ It fixes 12.7% of the Flat Tie and no more. `incoming` is a per-turn MAXIMUM, so
+        # removing any body that is not the argmax moves nothing and prices at EXACTLY 0 — 1036 of
+        # 1244 corpus bodies do. At most one body per board can carry a non-zero shift, none when
+        # two tie for the lead, and the Active is usually the maximum — so on the BENCH, which is
+        # the only scope `gust_target_slot` reads, this term still ranks almost nothing. That is
+        # Issue #398's open defect, not something this line claims to have solved.
+        #
+        # The other clock families (`survival`, `readiness`, `threat`) keep the integer: each
+        # carries scale anchors calibrated against it, and widening them is a separate, unmeasured
+        # change.
         base_exact = model.theirs.survival_clock(ma, **clock).exact
         # Deny Relevance's REDUNDANCY gate (ADR-0080 step 2), resolved once for the whole decision
         # rather than per body: which opponent bodies die to our Knock Out this turn, and so deny
