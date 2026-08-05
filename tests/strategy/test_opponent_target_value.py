@@ -153,6 +153,13 @@ def test_no_crossing_within_the_horizon_reads_the_same_both_ways():
     assert empty.turns == 5 and empty.exact == pytest.approx(5.0)
     dead = c.survival_clock({"id": MY, "hp": 0}, [_b(A)], max_t=4)   # no HP: no clock at all
     assert dead.turns == 5 and dead.exact == pytest.approx(5.0)
+    # NEGATIVE hp is already past dead: `dealt >= hp` holds at t=1 before anything is dealt, so
+    # there is no crossing to interpolate and the divisor would be that turn's zero damage. The
+    # integer route answered 1 before ADR-TEMP-398 and must still — this regressed to a
+    # ZeroDivisionError once, which is a louder answer rather than a sharper one.
+    past = c.survival_clock({"id": MY, "hp": -5}, [_b(A)], max_t=4)
+    assert past.turns == 1 and past.exact == pytest.approx(1.0)
+    assert c.turns_to_ko_me({"id": MY, "hp": -5}, [_b(A)], max_t=4) == 1
 
 
 def test_a_flat_tie_the_integer_clock_cannot_see_and_the_fractional_one_can():
@@ -179,6 +186,33 @@ def test_a_flat_tie_the_integer_clock_cannot_see_and_the_fractional_one_can():
            val(prize_advance=2, survival_shift=0, phase=0.7)        # the tie, as it shipped
     assert val(prize_advance=2, survival_shift=40 / 60 - 10 / 90, phase=0.7) > \
            val(prize_advance=2, survival_shift=0.0, phase=0.7)
+
+
+def test_only_the_bodies_that_LEAD_the_per_turn_max_can_score():
+    """The **Structural Zero** itself, on the two boards ADR-TEMP-398 quotes.
+
+    The ADR cited these as "confirmed analytically" while they existed only in a scratch run — the
+    citation is what makes them real. `incoming()` is a per-turn MAX over their forms, so:
+
+    * on `[C60, D90, A]` only `A` (100 a turn, the standing lead into my 100 HP) can score; removing
+      either of the other two leaves the maximum exactly where it was;
+    * on `[A, A]` NEITHER scores, because removing one leaves the other at the identical maximum —
+      the lead has to be UNIQUE, not merely held."""
+    c = _combat()
+    board = [_b(C60), _b(D90), _b(A)]
+    base = c.survival_clock(MY_BODY, board).exact
+    assert base == pytest.approx(1.0)
+    shifts = [c.survival_clock(MY_BODY, board[:i] + board[i + 1:]).exact - base for i in range(3)]
+    assert shifts[0] == pytest.approx(0.0), "C60 never leads — removing it is a Structural Zero"
+    assert shifts[1] == pytest.approx(0.0), "D90 never leads either"
+    assert shifts[2] == pytest.approx(1 / 9), "A is the lead, so only A's removal moves the clock"
+
+    tied_lead = [_b(A), _b(A)]
+    tied_base = c.survival_clock(MY_BODY, tied_lead).exact
+    assert [c.survival_clock(MY_BODY, tied_lead[:i] + tied_lead[i + 1:]).exact - tied_base
+            for i in (0, 1)] == [pytest.approx(0.0), pytest.approx(0.0)], (
+        "two bodies tied for the lead: removing either leaves the maximum untouched, so neither "
+        "scores — the case that makes 'unique lead' load-bearing rather than decorative")
 
 
 def test_more_than_one_body_scores_when_the_lead_changes_across_turns():

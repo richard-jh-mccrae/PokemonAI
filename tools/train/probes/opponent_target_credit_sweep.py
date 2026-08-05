@@ -18,9 +18,11 @@ The cause is printed below every run: equal-prize groups whose rows carry an IDE
 pick falls to list order and ANY continuous term appears to "improve" it.
 
 ⚠️ **The numbers above were measured BEFORE the Fractional Survival Clock landed, and this probe's
-tie line reads lower now** (73.2% -> 63.8%). Re-run it before citing any figure here. The original
+tie line reads lower now.** Re-run it before citing any figure here — and note it compares
+`survival_shift`, a strict SUB-population of the Flat Tie, which is identical `value`
+(`fractional_clock_sweep.py` reports both, and is the one to read for the tie population). The original
 draft of this docstring said the ties were *"`survival_shift` integer-quantized to 0 for every
-row"*; that was measured false — quantization was 12.7% of it. The rest is a **Structural Zero**:
+row"*; that was measured false — quantization was 10.0% of it. The rest is a **Structural Zero**:
 `incoming()` aggregates their forms with a per-turn MAX, so removing a body that is not the argmax
 moves nothing at any resolution. See ADR-TEMP-398 (fractional survival clock) for the correction and
 ADR-TEMP-398 (sham control) for why the sham arms are mandatory here.

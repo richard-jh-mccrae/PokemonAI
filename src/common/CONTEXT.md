@@ -95,8 +95,10 @@ _Avoid_: removal value, kill value
 
 **Flat Tie**:
 An equal-prize group of opponent bodies whose target value is *identical*, so the
-pick falls to list order. 73.2% of equal-prize groups on the correction corpus before
-the Fractional Survival Clock, 63.8% after — and the reason any continuous term
+pick falls to list order — 81.9% of equal-prize groups on the correction corpus before
+the Fractional Survival Clock, 73.8% after. Tie on VALUE, which is what the ranking
+sorts on; ties on `survival_shift` alone are a strict sub-population (73.2%/63.8%)
+and measuring those instead understates the defect. The reason any continuous term
 appears to "improve" the ranking, see **Sham Leg**. A flat tie is a missing
 derivation, not a close call. Measured cause is a **Structural Zero**, not rounding.
 _Avoid_: draw, tie-break (a tie-break RESOLVES a tie; this names the tie itself)
@@ -105,7 +107,7 @@ _Avoid_: draw, tie-break (a tie-break RESOLVES a tie; this names the tie itself)
 `turns_to_ko_me` read as the interpolated crossing point rather than the first
 integer turn at which accumulated damage reaches HP. The precision is already
 computed inside the accumulate loop and discarded by the threshold; the fractional
-reading recovers it. Opt-in — the integer stays the default. Fixes 12.7% of the
+reading recovers it. Opt-in — the integer stays the default. Fixes 10.0% of the
 Flat Tie and is a *prerequisite for*, never *the*, fix to Issue #398. ADR-TEMP-398.
 _Avoid_: continuous clock, precise clock
 

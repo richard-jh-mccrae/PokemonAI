@@ -91,13 +91,28 @@ def _subset(rows, scope: str):
     return rows if scope == "all" else [r for r in rows if r["area"] == "bench" and r["value"] > 0]
 
 
-def _tied(rows) -> tuple[int, int]:
-    """``(equal-prize groups, of which perfectly tied)`` — the Flat Tie population."""
+def _tied(rows) -> tuple[int, int, int]:
+    """``(equal-prize groups, tied on VALUE, tied on survival_shift)`` — the Flat Tie population.
+
+    **The first count is the Flat Tie; the second is a sub-population of it.** A Flat Tie is defined
+    by identical `value`, because `value` is what the ranking sorts on and therefore what falls
+    through to list order. Ties on `survival_shift` are strictly FEWER: equal prize plus equal shift
+    forces equal value, but the converse fails — `needs.opponent_target_value` floors the shift at
+    `max(0.0, shift)`, so two rows with DIFFERENT negative shifts collapse to the same value, and at
+    `phase == 0` the survival term vanishes entirely and every equal-prize row ties whatever its
+    shift.
+
+    Reporting only the shift count was this probe's own error, and it biased BOTH directions at
+    once: it understated the defect (fewer ties seen than exist) and overstated the fix (recovery
+    measured against the wrong denominator). Both are printed now so the gap between them stays
+    visible rather than having to be rediscovered."""
     by_prize: dict = {}
     for r in rows:
         by_prize.setdefault(r["prize"], []).append(r)
     groups = [g for g in by_prize.values() if len(g) >= 2]
-    return len(groups), sum(1 for g in groups if len({float(r["survival_shift"]) for r in g}) == 1)
+    return (len(groups),
+            sum(1 for g in groups if len({float(r["value"]) for r in g}) == 1),
+            sum(1 for g in groups if len({float(r["survival_shift"]) for r in g}) == 1))
 
 
 def main(argv=None) -> int:
@@ -110,7 +125,7 @@ def main(argv=None) -> int:
                                       predicate=lambda c: bool(c.obs and c.agent)))
 
     captured, errors, scanned = [], Counter(), 0
-    ties = {"INT": [0, 0], "FRAC": [0, 0]}
+    ties = {"INT": [0, 0, 0], "FRAC": [0, 0, 0]}
     band = 0.0
     for key, rec in frames:
         try:
@@ -130,9 +145,8 @@ def main(argv=None) -> int:
             continue
         scanned += 1
         for name, res in (("INT", before), ("FRAC", after)):
-            g, t = _tied(res[1])
-            ties[name][0] += g
-            ties[name][1] += t
+            for i, n in enumerate(_tied(res[1])):
+                ties[name][i] += n
         # The band is FRAC's OWN largest effect on `value`, so a sham cannot lose by being smaller.
         band = max(band, max((abs(a["value"] - b["value"])
                               for a, b in zip(after[1], before[1])), default=0.0))
@@ -166,10 +180,14 @@ def main(argv=None) -> int:
         print(f"replay errors                       : {dict(errors)}")
     print()
     print("THE FLAT TIE POPULATION — the defect, before and after")
+    print("  (a Flat Tie is identical VALUE, which is what falls to list order. The `shift` column"
+          " is a SUB-population — see `_tied`.)")
     for name in ("INT", "FRAC"):
-        g, t = ties[name]
-        pct = f"{100 * t / g:.1f}%" if g else "n/a"
-        print(f"  {name:<5} equal-prize groups {g:>4}   perfectly tied {t:>4}  ({pct})")
+        g, v, t = ties[name]
+        vpct = f"{100 * v / g:.1f}%" if g else "n/a"
+        tpct = f"{100 * t / g:.1f}%" if g else "n/a"
+        print(f"  {name:<5} equal-prize groups {g:>4}   tied on VALUE {v:>4} ({vpct:>6})"
+              f"   tied on shift {t:>4} ({tpct:>6})")
     print()
     print(f"sham band (FRAC's own max effect on `value`): {band:.6f}")
     print()

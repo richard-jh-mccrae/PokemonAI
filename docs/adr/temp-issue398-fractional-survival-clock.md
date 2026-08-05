@@ -21,23 +21,38 @@ differential measurement was only run when the change was built.
 correction corpus, reconstructing the pre-change arm by patching the SHIPPED model route rather
 than reimplementing it (a reimplementation would be the second oracle this ADR elsewhere refuses):
 
-| arm | equal-prize groups | perfectly tied |
-|---|---|---|
-| integer clock (pre) | 343 | 251 (73.2%) |
-| fractional clock (post) | 343 | 219 (63.8%) |
+| arm | equal-prize groups | tied on VALUE (the Flat Tie) | tied on `survival_shift` |
+|---|---|---|---|
+| integer clock (pre) | 343 | **281 (81.9%)** | 251 (73.2%) |
+| fractional clock (post) | 343 | **253 (73.8%)** | 219 (63.8%) |
 
-**Quantization was 12.7% of the Flat Tie, not the Flat Tie.** 32 groups recovered; 219 survive.
+**Quantization was 10.0% of the Flat Tie, not the Flat Tie.** 28 groups recovered; 253 survive.
 
-Every one of the 219 survivors is tied at **exactly 0**, and 1036 of 1244 opponent bodies price at
-exactly 0:
+⚠️ **The right-hand column is what the first draft of this correction reported, and it was the
+wrong quantity** — caught in review, not by the instrument. A Flat Tie is identical **`value`**,
+because `value` is what the ranking sorts on and therefore what falls through to list order. Ties on
+`survival_shift` are a strict SUB-population: equal prize plus equal shift forces equal value, but
+the converse fails, because `needs.opponent_target_value` floors the shift at `max(0.0, shift)` (so
+rows with different NEGATIVE shifts collapse to one value) and at `phase == 0` the survival term
+vanishes entirely. Measuring the sub-population biased both directions at once — it understated the
+defect (73.2% against a true 81.9%) and overstated the recovery (32 groups against a true 28). The
+73.2% headline Issue #398 was FILED on carries the same error; it came from
+`opponent_target_credit_sweep.py`, which compared the same wrong field.
+
+The MECHANISM is read off the `survival_shift` column (the right-hand one above), and there it is
+unambiguous — every one of the 219 shift-tied groups is tied at **exactly 0**, never at a shared
+non-zero value, and 1036 of 1244 opponent bodies price at exactly 0:
 
 ```
 equal-prize groups          : 343
-  discriminated             : 124
+  discriminated             : 124      <- on `survival_shift`; on `value` it is 90
   STILL TIED, all shifts = 0: 219
-  still tied at a non-zero  : 0
+  still tied at a non-zero  : 0        <- NOT ONE. The residue is a hard zero, not a near-miss.
 per-body shift distribution : {exactly 0: 1036, fractional: 203, integral >0: 5}
 ```
+
+The `still tied at a non-zero: 0` row is the load-bearing one: if the residual ties were rounding,
+some group would tie at a shared non-zero shift. None does.
 
 ### The real cause: `incoming()` is a per-turn MAXIMUM
 
@@ -85,17 +100,17 @@ missing feature this ADR originally argued was absent is real.**
 `pilot._opponent_target_rows` prices every opponent body as
 `needs.opponent_target_value(prize_advance, survival_shift, phase)`, where `prize_advance` is
 `CardStat.prize_value ∈ {1,2,3}` and `survival_shift` is `Δ turns_to_ko_me` under removal of that
-body. Measured over the corrections corpus, 251 of 343 equal-prize groups carried an identical
+body. Measured over the corrections corpus, 281 of 343 equal-prize groups carried an identical
 value and the winner was decided by list order. Frame `81906755|1|decision|77` is the shape: five
 2-prize bodies, all valued exactly `2.0`.
 
 Two causes were conflated in the original filing and are now separated:
 
-1. **Quantization** (12.7%). `turns_to_ko_me` accumulates `incoming()` and returns the first integer
+1. **Quantization** (10.0%). `turns_to_ko_me` accumulates `incoming()` and returns the first integer
    turn at which `dealt >= hp`. `dealt` is continuous; the integer is only where it crosses. Where a
    removal *does* move the maximum, the size of that move was being rounded away. **This ADR fixes
    this cause and only this cause.**
-2. **The max structure** (87.3%). Above. **Not addressed here.** It needs a term that is not a
+2. **The max structure** (90.0%). Above. **Not addressed here.** It needs a term that is not a
    removal-Δ of a maximum, and designing that is Issue #398's remaining work.
 
 For cause 1 the fix is genuinely free: `incoming()` prices through `predicted_max_damage` (the
@@ -122,7 +137,7 @@ equation opts into the fractional reading. A second oracle was rejected for the 
 exists at all: two answers to one question drift, and nothing reports it.
 
 **This decision is kept on its merits, not on its original rationale.** It is correct, costs
-nothing, recovers 32 real groups (92 → 124 discriminated), and any future fix that differences the
+nothing, recovers 28 real groups (62 → 90 discriminated on value), and any future fix that differences the
 clock wants the precision. It is a **prerequisite for** the fix to Issue #398, not the fix.
 
 ## The two alternatives: RE-OPENED, not defeated
@@ -159,14 +174,14 @@ for Issue #398's re-grill, restated here with what survives of the original obje
 - **Discrimination is recovered from the existing composition where the composition HAS it.** The
   original blanket form of this policy — never author beside the derivation — is narrowed to its
   defensible core: before adding a term, check whether the quantity is already computed and
-  discarded. Here it was, for 12.7% of the problem. For the other 87.3% it is not computed at all,
+  discarded. Here it was, for 10.0% of the problem. For the other 90.0% it is not computed at all,
   and a policy forbidding new terms would forbid the fix.
 
 ## Verification
 
 - The pre/post tie population is reproducible from
   `tools/train/probes/fractional_clock_sweep.py`, which prints both arms and their denominators per
-  run. **This is the bar this change clears**: 251 → 219 tied, 92 → 124 discriminated.
+  run. **This is the bar this change clears**: 281 → 253 tied on value, 62 → 90 discriminated.
 - **The sham bar is reported and NOT cleared, and that is stated rather than buried.** Under
   ADR-TEMP-398-SHAM, bench argmax movement:
 
@@ -189,3 +204,9 @@ for Issue #398's re-grill, restated here with what survives of the original obje
   (Issue #398 landing sequence, PR (a)), so its flips are attributable to the clock and not to the
   work that follows. The Decision Gate was measured GREEN on the unmodified tree at `37f5975`
   (agree 251/340, 0 picks moved), which is the control this comparison needs.
+- **Decision Gate, POST-change: PASS, `agree 251/340 -> 251/340`, 0 picks moved.** Recorded here
+  because a gate result cited only as a control is half a measurement. Zero movement is the
+  EXPECTED outcome and not a null result: the change recovers precision on a term whose residual
+  87% is a Structural Zero, so it was never likely to reach a ruled decision. It does mean this PR
+  ships no behavioural change on the corpus — which is the honest reading of "prerequisite, not
+  fix", and the reason nothing here is offered as evidence that the ranking got better.

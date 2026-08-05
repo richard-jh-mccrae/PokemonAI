@@ -374,7 +374,7 @@ class SurvivalClock:
     The precision is not new information — ``dealt`` is continuous and the accumulation already
     computes it; the integer threshold is simply where it was being discarded.
 
-    ⚠️ **This recovers a MINORITY of the Flat Tie.** Quantization was 12.7% of that defect; the rest
+    ⚠️ **This recovers a MINORITY of the Flat Tie.** Quantization was 10.0% of that defect; the rest
     is a **Structural Zero** no resolution can touch, because :meth:`incoming` is a per-turn MAXIMUM
     over their forms — removing a body that never leads that maximum moves nothing, at any
     precision. Do not cite this class as the fix for Issue #398; it is a prerequisite for one.
@@ -1993,6 +1993,14 @@ class CombatMath:
         hp = (my_body or {}).get("hp", 0)
         if not hp:
             return SurvivalClock(max_t + 1, float(max_t + 1))
+        if hp < 0:
+            # A NEGATIVE hp is already past dead, and the accumulation cannot interpolate a crossing
+            # it started on the far side of — `dealt >= hp` is true at t=1 before anything is dealt,
+            # so the divisor would be the turn's zero damage. The integer route answered 1 here
+            # before ADR-TEMP-398 and still must: this is the byte-identical guarantee, and a
+            # regression to ZeroDivisionError on a body the caller already knows is dead is not a
+            # sharper answer, just a louder one.
+            return SurvivalClock(1, 1.0)
         horizon = max(1, int(max_t))
         if my_benched:
             bench = list(my_bench) or [my_body]

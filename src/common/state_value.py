@@ -718,8 +718,9 @@ REGISTRY: tuple[TermFamily, ...] = (
             "forbids exactly that). The accessor is substrate, owned by T1's completeness contract "
             "(Issue #260); named here rather than derived inline, because `ceil(hp / damage)` "
             "written in this module WOULD be the second opinion.",
-            "the SURVIVAL half of `opponent_target_value` — its `survival_shift` is a Δ of "
-            "`turns_to_ko_me` under REMOVAL of the body, and the model exposes no removal-delta "
+            "the SURVIVAL half of `opponent_target_value` — its `survival_shift` is a Δ of the "
+            "Fractional Survival Clock (`survival_clock().exact`, ADR-TEMP-398; it was a Δ of the "
+            "INTEGER `turns_to_ko_me` before) under REMOVAL of the body, and the model exposes no removal-delta "
             "route (the live consumer at `pilot.py` bypasses to CombatMath, which the sole-supplier "
             "ruling forbids here). Passed as 0, so this family prices prize_advance only and a body "
             "whose removal buys turns without yielding prizes reads flat. T1 (Issue #260) owns the "
