@@ -164,7 +164,7 @@ def main(argv=None) -> int:
     print()
     print("THE FLAT TIE POPULATION — before and after")
     print("  (a Flat Tie is identical VALUE, which is what falls to list order. The `shift` column"
-          " is a SUB-population — see `fractional_clock_sweep._tied`.)")
+          " is a SUB-population — see `_sham.tie_population`.)")
     for name in ("OWN", "LINE"):
         g, v, t = ties[name]
         vpct = f"{100 * v / g:.1f}%" if g else "n/a"
