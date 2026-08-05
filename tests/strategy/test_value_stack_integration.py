@@ -166,7 +166,7 @@ CONSUMED = frozenset({
     # ── TheirSide (6) — the newly-threaded half ──
     "model.theirs.active_raw", "model.theirs.bodies", "model.theirs.turns_to_ko_me",
     "model.theirs.reachable_incoming",
-    # `theirs.forward_payoff` LEFT at ADR-TEMP-398, which deleted `_denied_forward_payoff` — the
+    # `theirs.forward_payoff` LEFT at ADR-0119, which deleted `_denied_forward_payoff` — the
     # forward DAMAGE a removal denies is already inside `survival`'s clock (`incoming()`'s
     # availability gate is all-descendants) and this module differences, so pricing it here was one
     # quantity counted twice. `theirs.forward_line_prize` takes its place: the forward PRIZE, which

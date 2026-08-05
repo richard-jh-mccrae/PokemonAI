@@ -81,12 +81,12 @@ _CARDS = {
     STALL_TARGET: CardStat(STALL_TARGET, synthetic=True, hp=200, retreatCost=2),
     PREEVO_THREAT: CardStat(PREEVO_THREAT, synthetic=True, name="Riolu", hp=60),
     EVO_FORM: CardStat(EVO_FORM, synthetic=True, name="MegaLucario", evolvesFrom="Riolu", maxDamage=270,
-                       megaEx=True),   # a Mega ex: 3 prizes. Unset until ADR-TEMP-398 made the
+                       megaEx=True),   # a Mega ex: 3 prizes. Unset until ADR-0119 made the
                                        # line's PRIZE load-bearing; the card always was one.
     DEAD_END: CardStat(DEAD_END, synthetic=True, name="Ditto", hp=60),
     # An ALAKAZAM-SHAPED line: the forward form's printed `maxDamage` is a trivial 10 because its
     # whole output is a Damage Formula scaler (`per_unit x count(variable)`). The printed forward
-    # index therefore reads this line at 10 and the pre-ADR-TEMP-398 `_gust_forward_denial` scored
+    # index therefore reads this line at 10 and the pre-ADR-0119 `_gust_forward_denial` scored
     # it exactly 0, while the board-priced `forward_threat_ceiling` sees the real number.
     SCALER_PREEVO: CardStat(SCALER_PREEVO, synthetic=True, name="Abra", hp=60),
     SCALER_FORM: CardStat(SCALER_FORM, synthetic=True, name="Alakazam", evolvesFrom="Abra", hp=140,
@@ -744,11 +744,11 @@ def test_gust_target_breaks_ties_toward_the_loaded_body():
     assert p.decide(obs) == [1]
 
 
-# ── ADR-TEMP-398: denial is a LINE PRIZE, and the evolving-threat read is board-priced ────────────
+# ── ADR-0119: denial is a LINE PRIZE, and the evolving-threat read is board-priced ────────────
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_flat_wincon_denial_constant_is_gone_not_relocated():
-    """ADR-TEMP-398 decision 2. `_gust_wincon_denial` added a flat `_WINCON_DENIAL_PRIZES` (1.5)
+    """ADR-0119 decision 2. `_gust_wincon_denial` added a flat `_WINCON_DENIAL_PRIZES` (1.5)
     scaled by γ and gated to two curated MatchupPlan roles, so it read 0 on an unrecognised opponent
     and on any wincon line no Brief had labelled. Its question — *what does this line BECOME* — is
     now answered from card facts for every board.
@@ -790,7 +790,7 @@ def test_the_gust_target_prices_the_LINES_prize_not_the_bodys_own():
 
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_evolving_threat_denial_sees_a_SCALING_forward_form():
-    """ADR-TEMP-398 decision 5, made concrete on the shape that broke it.
+    """ADR-0119 decision 5, made concrete on the shape that broke it.
 
     `_gust_forward_denial` used to threshold the provider's PRINTED forward index at 100. Alakazam's
     whole output is a Damage Formula scaler, so that index reads its line at **10** and the term
@@ -829,7 +829,7 @@ def test_the_evolving_threat_denial_is_a_magnitude_not_a_threshold():
 @pytest.mark.req("REQ-GUST-0002")
 def test_the_printed_read_is_restored_exactly_when_the_lever_is_thrown():
     """`scaled_threat_rank` OFF must restore the printed threshold byte-for-byte at THIS call site
-    too, which is the whole reason ADR-TEMP-398 rides Issue #213's existing lever rather than
+    too, which is the whole reason ADR-0119 rides Issue #213's existing lever rather than
     deleting the two constants. An incident switch that reverted two of three printed reads would be
     worse than no switch at all."""
     from common.strategy.doctrines import doctrine_gust as dg
@@ -852,7 +852,7 @@ def test_the_evolving_threat_denial_discounts_by_the_hops_to_the_ATTACKER():
     discounting it by `forward_line_prize`'s hop count asks how far away a different form is. The
     two genuinely diverge, and the direction of the error is what makes this worth a test rather
     than a comment: a line with NO prize gap reports 0 prize-hops, so a prize-hop discount would
-    vanish entirely on exactly the case ADR-TEMP-398 decision 5 is justified by — *"a 1-prize Basic
+    vanish entirely on exactly the case ADR-0119 decision 5 is justified by — *"a 1-prize Basic
     evolving into a 1-prize Stage 1 that hits hard"*.
 
     `SCALER_PREEVO` is that case: Abra (1 prize) -> Alakazam (1 prize), so `forward_line_prize`

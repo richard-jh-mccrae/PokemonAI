@@ -547,7 +547,7 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="threat",
-        # `denied_forward_payoff` was here until ADR-TEMP-398 and is replaced by
+        # `denied_forward_payoff` was here until ADR-0119 and is replaced by
         # `denied_line_prize`, NOT merely renamed: the old fact was the forward DAMAGE a removal
         # denies, which `incoming()` already credits all-descendants and `survival` therefore
         # already prices — one fact guarded twice, which is exactly what `double_counted()` exists
@@ -633,7 +633,7 @@ REGISTRY: tuple[TermFamily, ...] = (
             "credit changed 327 of 614 non-empty inputs and moved `threat`'s OUTPUT on **296** "
             "of 2061 calls, by **0.000115 to 0.002192** prizes, against **0** calls under the old "
             "equation — a credit can never make an empty input non-empty, so this was the one leg "
-            "the cap erased completely rather than partly. **RETIRED by ADR-TEMP-398**: that leg "
+            "the cap erased completely rather than partly. **RETIRED by ADR-0119**: that leg "
             "priced the forward DAMAGE a removal denies, which `incoming()`'s all-descendants gate "
             "already puts inside `survival`'s clock — and this module DIFFERENCES, so removing the "
             "body moves `survival` unaided. The measurement above is kept as the record of what the "
@@ -738,7 +738,7 @@ REGISTRY: tuple[TermFamily, ...] = (
             "(Issue #260); named here rather than derived inline, because `ceil(hp / damage)` "
             "written in this module WOULD be the second opinion.",
             "the SURVIVAL half of `opponent_target_value` — `survival_shift` is passed as 0 here, "
-            "and **ADR-TEMP-398 decision 3 RETIRES that as a debt rather than discharging it**. It "
+            "and **ADR-0119 decision 3 RETIRES that as a debt rather than discharging it**. It "
             "was recorded as owed to T1 (Issue #260), which would supply a removal-delta accessor on "
             "the model; building it would be a DEFECT. This module DIFFERENCES — its one live "
             "consumer is `planner.py`'s leaf evaluator, scoring an end-of-turn board — so removing "
@@ -1337,7 +1337,7 @@ def _reachable_target_values(model: "StateModel") -> tuple:
                  model.mine.best_reachable_bench_damage(mine, target))
         if reach < target.hp_remaining:
             continue
-        # THE LINE'S PRIZE (ADR-TEMP-398 decision 2), the SAME reading `_opponent_target_rows` takes
+        # THE LINE'S PRIZE (ADR-0119 decision 2), the SAME reading `_opponent_target_rows` takes
         # through the same model route — the point of routing it through `TheirSide` rather than the
         # Pilot is that this family and the live ranking cannot come to hold two opinions about what
         # one line is worth.
@@ -1362,7 +1362,7 @@ def _forward_credit(forward, *, relevance: float = 1.0) -> float:
     crossed on `PRIZE_DAMAGE_RATE`, carried at the positional `_READINESS_W` band, hop-discounted by
     `EvolveBody.p_arrive`'s shipped `halve` convention (ADR-0070 §6).
 
-    **It had a their-side twin, `_denied_forward_payoff`, and ADR-TEMP-398 retired it** — not
+    **It had a their-side twin, `_denied_forward_payoff`, and ADR-0119 retired it** — not
     because the two drifted, but because the their-side reading was redundant from the day it
     shipped: `CombatMath.incoming`'s availability gate is all-descendants, so the forward damage a
     removal denies is already inside `survival`'s clock, and this module DIFFERENCES. The

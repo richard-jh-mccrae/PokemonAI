@@ -121,7 +121,7 @@ def test_a_held_gust_cards_slot_is_never_the_damage_swing():
     #
     # Bounded against the mechanism's OWN derived ceiling rather than a hand-calibrated number. The
     # old bound was 3.0, an empirical fit to the values this frame happened to produce when
-    # `prize_advance` was the body's own prize; ADR-TEMP-398 made it the LINE's prize, so those
+    # `prize_advance` was the body's own prize; ADR-0119 made it the LINE's prize, so those
     # values legitimately rose and a fitted bound would have to be re-fitted on every such change.
     # `GUST_TARGET_BAND` is the real ceiling — `target_value_to_worth` clamps its input at
     # `TARGET_VALUE_CEILING` and multiplies by `GUST_TARGET_BAND / TARGET_VALUE_CEILING`, so the

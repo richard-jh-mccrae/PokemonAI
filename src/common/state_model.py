@@ -90,7 +90,7 @@ from common.board_cards import body_card_ids, body_unit_codes   # the ONE walk /
 from common.deck_odds import p_contains          # the Probability Leg's one implementation
 from common.strategy.combat import UNCHARGED     # the doom policy — see `TheirSide.doomed`
 from common.strategy.combat import SurvivalClock  # both readings of ONE accumulation (ADR-0117)
-from common.strategy.combat import LinePrize     # ...and the line's prize + its hops (ADR-TEMP-398)
+from common.strategy.combat import LinePrize     # ...and the line's prize + its hops (ADR-0119)
 from common.strategy.context import PRIZE_CARDS  # the rules' own 6 — `prizes_taken`'s other half
 from common.strategy.damage_context import SideFacts        # the Damage Formula's ONE context
 from common.strategy.damage_context import bench_gate_context   # ...and its matchup-free slice
@@ -2065,7 +2065,7 @@ class TheirSide(_SideBase):
 
     def forward_line_prize(self, card_id) -> "LinePrize":
         """:class:`~common.strategy.combat.LinePrize` for one of THEIR bodies — the PRIZE its line
-        ultimately presents, and how far away that form is (ADR-TEMP-398 decision 2).
+        ultimately presents, and how far away that form is (ADR-0119 decision 2).
 
         The prize twin of :meth:`forward_payoff`, threaded through the same ``forward_ids``
         availability gate so both legs of Denial Value read ONE closure. It carries the identical

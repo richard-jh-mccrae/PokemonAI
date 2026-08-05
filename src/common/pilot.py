@@ -8881,7 +8881,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         for i, b in enumerate(bodies):
             shift = model.theirs.survival_clock(
                 ma, **dict(clock, bodies=bodies[:i] + bodies[i + 1:])).exact - base_exact
-            # THE LINE'S PRIZE, not the body's own (ADR-TEMP-398 decision 2). A 1-prize Staryu one
+            # THE LINE'S PRIZE, not the body's own (ADR-0119 decision 2). A 1-prize Staryu one
             # hop from a 3-prize Mega Starmie ex prices at 2: what removing it DENIES is the form
             # that never arrives, and `prize_value` structurally cannot say so. This is the leg the
             # winner-take-all `survival_shift` above cannot supply — that one is lead-only because

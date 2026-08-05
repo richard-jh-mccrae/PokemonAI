@@ -277,7 +277,7 @@ def test_more_than_one_body_scores_when_the_lead_changes_across_turns():
     assert (early_gone.turns - base.turns, late_gone.turns - base.turns) == (1, 0)
 
 
-# ---- the LINE PRIZE (ADR-TEMP-398 decision 2) -------------------------------------------------
+# ---- the LINE PRIZE (ADR-0119 decision 2) -------------------------------------------------
 def test_forward_line_prize_reads_the_lines_best_prize_and_the_hops_to_IT():
     """`(prize, hops)` over the card's forward closure INCLUDING itself.
 

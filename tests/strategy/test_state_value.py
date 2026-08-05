@@ -3045,7 +3045,7 @@ def test_the_dragapult_cross_turn_shape_is_priced_BEFORE_the_gust_and_not_only_a
 # The credit was `development.evolve_marginal`'s own expression — `_READINESS_W x (owed_damage /
 # PRIZE_DAMAGE_RATE) x halve(hops)` — against `TheirSide.forward_payoff`.
 #
-# **ADR-TEMP-398 replaced the QUANTITY and kept every claim.** That expression priced forward
+# **ADR-0119 replaced the QUANTITY and kept every claim.** That expression priced forward
 # DAMAGE, which `CombatMath.incoming` already credits all-descendants — so it was inside `survival`'s
 # clock, and this module differences, so it was one quantity counted twice at a band 11x off the
 # live ranking's. The leg that survives prices the LINE's PRIZE
@@ -3072,7 +3072,7 @@ def _credit_for(model, card_id: int) -> float:
     """The denial credit for the body carrying ``card_id`` — how much MORE than its own prize its
     LINE is worth, off the SHIPPED primitives.
 
-    **Re-pointed by ADR-TEMP-398.** It used to read `_denied_forward_payoff`, which priced the
+    **Re-pointed by ADR-0119.** It used to read `_denied_forward_payoff`, which priced the
     forward DAMAGE a removal denies at the `_READINESS_W` band. That leg is deleted: `incoming()`'s
     availability gate is all-descendants, so the damage was already inside `survival`'s clock and
     this module DIFFERENCES, making it one quantity counted twice. The surviving denial leg is the
@@ -3124,7 +3124,7 @@ def test_a_two_hop_base_prices_below_a_one_hop_base_on_the_SAME_terminal_payoff(
     ``Drakloak``). Both are 1-prize Basics, so both are owed the SAME prize gap of 1, and the only
     thing separating them is `halve(hops)`.
 
-    **This test got weaker when ADR-TEMP-398 changed the quantity, and that is stated rather than
+    **This test got weaker when ADR-0119 changed the quantity, and that is stated rather than
     papered over.** Against owed DAMAGE the pair genuinely inverted — Dreepy's own printed damage is
     lower (40 vs 70), so it was owed MORE (160 vs 130) and would have priced ABOVE Drakloak
     undiscounted, which made the ordering itself proof the discount was applied to the right

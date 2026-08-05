@@ -1,6 +1,6 @@
 """Line-prize denial sweep. **Not a gate.**
 
-Answers what ADR-TEMP-398 owes its own change: does pricing `prize_advance` as the LINE's prize
+Answers what ADR-0119 owes its own change: does pricing `prize_advance` as the LINE's prize
 recover real discrimination in the opponent-target ranking, or does it merely break Flat Ties the
 way any number of that size would?
 
@@ -12,7 +12,7 @@ beside it rather than in place of it (see `_sham.tie_population`).
 
 ## Arms
 
-    OWN    the pre-ADR-TEMP-398 ranking — `prize_advance` collapsed back to the body's OWN prize.
+    OWN    the pre-ADR-0119 ranking — `prize_advance` collapsed back to the body's OWN prize.
            Reconstructed by patching the shipped model route for the duration of the frame, so it
            is the real code path answering the OLD question rather than a hand-rebuilt imitation.
     LINE   the ranking as it now ships.
@@ -60,7 +60,7 @@ from common.state_model import TheirSide                       # noqa: E402
 
 
 class _OwnPrizeOnly(ArmPatch):
-    """Collapses `forward_line_prize` onto the body's OWN prize — the pre-ADR-TEMP-398 reading.
+    """Collapses `forward_line_prize` onto the body's OWN prize — the pre-ADR-0119 reading.
 
     ``(0, 0)`` is what makes this the OLD reading EXACTLY rather than approximately:
     `needs.line_prize_advance` floors its result at ``own_prize``, so a zero best-line-prize yields

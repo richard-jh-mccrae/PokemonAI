@@ -318,7 +318,7 @@ def survival_value(*, survival_shift: float, phase: float) -> float:
 
 def line_prize_advance(*, own_prize: float, max_line_prize: float, hops: float) -> float:
     """``prize_advance`` read as the LINE's prize rather than the body's own — **Denial Value**'s one
-    new leg (ADR-TEMP-398 decision 2).
+    new leg (ADR-0119 decision 2).
 
         own + (max_line_prize − own) × halve(hops)
 

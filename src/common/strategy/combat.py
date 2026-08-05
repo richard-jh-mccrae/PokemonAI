@@ -361,7 +361,7 @@ def _matched_slots(slots, units, caps=None) -> int:
 
 class LinePrize(NamedTuple):
     """The greatest prize value in a card's evolution line, and how far away that form is —
-    :meth:`CombatMath.forward_line_prize`'s answer (ADR-TEMP-398 decision 2).
+    :meth:`CombatMath.forward_line_prize`'s answer (ADR-0119 decision 2).
 
     NAMED rather than a bare 2-tuple, for the reason `state_model.ForwardPayoff` gives and MORE
     sharply than that one needs it. `ForwardPayoff` argues a swap would be caught because two of its
@@ -1840,7 +1840,7 @@ class CombatMath:
 
     def forward_line_prize(self, card_id, *, forward_ids=None, max_hops: int = 3) -> LinePrize:
         """:class:`LinePrize` — the greatest prize value anywhere in ``card_id``'s line
-        INCLUDING itself, and how many evolutions away that form is (ADR-TEMP-398 decision 2).
+        INCLUDING itself, and how many evolutions away that form is (ADR-0119 decision 2).
 
         The prize a body's LINE ultimately presents, which its own `prize_value` cannot distinguish:
         Staryu and a dead-end Basic are both 1-prize cards, but one of them is a Mega Starmie ex one

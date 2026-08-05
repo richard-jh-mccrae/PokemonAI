@@ -1,6 +1,4 @@
-# ADR-TEMP-398 - Denial is the LINE's prize, and the Structural Zero is correct rather than a defect
-
-⚠️ **Temp-named, not numbered.** Real number assigned at /open-pr rebase time. Cite the issue.
+# ADR-0119 - Denial is the LINE's prize, and the Structural Zero is correct rather than a defect
 
 **Status:** Accepted (grill of Issue #398 PR (b), 2026-08-05). **Amends ADR-0117**, whose framing of
 the Structural Zero as a *defect* does not survive a rules check. Supersedes ADR-0051 Phase 3b's

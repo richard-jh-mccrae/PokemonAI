@@ -93,7 +93,7 @@ it, so denial never spells it a second time. The PRIZE the line would have yield
 `prize_advance` as a line reading — `own + (max_line_prize − own) × halve(hops)` —
 rather than as a term beside it, because it is bounded by `MAX_PRIZE_VALUE` and so
 leaves `TARGET_VALUE_CEILING` (and the two rates derived from it) still.
-ADR-TEMP-398.
+ADR-0119.
 _Avoid_: removal value, kill value, a separate `denial_value` term (it is a reading
 of `prize_advance`, not a fourth addend)
 

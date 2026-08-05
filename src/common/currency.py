@@ -23,7 +23,7 @@ from common.card_worth import ROLE_TIER as _ROLE_TIER, TAG_TIER as _TAG_TIER
 # The PRIZE-equivalent yardstick, for the gust-target band. `common.needs` imports `card_worth`,
 # `grading` and `strategy.context` — all three leaves, none of which imports anything from `common`
 # — and never this module, so the arrow runs one way and this cannot cycle either. (`grading` joined
-# that list at ADR-TEMP-398, which gave `needs` the `halve` hop-discount; the invariant this comment
+# that list at ADR-0119, which gave `needs` the `halve` hop-discount; the invariant this comment
 # protects is the LIST, so it is restated rather than left reading as though `needs` still had two
 # imports.) IMPORTED rather than restated so the bound and the equation it bounds — the two
 # halves of ONE fact — cannot drift apart; aliased private because `needs` is its home and this

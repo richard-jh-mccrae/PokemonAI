@@ -237,7 +237,7 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     **The slot is WORTH-denominated as of Issue #313 item 2g**, so the number below is a band
     fraction (`10.0 x prize_equivalents/3.9`) rather than the raw prize-equivalent it used to be.
 
-    **ADR-TEMP-398 moved this frame's number, and the old prose explaining WHY it was chosen no
+    **ADR-0119 moved this frame's number, and the old prose explaining WHY it was chosen no
     longer describes it.** It read: *"the only gustable body is a 1-prize Dreepy whose removal buys
     no survival turns — the MODAL corpus target"*, held up as the "not everywhere" half of the
     denomination fix. The survival half of that is still true. The prize half is not: Dreepy is two
@@ -269,7 +269,7 @@ def test_a_gust_cards_slot_prices_below_the_cards_general_worth():
     # here pinned deny's `10 / 2^t` grade the same way; a loose inequality would let the value drift
     # anywhere below the floor unnoticed). Their bench holds one gustable body, a 1-prize Dreepy
     # whose removal buys 0 survival turns — so the survival leg is `phase x 0` = 0 and the whole
-    # marginal is `prize_advance`. Since ADR-TEMP-398 that is the LINE's prize: Dreepy is two hops
+    # marginal is `prize_advance`. Since ADR-0119 that is the LINE's prize: Dreepy is two hops
     # from Dragapult ex (2 prizes), so `1 + (2-1) x halve(2)` = 1.25, denominated into Worth by
     # `currency.target_value_to_worth` at the band fraction 1.25/3.9. It read 1.0 while
     # `prize_advance` was the body's own prize.

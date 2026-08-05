@@ -23,7 +23,7 @@ _STALL_EX_BONUS = 3          # keystone bump: stranding an energyless opponent E
                              # more than a point of retreat cost (ml f41); << KO_SCORE so a KO still wins
                              # to discard -> can't pay ANY retreat cost (≥1) -> opponent must first
                              # spend a turn's attach to retreat it — real tempo cost even at 1 (ep82754875)
-_EVOLVING_GUST_DENIAL = 0.5  # OFF-BRANCH ONLY since ADR-TEMP-398 decision 5 — dead on the live path.
+_EVOLVING_GUST_DENIAL = 0.5  # OFF-BRANCH ONLY since ADR-0119 decision 5 — dead on the live path.
                              # It was the flat sub-prize tie-break for gusting a latent evolving
                              # threat, tripped by a PRINTED damage threshold. `_gust_forward_denial`
                              # now reads the board-priced `forward_threat_ceiling` as a magnitude;
@@ -38,7 +38,7 @@ _MATCHUP_GUST_SCALE = 0.004  # ADR-0051: scale a MatchupPlan role priority (base
                              # stack (0.5 evolving + 0.4 matchup) stays < 1 prize and never overrides a
                              # real prize difference. Aligns the gust target pick with the snipe order.
 # `_WINCON_DENIAL_PRIZES = 1.5` stood here (ADR-0051 Phase 3b) — a flat γ-scaled, role-scoped bump for
-# gusting the opponent's WIN-CONDITION line. DELETED by ADR-TEMP-398 decision 2, not relocated: the
+# gusting the opponent's WIN-CONDITION line. DELETED by ADR-0119 decision 2, not relocated: the
 # question it answered ("what does this line BECOME") is now read from card facts by
 # `needs.line_prize_advance` over `CombatMath.forward_line_prize`, at `_gust_target_tactical`. Three
 # things improved — an authored constant became a derivation; the γ-gate went, so it fires on an
@@ -101,7 +101,7 @@ class GustMixin:
             return 0                                     # the KO premise is unpayable this turn (f31)
         if not self._gust_can_ko(my_stat, target):
             return 0
-        # THE LINE'S PRIZE, not the body's own (ADR-TEMP-398 decision 2). This is where
+        # THE LINE'S PRIZE, not the body's own (ADR-0119 decision 2). This is where
         # `_gust_wincon_denial` went: that term added a flat `_WINCON_DENIAL_PRIZES` (1.5) x gamma
         # for a target the MatchupPlan had labelled `prize_liability` / `fragile_preevo`, so it was
         # silent on an unrecognised opponent (gamma 0) and on any wincon line the Brief had not
@@ -190,7 +190,7 @@ class GustMixin:
         little extra — it denies a latent threat before it comes online. < 1 prize, so it breaks ties
         among equal-prize targets without ever overriding a real prize difference.
 
-        **The reading is BOARD-PRICED and a MAGNITUDE (ADR-TEMP-398 decision 5).** It used to
+        **The reading is BOARD-PRICED and a MAGNITUDE (ADR-0119 decision 5).** It used to
         threshold the provider's PRINTED forward index — `forward_max_damage >= 100` — and that index
         drops the Damage Formula's whole `per_unit x count(variable)` term, so it reads Alakazam at
         **10** and priced one of the set's scariest evolving lines at exactly 0. Issue #213 already

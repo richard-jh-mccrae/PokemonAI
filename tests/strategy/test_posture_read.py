@@ -621,7 +621,7 @@ def _lever_stats(attacks=None):
                                maxDamage=270, evolvesFrom="Riolu"),
         SOLROCK: CardStat(SOLROCK, name="Solrock", hp=110, maxDamage=70),
         KIRLIA: CardStat(KIRLIA, name="Kirlia", hp=80, maxDamage=0),
-        # `megaEx` added by ADR-TEMP-398, which made the LINE's prize load-bearing and so reached
+        # `megaEx` added by ADR-0119, which made the LINE's prize load-bearing and so reached
         # this row for the first time. **This id is a STAND-IN, not the pool card** — `GARDEVOIR` is
         # 101 (the pool's 101 is Jynx), so the claim below is that the fixture models Kirlia's real
         # line faithfully, NOT that it is that card. What was verified at source is the line itself:
@@ -875,7 +875,7 @@ def test_gust_wincon_denial_drags_the_preevo_over_a_bigger_inert_prize():
     """A 1-prize wincon pre-evo outranks a 2-prize INERT ex in the gust target pick — deny the line,
     do not take the fatter prize.
 
-    **The γ=0 half of this test inverted at ADR-TEMP-398, deliberately, and that is the whole point
+    **The γ=0 half of this test inverted at ADR-0119, deliberately, and that is the whole point
     of the change rather than fallout from it.** Under ADR-0051 Phase 3b the lift was
     `_WINCON_DENIAL_PRIZES` (1.5) × γ, role-scoped to a briefed `fragile_preevo` — so at γ=0, on any
     opponent the Read did not recognise, it VANISHED and the bigger prize won. The lift is now the

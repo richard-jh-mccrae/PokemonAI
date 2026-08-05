@@ -117,7 +117,7 @@ PER_DECISION_PROFILE = frozenset({
     # two share ONE memo entry (1 before, 1 after). `turns_to_ko_me` no longer calls `_memoized` at
     # all, so there is no second registration to find. Field-set cardinality is unchanged.
     "theirs.survival_clock",
-    # ← ADR-TEMP-398: `prize_advance` is the LINE's prize, so the rows ask what each opponent body
+    # ← ADR-0119: `prize_advance` is the LINE's prize, so the rows ask what each opponent body
     # BECOMES. Unlike the `survival_clock` rename above this is a genuinely NEW derivation, so it
     # was measured rather than argued.
     #
