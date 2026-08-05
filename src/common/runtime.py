@@ -30,7 +30,6 @@ PROFILE = {
     "posture": True,                # ADR-0026 Read/Posture
     "lethal_verify": True,          # ADR-0030 engine-confirm direct lethal locks
     "lethal_seed_exact": True,      # ADR-0050 exact own deck/prize split seeds the verify
-    "planner_engine_rank": True,    # ADR-0031 engine-sim ranks the Planner's candidates
     "planner_key_threat": True,     # ADR-0031 KO-the-key-threat Goal-Ladder rung
     "lethal_family": True,          # ADR-0037 the ONE win-generator family + verify-every-lock
     "lethal_veto": True,            # ADR-0037 replay the verified cascade
@@ -55,7 +54,6 @@ PROFILE = {
                                     # changes my_path_turns/race_ahead; kill-switch → mask-order default.
     "forced_promotion": True,       # ADR-0044 Forced-Promotion Read
     "match_planner_steer": True,    # ADR-0045 S3 Game Plan directs the Turn Goal
-    "forgo_ko": True,               # ADR-0045 S4 forgo a non-winning KO
     "prize_economy_fetch": True,    # ADR-0048 cheap 1-prize attacker line
     # `evolving_wincon_priority` was RETIRED by ADR-0085 Amendment G (Issue #188). It gated the
     # stand-down that kept the current-attacker rungs from burying `snipe-the-evolving-threat`;
@@ -82,28 +80,6 @@ PROFILE = {
                                     # Gated on the leaf-lab bench (SOLE-top / distinct-values / Gate 0);
                                     # arms only when the bench clears it — a new positive leaf term can
                                     # void guards sized against the old scale (the grill's builder-gotcha).
-    "develop_rollout": True,        # develop-rung armed-ON 2026-07-15 (ladder-testing): the within-turn
-                                    # rollout rung — cost-measured affordable + crash-safe (60 games, 0
-                                    # crashes; ~1s/game). In-place ladder A/B vs the prior flag-off
-                                    # submission. Kill-switch if its ladder value is weak.
-                                    # ⚠ It does NOT "no-op on offline correction retests" as this comment
-                                    # claimed until 2026-07-27 (#160 caught the claim, #178 the damage):
-                                    # the 5 seeded correction fixtures DO carry `search_begin_input`
-                                    # (ADR-0050), so the rung fires on them and its pick was decided by
-                                    # the engine's shuffle. Since #178 it defers whenever ANY candidate's
-                                    # sim rode that shuffle, so a retest is reproducible again.
-    "leaf_option_equivalence": True,  # ADR-0091 (Issue #247), ON at build: options a board cannot
-                                    # tell apart are ONE decision, so the develop rung sims one
-                                    # representative per Option Equivalence Class and fans the class
-                                    # MAXIMUM out to every member. ON rather than armed-off because this
-                                    # is not a new positive leaf term awaiting ladder evidence (the
-                                    # `leaf_hand_value` shape) — it DELETES an inconsistency, and the
-                                    # corrected value is one the simulator itself proved reachable:
-                                    # `81903490|0|decision|49` scored 1167.0 / 95.4 / 95.4 on three
-                                    # byte-identical Riolu. Evidence gate = both ADR-0072 instruments
-                                    # plus the human flip review, not a win-rate run. Also narrows #178's
-                                    # all-or-nothing defer to the sims the rung actually consults, so it
-                                    # defers LESS often. Root cause (the order-dependent rollout) = #254.
     "copy_top_value": True,         # Issue #289: known-top carry + Slowking copy-top pricing ships ON.
                                     # Unknown top remains fail-closed, so the feature is silent unless
                                     # the log stream has self-verified the top card.

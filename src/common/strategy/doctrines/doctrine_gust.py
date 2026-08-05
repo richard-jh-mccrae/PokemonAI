@@ -444,123 +444,18 @@ class GustMixin:
         return False
 
 
-# ── the two tunable positional weights (rest of doctrine is the Tactical layer above) ──
-HYPOTHESES = [
-    Hypothesis(
-        id="gust-for-the-ko",
-        rationale="Play a gust Supporter (Function Tag `gust`, e.g. Boss's Orders) only when it converts "
-                  "to a Knock Out this turn (`Board.gust_best_ko_prizes > 0`) — otherwise HOLD it, since "
-                  "gusting an un-KO-able target just benches the opponent's committed Active safely. Must "
-                  "beat the best MENU-attack total too — its Active KO, its poison/burn Checkup finish, "
-                  "AND its bench rider's snipe/spread KOs (ADR-0066; ep86091435 f119: Phantom Dive's 60 "
-                  "spread already collects the 40-HP Relicanth, so a gust reaching only that body is a "
-                  "wasted Supporter); the gust side counts its own gust+snipe synergy so a 2-prize "
-                  "drag-and-snipe still fires (ep82523164 f55). THREAT-FORFEIT premium (ADR-0066): "
-                  "when the menu KO would remove the very body dooming my Active (`active_doomed` "
-                  "with an Active KO on the menu), gusting benches that threat SAFELY and it comes "
-                  "back — the gust must then beat the menu by MORE than one prize, not tie-plus-one "
-                  "(ep82753102 f109: a 2-prize gust+snipe must not bench the hand-size Alakazam the "
-                  "menu could KO). The SETUP-before-wincon stand-down applies only to the Supporter "
-                  "gust, not a free ITEM gust (Pokémon Catcher). Whether-to-play only — target "
-                  "selection is the SWITCH rule (ADR-0022).",
-        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.gust_best_total_prizes > (
-            max(c.board.menu_attack_total_prizes, c.board.active_condition_ko_prizes)
-            + (1 if (c.board.active_doomed and c.board.active_ko_prizes > 0) else 0))
-        and not (getattr(c.stat, "is_supporter", False)                # Supporter-economy damping only
-                 and not c.board.line_ready and not c.board.wincon_in_play),
-        weight=50, status="assumed"),
-    Hypothesis(
-        id="gust-for-the-loaded-equal-ko",
-        rationale="An EQUAL-prize gust-KO is normally a wasted Supporter (the direct/rider KO is free — "
-                  "the ep82224509 f46 refutation), but when the gust target carries ≥ "
-                  f"{_LOADED_KO_SWING} MORE sunk Energy than the baseline KO destroys, the tie is not a "
-                  "tie: the KO takes the body AND everything attached (ADR-0062's marginal strip pointed "
-                  "across the table), so break it toward the loaded body (ADR-0066; ep85163079 f30: KO "
-                  "the 4-Energy Staryu one turn from Mega Starmie ex over the 1-Energy Cinderace — same "
-                  "prize, nowhere near the same loss). Strictly an equal-prize tie-break: a bigger prize "
-                  "is `gust-for-the-ko`, a smaller one never fires. Never against a menu KO that removes "
-                  "my Active's doom (the same threat-forfeit guard). Same Supporter-economy damping.",
-        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.gust_best_total_prizes > 0
-        and c.board.gust_best_total_prizes == max(c.board.menu_attack_total_prizes,
-                                                  c.board.active_condition_ko_prizes)
-        and c.board.gust_ko_energy_swing >= _LOADED_KO_SWING
-        and not (c.board.active_doomed and c.board.active_ko_prizes > 0)   # threat-forfeit guard
-        and not (getattr(c.stat, "is_supporter", False)
-                 and not c.board.line_ready and not c.board.wincon_in_play),
-        weight=50, status="testing"),
-    Hypothesis(
-        id="gust-for-the-stall",
-        rationale="Defensive stall-gust (tier 5, LAST resort): Active doomed, no gustable/direct KO "
-                  "available, but the opponent has an energyless high-retreat benched Pokémon — drag it "
-                  "Active so they burn a turn retreating it, buying a setup turn. GATED on the opponent's "
-                  "CURRENT Active actually being able to damage us this turn (`opp_active_can_damage_us`): "
-                  "when their Active is already neutralized (Kyogre at 0 Energy — Riptide needs discarded "
-                  "{W}, Swirling Waves is unpayable), gusting a benched body up just FREES that harmless "
-                  "Active to the Bench to reposition / power up — keep it pinned and develop instead "
-                  "(dragapult f10). The affordability charge is intentional HERE and does NOT contradict the "
-                  "worst-case `active_doomed` reading: the MILD stall's whole question is 'is their Active a "
-                  "threat NOW', whereas the famine sibling `stall-gust-over-dev-when-starved` (+95) governs "
-                  "the worst-case and is NOT so gated — under a true energy famine a harmless-NOW but "
-                  "forward-lethal Active (Riolu → Mega Lucario ex) must still be stalled (ep83457493 f20). "
-                  "Weighted below every tutor/draw so it only wins the slot when nothing else helps; never "
-                  "fires on an Active carrying a special condition (`opp_active_condition_gift`), since "
-                  "switching it out CLEARS the condition (rules.md §8) and would hand a free cure (ADR-0022). "
-                  "ONE attack guard (`active_unarmed_but_able`, #142): an UNARMED Active that can still REACH an "
-                  "attack this turn swings instead of stalling. It replaced a PAIR of partial guards that did "
-                  "not compose — the old accel half never checked that the Active was unarmed, so merely "
-                  "HOLDING a Crispin suppressed an armed stall this rationale defends.",
-        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.active_doomed and c.board.opp_active_can_damage_us
-        and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
-        and c.board.stall_target_exists
-        and not c.board.active_unarmed_but_able  # go down swinging: an UNARMED Active whose attack this turn's
-        #   full Attach Budget can still reach should ATTACK, not stall-gust (ml f19's hand attach; dragapult
-        #   f70's Crispin line). An already-armed Active (energy>0) may still legitimately stall — it keeps
-        #   its attack option either way, and an accel in hand does not change that.
-        and not c.board.opp_active_condition_gift,
-        weight=10, status="assumed"),
-    Hypothesis(
-        id="stall-gust-over-dev-when-starved",
-        rationale="When my Active is DOOMED (incl. the forward evolves-into-attacker read: their Riolu "
-                  "becomes Mega Lucario ex next turn) and I am in a real **Famine** — NO attack "
-                  "reachable under this turn's FULL Attach Budget, or the rules forbid me one at all "
-                  "(Asleep/Paralyzed/turn-1-going-first) — development "
-                  "Active (energyless, high-retreat — it can't attack and may be stuck for turns) and "
-                  "deny the evolve-and-KO a turn. Outranks a tutor's dig stack ONLY under the "
-                  "energy-famine gate, so normal development is untouched (ep83457493 f20: Boss's "
-                  "gust Makuhita ≻ Salvatore while Cinderace faces the Mega Lucario line with zero "
-                  "Energy anywhere). Stacks on `gust-for-the-stall`; same condition-gift guard. "
-                  "MARGINAL (ADR-0066): stands down when the swap is pointless — their current "
-                  "Active is itself an energyless high-retreat wall no more dangerous in place than "
-                  "any stall candidate (ep86091435 f13: Duraludon-for-Duraludon denies nothing).",
-        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.active_doomed
-        and c.board.active_famine  # the CORRECTED premise (#142): the retired pair read a flat `+1` accel
-        #   against an UNTYPED cheapest-cost count and cried famine on the f70 board, where Crispin reached
-        #   Phantom Dive's {R}{P} from zero. One oracle, full Budget, every attack scanned.
-        and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
-        and c.board.stall_target_exists
-        and not c.board.stall_swap_pointless             # wall-for-equal-wall denies nothing (ADR-0066)
-        and not c.board.opp_active_condition_gift,
-        weight=95, status="assumed"),
-    Hypothesis(
-        id="gust-to-strand-the-key-attacker",
-        rationale="When the stall-gust target is the opponent's KEY attacker — an energyless, high-retreat "
-                  "ex/Mega ex (`stall_target_is_keystone`) — stranding it Active is far stronger than a "
-                  "generic wall: their win-condition can't attack and they burn a full turn retreating it. "
-                  "Stacks on `gust-for-the-stall` so it beats a redundant dig for the slot (drag up their "
-                  "benched Mega Starmie ex instead of a wasted Salvatore — ep82751468 f57); same guards, "
-                  "and a real KO still outranks it on tactical. It STACKS but scores independently, so it "
-                  "carries `gust-for-the-stall`'s attack guard in its own right (#142) — the lone accel "
-                  "half it used to carry was no famine premise at all, and would have re-opened f70 here "
-                  "on its own once the sibling was fixed.",
-        when=lambda c: c.option_type == _PLAY and "gust" in c.tags
-        and c.board.active_doomed
-        and not c.board.active_unarmed_but_able  # an Active that can still reach an attack beats the stall (dp f70)
-        and c.board.gust_best_ko_prizes == 0 and c.board.active_ko_prizes == 0
-        and c.board.stall_target_is_keystone
-        and not c.board.opp_active_condition_gift,
-        weight=20, status="testing"),
-]
+# ── the WHETHER-TO-PLAY band is DELETED (POC-T4/5, Issue #386) ───────────────────────────────────
+# Five rungs died here: `gust-for-the-ko` (+50), `gust-for-the-loaded-equal-ko` (+50),
+# `gust-for-the-stall` (+10), `stall-gust-over-dev-when-starved` (+95) and
+# `gust-to-strand-the-key-attacker` (+20). All five answered ONE question — *"is this worth the
+# Supporter slot?"* — by hand-comparing the gust's prize total against the menu's, which is exactly
+# the comparison a sequence composer makes by construction: gust-then-attack is a SEQUENCE, and its
+# end board carries the prizes taken, the body stranded and the Supporter spent. Issue #263 §
+# *The families this prices* retires the band by name, +95 included.
+#
+# **The TARGET-pick side above is untouched and is not a rung.** `GustMixin` is the firing
+# equation's own machinery (ADR-0022 / ADR-0066: which body to drag, the stall-target reads, the
+# loaded-KO energy swing), consumed through Board fields by the tactical layer and by the win rung's
+# gust generator. Issue #386 says so explicitly — *"the TARGET-pick side is FIRING equation-owned and
+# untouched"*.
+HYPOTHESES = []

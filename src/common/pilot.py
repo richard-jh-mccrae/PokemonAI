@@ -34,7 +34,7 @@ from common.option_equivalence import canonical_keys   # ADR-0103: the ordering 
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
 from common.grading import HORIZON as _HORIZON
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
-from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
+from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin
 from common.strategy.objectives import ObjectivesMixin
 from common.strategy.planner import PlannerMixin, TurnLine
 
@@ -539,11 +539,6 @@ class Board:
                                        # line-preevo Active with nothing better to do + a benched
                                        # `item_lock` opener + a cheap reachable retreat — retreat into
                                        # Budew to DENY the opp's Item turn (no incoming-damage premise)
-    tool_deploy_slot: tuple | None = None  # (AreaType, inPlayIndex) of body to equip my held +HP
-                                       # Tool this turn — survival-turns target picker (ADR-0028);
-                                       # None when no +HP Tool in hand / no body worth equipping
-    irreplaceable_tool_in_hand: bool = False  # an ACE SPEC (one-per-deck, unrecoverable) Tool is in
-                                       # my hand — anti-shuffle belt (never shuffle it away)
     priority_wincon_slot: tuple | None = None  # (AreaType, index) of the ONE win-condition Pokémon to
                                        # concentrate Energy on — most-Energy wincon still short of biggest
                                        # attack. Active skipped if it can already KO. None when no buildable wincon
@@ -887,9 +882,6 @@ class Context:
                                            # ABILITY needs as fuel (CardStat.abilityEnergyTypes) and none is
                                            # attached — the attach switches a dormant Ability on (Adrena-Brain's
                                            # {D}). Attach-side sibling of `fetch-the-ability-fuel-color`
-    attach_is_tool_deploy_target: bool = False  # this ATTACH option puts a +HP Tool on the body the
-                                           # survival-turns picker chose (== board.tool_deploy_slot) —
-                                           # proactive deploy endorsement (`deploy-hp-tool`, ADR-0028)
     attach_feeds_firing_accel: bool = False  # this ATTACH puts Energy on an ACTIVE accelerator
                                            # (`accel_source` Role, e.g. Cinderace) that still NEEDS it to fire
                                            # its accel attack, w/ a bench recipient and no ready wincon to retreat into. Multiplies Energy even if doomed (ep83037962 f70); off if a ready attacker exists (ep83007714 f65).
@@ -1215,11 +1207,15 @@ class Decision:
     game_plan: dict | None = None    # the Match Planner's Game Plan (ADR-0045), compact for telemetry:
                                      # mode + confidence + route + directed goal. Sparse; `/blunder-buster`
                                      # ties a ladder misplay to this match-scale read
-    plan_candidates: list | None = None  # the develop-rollout rung's ranked end-boards (Phase 1): top-K
-                                     # {step, value, why, committed?, greedy?} sorted by value desc, so a
-                                     # correction reader sees WHAT the rung out-scored, not just its pick.
-                                     # Sparse: None unless the develop rung fired — keeps a non-develop
-                                     # record byte-identical to the pre-rung wire format
+    composer: dict | None = None     # the SEQUENCE COMPOSER's per-decision telemetry (POC-T4/5): the
+                                     # margin block Issue #263 § *Beam-quality package* item 3 REQUIRES
+                                     # (the chosen first step's 1-ply rank relative to k and its margin to
+                                     # the k-th candidate), the run stats, the winning candidate's
+                                     # `working()` legs and its step indices, plus any coverage-gap
+                                     # reasons. Sparse: None unless the composer ran. It REPLACES
+                                     # `plan_candidates`, the develop rollout's top-K ranked end-boards,
+                                     # which died with that rung — a near-miss at the beam cutoff is the
+                                     # early warning the ranked list used to stand in for
     attach_working: dict | None = None  # the ENERGY-ATTACH DECIDER's legible working (ADR-0069 §9):
                                      # the per-option AXES rows — attack_axis (this_turn / build /
                                      # accel_value), retreat_equity, ability_fuel, evaporation_loss,
@@ -1239,7 +1235,7 @@ def _slot_cid(slot):
     return int(head) if head.isdigit() else None
 
 
-class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin, ToolMixin):
+class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefreshMixin):
     """Composed from the Turn Planner — whose sound top rung IS the Lethal Solver (ADR-0030/0031/0037,
     one entry point) — the Tier-3 Match Objectives (ADR-0040: the KO Race), and four doctrine mixins
     (gust / fetch / shuffle-refresh / tool) — each contributes its closed-form Pilot-side methods;
@@ -1248,23 +1244,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
     def __init__(self, strategy, deck, *, general_strategy=None, overrides=None, stats=None,
                  functions=None, effects=None,
                  search_budget=0, scout=None, briefs=None, posture=True, lethal_verify=False,
-                 planner_engine_rank=False, planner_key_threat=False, lethal_family=False,
+                 planner_key_threat=False, lethal_family=False,
                  lethal_veto=False, objectives_race=False,
                  objectives_path=False, objectives_phases=False, gamble_lines=False,
                  snipe_prize_redundant=False, snipe_prize_reach=False, forced_promotion=False,
                  value_model=None,
-                 match_planner_steer=False, forgo_ko=False, prize_economy_fetch=True,
+                 match_planner_steer=False, prize_economy_fetch=True,
                  lethal_seed_exact=True, promote_ko_aware=False, boost_lethal=False,
                  retreat_enabler_lethal=False, disruptor_lock_maneuver=False,
                  matchup_targeting=True,
                  ko_target_whiff=False, opp_resource_reads=False,
                  enabler_item_composer=False,
-                 develop_rollout=False,
                  leaf_hand_value=False, attach_value=True, evolve_value=True, deploy_value=False,
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False):
+                 snipe_relevance=False, copy_top_value=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1288,9 +1283,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # hidden zones from the EXACT own deck/prize split
                                                         # (own_prizes) vs the old id-sorted decklist prefix
                                                         # that hid the high-id enabler band. OFF = prefix.
-        self.planner_engine_rank = planner_engine_rank  # ADR-0031 kill-switch: engine-sim RANKS the
-                                                        # Planner's candidate lines (off = closed-form pick,
-                                                        # engine only sharpens the committed line's value)
         self.planner_key_threat = planner_key_threat    # ADR-0031 kill-switch: the KO-the-key-threat
                                                         # Goal-Ladder rung (snipe-KO the benched top threat)
         self.lethal_family = lethal_family              # ADR-0037 kill-switch: the ONE win-generator
@@ -1330,9 +1322,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # Game Plan directed goal biases the Turn Planner's
                                                         # candidate ranking (sub-prize, confidence-scaled).
                                                         # Default OFF — byte-identical; matured via ladder
-        self.forgo_ko = forgo_ko                        # ADR-0045 kill-switch (S4): forgo a NON-winning KO
-                                                        # under the tight sound gate ("don't wake the giant").
-                                                        # Default OFF — the riskiest lever, ladder-gated
         self.promote_ko_aware = promote_ko_aware        # kill-switch: KO-aware, boost-inclusive promote
                                                         # pick — prefer promoting the benched wincon whose
                                                         # affordable attack (given the attachable Energy +
@@ -1410,21 +1399,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # so OFF means attach endorsements go silent and only
                                                         # the surviving structure rungs speak. An incident
                                                         # lever, never a comparison baseline.
-        self.leaf_option_equivalence = leaf_option_equivalence   # ADR-0091 (Issue #247) kill-switch:
-                                                        # options a board cannot tell apart are ONE
-                                                        # decision, so the develop rung sims one
-                                                        # representative per class and gives every member
-                                                        # the class MAXIMUM. Fixes a measured 1167.0-vs-95.4
-                                                        # split on three byte-identical Riolu, caused by an
-                                                        # index-order-dependent greedy rollout (Issue #254).
-                                                        # OFF = byte-identical to the pre-#247 rung.
         self.copy_top_value = copy_top_value            # Issue #289: Slowking's Seek Inspiration is valued
                                                         # only from a self-verified known top card.
-        self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
-                                                        # the within-turn rollout rung — on a develop turn
-                                                        # (plan_turn else None) where greedy is weak/indifferent,
-                                                        # sim each candidate first action to end-of-turn and
-                                                        # commit the best leaf. OFF = byte-identical
         self.doom_matched_relax = doom_matched_relax    # doom-shadow grill kill-switch (2026-07-23): behind a
                                                         # γ-matched Brief (`_incoming_budget` set) AND no
                                                         # discard-recur fuel, a worst-case `active_doomed` cry
@@ -1557,8 +1533,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # wants IN the discard (deck-fixed; Aura Jab class)
         self._turn_plan = None                          # ADR-0031 turn-scoped committed plan:
                                                         # (fingerprint, TurnLine|None); re-planned on a reveal
-        self._develop_candidates_pending = None         # develop-rung Phase 1: the last rung's ranked
-                                                        # end-boards, lifted onto the Decision's plan_candidates
+        self._composer_trace = None                     # POC-T4/5: the last composer run's margin +
+                                                        # stats, lifted onto the Decision's `composer` key
         self._planning = False                          # reentrancy guard: True while an engine sim re-runs
                                                         # policy, so plan_turn stays closed-form (no nested search)
 
@@ -1629,8 +1605,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                             posture=self._posture_record(board),
                             objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
-                            plan_candidates=(self._develop_candidates_pending   # develop-rung Phase 1: the
-                                             if planned.goal == "develop" else None),  # rung's ranking (sparse)
+                            composer=(self._composer_trace                     # POC-T4/5: the margin
+                                      if planned.goal == "compose" else None),   # telemetry (sparse)
                             gamble=getattr(self, "_gamble_trace", None),
                             attach_working=self._attach_working(obs, select, board, options),
                             lethal_refuted=refuted, lethal_lost=self._lethal_lost)
@@ -1678,6 +1654,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                         objectives=self._objectives_trace(board), win_prob=self._win_prob(board),
                         game_plan=self._game_plan_record(board),
                         gamble=getattr(self, "_gamble_trace", None),
+                        # Emitted on the DEFER path too, and that is the point: the composer ran and
+                        # declined (no scorable option, or a coverage-gap winner it refused to commit
+                        # on an unknown), so this record is the only place the reason survives. A
+                        # telemetry key that appeared only when the composer WON would answer
+                        # "did it fire" with "did it agree", which is the column-misreading the lab's
+                        # own caveat exists against.
+                        composer=getattr(self, "_composer_trace", None),
                         attach_working=self._attach_working(obs, select, board, options),
                         lethal_lost=self._lethal_lost, reordered=reordered, grabbed=grabbed)
 
@@ -1757,12 +1740,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         answer). One consequence stated rather than hidden: this changes which of several EXACTLY
         tied options is picked in live play too, and deliberately — a policy that is invariant only
         inside the sim would be simulating something other than itself, which is the drift the
-        develop rung's whole override authority rests on not having.
+        composer's whole authority to decide the MAIN menu rests on not having.
 
         Unconditional, like `_prefer_soonest_arming_evolve` below (the same defect one layer up, the
         same fix): it deletes an inconsistency rather than adding a value term, so there is no OFF
-        branch worth carrying. `leaf_option_equivalence` keeps its own narrower contract — the develop
-        rung's class collapse — untouched.
+        branch worth carrying. The `leaf_option_equivalence` kill-switch that used to carry the
+        develop rung's narrower class-collapse contract is DELETED with that rung (POC-T4/5): the
+        composer applies ADR-0091 unconditionally, which is the same reading this key already took.
 
         Measured 2026-08-02 over 300 corpus frames (2193 options, mean 7.3/frame): the fingerprinting
         costs **0.031 ms per decision**, ~3% of the ~0.95 ms whole-Board build
@@ -6615,10 +6599,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         attach_target_is_priority_wincon = (
             option.get("type") == _ATTACH and board.priority_wincon_slot is not None
             and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.priority_wincon_slot)
-        attach_is_tool_deploy_target = (
-            option.get("type") == _ATTACH and board.tool_deploy_slot is not None
-            and "tool" in tags and getattr(stat, "hpBonus", 0) > 0
-            and (option.get("inPlayArea"), option.get("inPlayIndex")) == board.tool_deploy_slot)
         attach_feeds_firing_accel = (
             option.get("type") == _ATTACH and option.get("inPlayArea") == _ACTIVE
             and "accel_source" in at_roles and self._attach_target_needs(at_target)
@@ -6672,8 +6652,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_target_under_max=self._attach_target_under_max(at_target),
                        attach_target_is_priority_wincon=attach_target_is_priority_wincon,
                        attach_fuels_dormant_ability=self._attach_fuels_dormant_ability(stat, at_target),
-                       attach_is_tool_deploy_target=attach_is_tool_deploy_target,
-                       attach_feeds_firing_accel=attach_feeds_firing_accel,
+                                  attach_feeds_firing_accel=attach_feeds_firing_accel,
                        attach_target_is_line_member=at_is_line_member,
                        attach_target_is_draw_engine=self._is_draw_engine_body((at_target or {}).get("id")),
                        attach_from_target_needs=attach_from_needs,
@@ -7539,10 +7518,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             board.ko_promote_slot = self._ko_aware_promote_slot(obs, board, me, oa)   # KO-aware,
             #                                             boost-inclusive promote target (KO-gated; None
             #                                             when no benched body reaches a KO -> inert)
-        if self._tool_in_hand(me):                      # Tool doctrine signals (ADR-0028) — only when a
-            board = replace(board,                      # Tool is in hand (common case pays nothing)
-                            tool_deploy_slot=self._tool_deploy_slot(obs, me, board),
-                            irreplaceable_tool_in_hand=self._irreplaceable_tool_in_hand(me))
         board.game_plan = self.plan_match(obs, board)   # the Match Planner (ADR-0045) runs first each turn;
         board.turn_goal_satisfied = self._turn_goal_satisfied(board, select)  # BUILD 4 predicate
         # ADR-0076: the shared per-body opponent-target value, resolved ONCE per `_board()` call and

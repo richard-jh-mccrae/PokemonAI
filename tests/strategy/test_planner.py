@@ -5,7 +5,10 @@ multi-step Turn Line reaches a valuable outcome the greedy per-option scorer wou
 
 Lib-free (the closed-form layers); the engine-sim slices live in the engine-backed suite
 (``test_planner_engine.py``). The Planner is layer-on-top: it commits ONLY when a line beats what the
-tuned scoring would already play, so a decision the existing machinery handles leaves ``planned`` None.
+tuned scoring would already play, so a decision no rung reaches leaves ``planned`` on the COMPOSER —
+`common.composer`, armed as the MAIN decider by POC-T4/5 (Issue #386). Read every "stands down"
+assertion through the `rung()` helper below: it strips a `goal="compose"` line, which is what these
+tests always meant by "the planner did not commit".
 """
 from dataclasses import dataclass, field
 
@@ -18,6 +21,19 @@ from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.telemetry import to_record
 from pilot_helpers import ACTIVE, ATTACH, HAND, PLAY, attack_opt, make_select, opt, poke, state
+
+def rung(planned):
+    """The HEURISTIC rung's committed line, or None when only the COMPOSER answered.
+
+    POC-T4/5 (Issue #386) armed `common.composer` as the MAIN decider, so `plan_turn` no longer
+    returns None at a MAIN single-pick menu — the bottom rung always has an opinion, which is the
+    whole point of the swap. These tests are about the rungs ABOVE it (win / KO-for-prizes /
+    KO-the-key-threat / gamble), and for them *"the planner stands down"* now means *"no rung above
+    the composer committed"*. Reading that through one named helper keeps the property each test was
+    written to assert intact, rather than re-pointing thirty assertions at a composer line whose
+    value they never meant to grade."""
+    return None if (planned is not None and planned.goal == "compose") else planned
+
 
 END = 14        # OptionType.END (not exported by pilot_helpers)
 EVOLVE = 9      # OptionType.EVOLVE
@@ -130,7 +146,7 @@ def test_planner_stands_down_when_the_tuned_scoring_already_reaches_the_ko():
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
                   hand=[WATER], prizes=2, opp_prizes=2)
     obs = make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None
 
 
 @pytest.mark.req("REQ-PLANNER-0003")
@@ -159,7 +175,7 @@ def test_no_planned_line_when_no_enabling_step_reaches_a_ko():
                   opp_active=poke(OPP, hp=330), opp_bench=[poke(BENCHIE, hp=100)],
                   hand=[WATER], prizes=2, opp_prizes=2)
     obs = make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None
 
 
 @pytest.mark.req("REQ-PLANNER-0005")
@@ -171,7 +187,7 @@ def test_planner_only_acts_at_the_single_pick_main_menu():
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
                   hand=[WATER], prizes=2, opp_prizes=2)
     obs = make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board, max_count=2)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None
 
 
 @pytest.mark.req("REQ-PLANNER-0006")
@@ -184,7 +200,7 @@ def test_no_planned_line_when_the_enabling_attach_is_not_available():
                   opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
                   hand=[], prizes=2, opp_prizes=2)                    # no reusable Energy in hand
     obs = make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None
 
 
 @pytest.mark.req("REQ-PLANNER-0007")
@@ -202,11 +218,16 @@ def test_planned_line_is_emitted_in_decision_telemetry():
     assert rec["planned"] == {"step": [0], "goal": "ko_for_prizes",
                               "why": "plan (ko_for_prizes): retreat unlocks a 1-prize KO"}
 
+    # No rung reaches a KO here, so the COMPOSER commits (POC-T4/5) and the record says so — with the
+    # margin telemetry Issue #263 § *Beam-quality package* item 3 requires beside it. The `planned`
+    # key is still always present, which is the filterability property this test is really about.
     safe = state(active=poke(OPENER, energy=1, hp=110), bench=[poke(WINCON, energy=2, hp=330)],
                  opp_active=poke(OPP, hp=330), opp_bench=[poke(BENCHIE, hp=100)], hand=[WATER],
                  prizes=2, opp_prizes=2)
-    rec_none = to_record(pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=safe)))
-    assert "planned" in rec_none and rec_none["planned"] is None
+    rec_c = to_record(pilot.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=safe)))
+    assert "planned" in rec_c and rec_c["planned"]["goal"] == "compose"
+    assert rec_c["planned"]["ranked"] == "composer"
+    assert set(rec_c["composer"]["margin"]) >= {"rank", "k", "in_beam", "margin_to_kth"}
 
 
 # ------------------------------------------------------------------ P2: survival + threat leaf terms
@@ -242,21 +263,6 @@ def test_leaf_value_prizes_dominate_positional_terms():
     assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True, threat_removed=10_000)
 
 
-# ---------------------------------------------------------- P3: engine-sim rank (fallback, lib-free)
-@pytest.mark.req("REQ-PLANNER-0010")
-def test_engine_leaf_value_is_none_without_a_search_observation():
-    """Fallback (ADR-0031 decision 7): with no ``search_begin_input`` on the observation (the lib-free
-    unit path), the engine leaf-eval returns None so the caller keeps its closed-form value — the
-    Planner never crashes on a missing engine. The engine round-trip itself is proven on a real
-    observation in ``test_planner_engine.py``."""
-    pilot = _pilot()
-    board = state(active=poke(OPENER, energy=1, hp=110), opp_active=poke(OPP, hp=180),
-                  prizes=2, opp_prizes=2)
-    obs = make_select([opt(END)], current=board)
-    assert pilot._engine_leaf_value(obs, [0]) is None
-    assert pilot._simulate_line(obs, [0]) is None
-
-
 # ------------------------------------------ P4: turn-scoped committed-plan cache + re-plan-on-reveal
 def _ko_obs(opp_hp=180):
     return make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)],
@@ -284,7 +290,7 @@ def test_plan_is_recomputed_when_the_board_reveals_new_information():
     here the opponent's Active is now too healthy to KO, so the plan correctly collapses to None."""
     pilot = _pilot()
     assert pilot.explain(_ko_obs(opp_hp=180)).planned is not None
-    assert pilot.explain(_ko_obs(opp_hp=330)).planned is None   # reveal invalidates cached KO line
+    assert rung(pilot.explain(_ko_obs(opp_hp=330)).planned) is None   # reveal invalidates cached KO line
 
 
 @pytest.mark.req("REQ-PLANNER-0015")
@@ -301,217 +307,6 @@ def test_no_nested_plan_or_cache_while_simulating():
         pilot._planning = False
     assert d.planned is not None and d.planned.next_step == [0]   # closed-form line still returned
     assert pilot._turn_plan is None                                # not cached (mid-sim)
-
-
-# ------------------------------------------------------ stabilize-then-KO (0cbc): heal AND take the KO
-@pytest.mark.req("REQ-PLANNER-0017")
-def test_stabilize_then_ko_heals_to_full_and_keeps_the_ko_when_doomed():
-    """0cbc shape: my Mega ex Active can KO the opponent's Active this turn (Jetting Blow 120 vs 70), but
-    it is DOOMED — the opponent's 210-damage attacker KOs it next turn. Playing Wally's Compassion
-    (clutch_heal) first heals to full and bounces its Energy; one re-attach still affords Jetting Blow, so
-    I KO **and** survive. The greedy scorer suppresses the heal (a KO is available — the `active_can_ko`
-    trap that caused the blunder), so the Planner commits the heal to combine both goals."""
-    pilot = _pilot()
-    play_wallys = opt(PLAY, area=HAND, index=0)
-    attach_water = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
-    board = state(active=poke(WINCON, energy=2, hp=100), opp_active=poke(THREAT, hp=70),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS, WATER], prizes=2, opp_prizes=2)
-    obs = make_select([play_wallys, attach_water, attack_opt(JETTING), opt(END)], current=board)
-    b = pilot._board(obs)
-    assert b.active_doomed and b.active_can_ko          # doomed, yet a KO is on the board (the trap)
-    d = pilot.explain(obs)
-    assert d.planned is not None and d.planned.goal == "stabilize_then_ko"
-    assert d.planned.next_step == [0]                   # play Wally's first (heal, re-power, then KO)
-    assert pilot.decide(obs) == [0]
-
-
-@pytest.mark.req("REQ-PLANNER-0018")
-def test_stabilize_stands_down_when_the_heal_would_forfeit_the_ko():
-    """Soundness: the ONLY KO here is Nebula Beam (cost 3, 210 vs a 180-HP Active); my Active affords it
-    NOW at 3 Energy. But Wally's bounce drops it to 0 and only ONE re-attach is possible this turn — Nebula
-    is then unaffordable, so healing would FORFEIT the KO. The Planner must not heal-and-stall: it stands
-    down (``planned is None``) and the tuned scoring takes the prize."""
-    pilot = _pilot()
-    board = state(active=poke(WINCON, energy=3, hp=100), opp_active=poke(THREAT, hp=180),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS, WATER], prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(NEBULA), attack_opt(JETTING), opt(END)], current=board)
-    assert pilot._board(obs).active_doomed and pilot._board(obs).active_can_ko
-    assert pilot.explain(obs).planned is None           # can't re-power KO -> don't heal
-
-
-@pytest.mark.req("REQ-PLANNER-0019")
-def test_stabilize_stands_down_when_the_active_is_not_doomed():
-    """Soundness: with the Active healthy (300 HP vs 210 Incoming) there is nothing to stabilise, so the
-    Planner does NOT spend Wally's to top off — it defers and the KO is taken as usual (``planned is
-    None``). Keeps the 'take the prize, don't heal-and-stall' default when survival isn't at stake."""
-    pilot = _pilot()
-    board = state(active=poke(WINCON, energy=2, hp=300), opp_active=poke(THREAT, hp=70),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS, WATER], prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(JETTING), opt(END)], current=board)
-    assert not pilot._board(obs).active_doomed
-    assert pilot.explain(obs).planned is None
-
-
-# --------------------------------------- stabilize via Effect Clauses (ADR-0032 4b): any heal with the numbers
-SUPER_POTION, POTION = 1112, 1117
-
-
-def _effects(table):
-    from common.effects import CardEffects
-    return CardEffects(table)
-
-
-@pytest.mark.req("REQ-PLANNER-0024")
-def test_clause_heal_stabilizes_when_amount_and_rider_math_check_out():
-    """ADR-0032 4b: Super Potion's CLAUSE (heal 60, rider discard_own_energy) generalizes the
-    Wally-only stabilize: my doomed Mega (160/330, Incoming 210) KOs the 70-HP glass cannon with
-    Jetting Blow; heal 60 -> 220 > 210 survives, and after the rider discards one Energy (2 -> 1)
-    plus the manual attach, Jetting (cost 1) is still affordable — heal first, still take the KO."""
-    pilot = _pilot(effects=_effects({SUPER_POTION: [
-        {"kind": "heal", "amount": 60, "rider": "discard_own_energy"}]}))
-    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[SUPER_POTION, WATER],
-                  prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(JETTING), opt(END)], current=board)
-    b = pilot._board(obs)
-    assert b.active_doomed and b.active_can_ko
-    d = pilot.explain(obs)
-    assert d.planned is not None and d.planned.goal == "stabilize_then_ko"
-    assert d.planned.next_step == [0] and pilot.decide(obs) == [0]
-
-
-@pytest.mark.req("REQ-PLANNER-0024")
-def test_a_per_body_heal_credits_my_active_the_PRINTED_amount_not_amount_times_bodies():
-    """**Issue #349's live half.** `draw` magnitudes have no consumer; `heal` magnitudes have two —
-    `_heal_candidate` and `_heal_averts_doom` both read `clause["amount"]` and compare the result to
-    the incoming damage. So the board-scaled magnitude key had to land without moving a survival read.
-
-    `each_of` widens the SET a heal reaches, never the amount any one body receives: 1222 Fennel's
-    *"Heal 40 damage from each of your Pokémon"* gives my Active 40, exactly as a single-target
-    Potion-shaped 40 would. That is why the key is safe here — and why it had to be a separate key
-    from `amount_per`, which DOES multiply. Read as a multiplier on a 5-body board this clause would
-    credit 200 and manufacture a KO_SCORE-class phantom survival.
-
-    Asserted in both directions on one harness, so the green is a measurement rather than a line that
-    never fired: 40 does not clear the 210 Incoming from 160 HP and the planner stands down **whether
-    or not `each_of` is present**; the same board with the multiplied amount it would wrongly imply
-    (200 → 360, capped to 330) does fire. If `each_of` ever started scaling the Active's credit, the
-    first assertion would go green-to-red into the third's behaviour."""
-    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[POTION, WATER], prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(JETTING), opt(END)], current=board)
-    per_body = _pilot(effects=_effects({POTION: [
-        {"kind": "heal", "amount": 40, "target": "any_pokemon", "each_of": True}]}))
-    assert per_body._board(obs).active_doomed
-    assert per_body.explain(obs).planned is None          # 160 + 40 = 200 <= 210: no stabilise
-    plain = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 40}]}))
-    assert plain.explain(obs).planned is None             # …and `each_of` changed nothing
-    # The positive control: the credit `each_of` must NOT produce (40 x 5 bodies) does fire here, so
-    # the two stand-downs above are the key staying inert rather than the harness being unable to plan.
-    multiplied = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 200}]}))
-    planned = multiplied.explain(obs).planned
-    assert planned is not None and planned.goal == "stabilize_then_ko"
-
-
-@pytest.mark.req("REQ-PLANNER-0024")
-def test_clause_heal_stands_down_when_the_amount_cannot_stabilize():
-    # Potion heals 30: 160+30=190 <= 210 Incoming — heal wouldn't save Active, don't spend it
-    pilot = _pilot(effects=_effects({POTION: [{"kind": "heal", "amount": 30}]}))
-    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[POTION, WATER], prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(JETTING), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
-
-
-@pytest.mark.req("REQ-PLANNER-0024")
-def test_clause_heal_stands_down_when_its_rider_forfeits_the_ko():
-    # ONLY KO is Nebula (cost 3) at exactly 2 Energy + 1 attach = 3 — but Super Potion's rider
-    # discards one (2 -> 1 + 1 = 2 < 3): healing would forfeit the prize -> stand down
-    pilot = _pilot(effects=_effects({SUPER_POTION: [
-        {"kind": "heal", "amount": 60, "rider": "discard_own_energy"}]}))
-    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(OPP, hp=180),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[SUPER_POTION, WATER],
-                  prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(NEBULA), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
-
-
-@pytest.mark.req("REQ-PLANNER-0024")
-def test_clause_restriction_gates_the_candidate():
-    # mega-only heal clause can't target my non-Mega Active: skipped, no line
-    pilot = _pilot(effects=_effects({SUPER_POTION: [
-        {"kind": "heal", "amount": 200, "restriction": "mega_only"}]}))
-    board = state(active=poke(OPENER, energy=1, hp=100), opp_active=poke(THREAT, hp=30),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[SUPER_POTION, WATER],
-                  prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(OPEN_ATK), opt(END)], current=board)
-    b = pilot._board(obs)
-    assert b.active_doomed and b.active_can_ko
-    assert pilot.explain(obs).planned is None
-
-
-@pytest.mark.req("REQ-PLANNER-0025")
-def test_board_checkable_condition_gates_are_evaluated():
-    # Bianca's Devotion: heal ALL, gated on "30 HP or less remaining" — gate is board-checkable,
-    # so Planner evaluates it instead of fail-closed skipping. At 20/330 gate passes (heal to
-    # full, KO kept); at 160/330 gate fails -> no line.
-    BIANCA = 1190
-    eff = _effects({BIANCA: [{"kind": "heal", "amount": "all",
-                              "condition": "remaining_hp_30_or_less"}]})
-    for hp, fires in ((20, True), (160, False)):
-        pilot = _pilot(effects=eff)
-        board = state(active=poke(WINCON, energy=2, hp=hp), opp_active=poke(THREAT, hp=70),
-                      opp_bench=[poke(BENCHIE, hp=100)], hand=[BIANCA, WATER],
-                      prizes=2, opp_prizes=2)
-        obs = make_select([opt(PLAY, area=HAND, index=0),
-                           opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                           attack_opt(JETTING), opt(END)], current=board)
-        planned = pilot.explain(obs).planned
-        assert (planned is not None) is fires, f"hp={hp}"
-        if fires:
-            assert planned.goal == "stabilize_then_ko"
-
-
-@pytest.mark.req("REQ-PLANNER-0025")
-def test_energy_gate_is_evaluated():
-    # Jumbo Ice Cream: heal 80, gated on the Active having 3+ Energy — checkable off the board
-    JUMBO = 1147
-    eff = _effects({JUMBO: [{"kind": "heal", "amount": 80, "condition": "energy_3_plus"}]})
-    for energy, fires in ((3, True), (2, False)):
-        pilot = _pilot(effects=eff)
-        board = state(active=poke(WINCON, energy=energy, hp=160), opp_active=poke(THREAT, hp=70),
-                      opp_bench=[poke(BENCHIE, hp=100)], hand=[JUMBO, WATER],
-                      prizes=2, opp_prizes=2)
-        obs = make_select([opt(PLAY, area=HAND, index=0),
-                           opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                           attack_opt(JETTING), opt(END)], current=board)
-        assert (pilot.explain(obs).planned is not None) is fires, f"energy={energy}"
-
-
-@pytest.mark.req("REQ-PLANNER-0025")
-def test_unknown_condition_still_fails_closed():
-    eff = _effects({1242: [{"kind": "heal", "amount": 200, "condition": "played_supporter_this_turn"}]})
-    pilot = _pilot(effects=eff)
-    board = state(active=poke(WINCON, energy=2, hp=160), opp_active=poke(THREAT, hp=70),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[1242, WATER], prizes=2, opp_prizes=2)
-    obs = make_select([opt(PLAY, area=HAND, index=0),
-                       opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0),
-                       attack_opt(JETTING), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None       # not board-checkable -> never plan on it
 
 
 # ------------------------------------------- Supporter-enabled KO line (4298): the tutor supplies the attach
@@ -556,95 +351,6 @@ def test_energy_tutor_line_generalizes_to_any_tutor_energy_supporter():
     assert d.planned is not None and d.planned.goal == "ko_for_prizes"
     assert d.planned.next_step == [0]                  # play the (non-Hilda) energy tutor
     assert pilot.decide(obs) == [0]
-
-
-# ------------------------------- multi-candidate ENGINE RANKING (ADR-0031 P3 completion, item 2a)
-def _two_candidate_obs():
-    """A board with TWO viable ko_for_prizes candidates: retreat into the benched 2-Energy Mega
-    (option 0, + attach -> Nebula 210 KOs 180) OR evolve the Active Staryu to Mega (option 1, the 2
-    Energy carry through, + attach -> Nebula). Equal closed-form leaf values -> the closed-form pick
-    is the first (the retreat)."""
-    board = state(active=poke(PREEVO, energy=2, hp=70), bench=[poke(WINCON, energy=2, hp=330)],
-                  opp_active=poke(OPP, hp=180), opp_bench=[poke(BENCHIE, hp=100)],
-                  hand=[WINCON, WATER], prizes=2, opp_prizes=2)
-    evolve = opt(EVOLVE, area=HAND, index=0, inPlayArea=ACTIVE, inPlayIndex=0)
-    return make_select([opt(RETREAT), evolve, attack_opt(STARYU), opt(END)], current=board)
-
-
-@pytest.mark.req("REQ-PLANNER-0026")
-def test_engine_rank_off_by_default_keeps_the_closed_form_pick():
-    """Kill-switch (ADR-0021 pattern): without ``planner_engine_rank=True`` a multi-candidate board
-    commits the closed-form best (ties break to the first generated) and the line is not marked
-    engine-ranked — byte-identical to the shipped behavior."""
-    pilot = _pilot()
-    d = pilot.explain(_two_candidate_obs())
-    assert d.planned is not None and d.planned.next_step == [0]   # the closed-form (first) candidate
-    assert d.planned.ranked_by is None                            # no ranking ran (switch off)
-
-
-@pytest.mark.req("REQ-PLANNER-0027")
-def test_engine_rank_commits_the_engine_best_candidate(monkeypatch):
-    """Multi-candidate ranking (the ADR-0031 deferred phase, built): with the switch ON, every
-    closed-form candidate is engine-simmed and the ENGINE's leaf value picks the committed line —
-    here the engine values the evolve line above the retreat the closed form would take. The
-    divergence is recorded for the A/B fire/divergence count."""
-    pilot = _pilot(planner_engine_rank=True)
-    values = {(0,): KO_SCORE + 60.0, (1,): KO_SCORE + 160.0}
-    monkeypatch.setattr(pilot, "_engine_leaf_value",
-                        lambda obs, step: values[tuple(step)])
-    d = pilot.explain(_two_candidate_obs())
-    assert d.planned is not None and d.planned.next_step == [1]   # the engine's pick, not closed-form's
-    assert d.planned.ranked_by == "engine" and d.planned.diverged is True
-    assert to_record(d)["planned"]["ranked"] == "engine"
-    assert to_record(d)["planned"]["diverged"] is True
-
-
-@pytest.mark.req("REQ-PLANNER-0027")
-def test_engine_rank_result_is_cached_per_reveal():
-    """Plan-once-cache (decision 5) holds for the ranked plan: the N candidate sims run once per
-    board fingerprint — the same board returns the cached line object without re-simulating."""
-    pilot = _pilot(planner_engine_rank=True)
-    calls = []
-    pilot._engine_leaf_value = lambda obs, step: calls.append(tuple(step)) or (KO_SCORE + 50.0)
-    obs = _two_candidate_obs()
-    line1 = pilot.explain(obs).planned
-    n = len(calls)
-    assert line1 is not None and n >= 2                           # every candidate was simmed once
-    assert pilot.explain(obs).planned is line1                    # cache hit ...
-    assert len(calls) == n                                        # ... no re-simulation
-
-
-@pytest.mark.req("REQ-PLANNER-0028")
-def test_engine_rank_defers_when_every_candidate_collapses(monkeypatch):
-    """The natural veto: when the engine end-boards show NO candidate actually takes a prize (every
-    ranked value below KO_SCORE — the rung's premise failed in sim), the Planner defers to the tuned
-    scoring instead of committing a refuted line. The proven default decides the turn."""
-    pilot = _pilot(planner_engine_rank=True)
-    monkeypatch.setattr(pilot, "_engine_leaf_value", lambda obs, step: 50.0)
-    d = pilot.explain(_two_candidate_obs())
-    assert d.planned is None                                      # refuted premise -> defer
-    assert d.chosen                                               # the tuned scoring still decided
-
-
-@pytest.mark.req("REQ-PLANNER-0029")
-def test_engine_rank_falls_back_per_candidate_when_a_sim_is_unavailable(monkeypatch):
-    """Fail-safe (decision 7, per candidate): a None sim keeps that candidate's closed-form value on
-    the SAME leaf scale, so an unavailable engine (or one failed fork) never loses the line — with
-    every sim unavailable the pick degrades exactly to the closed-form choice, marked unranked."""
-    pilot = _pilot(planner_engine_rank=True)
-    monkeypatch.setattr(pilot, "_engine_leaf_value", lambda obs, step: None)
-    d = pilot.explain(_two_candidate_obs())
-    assert d.planned is not None and d.planned.next_step == [0]   # closed-form pick survives
-    assert d.planned.ranked_by == "closed" and d.planned.diverged is False
-
-    # mixed: candidate 0 unavailable (keeps closed-form value >= KO_SCORE), candidate 1 engine-refuted
-    # (collapsed) -> the unrefuted closed-form line wins; the engine's refute of [1] still counted.
-    pilot2 = _pilot(planner_engine_rank=True)
-    monkeypatch.setattr(pilot2, "_engine_leaf_value",
-                        lambda obs, step: None if tuple(step) == (0,) else 50.0)
-    d2 = pilot2.explain(_two_candidate_obs())
-    assert d2.planned is not None and d2.planned.next_step == [0]
-    assert d2.planned.ranked_by == "closed"
 
 
 # --------------------------------------------- the KO-the-key-threat rung (ADR-0031 ladder, item 2b)
@@ -705,7 +411,7 @@ def test_key_threat_rung_commits_the_retreat_that_unlocks_the_threat_snipe():
     assert on.decide(_key_threat_obs()) == [0]
 
     off = _snipe_pilot()
-    assert off.explain(_key_threat_obs()).planned is None   # default OFF: byte-identical behavior
+    assert rung(off.explain(_key_threat_obs()).planned) is None   # default OFF: no rung fires
 
 
 @pytest.mark.req("REQ-PLANNER-0031")
@@ -741,7 +447,7 @@ def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
     ko_on_menu = state(active=poke(WINCON, energy=3, hp=330), opp_active=poke(OPP, hp=120),
                        opp_bench=[poke(THREATB, energy=1, hp=90)], prizes=3, opp_prizes=3)
     d = pilot.explain(make_select([attack_opt(SNIPE), attack_opt(JETTING), opt(END)], current=ko_on_menu))
-    assert d.planned is None                           # the KO on the menu owns the turn
+    assert rung(d.planned) is None                           # the KO on the menu owns the turn
 
     FATB = 703                                         # a harmless fat benched body (no threat rank)
     stats = _snipe_stats()
@@ -752,190 +458,7 @@ def test_key_threat_rung_is_layer_on_top_and_needs_a_snipe_koable_top_threat():
                       opp_active=poke(OPP, hp=330), opp_bench=[poke(FATB, hp=150)],
                       hand=[WATER], prizes=3, opp_prizes=3)
     d2 = pilot2.explain(make_select([opt(RETREAT), attack_opt(OPEN_ATK), opt(END)], current=no_threat))
-    assert d2.planned is None                          # nothing benched threatens -> no rung
-
-
-# ------------------------------------------------ the development leaf term (ADR-0031 decision 4, item 2c)
-@pytest.mark.req("REQ-PLANNER-0033")
-def test_readiness_term_breaks_engine_rank_ties_and_stays_below_a_prize(monkeypatch):
-    """The engine-sim leaf's positional term (`_readiness`, replacing `_board_development`) gets its
-    input (engine-rank phase, `P3 on`): two candidate lines with EQUAL engine prizes + survival are split
-    by the simmed end-board's MY-side readiness — the line that leaves a more developed, attack-readier
-    board wins. The hard-rung invariant holds: no positional term can ever outrank a prize."""
-    pilot = _pilot(planner_engine_rank=True)
-
-    def fake_sim(obs, first_step, max_steps=40, *, opponent_reply=False):
-        me_bare = {"active": [poke(WINCON, energy=1, hp=330)], "bench": [], "prize": [None]}
-        me_dev = {"active": [poke(WINCON, energy=1, hp=330)],
-                  "bench": [poke(PREEVO, energy=2, hp=70), poke(OPENER, energy=1, hp=110)],
-                  "prize": [None]}
-        opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 2}
-        me = me_dev if first_step == [1] else me_bare
-        end = {"current": {"turn": 3, "yourIndex": 0, "players": [me, opp]}}
-        return (end, 0, 2, -1, 0.0, False, False)       # both lines banked 1 prize (2 -> 1), no result;
-                                                        # 0 line account; coin-free + RNG-free (the two
-                                                        # win-trust bits)
-
-    monkeypatch.setattr(pilot, "_simulate_line", fake_sim)
-    d = pilot.explain(_two_candidate_obs())
-    assert d.planned is not None and d.planned.next_step == [1]   # the readier end-board wins the tie
-    assert d.planned.ranked_by == "engine"
-
-    lv = pilot._leaf_value
-    # both the legacy development term AND the new readiness term stay capped below a prize
-    assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True,
-                                                    threat_removed=10_000, development=10_000)
-    assert lv(prizes=1, active_survives=False) > lv(prizes=0, active_survives=True,
-                                                    threat_removed=10_000, readiness=10_000, line=10_000)
-
-
-@pytest.mark.req("REQ-PLANNER-0037")
-def test_a_coin_dependent_simmed_win_is_never_the_dominant_short_circuit(monkeypatch):
-    """The f24 phantom-win regression (CI, 2026-07-20): `_simulate_line` auto-resolves coins, so a
-    line can sim to an outright \"win\" on one lucky RNG stream (7000) and to an ordinary board on
-    another (162) — and the dominant win short-circuit let that mirage preempt the tuned scoring.
-    The sim tuple's ``coins`` bit demotes it: a simmed win is dominant ONLY when the line consumed no
-    coin flips; a coin-dependent one ranks as its ordinary end board (prizes banked still count), so
-    only the SOUND win rung may claim wins.
-
-    The wider ``stream`` bit (#178) deliberately does NOT gate this: the leaf's own values feed
-    ADR-0072's pinned Discrimination Gate, and widening the short-circuit takes that gate from main's
-    own 2 unruled `OK → MISS` to 9 — seven frames owing that gate a user ruling on their own merits."""
-    pilot = _pilot()
-    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
-    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
-    end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
-
-    def fake_sim(coins, stream=None):
-        stream = coins if stream is None else stream
-        return lambda obs, first_step, max_steps=40, **kw: (end, 0, 2, 0, 0.0, coins, stream)
-
-    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False))
-    clean = pilot._engine_leaf_value({}, [0])
-    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(True))
-    coined = pilot._engine_leaf_value({}, [0])
-    monkeypatch.setattr(pilot, "_simulate_line", fake_sim(False, stream=True))
-    drawn = pilot._engine_leaf_value({}, [0])
-    from common.state_value import WIN_PRIZES
-    from common.strategy.context import KO_SCORE
-    assert clean == KO_SCORE * WIN_PRIZES               # coin-free win: dominant (Issue #362's band)
-    assert coined < KO_SCORE * WIN_PRIZES               # coin-won "win": ordinary board ranking
-    assert coined < clean
-    assert drawn == clean                               # a DRAWN win keeps the leaf's value: the
-                                                        # rung's gate is `with_stream`, not this one
-
-
-@pytest.mark.req("REQ-PLANNER-0037")
-def test_a_coin_free_simmed_WIN_outranks_every_board_the_leaf_can_score(monkeypatch):
-    """Issue #362: the short-circuit's comment said *"dominant"* and its arithmetic no longer was.
-    The defect, its corpus measurement and the derivation all live on
-    :data:`~common.state_value.WIN_PRIZES`; this asserts the half that module cannot.
-
-    The bound belongs on the LEAF's axis rather than `state_value`'s, because the leaf adds
-    `min(_LINE_CAP, line_val)` OUTSIDE the scalar and the win has to clear that too. `WIN_PRIZES`'
-    one prize of headroom (1000) covers `_LINE_CAP` (100) ten times over, which is why the derivation
-    lives over there and only this assertion knows about the line account."""
-    import common.state_value as sv
-    from common.strategy.context import KO_SCORE
-    from common.strategy.planner import _LINE_CAP
-
-    ceiling = KO_SCORE * (sv._PRIZES_START + sv._PROXIMITY_W + sv.POSITIONAL_MAX) + _LINE_CAP
-    assert KO_SCORE * sv.WIN_PRIZES > ceiling
-
-    # …and end-to-end through the two branches on the SAME simulated board, so the wiring is under
-    # test and not only the arithmetic: flipping `result` is the only difference between the calls.
-    pilot = _pilot()
-    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None]}
-    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 5}
-    start_prizes = len(me["prize"])                  # 1 prize REMAINING — a win one turn away
-
-    def sim(result):
-        end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": result}}
-        return lambda obs, first_step, max_steps=40, **kw: (
-            end, 0, start_prizes, result, 0.0, False, False)
-
-    monkeypatch.setattr(pilot, "_simulate_line", sim(0))
-    won = pilot._engine_leaf_value({}, [0])
-    monkeypatch.setattr(pilot, "_simulate_line", sim(-1))
-    unfinished = pilot._engine_leaf_value({}, [0])
-    # NON-VACUITY, and it reproduces the defect in a unit test rather than only in prose: this
-    # ordinary UNFINISHED board out-scores what the retired formula would have paid the WIN on this
-    # very frame — and it clears the formula's absolute ceiling of 7 prizes on a real corpus board
-    # (`82749168|1|decision|88`: won 2000, non-win 6789.9). Without this the comparison below would
-    # pass against a board the old magnitude also beat, which would test nothing.
-    assert unfinished > KO_SCORE * (start_prizes + 1)
-    assert won > unfinished
-
-
-@pytest.mark.req("REQ-PLANNER-0037")
-def test_the_win_value_is_FLAT_and_that_costs_the_ranking_nothing(monkeypatch):
-    """Issue #362 scope 3, taken as an OWNED zero rather than closed — with the measurement that
-    makes it free.
-
-    Every winning line in a frame now prices identically. So did the old formula: `start_prizes` is
-    read off the **root observation** inside `_simulate_line`, before the first step, so it is one
-    number per FRAME and every option of that frame carries it. It could never separate two winning
-    lines; all it ever did was scale the flat value differently per frame, which is a magnitude no
-    ranking can use because rankings are within-frame. Measured on `82749168|1|decision|88`: eight
-    winning options, all `start_prizes 1`, all 2000.
-
-    So the tie is not a regression this change introduced and there is nothing here to distinguish:
-    `_simulate_line` stops at MY turn end, so every one of these lines wins THIS turn — there is no
-    sooner-or-later to prefer. What genuinely varies between them is how far the heuristic sim had to
-    predict to get there, and that is ALREADY governed: the `coins` bit demotes an RNG-won line out of
-    this branch entirely and `_develop_rollout_line` refuses any ranking that rode `stream`. The
-    residual — ordering two equally-winning, equally-coin-free lines — is Issue #263's (T4 owns
-    ordering and inherits this leaf)."""
-    import common.state_value as sv
-    from common.strategy.context import KO_SCORE
-
-    pilot = _pilot()
-    me = {"active": [poke(WINCON, energy=3, hp=330)], "bench": [], "prize": [None] * 2}
-    opp = {"active": [poke(BENCHIE, hp=100)], "bench": [], "prize": [None] * 3}
-    end = {"current": {"turn": 5, "yourIndex": 0, "players": [me, opp], "result": 0}}
-
-    values = set()
-    for banked in range(0, 7):                      # every legal prize count a line can begin from
-        monkeypatch.setattr(pilot, "_simulate_line",
-                            lambda obs, first_step, max_steps=40, _b=banked, **kw:
-                            (end, 0, _b, 0, 0.0, False, False))
-        values.add(pilot._engine_leaf_value({}, [0]))
-    assert values == {KO_SCORE * sv.WIN_PRIZES}, "a win is a win — the banked count no longer scales it"
-
-    # The claim the paragraph above rests on, asserted through the REAL `_simulate_line` rather than
-    # quoted: two different first steps on one board report the same `start_prizes`, so the term the
-    # old formula varied on was frame-constant and never discriminated within a frame.
-    real = _pilot()
-    real._search_api = _FakeSearchApi([])
-    obs = dict(_two_candidate_obs(), search_begin_input="x")
-    assert real._simulate_line(obs, [0])[2] == real._simulate_line(obs, [1])[2]
-
-
-@pytest.mark.req("REQ-PLANNER-0037")
-def test_develop_rollout_defers_when_any_candidate_sim_rode_the_rng_stream(monkeypatch):
-    """The other half of the f24 heisenbug (#178): the develop rollout's OVERRIDE authority comes from
-    a reproducible end-board, and ONE stream-riding candidate makes the whole ranking unreproducible —
-    so the rung defers rather than rank the survivors.
-
-    All-or-nothing, not per-candidate exclusion. The excluded lines are not known-worse, and what
-    survives exclusion is systematically what TOUCHES NOTHING (a bare END never draws). On the real
-    f24 board 12 of 13 candidates draw off the shuffled deck; ranking the survivors would have
-    committed the END option."""
-    pilot = _pilot()
-    values = {0: (50.0, False), 1: (40.0, False), 2: (45.0, False)}
-
-    def fake_leaf(obs, first_step, spend_account=True, with_stream=False):
-        val, stream = values[first_step[0]]
-        return (val, stream) if with_stream else val
-
-    monkeypatch.setattr(pilot, "_engine_leaf_value", fake_leaf)
-    traces = [type("T", (), {"score": 0.0, "card_id": None})() for _ in range(3)]
-    line = pilot._develop_rollout_line({}, {}, None, [{}, {}, {}], traces)
-    assert line is not None and line.next_step == [0]   # fully reproducible ranking -> the argmax commits
-    values.update({2: (45.0, True)})                    # ONE candidate rode the stream...
-    line = pilot._develop_rollout_line({}, {}, None, [{}, {}, {}], traces)
-    assert line is None                                 # ...and the whole ranking is forfeit
-    assert pilot._develop_candidates_pending is None    # nothing to emit: there was no ranking
+    assert rung(d2.planned) is None                          # nothing benched threatens -> no rung
 
 
 # ── the `stream` bit itself: what `_simulate_line` counts as engine randomness (#178) ────────────
@@ -996,50 +519,8 @@ class _FakeSearchApi:
         return None
 
 
-def _sim_stream(logs):
-    """The `stream` bit (the last `_simulate_line` tuple element) for a line whose step made ``logs``."""
-    pilot = _pilot()
-    pilot._search_api = _FakeSearchApi(logs)
-    obs = dict(_two_candidate_obs(), search_begin_input="x")
-    sim = pilot._simulate_line(obs, [0])
-    assert sim is not None, "the fake backend must produce an end board"
-    return sim[6]
-
-
 L = _FakeSearchApi.LogType
 A = _FakeSearchApi.AreaType
-
-
-@pytest.mark.req("REQ-PLANNER-0037")
-def test_a_line_the_shuffle_cannot_change_stays_reproducible():
-    """The negative cases, so the bit is not vacuously True — each one measured on a real cascade:
-
-    * a bare ``SHUFFLE`` nobody then looks at, and moves out of zones we can already see;
-    * a ``DECK``→``HAND`` **search**: the deck is revealed and we pick by identity, so the order
-      decides nothing (all the hidden-zone traffic the f26/f48 tutor lines have);
-    * the OPPONENT's draws, which land after my turn has passed. Without this exclusion a bare END
-      would count, since the sim always steps into their turn start before it stops."""
-    assert _sim_stream([]) is False
-    assert _sim_stream([_FakeLog(L.SHUFFLE, playerIndex=0),
-                        _FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.HAND, toArea=A.DISCARD)]) is False
-    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.HAND),
-                        _FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.BENCH)]) is False
-    assert _sim_stream([_FakeLog(L.DRAW, playerIndex=1),
-                        _FakeLog(L.DRAW_REVERSE, playerIndex=0)]) is False
-
-
-@pytest.mark.req("REQ-PLANNER-0037")
-def test_a_card_the_engine_picked_off_a_shuffled_zone_marks_the_sim_unreproducible():
-    """The channel the COIN-only bit missed (#178). `_seed_zones` hands `search_begin` a predicted
-    MULTISET for my deck and prizes and the engine SHUFFLES it, so a card taken POSITIONALLY out of
-    one — a draw, a top-N peek, a mill, or a face-down prize whose id is our own prediction — is a
-    sample of that shuffle, and the end board it produces is not a fact about the position. A coin
-    anywhere on the line still counts, whoever flipped it."""
-    assert _sim_stream([_FakeLog(L.DRAW, playerIndex=0)]) is True
-    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.LOOKING)]) is True
-    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.DECK, toArea=A.DISCARD)]) is True
-    assert _sim_stream([_FakeLog(L.MOVE_CARD, playerIndex=0, fromArea=A.PRIZE, toArea=A.HAND)]) is True
-    assert _sim_stream([_FakeLog(L.COIN, playerIndex=1)]) is True
 
 
 @pytest.mark.req("REQ-PLANNER-0037")
@@ -1058,54 +539,6 @@ def test_the_verdict_probe_ignores_a_prize_take_the_board_probe_counts():
     assert _rng_probe(api, 0, prize=True)(take) is True      # the board question
     assert _rng_probe(api, 0, prize=False)(take) is False    # the verdict question
     assert _rng_probe(api, 0, prize=False)(draw) is True     # a DRAW demotes either way
-
-
-# --------------------------------- heal-before-attach (corpus 6858 shape): the attach-carried KO
-IGNITION = 17   # discard-at-end-of-turn special Energy — {C}, or {C}{C}{C} on an Evolution
-BRUISER = 681   # opponent's Active: 180 HP, hits for 210 (dooms my damaged Mega)
-
-
-def _ignition_pilot(**kw):
-    strat = Strategy(roles={WINCON: ["win_condition", "primary_attacker"]})
-    stats = _stats()
-    stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
-    stats._stats[BRUISER] = CardStat(BRUISER, synthetic=True, name="bruiser", hp=180, energyType=7,
-                                     minAttackCost=1, minCostDamage=210, maxDamage=210)
-    fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot"]})
-    return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=fns,
-                 **kw)
-
-
-@pytest.mark.req("REQ-PLANNER-0036")
-def test_stabilize_fires_when_the_ko_rides_the_attach_and_the_burst_survives_the_bounce():
-    """6858 shape: my Mega (200/330, 0 Energy) is doomed to the opponent's 210 hit, and the only KO
-    is attach-CARRIED — Ignition's {C}{C}{C} on the Evolution unlocks Nebula Beam (210 ≥ 180); no
-    ATTACK option is even on the menu. Healing FIRST (Wally's bounces nothing it needs — the burst
-    attach lands after) keeps both: the stabilize-then-KO rung must see the attach-carried KO and
-    commit the heal ahead of the attach."""
-    pilot = _ignition_pilot()
-    play_wallys = opt(PLAY, area=HAND, index=0)
-    attach_ign = opt(ATTACH, area=HAND, index=1, inPlayArea=ACTIVE, inPlayIndex=0)
-    board = state(active=poke(WINCON, energy=0, hp=200), opp_active=poke(BRUISER, hp=180),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS, IGNITION],
-                  prizes=6, opp_prizes=6)
-    obs = make_select([play_wallys, attach_ign, opt(END)], current=board)
-    d = pilot.explain(obs)
-    assert d.planned is not None and d.planned.goal == "stabilize_then_ko"
-    assert d.planned.next_step == [0]                  # Wally's FIRST; the Ignition attach follows
-    assert pilot.decide(obs) == [0]
-
-
-@pytest.mark.req("REQ-PLANNER-0036")
-def test_stabilize_stands_down_when_no_re_attach_exists_after_the_bounce():
-    """Soundness: same doom, but the hand holds NO Energy — after Wally's bounce nothing re-powers
-    the Mega, so the KO is genuinely forfeited by healing. The rung must not commit (no candidate
-    KO on the menu or the attach), leaving the decision to the tuned scoring."""
-    pilot = _ignition_pilot()
-    board = state(active=poke(WINCON, energy=0, hp=200), opp_active=poke(BRUISER, hp=180),
-                  opp_bench=[poke(BENCHIE, hp=100)], hand=[WALLYS], prizes=6, opp_prizes=6)
-    obs = make_select([opt(PLAY, area=HAND, index=0), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
 
 
 # ------------------------------------------- the evolution-tutor line (Salvatore, corpus a212 shape)
@@ -1156,7 +589,7 @@ def test_evolution_tutor_win_needs_positive_deck_certainty():
     rank-commit the line, but never as a guaranteed win)."""
     pilot = _salvatore_pilot(lethal_family=True)
     d = pilot.explain(_salvatore_obs())
-    assert d.planned is None or d.planned.goal != "win"
+    assert rung(d.planned) is None or d.planned.goal != "win"
 
 
 @pytest.mark.req("REQ-PLANNER-0035")
@@ -1170,7 +603,7 @@ def test_evolution_tutor_excludes_ability_bearing_evolutions():
                                   attacks=(JETTING,), evolvesFrom="Staryu", hasAbility=True)
     pilot = _salvatore_pilot(deck=[ABIL] * 3 + [1] * 57, stats=stats, lethal_family=True)
     obs = _salvatore_obs(anchored=True)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None
 
 
 @pytest.mark.req("REQ-PLANNER-0035")
@@ -1180,7 +613,7 @@ def test_evolution_tutor_benched_target_needs_the_retreat_on_the_menu():
     nothing is planned."""
     pilot = _salvatore_pilot(lethal_family=True)
     obs = _salvatore_obs(options=[opt(PLAY, area=HAND, index=0), opt(END)], anchored=True)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None
 
 
 @pytest.mark.req("REQ-PLANNER-0035")
@@ -1210,4 +643,4 @@ def test_energy_tutor_stands_down_when_the_turns_attach_is_already_spent():
                   hand=[HILDA], prizes=2, opp_prizes=2)
     board["energyAttached"] = True                     # this turn's one Energy attach already spent
     obs = make_select([opt(PLAY, area=HAND, index=0), attack_opt(OPEN_ATK), opt(END)], current=board)
-    assert pilot.explain(obs).planned is None
+    assert rung(pilot.explain(obs).planned) is None

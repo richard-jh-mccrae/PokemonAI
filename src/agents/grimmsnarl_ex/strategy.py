@@ -90,8 +90,9 @@ STRATEGY = Strategy(
             "preferred_start": "second",  # Budew's free item-lock wants the go-second turn (the
                                           # general `honor-preferred-start` reads this at the toss)
             "my_archetype": "Marnie's Grimmsnarl ex / Froslass / Munkidori",  # Posture key (ADR-0026)
-            # NB "reactivity" is deliberately UNSET: only the value "solitaire" is consumed
-            # (planner.py `_forgo_ko`), and this control deck is explicitly not that.
+            # NB "reactivity" is deliberately UNSET. Its one consumer (the planner's forgo-KO gate)
+            # is DELETED by POC-T4/5, so no value is read anywhere today; leaving it unset stays
+            # correct — this control deck is explicitly not "solitaire".
             },
     hypotheses=[],                       # empty by design — doctrine not yet authored (see docstring)
 )
