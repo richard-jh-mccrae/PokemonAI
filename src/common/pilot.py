@@ -6680,7 +6680,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                        attach_from_target_is_concentrate=attach_from_concentrate,
                        card_is_line_preevo=card_is_line_preevo, card_is_wincon=card_is_wincon,
                        card_is_recognized_line_preevo=card_is_recognized_line_preevo,
-                       card_forward_payoff_prize=self._forward_payoff_prize_value(cid),
+                       card_forward_payoff_prize=self.combat.forward_line_prize(cid)[0],
                        card_evolution_baseless=self._evolution_baseless(obs, cid),
                        card_base_unreachable=self._card_base_unreachable(obs, cid, board),
                        card_is_starter=card_is_starter, card_is_support=card_is_support,
@@ -7696,16 +7696,6 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             result = {cid for line in self.strategy.lines for cid in line.path if cid != line.payoff}
         self._recognized_preevo_cache = result
         return result
-
-    def _forward_payoff_prize_value(self, cid) -> int:
-        """The greatest prize value the card `cid` BECOMES — max `_prize_value` over `cid` and its forward
-        evolution descendants (`_forward_card_ids`): Riolu → Mega Lucario ex = 3, Makuhita → Hariyama = 1.
-        The prize a body's LINE ultimately presents, which the card's own prize value (Riolu and Makuhita
-        are both 1-prize Basics) cannot distinguish (ADR-0048). 0 with no stats / id."""
-        if cid is None or not self.stats:
-            return 0
-        ids = {cid} | self._forward_card_ids(cid)
-        return max((self._prize_value({"id": i}) for i in ids), default=0)
 
     def _active_is_weak_preevo(self, ma: dict | None) -> bool:
         """True iff my Active is a WIN-CONDITION line pre-evolution (`_line_preevo_set`) whose OWN printed
@@ -8891,11 +8881,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         for i, b in enumerate(bodies):
             shift = model.theirs.survival_clock(
                 ma, **dict(clock, bodies=bodies[:i] + bodies[i + 1:])).exact - base_exact
+            # THE LINE'S PRIZE, not the body's own (ADR-TEMP-398 decision 2). A 1-prize Staryu one
+            # hop from a 3-prize Mega Starmie ex prices at 2: what removing it DENIES is the form
+            # that never arrives, and `prize_value` structurally cannot say so. This is the leg the
+            # winner-take-all `survival_shift` above cannot supply — that one is lead-only because
+            # the rules allow one attack a turn, so every non-leading body's removal Δ is a
+            # Structural Zero however finely the clock is read.
+            #
+            # `prize` keeps the body's OWN value in the row: `prize_race` moves by THAT when the KO
+            # actually lands, and consumers grouping equal-prize bodies mean the printed one.
             prize = model.theirs.view_of(b).prize_value
-            val = needs.opponent_target_value(prize_advance=prize, survival_shift=shift, phase=phase)
+            line_prize, line_hops = model.theirs.forward_line_prize(b.get("id"))
+            advance = needs.line_prize_advance(own_prize=prize, max_line_prize=line_prize,
+                                               hops=line_hops)
+            val = needs.opponent_target_value(prize_advance=advance, survival_shift=shift,
+                                              phase=phase)
             area, bi = ("active", i) if i < len(active_list) else ("bench", i - len(active_list))
             row = {"body": b, "area": area, "bi": bi, "id": b.get("id"), "prize": prize,
-                   "survival_shift": shift, "value": val}
+                   "prize_advance": advance, "survival_shift": shift, "value": val}
             if self.deny_strip_delta:
                 row.update(self._strip_delta_terms(ma, bodies, i, phase,
                                                    opp_active=opp_active, enabler=enabler))

@@ -547,7 +547,21 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="threat",
-        reads=("opponent_target_value", "my_reachable_kos", "denied_forward_payoff"),
+        # `denied_forward_payoff` was here until ADR-TEMP-398 and is replaced by
+        # `denied_line_prize`, NOT merely renamed: the old fact was the forward DAMAGE a removal
+        # denies, which `incoming()` already credits all-descendants and `survival` therefore
+        # already prices — one fact guarded twice, which is exactly what `double_counted()` exists
+        # to catch and could not, because the two families spelled it differently. The new fact is
+        # the forward PRIZE, which no family priced at all.
+        #
+        # **Disjoint from `prize_race` by construction, and stated because it looks like it might
+        # not be.** `prize_race` prices the two REMAINING prize counts; this prices the prize a line
+        # would have PRESENTED had it been allowed to arrive. Knocking out a Staryu that reads 2
+        # here moves `their_prizes_remaining` by exactly 1 — the body's own value — and the residual
+        # 1 is the Mega Starmie ex that never happens, which no count on the board can express.
+        # `their_prizes_remaining` therefore stays in `does_not_read` below, unchanged: this family
+        # still does not read it, and the new leg does not change that.
+        reads=("opponent_target_value", "my_reachable_kos", "denied_line_prize"),
         does_not_read=("turns_to_ko_me", "their_prizes_remaining"),
         composition="Their exposure to ME: per-body `needs.opponent_target_value` over the Knock "
                     "Outs I can reach, across BOTH seats. The mirror of `survival`, and the reason "
@@ -614,12 +628,17 @@ REGISTRY: tuple[TermFamily, ...] = (
             "appended target contributes `prize_advance >= 1.0` (`CombatMath.prize_value` returns "
             "1, 2 or 3 and never less), so `min(_THREAT_CAP, sum)` bound on every frame the loop "
             "touched and the credit could not move the family on ANY board. **Re-measured after the "
-            "anchor** (same leaf pass, `_denied_forward_payoff` severed to 0.0 as the control, and "
-            "in the same CALL denominator as the entry above): the "
-            "credit changes 327 of 614 non-empty inputs and now moves `threat`'s OUTPUT on **296** "
+            "anchor** (same leaf pass, the then-`_denied_forward_payoff` severed to 0.0 as the "
+            "control, and in the same CALL denominator as the entry above): the "
+            "credit changed 327 of 614 non-empty inputs and moved `threat`'s OUTPUT on **296** "
             "of 2061 calls, by **0.000115 to 0.002192** prizes, against **0** calls under the old "
             "equation — a credit can never make an empty input non-empty, so this was the one leg "
-            "the cap erased completely rather than partly. "
+            "the cap erased completely rather than partly. **RETIRED by ADR-TEMP-398**: that leg "
+            "priced the forward DAMAGE a removal denies, which `incoming()`'s all-descendants gate "
+            "already puts inside `survival`'s clock — and this module DIFFERENCES, so removing the "
+            "body moves `survival` unaided. The measurement above is kept as the record of what the "
+            "leg did while it existed, not as a live reading. `prize_advance` now carries the LINE's "
+            "prize instead (`needs.line_prize_advance`), which is the half nothing priced. "
             "The residual 31 are where the runaway guard "
             "absorbs it — small, not zero, and no longer structural. "
             "**Two credit maxima are recorded in this module and they measure different things; do "
@@ -718,13 +737,18 @@ REGISTRY: tuple[TermFamily, ...] = (
             "forbids exactly that). The accessor is substrate, owned by T1's completeness contract "
             "(Issue #260); named here rather than derived inline, because `ceil(hp / damage)` "
             "written in this module WOULD be the second opinion.",
-            "the SURVIVAL half of `opponent_target_value` — its `survival_shift` is a Δ of the "
-            "Fractional Survival Clock (`survival_clock().exact`, ADR-0117; it was a Δ of the "
-            "INTEGER `turns_to_ko_me` before) under REMOVAL of the body, and the model exposes no removal-delta "
-            "route (the live consumer at `pilot.py` bypasses to CombatMath, which the sole-supplier "
-            "ruling forbids here). Passed as 0, so this family prices prize_advance only and a body "
-            "whose removal buys turns without yielding prizes reads flat. T1 (Issue #260) owns the "
-            "accessor; until it lands the fail-closed 0 is the honest answer, not a silent one.",
+            "the SURVIVAL half of `opponent_target_value` — `survival_shift` is passed as 0 here, "
+            "and **ADR-TEMP-398 decision 3 RETIRES that as a debt rather than discharging it**. It "
+            "was recorded as owed to T1 (Issue #260), which would supply a removal-delta accessor on "
+            "the model; building it would be a DEFECT. This module DIFFERENCES — its one live "
+            "consumer is `planner.py`'s leaf evaluator, scoring an end-of-turn board — so removing "
+            "their body already moves `survival`, which reads the same clock. Passing the delta here "
+            "too would count one quantity twice. The live ranking at `pilot._opponent_target_rows` "
+            "passes a REAL shift because it has no 'after' to difference against (its consumer "
+            "prices HOLDING a gust card, for a play not made this turn); two idioms, one quantity, "
+            "and the asymmetry is structural rather than transitional. So this 0 is not a gap: it is "
+            "the correct reading for a differencing family, and a later change that 'fixes' it "
+            "re-introduces the double-count.",
         ),
     ),
     TermFamily(
@@ -1313,27 +1337,42 @@ def _reachable_target_values(model: "StateModel") -> tuple:
                  model.mine.best_reachable_bench_damage(mine, target))
         if reach < target.hp_remaining:
             continue
-        advance = float(target.prize_value) + _denied_forward_payoff(model, target)
+        # THE LINE'S PRIZE (ADR-TEMP-398 decision 2), the SAME reading `_opponent_target_rows` takes
+        # through the same model route — the point of routing it through `TheirSide` rather than the
+        # Pilot is that this family and the live ranking cannot come to hold two opinions about what
+        # one line is worth.
+        #
+        # This REPLACES `_denied_forward_payoff`, which is deleted rather than kept beside it. That
+        # leg priced the forward DAMAGE a removal denies, and `CombatMath.incoming`'s availability
+        # gate is all-descendants — so the damage is already inside `survival`'s clock, and this
+        # module DIFFERENCES, so removing the body moves `survival` on its own. Pricing it here too
+        # was one quantity counted twice, at a band 11x off the other site's.
+        line_prize, line_hops = model.theirs.forward_line_prize(target.card_id)
+        advance = _needs.line_prize_advance(own_prize=float(target.prize_value),
+                                            max_line_prize=line_prize, hops=line_hops)
         values.append(_needs.opponent_target_value(prize_advance=advance,
                                                    survival_shift=0, phase=phase))
     return tuple(values)
 
 
 def _forward_credit(forward, *, relevance: float = 1.0) -> float:
-    """What a line's UNPAID forward payoff is worth, in prizes — the ONE expression, both sides.
+    """What a line's UNPAID forward payoff is worth, in prizes — MY side's development leg.
 
-    `_development_legs` prices MY body's owed payoff with it and :func:`_denied_forward_payoff`
-    prices the DENIAL of theirs, and they are the same quantity read from opposite ends of the
-    board: printed damage held as POTENTIAL, crossed on `PRIZE_DAMAGE_RATE`, carried at the
-    positional `_READINESS_W` band, hop-discounted by `EvolveBody.p_arrive`'s shipped `halve`
-    convention (ADR-0070 §6). Two copies would let a re-tier land on one side and not the other,
-    which is the divergence `CombatMath._forward_hop_depths` was extracted to prevent one module
-    over — the same discipline, applied to the expression rather than to the walk.
+    `_development_legs` prices MY body's owed payoff with it: printed damage held as POTENTIAL,
+    crossed on `PRIZE_DAMAGE_RATE`, carried at the positional `_READINESS_W` band, hop-discounted by
+    `EvolveBody.p_arrive`'s shipped `halve` convention (ADR-0070 §6).
 
-    ``relevance`` is the my-side leg only: `MySide.role_worth` is the deck's DECLARED opinion about
-    what a body is for, and no opponent supplies one. It defaults to 1.0 rather than to 0.0 so the
-    opponent reading carries the payoff at full weight, which is an OVER-read and the safe direction
-    for a threat term (`threat.blind_to`).
+    **It had a their-side twin, `_denied_forward_payoff`, and ADR-TEMP-398 retired it** — not
+    because the two drifted, but because the their-side reading was redundant from the day it
+    shipped: `CombatMath.incoming`'s availability gate is all-descendants, so the forward damage a
+    removal denies is already inside `survival`'s clock, and this module DIFFERENCES. The
+    `relevance` parameter below is therefore now MY side's only, rather than my side's leg of a
+    two-sided expression.
+
+    ``relevance`` is `MySide.role_worth`, the deck's DECLARED opinion about what a body is for. It
+    keeps its 1.0 default now that the their-side caller is gone: the default is what an
+    undeclared-role body gets, and 1.0 (full weight) rather than 0.0 is the direction that never
+    silently zeroes a real payoff.
 
     **The guard is defensive, not load-bearing, and mutation testing says so** — deleting it changes
     no result, because `forward_payoff_terms` and `MySide.forward_payoff` both return owed damage 0
@@ -1346,17 +1385,6 @@ def _forward_credit(forward, *, relevance: float = 1.0) -> float:
         return 0.0
     return (_READINESS_W * (forward.owed_damage / currency.PRIZE_DAMAGE_RATE)
             * halve(forward.hops) * relevance)
-
-
-def _denied_forward_payoff(model: "StateModel", target) -> float:
-    """The forward payoff removing ``target`` DENIES, in prizes — `threat`'s denial credit.
-
-    :func:`_forward_credit` against THEIR body, minus the two legs that have no opponent-side
-    supplier: `relevance` (defaulted, see above) and the `line_topology` CANCELLATION, which cannot
-    apply because `TheirSide.forward_payoff` fails OPEN on reachability. Both are argued at
-    :func:`_reachable_target_values` and named in `threat.blind_to`.
-    """
-    return _forward_credit(model.theirs.forward_payoff(target.card_id))
 
 
 def _ready_bodies(model: "StateModel") -> tuple:

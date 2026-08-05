@@ -2062,6 +2062,25 @@ class TheirSide(_SideBase):
                                       card_id, forward_ids=self._forward_ids),
                                   True))
 
+    def forward_line_prize(self, card_id) -> tuple:
+        """``(best_prize, hops)`` for one of THEIR bodies — the PRIZE its line ultimately presents,
+        and how far away that form is (ADR-TEMP-398 decision 2).
+
+        The prize twin of :meth:`forward_payoff`, threaded through the same ``forward_ids``
+        availability gate so both legs of Denial Value read ONE closure. It carries the identical
+        fail-OPEN consequence argued at length above — a Staryu on their board reads as a Mega
+        Starmie ex line whether or not they run one, because the pool index is deck-agnostic — and
+        for the identical reason: over-crediting a live opponent line is the safe error, and
+        under-crediting one is not.
+
+        **The model route is what makes this shared rather than duplicated.** `state_value.py` holds
+        a `StateModel` and never a `Pilot`, so a reading that lived only on the Pilot could not reach
+        the `threat` family; the two consumers would then each grow their own, which is precisely the
+        drift this ADR was opened to close."""
+        return self._memoized(
+            ("their_forward_line_prize", card_id),
+            lambda: self._combat.forward_line_prize(card_id, forward_ids=self._forward_ids))
+
 
 # ── the model ─────────────────────────────────────────────────────────────────────────────────
 

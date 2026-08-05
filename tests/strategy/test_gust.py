@@ -33,6 +33,9 @@ STALL_TARGET = 706  # opp benched: energyless + high retreat — defensive stall
 PREEVO_THREAT = 707  # opp benched pre-evo whose LINE becomes an attacker (forward-evolution)
 EVO_FORM = 708     # attacker PREEVO_THREAT evolves into (high forward_max_damage)
 DEAD_END = 709     # opp benched mon that evolves into nothing (forward_max_damage 0)
+SCALER_PREEVO = 740  # opp benched pre-evo whose line's threat is a SCALER — printed index reads 10
+SCALER_FORM = 741    # ...the Alakazam-shaped form it becomes (printed 10, board-priced far higher)
+A_SCALE = 8130       # that form's attack: printed 10 + 20 per card in the attacker's hand
 WEAK_ATTACKER = 905  # my Active: 10-damage attacker, can't KO a 20-HP body by attacking
 ITEM_GUST = 1183   # synthetic Item gust (cardType ITEM) — doesn't cost the one Supporter slot
 FIGHT_GUST = 906   # my Active: Fighting attacker (120) — exercises Resistance in gust oracle
@@ -77,8 +80,17 @@ _CARDS = {
     DOOM_ACTIVE: CardStat(DOOM_ACTIVE, synthetic=True, energyType=FIRE, hp=330, maxDamage=200, attacks=(DOOM_ATK,)),
     STALL_TARGET: CardStat(STALL_TARGET, synthetic=True, hp=200, retreatCost=2),
     PREEVO_THREAT: CardStat(PREEVO_THREAT, synthetic=True, name="Riolu", hp=60),
-    EVO_FORM: CardStat(EVO_FORM, synthetic=True, name="MegaLucario", evolvesFrom="Riolu", maxDamage=270),
+    EVO_FORM: CardStat(EVO_FORM, synthetic=True, name="MegaLucario", evolvesFrom="Riolu", maxDamage=270,
+                       megaEx=True),   # a Mega ex: 3 prizes. Unset until ADR-TEMP-398 made the
+                                       # line's PRIZE load-bearing; the card always was one.
     DEAD_END: CardStat(DEAD_END, synthetic=True, name="Ditto", hp=60),
+    # An ALAKAZAM-SHAPED line: the forward form's printed `maxDamage` is a trivial 10 because its
+    # whole output is a Damage Formula scaler (`per_unit x count(variable)`). The printed forward
+    # index therefore reads this line at 10 and the pre-ADR-TEMP-398 `_gust_forward_denial` scored
+    # it exactly 0, while the board-priced `forward_threat_ceiling` sees the real number.
+    SCALER_PREEVO: CardStat(SCALER_PREEVO, synthetic=True, name="Abra", hp=60),
+    SCALER_FORM: CardStat(SCALER_FORM, synthetic=True, name="Alakazam", evolvesFrom="Abra", hp=140,
+                          maxDamage=10, attacks=(A_SCALE,)),
     WEAK_ATTACKER: CardStat(WEAK_ATTACKER, synthetic=True, energyType=WATER, minAttackCost=1, minCostDamage=10,
                             attacks=(A_WEAK,)),
     FIGHT_GUST: CardStat(FIGHT_GUST, synthetic=True, energyType=FIGHTING, minAttackCost=1, minCostDamage=120,
@@ -107,6 +119,9 @@ _ATTACKS = {   # every attacker's cheapest attack as a real record (fallback ret
     A_WIN: AttackStat(A_WIN, damage=120, cost=1),
     A_OFF: AttackStat(A_OFF, damage=120, cost=1),
     A_MEGA: AttackStat(A_MEGA, damage=120, cost=1),
+    # Printed 10, but 20 more per card in the ATTACKER's hand — the shape whose whole threat lives
+    # in the Damage Formula and which the printed forward index cannot see.
+    A_SCALE: AttackStat(A_SCALE, damage=10, cost=1, scaleVar="atk_hand", scalePerUnit=20),
     A_FIGHT: AttackStat(A_FIGHT, damage=120, cost=1),
     A_WEAK: AttackStat(A_WEAK, damage=10, cost=1),
     A_FRAG: AttackStat(A_FRAG, damage=50, cost=1),
@@ -727,3 +742,103 @@ def test_gust_target_breaks_ties_toward_the_loaded_body():
     opts = p.explain(obs).options
     assert opts[1].tactical > opts[0].tactical
     assert p.decide(obs) == [1]
+
+
+# ── ADR-TEMP-398: denial is a LINE PRIZE, and the evolving-threat read is board-priced ────────────
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_the_flat_wincon_denial_constant_is_gone_not_relocated():
+    """ADR-TEMP-398 decision 2. `_gust_wincon_denial` added a flat `_WINCON_DENIAL_PRIZES` (1.5)
+    scaled by γ and gated to two curated MatchupPlan roles, so it read 0 on an unrecognised opponent
+    and on any wincon line no Brief had labelled. Its question — *what does this line BECOME* — is
+    now answered from card facts for every board.
+
+    Asserted structurally because the regression this guards is someone re-adding the constant
+    beside the derivation, which no value test would notice."""
+    from common.strategy.doctrines import doctrine_gust as dg
+    assert not hasattr(Pilot, "_gust_wincon_denial")
+    assert not hasattr(dg, "_WINCON_DENIAL_PRIZES")
+    # Positive control on the same instrument: the siblings that were deliberately KEPT are present,
+    # so this is not a module that failed to import or a getattr that always answers False.
+    assert hasattr(Pilot, "_gust_matchup_priority") and hasattr(Pilot, "_gust_target_denial")
+    assert hasattr(dg, "_MATCHUP_GUST_SCALE")
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_the_gust_target_prices_the_LINES_prize_not_the_bodys_own():
+    """The premium `_gust_wincon_denial` used to add, now derived. Riolu is a 1-prize Basic one hop
+    from a 3-prize Mega ex; Ditto is a 1-prize Basic whose line goes nowhere. Both are KO-able and
+    both yield exactly one prize TODAY, so nothing but the line reading can separate them.
+
+    Hand-derived: `1 + (3 - 1) x halve(1)` = 2.0 against Ditto's flat 1.0."""
+    from common.needs import line_prize_advance
+    p = _pilot()
+    assert p.combat.forward_line_prize(PREEVO_THREAT) == (3, 1), "Riolu -> MegaLucario, one hop"
+    assert p.combat.forward_line_prize(DEAD_END) == (1, 0), "a line going nowhere"
+    assert line_prize_advance(own_prize=1, max_line_prize=3, hops=1) == pytest.approx(2.0)
+    assert line_prize_advance(own_prize=1, max_line_prize=1, hops=0) == pytest.approx(1.0)
+
+    obs = make_select(
+        [card_opt(BENCH, 0, player=1), card_opt(BENCH, 1, player=1)],
+        context=SWITCH,
+        current=state(active=poke(WINCON, energy=1, hp=200),
+                      opp_bench=[poke(DEAD_END, hp=60), poke(PREEVO_THREAT, hp=60)]))
+    opts = p.explain(obs).options
+    assert opts[1].tactical - opts[0].tactical >= 1.0, (
+        "a one-hop 3-prize line must outrank a dead end by the DERIVED premium, not a tie-break")
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_the_evolving_threat_denial_sees_a_SCALING_forward_form():
+    """ADR-TEMP-398 decision 5, made concrete on the shape that broke it.
+
+    `_gust_forward_denial` used to threshold the provider's PRINTED forward index at 100. Alakazam's
+    whole output is a Damage Formula scaler, so that index reads its line at **10** and the term
+    scored a genuinely lethal evolving threat at exactly **0**. The board-priced
+    `CombatMath.forward_threat_ceiling` sees it.
+
+    The printed control is asserted first, so this cannot pass by the fixture simply being big."""
+    p = _pilot()
+    p.scaled_threat_rank = True          # armed by the runtime profile, not by `Pilot.__init__`
+    printed = p.stats.forward_max_damage(SCALER_PREEVO)
+    assert printed == 10, "the premise: the printed index reads this lethal line at 10"
+    assert printed < 100, "...and so fell under the old threshold, scoring 0"
+
+    p._opp_attack_context = {"atk_hand": 7}          # 10 + 20x7 = 150 on this board
+    assert p.combat.forward_threat_ceiling(SCALER_PREEVO, context=p._opp_attack_context) == 150
+    assert p._gust_forward_denial({"id": SCALER_PREEVO}) > 0.0, (
+        "the regression this decision exists to fix: a scaling evolving threat now scores")
+    # Still SUB-PRIZE, so it breaks ties among equal-prize targets and never overrides a real gap.
+    assert p._gust_forward_denial({"id": SCALER_PREEVO}) < 1.0
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_the_evolving_threat_denial_is_a_magnitude_not_a_threshold():
+    """A line at 99 and a line at 400 both scored 0 and 0.5 under the threshold. Now the reading is
+    monotone in the board-priced ceiling, so a scarier line prices higher — asserted by moving ONLY
+    the scaler's variable, which leaves every card fact identical between the two readings."""
+    p = _pilot()
+    p.scaled_threat_rank = True          # armed by the runtime profile, not by `Pilot.__init__`
+    p._opp_attack_context = {"atk_hand": 2}
+    small = p._gust_forward_denial({"id": SCALER_PREEVO})
+    p._opp_attack_context = {"atk_hand": 10}
+    large = p._gust_forward_denial({"id": SCALER_PREEVO})
+    assert 0.0 < small < large, "same card, bigger board threat, strictly bigger denial"
+
+
+@pytest.mark.req("REQ-GUST-0002")
+def test_the_printed_read_is_restored_exactly_when_the_lever_is_thrown():
+    """`scaled_threat_rank` OFF must restore the printed threshold byte-for-byte at THIS call site
+    too, which is the whole reason ADR-TEMP-398 rides Issue #213's existing lever rather than
+    deleting the two constants. An incident switch that reverted two of three printed reads would be
+    worse than no switch at all."""
+    from common.strategy.doctrines import doctrine_gust as dg
+    p = _pilot()
+    p._opp_attack_context = {"atk_hand": 10}
+    p.scaled_threat_rank = False
+    # The scaler line reads 10 printed, under the 100 threshold -> exactly 0, as it always did.
+    assert p._gust_forward_denial({"id": SCALER_PREEVO}) == 0
+    # ...and the flat-damage line still trips the threshold to the flat constant.
+    assert p._gust_forward_denial({"id": PREEVO_THREAT}) == dg._EVOLVING_GUST_DENIAL
+    p.scaled_threat_rank = True
+    assert p._gust_forward_denial({"id": SCALER_PREEVO}) > 0.0, "ON sees what OFF cannot"

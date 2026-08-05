@@ -1817,6 +1817,44 @@ class CombatMath:
                 best_owed, best_hops = owed, depths[s.name]
         return (best_owed, best_hops)
 
+    def forward_line_prize(self, card_id, *, forward_ids=None, max_hops: int = 3) -> tuple:
+        """``(best_prize, hops)`` — the greatest prize value anywhere in ``card_id``'s line
+        INCLUDING itself, and how many evolutions away that form is (ADR-TEMP-398 decision 2).
+
+        The prize a body's LINE ultimately presents, which its own `prize_value` cannot distinguish:
+        Staryu and a dead-end Basic are both 1-prize cards, but one of them is a Mega Starmie ex one
+        hop from now. ``(0, 0)`` for an unknown card — no claim, and no phantom credit.
+
+        **The hops are hops to the best-PRIZE form, and that is why this is not a reading of
+        :meth:`forward_payoff_terms`.** That one returns the distance to the best-DAMAGE form (Issue
+        #285), and the two diverge on any line whose biggest attacker is not its biggest prize. Both
+        take their depths from :meth:`_forward_hop_depths`, which stays the ONE home for *"how far is
+        that form"* — this is its third aggregation, not a fourth walk.
+
+        CARD KNOWLEDGE ONLY, like the damage twin: `evolvesFrom` chains and `prize_value`, both of
+        which the stat cache holds for every card in the set. No board, no zones, no reachability —
+        the availability question belongs to the caller, and on the opponent's side there is no
+        sound answer to it anyway (`TheirSide.forward_payoff` fails OPEN for the same reason)."""
+        st = self._card_stat(card_id) if card_id is not None else None
+        if st is None:
+            return (0, 0)
+        fwd = forward_ids if forward_ids is not None else self.forward_card_ids
+        # SORTED for the reason `forward_payoff_terms` states one method up: the closure is a
+        # frozenset and the scan breaks ties on `>`, so set-iteration order would otherwise pick the
+        # hops among two equal-prize forms at different depths. Here ties are NOT hypothetical the
+        # way they are for damage — prize values run {1, 2, 3}, so any line with two ex forms ties —
+        # and the sort makes the shallower one win deterministically, which is the reading that
+        # under-discounts least.
+        fwd_stats = [self._card_stat(f) for f in sorted(fwd(card_id) or ())]
+        depths = self._forward_hop_depths(st, fwd_stats, max_hops=max_hops)
+        best_prize, best_hops = int(st.prize_value), 0
+        for s in fwd_stats:
+            if s is None or not s.name or s.name not in depths:
+                continue
+            if int(s.prize_value) > best_prize:
+                best_prize, best_hops = int(s.prize_value), depths[s.name]
+        return (best_prize, best_hops)
+
     def _bench_payload_pairs(self, opp_bodies, t: int, *, charged=None, opp_active=None,
                              switch_enabler: bool = False) -> set:
         """Every ``(snipe, spread)`` rider payload their board could put on my Bench at turn ``t``.

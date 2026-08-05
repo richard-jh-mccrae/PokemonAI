@@ -10,6 +10,9 @@ docs/general-strategy.md and docs/adr/0022-gust-is-closed-form-lethal-lookahead.
 """
 from __future__ import annotations
 
+from common.currency import PRIZE_DAMAGE_RATE   # the ONE damage->prize crossing
+from common.grading import halve                # ...and the ONE hop discount (ADR-0070 §6)
+from common.needs import _SURVIVAL_CAP, line_prize_advance   # the sub-prize bound; the Denial leg
 from common.strategy.context import (KO_SCORE, _BENCH, _CARD, _EVOLVING_THREAT_DMG, _PLAY,
                                       _SUPPORTER, _SWITCH)
 from common.strategy.strategy import Hypothesis, Plan
@@ -26,12 +29,13 @@ _MATCHUP_GUST_SCALE = 0.004  # ADR-0051: scale a MatchupPlan role priority (base
                              # the gust sub-prize tie-break band — prize_liability 100 → 0.4, so the worst
                              # stack (0.5 evolving + 0.4 matchup) stays < 1 prize and never overrides a
                              # real prize difference. Aligns the gust target pick with the snipe order.
-_WINCON_DENIAL_PRIZES = 1.5  # ADR-0051 Phase 3b: extra effective prizes for gusting the opponent's
-                             # WIN-CONDITION line (its body or its pre-evo) — a fragile-wincon matchup is
-                             # won by denying the line, not prize count, so value the crib wincon as ~2
-                             # prizes not 1. Sits ABOVE a +1 prize gap (drag the pre-evo over a bigger inert
-                             # body) but BELOW the live-threat denial (`_gust_target_denial`, a full prize)
-                             # and any lethal KO. γ-scaled + role-scoped; ladder-tunable.
+# `_WINCON_DENIAL_PRIZES = 1.5` stood here (ADR-0051 Phase 3b) — a flat γ-scaled, role-scoped bump for
+# gusting the opponent's WIN-CONDITION line. DELETED by ADR-TEMP-398 decision 2, not relocated: the
+# question it answered ("what does this line BECOME") is now read from card facts by
+# `needs.line_prize_advance` over `CombatMath.forward_line_prize`, at `_gust_target_tactical`. Three
+# things improved — an authored constant became a derivation; the γ-gate went, so it fires on an
+# unrecognised opponent instead of reading 0; and the role-gate went, so any line with a bigger
+# forward form is priced rather than only the two roles a Brief had curated.
 _ENERGY_DENIAL_PER = 0.2     # ADR-0066: sub-prize per SUNK Energy on a KO-able gust target — a KO
 _ENERGY_DENIAL_CAP = 0.8     # destroys everything attached (the ADR-0062 marginal strip, pointed across
                              # the table), so among equal-prize targets prefer the loaded body. Capped
@@ -89,9 +93,22 @@ class GustMixin:
             return 0                                     # the KO premise is unpayable this turn (f31)
         if not self._gust_can_ko(my_stat, target):
             return 0
-        return (KO_SCORE + self._prize_value(target) + self._gust_target_denial(board, target)
+        # THE LINE'S PRIZE, not the body's own (ADR-TEMP-398 decision 2). This is where
+        # `_gust_wincon_denial` went: that term added a flat `_WINCON_DENIAL_PRIZES` (1.5) x gamma
+        # for a target the MatchupPlan had labelled `prize_liability` / `fragile_preevo`, so it was
+        # silent on an unrecognised opponent (gamma 0) and on any wincon line the Brief had not
+        # curated. The line-prize reading answers the same question from CARD FACTS, so it fires on
+        # every board — and it is derived rather than authored.
+        #
+        # Stated because it is easy to get wrong when reading the ADR alone: this call site does NOT
+        # go through `_opponent_target_rows`, so it does not inherit `prize_advance` from there. It
+        # has to take the reading itself, or deleting `_gust_wincon_denial` would silently drop the
+        # premium here while the ADR claimed it had merely moved.
+        line_prize, line_hops = self.combat.forward_line_prize(target.get("id"))
+        advance = line_prize_advance(own_prize=self._prize_value(target),
+                                     max_line_prize=line_prize, hops=line_hops)
+        return (KO_SCORE + advance + self._gust_target_denial(board, target)
                 + self._gust_forward_denial(target) + self._gust_matchup_priority(board, target)
-                + self._gust_wincon_denial(board, target)
                 + self._gust_energy_denial(target)
                 + self._gust_snipe_synergy(board, my_stat, target))
 
@@ -161,16 +178,40 @@ class GustMixin:
         return best
 
     def _gust_forward_denial(self, target: dict) -> float:
-        """Sub-prize tie-break: removing a target whose evolution LINE becomes an attacker
-        (`forward_max_damage` >= `_EVOLVING_THREAT_DMG`) is worth a little extra — denies a latent
-        threat before it comes online. Reuses the ADR-0020 forward-evolution provider primitive (the
-        shared value sub-term, not the snipe Hypothesis's weight). < 1 prize, so it breaks ties among
-        equal-prize targets without ever overriding a real prize difference."""
-        fwd = getattr(self.stats, "forward_max_damage", None)
+        """Sub-prize tie-break: removing a target whose evolution LINE becomes an attacker is worth a
+        little extra — it denies a latent threat before it comes online. < 1 prize, so it breaks ties
+        among equal-prize targets without ever overriding a real prize difference.
+
+        **The reading is BOARD-PRICED and a MAGNITUDE (ADR-TEMP-398 decision 5).** It used to
+        threshold the provider's PRINTED forward index — `forward_max_damage >= 100` — and that index
+        drops the Damage Formula's whole `per_unit x count(variable)` term, so it reads Alakazam at
+        **10** and priced one of the set's scariest evolving lines at exactly 0. Issue #213 already
+        migrated the threat rank off that same printed index onto
+        `CombatMath.forward_threat_ceiling`; this call site was left behind, and this is it catching
+        up. Thresholding was the second flaw: a line at 99 and a line at 400 both scored 0 and 0.5.
+
+        Rides `scaled_threat_rank` — the SAME lever Issue #213 armed for the SAME fact, because one
+        fact should have one switch. OFF restores the printed threshold byte-for-byte, which is what
+        keeps that lever honest: an incident switch that reverted two of three printed reads would be
+        worse than none. That is why `_EVOLVING_GUST_DENIAL` / `_EVOLVING_THREAT_DMG` survive below
+        rather than being deleted — they are the OFF branch, dead on the live path.
+
+        Capped at `needs._SURVIVAL_CAP` rather than at a band of its own: this family already has
+        exactly one "sub-prize tie-break ceiling" constant, and deriving beats authoring."""
         cid = (target or {}).get("id")
-        if fwd is None or cid is None:
+        if cid is None:
             return 0
-        return _EVOLVING_GUST_DENIAL if (fwd(cid) or 0) >= _EVOLVING_THREAT_DMG else 0
+        if not getattr(self, "scaled_threat_rank", True):
+            fwd = getattr(self.stats, "forward_max_damage", None)      # the OFF branch, verbatim
+            if fwd is None:
+                return 0
+            return _EVOLVING_GUST_DENIAL if (fwd(cid) or 0) >= _EVOLVING_THREAT_DMG else 0
+        reach = float(self.combat.forward_threat_ceiling(
+            cid, context=getattr(self, "_opp_attack_context", None)) or 0.0)
+        if reach <= 0.0:
+            return 0
+        _, hops = self.combat.forward_line_prize(cid)
+        return min(_SURVIVAL_CAP, (reach / PRIZE_DAMAGE_RATE) * halve(hops))
 
     def _gust_matchup_priority(self, board, target: dict) -> float:
         """ADR-0051 sub-prize tie-break for a gust TARGET: among equal-value KO-able bodies, prefer
@@ -184,21 +225,6 @@ class GustMixin:
         if cid is None:
             return 0.0
         return max(0.0, board.matchup_plan.priority(cid)) * _MATCHUP_GUST_SCALE
-
-    def _gust_wincon_denial(self, board, target: dict) -> float:
-        """ADR-0051 Phase 3b: value gusting the opponent's WIN-CONDITION line — its body
-        (`prize_liability`) or its pre-evolution (`fragile_preevo`) — above a plain prize. A
-        fragile-wincon matchup is won by denying that line, not by prize count, so a wincon-line gust
-        target is worth ~`_WINCON_DENIAL_PRIZES` extra effective prizes: enough to drag the 1-prize
-        crib pre-evo up over a bigger INERT body, while still yielding to the live-threat denial term
-        (a full prize) and any lethal KO. γ-scaled (silent on an unrecognized opponent — those roles
-        only come from the γ-gated Read/Brief tiers) and role-scoped to the two wincon-line roles, so a
-        plain engine / disruption target / draw engine gets none of it. 0 when the plan is inert."""
-        cid = (target or {}).get("id")
-        role = board.matchup_plan.role(cid) if cid is not None else None
-        if role not in ("prize_liability", "fragile_preevo"):
-            return 0.0
-        return _WINCON_DENIAL_PRIZES * board.matchup_plan.gamma
 
     def _gust_stall_target_tactical(self, obs: dict, select: dict, board, option: dict) -> float:
         """Small value for a defensive stall-gust TARGET — at a SWITCH select, an ENERGYLESS,

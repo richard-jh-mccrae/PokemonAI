@@ -65,6 +65,20 @@ TARGET_VALUE_CEILING`, and `currency.target_value_to_worth`'s clamp — each wit
 `sound_rules` whitelist entry. An ADDITIVE denial leg would have moved all three before the new term
 did anything, entangling the rescale with the effect on the Decision Gate.
 
+**The reading must reach ALL THREE consumers, and one of them does not read `prize_advance` at
+all.** Found at build time: `doctrine_gust._gust_target_tactical` — the only caller of
+`_gust_wincon_denial` — scores `KO_SCORE + self._prize_value(target) + …`, the body's OWN prize.
+Deleting `_gust_wincon_denial` on the grounds that "the premium is now inside `prize_advance`" would
+therefore have been false for that call site and would have silently dropped the wincon premium from
+the gust doctrine path. `_gust_target_tactical`'s `_prize_value(target)` is replaced by the same
+line-prize reading, which is what makes the justification true rather than merely plausible.
+
+**Hops are hops to the best-PRIZE form, not to the best-DAMAGE form.** `ForwardPayoff.hops` answers
+the latter (Issue #285) and the two diverge on any line whose biggest attacker is not its biggest
+prize. The depth walk `CombatMath._forward_hop_depths` is the ONE home for *"how far is that form"*
+and already serves two aggregations; this is a third, taken from the same walk rather than
+re-derived beside it.
+
 `_WINCON_DENIAL_PRIZES = 1.5 × γ` is **DELETED**, not relocated. Three things improve:
 
 - an authored constant becomes a derivation;
@@ -135,8 +149,20 @@ the shape are wrong:
 Replaced by `CombatMath.forward_threat_ceiling(cid, context=…)`, board-priced, crossing to prizes on
 `currency.PRIZE_DAMAGE_RATE`, hop-discounted by the same `grading.halve` Decision 2 uses, and capped
 at `needs._SURVIVAL_CAP` so the sub-prize tie-break discipline the old constant enforced is
-preserved by an existing bound rather than a new one. `_EVOLVING_GUST_DENIAL` and
-`_EVOLVING_THREAT_DMG` are **DELETED** — two more authored constants gone, none added.
+preserved by an existing bound rather than a new one.
+
+**AMENDED at build time (2026-08-05): this migration rides `scaled_threat_rank`, and the two
+constants are RETIRED FROM THE LIVE PATH rather than deleted.** Step 0 found that Issue #213 already
+performed this exact migration — printed `forward_max_damage` → board-priced
+`forward_threat_ceiling` — at `Pilot._threat_damage_pair`, naming the same casualty (*"Alakazam
+ranks at its forward index's 10"*), behind the `scaled_threat_rank` flag whose OFF branch promises
+*"restoring the printed-only read exactly"* as an incident lever. `_gust_forward_denial` is the same
+fact at a call site that migration left behind, so it belongs on the same lever: one fact, one
+switch. Deleting the constants would leave OFF unable to restore this call site, making the lever
+partial — and a lever that lies is worse than no lever. `_EVOLVING_GUST_DENIAL` and
+`_EVOLVING_THREAT_DMG` therefore survive as the OFF branch only, live-path dead. Net authored
+constants removed by this ADR: **two** (`_WINCON_DENIAL_PRIZES` deleted, `_denied_forward_payoff`
+retired), not the four an earlier draft claimed.
 
 **This is NOT the drift Decision 3 closed.** `survival_shift` answers *"does removing this move my
 clock"* and is lead-only by the rules, so it structurally cannot see a line that is dangerous but

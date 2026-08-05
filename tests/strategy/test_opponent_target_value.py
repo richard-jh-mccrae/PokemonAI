@@ -25,6 +25,15 @@ LATE = 506          # cost 3, 250 a turn — takes the lead from t=3
 FAST_ATK, SLOW_ATK, SIXTY_ATK, NINETY_ATK = 511, 512, 513, 514
 EARLY_ATK, LATE_ATK = 515, 516
 
+# A LINE: a 1-prize Basic one hop from a 3-prize Mega ex, and a 2-hop line to a 2-prize ex. Both
+# exist to exercise `forward_line_prize`'s hop distance, which is NOT `ForwardPayoff.hops` — that
+# one measures the distance to the best-DAMAGE form (Issue #285) and the two diverge whenever a
+# line's biggest attacker is not its biggest prize, which is exactly what `MID` below arranges.
+STARYU, MEGA = 507, 508          # Staryu -> Mega Starmie ex, 1 hop, prize 1 -> 3
+PIP, MID, BIGEX = 509, 510, 517  # Pip -> Mid -> Big ex, 2 hops, prize 1 -> 1 -> 2
+DEADEND = 518                    # a 1-prize Basic whose line goes nowhere
+MID_ATK = 519                    # MID hits hardest in its line; BIGEX carries the prize
+
 
 def _combat():
     stats = DictCardStatProvider({
@@ -37,10 +46,22 @@ def _combat():
                       maxDamage=60, attacks=(SIXTY_ATK,)),
         D90: CardStat(D90, synthetic=True, name="Ninety", hp=120, minAttackCost=1, minCostDamage=90,
                       maxDamage=90, attacks=(NINETY_ATK,)),
+        # 1 hop, 1 prize -> 3 prizes.
+        STARYU: CardStat(STARYU, synthetic=True, name="Staryu", hp=60, maxDamage=10, attacks=()),
+        MEGA: CardStat(MEGA, synthetic=True, name="Mega Starmie ex", evolvesFrom="Staryu", hp=310,
+                       megaEx=True, maxDamage=200, attacks=()),
+        # 2 hops, 1 prize -> 2 prizes, and the BIGGEST DAMAGE sits at hop 1 rather than hop 2.
+        PIP: CardStat(PIP, synthetic=True, name="Pip", hp=60, maxDamage=10, attacks=()),
+        MID: CardStat(MID, synthetic=True, name="Mid", evolvesFrom="Pip", hp=100, maxDamage=250,
+                      minAttackCost=1, minCostDamage=250, attacks=(MID_ATK,)),
+        BIGEX: CardStat(BIGEX, synthetic=True, name="Big ex", evolvesFrom="Mid", hp=200, ex=True,
+                        maxDamage=90, attacks=()),
+        DEADEND: CardStat(DEADEND, synthetic=True, name="Deadend", hp=60, maxDamage=10, attacks=()),
     }, attacks={FAST_ATK: AttackStat(FAST_ATK, damage=100, cost=1, energyTypes=(0,)),
                 SLOW_ATK: AttackStat(SLOW_ATK, damage=100, cost=3, energyTypes=(0, 0, 0)),
                 SIXTY_ATK: AttackStat(SIXTY_ATK, damage=60, cost=1, energyTypes=(0,)),
-                NINETY_ATK: AttackStat(NINETY_ATK, damage=90, cost=1, energyTypes=(0,))})
+                NINETY_ATK: AttackStat(NINETY_ATK, damage=90, cost=1, energyTypes=(0,)),
+                MID_ATK: AttackStat(MID_ATK, damage=250, cost=1, energyTypes=(0,))})
     return CombatMath(stats, functions=None, transients=None)
 
 
@@ -254,6 +275,57 @@ def test_more_than_one_body_scores_when_the_lead_changes_across_turns():
     assert min(early_gone.exact - base.exact, late_gone.exact - base.exact) > 0
     # ...and the integer clock sees only ONE of the two, which is the quantization loss on top.
     assert (early_gone.turns - base.turns, late_gone.turns - base.turns) == (1, 0)
+
+
+# ---- the LINE PRIZE (ADR-TEMP-398 decision 2) -------------------------------------------------
+def test_forward_line_prize_reads_the_lines_best_prize_and_the_hops_to_IT():
+    """`(prize, hops)` over the card's forward closure INCLUDING itself.
+
+    The hop count is the distance to the best-PRIZE form, and that is the whole reason this cannot
+    reuse `ForwardPayoff.hops`: that one measures the distance to the best-DAMAGE form (Issue #285).
+    `Pip -> Mid -> Big ex` is built to separate them — `Mid` hits for 250 at hop 1 while the 2-prize
+    `Big ex` sits at hop 2, so a damage-derived hop count would discount this line by half again as
+    much as it should."""
+    c = _combat()
+    assert c.forward_line_prize(STARYU) == (3, 1)      # 1-prize Basic, 3-prize Mega ex one hop up
+    assert c.forward_line_prize(MEGA) == (3, 0)        # already the best form: no hops
+    assert c.forward_line_prize(PIP) == (2, 2)         # best PRIZE is 2 hops up...
+    assert c.forward_payoff_terms(PIP)[1] == 1         # ...while best DAMAGE is 1. They differ.
+    assert c.forward_line_prize(DEADEND) == (1, 0)     # a line going nowhere is worth its own prize
+    assert c.forward_line_prize(None) == (0, 0)        # unknown: no claim, no phantom credit
+    assert c.forward_line_prize(999999) == (0, 0)
+
+
+def test_line_prize_advance_is_the_hop_discounted_line_prize():
+    """`own + (max_line_prize - own) x halve(hops)`, hand-derived against `grading.halve`'s own
+    shipped values — the same `p_arrive` convention ADR-0070 §6 uses everywhere else."""
+    adv = needs.line_prize_advance
+    assert adv(own_prize=1, max_line_prize=3, hops=1) == pytest.approx(1 + 2 * 0.5)      # 2.0
+    assert adv(own_prize=1, max_line_prize=3, hops=2) == pytest.approx(1 + 2 * 0.25)     # 1.5
+    assert adv(own_prize=1, max_line_prize=2, hops=2) == pytest.approx(1 + 1 * 0.25)     # 1.25
+    # Already the best form, or a dead-end line: the own prize, undiscounted and unchanged.
+    assert adv(own_prize=3, max_line_prize=3, hops=0) == 3.0
+    assert adv(own_prize=1, max_line_prize=1, hops=0) == 1.0
+    # A forward form worth FEWER prizes owes nothing — floored, never negative (the same direction
+    # `forward_payoff_terms` floors owed damage).
+    assert adv(own_prize=2, max_line_prize=1, hops=1) == 2.0
+    # An absent supplier (0) must not read as "this line is worthless" and drag the body below its
+    # own prize — the fail-closed direction.
+    assert adv(own_prize=2, max_line_prize=0, hops=0) == 2.0
+
+
+def test_the_line_prize_never_breaches_the_ceiling_the_whole_equation_is_normalised_against():
+    """`TARGET_VALUE_CEILING` (3.9) normalises `_THREAT_W` AND `GUST_TARGET_WORTH_RATE`, so a leg
+    that could exceed `MAX_PRIZE_VALUE` would silently rescale two derived rates in other modules.
+    Bounded by construction — the line's best prize is itself a `prize_value`, and the discount only
+    ever shrinks the gap toward it."""
+    adv = needs.line_prize_advance
+    for own in (1, 2, 3):
+        for best in (1, 2, 3):
+            for hops in (0, 1, 2, 3, 8):
+                v = adv(own_prize=own, max_line_prize=best, hops=hops)
+                assert own <= v <= needs.MAX_PRIZE_VALUE
+    assert needs.TARGET_VALUE_CEILING == float(needs.MAX_PRIZE_VALUE) + 0.9
 
 
 def test_the_survival_term_still_never_outranks_a_real_prize():
