@@ -69,7 +69,7 @@ disrupt its engine / deny the donk. This is what each of our agents relativizes 
 ```
 opponent_properties = { "<key>": <value>, ... }   # each from src/common/scouting/opponent_properties.json (flag new keys)
 threats             = [ { "card": "<name>", "why": "<…>" }, ... ]
-targets             = [ { "card": "<name>", "role": "<prize_liability|fragile_preevo|disruption_target|engine|avoid>", "why": "<…>" }, ... ]
+targets             = [ { "card": "<name>", "role": "<prize_liability|fragile_preevo|disruption_target|attacker|enabler|engine|avoid>", "why": "<…>" }, ... ]
 ```
 
 ## 7 · Open questions / deferred

@@ -10,12 +10,18 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from common.card_tags import is_card_key
+
 _DEFAULT = Path(__file__).resolve().parent / "card_functions.json"
 
 
 class CardFunctions:
     def __init__(self, table: dict):
-        self._table = {int(k): list(v) for k, v in table.items()}
+        # Reserved keys SKIPPED rather than `int()`-ed (Issue #395 D6.5), matching the builder's
+        # `_load_table`. Both walked every key unconditionally, so the store could not carry a
+        # `_note` or a provenance block the way `function_overrides.json` and `card_effects.json`
+        # already do — and the runtime loader is the half that would have raised at agent start.
+        self._table = {int(k): list(v) for k, v in table.items() if is_card_key(k)}
 
     def tags(self, card_id: int) -> list[str]:
         """Function Tags for a card; [] if the card isn't tagged (yet)."""

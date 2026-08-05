@@ -456,3 +456,82 @@ def test_the_deleted_pilot_duplicate_read_the_same_number_on_every_real_card():
     # ...and the one place they differ, stated rather than left to be discovered.
     assert old(999999) == 1 and p.combat.forward_line_prize(999999)[0] == 0
     assert 999999 not in p._recognized_line_preevo_set(), "so the consumer's gate never reaches it"
+
+
+# --- the role sheet as its OWN row leg (Issue #395 D7) -----------------------------------------
+
+
+def test_the_row_carries_the_role_priority_as_its_own_leg():
+    """D7: the sheet reaches the rows as `role_priority`, beside `prize_advance` / `survival_shift`
+    / `value` — exactly as `_relevance_terms` and `_strip_delta_terms` attach theirs and let each
+    consumer combine. It is an ORDINAL priority, not a worth, so it is never summed into `value`.
+
+    Both bodies here are 1 prize with the same clock, so `value` ties by construction and the ONLY
+    thing that can order them is the new leg — which is precisely the population Issue #398 closed
+    on (139 of 343 equal-prize groups still flat)."""
+    from common.scouting.matchup_plan import build_matchup_plan
+    from train.tune import _build_pilot
+    p = _build_pilot("mega_lucario")[0]
+    p._planning = False
+    dunsparce, alakazam, psychic = 305, 743, 5
+    obs = {"current": {"yourIndex": 0, "players": [
+        {"active": [{"id": 999999, "hp": 200, "energies": []}], "bench": [],
+         "handCount": 1, "hand": []},
+        {"active": [{"id": dunsparce, "hp": 70, "energies": [psychic]}],
+         "bench": [{"id": alakazam, "hp": 140, "energies": [psychic]}],
+         "handCount": 6},
+    ]}}
+    plan = build_matchup_plan(brief_roles={alakazam: "prize_liability"}, gamma=1.0)
+    board = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3, matchup_plan=plan)
+    p._snapshot(obs)
+    p._opp_attack_context = p._damage_context(obs, attacker_is_me=False)
+
+    _phase, rows = p._opponent_target_rows(obs, board)
+    by_id = {r["id"]: r for r in rows}
+    assert set(by_id) == {dunsparce, alakazam}
+    assert by_id[alakazam]["role_priority"] > 0
+    assert by_id[dunsparce]["role_priority"] == 0.0     # unroled falls through, as it always did
+    # …and the leg does NOT leak into the prize-denominated currency: `value` is still exactly the
+    # two-term equation over the row's own `prize_advance` and `survival_shift`.
+    for r in rows:
+        assert r["value"] == pytest.approx(needs.opponent_target_value(
+            prize_advance=r["prize_advance"], survival_shift=r["survival_shift"], phase=_phase))
+
+
+def test_a_board_with_no_matchup_plan_still_produces_rows():
+    """Fail-open, stated: an inert plan (the ADR-0051 kill-switch off) or a `Board` that predates the
+    field must degrade to 0.0 — the same reading `MatchupPlan.priority` gives an unroled body — never
+    to a crash and never to a missing key a consumer would have to special-case."""
+    from train.tune import _build_pilot
+    p = _build_pilot("mega_lucario")[0]
+    p._planning = False
+    obs = {"current": {"yourIndex": 0, "players": [
+        {"active": [{"id": 999999, "hp": 200, "energies": []}], "bench": [], "handCount": 1,
+         "hand": []},
+        {"active": [{"id": 305, "hp": 70, "energies": [5]}], "bench": [], "handCount": 6},
+    ]}}
+    board = types.SimpleNamespace(race_ahead=-1.0, opp_prizes_remaining=3)   # no matchup_plan at all
+    p._snapshot(obs)
+    p._opp_attack_context = p._damage_context(obs, attacker_is_me=False)
+    _phase, rows = p._opponent_target_rows(obs, board)
+    assert rows and all(r["role_priority"] == 0.0 for r in rows)
+
+
+def test_the_ceiling_and_both_rates_derived_from_it_are_unchanged():
+    """**Checked, not assumed** — Issue #395's acceptance criterion, and D1's stated consequence.
+
+    Under D1 the sheet is an ordinal priority that never enters `value`, so the opponent-target
+    ceiling and the two rates derived from it must be bit-for-bit what they were. If any of these
+    moves, the implementation drifted into a WORTH and the response is to re-read D1, not to update
+    the number."""
+    from common import currency, state_value
+    assert needs.TARGET_VALUE_CEILING == pytest.approx(3.9)
+    assert currency.GUST_TARGET_BAND == pytest.approx(10.0)
+    assert currency.GUST_TARGET_WORTH_RATE == pytest.approx(10.0 / 3.9)
+    assert state_value._THREAT_W == pytest.approx(state_value._THREAT_CAP / 3.9)
+    # …and both rates are still DERIVED from the ceiling rather than re-authored beside it, which is
+    # what makes the three numbers above one fact instead of three.
+    assert currency.GUST_TARGET_WORTH_RATE == pytest.approx(
+        currency.GUST_TARGET_BAND / needs.TARGET_VALUE_CEILING)
+    assert state_value._THREAT_W == pytest.approx(
+        state_value._THREAT_CAP / needs.TARGET_VALUE_CEILING)

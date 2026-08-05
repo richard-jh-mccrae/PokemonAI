@@ -7,12 +7,17 @@ need refreshing — a failure means "a known tag disappeared", which is exactly 
 Stochastic tags (recycle/energy_denial/heal) are deliberately excluded; they vary per build.
 """
 import json
+import re
 from pathlib import Path
 
 import pytest
 
 import build_card_functions            # the real builder: its loaders and its two default paths
+from common import card_tags
 from common.scouting.card_text import normalize_card_name
+# The classifier's OWN derived set, imported rather than re-transcribed — a second copy of it is the
+# drift `unsourced_tag_instances` exists to detect (Issue #395 D6.1).
+from meta_tracker.card_functions import DERIVED_TAGS
 from meta_tracker.cards import load_cards
 
 TABLE = Path(__file__).resolve().parents[2] / "src" / "common" / "card_functions.json"
@@ -225,3 +230,240 @@ def test_meowth_ex_does_not_carry_the_retired_stall_play_role(name_tags):
     keeps_stall = sorted(cid for cid, tags in table.items() if "stall" in tags)
     assert keeps_stall, "no card ships `stall` at all — the assertion above would pass vacuously"
     assert not set(keeps_stall) & set(ids), keeps_stall
+
+
+# --- the closed tag vocabulary, and rebuild-reachability (REQ-FUNC-0017/0018, Issue #395) ------
+#
+# Both walk the SHIPPED stores through the builder's own loaders, and both carry a vacuity guard and
+# a positive control on the same run — the `test_snapshot_coverage.py` discipline, because *"found
+# nothing"* and *"my instrument is broken"* return the same empty list.
+
+
+@pytest.mark.req("REQ-FUNC-0018")
+def test_every_tag_in_the_shipped_table_is_declared():
+    """**The closed vocabulary** (Issue #395 D6.1). `function_audit._CUES` is a 17-tag whitelist that
+    EXEMPTS what it has never heard of — the exact inversion of `snapshot_coverage.undeclared_clauses`
+    — so 25 of the 42 shipped tags were audited by nothing at all and a typo'd tag was a tag that
+    shipped: read by no consumer, reported by no test, pricing exactly 0.
+
+    Walks the store rather than a hand-kept list, for the reason the effects layer already states:
+    *a hand-kept list is precisely what a new tag value would not be added to.*"""
+    table = build_card_functions._load_table(build_card_functions.DEFAULT_OUT)
+    vocab = card_tags.tag_vocabulary({str(k): v for k, v in table.items()})
+    # Guard the instrument before trusting its silence.
+    assert len(table) > 50, f"shipped table looks unread: {len(table)} cards"
+    assert len(vocab) > 20, f"vocabulary walk looks empty: {vocab}"
+
+    assert card_tags.undeclared_tags(vocab) == [], (
+        "tags in the shipped table with no `card_tags.TAG_REGISTRY` entry: %s"
+        % card_tags.undeclared_tags(vocab))
+    # The parametric families are reached by the walk, so the registry's PREFIX entries are doing
+    # work rather than sitting unexercised beside a table of plain names.
+    assert {card_tags.is_parametric(t) for t in vocab} >= {"dig:", "provides:"}
+    # Every declared tag says what it is; a reason-less entry is an undocumented one.
+    assert [t for t, e in card_tags.TAG_REGISTRY.items() if not e.reason.strip()] == []
+    assert [t for t, e in card_tags.TAG_REGISTRY.items() if e.source not in card_tags.SOURCES] == []
+
+
+@pytest.mark.req("REQ-FUNC-0018")
+def test_the_tag_vocabulary_audit_actually_bites_with_a_positive_control():
+    """The positive control, on the same run as the green pass above.
+
+    Bites in both shapes a real divergence takes: a name nothing declared, and a PARAMETRIC tag whose
+    suffix is not an integer — the second matters because a family that accepted any suffix would let
+    `dig:many` arrive already exempt from the audit meant to cover it."""
+    assert card_tags.undeclared_tags(["__never_a_real_tag__"]) == ["__never_a_real_tag__"]
+    assert card_tags.undeclared_tags(["dig:many"]) == ["dig:many"]
+    assert card_tags.undeclared_tags(["dig:2"]) == []
+    # …and the same call on a fabricated table finds the bad one WITHOUT flagging its legitimate
+    # neighbours, so the result above is discrimination rather than a walk that reached nothing.
+    fabricated = {"999": ["draw", "__typo__"], "_note": "prose", "1000": ["provides:1"]}
+    assert card_tags.undeclared_tags(card_tags.tag_vocabulary(fabricated)) == ["__typo__"]
+    assert card_tags.tag_vocabulary(fabricated) == ["__typo__", "draw", "provides:1"]
+
+
+@pytest.mark.req("REQ-FUNC-0018")
+def test_the_registrys_derived_declarations_match_the_classifiers_own_set():
+    """The registry says which tags a rebuild re-derives; the classifier is what actually derives
+    them. **This is the drift check** — two descriptions of one behaviour, asserted equal, so
+    changing a classify rule without touching the registry fails here rather than silently making
+    `unsourced_tag_instances` wrong in the direction that hides data loss."""
+    declared = {t for t, e in card_tags.TAG_REGISTRY.items() if e.source == card_tags.DERIVED}
+    assert declared == set(DERIVED_TAGS), {
+        "declared derived but the classifier cannot emit": sorted(declared - set(DERIVED_TAGS)),
+        "emitted by the classifier but not declared derived": sorted(set(DERIVED_TAGS) - declared),
+    }
+    # A parametric family is never `derived`: the probe emits the plain `dig`, never a depth, so a
+    # `dig:N` declared derived would make an unreachable instance look sourced.
+    assert not any(card_tags.is_parametric(t) for t in DERIVED_TAGS)
+
+
+@pytest.mark.req("REQ-FUNC-0017")
+def test_every_shipped_tag_instance_is_reachable_by_a_rebuild():
+    """**`--fresh` must be LOSSLESS, and it was not** (Issue #395 Fact 3, RED when written).
+
+    Eleven tag instances lived in the shipped table and in NEITHER the prober's derived set NOR
+    `function_overrides.json`. `python tools/build_card_functions.py --fresh` deleted all eleven
+    silently — `--fresh` sets ``prior = {}`` and the monotonic accumulate union was the only thing
+    preserving them. Among them was `prevent_ex_damage` on 345 Crustle: the damage oracle's
+    ex-immunity read, `_body_threat_rank`'s `+500` and snipe relevance's `prevents_my_ex` leg, all
+    three lost in one documented command with nothing red.
+
+    Its sibling `test_every_curated_override_tag_reached_the_shipped_table` asserts **overrides ⊆
+    table**. This is the other direction — **table ⊆ derived ∪ overrides** — and the absence of that
+    direction is what let the eleven sit there. Both stores are read through the BUILDER's own
+    loaders and default paths, never re-derived here."""
+    table = build_card_functions._load_table(build_card_functions.DEFAULT_OUT)
+    overrides = build_card_functions._load_overrides(build_card_functions.DEFAULT_OVERRIDES)
+    assert len(table) > 50, f"shipped table looks unread: {len(table)} cards"
+    assert len(overrides) > 50, f"override store looks unread: {len(overrides)} numeric keys"
+    assert len(DERIVED_TAGS) > 10, f"classifier's derived set looks empty: {DERIVED_TAGS}"
+
+    unsourced = card_tags.unsourced_tag_instances(
+        {str(k): v for k, v in table.items()},
+        {str(k): v for k, v in overrides.items()},
+        DERIVED_TAGS)
+    assert unsourced == {}, (
+        "tag instances no rebuild can re-derive — `--fresh` DELETES these silently; key them in "
+        "tools/meta_tracker/function_overrides.json (the only store upstream of the accumulate "
+        "step) or remove them: %s" % unsourced)
+
+
+@pytest.mark.req("REQ-FUNC-0017")
+def test_the_rebuild_reachability_audit_actually_bites_with_a_positive_control():
+    """The positive control for the sweep above, on the same run.
+
+    A green *"every instance is reachable"* means nothing unless the check can go red for an instance
+    that is not — and it must go red for BOTH escapes: a tag no classify rule emits, and a card whose
+    override entry does not cover the tag it carries."""
+    derived = {"draw"}
+    fabricated = {"_note": "prose", "345": ["draw", "prevent_ex_damage"], "66": ["draw"]}
+    assert card_tags.unsourced_tag_instances(fabricated, {"345": []}, derived) == \
+        {345: ["prevent_ex_damage"]}
+    # Covered by the override -> reachable, so the bite above is about sourcing rather than about the
+    # walk reaching the card at all.
+    assert card_tags.unsourced_tag_instances(
+        fabricated, {"345": ["prevent_ex_damage"]}, derived) == {}
+    # Reserved keys are skipped rather than `int()`-ed — the capacity D6.5 lifted.
+    assert card_tags.unsourced_tag_instances({"_note": "prose"}, {}, derived) == {}
+
+
+@pytest.mark.req("REQ-FUNC-0017")
+def test_crustles_ex_damage_prevention_survives_a_fresh_rebuild(name_tags):
+    """345 Crustle's `prevent_ex_damage`, pinned BY NAME (Issue #395 acceptance criterion).
+
+    The general audits above would catch its loss as one entry in a dict; this says out loud which
+    card fact three live consumers depend on, at the point where somebody would otherwise delete it.
+    Crustle's Mysterious Rock Inn — *"Prevent all damage done to this Pokémon by attacks from your
+    opponent's Pokémon {ex}"* — is why it is the Crustle / Mega Kangaskhan ex deck's main attacker in
+    an ex-dominated format, and it is the fact the whole worked example turns on."""
+    nm2ids, table = name_tags
+    ids = nm2ids.get("Crustle", [])
+    assert ids, "Crustle not in the pool (rotated out? refresh the oracle)"
+    assert any("prevent_ex_damage" in table.get(cid, []) for cid in ids), \
+        f"Crustle lost `prevent_ex_damage` (ids={ids})"
+    # …and it is REACHABLE, not merely present: the override store is what survives `--fresh`.
+    overrides = build_card_functions._load_overrides(build_card_functions.DEFAULT_OVERRIDES)
+    assert any("prevent_ex_damage" in overrides.get(cid, []) for cid in ids), \
+        "Crustle's tag is in the table but in no store a rebuild reads — `--fresh` would drop it"
+
+
+@pytest.mark.req("REQ-FUNC-0017")
+def test_the_dead_hand_size_attacker_tag_is_gone_rather_than_adopted(name_tags):
+    """The eleventh orphan was ruled a genuine LEFTOVER, not a fact to preserve.
+
+    `hand_size_attacker` on 743 Alakazam had both its consumers deleted by ADR-0102 / Issue #261 item
+    2c, and no `src/` module reads the string today — the hand-size attack is priced by the Damage
+    Formula's `atk_hand` scaler like any other scaling attack (`combat.py`, Issue #213). Reconciling
+    the store must not launder a dead tag into the curated file, so it was removed instead.
+
+    **Positive control on the same run:** the card is still in the pool and the tag's own
+    `opponent_properties` sibling still ships, so this absence is a ruling rather than a rotation."""
+    nm2ids, table = name_tags
+    ids = nm2ids.get("Alakazam", [])
+    assert ids, "Alakazam not in the pool (rotated out? re-rule this deletion)"
+    assert all("hand_size_attacker" not in table.get(cid, []) for cid in ids), table
+    assert "hand_size_attacker" not in card_tags.TAG_REGISTRY
+    overrides = build_card_functions._load_overrides(build_card_functions.DEFAULT_OVERRIDES)
+    assert all("hand_size_attacker" not in tags for tags in overrides.values())
+    # …and nothing else in the store carries it either, so the ruling is about the tag, not one card.
+    assert [cid for cid, tags in table.items() if "hand_size_attacker" in tags] == []
+
+
+@pytest.mark.req("REQ-FUNC-0018")
+def test_every_declared_consumer_really_reads_its_tag_and_inert_tags_really_are_inert():
+    """The registry's `consumers` claim, made TRUE rather than aspirational — the same move
+    `test_snapshot_coverage.py` makes when it resolves `WRITABLE`'s dotted paths against the real
+    classes, so a reader moving breaks the test instead of the contract.
+
+    Both directions, and the second is the load-bearing one: a tag declared INERT must be read by
+    nothing. That is what stops an "authored ahead of its consumer" label going stale the moment
+    somebody wires it up, which is the shape `UNCONSUMED_SELECTORS` guards one store over."""
+    src = Path(__file__).resolve().parents[2] / "src"
+    # The registry itself names every tag by construction, so it is not evidence about consumers.
+    registry = src / "common" / "card_tags.py"
+    sources = {p: p.read_text(encoding="utf-8") for p in src.rglob("*.py") if p != registry}
+    assert len(sources) > 30, f"source tree looks unread: {len(sources)} modules"
+    assert registry.exists()          # …and the exclusion names a real file, not a stale path
+
+    def _module(dotted: str) -> Path:
+        return src.joinpath(*dotted.split(".")).with_suffix(".py")
+
+    missing, leaked = {}, {}
+    for tag, entry in card_tags.TAG_REGISTRY.items():
+        literals = (f'"{tag}"', f"'{tag}'")
+        for dotted in entry.consumers:
+            path = _module(dotted)
+            assert path in sources, f"{tag}: declared consumer {dotted} is not a module"
+            if not any(lit in sources[path] for lit in literals):
+                missing.setdefault(tag, []).append(dotted)
+        if not entry.consumers:
+            hits = sorted(p.relative_to(src).as_posix() for p, text in sources.items()
+                          if any(lit in text for lit in literals))
+            if hits:
+                leaked[tag] = hits
+    assert missing == {}, f"declared consumers that never name their tag: {missing}"
+    assert leaked == {}, (
+        "tags declared INERT that something now reads — wire the consumer into TAG_REGISTRY "
+        "rather than leaving the registry claiming nothing reads it: %s" % leaked)
+
+
+@pytest.mark.req("REQ-FUNC-0017")
+def test_the_shipped_store_is_byte_identical_to_what_the_builder_writes():
+    """The store is a COMMITTED artifact, so its format is part of it (Issue #395 D6.4).
+
+    It shipped `indent=1` and STRING-sorted while the builder emitted `indent=0` and INT-sorted, so
+    the next rebuild reformatted all 275 entries and a one-tag change would have arrived as a
+    275-line diff — which defeats the whole point of the byte-safe write beside it. Both now go
+    through `build_card_functions.shipped_bytes`, and this is what keeps them agreeing.
+
+    Asserts BYTES, so it also covers the line endings: `Path.write_text` rewrote LF to CRLF on
+    Windows, the store is `text=auto` so the CI line-ending guard cannot see it (cf. ADR-0116), and
+    this repo builds on Windows while it grades on Linux."""
+    shipped = build_card_functions.DEFAULT_OUT.read_bytes()
+    table = build_card_functions._load_table(build_card_functions.DEFAULT_OUT)
+    assert len(table) > 50, f"shipped table looks unread: {len(table)} cards"
+    assert shipped == build_card_functions.shipped_bytes(table), (
+        "the committed card_functions.json is not in the builder's own output format — a rebuild "
+        "would reformat the whole file and hide the real change inside it")
+    assert b"\r\n" not in shipped
+
+
+@pytest.mark.req("REQ-FUNC-0018")
+def test_every_declared_tag_has_a_row_in_the_documented_reference():
+    """`docs/card-functions.md` calls its table *"the full behavioral vocabulary"*, and for ten tags
+    it was not — `supporter_tutor`, the three `tutor_*` refinements, `cost_discard`, `shuffle_hand`,
+    `item_lock`, `prevent_ex_damage`, `discard_energy_recur` and `tool` shipped with no row.
+
+    A doc that claims completeness and is not is worse than one that claims nothing, so the claim is
+    made checkable here rather than promised. The registry stays the machine-readable vocabulary of
+    record; the table is the narrative half, and this is what keeps them one vocabulary."""
+    doc = (Path(__file__).resolve().parents[2] / "docs" / "card-functions.md").read_text(
+        encoding="utf-8")
+    rows = set(re.findall(r"^\| `([a-z_]+)` \|", doc, flags=re.M))
+    assert len(rows) > 20, f"the reference table looks unread: {len(rows)} rows"
+    assert sorted(t for t in card_tags.TAG_REGISTRY if t not in rows) == [], (
+        "tags declared in card_tags.TAG_REGISTRY with no row in docs/card-functions.md")
+    # …and the other direction, so a row for a tag the registry does not declare is caught too — a
+    # documented tag nothing declares is a tag the vocabulary lint would reject on sight.
+    assert sorted(r for r in rows if r not in card_tags.TAG_REGISTRY) == []

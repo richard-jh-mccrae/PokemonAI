@@ -741,6 +741,39 @@ def test_a_benched_tera_carries_a_structural_snipe_veto_not_a_tunable_weight():
 
 
 @pytest.mark.req("REQ-POSTURE-0013")
+def test_a_positive_role_priority_cannot_erode_the_tera_veto_through_the_tiebreak(monkeypatch):
+    """**The Brief Tiebreak was the one leg that had not added itself to the stand-down gate**
+    (Issue #395). `TheirPlanInputs.brief_boost_gated()` stands a POSITIVE priority down on a
+    redundant / mirage / benched-Tera body, and the relevance MULTIPLIER honours it — but the
+    tiebreak read the raw priority, so a Tera carrying a strict-maximum role won a derived bonus and
+    lifted the structural veto off `-KO_SCORE`.
+
+    Latent before this issue (a Brief could always have named a Tera) and reached daily by widening
+    the general tier, since a derived role now lands on nearly every in-play body. The veto is a CARD
+    FACT — a benched Tera takes no damage from attacks at all — so nothing positive may erode it."""
+    from common.scouting.matchup_plan import build_matchup_plan
+    p = _tera_snipe_pilot()
+    obs = _tera_snipe_obs(poke(TERA_WINCON, hp=200, energy=2), poke(BRUISER, hp=120))
+    # The Tera alone carries a positive role — a strict maximum among the relevance-tied peers, which
+    # is exactly the shape the tiebreak fires on.
+    plan = build_matchup_plan(read_roles={TERA_WINCON: "prize_liability"}, gamma=1.0)
+    real_board = p._board
+    monkeypatch.setattr(p, "_board",
+                        lambda *a, **kw: _with_plan(real_board(*a, **kw), plan))
+
+    tera, bruiser = p.explain(obs).options
+    assert plan.priority(TERA_WINCON) > 0, "the fixture must express a positive role, or this is vacuous"
+    assert tera.tactical <= -KO_SCORE
+    assert tera.score < bruiser.score
+    assert p.decide(obs) == [1]
+
+
+def _with_plan(board, plan):
+    board.matchup_plan = plan
+    return board
+
+
+@pytest.mark.req("REQ-POSTURE-0013")
 def test_the_tera_veto_never_freezes_a_forced_snipe_select():
     """EDGE CASE: our attack REQUIRES a snipe and the opponent's ONLY benched body is a Tera. The veto
     must ORDER the Tera last, never REMOVE it — the agent has to answer a forced select or the engine

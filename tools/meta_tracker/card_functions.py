@@ -33,6 +33,25 @@ _AREA_LOOK = 12                # AreaType.LOOKING (cards being looked at)
 _INTO_PLAY = frozenset((2, 4, 5))   # HAND / ACTIVE / BENCH — fetch destinations
 _CTX_DAMAGE_COUNTER_ANY = 14   # SelectContext.DAMAGE_COUNTER_ANY
 
+#: **Every tag :func:`classify_functions` can emit from a probe record** — i.e. exactly the tags a
+#: ``--fresh`` rebuild re-derives without help from `function_overrides.json`.
+#:
+#: Exported because `common.card_tags.unsourced_tag_instances` needs it and **must not re-transcribe
+#: it** (Issue #395 D6.1): a second copy of this set is the drift that check exists to detect, and it
+#: would go stale the first time a classify rule changed. The Special Conditions are composed from
+#: :data:`_CONDITION_TAG` rather than re-listed here for the same reason, one scale down.
+#:
+#: `tests/cards/test_card_functions.py` holds it honest in BOTH directions — every tag a synthetic
+#: probe record produces is in here, and every tag in here is produced by one.
+DERIVED_TAGS = frozenset({
+    "switch", "gust",                       # SWITCH log, by side
+    "hand_disruption", "energy_denial",     # opponent-side forced moves during resolution
+    "draw", "dig", "search", "recycle",     # DRAW / LOOKING / DECK→play / DISCARD→play moves
+    "energy_accel",                         # non-Tool ATTACH
+    "heal",                                 # HP_CHANGE up, not a damage counter
+    "spread",                               # DAMAGE_COUNTER_ANY select context
+}) | frozenset(_CONDITION_TAG.values())     # poison / burn / sleep / paralyze / confuse
+
 
 def classify_functions(card: dict, *, probe: dict | None = None,
                        overrides: list[str] | None = None) -> list[str]:

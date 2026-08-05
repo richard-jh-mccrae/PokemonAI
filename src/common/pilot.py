@@ -26,7 +26,8 @@ from common.strategy import GamePlan, Plan, Strategy
 from common.scouting.read import Read
 from common.scouting.matchup import matchup_favorability
 from common.scouting.briefs import Brief, match_brief, resolve_brief_cards
-from common.scouting.matchup_plan import MatchupPlan, build_matchup_plan
+from common.scouting.matchup_plan import (BodyFacts, MatchupPlan, build_matchup_plan,
+                                          derive_general_roles)
 from common.option_equivalence import canonical_keys   # ADR-0103: the ordering tie-break is a board
                                                        # fact (the fingerprint), never the menu index
 
@@ -86,8 +87,16 @@ _REFRESH_CYCLE = 20        # the DRAW side, flat: cards I have not seen are spec
 # cards we cannot see, i.e. an expectation over their representative build — and 59.4% of that build
 # prices `_role_value` 0 today, because role declarations come from OUR deck. The missing 59% is
 # exactly their attackers and wincons, so a "derived" GIFT would be biased DOWNWARD precisely where it
-# matters, making "Judge into their small hand" look cheap — ml f111's CRITICAL blunder. They retire
-# when `gusting-keepcost-design.md` §2's shared opponent role sheet exists, not before.
+# matters, making "Judge into their small hand" look cheap — ml f111's CRITICAL blunder.
+#
+# ⚠️ **The prerequisite is STILL UNMET, and Issue #395 did not discharge it** (D9). That issue built
+# the shared opponent role sheet `gusting-keepcost-design.md` §2 names — `matchup_plan.ROLE_REGISTRY`
+# plus `derive_general_roles` — and it is deliberately NOT the quantity these rates need. It is an
+# ORDINAL PRIORITY over bodies IN PLAY; grading a hand strip needs a WORTH over cards we cannot see,
+# an expectation across their representative build. The two are different quantities and citing the
+# first does not supply the second. `card_worth.role_value` is untouched, so the 59.4% figure above is
+# unchanged and remains exactly the reason. These retire when that worth exists, not before — and a
+# later reader must not read "the role sheet exists now" as the condition having been met.
 _REFRESH_OPPONENT_HAND_STRIP = 4   # per card stripped from THEIR hand — certain denial (ms f43/f45/f100/f64).
 _REFRESH_OPPONENT_HAND_GIFT = 8    # per card HANDED to them: Judge into a 1-card opponent hand REFILLS
                            # them to 4. Priced like a shed — a card in their hand is as real as one in
@@ -609,7 +618,9 @@ class Board:
     my_hand_size: int = 0                 # my current hand size — the don't-gift-a-refresh comparator
                                           # (only strip when theirs exceeds mine, so we net-strip rather than hand them a fresh hand)
     # `opp_draw_engine_in_play` DELETED (ADR-0102) with `strip-the-stacked-engine-hand`, its only
-    # reader. `_draw_engine_ids` survives — the Read's deck-recognition still consumes it.
+    # reader. The general MatchupPlan tier survives as `_general_body_facts` (Issue #395 D4/D5,
+    # which superseded the id-set `_draw_engine_ids`); its ONE caller is `_matchup_plan`, which
+    # feeds it to `derive_general_roles`.
     # -- Opponent RESOURCES (ADR-0047) flattened onto the Board so a `when()` can trigger off them
     #    without reaching through `board.opponent.resources`. Sourced from the match-scoped tracker
     #    (opponent_resources.OpponentResourceModel); every value fails OPEN (unknown -> the no-fire
@@ -8361,14 +8372,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """Compose the ADR-0051 MatchupPlan for this decision — the unified opponent target-
         priority spine read by the snipe/gust consumers. Empty (inert) when the kill-switch is
         off. Curated ``brief_roles`` (already resolved to ids) is the top tier; ``read.targets``
-        Intel is the γ-gated speculative tier; the general ``draw``-engine card fact is the
-        always-on floor. Pure over the resolved inputs — the composition lives in
-        ``matchup_plan.build_matchup_plan``."""
+        Intel is the γ-gated speculative tier; the general card-fact derivation is the always-on
+        floor. Pure over the resolved inputs — the composition lives in
+        ``matchup_plan.build_matchup_plan`` and the general tier's RULES live in
+        ``matchup_plan.derive_general_roles``; this method only resolves the facts (Issue #395 D5)."""
         if not self.matchup_targeting:
             return MatchupPlan()
         read_roles = {t.cardId: t.role for t in (read.targets if read else [])}
+        general = derive_general_roles(self._general_body_facts(opp))
         return build_matchup_plan(brief_roles=brief_roles, read_roles=read_roles,
-                                  draw_engine_ids=self._draw_engine_ids(opp), gamma=gamma)
+                                  general_roles=general, gamma=gamma)
 
     # `_snipe_matchup_tactical` (ADR-0051's MatchupPlan snipe steer) was DELETED by ADR-0085
     # decision 5, which put it in the fold's scope alongside the six target rungs. Armed it was
@@ -8418,16 +8431,48 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         `target_is_bench_tera` is already scoped to a bench target at a DAMAGE select."""
         return -KO_SCORE if ctx.target_is_bench_tera else 0.0
 
-    def _draw_engine_ids(self, opp: dict) -> frozenset:
-        """Opponent in-play body ids whose card carries the general ``draw`` Function Tag — a draw
-        ENGINE (Dudunsparce / Budew class) that is a poor target in EVERY deck (matchup-agnostic).
-        The general tier of the MatchupPlan; empty when no provider / no opponent."""
-        if not self.functions or not opp:
-            return frozenset()
-        ids = {(p or {}).get("id")
-               for p in (opp.get("active") or []) + (opp.get("bench") or [])
-               if p and p.get("id") is not None and "draw" in self.functions.tags(p["id"])}
-        return frozenset(ids)
+    def _general_body_facts(self, opp: dict) -> dict:
+        """``{card id: BodyFacts}`` for every opponent in-play body — the deck-agnostic card facts
+        the MatchupPlan's **general** tier derives its roles from (`matchup_plan.BodyFacts`).
+
+        The Pilot RESOLVES, the scouting layer DERIVES: that is `build_matchup_plan`'s existing
+        contract (*"Pure — the Pilot supplies the facts"*), and keeping it means the `avoid` prize
+        gate is testable at the scouting seam rather than stranded here.
+
+        Superseded `_draw_engine_ids`, which returned bare ids and therefore could express only one
+        rule and no gate. Empty when there is no provider or no opponent — no facts, no general
+        claim (fail-CLOSED, ADR-0067)."""
+        if not opp:
+            return {}
+        facts = {}
+        for p in (opp.get("active") or []) + (opp.get("bench") or []):
+            cid = (p or {}).get("id")
+            if cid is None or cid in facts:
+                continue
+            tags = frozenset(self.functions.tags(cid)) if self.functions else frozenset()
+            stat = self.stats.get(cid) if self.stats else None
+            # `_threat_damage_pair` is the ONE home for "how hard does this body hit, now and once
+            # evolved" — the same pair `_body_threat_rank` ranks the bench with, so the derived
+            # `attacker` / `fragile_preevo` split cannot disagree with the threat order the snipe
+            # and Planner rungs already use. It prices through the Damage Formula when
+            # `scaled_threat_rank` is on, so a scaling attacker is read at what it would really hit
+            # for rather than at its printed 10.
+            own, fwd = self._threat_damage_pair(cid, stat)
+            facts[cid] = BodyFacts(
+                tags=tags,
+                # `_prize_value` is the ONE adapter for "what does a KO here yield" (ADR-0056), and
+                # it is the POC-T1 census's already-ruled bypass: prize yield is CARD knowledge,
+                # constant all game, so it stays on the oracle while only the RACE lives on the
+                # model (ADR-0052). Going through it rather than `self.combat` directly keeps this
+                # off the census's undocumented list without minting a second licence.
+                prize_value=self._prize_value(p),
+                own_damage=own, forward_damage=fwd,
+                # The three `enabler` facts, all already parsed by `card_text.py` — no new tag was
+                # needed for the role, which was Issue #395 D5's finding rather than its proposal.
+                damage_boost=int(getattr(stat, "damageBoost", 0) or 0),
+                grants_free_retreat=bool(getattr(stat, "retreatFreeGrant", None)),
+                ability_fuel=bool(getattr(stat, "abilityEnergyTypes", ()) or ()))
+        return facts
 
     def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0) -> float:
         """The select-independent threat-rank core behind `_target_threat_rank` — rank ANY benched
@@ -8797,7 +8842,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Returns ``(phase, rows)``; each row carries the raw ``body`` dict, its ``area``
         (``"active"``/``"bench"``) and within-area index ``bi`` (the deny-slot key convention), plus
-        ``id``/``prize``/``survival_shift``/``value``. None when sparse: no live my Active, or no
+        ``id``/``prize``/``survival_shift``/``value``/``role_priority``. The last is the ADR-0051
+        role sheet as its OWN leg (Issue #395 D7) — an ordinal priority, never summed into ``value``,
+        whose meaning and ceiling are unchanged by it. None when sparse: no live my Active, or no
         opponent in-play bodies.
 
         **Runs MID-SIM** (ADR-0093 decision 3). It used to early-return `None` under the
@@ -8877,6 +8924,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                     else ())
                           | frozenset(("bench", j)
                                       for j in self._bench_doomed_by_me(ma, bench_list)))
+        # The ADR-0051 spine, resolved once for the whole decision rather than per body. `None` when
+        # the kill-switch is off or the Board predates it — the row then carries 0.0, which is the
+        # same "unroled" reading `MatchupPlan.priority` gives, so no consumer has to special-case it.
+        plan = getattr(board, "matchup_plan", None)
         rows = []
         for i, b in enumerate(bodies):
             shift = model.theirs.survival_clock(
@@ -8898,7 +8949,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                               phase=phase)
             area, bi = ("active", i) if i < len(active_list) else ("bench", i - len(active_list))
             row = {"body": b, "area": area, "bi": bi, "id": b.get("id"), "prize": prize,
-                   "prize_advance": advance, "survival_shift": shift, "value": val}
+                   "prize_advance": advance, "survival_shift": shift, "value": val,
+                   # THE ROLE SHEET, as its own leg (Issue #395 D7) — exactly as `_relevance_terms`
+                   # and `_strip_delta_terms` below attach theirs and let each consumer combine.
+                   #
+                   # It is NOT folded into `value`, and that is the ruling rather than an omission.
+                   # `value` keeps its prize+clock meaning and its `TARGET_VALUE_CEILING` (3.9), so
+                   # the two rates derived from that ceiling — `state_value._THREAT_W` and
+                   # `currency.GUST_TARGET_WORTH_RATE` — are untouched and nothing is re-banded. A
+                   # single fused scalar would also erase the thing the architecture already gets
+                   # right: gust, snipe and deny ask DIFFERENT questions of the same body and each
+                   # already weighs the steering layer differently.
+                   #
+                   # This is an ORDINAL priority, not a worth (D1) — it must never be summed into a
+                   # prize-denominated number without a rate, and the only rate at this seam is
+                   # derived from `currency.GUST_TARGET_BAND`, never authored.
+                   "role_priority": (plan.priority(b.get("id")) if plan is not None else 0.0)}
             if self.deny_strip_delta:
                 row.update(self._strip_delta_terms(ma, bodies, i, phase,
                                                    opp_active=opp_active, enabler=enabler))
@@ -9161,16 +9227,41 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         return _SNIPE_RELEVANCE_K * got["relevance"]
 
-    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan) -> float:
+    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan, ctx) -> float:
         """This option's signed MatchupPlan/Brief priority, or 0.0 when nothing is briefed.
 
         One owner, because the tiebreak reads it twice — once for the candidate and once per peer —
         and the two readings MUST agree exactly: the comparison is `!=` against a strict maximum, so
-        any drift between them silently turns a winner into a non-winner."""
+        any drift between them silently turns a winner into a non-winner.
+
+        **A POSITIVE priority stands down on a redundant / mirage / benched-Tera body** (Issue #395),
+        through `TheirPlanInputs.brief_boost_gated()` — the ONE home for that rule, whose own
+        docstring already names *"the three gates a later leg would have to remember to add itself
+        to"*. This tiebreak was that later leg and it had not: the MULTIPLIER stood down on a benched
+        Tera while the tiebreak still handed it a strict-maximum bonus, so a body that takes NO damage
+        from attacks at all could be ordered ABOVE one that can hold the counters.
+
+        Latent before this issue — a Brief could always have named a Tera — and reached daily by
+        widening the general tier, since a derived role now lands on nearly every in-play body. The
+        asymmetry is preserved exactly: a NEGATIVE (`avoid`) priority is never gated, because a
+        booster must scale the oracle while a de-prioritizer may always apply.
+
+        ``ctx`` is REQUIRED rather than defaulted: a caller that omitted it would silently skip the
+        stand-down and get the pre-fix reading back, which is the shape of defect this argument
+        exists to close."""
         cid = (self._option_pokemon(obs, select, option) or {}).get("id")
         if plan is None or cid is None:
             return 0.0
-        return float(plan.priority(cid) or 0.0)
+        priority = float(plan.priority(cid) or 0.0)
+        if priority > 0:
+            from common import snipe_relevance as srel
+            gated = srel.TheirPlanInputs(
+                prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),
+                promotion_mirage=bool(getattr(ctx, "target_promotion_mirage", False)),
+                is_tera=bool(getattr(ctx, "target_is_bench_tera", False))).brief_boost_gated()
+            if gated:
+                return 0.0
+        return priority
 
     def _snipe_brief_peers(self, obs: dict, select: dict, board: Board) -> list[tuple[float, float]]:
         """``[(relevance, brief_priority)]`` over every bench target this menu offers, once per
@@ -9193,12 +9284,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             slot = o.get("index")
             if slot in seen:
                 continue
-            got = self._snipe_relevance_terms(obs, select, board, o,
-                                              self._context(obs, select, board, o))
-            if got is None:
+            octx = self._context(obs, select, board, o)          # ONE ctx per peer: the relevance
+            got = self._snipe_relevance_terms(obs, select, board, o, octx)   # terms and the priority
+            if got is None:                                       # gate must read the same reads
                 continue
             seen.add(slot)
-            peers.append((got["relevance"], self._snipe_brief_priority(obs, select, o, plan)))
+            peers.append((got["relevance"],
+                          self._snipe_brief_priority(obs, select, o, plan, octx)))
         self._snipe_peer_cache = peers
         return peers
 
@@ -9249,7 +9341,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if got is None:
             return 0.0
         from common import snipe_relevance as srel
-        mine = self._snipe_brief_priority(obs, select, option, getattr(board, "matchup_plan", None))
+        mine = self._snipe_brief_priority(obs, select, option,
+                                          getattr(board, "matchup_plan", None), ctx)
         return srel.brief_tiebreak(self._snipe_brief_peers(obs, select, board),
                                    got["relevance"], mine)
 

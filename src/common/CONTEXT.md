@@ -234,8 +234,22 @@ A coarse label for a *behavioral* function a card performs (`draw`, `search`, `e
 `card_functions.json` for O(1) mid-match lookup. **Behavioral only**: structural facts (ex/Mega
 → prizes, trainer subtype, ACE SPEC) are read straight off the engine's `CardData`, never tagged.
 A *routing hint*, not an outcome — the Search API still resolves exact effects.
+The vocabulary is CLOSED and declared in `common/card_tags.py` (Issue #395, REQ-FUNC-0017/0018):
+`TAG_REGISTRY` names every legal tag with its source, its reason and its consuming modules;
+`undeclared_tags` and `unsourced_tag_instances` are the teeth, walked over the shipped store. The
+second is the one that was red — eleven hand-authored tag instances existed in neither the prober's
+derived set nor the curated overrides, so `build_card_functions.py --fresh` deleted them silently.
 _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category), structural tag
 (ex/trainer-type — those come from `CardData`), embedding (a rejected approach — use exact tags)
+
+⚠️ **Two role vocabularies exist and they COLLIDE on one word.** OUR-side deck Roles
+(`card_worth.ROLE_TIER`: `win_condition`, `accel_source`, `engine`, …) say what OUR deck intends a
+card for; the OPPONENT role sheet (`scouting.matchup_plan.ROLE_REGISTRY`: `prize_liability`,
+`fragile_preevo`, `attacker`, `enabler`, `engine`, `avoid`, …) says how worth REMOVING one of THEIR
+bodies is. `engine` means opposite things in the two — `ROLE_TIER` 12.0 *a plan piece worth keeping*
+against `ROLE_REGISTRY` 0 *neutral, do not boost* — which is one of the three reasons ADR-0120 keeps
+them as separate tables rather than reusing either as the other's sheet. The our-side table is a
+WORTH in card-worth points; the opponent table is an ORDINAL PRIORITY and enters no currency.
 
 **Attack Effect**:
 The per-attack, machine-readable effect facts of a *single* attack — its damage and energy cost plus

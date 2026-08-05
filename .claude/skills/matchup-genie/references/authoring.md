@@ -23,7 +23,7 @@ a deterministic validator, not per-Hypothesis trigger checks.
 | §1 how-it-wins tempo | `tempo` (`fast`/`midrange`/`slow`) + `summary` |
 | §3 seam → `opponent_properties` | `opponent_properties: { "<key>": <value> }` — each key registered |
 | §4 threats | `threats: [ { card, why } ]` |
-| §4 targets | `targets: [ { card, role, why } ]` — role ∈ `prize_liability` / `fragile_preevo` / `disruption_target` / `engine` (neutral) / `avoid` (see SKILL.md for the semantics; all feed the ADR-0051 MatchupPlan) |
+| §4 targets | `targets: [ { card, role, why } ]` — role ∈ `prize_liability` / `fragile_preevo` / `disruption_target` / `attacker` / `enabler` / `engine` (neutral) / `avoid` (see SKILL.md for the semantics; all feed the ADR-0051 MatchupPlan, and the closed registry is `matchup_plan.ROLE_REGISTRY` — an undeclared role fails the vocabulary lint, Issue #395) |
 | index.json | `slug`, `label`, `covers` (verbatim) |
 | §2 sources | `sources: [ "name — url" ]` |
 
