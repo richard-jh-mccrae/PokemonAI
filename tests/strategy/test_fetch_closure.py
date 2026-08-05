@@ -119,6 +119,65 @@ def test_the_widened_target_classes_each_match_exactly_their_class(target, hits)
     assert got == hits
 
 
+# ── the same two classes, against PRODUCTION rows (Issue #408) ────────────────────────────────────
+# The test above builds its own `CardStat`, which is how `stage1`/`stage2` stayed green for a year
+# while matching nothing on any real board: `CardStat.stage` was never written, so the fixture was
+# supplying a value the provider could not emit. A class predicate has to be pinned against a row the
+# provider actually produced, or the fixture is grading itself.
+
+#: The hydrapple deck's own line — Dawn (1231), the one card in a shipped deck naming these classes,
+#: fetches all three rungs of it. Applin is the POSITIVE CONTROL: a Basic of the SAME line must match
+#: neither class, so a predicate that had degenerated to "any Pokémon" fails here rather than
+#: silently over-reaching. Read through the production provider, not `_shipped_pilot` — hydrapple is
+#: a deck with no `strategy.py`, and these are pool facts anyway.
+APPLIN, DIPPLIN, HYDRAPPLE_EX = 149, 93, 150
+
+
+@pytest.fixture(scope="module")
+def real_stats():
+    from common.scouting.provider import EngineCardStatProvider
+    stats = EngineCardStatProvider()
+    stats.warm()
+    return stats
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_the_stage_classes_match_real_provider_rows(real_stats):
+    """`stage1` reaches a real Stage 1 and `stage2` a real Stage 2, read off the production provider.
+
+    Before `CardStat.stage` was populated both comparisons were unsatisfiable, so every assertion
+    here returned False — 461 cards' worth of nothing, on every board. The Basic leg is what keeps
+    the fix honest in the other direction."""
+    from common import fetch_closure
+    applin, dipplin, hydrapple = (real_stats.get(APPLIN), real_stats.get(DIPPLIN),
+                                  real_stats.get(HYDRAPPLE_EX))
+    assert (applin.stage, dipplin.stage, hydrapple.stage) == ("basic", "stage1", "stage2")
+    for target, expected in (("stage1", dipplin), ("stage2", hydrapple)):
+        clause = {"target": target}
+        matched = [s for s in (applin, dipplin, hydrapple)
+                   if fetch_closure.fetch_target_matches(clause, s)]
+        assert matched == [expected], target
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_dawns_shipped_clauses_reach_the_line_they_name(real_stats):
+    """End-to-end on the real carrier: Dawn (1231) declares `basic_pokemon` / `stage1` / `stage2`
+    (Issue #301 got the DATA right; the reader was blind), and each leg must now reach exactly its
+    rung of the Applin -> Dipplin -> Hydrapple ex line. Both the clause rows and the stat rows come
+    from shipped artefacts, so neither side of the match is authored by this test."""
+    from common import fetch_closure
+    from common.effects import CardEffects
+    clauses = [cl for cl in CardEffects.load().clauses(1231) if cl.get("kind") == "fetch"]
+    by_target = {cl["target"]: cl for cl in clauses}
+    assert set(by_target) == {"basic_pokemon", "stage1", "stage2"}
+    for target, cid in (("basic_pokemon", APPLIN), ("stage1", DIPPLIN), ("stage2", HYDRAPPLE_EX)):
+        assert fetch_closure.fetch_target_matches(by_target[target],
+                                                  real_stats.get(cid)) is True, target
+    # …and no leg is a blanket "any Pokémon": the Stage 2 is out of reach of the Basic clause.
+    assert fetch_closure.fetch_target_matches(by_target["basic_pokemon"],
+                                              real_stats.get(HYDRAPPLE_EX)) is False
+
+
 @pytest.mark.req("REQ-WORTH-0002")
 def test_the_deadness_only_classes_resolve_for_deadness_and_refuse_for_reach():
     """`FETCH_DEADNESS_ONLY_TARGETS` — the two classes that answer *"is anything left to find?"* and

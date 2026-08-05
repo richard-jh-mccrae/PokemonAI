@@ -2933,12 +2933,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         The predicate travels WITH the grant (`CardStat.retreatFreeGrant`), so adding a card adds a
         parse and a predicate rather than a call-site special case. Unknown predicate → False, which
-        is the fail-closed direction: we charge the printed cost."""
+        is the fail-closed direction: we charge the printed cost.
+
+        ⚠️ This could not fire at all until Issue #408: `CardStat.stage` was declared and never
+        written, so the `"basic"` predicate below compared against None for every card in the pool.
+        It was dead for TWO independent reasons — that, and the fact that the only deck carrying the
+        grantor (`slowking`, 2× Latias ex) has no `strategy.py` and so is never built as a Pilot.
+        #408 removed the first; the second is #149's to close, and until it does this stays latent
+        rather than live. Worth stating plainly because the grant was modelled, covered by tests, and
+        reachable by neither route — the tests declared `stage` themselves."""
         me = self._my_player(obs) or {}
         bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
         for body in bodies:
             gstat = self.stats.get(body.get("id")) if body.get("id") is not None else None
             grant = getattr(gstat, "retreatFreeGrant", None) if gstat is not None else None
+            # `stage` is the canonical "basic"/"stage1"/"stage2" (`provider.stage_from_card`), so the
+            # `.lower()` is redundant against a real provider — kept because the field crosses a
+            # provider boundary and a cheap coercion beats a silent miss on an injected row.
             if grant == "basic" and (getattr(stat, "stage", None) or "").lower() == "basic":
                 return True
             if grant == "metal_attached" and self._attached_type_counts(ma).get(_METAL):

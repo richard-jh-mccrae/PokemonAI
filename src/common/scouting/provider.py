@@ -47,6 +47,32 @@ from .forward_index import _ForwardIndex, _build_forward_index, _name_index  # n
 _ITEM, _TOOL, _SUPPORTER, _STADIUM, _BASIC_ENERGY, _SPECIAL_ENERGY = 1, 2, 3, 4, 5, 6
 
 
+def stage_from_card(c) -> str | None:
+    """The card's printed evolution stage as the CANONICAL string — the ONE derivation (Issue #408).
+
+    ``"basic"`` / ``"stage1"`` / ``"stage2"``, or None for a card that is not a Pokémon body. The
+    vocabulary is the ENGINE's own, because the answer is: ``CardData.basic`` / ``.stage1`` /
+    ``.stage2`` are three booleans the engine sets, and this is the only place that folds them into
+    the one field readers ask for. A second spelling of *"what stage is this?"* is the drift ADR-0087
+    charges for, so `tools/meta_tracker/dump_cards.stage_of` DELEGATES here rather than repeating it.
+
+    Not derived from ``evolvesFrom``: that is exact on today's pool but it is a second READING —
+    inferring a printed stage from an evolution name — where the booleans are the engine's answer.
+
+    The five Antique Fossils (1099/1136/1138/1150/1151) are ``cardType`` ITEM yet report
+    ``basic=True``, and correctly so — *"Play this card as if it were a 60-HP Basic {C} Pokémon."*
+    They are the reason the partition that holds is ``hp > 0`` (``CardStat.is_pokemon``) rather than
+    ``cardType == POKEMON``: over all 1267 cards, every body with HP has a stage and nothing else does.
+    """
+    if getattr(c, "basic", False):
+        return "basic"
+    if getattr(c, "stage1", False):
+        return "stage1"
+    if getattr(c, "stage2", False):
+        return "stage2"
+    return None
+
+
 @dataclass
 class CardStat:
     cardId: int
@@ -135,7 +161,12 @@ class CardStat:
                                        # defensive stall-gust strands an energyless high-retreat body
     cardType: int | None = None        # CardType enum (ITEM=1, TOOL=2, SUPPORTER=3…) — distinguishes
                                        # Supporter gust (costs the slot) from free Item gust. ADR-0022 #12
-    stage: str | None = None
+    stage: str | None = None           # printed evolution stage, CANONICAL vocabulary (`stage_from_card`):
+                                       # "basic" | "stage1" | "stage2", None for a non-body. Folds the
+                                       # engine's three CardData booleans into the one field the FETCH
+                                       # closure's `stage1`/`stage2` classes and the Skyliner grant read.
+                                       # Written ONLY by `_build_cache` — a fixture spelling it any other
+                                       # way is claiming a value production cannot emit (Issue #408).
     stage2: bool = False               # engine CardData.stage2 — a Stage 2 Pokémon (Gravity Mountain's
                                        # −30 HP hits exactly these; the opp-board stadium-tech read)
     evolvesFrom: str | None = None
@@ -537,6 +568,7 @@ def _build_cache(card_data, attacks) -> dict[int, CardStat]:
             holderNoRuleBox=_parse_tool_holder_no_rule_box(c),
             retreatFreeAtHp=_parse_tool_retreat_free_at_hp(c),
             retreatFreeGrant=_parse_retreat_free_grant(c),
+            stage=stage_from_card(c),
             stage2=bool(getattr(c, "stage2", False)),
             damageBoost=boost, damageBoostType=boost_type, damageBoostVsEx=boost_vs_ex,
             recoil=int(recoil),

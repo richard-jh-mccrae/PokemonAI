@@ -23,6 +23,15 @@ against a board here, not a real one, because the only deck running Latias ex is
 `slowking` — which has `deck.csv`/`deck.txt` and **no `strategy.py`** (#149 §Charter), so it cannot
 be built as a Pilot and owns no corpus frames. The debt is named here rather than implied.
 
+⚠️ **That exception had a cost, and Issue #408 collected it.** Every board test below declares its
+own `stage`, and `CardStat.stage` was declared-but-never-written until #408 — so the `grant ==
+"basic"` predicate compared against None for every card in the pool while this file stayed green.
+The synthetic seam did not merely under-test the grant; it actively concealed that the grant could
+not fire at all. `test_the_grant_predicate_reads_a_value_the_provider_actually_emits` is the guard
+added for it: a fixture is evidence only if production can emit the value it declares. Note the gate
+was dead for TWO independent reasons — the unwritten field and the missing `strategy.py` — and #408
+removed only the first, so item 1 below still stands.
+
 **OWED TO #149 — two things, the second sharper than the first:**
 
 1. A real-deck end-to-end test: a `slowking` Pilot on a real frame where the retreat DECISION changes
@@ -87,6 +96,8 @@ from pilot_helpers import MAIN, make_select, opt, poke, state
 RETREAT, END = 12, 14
 AIR_BALLOON, RESCUE_BOARD, LATIAS_EX, ARCHALUDON = 1174, 1157, 184, 170
 WALKER, BENCHIE, WALL = 800, 801, 900
+TOWER = 802                     # a Stage 2 with a PRINTED retreat cost and no grant of its own —
+                                # the row the predicate test needs to bite on (see its docstring)
 METAL, A_WALK, A_WALL = 8, 71, 72
 
 
@@ -175,17 +186,19 @@ def test_the_real_cards_parse_through_the_engine_provider():
 
 def _pilot(*, grantor=None):
     stats = DictCardStatProvider({
-        WALKER: CardStat(WALKER, synthetic=True, name="Walker", hp=120, stage="Basic", retreatCost=2,
+        WALKER: CardStat(WALKER, synthetic=True, name="Walker", hp=120, stage="basic", retreatCost=2,
                          minAttackCost=1, maxDamage=60, maxDamageCost=1, attacks=(A_WALK,)),
-        BENCHIE: CardStat(BENCHIE, synthetic=True, name="Benchie", hp=90, stage="Basic", retreatCost=1,
+        BENCHIE: CardStat(BENCHIE, synthetic=True, name="Benchie", hp=90, stage="basic", retreatCost=1,
                           minAttackCost=1, maxDamage=30, maxDamageCost=1, attacks=(A_WALK,)),
         WALL: CardStat(WALL, synthetic=True, name="Wall", hp=300, minAttackCost=2, maxDamage=60,
                        maxDamageCost=2, attacks=(A_WALL,)),
+        TOWER: CardStat(TOWER, synthetic=True, name="Tower", hp=300, stage="stage2", retreatCost=3,
+                        minAttackCost=2, maxDamage=60, maxDamageCost=2, attacks=(A_WALL,)),
         RESCUE_BOARD: CardStat(RESCUE_BOARD, synthetic=True, name='Rescue Board', cardType=2,
                                retreatReduction=1, retreatFreeAtHp=30),
-        LATIAS_EX: CardStat(LATIAS_EX, synthetic=True, name='Latias ex', hp=210, ex=True, stage="Basic",
+        LATIAS_EX: CardStat(LATIAS_EX, synthetic=True, name='Latias ex', hp=210, ex=True, stage="basic",
                             retreatFreeGrant="basic"),
-        ARCHALUDON: CardStat(ARCHALUDON, synthetic=True, name='Archaludon', hp=300, stage="Stage 2",
+        ARCHALUDON: CardStat(ARCHALUDON, synthetic=True, name='Archaludon', hp=300, stage="stage2",
                              retreatFreeGrant="metal_attached"),
     }, attacks={A_WALK: AttackStat(A_WALK, damage=60, cost=1),
                 A_WALL: AttackStat(A_WALL, damage=60, cost=2)})
@@ -226,13 +239,43 @@ def test_a_board_level_ability_frees_my_basics_from_another_slot():
 
 def test_the_board_level_grant_respects_its_own_predicate():
     """"Your BASIC Pokémon in play" — a Stage 2 gets nothing, so the predicate is doing real work
-    rather than being a blanket free-retreat switch."""
+    rather than being a blanket free-retreat switch.
+
+    The Stage 2 leg used to assert `== 0` against Archaludon, whose printed cost was 0 anyway: it
+    passed whether the predicate refused or not, which is the same defect Issue #408 found in the
+    `stage` fixtures. `TOWER` has a printed 3, so a predicate that stopped discriminating fails."""
     p = _pilot()
-    stage2 = poke(ARCHALUDON, energy=2, hp=300)
-    obs = _obs(stage2, [poke(LATIAS_EX, hp=210)])
-    assert p._effective_retreat_cost(obs, stage2) == 0      # Archaludon has no printed cost here
+    grantor = [poke(LATIAS_EX, hp=210)]
+    stage2 = poke(TOWER, energy=3, hp=300)
+    assert p._effective_retreat_cost(_obs(stage2, grantor), stage2) == 3   # refused: not a Basic
     basic = poke(WALKER, energy=2, hp=120)
-    assert p._effective_retreat_cost(_obs(basic, [poke(BENCHIE, hp=90)]), basic) == 2
+    assert p._effective_retreat_cost(_obs(basic, grantor), basic) == 0     # granted: a Basic
+    assert p._effective_retreat_cost(_obs(basic, [poke(BENCHIE, hp=90)]), basic) == 2  # no grantor
+
+
+def test_the_grant_predicate_reads_a_value_the_provider_actually_emits():
+    """The link the board tests above cannot supply, and whose absence made all of them vacuous.
+
+    Every test in this section hands `_effective_retreat_cost` a `stage` it wrote itself. Until
+    Issue #408 the provider wrote NONE — `CardStat.stage` was declared and never assigned — so the
+    `grant == "basic"` predicate compared against None on every real board while these stayed green.
+    A fixture is only evidence if production can emit the value it declares, so assert exactly that,
+    against the real records: the grantor's `retreatFreeGrant` and the beneficiary's `stage` have to
+    meet on the same two strings the predicate joins on.
+
+    slowking's own line, because slowking is the deck that runs Latias ex: Slowpoke is the Basic the
+    grant frees, Slowking the Stage 1 it must refuse."""
+    from common.scouting.provider import EngineCardStatProvider
+    stats = EngineCardStatProvider()
+    stats.warm()
+    slowpoke, slowking = stats.get(162), stats.get(163)
+    assert stats.get(LATIAS_EX).retreatFreeGrant == "basic"
+    assert (slowpoke.stage, slowking.stage) == ("basic", "stage1")
+    # the join, spelled as the predicate spells it — and its negative half
+    assert (slowpoke.stage or "").lower() == "basic"
+    assert (slowking.stage or "").lower() != "basic"
+    # …and the printed costs the grant is worth something against (0 would make it untestable)
+    assert slowpoke.retreatCost > 0 and slowking.retreatCost > 0
 
 
 @pytest.mark.req("REQ-GEN-0026")
