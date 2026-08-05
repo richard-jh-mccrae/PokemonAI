@@ -84,6 +84,39 @@ ex/Mega bodies (prize math), with weakness/HP exposed as data. Which target *I* 
 exploit is the consumer's job.
 _Avoid_: weak point, mark
 
+**Denial Value**:
+What REMOVING an opponent body denies them, as distinct from what killing it yields
+now (`prize_value`). Two legs, and only one of them is new: the damage the body's
+line would have gone on to deal is already priced by `incoming()`, whose availability
+gate is all-descendants — so the clock sees it. The PRIZE the line would have yielded
+(a Staryu becomes a 3-prize Mega Starmie ex) is priced nowhere and is the leg
+`denial_value` owns. ADR-TEMP-398.
+_Avoid_: removal value, kill value
+
+**Flat Tie**:
+An equal-prize group of opponent bodies whose target value is *identical*, so the
+pick falls to list order. 73.2% of equal-prize groups on the correction corpus, and
+the reason any continuous term appears to "improve" the ranking — see **Sham Leg**.
+A flat tie is a missing derivation, not a close call.
+_Avoid_: draw, tie-break (a tie-break RESOLVES a tie; this names the tie itself)
+
+**Fractional Survival Clock**:
+`turns_to_ko_me` read as the interpolated crossing point rather than the first
+integer turn at which accumulated damage reaches HP. The precision is already
+computed inside the accumulate loop and discarded by the threshold; the fractional
+reading recovers it. Opt-in — the integer stays the default. ADR-TEMP-398.
+_Avoid_: continuous clock, precise clock
+
+**Sham Leg**:
+A deliberately MEANINGLESS term (`cid % 7`, `hp % 70`, a position index), scaled into
+the same magnitude band as the term under test, used as the null for an argmax probe.
+Distinct from a **null control** (an arm against itself, expect 0), which proves the
+comparison is stable but introduces no term and so cannot show that observed movement
+is attributable. Both are required. A movement number published without its sham
+baseline is not evidence. ADR-TEMP-398.
+_Avoid_: placebo, dummy, random control (a sham need not be random — `cid % 7` is
+deterministic and card-derived; what makes it a sham is having no causal claim)
+
 **Representative Build**:
 The recency-weighted most-common decklist of an Archetype — the baseline the Read
 predicts against (drives `expected_cards` and `evolution_paths`). The latest
