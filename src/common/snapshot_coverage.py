@@ -879,8 +879,8 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
                                       "a HEAL target — under-count, at both consumers",
     "restriction=arvens_pokemon": "1130 Arven's Sandwich. An owner family wearing the `restriction` "
                                   "key rather than `name_family`; same Issue #301 refusal. The card "
-                                  "carries a second, unrestricted `active_only` heal clause, so the "
-                                  "refusal costs the 30 branch nothing",
+                                  "carries a SECOND heal clause gated only on `active_only`, so the "
+                                  "refusal costs its 30 branch nothing",
     "source=opponent_attack": "1244 Full Metal Lab, 1247 Neutralization Zone. Names the OPPONENT's "
                               "attack as the material a modifier acts on; the damage readers branch "
                               "on the effect instead",

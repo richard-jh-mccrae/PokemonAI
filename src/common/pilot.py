@@ -2178,7 +2178,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._heal_target_tactical(obs, select, board, option)   # ctx 17 (Issue #409):
-                                                                     # the FOURTH target-select term
+                                                                       # the 4th target-select term
                     + self._gust_stall_target_tactical(obs, select, board, option)
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
@@ -3317,11 +3317,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if cand is None:
             return 0.0                                # unreadable target: 0.0, never a guess (R3)
         healed_hp, energy_total = cand
-        return (self._heal_survival_gain(obs, board, body, stat, cid, healed_hp,
-                                         is_active=is_active)
-                - self._heal_bounce_cost(obs, board, body, energy_total, is_active=is_active))
+        # `attach_units` is threaded rather than re-derived: the bounce leg needs the SAME manual
+        # attach the candidate was priced against, and a second `_best_hand_attach_units` call is a
+        # second chance to disagree with the first.
+        return (self._heal_survival_gain(obs, body, stat, cid, healed_hp, is_active=is_active)
+                - self._heal_bounce_cost(obs, body, energy_total, attach_units,
+                                         is_active=is_active))
 
-    def _heal_survival_gain(self, obs: dict, board: Board, body: dict, stat, cid,
+    def _heal_survival_gain(self, obs: dict, body: dict, stat, cid,
                             healed_hp: int, *, is_active: bool) -> float:
         """What healing ``body`` to ``healed_hp`` BUYS, in damage currency — the positive leg of
         `_heal_target_tactical`'s objective (Issue #409 R2).
@@ -3385,7 +3388,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         denied = min(max(0, int(healed_hp) - cur_hp), reach)
         return prize_to_damage(prizes) + float(denied)
 
-    def _heal_bounce_cost(self, obs: dict, board: Board, body: dict, energy_total: int, *,
+    def _heal_bounce_cost(self, obs: dict, body: dict, energy_total: int, attach_units: int, *,
                           is_active: bool) -> float:
         """What healing ``body`` FORFEITS this turn, in damage — the negative leg of
         `_heal_target_tactical`'s objective (Issue #409 R2): the attack the heal's Energy rider
@@ -3411,15 +3414,16 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         rider returns the cards to hand and the re-attach may bring back any of the bounced types,
         which is the same reading `_stabilize_then_ko_lines` states outright when it skips ``body``
         (*"a bounce rider re-attaches ANY bounced type — attached counts are stale here"*). Fail-open
-        on the after-read is the direction that under-states the cost."""
+        on the after-read is the direction that under-states the cost.
+
+        ``attach_units`` is threaded in by the caller rather than re-derived here, so both legs price
+        against the SAME manual attach `_heal_body_candidate` folded into ``energy_total`` — a second
+        `_best_hand_attach_units` call is a second chance to disagree with the first."""
         if not is_active:
             return 0.0                                # only the Active swings this turn
         opp = self._opp_active(obs)
         if not (opp and opp.get("hp")):
             return 0.0
-        attach_units = (0 if board.energy_attached
-                        else self._best_hand_attach_units(
-                            board.hand_ids, self.stats.get(body.get("id")) if self.stats else None))
         before = self._best_affordable_damage(
             body.get("id"), len(body.get("energies") or []) + attach_units, opp, body=body,
             extra_units=attach_units)
@@ -3813,7 +3817,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                 bound: str = "exact", context: dict | None = None) -> float:
         """The biggest damage a hypothetical attacker's AFFORDABLE attacks reach — the KO oracle's
         ``best_affordable_damage`` (Issue #409), the sub-lethal sibling of
-        :meth:`_best_affordable_ko_value`. Thin delegator, same shape as that one."""
+        :meth:`_best_affordable_ko_value`.
+
+        A PURE forward, unlike that sibling (which injects ``board.opp_bench``) — and that is the
+        house shape for reaching `CombatMath`, not an oversight: :meth:`_attack_cost`,
+        :meth:`predicted_damage` and :meth:`_attack_type_payable` are each exactly this, so the
+        Pilot's call sites speak one vocabulary and the oracle stays the single combat home."""
         return self.combat.best_affordable_damage(
             attacker_id, energy, defender, body=body, extra_type=extra_type,
             extra_units=extra_units, bound=bound, context=context)

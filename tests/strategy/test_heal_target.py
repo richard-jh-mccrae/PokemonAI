@@ -13,10 +13,13 @@ the bar. What stands in for it:
 
 * the four REAL multi-option ctx-17 boards in the committed parity corpus, used as **constructed
   fixtures** — their board states are genuine engine output, and their recorded ``choice`` is
-  discarded. Every one of those traces carries ``meta.policy = "chaos:seed=NNNN"``:
-  `tools/parity/capture_match.py` drives them with a randomised policy to exercise the engine, so
-  the picks are NOISE. Reading them as rulings would anchor this file to a coin flip, which is
-  exactly why the numbers asserted below are the term's own legs and not the trace's choice.
+  discarded. All four live in traces whose ``meta.policy`` reads ``chaos:seed=NNNN``
+  (`ms_mirror_1001`, `v2_ms_mirror_5000`, `v2_ms_mirror_5001`): `tools/parity/capture_match.py`
+  drives those with a randomised policy to exercise the engine, so the picks are NOISE. Reading them
+  as rulings would anchor this file to a coin flip, which is exactly why the numbers asserted below
+  are the term's own legs and not the trace's choice. (Stated of *these* traces rather than of the
+  corpus — the one Potion step is captured under a targeted `card-target:1117:seed=9760` policy
+  instead, and it is width-1/forced, so it poses no choice either way.)
 * unit assertions on each leg of the equation, including the fail-closed floor.
 
 The corpus census itself is asserted (`test_corpus_ctx17_census_is_what_the_equation_was_built_on`)
@@ -91,8 +94,8 @@ def _legs(pilot, frame: dict):
         cand = pilot._heal_body_candidate(cid, stat, is_active=is_active, cur_hp=body["hp"],
                                           attached=len(body["energies"]), attach_units=attach,
                                           max_hp=body["maxHp"])
-        gain = pilot._heal_survival_gain(obs, board, body, stat, cid, cand[0], is_active=is_active)
-        bounce = pilot._heal_bounce_cost(obs, board, body, cand[1], is_active=is_active)
+        gain = pilot._heal_survival_gain(obs, body, stat, cid, cand[0], is_active=is_active)
+        bounce = pilot._heal_bounce_cost(obs, body, cand[1], attach, is_active=is_active)
         out.append((is_active, pilot._heal_target_tactical(obs, sel, board, o), gain, bounce))
     return out, pilot.explain(obs).chosen
 
@@ -252,13 +255,15 @@ def test_a_bench_body_no_attack_can_reach_gains_nothing():
     yi = obs["current"]["yourIndex"]
     bench_body = obs["current"]["players"][yi]["bench"][0]
     stat = pilot.stats.get(bench_body["id"])
-    reachable = pilot._heal_survival_gain(obs, pilot._board(obs), bench_body, stat, WALLYS,
+    pilot._board(obs)                                          # prime the per-decision StateModel
+    reachable = pilot._heal_survival_gain(obs, bench_body, stat, WALLYS,
                                           bench_body["maxHp"], is_active=False)
     assert reachable > 0.0                                     # positive control: the 50 rider lands
 
     obs["current"]["players"][1 - yi]["active"] = [poke(STARYU, hp=70, max_hp=70, energy_card=3,
                                                         energy=1)]
-    unreachable = pilot._heal_survival_gain(obs, pilot._board(obs), bench_body, stat, WALLYS,
+    pilot._board(obs)
+    unreachable = pilot._heal_survival_gain(obs, bench_body, stat, WALLYS,
                                             bench_body["maxHp"], is_active=False)
     assert unreachable == 0.0                                  # Water Gun carries no bench rider
 
@@ -268,9 +273,9 @@ def test_a_benched_bounce_costs_nothing_because_only_the_active_swings():
     pilot = _pilot()
     obs, _ = _heal_obs(active=poke(M_STARMIE, hp=300, max_hp=330),
                        bench=[poke(M_STARMIE, hp=10, max_hp=330, energy_card=3, energy=3)])
-    board = pilot._board(obs)
+    pilot._board(obs)
     bench_body = obs["current"]["players"][0]["bench"][0]
-    assert pilot._heal_bounce_cost(obs, board, bench_body, 0, is_active=False) == 0.0
+    assert pilot._heal_bounce_cost(obs, bench_body, 0, 1, is_active=False) == 0.0
 
 
 def test_an_unreadable_restriction_contributes_exactly_zero_and_never_a_guess():
@@ -295,8 +300,8 @@ def test_an_unevaluable_condition_fails_closed_too():
     """R3 again, on the other gate. Bianca's Devotion is ``condition: remaining_hp_30_or_less``, and
     the condition qualifies the CHOSEN Pokémon (card text, `EN_Card_Data.csv`): *"Heal all damage
     from 1 of your Pokémon that has 30 HP or less remaining."* A body above 30 HP is refused; one at
-    or below it is priced. Reading the gate off the ACTIVE — which is what the pre-#409 reader did —
-    would answer for the wrong Pokémon whenever the target is benched."""
+    or below it is priced. Reading the gate off the ACTIVE — which is what the reader before Issue
+    #409 did — would answer for the wrong Pokémon whenever the target is benched."""
     pilot = _pilot()
     stat = pilot.stats.get(M_STARMIE)
     healthy = pilot._heal_body_candidate(BIANCA, stat, is_active=False, cur_hp=300, attached=0,
@@ -382,7 +387,7 @@ def test_only_wallys_is_in_any_shipped_deck_so_no_active_path_decision_can_move(
         with open(deck, encoding="utf-8-sig") as fh:
             ids = {int(v) for row in csv.DictReader(fh) for v in row.values()
                    if v and str(v).strip().isdigit()}
-        assert ids & healers in ({}, set(), {WALLYS}), f"{deck.parent.name}: {ids & healers}"
+        assert ids & healers in (set(), {WALLYS}), f"{deck.parent.name}: {ids & healers}"
 
 
 def test_the_legacy_clutch_heal_tag_path_stays_active_only():

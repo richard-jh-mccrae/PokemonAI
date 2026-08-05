@@ -32,7 +32,10 @@ equivalent for 17.
 
 The corpus (all 377 committed parity traces): **15** ctx-17 steps, **11** of them forced (menu width
 1) and **4** offering a real choice; Wally's Compassion ×14, Potion ×1; `minCount`/`maxCount` 1/1 on
-every one. Six of the fourteen `kind: heal` cards in the pool can pose a multi-target select.
+every one. Six of the **thirteen** cards carrying a `kind: heal` clause in `card_effects.json` can
+pose a multi-target select. *(Issue #409's body says "6 of the 14"; the store holds 13 — 1096, 1105,
+1112, 1117, 1130, 1147, 1153, 1190, 1212, 1222, 1229, 1241, 1242 — and the issue's own table lists
+13. The count is incidental to every ruling, but it is corrected here rather than carried forward.)*
 
 ## Decision
 
@@ -105,6 +108,15 @@ on"*). Each becomes the Active-spot reading of a body-generic core, so the two r
 
 `active_only` is the whole reason the restriction reader needed the flag: it is the one restriction
 whose answer depends on where the body stands, and the Active-only form had to hardcode it `True`.
+
+**This is a claim in Issue #409 that the build REFUTED, and it is recorded rather than quietly
+worked around** — the failure mode a self-filed spec exists to produce. The issue's reusable-symbols
+table rates `_heal_restriction_ok` *"**yes, body-generic already**"*. It is not: it answers `True`
+for `active_only` unconditionally, which is right for its own caller and **wrong for every benched
+candidate** — reused as-rated it would have offered a benched Cook / Lumiose Galette / Jumbo Ice
+Cream target. The same table omits `_condition_holds` entirely, which was equally Active-only and
+needed the same treatment. Two of the four generalisations in the table above were therefore
+unplanned.
 
 **Both `condition` gates are per-TARGET at the card text**, verified at source: 1190 Bianca's
 Devotion is *"Heal all damage from 1 of your Pokémon that has 30 HP or less remaining"* — the HP
