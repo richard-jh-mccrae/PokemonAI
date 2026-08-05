@@ -988,7 +988,7 @@ def coverage(kind: int) -> str:
 
 
 def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: bool | None = None,
-         clauses_cover: bool | None = None) -> str:
+         clauses_cover: bool | None = None, deferred_target: bool | None = None) -> str:
     """Which of §3b's three :data:`FATES` this **specific call** resolves to.
 
     ``depth``          — plies already applied. 0 is the live observation; ≥ 1 means the board is a
@@ -1002,6 +1002,10 @@ def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: boo
                          tri-state, from `CardEffects.clauses_cover(card_id)` over
                          `card_effects.json`'s `_covers` verdict (Issue #300): `True` full, `False`
                          partial, `None` unruled-or-absent.
+    ``deferred_target``— does this option defer its target to a follow-up select AND is expansion
+                         armed? `common.board_choice.has_deferred_target` joined with the caller's
+                         `deferred_target_expansion` flag (POC-T4/5, Issue #392). The caller does the
+                         join because the flag is deployment config and this module is pure.
 
     **The resolution order** (Issue #299, ADR-0098 Amendment C — see this module's header for the
     measurement behind it):
@@ -1029,6 +1033,16 @@ def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: boo
     5. A MODELLED kind stays MODELLED **unless ``clauses_cover is False``.** `False` is Issue #300's
        *partial* verdict and it now refuses, which is the entire reason that verdict was declared: a
        partial set used to price as a complete one and the uncovered leg differenced to exactly 0.
+    5b. ``deferred_target is True`` ⇒ **MODELLED**, as a CHOICE node (Issue #392). It sits after the
+       two MODELLED tests and before the engine ones on purpose. Placed EARLIER it would speak over
+       quarantine and over Issue #300's *partial* verdict, which are statements that the seam's model
+       of this option is wrong — no target enumeration can outrank those. Placed LATER it would be
+       unreachable for any deferred-target option whose kind is not already MODELLED, which is the
+       only population it adds: a `_RETREAT` is MODELLED at step 5 and reaches
+       :func:`apply_option`'s choice branch anyway, so what this step actually buys is that a future
+       deferred-target member does not have to be MODELLED-by-kind to be EXPANDED. The SHAPE, not the
+       fate, is what changes — :func:`apply_option` returns an `Expectation` where it would have
+       returned a `StateModel`, which is a return shape that function already declares.
     6. Otherwise the **engine route**, open to every declared non-terminal kind rather than to
        :data:`ENGINE_ROUTE_KINDS` alone: `depth == 0` **and** ``deterministic is True`` **and** a
        live ``search_api``.
@@ -1052,6 +1066,8 @@ def fate(option: Mapping, *, depth: int = 0, search_api=None, deterministic: boo
     if clauses_cover is True:
         return MODELLED
     if how == MODELLED and clauses_cover is not False:
+        return MODELLED
+    if deferred_target is True:
         return MODELLED
     if depth >= 1:
         return REFUSED
@@ -1109,7 +1125,8 @@ def require_model(result: object):
 
 
 def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
-                 deterministic: bool | None = None, clauses_cover: bool | None = None):
+                 deterministic: bool | None = None, clauses_cover: bool | None = None,
+                 expand_deferred_targets: bool = False):
     """The board after taking ``option``.
 
     Returns one of four shapes:
@@ -1146,7 +1163,20 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     **Quarantine** (ADR-0098 decision 4): when the parity lane finds a divergence for an option kind,
     that kind is marked unverified and refuses here, so the planner degrades to always-expand and the
     telemetry names the kind. A parity failure therefore DEGRADES the agent visibly rather than
-    silently mis-playing it."""
+    silently mis-playing it.
+
+    **``expand_deferred_targets`` opts into the CHOICE node** (POC-T4/5, Issue #392), and ships OFF —
+    `runtime.PROFILE["deferred_target_expansion"]` is False until Issue #385's composer arms it. A
+    parameter rather than a module-level read because this module is pure and the flag is deployment
+    config, and DEFAULT-OFF because the ADR-0098 parity lane and both ADR-0072 gates must keep seeing
+    the seam they saw at Issue #382: with it off, a `_RETREAT` still resolves through
+    `board_delta._retreat` to the allowance-only point transition the recorded native trace shows.
+
+    With it ON, an option whose target is deferred to a follow-up select returns an `Expectation` over
+    the boards that target can reach — and **never falls back** to the point transition on a refusal.
+    The fallback is the whole defect: a retreat's point delta is the allowance bit alone, which prices
+    at ~0.0 and reads at ordering time as *never explore this*. A `Refusal` is the honest answer,
+    because it is the always-expand path."""
     kind = transition_kind(option)
     if kind in quarantined_kinds():
         return refuse(option, f"option kind {kind} is quarantined by the parity lane",
@@ -1159,12 +1189,20 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
     if how == UNDECLARED:
         return refuse(option, f"option kind {kind} is not in the seam's coverage table",
                       scope=UNDECLARED_SCOPE)
+    # Is this a CHOICE node? Asked once, here, and threaded into `fate` so the two cannot disagree
+    # about the same option — the census mirrors `fate` while the composer calls this function, which
+    # is exactly the shape where a second answer would be invisible.
+    deferred = False
+    if expand_deferred_targets:
+        from common import board_choice
+        deferred = board_choice.has_deferred_target(
+            model, option, seat_index=int(getattr(model, "my_index", 0)))
     # The FATE is `fate`'s to decide — asked ONCE, never re-derived. A second copy of the resolution
     # order here is the drift ADR-0087 charges for one store over, and it would be invisible: the
     # census mirrors `fate` while the composer calls this, so a disagreement would price the same
     # option two ways with nothing to say so. What this function adds is only the SCOPE.
     resolved = fate(option, depth=depth, search_api=search_api, deterministic=deterministic,
-                    clauses_cover=clauses_cover)
+                    clauses_cover=clauses_cover, deferred_target=deferred or None)
     if resolved == REFUSED:
         # Quarantine, TERMINAL and UNDECLARED already returned above, so a refusal here is an ENGINE
         # precondition — and exactly which one is the work owed. Each gets its OWN scope, because the
@@ -1198,7 +1236,30 @@ def apply_option(model, option: Mapping, *, depth: int = 0, search_api=None,
                 "the engine raised",
                 scope=NO_ENGINE_SCOPE)
         return EngineResolved(model=after, kind=kind, clause_gap=_clause_gap(model, option))
+    if deferred:
+        return _choice(model, option)
     return _modelled(model, option)
+
+
+def _choice(model, option: Mapping):
+    """The CHOICE node: an `Expectation` over the boards this option's deferred target can reach.
+
+    `common.board_choice` owns the arithmetic, exactly as `common.board_delta` does for
+    :func:`_modelled` — so this function contributes no card or rule knowledge of its own and
+    `tools/train/choice_parity.py` has exactly one thing to diff.
+
+    A refusal is returned as a `Refusal` at :data:`OPTION_SCOPE` and **never as the point transition**:
+    the fate has already ruled this option a choice node, and quietly answering with the board the
+    engine's own step produced would hand the composer the ~0.0 allowance-only delta this node exists
+    to replace — an option with no value, where what we have is an option with no estimate."""
+    # Imported inside the body for :func:`_modelled`'s own reason — `board_delta` and `board_choice`
+    # both import the contract shapes from here, so a module-level import would be a cycle.
+    from common import board_choice
+    from common.board_delta import Unmodellable
+    try:
+        return board_choice.deferred_target(model, option)
+    except Unmodellable as gap:
+        return refuse(option, str(gap))
 
 
 def _modelled(model, option: Mapping):

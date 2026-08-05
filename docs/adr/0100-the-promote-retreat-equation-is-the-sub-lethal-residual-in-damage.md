@@ -431,3 +431,81 @@ Gates re-run at the derived rate: Decision Gate PASS ×3 (promote/retreat 15 FIX
 attach 22 FIX / 0 REGRESSION, evolve 4 FIX / 0 REGRESSION), Discrimination Gate **PASS with zero
 unruled** — the `OK → MISS` the fuel fix alone had opened is gone, `leaf_correct` 191 → 192,
 `leaf_correct_strict` 35 → 36, average top-tie unchanged.
+
+## Amendment (2026-08-05, Issue #392): two of this ADR's rulings are DEMOTED to prefilter roles
+
+Ruled by ADR-TEMP-392's grill (decisions 5 and 6) and recorded **here** rather than only there,
+because both change what a part of *this* equation is FOR, and a ruling that moves house without
+leaving a forwarding address is how one dies quietly. Neither is a bug fix; neither changes an
+arithmetic result at this commit.
+
+### 1. `RetreatSide.build_after` stops being the ANSWER to *which Energy goes* and becomes its RANKER
+
+§8 prices `retreat_cost(A)` as the Build Standing the discard destroys, and resolves *which* Energy is
+discarded by **the greedy cheapest-to-lose typed choice** — the set that maximises `build_after`.
+`docs/rulebook.txt` L142 is what makes that a choice at all: *"you must discard 1 Energy from your
+Active Pokémon for each [C] listed in its Retreat Cost"*, with **no type restriction**, so the set is
+genuinely ours to pick, and the engine poses it as a `_DISCARD_ENERGY` select (context 30).
+
+That criterion asks which Energy hurts **A's own** line payoff attack least. It was chosen when A's
+future was not being searched, and it is blind to which type another line is starving for and to what
+A must pay when it returns. Under the sequence composer that future IS searched, so the greedy set
+becomes the **ranker** for that dimension: `common.board_choice` enumerates the legal payments,
+orders them by the same Build Standing, and lets `state_value` decide among the survivors. Expansion
+still leads with the greedy set — it ranks first by construction — and simply does not stop there.
+
+**A corpus-ruled decision is being demoted on a design argument, which is exactly how rulings die
+quietly.** Hence this amendment. The arithmetic in `promote_retreat_value.py` is unchanged, and
+`Pilot._retreat_cost_legs` still computes the greedy set for the whether-site's cost leg; what moved
+is the claim that the greedy set is the *answer*.
+
+### 2. The three call sites collapse to ONE evaluator, at a different layer than §9 describes
+
+§9 rules *"one evaluator, three call sites"* — whether-to-retreat at MAIN carrying the A-side terms,
+the body PICK at a SWITCH/TO_ACTIVE select without them, and the forced promote. Under the composer
+the follow-up select **REPLANS** through the identical Target Ranker + `state_value` machinery over
+the real board, so the three sites become one evaluator one layer up.
+
+**The honest reason, because the obvious one is false.** For a retreat, *nothing* changes between
+choosing to retreat and being asked whom to promote: the discard touches only A, every
+`promote_value(B)` term reads B — which is §9's own *"CONSTANT across destinations"* read from the
+other side — nothing is revealed by discarding one's own attached Energy, and the opponent cannot act
+during our turn. A commitment would provably agree. The argument is that **Crispin (1198) already
+breaks commitment today**: *"Search your deck for up to 2 Basic Energy cards of different types,
+**reveal them**"* is an information-revealing play, and Issue #263 § *Commutative-block collapse*
+names a revealing play a block boundary. Census over the deferred-target class: retreat, Boss's
+Orders, Wally's Compassion and Rosa's Encouragement reveal nothing (Rosa's attaches from the public
+discard); Crispin reveals. Commitment therefore makes coherence a **standing per-member proof
+obligation** over a vocabulary that will grow, whose failure mode is a legal, plausible, wrong pick
+with no error anywhere. Replanning makes it **structural**.
+
+§9's invariant is preserved verbatim — *"that the two sites run the same evaluator is what makes the
+old divergence — retreat BECAUSE Cinderace is worth promoting, then promote Budew — structurally
+impossible"* — and is now **checkable rather than asserted**: `tools/train/choice_parity.py` proves
+the MAIN-site synthesized board equals the select-site real board over the corpus's retreat steps, and
+one evaluator over two boards a lane proves equal cannot disagree. Divergence becomes a CI condition.
+
+### What this amendment does NOT do
+
+`promote_value(PromoteRetreatInputs(body=B, retreat=None))` is reused as the our-side **promotion
+ranker**, and `common.board_choice._promote_body` fills only the terms a `StateModel` supplies —
+`reach`, `prizes`, `ko_active`, `opp_prizes_remaining` — leaving `wall_progress`, `accel_units`,
+`closure`, `tempo_step`, `denies_items` and `takes_ko` at their defaults, because those are Board and
+objectives derivations the Pilot owns. That is a **prefilter**, the role Issue #263 § *Consequence*
+sanctions for the retiring deciders (*"optionally as pruning approximations"*), and it is not a claim
+that the equation has been reimplemented in `src/common/board_choice.py`. `preservation(A)` and
+`retreat_cost(A)` are omitted from that ranker for §9's own reason: constant across destinations, so
+they could change no ordering.
+
+### Measured while building, and NOT fixed here
+
+`Pilot._effective_retreat_cost` — extracted to `common.retreat_cost` in this issue so the choice node
+and the Pilot cannot disagree about a body's Retreat Cost — misses a **fourth** free-retreat grant
+shape. **Ethan's Magcargo (356)**, Ability *Melt Away*: *"If this Pokémon has no Energy attached, it
+has no Retreat Cost"* (printed text, `data/EN_Card_Data.csv`). Nothing parses a self-Ability
+conditional on the body's own attachment count, so `CardStat.retreatFreeGrant` is `None` and §8
+charges the printed **3** — over-stating a Magcargo pivot by the full convex build delta. Found by
+`tools/train/choice_parity.py`, at 2 corpus steps where the engine resolved a retreat that cost 0 from
+a body carrying none. Closing it needs a `scouting/card_text.py` parse and a new `CardStat` field,
+which moves what the affordability gate believes on any board holding a bare Magcargo — a
+decision-moving change this issue holds no ruling for, so it is recorded rather than smuggled in.

@@ -15,6 +15,8 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
+from common import retreat_cost                # ADR-0100 §8's grant-aware cost, shared with
+                                              # `board_choice`'s Energy-discard target space
 from common.board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
@@ -1275,7 +1277,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False):
+                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False,
+                 deferred_target_expansion=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1431,6 +1434,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # OFF = byte-identical to the pre-#247 rung.
         self.copy_top_value = copy_top_value            # Issue #289: Slowking's Seek Inspiration is valued
                                                         # only from a self-verified known top card.
+        self.deferred_target_expansion = deferred_target_expansion   # ADR-TEMP-392 (Issue #392),
+                                                        # armed-OFF: the apply seam returns a
+                                                        # `common.board_choice` CHOICE node — the
+                                                        # boards a Deferred-Target Option's target can
+                                                        # reach — instead of the point transition
+                                                        # whose 1-ply delta is a retreat's allowance
+                                                        # bit alone. Read by the composer (Issue
+                                                        # #385), which is what arms it; nothing on
+                                                        # this Pilot consumes it yet, so OFF is
+                                                        # byte-identical and ON changes no decision
+                                                        # until that consumer exists.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -2889,72 +2903,35 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         reduction cost 8 points; under the convex build delta, over-charging one Energy on a 3-slot
         attacker is `(3/3)^2 - (2/3)^2 = 5/9 x maxDamage` ~ **117 damage of phantom cost**, and it
         would be systematic on an archetype built around free-retreat pivoting."""
-        if not ma or not self.stats:
-            return 0
-        stat = self.stats.get(ma.get("id"))
-        if stat is None:
-            return 0
-        hp = ma.get("hp") or 0
-        for tstat in self._attached_tool_stats(ma):
-            free_at = getattr(tstat, "retreatFreeAtHp", 0)
-            if free_at and hp and hp <= free_at:
-                return 0                                  # Rescue Board on a damaged holder
-        cost = getattr(stat, "retreatCost", 0) - self._attached_retreat_delta(ma)
-        if cost > 0 and self._retreat_free_granted(obs, ma, stat):
-            return 0
-        return max(0, cost)
+        return retreat_cost.effective_retreat_cost(
+            ma, stat_of=self._stat_of, my_bodies=self._my_in_play_raws(obs), combat=self.combat)
+
+    def _stat_of(self, card_id):
+        """This card's ``CardStat``, or None — the provider read as a CALLABLE, which is the shape
+        `common.retreat_cost` takes so a `StateModel` (whose accessor is `card_stat()`, not a
+        mapping) can supply the same card knowledge the Pilot does."""
+        return self.stats.get(card_id) if self.stats else None
+
+    def _my_in_play_raws(self, obs: dict) -> list:
+        """Every in-play body on MY side, Active first — the board scope a BOARD-LEVEL grant reads."""
+        me = self._my_player(obs) or {}
+        return [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
 
     def _attached_tool_stats(self, body: dict | None):
-        """The ``CardStat`` of every Tool attached to ``body`` — the one place the engine's
-        ``tools`` list (ids or id-carrying dicts, both shapes appear) is resolved. Unknown ids are
-        skipped, so a caller only ever sees Tools it can actually read."""
-        if not body or not self.stats:
-            return
-        for tool in (body.get("tools") or []):
-            tid = tool.get("id") if isinstance(tool, dict) else tool
-            tstat = self.stats.get(tid) if tid is not None else None
-            if tstat is not None:
-                yield tstat
+        """The ``CardStat`` of every Tool attached to ``body`` (`common.retreat_cost`)."""
+        return retreat_cost.attached_tool_stats(body, self._stat_of)
 
     def _attached_retreat_delta(self, body: dict | None) -> int:
-        """Σ ``retreatReduction`` over the Tools attached to ``body`` — the amount to SUBTRACT from a
-        printed Retreat Cost.
-
-        SIGNED, and extracted precisely because it is (Issue #306): Gravity Gemstone parses to −1,
-        so the sum can be negative and a retreat can cost MORE than printed. The four call sites that
-        needed this arithmetic each open-coded the loop, which is how one of them
-        (``_retreat_shortfall``) came to omit it entirely — survivable while every Tool was a
-        discount, unsound the moment one is a surcharge, because that site sizes a KO_SCORE-class
-        claim."""
-        return sum(getattr(t, "retreatReduction", 0) for t in self._attached_tool_stats(body))
+        """Σ ``retreatReduction`` over the Tools attached to ``body`` — the SIGNED amount to SUBTRACT
+        from a printed Retreat Cost (`common.retreat_cost`, Issue #306)."""
+        return retreat_cost.attached_retreat_delta(body, self._stat_of)
 
     def _retreat_free_granted(self, obs: dict, ma: dict, stat) -> bool:
-        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0100 §8)?
-
-        The predicate travels WITH the grant (`CardStat.retreatFreeGrant`), so adding a card adds a
-        parse and a predicate rather than a call-site special case. Unknown predicate → False, which
-        is the fail-closed direction: we charge the printed cost.
-
-        ⚠️ This could not fire at all until Issue #408: `CardStat.stage` was declared and never
-        written, so the `"basic"` predicate below compared against None for every card in the pool.
-        It was dead for TWO independent reasons — that, and the fact that the only deck carrying the
-        grantor (`slowking`, 2× Latias ex) has no `strategy.py` and so is never built as a Pilot.
-        Issue #408 removed the first; the second is Issue #149's to close, and until it does this stays latent
-        rather than live. Worth stating plainly because the grant was modelled, covered by tests, and
-        reachable by neither route — the tests declared `stage` themselves."""
-        me = self._my_player(obs) or {}
-        bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
-        for body in bodies:
-            gstat = self.stats.get(body.get("id")) if body.get("id") is not None else None
-            grant = getattr(gstat, "retreatFreeGrant", None) if gstat is not None else None
-            # `stage` is the canonical "basic"/"stage1"/"stage2" (`provider.stage_from_card`), so the
-            # `.lower()` is redundant against a real provider — kept because the field crosses a
-            # provider boundary and a cheap coercion beats a silent miss on an injected row.
-            if grant == "basic" and (getattr(stat, "stage", None) or "").lower() == "basic":
-                return True
-            if grant == "metal_attached" and self._attached_type_counts(ma).get(_METAL):
-                return True
-        return False
+        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0100 §8,
+        `common.retreat_cost`)?"""
+        return retreat_cost.retreat_free_granted(
+            ma, stat, my_bodies=self._my_in_play_raws(obs), stat_of=self._stat_of,
+            combat=self.combat)
 
     def _valued_attack_types(self, cid) -> tuple:
         """The TYPED cost (per-slot EnergyType codes; 0 = colourless) of a card's biggest-damage attack

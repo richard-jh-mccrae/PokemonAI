@@ -147,6 +147,15 @@ EXPECTED_SHIPPED = {
                                     # 5 made a precondition, because gate 1 proved SIGN only and the
                                     # promotion gate inflates the rung's MAGNITUDE where it opens
                                     # (f79 55->95, f26 16.25->95, f24 17.5->100)
+    "deferred_target_expansion": False,  # ADR-TEMP-392 (Issue #392) armed-OFF: the CHOICE node
+                                    # (`common.board_choice`). ON, the apply seam returns an
+                                    # Expectation over the boards a Deferred-Target Option's target
+                                    # can reach instead of the point transition. Its consumer — the
+                                    # composer that takes the `max` over those classes — is Issue
+                                    # #385 and does not exist yet, so ON would change only what the
+                                    # ADR-0098 parity lane and both ADR-0072 gates see. Same
+                                    # contract, and the same reason, as `board_expectation` shipping
+                                    # inert at Issue #383.
 }
 
 

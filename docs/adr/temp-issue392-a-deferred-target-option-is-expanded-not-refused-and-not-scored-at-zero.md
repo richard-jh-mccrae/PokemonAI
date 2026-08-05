@@ -173,3 +173,84 @@ becomes a CI condition instead of a runtime surprise.
 - **Citation correction.** Issue #392 and Issue #263 both cite `promote_retreat_value` as *ADR-0073*.
   ADR-0073 is `fetch-reach-and-fetch-deadness-are-opposite-readings-of-one-clause`. The correct
   reference throughout is **ADR-0100**.
+
+## Build record (2026-08-05) — what the implementation measured, and what it changed about the ruling
+
+The seven decisions above shipped as written. Five things the grill could not know were measured
+during the build, and each is recorded here because each is a fact about the decision rather than a
+detail of the code.
+
+### 1. The near-zero is EXACTLY zero
+
+Decision 1 rests on a retreat's 1-ply delta being *"a near-zero against a leaf that scores the
+board"*. Measured through built, engine-backed Pilots on Issue #263's own two acceptance frames
+(`tools/train/probes/choice_beam.py`), it is **exactly 0.0** on both — `board_delta._retreat` writes
+`allowance_retreat_used` alone, and no `state_value` family reads the retreat allowance. Expanded, the
+same option scores the max over its classes: **f32 +0.00075 prizes over 2 classes**, **f35 +0.00186
+over 4**. The defect is therefore sharper than stated, not softer.
+
+### 2. The class identity needs TWO collapses, because `option_fingerprint` provably cannot do one
+
+Decision 1 said the classes are collapsed by ADR-0091's fingerprint on the post-choice observation.
+That is right for the promotion dimension and **impossible for the Energy-discard one**:
+`option_fingerprint` compares a body's card lists by value *including their order*, so discarding
+entries 0 and 1 versus 0 and 6 of eight attached Energy leaves the same multiset in a different order
+and fingerprints differently. Measured at `boomer_9001` f39 (Mega Zygarde ex, eight Energy, Retreat
+Cost 2). No canonical removal repairs it either — the engine's own pick among identical cards is
+arbitrary and lands in that same order, so a canonicalised synthesis would disagree with the recorded
+board.
+
+So the two collapses coexist and answer different questions: the space collapses **identical Energy
+CARD ids** (*is this the same CHOICE?*, in the option's coordinates) and the fingerprint collapses
+**identical post-choice boards** (*is this the same BOARD?*, ADR-0091's declared identity, which is
+what makes two indistinguishable benched Riolu one class). Neither subsumes the other.
+
+### 3. The probability denominator is the FULL enumeration
+
+Decision 1's phrasing (*"every `OutcomeClass.probability` is `1/len(classes)`"*) is ambiguous between
+the kept classes and the enumerated ones, and only one reading satisfies the stated purpose. It is the
+**full** enumeration: normalising over the survivors would make `total_probability` read 1.0 while
+classes were being dropped, which is the "no silent caps" failure the same sentence forbids.
+
+### 4. Decision 7's lane is green, and its two refusal families are INHERITED
+
+**377 traces / 37 983 frames / 2254 choice steps: 2200 verified, 0 diverged, 0 unenumerated**, 14
+refused, 40 unsettled (no same-orientation MAIN frame follows — 17 traces end mid-resolution, 23 pass
+the turn there). The 14 refusals are 12 untagged Special Energy (`board_delta.units_for_cards` cannot
+derive their provision — the shared primitive's own fail-closed refusal) and 2 Ethan's Magcargo, whose
+*"If this Pokémon has no Energy attached, it has no Retreat Cost"* is a **fourth free-retreat grant
+shape nothing parses** (recorded as an ADR-0100 amendment note; `Pilot._effective_retreat_cost` has the
+same gap and over-charges the pivot).
+
+One comparison is relaxed and counted: `my_discard_contents` as a multiset. The engine appends
+simultaneously-discarded Energy in the order the ctx-30 selects were **answered**, which is a property
+of the policy that recorded the trace rather than of the rules — `docs/rulebook.txt` L142 assigns
+none, and every committed trace is our own self-play, so inferring it would be fitting to ourselves.
+Measured: **10 of 2254**, all in that zone, all identical multisets, every one a transposed pair.
+
+### 5. The margin-telemetry half of the f32/f35 criterion is NOT discharged, and why
+
+The criterion asks for rank at 1-ply ordering relative to `k` **and** score margin to the k-th
+candidate. The rank half is **1 on both frames**. The margin half is undefined: at `k=3` there are
+fewer than three *scored* candidates on either menu, because the apply seam refuses most of the rest
+(f32: 1 scored / 3 refused / 1 terminal; f35: 2 scored / 2 refused / 1 terminal). A refusal is not a
+pruned option — `must_expand` makes it the always-expand path — so this is a fact about apply-seam
+COVERAGE at this commit, not a defect in the ordering, and the margin becomes computable when the seam
+covers more of a Trainer-heavy menu rather than when Issue #385's composer lands. Pinned as a test
+(`tests/train/test_choice_beam.py`) so a commit that widens coverage turns it red instead of leaving a
+stale claim in prose.
+
+### Groundwork this build incurred, flagged rather than hidden
+
+* **`common.retreat_cost` (new)** — ADR-0100 §8's grant-aware cost extracted from `Pilot`, because the
+  size of a retreat's Energy-discard space *is* that number and a choice node computing it for itself
+  would be a second reader of a fact ADR-0070 already drew the *"one function owns the fact"* lesson
+  for. The Pilot's three methods are one-line delegations; the arithmetic is unchanged. It does **not**
+  discharge the `_can_retreat` / `planner` divergence Issue #149 owns.
+* **`board_delta.clear_conditions` / `units_for_cards` promoted to public** — the same POC-T4/2 move
+  that made `fork` / `fork_player` / `take_from_hand` / `card_clauses` public, for the same reason.
+* **`matchup_plan.role_registry()` (new, public)** — so decision 3's `ROLE_SPAN` is DERIVED from the
+  sheet rather than transcribed. Issue #395 D3/D4 is in flight to change that sheet.
+* **`.github/filters.yml`** — the apply-seam sources now trigger `tests/parity`. This closed a real
+  gap rather than widening the filter: neither seam-parity lane was reachable from a source change on
+  a PR, so `board_delta.py` could be rewritten without replaying a trace.
