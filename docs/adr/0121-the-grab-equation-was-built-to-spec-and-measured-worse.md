@@ -36,21 +36,23 @@ dimensionless ratio through `DEPLOY_BAND`, folded into `_option_trace`'s `tactic
 deleted; `fetch-deck-priority` demoted to an `_order_key` ordering leg.
 
 Replayed over the issue's own validation base — the 30 ruled ctx-7 correction frames that name a
-`correct` option — with a **fresh Pilot per frame** (an earlier pass mutated the shared
-`GENERAL_STRATEGY` singleton and returned 20/30 for all four arms; that number is void):
+`correct` option. **The two numbers that matter come from `tools/train/grab_sweep.py` run against
+real trees, not from a patched Pilot:**
 
-|   | configuration | agrees with the human |
+| tree | configuration | agrees with the human |
 |---|---|---:|
-| A | incumbent — 23 rungs, no equation | **23 / 30** |
-| B | both — rungs + equation | 19 / 30 |
-| C | **the spec** — rungs deleted, equation on | **17 / 30** |
-| D | neither | 15 / 30 |
-| E | rungs + equation at band → 0 (ordering-only) | 23 / 30 |
-| F | rungs deleted, equation at 4× band | 14 / 30 |
+| `8dbde0fe` (shipped) | incumbent — 23 rungs, no equation | **25 / 30** |
+| `bd9187d7` (the build) | **the spec** — rungs deleted, equation on | **17 / 30** |
 
-*Positive control:* the four arms are distinguishable, which is what says the levers are live. Row F
-is the one that settles it — at four times the band the equation scores **below doing nothing at
-all**, so its ranking is not merely incomplete, it is actively wrong on frames the ladder gets right.
+**Eight frames worse.** A supporting four-way sweep with a fresh Pilot per frame placed the other
+arms — both (19), neither (15), ordering-only band → 0 (23), and rungs deleted at 4× band (**14 —
+below doing nothing at all**, which is what says the ranking is actively wrong rather than merely
+incomplete). Its ORDERING is sound and its positive control passed (the arms are distinguishable),
+but two of its absolute values are not quotable, for a reason that is itself a finding — see
+Decision 3. The clean pair above supersedes them.
+
+Read against the clean incumbent: the rung ladder is worth **ten frames** over an empty seam
+(15 → 25); the equation is worth **two** (15 → 17).
 
 Two defects of the build's own were found and fixed before this table was taken, both from rulings
 already in the code, and neither was the problem (they moved the corpus 14 → 17):
@@ -187,7 +189,65 @@ Each is still computed every decision. An unconsumed board signal is an unbuilt 
 them is the same finding as F1–F5 counted a different way: **these are the facts the rungs were
 reading and the assignment does not model.**
 
-## Decision 3 — the cost facts, recorded because they are true regardless (AC 8 and 9)
+## Decision 3 — the ladder is NOT abstaining, and that reframes what is left to fix
+
+The issue's framing is that 23 rungs *"decide the grab by hand"* with *"no equation"*, and the
+implied consequence — the one that makes it urgent — is `_deploy_decision`'s recorded failure mode:
+*"every option on that select tied and the pick fell to menu position."* **Measured, that is not
+happening at ctx 7.**
+
+A first count said it was: 19 of 31 frames share their top score, over a mean 3.42 distinct scores
+across 8.9 options — a ladder that looks hopelessly coarse. That count is **vacuous**, and ADR-0091
+says exactly why: *options a board cannot tell apart are ONE decision.* Re-counted by DISTINCT CARD
+CLASS at the top:
+
+| | ctx-7 frames |
+|---|---:|
+| ladder produced a sole top option | 12 |
+| tied, but every tied option is the SAME card (ADR-0091: one decision, any pick correct) | 17 |
+| **tied between DISTINCT cards — the ladder genuinely abstained** | **2** |
+
+Seventeen of the nineteen "ties" are duplicate copies of one Energy or one Basic. The ladder
+abstains on **two frames in thirty-one**, not nineteen.
+
+And the two abstentions are already named above:
+
+* `85046350-18` — Basic {P} vs Basic {R} Energy, tied at 38.0. That is **F3**.
+* `86091435-69` — Dragapult ex / Dudunsparce / Fezandipiti ex / Munkidori, all at 0.0 on a full
+  Bench. That is **F2**.
+
+So the honest target is not thirteen frames and not an equation. The incumbent misses **five**
+frames, and they are a short list with short causes:
+
+| frame | wanted | ladder took | cause |
+|---|---|---|---|
+| `86091435-69` | Dudunsparce | Fezandipiti ex | **F2** — full Bench; all four tie at 0.0 |
+| `86091728-47` | Night Stretcher | Ultra Ball | **F4** — the recycle line (Drakloak → evolve → ability) is a chain the ladder prices at 0 |
+| `83661652-31` | Mega Lucario ex | Riolu | **F1** — a base is preferred over the payoff its line already has bases for |
+| `84889011-7` | Riolu | Makuhita | **F1** — two line bases tie; nothing ranks which line needs one |
+| `86088989-29` | Lillie's Determination | Team Rocket's Petrel | **F4/F5** — `grab-the-chain-opener` (+15) out-scores `grab-a-draw-supporter-in-setup` (+10) |
+
+**Every one is a missing FACT, not a missing marginal.** That is the re-grill's actual agenda, and
+it is far smaller than either the issue or the first draft of this ADR implied.
+
+### Two defects in the build's own instrumentation, recorded so the successor does not repeat them
+
+**The kill-switch did not switch everything off.** `grab_value=False` gated `_grab_decision` but NOT
+the `_grab_value_of` rewrite (R7), which is reached through `_context` → `card_chain_value` and the
+refresh's probable-miss on every decision regardless. So every measurement arm that KEPT the rungs
+was scored with the new oracle feeding `grab-the-chain-opener` and `demote-the-costly-chain-opener`,
+which is why the patched "incumbent" read 23/30 where the shipped tree reads 25/30 — the two frames
+of difference are `86091728-47` and `86088989-29`, both chain-rung frames. This is the shape
+`runtime.PROFILE` exists to prevent (the 2026-07-03 dark-planner incident): **a shared-oracle swap
+is not covered by the flag on its consumer, and needs its own.**
+
+**R10's ordering leg is structurally inert on every deck we ship.** `fetch-deck-priority` was demoted
+to an `_order_key` leg reading `Board.top_fetch_priority_id`, which resolves from
+`Strategy.fetch_priority` — measured `[]` for `mega_starmie`, `mega_lucario` and `dragapult_ex`
+alike. So the demotion could neither help nor hurt, and no corpus measurement could ever have graded
+it. A successor should either populate the list or drop the leg, not ship it unmeasurable.
+
+## Decision 4 — the cost facts, recorded because they are true regardless (AC 8 and 9)
 
 Censused over the ctx-7 corpus at the resolver, n = 1177 candidate resolves:
 
@@ -208,7 +268,7 @@ Two things follow, neither of which needed the equation to be true:
 
 ## Consequences
 
-* **Nothing ships.** No behaviour changed; the incumbent 23-rung ladder stands at 23/30.
+* **Nothing ships.** No behaviour changed; the incumbent 23-rung ladder stands at **25/30**.
 * **The build is in history, not in the tree** (`bd9187d7`), on ADR-0093's discipline and Issue
   #386's precedent: a refuted design is evidence, and deleting it makes the successor re-derive it.
 * **`tools/train/grab_sweep.py` is retained**, degraded to score + fired-rung output so it runs
@@ -219,8 +279,31 @@ Two things follow, neither of which needed the equation to be true:
   Deploy Marginal the grab was built to mirror — has exactly **one** ruled corpus frame. The mirror
   was drawn from a seam validated on a single ruling, onto a seam with thirty. That asymmetry is the
   best short explanation of why the analogy held in argument and failed in measurement.
-* **The successor's bar**: F1–F5 are prerequisites, not follow-ups. Each is a change to `needs.py`'s
-  MODEL (a per-copy line need, a capacity reading, typed fund slots plus an ability-fuel kind, a
-  per-(row, slot) factor) and each therefore perturbs the DISCARD decider and the REFRESH shed as
-  well, since all three share `_resolve_needs`. Both main-watchdog gates must be re-measured for any
-  of them. That is a larger job than Issue #406 scopes, and it should be grilled before it is built.
+
+### What the successor should actually do — and what it should NOT
+
+Decision 3 is the load-bearing one, and it inverts the shape of the work. The grab does not need an
+equation, because the ladder is not abstaining: it decides 29 of 31 frames and misses 5. The
+successor's job is **five frames and four facts**, in this order:
+
+1. **F2 — bench capacity reaches the grab.** The narrowest and the highest-value: it is the sole
+   cause of one of the two genuine abstentions, and it wants no new slot kind. A Basic whose only
+   route to the board is a Bench slot that does not exist should read through the existing `deploy`
+   gate (`_deploy_odds` already owns exactly this class of question), not through `capacity`.
+2. **F3 — typed `fund_attack` slots plus an `ability_fuel` kind.** The other genuine abstention.
+   `state_model` is already fully typed and `fuel_slot` already filters by colour, so this is
+   removing an inconsistency rather than adding a model.
+3. **F1 — a line needs a base per un-based PAYOFF copy**, not one per class. Two of the five misses.
+4. **F4 — the tutor chain.** Two of the five misses, and the only one that needs a genuine model
+   extension (a per-(row, slot) factor). It is also the one whose knowledge already exists in code
+   (`_chain_grab_value`), so the cheaper first move may be to RANK with it rather than price with
+   it — `_order_key`'s ordering-leg shape, which by construction cannot dominate a working score.
+
+**Each of 1–3 changes `needs.py`'s model, so each also perturbs the DISCARD decider and the REFRESH
+shed through the shared `_resolve_needs`.** Both main-watchdog gates must be re-measured for any of
+them, and `grab_sweep.py` run alongside. Take them ONE at a time with a measurement between; the
+failure recorded here is what happens when four model gaps are closed at once by a single new term.
+
+**Do not** re-attempt the retirement as a bundle. The 23 rungs are worth ten frames over an empty
+seam and the assignment is worth two; any rung retired must be retired against the specific fact
+that replaced it, measured at ctx 7, one at a time.
