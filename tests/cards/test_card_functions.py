@@ -6,7 +6,7 @@ Lib-free: feeds synthetic card / probe dicts (the probe shape mirrors cg/api.py 
 import pytest
 
 from meta_tracker.card_functions import (
-    accumulate_tables, build_function_table, classify_functions)
+    DERIVED_TAGS, accumulate_tables, build_function_table, classify_functions)
 
 
 @pytest.mark.req("REQ-FUNC-0001")
@@ -193,3 +193,40 @@ def test_accumulate_never_removes_a_once_observed_tag():
 @pytest.mark.req("REQ-FUNC-0011")
 def test_accumulate_from_empty_prior_is_identity():
     assert accumulate_tables({1: ["draw"]}, {}) == {1: ["draw"]}
+
+
+@pytest.mark.req("REQ-FUNC-0002")
+def test_DERIVED_TAGS_is_exactly_what_the_classifier_can_emit():
+    """`DERIVED_TAGS` is a CLAIM about this module, and `card_tags.unsourced_tag_instances` trusts
+    it to decide whether a shipped tag survives a `--fresh` rebuild (Issue #395 D6.1). A stale claim
+    fails in the direction that HIDES data loss — a tag wrongly listed here reads as re-derivable and
+    the audit stays green while the rebuild deletes it. So both directions are asserted.
+
+    The probe records below are one per classify rule, in the shape the harness captures
+    (`cg/api.py` `Log` / `SelectContext` codes, mirrored locally by the module under test)."""
+    records = [
+        {"actor": 0, "logs": [{"type": 4, "playerIndex": 0}]},                       # draw
+        {"actor": 0, "logs": [{"type": 6, "playerIndex": 0, "fromArea": 1, "toArea": 2}]},   # search
+        {"actor": 0, "logs": [{"type": 6, "playerIndex": 0, "fromArea": 1, "toArea": 12}]},  # dig
+        {"actor": 0, "logs": [{"type": 6, "playerIndex": 0, "fromArea": 3, "toArea": 2}]},   # recycle
+        {"actor": 0, "logs": [{"type": 8, "playerIndex": 0}]},                       # switch
+        {"actor": 0, "logs": [{"type": 8, "playerIndex": 1}]},                       # gust
+        {"actor": 0, "logs": [{"type": 11, "playerIndex": 0}]},                      # energy_accel
+        {"actor": 0, "logs": [{"type": 16, "playerIndex": 0, "value": 30}]},         # heal
+        {"actor": 0, "logs": [{"type": 6, "playerIndex": 1, "fromArea": 2, "toArea": 1}]},   # hand_disruption
+        {"actor": 0, "logs": [{"type": 6, "playerIndex": 1, "fromArea": 8, "toArea": 3}]},   # energy_denial
+        {"actor": 0, "logs": [], "contexts": [14]},                                  # spread
+    ] + [{"actor": 0, "logs": [{"type": t, "playerIndex": 0}]}                       # the 5 conditions
+         for t in (17, 18, 19, 20, 21)]
+
+    emitted = set()
+    for rec in records:
+        emitted |= set(classify_functions({"category": "item"}, probe=rec))
+
+    assert emitted - DERIVED_TAGS == set(), \
+        f"the classifier emits tags DERIVED_TAGS does not declare: {sorted(emitted - DERIVED_TAGS)}"
+    assert DERIVED_TAGS - emitted == set(), \
+        f"DERIVED_TAGS declares tags no classify rule produced: {sorted(DERIVED_TAGS - emitted)}"
+    # Positive control on the same run: the sweep really did classify something, so the two empty
+    # differences above are an agreement rather than two empty sets compared with each other.
+    assert len(emitted) > 10, sorted(emitted)

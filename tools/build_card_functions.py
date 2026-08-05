@@ -25,6 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))                          # meta_tracker
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))   # cg (lazy)
 
+from common.card_tags import is_card_key                   # noqa: E402  the ONE reserved-key rule
 from meta_tracker.card_functions import accumulate_tables, build_function_table  # noqa: E402
 from meta_tracker.cards import load_cards                     # noqa: E402
 from meta_tracker.probe_cards import (  # noqa: E402
@@ -134,16 +135,49 @@ def _load_overrides(path) -> dict[int, list[str]]:
     p = Path(path)
     if p.exists():  # numeric keys only — a leading-underscore "_note" key can document the file
         return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()
-                if k.lstrip("-").isdigit()}
+                if is_card_key(k)}
     return {}
 
 
 def _load_table(path) -> dict[int, list[str]]:
-    """The previously-shipped ``{cardId: tags}`` table, to accumulate into (empty if none)."""
+    """The previously-shipped ``{cardId: tags}`` table, to accumulate into (empty if none).
+
+    Reserved keys are SKIPPED rather than `int()`-ed (Issue #395 D6.5). Both this and
+    `CardFunctions.__init__` used to walk every key unconditionally, so the store had no capacity for
+    a `_note` or a provenance block the way its two siblings (`function_overrides.json`,
+    `card_effects.json`) already do — a hard ceiling on extensibility that costs one predicate to
+    lift. The predicate is `card_tags.is_card_key`, the same one `snapshot_coverage` states for the
+    effects family, because *a reader that rolls its own `int(k)` walk is the one that trips on the
+    next reserved key somebody adds*."""
     p = Path(path)
     if p.exists():
-        return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()}
+        return {int(k): v for k, v in json.loads(p.read_text(encoding="utf-8")).items()
+                if is_card_key(k)}
     return {}
+
+
+def shipped_bytes(table: dict[int, list[str]]) -> bytes:
+    """The shipped store's EXACT bytes for ``table`` — the one writer, so the format is a fact rather
+    than a habit (Issue #395 D6.4).
+
+    Two things it fixes, and the second is what makes the first worth anything:
+
+    * **Binary write.** `Path.write_text` rewrites LF to CRLF on Windows, and this repo builds on
+      Windows and grades on Linux. `tools/build_card_effects.py` already writes its sibling store
+      this way for exactly that reason. The `.gitattributes` default is `* text=auto`, so this store
+      normalises on commit and the CI line-ending guard cannot see the churn (cf. ADR-0116) — the
+      damage is a whole-file diff on a committed artifact, not a red test.
+    * **One canonical format.** The shipped store was `indent=1` and STRING-sorted while this writer
+      emitted `indent=0` and INT-sorted, so the very next rebuild reformatted all 275 entries and a
+      real change would have been one line hidden in a 275-line diff. Fixing the line endings while
+      leaving that in place would have been a fix to a smaller version of the same defect. The store
+      is re-emitted through this function in the same commit, and
+      `test_card_functions_oracle.py` asserts the committed bytes still match it.
+
+    `indent=0` and int-sorted are the sibling's format (`build_card_effects.py`), which is why they
+    are the ones kept."""
+    payload = {str(cid): tags for cid, tags in sorted(table.items())}
+    return json.dumps(payload, ensure_ascii=False, indent=0).encode("utf-8")
 
 
 def main() -> None:
@@ -177,8 +211,7 @@ def main() -> None:
     after = sum(len(v) for v in table.values())
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    payload = {str(cid): tags for cid, tags in sorted(table.items())}
-    out.write_text(json.dumps(payload, ensure_ascii=False, indent=0), encoding="utf-8")
+    out.write_bytes(shipped_bytes(table))
     mode = "fresh" if args.fresh else f"accumulated, +{after - before} new tag-instances"
     print(f"wrote {len(table)} tagged cards ({len(probes)} probed; {mode}) -> {out}")
     if not args.fresh:

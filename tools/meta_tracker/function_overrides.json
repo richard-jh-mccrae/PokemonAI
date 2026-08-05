@@ -9,18 +9,32 @@
   "provides:1",
   "search"
  ],
+ "_note_395_orphans_reconciled": "ELEVEN ORPHAN TAG INSTANCES RECONCILED HERE 2026-08-05 (Issue #395 Fact 3). They lived in the shipped src/common/card_functions.json and in NEITHER the prober's derived set NOR this file, so `python tools/build_card_functions.py --fresh` deleted all eleven silently: --fresh sets `prior = {}` and the monotonic accumulate union was the only thing preserving them. This file is the only store that survives --fresh, because `tags |= set(overrides or [])` sits UPSTREAM of the accumulate step. Ten were legitimate and are now keyed here, each re-verified against data/EN_Card_Data.csv rather than recalled: 66 Dudunsparce dig:3 (Run Away Draw — draw 3), 98 Chandelure dig:1 (Alluring Light — each player draws a card), 120 Drakloak dig:2 (Recon Directive — look at top 2, take 1), 345 Crustle prevent_ex_damage (Mysterious Rock Inn — prevent all damage from opponent's Pokemon ex), 351 Rapidash dig:1 (Hurried Gait — draw a card), 756 Mega Kangaskhan ex dig:2 (Run Errand — draw 2), 1071 Meowth ex supporter_tutor (Last-Ditch Catch — search deck for a Supporter), 1080 Unfair Stamp shuffle_hand (each player shuffles their hand into their deck), 1174 Air Balloon tool (Pokemon Tool), 1219 Team Rocket's Petrel tutor_trainer (search deck for a Trainer). The ELEVENTH, `hand_size_attacker` on 743 Alakazam, was ruled a genuine LEFTOVER and DELETED rather than adopted: both its consumers were removed by ADR-0102 / Issue #261 item 2c, and no src/ module reads the string today. Rebuild-reachability is now asserted: tests/cards/test_card_functions_oracle.py, REQ-FUNC-0017.",
  "66": [
-  "stall"
+  "stall",
+  "dig:3"
  ],
  "90": [
   "search"
+ ],
+ "98": [
+  "dig:1"
  ],
  "112": [
   "heal",
   "spread"
  ],
+ "120": [
+  "dig:2"
+ ],
  "344": [
   "search"
+ ],
+ "345": [
+  "prevent_ex_damage"
+ ],
+ "351": [
+  "dig:1"
  ],
  "353": [
   "search"
@@ -33,14 +47,19 @@
   "recycle"
  ],
  "756": [
-  "stall"
+  "stall",
+  "dig:2"
  ],
  "_note_1071_stall_retired": "1071 Meowth ex — `stall` was RETIRED here on 2026-07-03 (developer sign-off; re-model recorded in src/agents/mega_lucario/STRATEGY.md §3: `['search','stall']` -> `['search','supporter_tutor']`). Do NOT restore it. `stall` is a play-role meaning \"a big-HP wall piloted not to attack\"; Meowth ex is the opposite — HP 170 for TWO prizes, and Last-Ditch Catch is a once-only ON-PLAY-FROM-HAND Supporter search, so once played the body's value is SPENT. Its only attack is Tuck Tail {C}{C}{C} for 60, and the standing doctrine is \"never attach energy to Meowth unless desperate\". The replacement tag `supporter_tutor` carries the real function. This entry exists because the 2026-07-03 re-model edited the SHIPPED table (src/common/card_functions.json) but left `stall` here, and this file is a standing INSTRUCTION to the builder, not a record — classify_functions unions it in on every build (`--fresh` included, since the union sits upstream of the accumulate step `--fresh` skips), so the stale tag was a pending re-introduction. Reconciliation is now asserted: tests/cards/test_card_functions_oracle.py, REQ-FUNC-0016 (Issue #375).",
  "1071": [
-  "search"
+  "search",
+  "supporter_tutor"
  ],
  "1079": [
   "rare_candy"
+ ],
+ "1080": [
+  "shuffle_hand"
  ],
  "1081": [
   "energy_denial"
@@ -67,6 +86,9 @@
  "1159": [
   "tool"
  ],
+ "1174": [
+  "tool"
+ ],
  "1189": [
   "search",
   "rush_evolve"
@@ -82,6 +104,9 @@
  ],
  "1217": [
   "hand_disruption"
+ ],
+ "1219": [
+  "tutor_trainer"
  ],
  "1223": [
   "shuffle_hand"

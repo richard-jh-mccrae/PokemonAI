@@ -234,6 +234,11 @@ A coarse label for a *behavioral* function a card performs (`draw`, `search`, `e
 `card_functions.json` for O(1) mid-match lookup. **Behavioral only**: structural facts (ex/Mega
 → prizes, trainer subtype, ACE SPEC) are read straight off the engine's `CardData`, never tagged.
 A *routing hint*, not an outcome — the Search API still resolves exact effects.
+The vocabulary is CLOSED and declared in `common/card_tags.py` (Issue #395, REQ-FUNC-0017/0018):
+`TAG_REGISTRY` names every legal tag with its source, its reason and its consuming modules;
+`undeclared_tags` and `unsourced_tag_instances` are the teeth, walked over the shipped store. The
+second is the one that was red — eleven hand-authored tag instances existed in neither the prober's
+derived set nor the curated overrides, so `build_card_functions.py --fresh` deleted them silently.
 _Avoid_: ability/effect (the card's full behavior; a tag is the coarse category), structural tag
 (ex/trainer-type — those come from `CardData`), embedding (a rejected approach — use exact tags)
 
