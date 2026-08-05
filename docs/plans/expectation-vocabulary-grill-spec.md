@@ -173,9 +173,16 @@ full small-parameter grid (D≤7, K≤6, u≤6, k≤3): zero mismatches, and it 
 **D6 — item 4 is DECLINED, and the gate order is fixed so the backlog stops lying.** 23/23 already
 blocked (C4). A new, more actionable gate is added for the 11 ability-clause steps.
 
-**D7 (scope extension, my call) — `dest: bench` is BUILT alongside item 3.** Item 3 as scoped
-enumerates **4** corpus steps; adding the bench destination takes that to **34** (§8's table — 43
-bucket steps, 30 of them with a non-empty pool). The deploy floor already exists
+**D7 — `dest: bench` is SPLIT OUT to Issue #410, not built here.** It was specced in this document as
+a scope extension; on measurement it earned its own issue instead. Two findings moved it:
+its 43 bucket steps are **15** enumerable, not 30 — **Risky Ruins gates 15 of the 28 live-pool Poffin
+steps**, and all 17 gated steps are that one Stadium — and recovering them means APPLYING a Stadium
+trigger, which is a different kind of change from a reveal-vocabulary widening. #410 owns the
+destination, the trigger, and §3.4's two `board_delta` promotions (nothing left in this spec needs
+them — items 1 and 2 are hand writes). **This spec keeps item 3 hand-only: 4 corpus steps.**
+
+The reasoning that made it look like one issue is still sound and is recorded there: the deploy floor
+already exists
 (`board_delta._play`'s Basic-Pokémon branch: full HP bar, `appearThisTurn`, bench cap, `_stadium_gate`)
 and the value side already exists (`needs.deploy_marginal(..., capacity=K)`, whose capacity bound is
 *"an exact restriction of the same DP, not a heuristic"*). Flagged as an extension rather than smuggled
@@ -341,19 +348,12 @@ agreement, and a test that quietly counted it as a pass would be the vacuous-gat
 keeps naming. **This is the gate that would have caught the two defects**, and it exists so the third
 one fails a test instead of shipping.
 
-### 3.4 `src/common/board_delta.py` — two promotions
+### 3.4 `src/common/board_delta.py` — two promotions, MOVED to Issue #410
 
-`board_expectation` needs the deploy floor and the Stadium gate for D7, and re-spelling either is the
-duplication ADR-0087 forbids. Promote, exactly as `fork` / `fork_player` / `take_from_hand` were
-promoted for Issue #383:
-
-- `_stadium_gate` → **`stadium_gate(current, combat, *, why)`** — mandatory before any body enters
-  play. Risky Ruins (1260) *"place 2 damage counters"* fires on exactly that event; the parity lane
-  measured 28 deploys arriving at full HP in the seam and at 2 counters in the engine. `cgpy`'s
-  `op_deck_to_bench_and_shuffle` calls `_after_benched` per body, confirming the trigger site.
-- a new **`bench_body(card_id, stat, *, seat_index, serial)`** returning the body dict `_play` builds
-  (`hp`/`maxHp` from the stat, `appearThisTurn: True`, empty `energies`/`energyCards`/`tools`/
-  `preEvolution`), with `_play` refactored onto it. One definition of "a freshly benched body".
+`stadium_gate` and `bench_body` were specced here while D7 was in scope. Nothing left in THIS spec
+needs either — items 1 and 2 are hand writes, and item 3 is hand-only after §6.2 — so both move to
+Issue #410 with the destination that wants them. Recorded rather than deleted so a reader of the
+commit order does not go looking for a step that is no longer here.
 
 ### 3.5 `src/common/needs.py` — no change
 
@@ -588,7 +588,7 @@ subsets, against `cheapest_removal`'s own *"n ≤ ~10 ⇒ ≤ ~250 subsets — t
 
 ---
 
-## 6. Item 3 — multi-card deliveries (+ D7's bench destination)
+## 6. Item 3 — multi-card deliveries (hand only; the bench destination is Issue #410)
 
 ### 6.1 The multiset enumerator
 
@@ -603,9 +603,11 @@ def _multisets(pool: dict, m: int) -> list[tuple[int, ...]]:
 
 `m` is clamped to `min(amount, sum(pool.values()))` — a search delivers *"up to"* its amount
 (`min: 0` on every engine op), so a pool smaller than the amount is a smaller delivery, **not** a
-refusal. `amount: "all"` resolves to `sum(pool.values())`, further clamped by bench room for a bench
-delivery (the engine spells this: Precious Trolley is `max: 60` and
-`op_deck_to_bench_and_shuffle` sets `max = min(max, effective_bench_max − len(bench))`).
+refusal.
+
+`amount: "all"` is **not handled here** and stays refused: its only carrier is Precious Trolley,
+which delivers to the Bench, so resolving it needs the bench room clamp that goes with Issue #410.
+Enumerating an unbounded `"all"` against a hand write would be modelling a card no card is.
 
 Weight of a multiset = `Π p_contains_at_least(unseen[cid], hidden, left, k=multiplicity)` — this is
 where §3.1's new form is load-bearing, and the only place `p_contains` alone would have been wrong.
@@ -632,29 +634,20 @@ delivery from an 11-wide pool, **≤ 286** (an over-estimate, since the per-card
 an order of magnitude past the cap, so **truncation is expected off-corpus and the reporting path is
 what makes that legible.**
 
-### 6.2 The bench destination (D7)
+### 6.2 The bench destination — SPLIT OUT to Issue #410
 
-`dest: "bench"` routes to a deploy floor instead of a hand write:
+`dest: "bench"` (Buddy-Buddy Poffin 41 steps, Precious Trolley 2) is **not built here**. It needs a
+deploy floor rather than a hand write, and — measured — **Risky Ruins gates 15 of the 28 live-pool
+Poffin steps**, so the destination alone is worth 15 and only applying that Stadium trigger takes it
+to 30. Applying a trigger is a different kind of change from widening a reveal vocabulary, and it
+wants the parity lane (via `board_delta._play`) to verify its arithmetic — neither of which this
+inert module can offer. Issue #410 owns all of it, including §3.4's two promotions.
 
-1. **`stadium_gate`** (§3.4) — **mandatory, and first.** A body entering play is what Risky Ruins
-   fires on. Skipping it is the exact 28-step divergence the parity lane already measured for `_play`.
-2. Room = `min(m, benchMax − len(bench), pool total)`; `benchMax` read off the player dict with
-   `_BENCH_MAX` as fallback, exactly as `_play` does. **Room 0 REFUSES** rather than returning a
-   zero-card class — the engine's own `legal: [{op: benchSpace}]` means a full Bench never offers the
-   option at all, so room 0 is an unreachable board and a zero-class Expectation is precisely the
-   shape `expectation`'s `cap < 1` guard already raises on.
-3. Each delivered card becomes a `bench_body(...)` (§3.4) appended to my bench.
-4. Writes: `my_hand_ids`, `bodies_in_play`, `bench_occupancy`, `new_in_play`, `my_deck_count`,
-   `deck_odds`, `my_discard_contents` (the played Item still lands in my discard).
-5. **`reuse_their_side` stays `True`** — a bench deploy touches no `PlayerState` of theirs and no
-   Stadium (it is gated on a quiet Stadium by step 1), so `Delta.shares_opponent`'s guarantee holds.
+`dest: "in_play"` (17 Salvatore steps) stays refused in both places: `xDeckEvolveInPlayAndShuffle` is
+an evolve-in-place, so its floor is `_evolve`'s, not a deploy's.
 
-**Measured:** free Bench at the 41 Poffin steps is 1–5, pool 0–3, so room binds on real boards and
-must be applied before enumeration, not after.
-
-`dest: "in_play"` (17 Salvatore steps) stays refused, with the reason sharpened to name the engine op
-— `xDeckEvolveInPlayAndShuffle` is an evolve-in-place, so its floor is `_evolve`'s (carried damage,
-the Stadium re-read, `preEvolution` stacking), not a deploy's.
+**This spec's item 3 is therefore hand-only — Cyrano's 4 corpus steps** — and the multiset enumerator
+of §6.1 is built here, since Issue #410 consumes it.
 
 ---
 
@@ -713,12 +706,11 @@ it is **not** this issue's to make.
 | A10 | P0 is the ONE spelling of the stage question | `dump_cards.stage_of` delegates; asserted by test |
 | A11 | A conjunction leg that is unmatchable cannot masquerade as empty | fixture board with an unseen Stage 1 **and** Stage 2 yields a three-leg product (§2.5) |
 
-**Projected coverage: 81 → 228 of 706 (11.5% → 32.3%).**
+**Projected coverage: 81 → 198 of 706 (11.5% → 28.0%).**
 
 Counted per step against the measured pool, **not** by totalling the refusal buckets — a step whose
 pool is empty on its own board keeps refusing on the shipped provably-whiffing rule, which is correct
-behaviour and not a shortfall. Totalling the buckets would have claimed 243; the honest figure is 228,
-and the 15-step gap is exactly that residue.
+behaviour and not a shortfall. Totalling the buckets would have claimed 200; the honest figure is 198.
 
 | build | bucket steps | ENUMERABLE | why the gap |
 |---|---|---|---|
@@ -728,8 +720,8 @@ and the 15-step gap is exactly that residue.
 | item 2 cost — Ultra Ball | 65 | **64** | 1 step: no reachable Pokémon left unseen |
 | item 2+3 — Canari (needs cost AND amount) | 4 | **4** | — |
 | item 3 hand m-subset — Cyrano 4, Hyper Aroma 1 | 5 | **4** | Hyper Aroma's only step has an empty pool |
-| D7 bench — Poffin 41, Precious Trolley 2 | 43 | **30** | 13 Poffin steps: no ≤70 HP Basic left unseen |
 | item 4 | 23 | **0** | declined (§7) |
+| ~~D7 bench~~ | ~~43~~ | — | **split out to Issue #410** (§6.2) |
 
 Reproduce with `python tools/train/expectation_census.py --json out.json`, then count rows with
 `union > 0` per card — the same arithmetic, from the same walk.
@@ -760,10 +752,8 @@ verbatim from `card_effects.json`, as that file's convention requires:
 10. an m-card delivery enumerates multisets INCLUDING a two-copies-of-one-card class, weighted by
     `p_contains_at_least` (the class a `combinations` walk would silently drop)
 11. `m` clamps to the pool rather than refusing
-12. a bench delivery builds bodies with full HP + `appearThisTurn`, respects bench room, and
-    **refuses under a writing Stadium** (the Risky Ruins gate — a positive control, since a green
-    suite proves nothing about a gate nobody fires)
-13. `dest: in_play` still refuses
+12. `amount: "all"` refuses (its only carrier is a bench delivery — Issue #410's)
+13. `dest: bench` and `dest: in_play` BOTH still refuse here — the bench destination is Issue #410's
 14. the item-4 gates: an ability-clause deploy refuses with the new message; the backlog order is
     asserted so a future reorder is a deliberate act
 
@@ -787,9 +777,9 @@ is not an audit.
 1. `deck_odds.p_contains_at_least` + delegation + tests — pure, no consumer
 2. `snapshot_coverage.COST_CARDS` + `choice_relation_problems` + audits
 3. compendium `choice` fix (1097, 1142) + re-stamp — **inert**, A7
-4. `board_delta` promotions (`stadium_gate`, `bench_body`) + `_play` refactor — parity lane must stay clean
+4. ~~`board_delta` promotions~~ — moved to Issue #410 with the destination that needs them (§3.4)
 5. item 1 (relation, union pool, conjunction enumeration)
-6. item 3 + D7 (multiset enumerator, bench destination)
+6. item 3 — the multiset enumerator, HAND destination only (Issue #410 consumes it)
 7. item 2 (`cost_shed_indices`, the `shed` seam, the writer)
 8. item 4 (declines, gate order, header rewrite) + the re-measurement
 9. `cost_discard` tag backfill — **separate, `score_diff`-gated, revertible on its own** (§5.4)
@@ -802,8 +792,9 @@ Every ruling below was decidable at source; none needs a human. Recorded so the 
 reopen them.
 
 - **Precious Trolley (1126)** *"any number of Basic Pokémon onto your Bench"* — `amount: "all"`
-  resolves to the pool, clamped by bench room. The engine spells it: `max: 60`, clamped by
-  `effective_bench_max − len(bench)`.
+  resolves to the pool clamped by bench room (the engine spells it: `max: 60`, clamped by
+  `effective_bench_max − len(bench)`). Decided, but the ruling travels with **Issue #410**: this card
+  delivers to the Bench, so it refuses here.
 - **Larry's Skill (1206)** *"Discard your hand and search…"* — `discard_hand` needs no choice at all
   (every other card goes), and the played Larry's is already out of hand when it resolves. Its three
   finds are a conjunction; the cost is paid once.
