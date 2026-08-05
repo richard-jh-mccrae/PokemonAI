@@ -207,14 +207,18 @@ def test_avoid_still_fires_on_a_one_prize_draw_engine():
 def test_avoid_no_longer_fires_on_fezandipiti_ex_two_prizes():
     """210 HP, Pokémon ex, `draw` tag. The developer's line — put ONE damage counter on it to take it
     to 200, then gust it next turn for the KO and the match — was being steered against by a rule
-    written for the Dudunsparce class."""
-    assert derive_general_roles(_facts(FEZANDIPITI, 2, "draw")) == {}
+    written for the Dudunsparce class. It is now a TARGET, at the top of the ladder, because two
+    prizes is what a body worth removing looks like."""
+    assert derive_general_roles(_facts(FEZANDIPITI, 2, "draw")) == {FEZANDIPITI: "prize_liability"}
+    assert role_priority("prize_liability") > 0
 
 
 def test_avoid_no_longer_fires_on_mega_kangaskhan_ex_three_prizes():
     """300 HP, Mega Pokémon ex, `draw`/`stall`/`dig:2`. A wall AND a draw engine — and THREE prizes,
-    which is precisely why it is a prime removal target rather than one to leave alone."""
-    assert derive_general_roles(_facts(MEGA_KANGASKHAN, 3, "draw", "stall", "dig:2")) == {}
+    which is precisely why it is a prime removal target rather than one to leave alone. Carrying
+    THREE utility tags does not save it: the gate is the prize count."""
+    roles = derive_general_roles(_facts(MEGA_KANGASKHAN, 3, "draw", "stall", "dig:2"))
+    assert roles == {MEGA_KANGASKHAN: "prize_liability"}
 
 
 def test_the_general_tier_no_longer_overwrites_the_dossiers_prize_liability():
@@ -236,9 +240,122 @@ def test_the_general_tier_no_longer_overwrites_the_dossiers_prize_liability():
     assert overwritten.role(DUDUNSPARCE) == "avoid"
 
 
-def test_a_body_with_no_draw_tag_is_untouched_at_any_prize_value():
-    """The gate narrows the rule; it must not widen it. Meowth ex carries `search`/`supporter_tutor`
-    and no `draw`, and escaped the −80 that caught Fezandipiti ex — an inconsistency the vocabulary
-    lint is what stops recurring, since the fix here is only to the direction."""
-    assert derive_general_roles(_facts(1071, 2, "search", "supporter_tutor")) == {}
+def test_the_avoid_inconsistency_between_two_prize_engines_is_gone():
+    """Meowth ex (170 HP, 2 prizes) carries `search`/`supporter_tutor` and no `draw`, so it ESCAPED
+    the −80 that caught Fezandipiti ex — the old rule was not even consistent among ex engines. Both
+    now land on the same side, and for the same stated reason.
+
+    That the derived role is `prize_liability` on a 2-prize SUPPORT ex is an over-claim the deriver
+    cannot avoid (matchup-genie's playbook: *"card facts cannot make this call for you"*), and
+    correcting it is the curated Brief's job — the derive-first / Brief-corrects split."""
+    meowth = derive_general_roles(_facts(1071, 2, "search", "supporter_tutor"))[1071]
+    assert meowth == derive_general_roles(_facts(FEZANDIPITI, 2, "draw"))[FEZANDIPITI]
+    assert meowth != "avoid"
     assert derive_general_roles({}) == {}
+
+
+# --- the widened derived tier (Issue #395 D5) --------------------------------------------------
+#
+# The general tier stops being one hard-coded rule. Every input already ships, which was D5's
+# FINDING rather than its proposal: prize value, the two damage ceilings `_threat_damage_pair`
+# already computes, and three parsed `CardStat` fields.
+
+
+def _body(prize=1, tags=(), own=0.0, fwd=0.0, boost=0, retreat=False, fuel=False):
+    return BodyFacts(tags=frozenset(tags), prize_value=prize, own_damage=own, forward_damage=fwd,
+                     damage_boost=boost, grants_free_retreat=retreat, ability_fuel=fuel)
+
+
+def test_the_derived_tier_names_every_role_it_declares_a_general_tier_for():
+    """The registry says which roles the `_GENERAL` tier may assign; this is the other half of that
+    claim — each one is actually reachable from card facts alone. A role declared general that no
+    derivation can produce is the mirror of the defect this issue is about."""
+    one_of_each = {
+        1: _body(prize=1, tags=("draw",)),                       # avoid
+        2: _body(prize=2),                                       # prize_liability
+        3: _body(prize=1, fwd=120),                              # fragile_preevo
+        4: _body(prize=1, own=120),                              # attacker
+        5: _body(prize=1, boost=30),                             # enabler
+        6: _body(prize=1, tags=("energy_accel",)),               # engine
+    }
+    derived = set(derive_general_roles(one_of_each).values())
+    assert derived == {r for r, e in ROLE_REGISTRY.items() if _GENERAL in e.tiers}
+    # Every body in the fixture got a role, so the equality above is a match rather than a set that
+    # happened to line up after some inputs fell through unread.
+    assert len(derive_general_roles(one_of_each)) == len(one_of_each)
+
+
+def test_the_worked_example_re_maps_the_way_the_developer_ruled_it():
+    """**Crustle / Mega Kangaskhan ex**, the archetype that ships in `artifact.json` with no Brief
+    covering it — so it runs on dossier roles alone, which called BOTH Crustle and Mega Kangaskhan
+    `attacker` and scored both at 0, while the general `draw` rule then forced the 3-prize Mega to
+    `avoid`.
+
+    Card facts verified at source (`data/EN_Card_Data.csv`): Crustle 150 HP, Stage 1, 1 prize,
+    Superb Scissors 120, Mysterious Rock Inn prevents all damage from opponent Pokémon ex; Dwebble
+    70 HP, 1 prize, its pre-evolution; Mega Kangaskhan ex 300 HP, 3 prizes, Run Errand draws 2 and
+    Rapid-Fire Combo hits 200.
+
+    The developer's ruling — *"Crustle IS their main attacker specifically because it resists ex
+    Pokémon's attacks, which near every other deck uses as its main. Mega Kangaskhan is a wall and
+    draw engine, NOT the main attacker"* — is about which body is the ATTACKER, and that is what the
+    derivation now says. The removal ORDER still puts the 3-prize body first, because prize math
+    stays in the equation."""
+    crustle, dwebble, mega = 345, 344, 756
+    roles = derive_general_roles({
+        crustle: _body(prize=1, tags=("prevent_ex_damage",), own=120),
+        dwebble: _body(prize=1, fwd=120),
+        mega: _body(prize=3, tags=("draw", "stall", "dig:2"), own=200),
+    })
+    assert roles == {crustle: "attacker", dwebble: "fragile_preevo", mega: "prize_liability"}
+    # All three were 0 or NEGATIVE before: two inert `attacker`s and a `−80` on the 3-prize body.
+    assert all(role_priority(r) > 0 for r in roles.values())
+    assert role_priority(roles[mega]) > role_priority(roles[dwebble]) \
+        > role_priority(roles[crustle])
+
+
+def test_a_utility_bodys_incidental_attack_does_not_make_it_an_attacker():
+    """Order matters and this is the pair that proves it. Dudunsparce hits for 90 with Land Crush,
+    so an `attacker`-first derivation would stop de-prioritizing it and undo D4's surviving half.
+    `avoid` is checked FIRST — the same call `_UTILITY_TAGS` already makes for the mirror-image
+    question (*is Energy on this body wasted?*)."""
+    assert derive_general_roles({66: _body(prize=1, tags=("draw", "stall"), own=90)}) \
+        == {66: "avoid"}
+    # Positive control on the same run: strip the utility tags and the SAME body is an attacker, so
+    # the result above is the ordering rule firing rather than the damage fact going unread.
+    assert derive_general_roles({66: _body(prize=1, own=90)}) == {66: "attacker"}
+
+
+def test_an_energy_accel_body_is_never_avoided_because_it_accelerates_by_attacking():
+    """The one place this derivation is deliberately NARROWER than the issue's D5 table, which wrote
+    `avoid = engine ∧ prize_value == 1` over `_ENGINE_TAGS`. Taken literally that puts −80 on a
+    1-prize `energy_accel` body — on Cinderace, a deck's MAIN attacker — and tells the agent never
+    to spend removal there. `strategy/context.py` had already ruled exactly this distinction for the
+    mirror-image question, so the gate reads `_UTILITY_TAGS`, which excludes `energy_accel`.
+
+    The neutral `engine` role keeps the wider `_ENGINE_TAGS` membership; only the −80 is narrowed."""
+    assert derive_general_roles({1: _body(prize=1, tags=("energy_accel",))}) == {1: "engine"}
+    assert derive_general_roles({1: _body(prize=1, tags=("energy_accel",), own=120)}) \
+        == {1: "attacker"}
+    # …and a body carrying BOTH still avoids, because a utility tag is a positive claim about what
+    # the body is for — this is a narrowing of the trigger, not a hole in it.
+    assert derive_general_roles({1: _body(prize=1, tags=("energy_accel", "draw"))}) == {1: "avoid"}
+
+
+def test_enabler_is_derived_from_card_facts_that_already_ship():
+    """D5's finding: `enabler` needs NO new Function Tag. Each of the three fields alone is enough,
+    and each is already parsed by `card_text.py` onto `CardStat`."""
+    assert derive_general_roles({1: _body(boost=30)}) == {1: "enabler"}
+    assert derive_general_roles({2: _body(retreat=True)}) == {2: "enabler"}
+    assert derive_general_roles({3: _body(fuel=True)}) == {3: "enabler"}
+    # …and it ranks below `attacker`, because removing the attacker is the more direct answer.
+    assert role_priority("attacker") > role_priority("enabler") > role_priority("engine")
+    # A body with no fact at all gets no role — the deriver stays silent rather than guessing.
+    assert derive_general_roles({4: _body()}) == {}
+
+
+def test_a_pre_evolution_of_a_non_attacker_is_not_flagged_fragile():
+    """`fragile_preevo` means *deny the payoff before it comes online*, so it needs a payoff that
+    ATTACKS. A line that evolves into something harmless is not a threat to pre-empt."""
+    assert derive_general_roles({1: _body(prize=1, fwd=0.0)}) == {}
+    assert derive_general_roles({1: _body(prize=1, fwd=10.0)}) == {1: "fragile_preevo"}

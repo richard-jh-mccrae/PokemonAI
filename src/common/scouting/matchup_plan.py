@@ -40,6 +40,24 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Mapping, Sequence
 
+# The TWO Function-Tag sets the general tier reads, imported from their ONE home rather than
+# restated here — a second copy would be free to drift from the rulings they carry.
+#
+#   `_ENGINE_TAGS`   {energy_accel, draw, search, dig} — a support/engine body's Ability.
+#   `_UTILITY_TAGS`  {draw, dig, search, supporter_tutor, stall} — a body that exists to DRAW /
+#                    TUTOR / STALL, *never to attack*. It deliberately EXCLUDES `energy_accel`,
+#                    because such a body accelerates BY attacking (Cinderace's Turbo Flare).
+#
+# **`_UTILITY_TAGS` is the `avoid` trigger, and that is deliberately NARROWER than Issue #395 D5's
+# table**, which wrote `avoid = engine ∧ prize_value == 1` over `_ENGINE_TAGS`. Taken literally that
+# forces `avoid` onto a 1-prize `energy_accel` body — onto Cinderace, a deck's MAIN attacker — and
+# tells the agent never to spend removal there. The repo had already ruled that exact distinction
+# for the mirror-image question (*is it worth attaching Energy to this body?*), so the gate reads
+# the set carrying the ruling. `engine` still reads `_ENGINE_TAGS`, so the neutral 0-priority role
+# keeps D5's wider membership; only the −80 is narrowed. `context` is a constants-only module with
+# no imports of its own, so this adds no cycle and keeps this one lib-free.
+from common.strategy.context import _ENGINE_TAGS, _UTILITY_TAGS
+
 # Provenance of a role assignment — decides whether the Read confidence scales it.
 _GENERAL = "general"     # a card fact: true in every matchup, applies at γ=0
 _MATCHUP = "matchup"     # a Read/Brief claim: only as strong as the recognition (× γ)
@@ -176,33 +194,72 @@ class BodyFacts:
     A record rather than a bag of kwargs, and supplied by the Pilot rather than looked up here: this
     module is pure, and `build_matchup_plan`'s existing contract is already *"the Pilot supplies the
     facts"*. Making the derivation pure is also what keeps the `avoid` prize gate testable at the
-    scouting seam instead of stranding it at the Pilot level."""
+    scouting seam instead of stranding it at the Pilot level.
+
+    **Every field already ships.** Nothing here needed new data — that was the point of Issue #395
+    D5's inventory: `prize_value` is `CombatMath.prize_value`, the two damage ceilings are
+    `_threat_damage_pair` (`threat_ceiling` / `forward_threat_ceiling` under the Damage Formula), and
+    the last three are parsed `CardStat` fields."""
 
     tags: frozenset = frozenset()
     prize_value: int = 1
+    own_damage: float = 0.0          # this body's own biggest priced hit
+    forward_damage: float = 0.0      # the biggest its line evolves INTO (0 = dead end)
+    damage_boost: int = 0            # `CardStat.damageBoost` — flat +N it grants an attack
+    grants_free_retreat: bool = False  # `CardStat.retreatFreeGrant` — a board-level Ability
+    ability_fuel: bool = False       # `CardStat.abilityEnergyTypes` — its Ability burns attached Energy
 
 
 def derive_general_roles(facts: Mapping[int, BodyFacts]) -> dict[int, str]:
     """``{card id: role}`` for the **general**, γ-independent tier — what is true of these cards in
-    every deck.
+    EVERY deck, so it applies with no Read at all (Issue #395 D5).
 
-    Today one rule, and it is the one Issue #395 D4 corrects. A body carrying the `draw` Function
-    Tag is `avoid` **only when it is worth one prize**. The gate is read off `prize_value`, which
-    `CombatMath.prize_value` already ships, so no new constant is authored.
+    This tier used to be a single hard-coded rule (*a `draw` body is `avoid`*), which is both why 530
+    dossier `attacker` assignments were the only role signal in play and why the one rule it did have
+    was firing on the wrong card class. It is now the deck-agnostic role deriver, reading only facts
+    that already ship.
 
-    Why the gate is the fix rather than a refinement: the ungated rule fired on Mega Kangaskhan ex
-    (300 HP, 3 prizes) and Fezandipiti ex (210 HP, 2 prizes) exactly as it fired on Dudunsparce
-    (140 HP, 1 prize), its `_GENERAL` provenance meant it applied at FULL strength against an
-    opponent we had not recognised, and `build_matchup_plan` writes it after Read-Intel so it
-    overwrote the `prize_liability` the dossier had already assigned. The developer's ruling is that
-    prize math stays in the equation: *"if they have a wall and draw engine like Mega Kangaskhan,
-    and we can KO it, that's 3 prize cards"*, and the Dragapult line — chip Fezandipiti ex to 200,
-    gust it next turn for the KO and the match — was being steered against by a rule written for the
-    Dudunsparce/Budew class."""
+    **First match wins, and the order is the ruling:**
+
+    1. ``avoid`` — a UTILITY body worth ONE prize. The prize gate is D4 and the developer's ruling
+       that prize math stays in the equation: a 1-prize utility body (Dudunsparce / Budew class) is a
+       poor place to spend removal, a 2- or 3-prize engine is a PRIME one, and the prizes are the
+       reason. It is FIRST because a utility body's incidental attack does not make it an attacker —
+       Dudunsparce hits for 90 and is still not what removal is for, which is the same call
+       `_UTILITY_TAGS` already makes one question over.
+    2. ``prize_liability`` — two or more prizes. Precedent, not invention: `Scout._target_role`
+       already derives exactly this from `is_ex_body`, and this moves that claim onto the tier that
+       does not need the opponent recognised. It DOES over-claim on a 2-prize SUPPORT ex (the
+       matchup-genie playbook's *"`prize_liability` means THE WINCON, not any fat multi-prize
+       body"*), and correcting that is the curated Brief's job — which is precisely the
+       derive-first / Brief-corrects split the tier order already encodes.
+    3. ``fragile_preevo`` — its line evolves into something that attacks. Deny the payoff before it
+       comes online; ranked above ``attacker`` because the pre-evolution is the cheaper answer to the
+       same threat.
+    4. ``attacker`` — it attacks now. **530 shipped assignments used to resolve to 0.**
+    5. ``enabler`` — it assists the key Pokémon in HOW it attacks: a flat damage boost, a
+       board-level free-retreat grant, or an Ability that burns attached Energy (the Solrock /
+       Lunatone shape the developer named). No new Function Tag: all three are parsed `CardStat`
+       fields today.
+    6. ``engine`` — a plain accelerant. NEUTRAL (0): informational, not a steer.
+
+    Returns only the bodies it can say something about; a body with no derived role keeps whatever
+    the Read or a Brief gave it."""
     out: dict[int, str] = {}
     for cid, f in (facts or {}).items():
-        if "draw" in (f.tags or ()) and f.prize_value == 1:
+        tags = f.tags or frozenset()
+        if (_UTILITY_TAGS & tags) and f.prize_value == 1:
             out[cid] = "avoid"
+        elif f.prize_value >= 2:
+            out[cid] = "prize_liability"
+        elif f.forward_damage > 0:
+            out[cid] = "fragile_preevo"
+        elif f.own_damage > 0:
+            out[cid] = "attacker"
+        elif f.damage_boost or f.grants_free_retreat or f.ability_fuel:
+            out[cid] = "enabler"
+        elif _ENGINE_TAGS & tags:
+            out[cid] = "engine"
     return out
 
 

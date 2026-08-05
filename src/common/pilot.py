@@ -8441,12 +8441,28 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             if cid is None or cid in facts:
                 continue
             tags = frozenset(self.functions.tags(cid)) if self.functions else frozenset()
-            # `_prize_value` is the ONE adapter for "what does a KO here yield" (ADR-0056), and it
-            # is the POC-T1 census's already-ruled bypass: prize yield is CARD knowledge, constant
-            # all game, so it stays on the oracle while only the RACE lives on the model (ADR-0052).
-            # Going through it rather than `self.combat` directly is what keeps this off the census's
-            # undocumented list without minting a second licence for the same question.
-            facts[cid] = BodyFacts(tags=tags, prize_value=self._prize_value(p))
+            stat = self.stats.get(cid) if self.stats else None
+            # `_threat_damage_pair` is the ONE home for "how hard does this body hit, now and once
+            # evolved" — the same pair `_body_threat_rank` ranks the bench with, so the derived
+            # `attacker` / `fragile_preevo` split cannot disagree with the threat order the snipe
+            # and Planner rungs already use. It prices through the Damage Formula when
+            # `scaled_threat_rank` is on, so a scaling attacker is read at what it would really hit
+            # for rather than at its printed 10.
+            own, fwd = self._threat_damage_pair(cid, stat)
+            facts[cid] = BodyFacts(
+                tags=tags,
+                # `_prize_value` is the ONE adapter for "what does a KO here yield" (ADR-0056), and
+                # it is the POC-T1 census's already-ruled bypass: prize yield is CARD knowledge,
+                # constant all game, so it stays on the oracle while only the RACE lives on the
+                # model (ADR-0052). Going through it rather than `self.combat` directly keeps this
+                # off the census's undocumented list without minting a second licence.
+                prize_value=self._prize_value(p),
+                own_damage=own, forward_damage=fwd,
+                # The three `enabler` facts, all already parsed by `card_text.py` — no new tag was
+                # needed for the role, which was Issue #395 D5's finding rather than its proposal.
+                damage_boost=int(getattr(stat, "damageBoost", 0) or 0),
+                grants_free_retreat=bool(getattr(stat, "retreatFreeGrant", None)),
+                ability_fuel=bool(getattr(stat, "abilityEnergyTypes", ()) or ()))
         return facts
 
     def _body_threat_rank(self, obs: dict, poke: dict, read=None, gamma: float = 0.0) -> float:
@@ -8817,7 +8833,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
 
         Returns ``(phase, rows)``; each row carries the raw ``body`` dict, its ``area``
         (``"active"``/``"bench"``) and within-area index ``bi`` (the deny-slot key convention), plus
-        ``id``/``prize``/``survival_shift``/``value``. None when sparse: no live my Active, or no
+        ``id``/``prize``/``survival_shift``/``value``/``role_priority``. The last is the ADR-0051
+        role sheet as its OWN leg (Issue #395 D7) — an ordinal priority, never summed into ``value``,
+        whose meaning and ceiling are unchanged by it. None when sparse: no live my Active, or no
         opponent in-play bodies.
 
         **Runs MID-SIM** (ADR-0093 decision 3). It used to early-return `None` under the
@@ -8897,6 +8915,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                     else ())
                           | frozenset(("bench", j)
                                       for j in self._bench_doomed_by_me(ma, bench_list)))
+        # The ADR-0051 spine, resolved once for the whole decision rather than per body. `None` when
+        # the kill-switch is off or the Board predates it — the row then carries 0.0, which is the
+        # same "unroled" reading `MatchupPlan.priority` gives, so no consumer has to special-case it.
+        plan = getattr(board, "matchup_plan", None)
         rows = []
         for i, b in enumerate(bodies):
             shift = model.theirs.survival_clock(
@@ -8918,7 +8940,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                               phase=phase)
             area, bi = ("active", i) if i < len(active_list) else ("bench", i - len(active_list))
             row = {"body": b, "area": area, "bi": bi, "id": b.get("id"), "prize": prize,
-                   "prize_advance": advance, "survival_shift": shift, "value": val}
+                   "prize_advance": advance, "survival_shift": shift, "value": val,
+                   # THE ROLE SHEET, as its own leg (Issue #395 D7) — exactly as `_relevance_terms`
+                   # and `_strip_delta_terms` below attach theirs and let each consumer combine.
+                   #
+                   # It is NOT folded into `value`, and that is the ruling rather than an omission.
+                   # `value` keeps its prize+clock meaning and its `TARGET_VALUE_CEILING` (3.9), so
+                   # the two rates derived from that ceiling — `state_value._THREAT_W` and
+                   # `currency.GUST_TARGET_WORTH_RATE` — are untouched and nothing is re-banded. A
+                   # single fused scalar would also erase the thing the architecture already gets
+                   # right: gust, snipe and deny ask DIFFERENT questions of the same body and each
+                   # already weighs the steering layer differently.
+                   #
+                   # This is an ORDINAL priority, not a worth (D1) — it must never be summed into a
+                   # prize-denominated number without a rate, and the only rate at this seam is
+                   # derived from `currency.GUST_TARGET_BAND`, never authored.
+                   "role_priority": (plan.priority(b.get("id")) if plan is not None else 0.0)}
             if self.deny_strip_delta:
                 row.update(self._strip_delta_terms(ma, bodies, i, phase,
                                                    opp_active=opp_active, enabler=enabler))
@@ -9181,16 +9218,37 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             return 0.0
         return _SNIPE_RELEVANCE_K * got["relevance"]
 
-    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan) -> float:
+    def _snipe_brief_priority(self, obs: dict, select: dict, option: dict, plan, ctx=None) -> float:
         """This option's signed MatchupPlan/Brief priority, or 0.0 when nothing is briefed.
 
         One owner, because the tiebreak reads it twice — once for the candidate and once per peer —
         and the two readings MUST agree exactly: the comparison is `!=` against a strict maximum, so
-        any drift between them silently turns a winner into a non-winner."""
+        any drift between them silently turns a winner into a non-winner.
+
+        **A POSITIVE priority stands down on a redundant / mirage / benched-Tera body** (Issue #395),
+        through `TheirPlanInputs.brief_boost_gated()` — the ONE home for that rule, whose own
+        docstring already names *"the three gates a later leg would have to remember to add itself
+        to"*. This tiebreak was that later leg and it had not: the MULTIPLIER stood down on a benched
+        Tera while the tiebreak still handed it a strict-maximum bonus, so a body that takes NO damage
+        from attacks at all could be ordered ABOVE one that can hold the counters.
+
+        Latent before this issue — a Brief could always have named a Tera — and reached daily by
+        widening the general tier, since a derived role now lands on nearly every in-play body. The
+        asymmetry is preserved exactly: a NEGATIVE (`avoid`) priority is never gated, because a
+        booster must scale the oracle while a de-prioritizer may always apply."""
         cid = (self._option_pokemon(obs, select, option) or {}).get("id")
         if plan is None or cid is None:
             return 0.0
-        return float(plan.priority(cid) or 0.0)
+        priority = float(plan.priority(cid) or 0.0)
+        if priority > 0 and ctx is not None:
+            from common import snipe_relevance as srel
+            gated = srel.TheirPlanInputs(
+                prize_redundant=bool(getattr(ctx, "target_prize_redundant", False)),
+                promotion_mirage=bool(getattr(ctx, "target_promotion_mirage", False)),
+                is_tera=bool(getattr(ctx, "target_is_bench_tera", False))).brief_boost_gated()
+            if gated:
+                return 0.0
+        return priority
 
     def _snipe_brief_peers(self, obs: dict, select: dict, board: Board) -> list[tuple[float, float]]:
         """``[(relevance, brief_priority)]`` over every bench target this menu offers, once per
@@ -9213,12 +9271,13 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             slot = o.get("index")
             if slot in seen:
                 continue
-            got = self._snipe_relevance_terms(obs, select, board, o,
-                                              self._context(obs, select, board, o))
-            if got is None:
+            octx = self._context(obs, select, board, o)          # ONE ctx per peer: the relevance
+            got = self._snipe_relevance_terms(obs, select, board, o, octx)   # terms and the priority
+            if got is None:                                       # gate must read the same reads
                 continue
             seen.add(slot)
-            peers.append((got["relevance"], self._snipe_brief_priority(obs, select, o, plan)))
+            peers.append((got["relevance"],
+                          self._snipe_brief_priority(obs, select, o, plan, octx)))
         self._snipe_peer_cache = peers
         return peers
 
@@ -9269,7 +9328,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if got is None:
             return 0.0
         from common import snipe_relevance as srel
-        mine = self._snipe_brief_priority(obs, select, option, getattr(board, "matchup_plan", None))
+        mine = self._snipe_brief_priority(obs, select, option,
+                                          getattr(board, "matchup_plan", None), ctx)
         return srel.brief_tiebreak(self._snipe_brief_peers(obs, select, board),
                                    got["relevance"], mine)
 
