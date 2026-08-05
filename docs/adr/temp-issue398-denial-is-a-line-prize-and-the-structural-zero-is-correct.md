@@ -38,7 +38,8 @@ four magnitudes:
 | `doctrine_gust._gust_wincon_denial` | `_WINCON_DENIAL_PRIZES (1.5) × γ`, role-gated | 1.5 prizes |
 | `doctrine_gust._gust_forward_denial` | `_EVOLVING_GUST_DENIAL (0.5)`, damage-thresholded | 0.5 prizes |
 
-The first two are the same quantity — the forward line's damage, denied — **11× apart**.
+The first two are the same quantity — the forward line's damage, denied — **11× apart**. The fourth
+reads a PRINTED damage index and so misses scaling attackers entirely (Decision 5).
 
 ## Decision 1 — the Structural Zero is CORRECT; PR (b) builds beside it, never replaces it
 
@@ -116,6 +117,50 @@ different questions and both are correct:
 A bench body unreachable by snipe is reachable once gusted. Denial value is seat-independent and
 instrument-independent, so it belongs in the shared equation; reachability is neither, so it does
 not.
+
+## Decision 5 — the evolving-threat denial reads the BOARD-PRICED forward oracle, as a magnitude
+
+`doctrine_gust._gust_forward_denial` thresholds `stats.forward_max_damage(cid) >= 100`
+(`_EVOLVING_THREAT_DMG`) and returns a flat `_EVOLVING_GUST_DENIAL = 0.5`. Both the instrument and
+the shape are wrong:
+
+- **The instrument is printed-only.** `forward_max_damage` is a card-facts roll-up over the line —
+  no board, no energy, no weakness, no scaling term. `CombatMath.forward_threat_ceiling`'s own
+  docstring names the victim: *"the printed forward index reads **Alakazam at 10** because its whole
+  threat lives in a scaling term."* So the shipped term returns **0** for one of the set's scariest
+  evolving lines. This is ADR-0109's defect class — the same printed-`maxDamage` read it removed
+  from `readiness` in favour of the board-priced `attack_payoff`.
+- **The shape is a threshold**, so a line at 99 and a line at 400 are 0 and 0.5.
+
+Replaced by `CombatMath.forward_threat_ceiling(cid, context=…)`, board-priced, crossing to prizes on
+`currency.PRIZE_DAMAGE_RATE`, hop-discounted by the same `grading.halve` Decision 2 uses, and capped
+at `needs._SURVIVAL_CAP` so the sub-prize tie-break discipline the old constant enforced is
+preserved by an existing bound rather than a new one. `_EVOLVING_GUST_DENIAL` and
+`_EVOLVING_THREAT_DMG` are **DELETED** — two more authored constants gone, none added.
+
+**This is NOT the drift Decision 3 closed.** `survival_shift` answers *"does removing this move my
+clock"* and is lead-only by the rules, so it structurally cannot see a line that is dangerous but
+not currently leading. Decision 2's prize reading cannot see it either when the forward form is not
+higher-prize (a 1-prize Basic evolving into a 1-prize Stage 1 that hits hard). Three readings, three
+genuinely different questions — recorded so the next reader does not collapse them.
+
+The doctrine layer must thread the THEIRS-direction Damage Formula context, exactly as Issue #343
+threaded it into `_opponent_target_rows`; an unthreaded `context` prices a scaling attack at 0,
+which is the very failure this decision exists to fix.
+
+## Decisions taken without a question (stated, not asked)
+
+- **This ADR amends ADR-0117 rather than editing it.** ADR-0117 shipped in PR #401 and is now an
+  immutable record; a superseded framing is corrected by a successor, not rewritten in place.
+- **`_gust_matchup_priority` and `_gust_target_denial` are untouched.** Neither is forward denial —
+  the first is γ-gated role ORDERING (Issue #395 / PR (c)'s subject), the second is defensive
+  URGENCY (*"this body would KO my Active"*). Out of PR (b)'s scope.
+- **The evolving-threat leg's cap reuses `_SURVIVAL_CAP`** rather than introducing a band of its
+  own. Deriving beats authoring, and this family already has exactly one "sub-prize tie-break
+  ceiling" constant.
+- **A sham-controlled probe is owed** for any argmax-movement claim PR (b) makes (ADR-0118), and the
+  tie population must be reported on `value`, not on `survival_shift` — the sub-population error
+  ADR-0117's own instrument made.
 
 ## Policy
 
