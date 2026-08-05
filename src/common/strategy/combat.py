@@ -374,14 +374,13 @@ class SurvivalClock:
     The precision is not new information — ``dealt`` is continuous and the accumulation already
     computes it; the integer threshold is simply where it was being discarded.
 
-    ⚠️ **This recovers a MINORITY of the Flat Tie, and the ADR is explicit about which minority.**
-    Measured pre/post over the correction corpus, tied equal-prize groups go 251/343 (73.2%) ->
-    219/343 (63.8%): quantization was 12.7% of the defect. The other 87.3% is structural and no
-    resolution can touch it — :meth:`CombatMath.incoming` is a per-turn MAXIMUM over their forms, so
-    removing a body that is not the argmax leaves that maximum untouched and its removal Δ is
-    exactly 0 at any precision. At most one body per board can score, and none when two tie for the
-    lead. Do not cite this class as the fix for Issue #398; it is a prerequisite for one.
-    Measurement: ``tools/train/probes/fractional_clock_sweep.py``.
+    ⚠️ **This recovers a MINORITY of the Flat Tie.** Quantization was 12.7% of that defect; the rest
+    is a **Structural Zero** no resolution can touch, because :meth:`incoming` is a per-turn MAXIMUM
+    over their forms — removing a body that never leads that maximum moves nothing, at any
+    precision. Do not cite this class as the fix for Issue #398; it is a prerequisite for one.
+    Numbers, the counter-example that narrowed the claim, and the reasoning live in ADR-TEMP-398
+    and are deliberately NOT restated here; the instrument is
+    ``tools/train/probes/fractional_clock_sweep.py``.
 
     The two fields are produced by ONE loop rather than two passes, so they cannot drift — the
     failure mode ADR-TEMP-398 explicitly rejected a second oracle to avoid. When there is no

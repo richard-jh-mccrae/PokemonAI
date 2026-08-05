@@ -20,7 +20,10 @@ A = 501             # reaches my HP at t=1 (cheap attack, 0 energy)
 B = 502             # reaches my HP at t=3 (3-cost attack)
 C60 = 503           # 60 a turn — crosses my 100 HP DURING t=2
 D90 = 504           # 90 a turn — also crosses during t=2, but far earlier within it
+EARLY = 505         # cost 1, 100 a turn — leads the per-turn MAX at t=1 and t=2
+LATE = 506          # cost 3, 250 a turn — takes the lead from t=3
 FAST_ATK, SLOW_ATK, SIXTY_ATK, NINETY_ATK = 511, 512, 513, 514
+EARLY_ATK, LATE_ATK = 515, 516
 
 
 def _combat():
@@ -176,6 +179,47 @@ def test_a_flat_tie_the_integer_clock_cannot_see_and_the_fractional_one_can():
            val(prize_advance=2, survival_shift=0, phase=0.7)        # the tie, as it shipped
     assert val(prize_advance=2, survival_shift=40 / 60 - 10 / 90, phase=0.7) > \
            val(prize_advance=2, survival_shift=0.0, phase=0.7)
+
+
+def test_more_than_one_body_scores_when_the_lead_changes_across_turns():
+    """The boundary of the **Structural Zero**, pinned because a stronger claim about it was drafted
+    into an ADR and was FALSE.
+
+    `incoming()` is a per-turn MAX over their forms, so removing a body that never leads that max
+    moves nothing — that much is true and `test_a_flat_tie...` above shows it. The claim that did
+    not survive was *"at most ONE body per board can carry a non-zero survival_shift"*. `incoming(t)`
+    grants each form `attached + t` energy, so the LEADING form can change across turns, and every
+    body that leads at some turn before the crossing scores.
+
+    My 300 HP against `Early` (cost 1, 100 a turn, leads at t=1 and t=2) and `Late` (cost 3, 250 from
+    t=3, leads there). Both present: dealt 100, 200, 450 — crossing during t=3 at 2 + (300-200)/250 =
+    2.4. Remove Early and `Late` alone deals 0, 0, 250, 500 — crossing during t=4 at 3 + 50/250 = 3.2.
+    Remove Late and `Early` alone deals 100, 200, 300 — crossing exactly ON t=3.
+
+    The corpus average (208 non-zero shifts over 359 frames) is consistent with the false form, which
+    is exactly why an average must never be read as a bound."""
+    stats = DictCardStatProvider({
+        MY: CardStat(MY, synthetic=True, name="Me", hp=300, minAttackCost=1, attacks=()),
+        EARLY: CardStat(EARLY, synthetic=True, name="Early", hp=120, minAttackCost=1,
+                        minCostDamage=100, maxDamage=100, attacks=(EARLY_ATK,)),
+        LATE: CardStat(LATE, synthetic=True, name="Late", hp=120, minAttackCost=3,
+                       minCostDamage=250, maxDamage=250, attacks=(LATE_ATK,)),
+    }, attacks={EARLY_ATK: AttackStat(EARLY_ATK, damage=100, cost=1, energyTypes=(0,)),
+                LATE_ATK: AttackStat(LATE_ATK, damage=250, cost=3, energyTypes=(0, 0, 0))})
+    c = CombatMath(stats, functions=None, transients=None)
+    me = {"id": MY, "hp": 300}
+    both = [_b(EARLY), _b(LATE)]
+
+    base = c.survival_clock(me, both)
+    assert (base.turns, base.exact) == (3, pytest.approx(2.4))
+    early_gone = c.survival_clock(me, [_b(LATE)])
+    late_gone = c.survival_clock(me, [_b(EARLY)])
+    assert early_gone.exact - base.exact == pytest.approx(0.8)
+    assert late_gone.exact - base.exact == pytest.approx(0.6)
+    # BOTH non-zero — the refutation. Neither body is redundant, because neither leads at every turn.
+    assert min(early_gone.exact - base.exact, late_gone.exact - base.exact) > 0
+    # ...and the integer clock sees only ONE of the two, which is the quantization loss on top.
+    assert (early_gone.turns - base.turns, late_gone.turns - base.turns) == (1, 0)
 
 
 def test_the_survival_term_still_never_outranks_a_real_prize():

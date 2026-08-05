@@ -14,10 +14,16 @@ It was written to measure one thing and found another. The original reading — 
 2. **Not evidence.** A deliberately meaningless leg of the same magnitude (`cid % 7`) moves the
    same argmax on 64/241. The real credit separates from noise by five frames out of 241.
 
-The cause is printed below every run: **73.2% of equal-prize groups are perfectly tied** — same
-`prize_advance`, `survival_shift` integer-quantized to 0 for every row — so the pick falls to list
-order and ANY continuous term appears to "improve" it. See ADR-TEMP-398 (fractional survival clock)
-for the defect and ADR-TEMP-398 (sham control) for why the sham arms are mandatory here.
+The cause is printed below every run: equal-prize groups whose rows carry an IDENTICAL value, so the
+pick falls to list order and ANY continuous term appears to "improve" it.
+
+⚠️ **The numbers above were measured BEFORE the Fractional Survival Clock landed, and this probe's
+tie line reads lower now** (73.2% -> 63.8%). Re-run it before citing any figure here. The original
+draft of this docstring said the ties were *"`survival_shift` integer-quantized to 0 for every
+row"*; that was measured false — quantization was 12.7% of it. The rest is a **Structural Zero**:
+`incoming()` aggregates their forms with a per-turn MAX, so removing a body that is not the argmax
+moves nothing at any resolution. See ADR-TEMP-398 (fractional survival clock) for the correction and
+ADR-TEMP-398 (sham control) for why the sham arms are mandatory here.
 
 ## Arms
 
@@ -55,14 +61,15 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.probes._corpus import replay_agent                  # noqa: E402
+from train.probes._sham import READING, SHAMS, argmax, legs    # noqa: E402  THE sham vocabulary
 from train.gates import keyed_corrections                      # noqa: E402
 from common import needs as _needs                             # noqa: E402
 from common.grading import halve                               # noqa: E402
 from common.state_value import _READINESS_W, _forward_credit   # noqa: E402
 
-#: Candidate legs (a causal claim) and SHAM legs (none). Reported side by side, deliberately.
+#: Candidate legs — each carries a causal claim. The SHAM legs beside them carry none and come from
+#: `_sham.SHAMS`, shared so two probes cannot drift into two different ideas of what a sham is.
 _CANDIDATES = (("B", "B damage credit"), ("C", "C prize leg, RAW"), ("D", "D prize leg, banded"))
-_SHAMS = (("S_cid", "sham cid%7"), ("S_hp", "sham hp%70"), ("S_pos", "sham position"))
 
 #: Band the shams are scaled into — the largest damage-credit value observed on the corpus. A sham
 #: an order of magnitude smaller would lose trivially and prove nothing (ADR-TEMP-398 sham policy).
@@ -74,16 +81,6 @@ def _tune():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
-
-
-def _argmax(values) -> int | None:
-    """Index of the maximum, FIRST-wins on a tie — stated because with 73% of groups tied the tie
-    convention IS the answer on most frames. The null arm is what proves this is stable."""
-    best_i, best_v = None, None
-    for i, v in enumerate(values):
-        if best_v is None or v > best_v + 1e-12:
-            best_i, best_v = i, v
-    return best_i
 
 
 def _legs(pilot, model, row, index: int, of: int) -> dict:
@@ -103,15 +100,14 @@ def _legs(pilot, model, row, index: int, of: int) -> dict:
     except Exception:
         hp = 0.0
     return {"A": 0.0, "A2": 0.0, "B": damage, "C": raw, "D": _READINESS_W * raw,
-            "S_cid": ((int(cid or 0) % 7) / 7.0) * _SHAM_BAND,
-            "S_hp": ((hp % 70) / 70.0) * _SHAM_BAND,
-            "S_pos": (index / max(1, of)) * _SHAM_BAND,
+            **{k: legs(k, band=_SHAM_BAND, card_id=cid, hp=hp, index=index, of=of)
+               for k, _ in SHAMS},
             "_meta": (cid, prize, forward_prize, hops)}
 
 
 def _scan(pilot, model, rows, phase) -> tuple:
     """``(arms, labels)`` — every arm's per-row value."""
-    keys = ("A", "A2") + tuple(k for k, _ in _CANDIDATES) + tuple(k for k, _ in _SHAMS)
+    keys = ("A", "A2") + tuple(k for k, _ in _CANDIDATES) + tuple(k for k, _ in SHAMS)
     arms = {k: [] for k in keys}
     labels = []
     for i, row in enumerate(rows):
@@ -174,18 +170,18 @@ def main(argv=None) -> int:
                 continue
             scopes[scope]["n"] += 1
             arms, labels = _scan(pilot, model, subset, phase)
-            base = _argmax(arms["A"])
+            base = argmax(arms["A"])
             if scope == "bench":
-                null_moved += _argmax(arms["A2"]) != base
+                null_moved += argmax(arms["A2"]) != base
                 for k, _ in _CANDIDATES:
                     spans[k].extend(v for v in
                                     (_legs(pilot, model, r, i, len(subset))[k]
                                      for i, r in enumerate(subset)) if v > 0)
-            for k, _label in _CANDIDATES + _SHAMS:
-                if _argmax(arms[k]) != base:
+            for k, _label in _CANDIDATES + SHAMS:
+                if argmax(arms[k]) != base:
                     scopes[scope]["moved"][k] += 1
                     if scope == "bench" and k in examples and len(examples[k]) < args.examples:
-                        examples[k].append((key, labels[base], labels[_argmax(arms[k])]))
+                        examples[k].append((key, labels[base], labels[argmax(arms[k])]))
 
     print(f"corpus                              : {len(frames)} replayable corrections")
     print(f"frames with opponent-target rows    : {scanned}")
@@ -210,7 +206,7 @@ def main(argv=None) -> int:
         allr = f"{scopes['all']['moved'][k]}/{a} ({100*scopes['all']['moved'][k]/a:.1f}%)" if a else "-"
         print(f"{label:<22} {bench:<22} {allr:<18} {rng}")
     print(f"{'':-<22} {'':-<22} {'':-<18}")
-    for k, label in _SHAMS:
+    for k, label in SHAMS:
         bench = f"{scopes['bench']['moved'][k]}/{b} ({100*scopes['bench']['moved'][k]/b:.1f}%)" if b else "-"
         allr = f"{scopes['all']['moved'][k]}/{a} ({100*scopes['all']['moved'][k]/a:.1f}%)" if a else "-"
         print(f"{label:<22} {bench:<22} {allr:<18} band-matched to {_SHAM_BAND}")
@@ -222,13 +218,8 @@ def main(argv=None) -> int:
             for key, was, now in examples[k]:
                 print(f"    {key:<26} {was}  ->  {now}")
 
-    print("\nREAD THE CANDIDATE ROWS AGAINST THE SHAM ROWS, NOT AGAINST ZERO. A candidate that does "
-          "not clearly beat `sham cid%7` has discriminated nothing — it has broken flat ties, which "
-          "any number of that size does. `sham position` is the floor: a leg below it loses to list "
-          "order. And beating the shams shows a leg DISCRIMINATES, never that it discriminates "
-          "CORRECTLY — the corpus rules chosen options, not internal orderings, so the decision test "
-          "remains `decider_lab.py diff --baseline data/decider_lab/baseline.json` against a "
-          "pre-registered prediction. This probe reports; it does not gate.")
+    print()
+    print(READING)
     return 0
 
 

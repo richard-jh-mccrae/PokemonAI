@@ -44,11 +44,10 @@ REPO = Path(__file__).resolve().parents[3]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.probes._corpus import replay_agent                  # noqa: E402
+from train.probes._sham import READING, SHAMS, argmax, legs    # noqa: E402  THE sham vocabulary
 from train.gates import keyed_corrections                      # noqa: E402
 from common.state_model import TheirSide                       # noqa: E402
 from common.strategy.combat import SurvivalClock               # noqa: E402
-
-_SHAMS = (("S_cid", "sham cid%7"), ("S_hp", "sham hp%70"), ("S_pos", "sham position"))
 
 
 def _tune():
@@ -65,29 +64,27 @@ class _IntegerClock:
     hand-rebuilt "what it used to do" is exactly the kind of second oracle ADR-TEMP-398 exists to
     avoid — it would drift from the real prior behaviour and nothing would report it."""
 
-    def __enter__(self):
-        self._real = TheirSide.survival_clock
+    _real = None
 
-        def integer_only(side, my_body, **kw):
-            clock = self._real(side, my_body, **kw)
+    def __enter__(self):
+        if _IntegerClock._real is not None:
+            raise RuntimeError("_IntegerClock is not re-entrant — a nested enter would capture the "
+                               "PATCHED function as the real one and never restore it")
+        _IntegerClock._real = real = TheirSide.survival_clock
+
+        def integer_only(side, *a, **kw):
+            # `*a` rather than a named `my_body`: the shipped signature takes it positionally OR by
+            # keyword, and a wrapper that narrows that is a wrapper that changes behaviour.
+            clock = real(side, *a, **kw)
             return SurvivalClock(clock.turns, float(clock.turns))
 
         TheirSide.survival_clock = integer_only
         return self
 
     def __exit__(self, *exc):
-        TheirSide.survival_clock = self._real
-        return False
-
-
-def _argmax(values) -> int | None:
-    """Index of the maximum, FIRST-wins on a tie — stated because under the INT arm most groups are
-    tied and the tie convention IS the answer there. That is the floor every arm clears for free."""
-    best_i, best_v = None, None
-    for i, v in enumerate(values):
-        if best_v is None or v > best_v + 1e-12:
-            best_i, best_v = i, v
-    return best_i
+        TheirSide.survival_clock = _IntegerClock._real
+        _IntegerClock._real = None
+        return False                      # never swallow — restore, then let the frame's try see it
 
 
 def _subset(rows, scope: str):
@@ -150,23 +147,17 @@ def main(argv=None) -> int:
             if len(pre) < 2:
                 continue
             counts[scope] += 1
-            base = _argmax([r["value"] for r in pre])
-            if _argmax([r["value"] for r in post]) != base:
+            base = argmax([r["value"] for r in pre])
+            if argmax([r["value"] for r in post]) != base:
                 moved[("FRAC", scope)] += 1
-            for k, _label in _SHAMS:
-                legs = []
-                for i, r in enumerate(pre):
-                    if k == "S_cid":
-                        leg = ((int(r["id"] or 0) % 7) / 7.0) * band
-                    elif k == "S_hp":
-                        leg = ((float((r["body"] or {}).get("hp") or 0) % 70) / 70.0) * band
-                    else:
-                        leg = (i / max(1, len(pre))) * band
-                    # `opponent_target_value` is LINEAR in `prize_advance`, so adding the sham to the
-                    # finished value is exactly adding it to that term — one fewer re-derivation to
-                    # get wrong, and it keeps the arms differing only by the leg under test.
-                    legs.append(r["value"] + leg)
-                if _argmax(legs) != base:
+            for k, _label in SHAMS:
+                # `opponent_target_value` is LINEAR in `prize_advance`, so adding the sham leg to the
+                # finished value is exactly adding it to that term — one fewer re-derivation to get
+                # wrong, and it keeps the arms differing only by the leg under test.
+                shammed = [r["value"] + legs(k, band=band, card_id=r["id"],
+                                             hp=(r["body"] or {}).get("hp"), index=i, of=len(pre))
+                           for i, r in enumerate(pre)]
+                if argmax(shammed) != base:
                     moved[(k, scope)] += 1
 
     print(f"corpus                              : {len(frames)} replayable corrections")
@@ -184,21 +175,15 @@ def main(argv=None) -> int:
     print()
     b, a = counts["bench"], counts["all"]
     print(f"{'arm':<22} {'BENCH (real seam)':<22} all rows")
-    for k, label in (("FRAC", "fractional clock"),) + _SHAMS:
+    for k, label in (("FRAC", "fractional clock"),) + SHAMS:
         bench = f"{moved[(k,'bench')]}/{b} ({100*moved[(k,'bench')]/b:.1f}%)" if b else "-"
         allr = f"{moved[(k,'all')]}/{a} ({100*moved[(k,'all')]/a:.1f}%)" if a else "-"
         print(f"{label:<22} {bench:<22} {allr}")
         if k == "FRAC":
             print(f"{'':-<22} {'':-<22} {'':-<18}")
 
-    print("\nREAD `fractional clock` AGAINST THE SHAM ROWS, NOT AGAINST ZERO. The tie rows above are "
-          "why: under INT the ranking is flat on most equal-prize groups, so ANY term of this size "
-          "moves the argmax by breaking ties, and a leg that does not clearly beat `sham cid%7` has "
-          "discriminated nothing. `sham position` is the floor — a leg below it loses to list order, "
-          "which is exactly what a Flat Tie already falls back to. And beating the shams shows the "
-          "clock DISCRIMINATES, never that it discriminates CORRECTLY: the corpus rules chosen "
-          "options, not internal orderings, so the decision test remains `decider_lab.py diff "
-          "--baseline data/decider_lab/baseline.json`. This probe reports; it does not gate.")
+    print()
+    print(READING)
     return 0
 
 

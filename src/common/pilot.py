@@ -8867,12 +8867,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # at t=1, so energy cost, scaled damage, riders, weakness and the full forward closure are
         # all in there). This reads the crossing point instead of the turn it lands in.
         #
-        # ⚠️ It fixes 12.7% of the Flat Tie and no more. `incoming` is a per-turn MAXIMUM, so
-        # removing any body that is not the argmax moves nothing and prices at EXACTLY 0 — 1036 of
-        # 1244 corpus bodies do. At most one body per board can carry a non-zero shift, none when
-        # two tie for the lead, and the Active is usually the maximum — so on the BENCH, which is
-        # the only scope `gust_target_slot` reads, this term still ranks almost nothing. That is
-        # Issue #398's open defect, not something this line claims to have solved.
+        # ⚠️ It fixes a MINORITY of the Flat Tie. `incoming` is a per-turn MAXIMUM, so a body scores
+        # only where it is the unique lead at some turn before the crossing — most opponent bodies
+        # never lead, and price at EXACTLY 0 at any resolution (a Structural Zero). The Active is
+        # usually that lead, so on the BENCH, which is the only scope `gust_target_slot` reads, this
+        # term still ranks almost nothing. That is Issue #398's open defect, not something this line
+        # claims to have solved. Numbers and derivation: ADR-TEMP-398, not restated here.
         #
         # The other clock families (`survival`, `readiness`, `threat`) keep the integer: each
         # carries scale anchors calibrated against it, and widening them is a separate, unmeasured
@@ -9452,6 +9452,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # `self._opp_attack_context` is `None` on a hand-built board that never went through
         # `_board`, which reproduces exactly today's reading rather than raising — the same
         # fail-to-current-behaviour contract `_deny_rows` gives such a caller.
+        #
+        # STAYS ON THE INTEGER READING, stated because the sibling Δ did not (ADR-TEMP-398).
+        # `_opponent_target_rows`' `survival_shift` took the Fractional Survival Clock and this
+        # `strip_shift` lands in the SAME row dict, so the asymmetry is visible and needs a reason
+        # rather than a shrug. The reason is scope, not principle: this Δ's consumer is ADR-0084
+        # decision 7's LEXICOGRAPHIC TIEBREAK, whose ordering was measured under whole turns, and
+        # the fractional reading has not been measured here. CONTEXT.md's Two Clocks entry records
+        # the open half — `strip_shift > 0` still means "delays my death by a whole turn or more",
+        # the 128-of-218 gap Issue #217 measured. Widening it is unscoped work, not an oversight.
         ctx = self._opp_attack_context
         base = model.theirs.turns_to_ko_me(ma, bodies=bodies, opp_active=opp_active,
                                            switch_enabler=enabler, charged=self._DENY_CHARGED,

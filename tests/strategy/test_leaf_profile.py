@@ -107,9 +107,15 @@ PER_DECISION_PROFILE = frozenset({
     "theirs.incoming",                # ← POC-T1: the FOLDED doom read, at the `UNCHARGED` policy
     "theirs.prizes_remaining",
     # ← POC-T1: `opponent_target_value`'s removal Δ. RENAMED from `theirs.turns_to_ko_me` by
-    # ADR-TEMP-398, and a rename is all it is: the integer route is now that clock's `.turns` view,
-    # so one logical read still registers ONE field and the per-side cost is unchanged. Re-pinned on
-    # that basis rather than re-measured, because nothing new is being computed.
+    # ADR-TEMP-398, and a rename is all it is: the integer route is that clock's `.turns` view.
+    #
+    # **Measured before re-pinning**, as this pin's own note demands — an argument that a rename
+    # costs nothing is not the same as a measurement that it costs nothing, and this pin exists
+    # because that difference caught a real +36% defect (Issue #261 item 2d, above). On the
+    # `test_state_model` fixture: ONE `turns_to_ko_me()` registers exactly one field
+    # (`theirs.survival_clock`), taking BOTH readings still registers that same one field, and the
+    # two share ONE memo entry (1 before, 1 after). `turns_to_ko_me` no longer calls `_memoized` at
+    # all, so there is no second registration to find. Field-set cardinality is unchanged.
     "theirs.survival_clock",
 })
 

@@ -46,17 +46,33 @@ per-turn **maxima**, which ADR-0071 decision 4 chose deliberately as the bounded
 A removal Δ therefore has a structural consequence nobody had stated:
 
 > **Removing a body that is not the argmax leaves the maximum untouched, so its removal Δ is
-> exactly 0 at ANY resolution.** At most ONE body per board can carry a non-zero `survival_shift`,
-> and NONE can when two bodies tie for the lead.
+> exactly 0 at ANY resolution.** A body scores only where it is the UNIQUE argmax at some turn at
+> or before the crossing; where two bodies tie for the lead at every turn, NEITHER scores.
 
-Confirmed analytically on a synthetic board with no corpus involved
+⚠️ **A stronger form of this claim was drafted and is false.** The first version read *"at most ONE
+body per board can carry a non-zero `survival_shift`"*. That is wrong: `incoming(t)` grants each
+form `attached + t` energy, so the leading form can CHANGE across turns, and every body that leads
+at some turn before the crossing scores. Constructed counter-example, verified — my 300 HP, their
+`Early` (cost 1, 100/turn) and `Late` (cost 3, 250 from t=3):
+
+```
+both present            -> turns=3 exact=2.4
+remove Early            -> turns=4 exact=3.2    shift +0.8000   (led at t=1,2)
+remove Late             -> turns=3 exact=3.0    shift +0.6000   (led at t=3)
+```
+
+Both score. The corpus average (208 non-zero shifts over 359 frames) is consistent with the false
+form, which is exactly why an average must not be read as a bound. Pinned as
+`test_more_than_one_body_scores_when_the_lead_changes_across_turns`.
+
+The weaker, true form is confirmed analytically where the lead does NOT change
 (`tests/strategy/test_opponent_target_value.py`):
 
 ```
-board [C60, D90, A]     remove C60 -> +0.0000   (not the max)
-                        remove D90 -> +0.0000   (not the max)
-                        remove A   -> +0.1111   (the max)
-board [A, A]            shifts [0.0, 0.0]       (neither is the UNIQUE max)
+board [C60, D90, A]     remove C60 -> +0.0000   (never leads)
+                        remove D90 -> +0.0000   (never leads)
+                        remove A   -> +0.1111   (leads at every turn)
+board [A, A]            shifts [0.0, 0.0]       (neither is the UNIQUE lead)
 ```
 
 The consequence for the live seam is sharper than the corpus average suggests: `gust_target_slot`
