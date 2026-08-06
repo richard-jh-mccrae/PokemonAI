@@ -79,7 +79,11 @@ MASTER_BALL, POKE_PAD, ULTRA_BALL, DAWN, POWER_PRO, GEAR, ENERGY_SEARCH = (
 #   1205 Cyrano           Supporter  "up to 3 Pokemon {ex}" — the multi-card delivery to HAND.
 #   1086 Buddy-Buddy Poffin Item      "up to 2 Basic Pokemon with 70 HP or less" ONTO YOUR BENCH.
 #   1126 Precious Trolley  Item       "any number of Basic Pokemon" onto the Bench — `amount: "all"`.
+#   1206 Larry's Skill    Supporter  "Discard your hand and search your deck for..." — `discard_hand`,
+#                                    a cost with no fixed count. BOGUS_COST is synthetic: a cost
+#                                    value the compendium never declared, reachable no other way.
 HILDA, GONG, BROCK, CYRANO, POFFIN, TROLLEY = 1225, 1142, 1210, 1205, 1086, 1126
+LARRY, BOGUS_COST = 1206, 1194
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 E_F = 6
 
@@ -106,6 +110,8 @@ _STATS = {
     CYRANO: CardStat(CYRANO, name="Cyrano", cardType=_SUPPORTER),
     POFFIN: CardStat(POFFIN, name="Buddy-Buddy Poffin", cardType=_ITEM),
     TROLLEY: CardStat(TROLLEY, name="Precious Trolley", cardType=_ITEM),
+    LARRY: CardStat(LARRY, name="Larry’s Skill", cardType=_SUPPORTER),
+    BOGUS_COST: CardStat(BOGUS_COST, name="Colress’s Tenacity", cardType=_SUPPORTER),
 }
 
 #: The committed `card_effects.json` rows for these cards, copied verbatim. `POWER_PRO` is absent on
@@ -134,6 +140,9 @@ _CLAUSES = {
               "amount": 2, "dest": "bench"}],
     TROLLEY: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": "all",
                "dest": "bench"}],
+    LARRY: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_hand"}],
+    # A cost value `COST_CARDS` has never heard of — the drift case, which no real card provides.
+    BOGUS_COST: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_9"}],
 }
 
 
@@ -604,3 +613,86 @@ def test_a_kind_other_than_PLAY_refuses():
     the structural floor this module writes around the reveal does not hold for it."""
     with pytest.raises(bd.Unmodellable, match="kind"):
         be.expectation(_search_board(), {"type": _ATTACH, "index": 0})
+
+
+# ── the COST: applied before the search, from an oracle the caller supplies ────────────────────────
+
+
+def _shed_first(n):
+    """A stand-in `shed` oracle: take the first `n` hand cards that are not the one being played.
+
+    Deliberately dumb. The REAL oracle is `Pilot.cost_shed_indices`, which asks
+    `needs.cheapest_removal` — the equation that decides the live discard. This node's contract is
+    only that it applies whatever set it is handed, so the tests must not depend on which set."""
+    def shed(model, option, picks):
+        hand = ((model.source_obs["current"]["players"])[0].get("hand") or ())
+        return [i for i in range(len(hand)) if i != option.get("index")][:n]
+    return shed
+
+
+def test_a_costed_search_refuses_when_no_shed_oracle_is_supplied_and_NAMES_the_seam():
+    """The fail-closed direction, and the one that matters. Pricing the cost UNPAID would over-value
+    every Ultra Ball by the two cards it does not charge for, so the node refuses instead — and the
+    refusal names the missing seam rather than the card, because supplying it is the caller's job."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    with pytest.raises(bd.Unmodellable, match="no `shed` oracle"):
+        be.expectation(board, _play_option())
+
+
+def test_a_costed_search_ENUMERATES_once_the_oracle_is_supplied():
+    """Ultra Ball is 65 of the corpus's 69 cost-refused steps and sits in all five shipped decks."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    exp = be.expectation(board, _play_option(), shed=_shed_first(2))
+    assert exp.classes and exp.total_probability == pytest.approx(1.0)
+
+
+def test_the_cost_is_charged_BEFORE_the_search_so_a_found_card_cannot_pay_for_itself():
+    """The engine's own order — `chain_overrides.json` gives 1121 `play: [costHandTrash,
+    effectDeckToHandAndShuffle]`. Observable rather than cosmetic: charging afterwards would let a
+    delivered card be discarded to pay for the search that delivered it.
+
+    Asserted on the resulting board: the two paid cards and the played card are all in my discard,
+    the delivered card is in my hand, and the hand is exactly the delivery."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    exp = be.expectation(board, _play_option(), shed=_shed_first(2))
+    for cls in exp.classes:
+        me = (cls.model.source_obs["current"]["players"])[0]
+        assert [c["id"] for c in me["discard"]].count(RIOLU) == 2      # both paid cards
+        assert ULTRA_BALL in [c["id"] for c in me["discard"]]          # ...and the source card
+        assert len(me["hand"]) == 1 and me["handCount"] == 1           # only the delivery remains
+
+
+def test_the_cost_never_takes_the_card_being_played():
+    """The engine's gate is `handOthers` — *"discard 2 OTHER cards"*. An oracle naming the played
+    card's own index has it dropped, which then makes the payment short and the play refuse rather
+    than silently discarding the card mid-play."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    def names_the_played_card(model, option, picks):
+        return [0, 1]                                    # index 0 IS the Ultra Ball being played
+    with pytest.raises(bd.Unmodellable, match="usable hand index"):
+        be.expectation(board, _play_option(), shed=names_the_played_card)
+
+
+def test_an_unpayable_cost_refuses_as_an_ILLEGAL_play_not_a_free_one():
+    """A one-card hand cannot pay "discard 2 other cards", so the play is not legal on this board —
+    the engine would never offer it. Refusing keeps an unreal option off the menu; pricing it as
+    merely cheap would put one on with a positive delta."""
+    with pytest.raises(bd.Unmodellable, match="usable hand index"):
+        be.expectation(_search_board(hand=(ULTRA_BALL,)), _play_option(), shed=_shed_first(2))
+
+
+def test_a_cost_with_no_fixed_count_refuses_by_NAME():
+    """`COST_CARDS` maps `discard_hand` and `bottom_2` to None, for two different reasons the
+    refusal states: a whole-hand discard has no constant count, and `bottom_2` returns cards to the
+    DECK — which moves `unseen_counts` and would invalidate the very pool being enumerated."""
+    board = _search_board(hand=(LARRY,))
+    with pytest.raises(bd.Unmodellable, match="no fixed card count"):
+        be.expectation(board, _play_option(), shed=_shed_first(2))
+
+
+def test_an_undeclared_cost_value_fails_CLOSED():
+    """Vocabulary drift, in the cost dimension — the same fail-closed rule the unknown-key gate
+    keeps. A cost nobody declared a count for must refuse, never charge 0."""
+    board = _search_board(hand=(BOGUS_COST,))
+    with pytest.raises(bd.Unmodellable, match="not in `snapshot_coverage.COST_CARDS`"):
+        be.expectation(board, _play_option(), shed=_shed_first(2))

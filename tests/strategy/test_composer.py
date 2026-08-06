@@ -66,6 +66,12 @@ RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 AURA_JAB, MEGA_BRAVE = 982, 983
 E_F, TOOL, ITEM = 6, 1159, 1125
 SUPPORTER, STADIUM = 1200, 1242
+#   1121 Ultra Ball        Item — the REAL costed search: "You can use this card only if you discard
+#                          2 other cards from your hand." 65 of the corpus's 69 cost-refused steps,
+#                          and in all five shipped decks. Kept out of `_STATS` for the same reason
+#                          the two rows below are: every other fixture's menu stays what it was.
+ULTRA_BALL = 1121
+_STATS_ULTRA = CardStat(ULTRA_BALL, name="Ultra Ball", cardType=1)
 
 _STATS = {
     RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING),
@@ -90,8 +96,8 @@ _ATTACKS = {AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGH
                                    energyTypes=(FIGHTING, FIGHTING))}
 
 
-def _combat(clauses=None):
-    return CombatMath(DictCardStatProvider(_STATS, attacks=_ATTACKS),
+def _combat(clauses=None, *, extra_stats=None):
+    return CombatMath(DictCardStatProvider({**_STATS, **(extra_stats or {})}, attacks=_ATTACKS),
                       functions=CardFunctions({}), transients=None,
                       effects=CardEffects(clauses or {}))
 
@@ -1249,3 +1255,40 @@ def test_the_composer_never_mutates_the_model_it_was_handed():
     cp.compose(model, options)
     assert state_value(model) == before
     assert model.source_obs == obs
+
+
+@pytest.mark.req("REQ-COMPOSER-0009")
+def test_a_costed_search_needs_the_shed_seam_and_REFUSES_without_it():
+    """**The third caller-supplied seam, beside `deterministic` and `clauses_cover`.**
+
+    Ultra Ball's *"discard 2 other cards"* has to be charged before its pool is enumerated, and WHICH
+    cards it takes is a live decision `needs.cheapest_removal` already makes at the real select. This
+    module cannot ask it — no `Pilot` is reachable from `composer.py`, and `StateModel.mine.needs` is
+    either absent in production or the LEAF resolution, which is resolved without general slots or
+    pitch terms and is pinned to the ROOT observation. So the CALLER passes it in.
+
+    Left unset, the option is REFUSED and the gap names the seam. That is the fail-closed direction
+    and it is the one that matters: pricing the cost unpaid would over-value every Ultra Ball by the
+    two cards it does not charge for, and 65 of the corpus's 69 cost-refused steps are Ultra Ball."""
+    ULTRA = ULTRA_BALL
+    clauses = {ULTRA: [{"kind": "fetch", "target": "pokemon", "zone": "deck",
+                        "cost": "discard_2", "cost_required": True}]}
+    deck = [RIOLU] * 3 + [MEGA_LUC] + [E_F] * 6 + [ULTRA]
+    obs = _obs(_player(active=_body(RIOLU, energy=[FIGHTING]), hand=[ULTRA, RIOLU, RIOLU],
+                       deck_count=len(deck)))
+    model = StateModel.build(obs, combat=_combat(clauses, extra_stats={ULTRA: _STATS_ULTRA}),
+                             deck=deck)
+    play = {"type": _PLAY, "area": HAND, "index": 0}
+
+    without = cp.compose(model, [play, {"type": _END}])
+    assert any("shed" in gap for gap in without.gaps), without.gaps
+
+    # ...and with the seam supplied it enumerates. The oracle here is deliberately dumb — the real
+    # one is `Pilot.cost_shed_indices`; this node's contract is only that it APPLIES the set it is
+    # handed, so the test must not depend on which set that is.
+    def shed(_model, option, picks):
+        return [i for i in (1, 2, 3, 4) if i != option.get("index")][:picks]
+
+    with_seam = cp.compose(model, [play, {"type": _END}], shed=shed)
+    assert not any("shed" in gap for gap in with_seam.gaps), with_seam.gaps
+    assert with_seam.bounds, "the costed search should now reach the expectation-node telemetry"

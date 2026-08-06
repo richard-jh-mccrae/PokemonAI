@@ -211,8 +211,16 @@ _HANDLED_FETCH_KEYS = frozenset({
     "kind", "target", "zone", "amount", "dest",
     # target predicates, every one of them resolved by the shipped `fetch_target_matches`
     "energy_type", "hp_max", "no_rule_box", "no_ability",
-    # a flag that only says the player picks, which is already this node's whole semantics
+    # the RELATION between several revealing legs — a union's shared cap versus a conjunction's one
+    # card per leg. Read by `fetch_closure.reveal_legs`, which both reveal nodes share, since Issue
+    # #394; before that it was inert and this comment called it "a flag that only says the player
+    # picks", which is not what `CLAUSE_PARAMETERS` declares it to mean.
     "choice",
+    # the play's price, applied BEFORE the search from a caller-supplied `shed` oracle. `cost` names
+    # the count via `snapshot_coverage.COST_CARDS`; `cost_required` is the playability half of the
+    # same fact and needs no separate handling here, because an unpayable cost already refuses as an
+    # illegal play rather than a free one.
+    "cost", "cost_required",
 })
 
 
@@ -291,10 +299,17 @@ def _check_clause(clause: dict, card_id, name) -> None:
     if clause.get("zone") != "deck":
         _no(card_id, name, f"a {clause.get('zone')!r}-zone search carries NO chance — that zone is "
                            f"visible — so it is a pure CHOICE node, not an expectation")
-    if clause.get("cost") is not None:
-        _no(card_id, name, "its `cost` names no target — WHICH cards are paid is chosen at a "
-                           "follow-up select, structurally the same case as the seam's 63 "
-                           "target-at-a-select refusals")
+    cost = clause.get("cost")
+    if cost is not None:
+        if cost not in snapshot_coverage.COST_CARDS:
+            _no(card_id, name, f"cost {cost!r} is not in `snapshot_coverage.COST_CARDS` — fail "
+                               f"closed against vocabulary drift, exactly as this module's "
+                               f"unknown-key gate does")
+        if snapshot_coverage.COST_CARDS[cost] is None:
+            _no(card_id, name, f"cost {cost!r} names no fixed card count. `discard_hand` pays the "
+                               f"whole hand, whose size is not a constant; `bottom_2` returns cards "
+                               f"to the DECK, which moves `unseen_counts` and would invalidate the "
+                               f"pool this node enumerates over")
     amount = clause.get("amount")
     if amount is not None and not (isinstance(amount, int) and not isinstance(amount, bool)
                                    and amount >= 1):
@@ -346,7 +361,38 @@ def _class_weight(model, delivered: tuple) -> float:
     return weight
 
 
-def _revealed(model, option, delivered: tuple, *, seat_index, stat):
+def _paid(model, option, legs, *, seat_index, card_id, name, shed) -> tuple:
+    """The HAND INDICES this play's cost takes, ``()`` when it is free, or a refusal.
+
+    **The seam, not a second formula.** WHICH cards a cost discards is a live decision the Pilot's
+    `needs.cheapest_removal` already makes at the real select; this node must assume the set that
+    decider would pick, so the answer is passed IN by whoever holds a Pilot. With no oracle supplied
+    it REFUSES and names the missing seam — it never prices the cost unpaid, which would over-value
+    every Ultra Ball by the two cards it does not charge for.
+
+    Indices are validated against the hand and de-duplicated, and the played card is excluded: the
+    engine's own gate is `handOthers`, *"discard 2 OTHER cards"*."""
+    cost = next((leg.get("cost") for leg in legs.legs if leg.get("cost") is not None), None)
+    if cost is None:
+        return ()
+    picks = snapshot_coverage.COST_CARDS[cost]          # `_check_clause` proved it is a real count
+    if shed is None:
+        _no(card_id, name, f"its cost {cost!r} takes {picks} card(s) from my hand and no `shed` "
+                           f"oracle was supplied — WHICH cards is the live decider's answer "
+                           f"(`needs.cheapest_removal`), so the caller must pass it in rather than "
+                           f"have this node invent a second one")
+    hand = ((model.source_obs.get("current") or {}).get("players") or [{}])[seat_index].get("hand")
+    played = option.get("index")
+    taken = tuple(dict.fromkeys(int(i) for i in (shed(model, option, picks) or ())))
+    legal = tuple(i for i in taken if 0 <= i < len(hand or ()) and i != played)
+    if len(legal) != picks:
+        _no(card_id, name, f"its cost takes {picks} card(s) and the `shed` oracle named {len(legal)} "
+                           f"usable hand index(es) — the play is not legal on this board (the "
+                           f"engine's own `handOthers` gate), so there is nothing to enumerate")
+    return legal
+
+
+def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple = ()):
     """The observation after the search RESOLVES: the source card in my discard, the found card(s) in
     my hand, and the Supporter allowance spent if one was.
 
@@ -358,10 +404,27 @@ def _revealed(model, option, delivered: tuple, *, seat_index, stat):
     across, which is what lets the caller rebuild with ``reuse_their_side=True``.
 
     The source card is spent ONCE per play, never once per delivered card — a conjunction is one
-    Supporter resolving into several picks, not several plays."""
+    Supporter resolving into several picks, not several plays.
+
+    ``paid`` are the hand indices this play's cost takes, applied BEFORE the search — the engine's
+    own order (`chain_overrides.json` 1121: ``play: [costHandTrash, effectDeckToHandAndShuffle]``).
+    The order is observable rather than cosmetic: charging after would let a delivered card be
+    discarded to pay for its own search. Removed highest-index-first so the earlier indices stay
+    valid, and the played card's index is re-resolved afterwards for the same reason."""
     new_obs, current, players = board_delta.fork(model.source_obs)
     me = board_delta.fork_player(players, seat_index)
-    played = board_delta.take_from_hand(me, option.get("index"), "reveal")
+    index = option.get("index")
+    if paid:
+        hand = list(me.get("hand") or ())
+        spent = [hand[i] for i in sorted(paid, reverse=True)]
+        for i in sorted(paid, reverse=True):
+            hand.pop(i)
+        me["hand"] = hand
+        if me.get("handCount") is not None:
+            me["handCount"] = len(hand)
+        me["discard"] = list(me.get("discard") or ()) + list(reversed(spent))
+        index = index - sum(1 for i in paid if i < index)      # the play's own index shifts down
+    played = board_delta.take_from_hand(me, index, "reveal")
     # `docs/rulebook.txt` L78 — the card that performed the search is out of play once it resolves.
     me["discard"] = list(me.get("discard") or ()) + [played]
     # The found cards, synthesized: the deck is face-down, so they have no observed `serial`. That is
@@ -461,7 +524,8 @@ def _classes_for(legs, pools: tuple) -> list:
     return multiset_classes(union, legs.cap)
 
 
-def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP):
+def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP,
+                shed=None):
     """The :class:`~common.apply_option.Expectation` over ``option``'s reveal, or
     :class:`~common.board_delta.Unmodellable`.
 
@@ -521,6 +585,7 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     for leg in legs.legs:
         _check_clause(leg, card_id, name)
 
+    paid = _paid(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
     pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
     candidates = _classes_for(legs, pools)
     if not candidates:
@@ -539,7 +604,8 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     kept, dropped = ranked[:int(cap)], ranked[int(cap):]
     classes = []
     for klass in kept:
-        after_obs, at = _revealed(model, option, klass, seat_index=seat_index, stat=stat)
+        after_obs, at = _revealed(model, option, klass, seat_index=seat_index, stat=stat,
+                                  paid=paid)
         classes.append(OutcomeClass(
             probability=weights[klass] / mass,
             # The reveal never reaches across the table, so their already-built side is reusable —

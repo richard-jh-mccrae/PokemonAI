@@ -89,6 +89,23 @@ def leg_pool(model, clause: dict) -> dict:
             if n > 0 and fetch_target_matches(probe, model.card_stat(cid))}
 
 
+def _census_shed(model, option, picks):
+    """A STAND-IN cost oracle for the census only, and it must not be mistaken for the real one.
+
+    The real seam is `Pilot.cost_shed_indices`, which asks `needs.cheapest_removal` — the equation
+    that decides the live discard. This walk builds a bare `StateModel` with no Pilot, so it cannot
+    ask that. It takes the first legal hand cards instead.
+
+    That is sound for THIS measurement and only this one: the question here is *"can the node
+    enumerate this step at all?"*, and the pool a search ranges over does not depend on WHICH hand
+    cards paid for it — `MySide.visible_counts` counts hand and discard alike, so a hand->discard
+    move leaves `unseen_counts` untouched. It would NOT be sound for anything that reads the
+    resulting board's hand."""
+    hand = ((model.source_obs.get("current") or {}).get("players") or [{}])[
+        int(getattr(model, "my_index", 0))].get("hand") or ()
+    return [i for i in range(len(hand)) if i != option.get("index")][:picks]
+
+
 def walk(paths, *, combat):
     """Every refused `_PLAY` step, as ``(card_id, bucket, facts)`` rows. One pass serves both
     reports — the walk is the expensive half (a `StateModel` per step), and running it twice to
@@ -124,7 +141,8 @@ def walk(paths, *, combat):
                 continue                        # the deterministic seam handled it
             refused += 1
             try:
-                enumerated[len(be.expectation(pre, option, seat_index=seat).classes)] += 1
+                enumerated[len(be.expectation(pre, option, seat_index=seat,
+                                              shed=_census_shed).classes)] += 1
                 continue
             except Exception as exc:
                 message = str(exc)
