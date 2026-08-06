@@ -53,7 +53,6 @@ _ACTIVATE = 43      # SelectContext.ACTIVATE — "use the Ability?" (YES/NO; sel
 _YES = 1            # OptionType.YES — the affirmative at an ACTIVATE / coin-toss select
 _FIGHTING = 6       # EnergyType.FIGHTING — the deck's only Energy type
 _ATTACH = 8         # OptionType.ATTACH — the turn's manual Energy attach
-_ATTACH_FROM = 21   # SelectContext.ATTACH_FROM — Aura Jab's bench-load recipient pick
 _SETUP_ACTIVE = 1   # SelectContext.SETUP_ACTIVE_POKEMON — the pregame Active pick
 _BENCH = 5          # AreaType.BENCH — the attach target's area (inPlayArea)
 
@@ -134,23 +133,29 @@ HYPOTHESES = [
         and c.attach_target_area == _BENCH
         and "secondary_attacker" in c.attach_target_roles and "engine" in c.attach_target_roles,
         weight=3, status="assumed"),
-    Hypothesis(
-        id="aurajab-skip-partnerless-solrock",
-        rationale="At Aura Jab's ATTACH_FROM bench-load, SKIP a partnerless Solrock — with no Lunatone in "
-                  "play, Cosmic Beam does NOTHING, so loading discard-{F} onto it is inert (ml f87: "
-                  "CRITICAL, all bench targets tied at `spread-attach-to-the-needy` +15 → index picked "
-                  "Solrock). Load the Riolu→Mega line instead. −20 nets the inert Solrock below the line.",
-        when=lambda c: c.select_context == _ATTACH_FROM and c.card_id == SOLROCK
-        and LUNATONE not in c.board.in_play_ids,
-        weight=-20, status="assumed"),
-    Hypothesis(
-        id="aurajab-load-the-wincon-line",
-        rationale="At Aura Jab's ATTACH_FROM, prefer loading the win-condition Line pre-evo "
-                  "(Riolu→Mega Lucario ex): `concentrate-accel-on-one-line-body` did not resolve to the "
-                  "bare 0-Energy Riolu here (ml f87), so the deck states the line preference. +10 lands "
-                  "the load on the Riolu line over an off-line body.",
-        when=lambda c: c.select_context == _ATTACH_FROM and c.card_is_line_preevo,
-        weight=10, status="assumed"),
+    # (aurajab-skip-partnerless-solrock (−20) and aurajab-load-the-wincon-line (+10) RETIRED
+    #  2026-08-06, Issue #425 / epic Issue #421 — SUPERSEDED by the ATTACH DECIDER's own equation
+    #  (`pilot._attach_value`'s `is_from` branch, ADR-0069), which was already deciding this select.
+    #  Both were `assumed`, both were authored off ml f87, and both claimed the same cause: "all bench
+    #  targets tied → the option index picked". That tie is gone. `_partner_absent` — deck-declared
+    #  data (`partners=` below), read on the RECIPIENT leg of `_attach_value` — is the disjunct of
+    #  `non_attacking` that role-gates a Lunatone-less Solrock's attack axis to 0, and
+    #  `_line_payoff_stat` + `_build_standing`'s convex `(matched/slots)**2` prices a bare Riolu by
+    #  Mega Brave's 270, not Accelerating Stab's 30.
+    #  MEASURED before deletion. Base first, per ADR-0121 Decision 0 (a follow-up select is gradeable
+    #  only if the MAIN decision that opened it was correct): of the three ruled 678 ctx-21 frames,
+    #  `train.grab_sweep._off_policy` flags 85058574-121 (two earlier ruled blunders on the same turn)
+    #  and clears ml f87 and 86088989-63 — **2/2 gradeable, 3 raw**. Excluding the third costs nothing:
+    #  it is also the one frame where neither rung ever fired. Then all 70 committed mega_lucario
+    #  Corrections replayed through the shipped Pilot and through the same Pilot with both ids removed:
+    #  ZERO decisions moved, agreement identical on both arms at 50/64 by `satisfies_human` (49/64
+    #  strict — 64, not 70, because six records are prose-only and carry no `correct`), and the two
+    #  rungs were observed firing in the shipped arm on exactly the two gradeable frames (the positive
+    #  control). At ml f87 the equation alone ranks the partnerless Solrock 3.00 against the Riolu's
+    #  18.38; at 86088989-63 the `+10` was actively WRONG, lifting a correctly-computed 0.00 (a Riolu
+    #  already at Mega Brave's full {F}{F}) to 10.00 — deleting it WIDENED the correct margin from
+    #  63.0 to 64.0. `_ATTACH_FROM` went with them: they were its only readers. Covered by the
+    #  "Aura Jab's bench-load" tests in tests/strategy/test_attach_decider.py.)
     Hypothesis(
         id="fetch-the-missing-engine-half",
         rationale="At a search, fetch the MISSING half of the Solrock↔Lunatone engine — an engine piece "
@@ -358,7 +363,9 @@ STRATEGY = Strategy(
     roles=ROLES,
     # The co-dependent one-of-each engine (STRATEGY.md §0): each half is a dead attach target without
     # its partner in play. Deck-declared so the GENERAL attach oracle zeroes a partnerless Solrock /
-    # Lunatone (attach Ruling 6) — the value-side complement of the `skip-partnerless-solrock` rung.
+    # Lunatone (attach Ruling 6). This is now the SOLE expression of that fact — it used to be the
+    # value-side complement of `aurajab-skip-partnerless-solrock`, and Issue #425 retired the rung
+    # once `_attach_value` was measured deciding ml f87 off this declaration alone.
     partners={SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
     # Who takes the ACTIVE Spot at the pregame pick, best first — the COMPLETE ranking of this deck's
     # startable bodies (ADR-0079). Read by the general `open-the-declared-starter`; the ids live here,

@@ -506,6 +506,7 @@ def _agent(rec) -> str:
 _CORPUS = {
     ("82227388", 7): "none",             # an all-Tool menu: nothing here is Energy
     ("86088989", 63): (BENCH, 2),        # over-attach: no 3rd Energy on a 2-cost Lucario (ruled FIX)
+                                         #   — Aura Jab ctx 21; see the Issue #425 family below
     ("86089638", 18): None,              # on-type onto the Dreepy line — assert against `correct`
     ("83037962", 48): None,              # doomed-DON'T-feed: 2 on a body needing 3 that dies = 0
                                          #   (an endorsed development PLAY correctly precedes it)
@@ -515,6 +516,7 @@ _CORPUS = {
     ("82750161", 59): (BENCH, 0),        # overkill cap -> develop the benched second threat
     ("83037962", 70): None,              # feed the accelerator (Turbo Flare routes 3)
     ("84889539", 87): None,              # route to the Riolu line, not a partnerless Solrock
+                                         #   — Aura Jab ctx 21; see the Issue #425 family below
     ("82525101", 69): (ACTIVE, 0),       # go down swinging: the bench Mega cannot pay its retreat
     ("83007714", 65): "none",            # ... but here it CAN: retreat into it, don't feed the doomed
     # Turbo Flare's recipient pick (ctx 21) on a bench of SAME-SPECIES bodies at different charge
@@ -610,9 +612,7 @@ def test_the_82224509_31_legs_are_the_convexity_and_not_a_coincidence():
     What this test adds beyond the `_CORPUS` ranking is the WORKING: the pick is the convex build
     delta doing its job, not a tie broken by luck. The already-3/3 Mega ex prices at exactly 0.0 —
     there is no build progress left to buy — so the margin is structural."""
-    rec = _frame("82224509", 31)
-    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
-    rows = {r["i"]: r for r in (dec.attach_working or {}).get("eq", ())}
+    _rec, _dec, rows = _replay_rows("82224509", 31)
     assert rows, "the decider priced nothing at a ctx-21 select"
     assert max(rows.values(), key=lambda r: r["tactical"])["i"] == 1
     assert rows[0]["tactical"] == 0.0        # the already-3/3 Mega ex: no build left to buy
@@ -690,3 +690,177 @@ def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_wh
     off_colour, off_score = _fired(F_ENERGY)
     assert "attach-off-color-at-fixed-recipient" not in on_colour and on_score == 0.0
     assert "attach-off-color-at-fixed-recipient" in off_colour and off_score == -8.0
+
+
+# --------------------------------- Aura Jab's bench-load (Issue #425, sub-issue of epic Issue #421)
+#
+# Mega Lucario ex's Aura Jab — *"Attach up to 3 Basic {F} Energy cards from your discard pile to your
+# Benched Pokémon in any way you like"* (`data/EN_Card_Data.csv` 678, read at source) — poses the
+# SAME `ATTACH_FROM` (21) recipient select as Cinderace's Turbo Flare above, differing only in source
+# zone (discard, a visible zone, so no odds machinery) and in `target: bench_only` (which the engine
+# encodes in the menu it offers, so no gate reads it).
+#
+# Two `assumed` deck rungs used to decide this select, both authored off `ml` f87 and both claiming a
+# tie broken by option index:
+#
+#   `aurajab-skip-partnerless-solrock` (−20) — *"all bench targets tied at `spread-attach-to-the-needy`
+#                                              +15 → index picked Solrock"*
+#   `aurajab-load-the-wincon-line`     (+10) — *"`concentrate-accel-on-one-line-body` did not resolve
+#                                              to the bare 0-Energy Riolu here"*
+#
+# **Both are RETIRED**, measured 2026-08-06 against `origin/main` @ `e8141b8` before any edit.
+#
+# The validation base is **2/2 gradeable, 3 raw**. ADR-0121 Decision 0 binds here — *a follow-up
+# select is only gradeable if the MAIN decision that opened it was correct* — so the base was run
+# through `train.grab_sweep._off_policy` FIRST: of the three ruled 678 ctx-21 frames, `85058574-121`
+# is off-policy (two earlier ruled blunders on the same turn) and is excluded, while `84889539-87`
+# and `86088989-63` are clean. Excluding it costs the argument nothing: it is also the one frame
+# where neither rung ever fired.
+#
+# On that base, all 70 committed mega_lucario Corrections replayed through the shipped Pilot and
+# through the same Pilot with the two ids filtered out of `strategy.hypotheses` moved **zero**
+# decisions; agreement was identical on both arms at 50/64 by `satisfies_human` (49/64 strict) — 64,
+# not 70, because six records are prose-only and carry no `correct` to grade. The two rungs were
+# observed FIRING in the shipped arm on exactly the two gradeable frames, which is the positive
+# control that makes "nothing moved" mean something. The facts they encoded were already computed:
+# `_partner_absent` for the inert Solrock, and `_line_payoff_stat` + `_build_standing`'s convex
+# `(matched/slots)**2` for the line preference.
+#
+# `src/common/pilot.py` is UNCHANGED by that retirement — this family covers the equation that was
+# already there, on the frames the rungs were written for.
+
+# Card facts VERIFIED at source (data/EN_Card_Data.csv, 2026-08-06).
+RIOLU = 677                         # Basic; Mega Lucario ex's ONLY previous stage. Retreat 2
+MEGA_LUCARIO_EX = 678               # Stage 1 from Riolu; Aura Jab {F} 130 / Mega Brave {F}{F} 270
+_AURAJAB_RUNGS = {"aurajab-skip-partnerless-solrock", "aurajab-load-the-wincon-line"}
+
+
+def _replay_rows(ep, fr):
+    """`(record, decision, {option index: working row})` for a replayed corpus frame.
+
+    The decider's own working rows, keyed by option index — the same read the four `ATTACH_FROM`
+    assertions below and `test_the_82224509_31_legs_...` above all need."""
+    rec = _frame(ep, fr)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
+    return rec, dec, {r["i"]: r for r in (dec.attach_working or {}).get("eq", ())}
+
+
+def test_both_aurajab_rungs_are_retired_from_the_deck_strategy():
+    """The retirement itself, so nothing re-adds either id quietly.
+
+    POSITIVE CONTROL (CLAUDE.md): the same harvest is asserted to still find
+    `attach-solrock-over-line-base` — the deck's OTHER attach rung, which survives because it breaks a
+    benched Solrock-vs-Line-base tie at a type-8 `ATTACH`, a seam this ctx-21 work never touched. An
+    absence assertion against a strategy that failed to load would otherwise pass for the wrong
+    reason."""
+    ids = {h.id for h in _tune()._build_pilot("mega_lucario")[0].strategy.hypotheses}
+    assert not (_AURAJAB_RUNGS & ids), f"retired rungs are back: {sorted(_AURAJAB_RUNGS & ids)}"
+    assert "attach-solrock-over-line-base" in ids, "the deck strategy did not load — control failed"
+
+
+def test_aura_jab_routes_to_the_wincon_line_over_a_partnerless_solrock():
+    """`84889539-87` (**ml f87**, CRITICAL) — the board BOTH retired rungs cite, decided by the
+    equation alone. *"Solrock is worthless without a Lunatone in play."*
+
+    My bench is Solrock / Makuhita / Solrock / Riolu, all at 0 Energy, and there is no Lunatone
+    anywhere in play — Cosmic Beam is *"If you don't have Lunatone on your Bench, this attack does
+    nothing"* (`data/EN_Card_Data.csv` 676, read at source), so both Solrocks are inert.
+
+    `_partner_absent` is read on the RECIPIENT leg of `_attach_value` — it is one disjunct of
+    `non_attacking`, keyed on the target's card id, and `role_gated = non_attacking and
+    attacker_alternative` (so it is necessary here, not sufficient in general: the Riolu is the
+    alternative that lets the gate close at all). Each Solrock therefore comes back `role_gated`, its
+    honestly-computed `build` of 70.0 zeroed out of the attack axis with only Retreat Equity
+    surviving. The Riolu keeps its build: `_line_payoff_stat` resolves it to Mega Lucario ex, whose
+    Mega Brave is `{F}{F}` for 270 (source), so one Energy is (1/2)**2 * 270 * the pre-evo discount.
+
+    This is acceptance criterion 5 of Issue #425: the partnerless Solrock prices **strictly below** the
+    wincon-line pre-evolution, with no rung in the sum."""
+    rec, dec, rows = _replay_rows("84889539", 87)
+    assert dec.chosen == rec.correct == [3]
+    solrock = [r for r in rows.values() if r["target"] == SOLROCK]
+    riolu = rows[3]
+    assert len(solrock) == 2 and riolu["target"] == RIOLU
+    for r in solrock:
+        assert r["role_gated"] is True                  # `_partner_absent`: no Lunatone in play
+        assert r["attack_axis"] == 0.0 and r["build"] > 0.0   # computed, then gated — not unseen
+        assert r["tactical"] < riolu["tactical"]
+    assert riolu["role_gated"] is False and riolu["build"] > 0.0
+
+
+def test_a_solrock_with_its_lunatone_is_the_top_pick_the_control_for_f87s_zero():
+    """The POSITIVE CONTROL for the frame above, taken from the corpus rather than synthesised.
+
+    `86088989-63` puts the SAME card (Solrock, 676) at the same ctx-21 select on a bench that DOES
+    hold a Lunatone. The role gate stands down, the identical Cosmic Beam build of 70.0 reaches the
+    attack axis, and that body becomes the decider's pick. So f87's zero is `_partner_absent` doing
+    its job, not Solrock being priced at zero everywhere."""
+    _, dec, rows = _replay_rows("86088989", 63)
+    solrock = rows[2]
+    assert solrock["target"] == SOLROCK
+    assert solrock["role_gated"] is False and solrock["attack_axis"] > 0.0
+    assert max(rows.values(), key=lambda r: r["tactical"])["i"] == 2
+    assert dec.chosen == [2]
+
+
+def test_aura_jab_does_not_hand_a_third_energy_to_a_two_cost_riolu():
+    """`86088989-63` (CRITICAL) — *"Why give a third energy to Riolu/Lucario who need only 2??"*
+
+    The Riolu on this bench already carries 2 Energy and Mega Brave costs `{F}{F}` (source), so
+    `_build_standing` is already at `(2/2)**2` of the payoff and the delta a third Energy buys is
+    **exactly 0.0** — the same structural zero as the already-3/3 Mega Starmie ex at `82224509-31`.
+    Retreat Equity is 0.0 too (Riolu's printed Retreat is 2 and is already funded), so the whole row
+    is 0.0.
+
+    The retired `aurajab-load-the-wincon-line` was actively WRONG here: it fired `+10` on this option
+    and lifted a correctly-computed 0.0 to 10.0. Removing it widened the correct answer's margin from
+    63.0 to 64.0."""
+    _, _, rows = _replay_rows("86088989", 63)
+    riolu = rows[3]
+    assert riolu["target"] == RIOLU
+    assert riolu["build"] == 0.0 and riolu["retreat_equity"] == 0.0 and riolu["tactical"] == 0.0
+
+
+def test_the_678_validation_base_is_two_of_three_and_names_which_one_is_off_policy():
+    """The base this retirement rests on, measured rather than assumed — **2/2 gradeable, 3 raw**.
+
+    ADR-0121 Decision 0: *a follow-up select is only gradeable if the MAIN decision that opened it
+    was correct*. An `ATTACH_FROM` menu exists only because the agent attacked with Aura Jab, so if
+    that turn's earlier play was itself ruled a blunder, the board is one the agent should never have
+    reached and a Correction filed on it is not evidence about the recipient pick.
+
+    `85058574-121` is exactly that: two earlier ruled Corrections on the SAME turn 10 (`f114`
+    wrong_attack, `f109` other, both MAIN). Its own rationale says the same thing from the other
+    direction — *"TURN-PLANNER scope, NOT the single-turn energy oracle"* — and the record is
+    `scope="turn"`. It is EXCLUDED, not failed, and excluding it costs the retirement nothing: it is
+    also the one frame of the three where neither retired rung ever fired.
+
+    POSITIVE CONTROL, required because this test's headline is an absence: the same detector is
+    pointed at the ctx-7 base, where ADR-0121 measured 15 of 31 off-policy. A detector that has gone
+    quiet would otherwise certify every frame as clean.
+
+    A test asserting the two survivors' DECISIONS is above; this one asserts only who is in the base
+    and who is not. Delete it the day the Turn Planner reaches `85058574-121` and the record stops
+    being off-policy — do NOT relax it into grading that frame."""
+    from train.blunder.store import load_corrections
+    from train.grab_sweep import _off_policy
+
+    corrs = load_corrections(str(REPO / "data" / "corrections"))
+    by_ep: dict = {}
+    for c in corrs:
+        by_ep.setdefault((c.agent, c.episode_id), []).append(c)
+
+    def _ctx(c):
+        return ((c.obs or {}).get("select") or {}).get("context")
+
+    def _effect(c):
+        return (((c.obs or {}).get("select") or {}).get("effect") or {}).get("id")
+
+    base = {f"{c.episode_id}-{(c.decision or {}).get('frame')}": _off_policy(c, by_ep)
+            for c in corrs if c.obs and _ctx(c) == 21 and _effect(c) == MEGA_LUCARIO_EX}
+    assert set(base) == {"84889539-87", "85058574-121", "86088989-63"}, f"base moved: {sorted(base)}"
+    assert not base["84889539-87"] and not base["86088989-63"]        # the two the equation is graded on
+    assert base["85058574-121"], "the off-policy frame stopped being flagged — re-rule the base"
+
+    flagged7 = [c for c in corrs if c.obs and _ctx(c) == 7 and _off_policy(c, by_ep)]
+    assert flagged7, "CONTROL FAILED: the detector flags nothing at ctx 7 either — it is broken"
