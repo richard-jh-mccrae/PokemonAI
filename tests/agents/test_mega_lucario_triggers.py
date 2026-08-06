@@ -209,11 +209,17 @@ def test_grab_the_gust_supporter_when_a_gust_kos():
 
 @pytest.mark.req("REQ-ML-0016")
 def test_grab_a_draw_supporter_in_setup_default():
-    """No closing gust available: in SETUP the grab defaults to a draw Supporter (keep digging)."""
+    """No closing gust available: in SETUP the grab defaults to a draw Supporter (keep digging).
+
+    `grab-a-draw-supporter-in-setup` was RETIRED 2026-08-06 (ADR-0122 amendment) — a flat category
+    credit for exactly what `_grab_refresh_value`'s real swing (`_refresh_swing`) now measures, and
+    stacking them double-counted (ml f71: a Lillie's that could not be played tied a playable Item at
+    8.00 and the option index broke it wrong). The DEFAULT this test names still holds — a draw
+    Supporter still outscores a silent option in SETUP — it is just no longer a rung to name."""
     p = _tagged_pilot()
     obs = make_select([card_opt(1, 0)], context=TO_HAND, deck=[{"id": LILLIES}],
                       current=state(active=poke(MAKUHITA, hp=80)))
-    assert "grab-a-draw-supporter-in-setup" in _fired(p.explain(obs).options[0])
+    assert p.explain(obs).options[0].score > 0.0
 
 
 # --- GENERAL: Tuck Tail self-return escape (Tactical _SELF_RETURN_ESCAPE) ----------------------

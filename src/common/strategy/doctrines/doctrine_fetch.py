@@ -56,9 +56,11 @@ _WHIFF_PROB_THRESHOLD = 0.20
 # tutor's held value = the closure-reachable value, recursively free"). Per-hop discount < 1 buys the
 # monotone-decay invariant — a direct target strictly outranks a tutor that merely reaches it at the
 # same select, and each extra hop (a play that reveals nothing until resolved) decays further. 2-hop
-# cap = the gamble's spec-verified one-turn Petrel → Item → target chain. The FLOOR is the flat
-# draw-Supporter band (`grab-a-draw-supporter-in-setup` +10) the chain must out-promise to fire —
-# it also silences noise chains (δ² × the +3 color tie-break ≈ 1.7).
+# cap = the gamble's spec-verified one-turn Petrel → Item → target chain. The FLOOR was the flat
+# draw-Supporter band (`grab-a-draw-supporter-in-setup` +10) the chain had to out-promise to fire; that
+# rung RETIRED 2026-08-06 (ADR-0122 amendment — `_grab_refresh_value` prices a refresh by its real
+# swing instead), so the 10.0 now stands on its own as the noise floor it always also was
+# (δ² × the +3 color tie-break ≈ 1.7). Re-derive it if the chain is ever re-grilled.
 _CHAIN_HOP_DISCOUNT = 0.75
 _CHAIN_MAX_HOPS = 2
 _CHAIN_OPENER_FLOOR = 10.0
@@ -981,18 +983,6 @@ HYPOTHESES = [
         and c.board.gust_best_ko_prizes > 0,
         weight=20, status="assumed"),
     Hypothesis(
-        id="grab-a-draw-supporter-in-setup",
-        rationale="The setup default of the context-ranked Supporter grab: with no closing gust "
-                  "available, take a `draw` Supporter (Lillie's / Judge) to keep digging. Below the "
-                  "gust rung (+20) so the closing gust still wins, and modest so `fetch-the-wincon` "
-                  "(+30) and a genuinely needed non-draw grab still outrank it. Gated to a Supporter "
-                  "CARD (`cardType`): a Pokémon carrying a `draw` ABILITY tag (Drakloak's Dig) is NOT a "
-                  "draw Supporter to fetch — that mis-fire made a dead mid-line Drakloak out-grab a live "
-                  "Basic (ep83686860 f33).",
-        when=lambda c: not c.board.line_ready and c.select_context == _TO_HAND and "draw" in c.tags
-        and bool(c.stat and getattr(c.stat, "is_supporter", False)),
-        weight=10, status="assumed"),
-    Hypothesis(
         id="grab-the-chain-opener",
         rationale="At a TO_HAND grab, a tutor is worth what it REACHES: spec Round 9 §3, 'a tutor's "
                   "held value = the closure-reachable value, recursively free' (seam C). "
@@ -1056,11 +1046,14 @@ HYPOTHESES = [
                   "exemption (a spare Basic Energy is always a future attach). `dont-fetch-the-redundant-"
                   "piece` covers redundancy IN PLAY; this covers redundancy IN HAND. ml f9 (CRITICAL): "
                   "already holding a Lillie's Determination, the agent spent Meowth ex's Last-Ditch Catch "
-                  "on another one (`grab-a-draw-supporter-in-setup` +10, three copies tied on the option "
-                  "index) instead of the Team Rocket's Petrel that opens the real chain (Petrel → Fighting "
-                  "Gong → Solrock → Lunar Cycle draws 3). −12 cancels the draw-Supporter rung without "
-                  "inverting the fetch order — a genuinely needed duplicate (`fetch-the-wincon` +30, "
-                  "`fetch-energy-when-starved` +35) still wins.",
+                  "on another one (the retired `grab-a-draw-supporter-in-setup` +10, three copies tied on "
+                  "the option index) instead of the Team Rocket's Petrel that opens the real chain (Petrel "
+                  "→ Fighting Gong → Solrock → Lunar Cycle draws 3). The −12 was SIZED to cancel that +10; "
+                  "since ADR-0122's amendment retired it, this now applies against `_grab_refresh_value`'s "
+                  "real swing instead, which is a DIFFERENT and un-recalibrated base — the swing is what "
+                  "a duplicate refresh is worth, and holding one already does not change it. Flagged as "
+                  "owed a re-measure, not silently re-tuned; a genuinely needed duplicate "
+                  "(`fetch-the-wincon` +30, `fetch-energy-when-starved` +35) still wins.",
         when=lambda c: c.select_context == _TO_HAND and c.card_already_in_hand,
         weight=-12, status="assumed"),
     Hypothesis(
@@ -1069,9 +1062,14 @@ HYPOTHESES = [
                   "once the one-per-turn Supporter is spent — often by the very tutor now resolving — a "
                   "fetched Supporter is next-turn fuel, while an Item plays immediately. ml f71: Team "
                   "Rocket's Petrel resolved with a DEAD hand (0 cards) and took a Lillie's Determination "
-                  "(+10) that could not be played, over the Fighting Gong that fetches a Basic {F} to "
-                  "discard to Lunar Cycle for 3 cards THIS turn. −12 cancels the draw-Supporter rung; a "
-                  "Supporter worth more than any playable Item still wins on its own merits.",
+                  "(then +10) that could not be played, over the Fighting Gong that fetches a Basic {F} "
+                  "to discard to Lunar Cycle for 3 cards THIS turn. The −12 was SIZED to cancel that flat "
+                  "+10, which ADR-0122's amendment retired. It now applies against `_grab_refresh_value`, "
+                  "which prices the SAME timing fact a second way — the swing takes `grading.halve(1)` "
+                  "when the Supporter quota is spent. Both together are what keep f71 correct (measured: "
+                  "Fighting Gong 8.00 over Lillie's −2.00), but the DOUBLE expression of one fact is real "
+                  "and owed a re-measure; a Supporter worth more than any playable Item still wins on its "
+                  "own merits.",
         when=lambda c: c.select_context == _TO_HAND and c.card_unplayable_this_turn,
         weight=-12, status="assumed"),
     Hypothesis(

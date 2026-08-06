@@ -1,14 +1,17 @@
-# ADR-0122 - The `_TO_HAND` grab equation was BUILT to spec and measured SIX FRAMES WORSE — five things the assignment must learn first
+# ADR-0122 - The `_TO_HAND` grab equation was BUILT to spec and measured worse; ONE seam-local fix shipped by differencing instead
 
-**Status:** **Rejected as specified** (Issue #406, built and measured 2026-08-06). The build is
-preserved at commit `bd9187d7` and reverted by its successor; Issue #406 returns to
-`status:1-grilling` carrying the five findings below as its agenda. **Does not amend ADR-0023** —
-the shared-oracle invariant it asserts is untouched, and this ADR is evidence *for* it. **Amends
-nothing else**: no shipped behaviour changed. Retains one artifact, `tools/train/grab_sweep.py`,
-because the successor needs the same instrument and it now grades the incumbent.
+**Status:** **The proposed equation is rejected as specified** (Issue #406, built and measured
+2026-08-06; build preserved at `bd9187d7`, reverted at `8dbde0fe`; Issue #406 closed
+`not planned`). **One targeted fix from the same measurement DID ship** (Decision 5,
+`_grab_refresh_value` / `_refresh_swing`), on a direct developer ruling discharging the single
+demonstrable defect Decision 0 found — built through the differencing/value-equation framework, not
+by tuning a rung. Everything else — F1–F7, the 23-rung retirement — remains an unbuilt register.
+**Does not amend ADR-0023** — the shared-oracle invariant it asserts is untouched, and this ADR is
+evidence *for* it. Retains `tools/train/grab_sweep.py`, which now also verifies the shipped fix.
 
 This is ADR-0119's shape — a change justified by what it measured rather than by what it shipped —
-except that here the measurement said *stop*.
+with a late addendum: the measurement said *stop* on the equation and *yes* on one narrow,
+independently-verified fix it surfaced.
 
 ## Context
 
@@ -391,6 +394,60 @@ Two things follow, neither of which needed the equation to be true:
   only of the SPARSE eligibility real hands produce — mean breadth 1.57 here — and the exposure is
   not confined to any new site: `pilot._needs_v2` already runs one `keep_v2` per hand row at every
   forced discard, and that path DECIDES. The docstring is corrected in the same commit as this ADR.
+
+## Decision 5 — F8 SHIPPED, not as a rung: `_grab_refresh_value`, the differencing swing at the grab
+
+The recommendation above ("close, don't re-spec") stood as filed. **`86088989-29` is the exception a
+subsequent developer ruling discharged directly** — *"empty hand and 6 prize cards remaining. playing
+meowth ex to then fetch a lillies and get 8 cards is the better play"* — and the explicit brief for it
+was the differencing framework, not the rung ladder. This decision is that build.
+
+**The framework already had the number; it was gated at the wrong seam.** `_refresh_swing_tactical`
+(the PLAY site) already prices a refresh's full swing — draw CYCLE, the graded SHED via
+`_refresh_shed_keepcost`, and the opponent's STRIP/FRESH/GIFT legs — through `common.strategy.refresh`.
+The GRAB site had its own, weaker reading: `_grab_refresh_draw_tactical` scored `0.1 × own_draw_count`,
+a SUB-POINT tie-break explicitly specified (its own comment) to *"top out at ≤ +10.8 — never crossing
+the +15 chain opener."* It could separate Lillie's 8 from Judge's 4 and could not, by its own design,
+say Lillie's was worth taking over a chain — which is exactly what f29 needed.
+
+**Fix: `_refresh_swing` extracted from `_refresh_swing_tactical`, read at both seams.** The GRAB site
+(`_grab_refresh_value`, renamed from `_grab_refresh_draw_tactical`) now returns that same swing,
+halved via the shared `grading.halve(1)` convention when this turn's Supporter quota is already
+spent — the one adjustment a GRAB needs over a PLAY, and it is a timing discount already used
+elsewhere (`deploy_value`'s `supporter_quota_spent` leg), not a new rate. On f29 (empty hand, 6
+prizes): Lillie's CYCLE 20 − shed 0 − gift 0 = **+20** against Judge's CYCLE 20 − shed 0 − gift 16 =
+**+4** — the gift leg (Judge refills a 2-card opponent to 4; Lillie's touches only mine) is the fact
+`own_draw_count` alone could never see, and ranking by draw count alone would get the ORDER right here
+by luck while getting a symmetric-vs-one-sided comparison backwards on a different board.
+
+**`grab-a-draw-supporter-in-setup` (+10) retired in the same commit, not left underneath.** It is a
+flat `"draw" in tags` category credit for precisely what the swing now measures, and stacking them
+double-counts — measured on `ml f71` (a Lillie's that cannot be played this turn tied a playable
+Fighting Gong at exactly 8.00 and lost the option-index break) before it was pulled. ADR-0069 §7's own
+rule: *"the rungs the decider replaced are DELETED, not shadowed, so nothing can double-count."*
+Coverage checked first — every `draw` Supporter across all three shipped decks (`mega_lucario`,
+`mega_starmie`, `dragapult_ex`) is a KNOWN refresh (`refresh_branches` resolves it), so nothing loses
+its credit outright; the two rungs whose own rationale was *"−12 cancels the draw-Supporter rung"*
+(`dont-grab-a-card-already-in-hand`, `grab-what-i-can-play-this-turn`) are flagged in their own text
+as now applying against an un-recalibrated base rather than silently re-tuned.
+
+**Measured**, on the same instruments this ADR already used:
+
+| | before F8 | after F8 |
+|---|---:|---:|
+| gradeable ctx-7 (15) | 14/15 | **15/15** |
+| off-policy ctx-7 (15, excluded, reported anyway) | no regression | no regression |
+| Decision Gate (ADR-0072) | — | **PASS**, agree 251/340 → **252/340**, 1 pick moved, **0 unruled REGRESSION** |
+| Discrimination Gate (ADR-0072) | — | **PASS**, 0 unruled OK→MISS (every flip already held out by a prior owner) |
+| full suite | — | 5179 passed / 1 pre-existing unrelated fail (the Windows CRLF issue) |
+
+`test_grab_refresh_draw.py` is rewritten rather than patched — its own prior docstring recorded the
+deferral this discharges (*"the Petrel-vs-Lillie's residual is filed for human re-review"*), so the
+new version asserts the opposite of what it used to and says why.
+
+**What this decision does NOT do.** It does not reopen F1–F7 or the 23-rung retirement Issue #406
+proposed — those remain a register, unbuilt, for the reasons Decision 0 gives. It is one seam-local
+fix, verified against both main-watchdog gates because it changes decisions.
 
 ## Consequences
 
