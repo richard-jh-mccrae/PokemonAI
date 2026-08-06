@@ -13,6 +13,7 @@ pilot_helpers + DictCardStatProvider, so the fast suite needs no native engine.
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
@@ -62,7 +63,7 @@ def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}), **kw)
+                 functions=CardFunctions({IGNITION: ignition_tags()}), **kw)
 
 
 # ----------------------------------------------- dont-waste-discard-energy: already-powered non-wincon

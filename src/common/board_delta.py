@@ -273,45 +273,45 @@ def _stat(combat, card_id):
     return getter(card_id) if getter is not None and card_id is not None else None
 
 
-def _provided_units(combat, card_id, stat, *, onto_evolution: bool) -> tuple:
-    """The `EnergyType` UNIT codes attaching this Energy CARD puts on ``energies``.
+def _provided_units(combat, card_id, *, holder_stat) -> tuple:
+    """The `EnergyType` UNIT codes attaching this Energy CARD puts on ``energies``, or a REFUSAL.
 
-    Composed, not invented: the colour is ``CardStat.energyType`` and the count is
-    `CardFunctions.energy_provision` — the same pair `CombatMath._special_energy_groups` reads for
-    the HAND leg of the Attach Budget, so a hypothetical attach and the real board it models agree
-    (Issue #142). A Basic Energy is one unit of its own colour and carries no tag — the case that
-    would otherwise fail closed to nothing.
+    The APPLY SEAM's arity of `CombatMath.provision_codes`, which owns the composition itself since
+    Issue #418 — the colour from ``CardStat.energyType``, the count from
+    `CardFunctions.energy_provision`, keyed on the HOLDER because Ignition Energy provides {C} on a
+    Basic and {C}{C}{C} on an Evolution. This function is the thin half: it turns the seam's
+    fail-CLOSED ``None`` into the `Unmodellable` a board write must raise rather than guess through.
 
     Ignition Energy (17) is the worked example the ``energies``/``energyCards`` split exists for:
     ``energyType`` colourless, provision 1 on a Basic and 3 on an Evolution, so it renders
     ``[0]`` or ``[0, 0, 0]`` and NEVER ``[17]`` (`common/board_cards.py`).
 
     Fail-CLOSED (ADR-0067): an untagged Special Energy raises rather than attaching zero units,
-    because zero units is a real, plausible board that under-reports the attach."""
-    colour = getattr(stat, "energyType", None)
-    if colour is None:
+    because zero units is a real, plausible board that under-reports the attach. The two causes get
+    two messages — the message is destined for the modelling backlog, and *"no colour"* and *"no
+    provision tag"* are different entries in it — so the reason is re-read off the `CardStat` here.
+    Only the reason: the COUNT rule stays in the seam and is not spelled twice."""
+    codes = combat.provision_codes(card_id, holder_stat)
+    if codes is not None:
+        return tuple(codes)
+    stat = _stat(combat, card_id)
+    if getattr(stat, "energyType", None) is None:
         raise Unmodellable(
             f"{card_id} {getattr(stat, 'name', '?')}: attached Energy with no `energyType` — the "
             f"unit colour is unknown, and a guessed colour funds attacks it cannot pay for")
-    if stat.is_basic_energy:
-        return (int(colour),)
-    functions = getattr(combat, "functions", None)
-    count = 0
-    if functions is not None:
-        count = functions.energy_provision(card_id, evolution=onto_evolution)
-    if count <= 0:
-        raise Unmodellable(
-            f"{card_id} {getattr(stat, 'name', '?')}: Special Energy with no `provides:N` Function "
-            f"Tag — how many units it provides is unknown, and 0 would under-report the attach")
-    return (int(colour),) * int(count)
+    raise Unmodellable(
+        f"{card_id} {getattr(stat, 'name', '?')}: Special Energy with no `provides:N` Function "
+        f"Tag — how many units it provides is unknown, and 0 would under-report the attach")
 
 
-def units_for_cards(combat, cards, *, onto_evolution: bool) -> list:
+def units_for_cards(combat, cards, *, holder_stat) -> list:
     """Every Energy CARD's provision, concatenated in attachment order — the ``energies`` list.
 
     Derived rather than carried, because the provision is a property of the HOLDER as well as of the
     card: Ignition Energy provides {C} on a Basic and {C}{C}{C} on an Evolution, so the same attached
-    card renders differently before and after an evolution.
+    card renders differently before and after an evolution. ``holder_stat`` is that holder's
+    `CardStat` — the stage to read the cards AGAINST, which on an evolve is the EVOLUTION's stat and
+    not the body's own.
 
     **PUBLIC since Issue #392**: a retreat's choice node discards a SUBSET of the Active's attached
     Energy CARDS (`docs/rulebook.txt` L142 — the Retreat Cost slots are colourless, so which cards go
@@ -320,11 +320,10 @@ def units_for_cards(combat, cards, *, onto_evolution: bool) -> list:
     out: list = []
     for card in cards or ():
         card_id = (card or {}).get("id")
-        stat = _stat(combat, card_id)
-        if stat is None:
+        if _stat(combat, card_id) is None:
             raise Unmodellable(f"{card_id}: no `CardStat` for an attached Energy card, so its "
                                f"provision cannot be re-derived")
-        out.extend(_provided_units(combat, card_id, stat, onto_evolution=onto_evolution))
+        out.extend(_provided_units(combat, card_id, holder_stat=holder_stat))
     return out
 
 
@@ -709,9 +708,8 @@ def _attach(obs, option, *, seat_index, combat) -> Delta:
             body["maxHp"] = int(body.get("maxHp") or 0) + bonus
             writes.add("damage_counters")
     elif stat.is_energy:
-        target_stat = _stat(combat, target.get("id"))
-        onto_evolution = getattr(target_stat, "evolvesFrom", None) is not None
-        units = _provided_units(combat, card.get("id"), stat, onto_evolution=onto_evolution)
+        units = _provided_units(combat, card.get("id"),
+                                holder_stat=_stat(combat, target.get("id")))
         body["energyCards"] = list(body.get("energyCards") or ()) + [card]
         body["energies"] = list(body_unit_codes(body)) + list(units)
         # The turn's one MANUAL attachment (`docs/rules.md` §3). Unconditional because
@@ -757,7 +755,6 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
     tools = list(target.get("tools") or ())
     energy_cards = list(target.get("energyCards") or ())
     target_stat = _stat(combat, target.get("id"))
-    was_evolution = getattr(target_stat, "evolvesFrom", None) is not None
 
     # A body CHANGING stage is what a static HP delta re-reads (Issue #410 R4). BOTH stats are asked,
     # because the delta may START applying (Stage 1 -> Stage 2 under Gravity Mountain) or STOP, and
@@ -783,7 +780,7 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
         int(getattr(t_stat, "hpBonus", 0) or 0)
         for t_stat in (_stat(combat, (t or {}).get("id")) for t in tools)
         if t_stat is not None and t_stat.applies_to_holder(stat)) + stadium_delta
-    units_before = tuple(units_for_cards(combat, energy_cards, onto_evolution=was_evolution))
+    units_before = tuple(units_for_cards(combat, energy_cards, holder_stat=target_stat))
     if units_before != tuple(body_unit_codes(target)):
         # A SELF-CHECK, not a formality: if the provision model already disagrees with the engine
         # about the body as it stands, re-deriving the post-evolution list from the same model would
@@ -803,7 +800,7 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
         "hp": max(0, max_hp - taken),
         "maxHp": max_hp,
         "appearThisTurn": True,
-        "energies": units_for_cards(combat, energy_cards, onto_evolution=True),
+        "energies": units_for_cards(combat, energy_cards, holder_stat=stat),
         "energyCards": energy_cards,
         "tools": tools,
         "preEvolution": list(target.get("preEvolution") or ()) + [_card_ref(target, seat_index)],

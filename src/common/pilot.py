@@ -2263,7 +2263,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # MY armed clock, off the snapshot (POC-T1): `mine.turns_to_afford` IS this read with
             # `typed=True` baked in — the typed leg is not optional for my own bodies, because
             # over-crediting an off-colour Energy prices an unpayable line as armed (ADR-0070 §2).
-            arm=model.mine.turns_to_afford(raw),
+            # ``exclude_expiring`` (Issue #418 R4, developer-ruled 2026-08-06) on BOTH sides, because
+            # this is a FORWARD clock and `MySide.turns_to_afford`'s own docstring states the rule:
+            # *"A FORWARD clock counting an Energy that will not be there is not conservative, it is
+            # wrong."* A Staryu carrying one Ignition is not one attach nearer Nebula Beam next turn
+            # than a Staryu carrying nothing — the card is discarded at the end of THIS turn.
+            #
+            # The symmetry is the ruling, not a nicety. Excluding on the RESULT alone judges the
+            # post-evolution honestly while still crediting the pre-evolution's vanishing card as
+            # forward progress, and the mismatch reads as a PENALTY for evolving: measured on
+            # `ms_mirror_1001` f15 bench 0 it prices the evolve at −26.25, the worst option on the
+            # menu, where both-sides returns it to a clean 0.00 tie with the Ignition-less Staryu
+            # beside it (ADR-0125's table).
+            arm=model.mine.turns_to_afford(raw, exclude_expiring=True),
             # AREA-AT-DAMAGE-TIME (ADR-0070 §9): an evolve does not move the body, so the area it
             # occupies now IS the area the reply lands on — the one place the board read is sound.
             #
@@ -2441,11 +2453,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         body_cid = raw.get("id")
         bench = self._my_bench_raws(obs)
         body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active, bench=bench)
-        # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
-        # hypothetical body differs from the real one ONLY in which card it is — exactly the
-        # substitution the deploy delta is asking about.
-        result_raw = dict(raw, id=target_cid)
+        # The result inherits the pre-evolution's attached Energy CARDS (rules.md §4) and its slot,
+        # so the hypothetical body differs from the real one ONLY in which card it is — exactly the
+        # substitution the deploy delta is asking about…
         rstat = self.stats.get(target_cid) if self.stats else None
+        # …and its attached Energy CARDS are RE-READ against the new stage, never copied (Issue #418
+        # D3). The provision is a property of the holder as well as of the card: one Ignition Energy
+        # renders `[0]` on a Basic Staryu and `[0, 0, 0]` on Mega Starmie ex, so copying ``energies``
+        # verbatim hands the result side a board the engine would never produce. `board_delta._evolve`
+        # — the APPLY seam for the very same substitution — has always re-derived it; the decider had
+        # no reading of the evolution clause at all. `restage_energy` declines (returns the body
+        # unchanged) when the cards cannot be re-derived or the model already disagrees with this
+        # board, so an unreadable card degrades to the old copy rather than to a guess.
+        result_raw = dict(self.combat.restage_energy(raw, rstat) or raw, id=target_cid)
         if rstat is not None and getattr(rstat, "hp", None):
             result_raw["hp"] = rstat.hp
         # SUBSTITUTE the hypothetical into the bench rather than reading it alone. `result_raw` is a
@@ -3756,9 +3776,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         """KO_SCORE-class value for an ATTACH that UNLOCKS a knockout this turn — attaching this Energy
         to my Active win-condition lets its best now-affordable attack KO the opponent's Active (e.g.
         Ignition → CCC → Nebula Beam 210 vs a 200-HP Active = win). Closed-form lethal lookahead the
-        single-action tactical can't see: it models the post-attach Energy (a Basic provides 1; a
-        discard-burst Energy — `discard_eot`, i.e. Ignition — provides CCC=3 on an Evolution, per the
-        card text) and asks whether an affordable attack reaches the defender's HP (weakness-doubled).
+        single-action tactical can't see: it models the post-attach Energy through
+        `CombatMath.provision_codes` (Issue #418 — a Basic provides one unit of its own colour,
+        Ignition provides CCC on an Evolution, per the card text) and asks whether an affordable
+        attack reaches the defender's HP (weakness-doubled).
 
         Fires only when the attach is NECESSARY (the Active can't ALREADY KO — else just attack, don't
         spend the attach) so it never rewards a needless attachment. Lives in the Tactical layer like
@@ -3774,13 +3795,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if not (active_stat and opp and opp_hp):
             return 0
         eid = self._option_card_id(obs, select, option)
-        etags = self.functions.tags(eid) if (self.functions and eid is not None) else []
-        is_evo = bool(getattr(active_stat, "evolvesFrom", None))   # Mega Starmie evolvesFrom Staryu
-        provided = 3 if ("discard_eot" in etags and is_evo) else 1   # Ignition: CCC on an Evolution
-        estat = self.stats.get(eid) if (self.stats and eid is not None) else None
-        etype = getattr(estat, "energyType", None)          # 0/None = colourless/special — pays a {C}
-                                                            # slot, NEVER a specific one (Ignition can't
-                                                            # fund Jetting Blow's {W})
+        # The provision, off the ONE seam (Issue #418): count AND colour together, keyed on the
+        # ACTIVE as the holder (Mega Starmie evolvesFrom Staryu, so Ignition provides CCC here). A
+        # colourless code pays a {C} slot and NEVER a specific one — Ignition can't fund Jetting
+        # Blow's {W} — and `()` means the card provides nothing at all, which is what a Pokémon Tool
+        # riding `OptionType.ATTACH` provides. This term is KO_SCORE-class, so an over-read here is a
+        # phantom knockout.
+        codes = self.combat.provision_codes_or_floor(eid, active_stat)
+        provided_units = len(codes)
+        etype = codes[0] if codes else None
         me = self._my_player(obs)
         ma = next((p for p in (me.get("active") or []) if p), None)
         bench_names = tuple(                                     # requiresBench partner check: an attack
@@ -3806,7 +3829,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         cur = board.my_active_energy
         if best_affordable(cur) >= opp_hp:                  # already lethal — no attach needed
             return 0
-        if best_affordable(cur + provided, extra_units=provided) >= opp_hp:
+        if best_affordable(cur + provided_units, extra_units=provided_units) >= opp_hp:
             return KO_SCORE + self._prize_value(opp)
         return 0
 
@@ -5408,18 +5431,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             best = max(best, self._attach_build_delta(b, wild))
         return best
 
-    def _attach_provision(self, target_stat, burst: bool) -> int:
-        """Energy UNITS this attach delivers, at PRINTED provision (ADR-0069 §5).
-
-        Ignition Energy provides {C} on a Basic and {C}{C}{C} on an Evolution Pokémon (card text,
-        verified at source) — a CARD FACT, never bent by a valuation heuristic. The old unit gate
-        falsified it to 1 unless the 3 happened to unlock a KO; the spend discipline that gate was
-        smuggling now lives in the equation (the evaporation loss and the no-KO cap below), where it
-        can be read. Colourless provision pays colourless slots only — that typing is carried by the
-        units themselves, not by this count."""
-        if burst and bool(getattr(target_stat, "evolvesFrom", None)):
-            return 3
-        return 1
+    # `_attach_provision` was DELETED by Issue #418. It answered *"how many units"* from
+    # `(target_stat, burst)`, which cannot express the COLOUR — half the fact, and the half that
+    # decides whether the provision pays the attack it is being credited for. Its whole reading is
+    # `CombatMath.provision_codes`, which answers both halves at once and is the single home the four
+    # hardcoded copies (3 on an Evolution holding a `discard_eot` card, 1 otherwise) now share.
+    # ADR-0069 §5's ruling (the
+    # PRINTED provision is a card fact, never falsified by a unit gate) is unchanged and is now
+    # recorded on the seam.
 
     def _attach_body_view(self, target: dict | None):
         """The StateModel :class:`BodyView` wrapping this raw board dict — the handle the
@@ -5572,11 +5591,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         area = option.get("inPlayArea") if is_attach else option.get("area", _BENCH)
         etags = set(self.functions.tags(ecid)) if (self.functions and is_attach and ecid is not None) else set()
         burst = "discard_eot" in etags
-        units = self._attach_provision(target_stat, burst) if is_attach else 1
-        # The PROVISION as Budget units: an ATTACH commits a known card (a typed Basic keeps its
-        # colour; Ignition's {C}{C}{C} pays colourless slots only), while an ATTACH_FROM recipient
-        # pick receives an Energy whose colour this decision does not fix — wild, fail-open.
-        provision = (self.combat.attach_units(ecid, units) if is_attach
+        # The PROVISION, off the ONE seam (Issue #418): how many units this card puts on THIS holder
+        # and in what colour — a CARD FACT (Ignition Energy provides {C} on a Basic and {C}{C}{C} on
+        # an Evolution), never bent by a valuation heuristic. An ATTACH commits a known card, while
+        # an ATTACH_FROM recipient pick receives an Energy whose colour this decision does not fix —
+        # one wild unit, fail-open.
+        codes = self.combat.provision_codes_or_floor(ecid, target_stat) if is_attach else ()
+        units = len(codes) if is_attach else 1
+        provision = (self.combat.units_for_codes(codes) if is_attach
                      else self.combat.wild_units(units))
         # -- the attack axis, term 1: tonight's counterfactual ------------------------------------
         # The survival gate's THIS-TURN half: going down swinging is only worth buying when it is
@@ -5599,11 +5621,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         if can_attack_tonight and is_attach:
             mine = self._state_model.mine
             base_dmg = mine.best_reachable_damage(view, manual_spent=True)
-            committed_dmg = mine.best_reachable_damage(view, extra_energy_ids=(ecid,) * units,
+            committed_dmg = mine.best_reachable_damage(view, extra_unit_codes=codes,
                                                        manual_spent=True)
             this_turn = max(0.0, committed_dmg - base_dmg)
             if burst and this_turn > 0:
-                this_turn = self._burst_capped_tonight(obs, view, this_turn, base_dmg, committed_dmg)
+                this_turn = self._burst_capped_tonight(obs, view, target_stat, this_turn,
+                                                       base_dmg, committed_dmg)
         # -- the attack axis, terms 2 and 3 -------------------------------------------------------
         # The survival gate: a doomed carrier banks no forward build — EXCEPT a wincon-Line
         # pre-evolution, whose Energy carries through evolution (the evolution-escape).
@@ -5705,7 +5728,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "line_value": round(0.0 if gated_off else self._role_value(tcid), 1),
                 "resource_cost": round(resource_cost, 1)}
 
-    def _burst_capped_tonight(self, obs: dict, view, this_turn: float,
+    def _burst_capped_tonight(self, obs: dict, view, target_stat, this_turn: float,
                               base_dmg: float, committed_dmg: float) -> float:
         """The burst's no-KO CAP (ADR-0069 §5b): a cashable one-shot earns at most what the best
         REUSABLE Basic in hand would have earned tonight — UNLESS its attack converts a KO the Basic
@@ -5716,13 +5739,19 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         lifts and the burst is spent (82523811-105); when even the big attack cannot KO (Nebula 210
         vs a 300-HP wall) the Basic does tonight's job just as well, so the burst keeps only the
         Basic's credit and loses the resource tie-break (83664340-45). No reusable Basic in hand ->
-        no alternative -> no cap."""
+        no alternative -> no cap.
+
+        The alternative's provision comes off the SAME seam the burst's does (Issue #418) rather
+        than from its card id: `_reusable_energy_id` admits any TYPED Energy, which includes typed
+        Specials (Telepath Psychic is card 19, whose id resolves to no colour at all), so the cap's
+        counterfactual leg was over-reading in exactly the direction it exists to restrain."""
         reusable = self._reusable_hand_energy_id(obs)
         if reusable is None:
             return this_turn
         opp_hp = (self._opp_active(obs) or {}).get("hp", 0) or 0
         reusable_dmg = self._state_model.mine.best_reachable_damage(
-            view, extra_energy_ids=(reusable,), manual_spent=True)
+            view, extra_unit_codes=self.combat.provision_codes_or_floor(reusable, target_stat),
+            manual_spent=True)
         if committed_dmg >= opp_hp > reusable_dmg:
             return this_turn                                   # the burst converts a KO the Basic misses
         return min(this_turn, max(0.0, reusable_dmg - base_dmg))

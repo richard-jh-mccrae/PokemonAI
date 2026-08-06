@@ -185,18 +185,107 @@ def test_the_widest_real_board_separates_the_bodies_the_string_sort_could_not():
     DELTA that ranks, which is right as an argmax: board value after picking *i* is
     ``Σ_j deploy(B_j) + [deploy(R_i) - deploy(B_i)]``, and the sum is constant across the menu.
 
-    Two model limits measured on this board are recorded in ADR-0124 and deliberately NOT fixed
-    here: `_evolve_substitution` copies `energies` verbatim, so the Ignition on bench 0 reads 1 unit
-    where the engine's own `units_for_cards(onto_evolution=True)` gives 3; and `payoff_damage`
-    pre-credits a pre-evolution with its whole line's payoff, which is what makes both bench deltas
-    cancel. Both are PRE-EXISTING in `_evolve_decision` and both move MAIN decisions, which
-    acceptance item 4 froze."""
+    Of the two model limits ADR-0124 recorded on this board and deliberately did not fix, the first
+    — `_evolve_substitution` copying `energies` verbatim, so the Ignition on bench 0 read 1 unit
+    where the engine's own re-derivation gives 3 — was fixed by **Issue #418 / ADR-0125**, together
+    with the expiry the fix makes mandatory (see `test_the_ignition_bench_is_priced_as_the_ignition
+    _less_bench_beside_it` below). The second stands: `payoff_damage` pre-credits a pre-evolution
+    with its whole line's payoff, which is what makes both bench deltas cancel.
+
+    The bench tie asserted here is therefore now a STRONGER statement than it was: it survives the
+    provision fix rather than predating it."""
     pilot = _shipped_pilot()
     terms, chosen = _terms(pilot, parity_frame(*WIDEST))
     assert len(terms) == 3
     active, bench_energised, bench_empty = terms
     assert active > 0 and bench_energised == bench_empty == 0.0
     assert chosen == [0]
+
+
+# ─────────────────────────────────── Issue #418 / ADR-0125: the provision and the expiry, on f15
+#: `evolve_value`'s deploy currency is damage, and the whole menu here is Nebula Beam's 210 scaled
+#: by two probabilities — so a "large-magnitude negative" delta is one whose size is comparable to
+#: that payoff. The rejected asymmetric build produced −26.25 on bench 0; every correct build
+#: produces 0.00. The bar is set well below the former and well above float noise.
+_LARGE_NEGATIVE = -1.0
+
+
+def test_the_ignition_bench_is_priced_as_the_ignition_less_bench_beside_it():
+    """**The ruled shape** (Issue #418 R4, developer-ruled 2026-08-06), on `ms_mirror_1001` f15.
+
+    Bench 0 carries one Ignition Energy; bench 1 carries nothing. Two facts about that Ignition
+    settle the whole reading, and they only work together:
+
+    * **D3 — the provision.** Evolving re-reads the attached CARDS against the new stage, so the
+      Ignition renders ``[0, 0, 0]`` on Mega Starmie ex, not the ``[0]`` it renders on a Staryu.
+    * **D4 — the expiry.** ``turns_to_afford`` is a FORWARD clock, and the card is discarded at the
+      end of this turn. A benched body cannot attack this turn, so those three units buy nothing and
+      are gone before the next one: the honest clock is **3**, not the *"armed now"* 0 that D3 alone
+      produces.
+
+    Once the Ignition cannot be trusted for the future, the two benched Staryu ARE identical for
+    this decider's purposes — which is exactly what the reading says: both arms 3, both deltas 0.00,
+    a clean tie. The ACTIVE keeps its own delta untouched (it holds no Energy, so there is nothing
+    to exclude), which is what makes the fix targeted rather than a blanket zeroing."""
+    pilot = _shipped_pilot()
+    frame = parity_frame(*WIDEST)
+    obs = frame["obs"]
+    sel = obs["select"]
+    board = pilot._board(obs)
+    target_cid = sel["contextCard"]["id"]
+    rows = []
+    for option in sel["option"]:
+        raw = pilot._option_pokemon(obs, sel, option)
+        body, result, result_raw = pilot._evolve_substitution(
+            obs, board, raw, target_cid, is_active=(option.get("area") == _ACTIVE))
+        rows.append((raw, body, result, result_raw))
+
+    (_a_raw, active_b, active_r, _a_res), (ign_raw, ign_b, ign_r, ign_res), \
+        (_e_raw, empty_b, empty_r, _e_res) = rows
+
+    # The board this is measured on, asserted rather than assumed.
+    assert [c.get("id") for c in (ign_raw.get("energyCards") or [])] == [17]
+    assert ign_raw["energies"] == [0] and _e_raw.get("energies") == []
+
+    # D3: the result side re-derives. `[0]` -> `[0, 0, 0]`, which is what the engine's own apply
+    # seam writes for this evolve.
+    assert ign_res["energies"] == [0, 0, 0]
+    assert ign_res["energyCards"] == ign_raw["energyCards"]
+
+    # D4, on BOTH sides: the vanishing card arms neither the Staryu nor the Mega Starmie ex.
+    assert ign_b.arm == ign_r.arm == 3
+    assert empty_b.arm == empty_r.arm == 3, "the Ignition-less control must be unchanged"
+    assert ign_b.deploy() == empty_b.deploy() and ign_r.deploy() == empty_r.deploy()
+
+    # …and the delta is a clean tie with the bench beside it, not a penalty for evolving.
+    assert ign_r.deploy() - ign_b.deploy() == 0.0
+    assert empty_r.deploy() - empty_b.deploy() == 0.0
+    assert active_r.deploy() - active_b.deploy() > 0.0, (
+        "the ACTIVE holds no Energy, so nothing is excluded there and its delta must stand")
+
+
+def test_the_result_only_exclusion_regression_is_structurally_unreachable():
+    """**A NEGATIVE test** (Issue #418 acceptance 4): the asymmetric fix — excluding the expiring
+    Energy on the RESULT but not on the BODY — is a new, worse bug, and this pins its shape out.
+
+    It judges the post-evolution honestly while still crediting the pre-evolution's vanishing card
+    as forward progress, and the mismatch reads as a PENALTY for evolving: measured at −26.25 on
+    bench 0, the worst score on the whole menu, for a substitution that changes nothing except which
+    body an already-present, already-expiring Energy sits on.
+
+    The assertion is on the SHAPE rather than on the number, so it survives a re-tuned payoff: no
+    option on this menu may score a large-magnitude negative, and no two bodies differing ONLY in
+    whether they carry an expiring Energy may be priced apart. Either would mean one side of the
+    substitution is being read on a clock the other is not."""
+    pilot = _shipped_pilot()
+    terms, _chosen = _terms(pilot, parity_frame(*WIDEST))
+    assert all(t > _LARGE_NEGATIVE for t in terms), (
+        f"an evolve priced as actively worse than not evolving: {terms} — the asymmetric "
+        f"(result-only) expiry exclusion is the build that produces this")
+    _active, bench_energised, bench_empty = terms
+    assert bench_energised == bench_empty, (
+        "the two benched Staryu differ only in an Energy that will not survive the turn; pricing "
+        "them apart means the body and the result are being read on different clocks")
 
 
 def test_the_pick_survives_reordering_so_it_is_the_term_and_not_the_fingerprint():

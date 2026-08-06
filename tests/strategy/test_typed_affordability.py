@@ -18,6 +18,7 @@ perfectly payable answer for a colourless slot, and the fail-open case is now an
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Board, KO_SCORE, Pilot
@@ -70,7 +71,7 @@ def _pilot(attack_stats=None, **kw):
     merged = {**_SYNTHS, **explicit}       # explicit records win; synths fill the remaining ids
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}, lines=[]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(merged),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}), **kw)
+                 functions=CardFunctions({IGNITION: ignition_tags()}), **kw)
 
 
 def _body(*units):

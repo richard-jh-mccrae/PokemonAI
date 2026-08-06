@@ -396,9 +396,8 @@ def _after_discard(model, body: dict, discard_idx) -> tuple:
     cards = list(body.get("energyCards") or ())
     drop = {int(i) for i in discard_idx}
     kept = [c for i, c in enumerate(cards) if i not in drop]
-    stat = model.card_stat(body.get("id"))
     after = dict(body, energyCards=kept, energies=board_delta.units_for_cards(
-        model.combat, kept, onto_evolution=getattr(stat, "evolvesFrom", None) is not None))
+        model.combat, kept, holder_stat=model.card_stat(body.get("id"))))
     return after, [c for i, c in enumerate(cards) if i in drop]
 
 

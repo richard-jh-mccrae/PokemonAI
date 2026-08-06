@@ -5,6 +5,7 @@ via pilot_helpers + DictCardStatProvider, so the fast suite needs no native engi
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
@@ -54,7 +55,7 @@ _ATTACK_STATS = {10: AttackStat(10, damage=210, cost=3),      # Nebula Beam
 def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
-                 functions=CardFunctions({IGNITION: ["discard_eot"], 1223: ["draw", "shuffle_hand"],
+                 functions=CardFunctions({IGNITION: ignition_tags(), 1223: ["draw", "shuffle_hand"],
                                           1227: ["draw", "shuffle_hand"], 1189: ["search", "rush_evolve"]}),
                  effects=fetch_effects({1189: ["search", "rush_evolve"]}), **kw)
 
@@ -348,7 +349,7 @@ MEGA_SIGNAL = 1145      # Mega Signal — tutor_mega (fetches ONLY a Mega Evolut
 ULTRA_BALL = 1121       # Ultra Ball — tutor_pokemon (fetches ANY Pokémon)
 FILLER = 99             # non-Pokémon deck filler (absent from stats -> not a Pokémon)
 _FNS = {POFFIN: ["search", "bench_fill"], MEGA_SIGNAL: ["search", "tutor_mega"],
-        ULTRA_BALL: ["search", "tutor_pokemon", "cost_discard"], IGNITION: ["discard_eot"]}
+        ULTRA_BALL: ["search", "tutor_pokemon", "cost_discard"], IGNITION: ignition_tags()}
 
 
 def _search_pilot(deck):

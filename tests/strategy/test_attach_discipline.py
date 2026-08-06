@@ -9,6 +9,7 @@ axes that produced it, not which rung fired.
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -40,7 +41,7 @@ def _stats():
 
 
 def _pilot():
-    funcs = CardFunctions({IGNITION: ["discard_eot"]})
+    funcs = CardFunctions({IGNITION: ignition_tags()})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=funcs)
@@ -90,7 +91,7 @@ def test_attach_tiebreak_prefers_the_line_base_over_an_off_line_body():
     """Among EQUAL-score needy bench attaches, the decide()-ordering tie-break feeds a win-condition
     LINE base (a Staryu) before an off-line body (a benched Cinderace) — build the line, don't dribble
     onto a spent opener. A W-route-invisible nicety (no score changes). ep82867148 f87."""
-    funcs = CardFunctions({IGNITION: ["discard_eot"]})
+    funcs = CardFunctions({IGNITION: ignition_tags()})
     stats = DictCardStatProvider({
         MEGA: CardStat(MEGA, name="Mega Starmie ex", hp=330, megaEx=True, minAttackCost=1,
                        maxDamageCost=3, evolvesFrom="Staryu"),
@@ -127,8 +128,7 @@ def _arm_pilot():
                  JETTING_BLOW: AttackStat(JETTING_BLOW, damage=60, cost=1, energyTypes=(0,))})
     return Pilot(Strategy(roles={MEGA: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=stats,
-                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1",
-                                                     "provides_evo:3"]}))
+                 functions=CardFunctions({IGNITION: ignition_tags()}))
 
 
 def _arm_board(p, energies, hand=()):

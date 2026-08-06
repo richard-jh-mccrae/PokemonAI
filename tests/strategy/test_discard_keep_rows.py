@@ -17,6 +17,7 @@ tests that price their rows.
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
@@ -48,7 +49,7 @@ def _setup(hand_ids, *, minc=2, powered=False):
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
                            WALLYS: ["heal", "clutch_heal"], CINDERACE: ["opener"],
-                           IGNITION: ["discard_eot"], LILLIES: ["draw", "shuffle_hand"],
+                           IGNITION: ignition_tags(), LILLIES: ["draw", "shuffle_hand"],
                            HARLEQUIN: ["draw", "hand_disruption", "shuffle_hand"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})
