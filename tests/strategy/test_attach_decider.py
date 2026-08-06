@@ -108,7 +108,7 @@ def _pilot(*, roles=None, partners=None, lines=_LINES, attach_value=True, functi
                      else {SOLROCK: [LUNATONE], LUNATONE: [SOLROCK]},
                      lines=list(lines))
     funcs = functions if functions is not None else CardFunctions(
-        {MEOWTH: ["search", "supporter_tutor"], IGNITION: ["discard_eot"],
+        {MEOWTH: ["search", "supporter_tutor"], IGNITION: ["discard_eot", "provides:1", "provides_evo:3"],
          SHUFFLE: ["shuffle_hand"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
                  functions=funcs, attach_value=attach_value)
@@ -420,7 +420,7 @@ def test_development_sequences_before_the_attach_and_the_attach_before_a_hand_sh
     accel_obs = _obs([], [{"id": W_ENERGY}, {"id": BALL}],
                      [_attach(0, ACTIVE, 0), {"type": PLAY, "area": HAND, "index": 1}],
                      active=active)
-    p = _pilot(functions=CardFunctions({IGNITION: ["discard_eot"], SHUFFLE: ["shuffle_hand"],
+    p = _pilot(functions=CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"], SHUFFLE: ["shuffle_hand"],
                                         BALL: ["energy_accel"]}))
     dec = p.explain(accel_obs)
     assert dec.options[0].score > dec.options[1].score > 0    # the attach scores higher …

@@ -62,7 +62,7 @@ def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]},
                           lines=[Line(path=[PREEVO, WINCON], payoff=WINCON)]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}), **kw)
+                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}), **kw)
 
 
 # ----------------------------------------------- dont-waste-discard-energy: already-powered non-wincon

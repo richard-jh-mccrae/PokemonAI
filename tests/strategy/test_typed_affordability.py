@@ -70,7 +70,7 @@ def _pilot(attack_stats=None, **kw):
     merged = {**_SYNTHS, **explicit}       # explicit records win; synths fill the remaining ids
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}, lines=[]),
                  deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=_stats(merged),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}), **kw)
+                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}), **kw)
 
 
 def _body(*units):

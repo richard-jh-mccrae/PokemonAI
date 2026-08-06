@@ -1071,7 +1071,7 @@ def _ignition_pilot(**kw):
     stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
     stats._stats[BRUISER] = CardStat(BRUISER, synthetic=True, name="bruiser", hp=180, energyType=7,
                                      minAttackCost=1, minCostDamage=210, maxDamage=210)
-    fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot"]})
+    fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=fns,
                  **kw)
 

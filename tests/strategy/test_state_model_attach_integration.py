@@ -50,7 +50,7 @@ def _pilot():
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
     return Pilot(strat, deck=[WATER] * 8 + [MEGA] * 3 + [STARYU] * 4 + [IGNITION],
                  general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot"]}))
+                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}))
 
 
 def _obs(*, active, bench=(), hand=(), opp_active=None, turn=6):

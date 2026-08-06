@@ -54,7 +54,7 @@ _ATTACK_STATS = {10: AttackStat(10, damage=210, cost=3),      # Nebula Beam
 def _pilot(**kw):
     return Pilot(Strategy(roles={WINCON: ["win_condition", "primary_attacker"]}), deck=[1] * 60,
                  general_strategy=GENERAL_STRATEGY, stats=_stats(attacks=_ATTACK_STATS),
-                 functions=CardFunctions({IGNITION: ["discard_eot"], 1223: ["draw", "shuffle_hand"],
+                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"], 1223: ["draw", "shuffle_hand"],
                                           1227: ["draw", "shuffle_hand"], 1189: ["search", "rush_evolve"]}),
                  effects=fetch_effects({1189: ["search", "rush_evolve"]}), **kw)
 
@@ -348,7 +348,7 @@ MEGA_SIGNAL = 1145      # Mega Signal — tutor_mega (fetches ONLY a Mega Evolut
 ULTRA_BALL = 1121       # Ultra Ball — tutor_pokemon (fetches ANY Pokémon)
 FILLER = 99             # non-Pokémon deck filler (absent from stats -> not a Pokémon)
 _FNS = {POFFIN: ["search", "bench_fill"], MEGA_SIGNAL: ["search", "tutor_mega"],
-        ULTRA_BALL: ["search", "tutor_pokemon", "cost_discard"], IGNITION: ["discard_eot"]}
+        ULTRA_BALL: ["search", "tutor_pokemon", "cost_discard"], IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}
 
 
 def _search_pilot(deck):

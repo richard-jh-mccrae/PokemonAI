@@ -104,7 +104,14 @@ _IGN_STATS = DictCardStatProvider({
     9999: CardStat(9999),                                          # generic opp body (HP set via poke)
 }, attacks={_A_JET_IGN: AttackStat(_A_JET_IGN, damage=120, cost=1, energyTypes=(WATER,)),
             _A_NEB_IGN: AttackStat(_A_NEB_IGN, damage=210, cost=3, energyTypes=(0, 0, 0))})
-_IGN_TAGS = CardFunctions({IGNITION: ["discard_eot"], CINDERACE: ["opener"]})
+# REAL Function Tags, copied from `src/common/card_functions.json` rather than trimmed to the one
+# tag a test happened to read. Ignition Energy carries THREE — `discard_eot`, `provides:1` and
+# `provides_evo:3` — and the provision is the parametric pair, not the rider: since Issue #418 the
+# {C}{C}{C} on an Evolution is read off `provides_evo:3`, where before it was inferred from
+# `discard_eot` + `evolvesFrom` by a hardcode that is right only because Ignition is the sole card
+# carrying both. A fixture that omits the provision tags is asserting a card fact that is not true.
+_IGN_TAGS = CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"],
+                           CINDERACE: ["opener"]})
 
 
 def _ign_pilot():

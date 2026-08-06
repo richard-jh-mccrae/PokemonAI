@@ -104,6 +104,13 @@ _UNIT_COLOURS = {
     11: frozenset({5, 7}),
 }
 
+#: ``EnergyType.RAINBOW`` — the engine's own code for *"Every Types"*, and so the unit code for an
+#: Energy whose colour this build cannot pin down. Not a sentinel: it is a real enum member that
+#: :func:`unit_colours` already resolves to the empty (WILD) colour set, which is the fail-OPEN
+#: reading :meth:`CombatMath.attack_type_payable` gives an unresolvable attached Energy anyway. Using
+#: it keeps the degraded reading inside the ``energies`` vocabulary instead of beside it.
+WILD_CODE = 10
+
 
 def unit_colours(code) -> frozenset:
     """The colours ONE attached **Energy Unit** can pay, from its ``EnergyType`` code.
@@ -115,6 +122,19 @@ def unit_colours(code) -> frozenset:
     if code in _UNIT_COLOURS:
         return _UNIT_COLOURS[code]
     return frozenset({code}) if isinstance(code, int) and 1 <= code <= 9 else frozenset()
+
+
+def units_for_codes(codes) -> tuple:
+    """``EnergyType`` UNIT codes as Budget units — the ONE translation from the ``energies``
+    vocabulary into :class:`AttachUnit`.
+
+    Every reading of a unit's colour goes through :func:`unit_colours` here, so Energy already on a
+    body and Energy a hypothetical attach would put there are typed by the same rule. Until Issue
+    #418 the hand-side readers spelled the pool as ``frozenset({etype})`` instead, which agrees with
+    :func:`unit_colours` on the eight Basic colours and on colourless — and disagrees on exactly the
+    two codes :data:`_UNIT_COLOURS` exists for (RAINBOW pays anything, TEAM_ROCKET pays {P} or {D}).
+    That is the Issue #297 split one door over, so it has one home now."""
+    return tuple(AttachUnit(unit_colours(code)) for code in codes)
 
 
 @dataclass(frozen=True)
@@ -1057,22 +1077,24 @@ class CombatMath:
         the same bug class as the retired `+1`, one zone over.
 
         Colour follows :meth:`_attached_units` exactly, so a hypothetical attach and the real board
-        it models agree: a colourless provision carries ``{0}`` and pays colourless slots only.
+        it models agree: a colourless provision carries ``{0}`` and pays colourless slots only. Since
+        Issue #418 that is a fact rather than a promise — both sides now compose the provision
+        through :meth:`provision_codes` and the colour through :func:`units_for_codes`, where before
+        this leg spelled the pool ``frozenset({etype})`` and so disagreed with the attached side on
+        RAINBOW and TEAM_ROCKET.
+
         Fail-CLOSED on an untagged card, an unknown stat or an unknown target."""
         if target_stat is None or not self.functions:
             return ()
-        evolution = getattr(target_stat, "evolvesFrom", None) is not None
         groups = []
         for cid in (hand_ids or ()):
             stat = self._card_stat(cid)
             if stat is None or not stat.is_special_energy:
                 continue
-            count = self.functions.energy_provision(cid, evolution=evolution)
-            if count <= 0:
+            codes = self.provision_codes(cid, target_stat)
+            if not codes:                      # unreadable (None) or a zero claim — no group either way
                 continue
-            etype = getattr(stat, "energyType", None)
-            pool = frozenset() if etype is None else frozenset({etype})
-            groups.append(tuple(AttachUnit(pool) for _ in range(count)))
+            groups.append(units_for_codes(codes))
         return tuple(groups)
 
     def _attach_contribution(self, card_id, group: int, target_stat, ctx: _AttachCtx):
@@ -1199,8 +1221,7 @@ class CombatMath:
         ``{0}`` and pays colourless slots only"* — and until Issue #297 it did not: the colour came
         from feeding an ``EnergyType`` code to the card table, so the one Energy the contract names
         got ``frozenset()`` (wild) attached and ``{0}`` in hand."""
-        return tuple(AttachUnit(unit_colours(code))
-                     for code in self.attached_unit_codes(body))
+        return units_for_codes(self.attached_unit_codes(body))
 
     def _attack_slots(self, attack_id) -> tuple:
         """An attack's per-slot cost as EnergyType codes; () when no record resolves OR the cost is
@@ -1275,16 +1296,119 @@ class CombatMath:
                     break
         return best
 
-    def attach_units(self, card_id, count: int = 1) -> tuple:
-        """``count`` Budget units of the Energy card ``card_id`` — the PROVISION an attach delivers.
+    #: ``EnergyType`` UNIT codes as Budget units — see :func:`units_for_codes`. Exposed on the oracle
+    #: because the Pilot and the planner reach every card fact through their `CombatMath` handle.
+    units_for_codes = staticmethod(units_for_codes)
 
-        The same typing rule :meth:`_attached_units` applies to Energy already in play, so a
-        hypothetical body built from these units is indistinguishable from the real board it
-        models: a typed Basic keeps its colour, a colourless/special Energy (Ignition's {C}{C}{C})
-        carries ``{0}`` and so pays colourless slots ONLY, and an unresolvable card is wild."""
-        etype = getattr(self._card_stat(card_id), "energyType", None)
-        pool = frozenset() if etype is None else frozenset({etype})
-        return tuple(AttachUnit(pool) for _ in range(max(0, int(count))))
+    def provision_codes(self, card_id, holder_stat) -> tuple | None:
+        """**The provision seam** (Issue #418): the ``EnergyType`` UNIT codes attaching this Energy
+        CARD puts on ``energies``, for THIS holder. ``None`` when it cannot be read.
+
+        *"How many units does this Energy card provide this body, and in what colour?"* is ONE
+        question, and this is the ONE place its two halves are composed — the colour from
+        ``CardStat.energyType`` and the count from `CardFunctions.energy_provision`. Before Issue
+        #418 five readers answered it: two composed the accessors (this function's ancestor
+        `board_delta._provided_units`, and :meth:`_special_energy_groups`) and four hardcoded
+        a hardcoded 3 whenever the holder was an Evolution and the card carried the ``discard_eot``
+        rider, and 1 otherwise. That hardcode is right only by the coincidence
+        that Ignition Energy is the sole card carrying BOTH ``discard_eot`` and ``provides_evo`` — a
+        future ``provides_evo`` card without the rider would read 1 where it should read N.
+
+        ``holder_stat`` is the RECIPIENT's `CardStat`, not the Energy card's, because the provision
+        is a property of the holder as well as of the card: Ignition Energy provides {C} on a Basic
+        and {C}{C}{C} on an Evolution (card text, `data/EN_Card_Data.csv` 17), so the same card
+        renders ``[0]`` or ``[0, 0, 0]`` and NEVER ``[17]`` (`common/board_cards.py`). A Basic
+        Energy is one unit of its own colour and carries no tag — the case that would otherwise fail
+        closed to nothing.
+
+        Three answers, and they are three different facts:
+
+        * ``(code, ...)`` — the provision, read.
+        * ``()`` — a CLAIM of zero: this card is a Pokémon **Tool**, which rides
+          ``OptionType.ATTACH`` exactly as an Energy does and provides no Energy at all. Positively
+          ``is_tool`` rather than "not ``is_energy``", and fail-OPEN in the same direction
+          `Pilot._attach_is_energy` already takes: ``cardType`` is the one `CardStat` field a
+          hand-built board routinely omits, so reading its ABSENCE as "not Energy" would silently
+          zero the provision on a board that is merely under-described.
+        * ``None`` — UNREADABLE (ADR-0067, fail-CLOSED): no ``CardStat``, no ``energyType``, or a
+          Special Energy with no ``provides:N`` Function Tag. The caller then makes no claim;
+          `board_delta._provided_units` turns it into an `Unmodellable` refusal and
+          :meth:`provision_codes_or_floor` turns it into the minimal reading a decider can price.
+        """
+        stat = self._card_stat(card_id)
+        if stat is None:
+            return None
+        if stat.is_tool:
+            return ()
+        colour = getattr(stat, "energyType", None)
+        if colour is None:
+            return None
+        if stat.is_basic_energy:
+            return (int(colour),)
+        count = (self.functions.energy_provision(
+            card_id, evolution=getattr(holder_stat, "evolvesFrom", None) is not None)
+            if self.functions is not None else 0)
+        return (int(colour),) * int(count) if count > 0 else None
+
+    def provision_codes_or_floor(self, card_id, holder_stat) -> tuple:
+        """:meth:`provision_codes`, with the FLOOR reading substituted for an unreadable provision:
+        ONE unit — of the card's own colour when the stat gives one, else :data:`WILD_CODE`.
+
+        The DECIDER's arity. An option has to be priced and ordered whatever the compendium knows,
+        so "make no claim" cannot mean "return nothing" here the way it can at the apply seam: an
+        attach the decider prices at zero units reads as *"this attach does nothing"*, which is a
+        confident and wrong claim about a legal play. One unit is the smallest a legal Energy attach
+        can deliver, and the colour follows the same split every other unresolved-Energy read in this
+        module already takes — the card's own code when known, WILD when not.
+
+        Both halves reproduce what the four retired hardcodes did on the cards they could not read,
+        so the floor changes no shipped decision; what it does not do is let an unreadable card
+        inherit the ``discard_eot``-shaped guess at THREE.
+
+        A shipped deck never reaches the floor's tag branch. `test_attach_budget_coverage.py` fails
+        a deck whose Special Energy carries no ``provides:N`` tag, so that half covers a card the
+        audit already forbids — it exists so an unaudited hand-built board degrades instead of
+        claiming nothing at all."""
+        codes = self.provision_codes(card_id, holder_stat)
+        if codes is not None:
+            return codes
+        colour = getattr(self._card_stat(card_id), "energyType", None)
+        return (WILD_CODE,) if colour is None else (int(colour),)
+
+    def restage_energy(self, body: dict | None, holder_stat) -> dict | None:
+        """``body`` as its attached Energy CARDS render on a DIFFERENT holder stage — the
+        hypothetical an EVOLVE decider must ask about (Issue #418, D3).
+
+        The sibling of :meth:`without_expiring_energy`: that one asks *what does this body hold once
+        the expiring Energy is gone*, this one asks *what do the same cards provide once this body is
+        an Evolution*. Both return a plain raw body, so every oracle below is asked the ordinary
+        question about an ordinary board.
+
+        `board_delta._evolve` performs exactly this substitution at the APPLY seam and REFUSES
+        (`Unmodellable`) when the provision model disagrees with the engine about the board as it
+        already stands. A decider cannot refuse, so the same self-check lands here as a DECLINE:
+        ``body`` is returned by identity — unchanged, and therefore reading exactly as it did before
+        Issue #418 — whenever the cards cannot be re-derived or the re-derivation of the CURRENT
+        stage does not reproduce the ``energies`` the engine renders. Compounding a provision error
+        we can already see is worse than the under-read it would replace.
+
+        ``holder_stat`` is the stage to re-read AGAINST — the evolution card's `CardStat`, not the
+        pre-evolution's."""
+        entries = tuple((body or {}).get("energyCards") or ())
+        if not entries:
+            return body                        # nothing to re-derive from; the units stand as given
+        was = self._card_stat((body or {}).get("id"))
+        before, after = [], []
+        for entry in entries:
+            cid = body_card_id(entry)
+            old, new = self.provision_codes(cid, was), self.provision_codes(cid, holder_stat)
+            if old is None or new is None:
+                return body                    # fail-CLOSED: an unreadable card decides nothing
+            before.extend(old)
+            after.extend(new)
+        if tuple(before) != tuple(body_unit_codes(body)):
+            return body                        # the model already disagrees with this board
+        return dict(body, energies=after) if tuple(after) != tuple(before) else body
 
     @staticmethod
     def wild_units(count: int = 1) -> tuple:
@@ -1702,7 +1826,7 @@ class CombatMath:
         """``body`` as it will stand once the rules discard its EVAPORATING Energy — the hypothetical
         a FORWARD clock must be asked about (Issue #286, POC-T3.5).
 
-        The subtractive mirror of `MySide.best_reachable_damage`'s ``extra_energy_ids``: that one
+        The subtractive mirror of `MySide.best_reachable_damage`'s ``extra_unit_codes``: that one
         asks *what if this body also held X*, this one asks *what does it hold once X is gone*. Both
         return a plain raw body, so every oracle below is asked the ordinary question about an
         ordinary board and nothing learns a second vocabulary.
@@ -1719,16 +1843,15 @@ class CombatMath:
         * **which cards expire** — the Effect Clause's ``rider == "discard_eot"``. The behavioural
           Function Tag of the same name exists too, and is deliberately NOT the instrument: the tag
           says *that* a card evaporates, the clause is the parametric record (ADR-0032/ADR-0067).
-        * **how many units each provides** — `CardFunctions.energy_provision`, the same accessor
-          :meth:`_special_energy_groups` sizes a hand attach with. It takes the HOLDER's stage,
-          because Ignition provides ``{C}`` on a Basic and ``{C}{C}{C}`` on an Evolution. It is NOT
-          the codebase's only reading of that quantity — `pilot._attach_provision` (ADR-0069 §5, and
-          corpus-ruled), `pilot._attach_lethal_tactical` and `planner._attach_provided` each hardcode
-          ``3 if discard_eot and evolution else 1``. Composing the accessor here adds no fourth;
-          folding those three into it would move `attach_value`, which is not this issue's to move.
-        * **which units** — the card's ``CardStat.energyType``, the colour :meth:`_attached_units`
-          gives those units, so only matching codes are removed and a Basic Energy beside them
-          survives.
+        * **how many units each provides, and in what colour** — :meth:`provision_codes`, the ONE
+          composition of `CardFunctions.energy_provision` with ``CardStat.energyType``. It takes the
+          HOLDER's stage, because Ignition provides ``{C}`` on a Basic and ``{C}{C}{C}`` on an
+          Evolution. This docstring used to record that it was NOT the codebase's only reading of
+          that quantity — `pilot._attach_provision`, `pilot._attach_lethal_tactical`,
+          `planner._attach_provided` and `planner._best_hand_attach_units` each hardcoded
+          a 3 on an Evolution holding the ``discard_eot`` rider and a 1 otherwise — and declined to
+          fix it. Issue #418 did: all
+          four now read the seam, and the codes removed here are the codes those sites add.
 
         Fail-CLOSED at every step, and per CARD as well as per body: no clause compendium, no
         clause, no resolvable HOLDER (the provision is stage-dependent, so an unknown stage cannot
@@ -1740,15 +1863,13 @@ class CombatMath:
         holder = self._card_stat((body or {}).get("id"))
         if not entries or self.effects is None or self.functions is None or holder is None:
             return body
-        evolution = getattr(holder, "evolvesFrom", None) is not None
         units, keep, dropped = list(body_unit_codes(body)), [], 0
         for entry in entries:
             cid = body_card_id(entry)
             clauses = self.effects.clauses(cid) if cid is not None else ()
             removed = 0
             if any(cl.get("rider") == "discard_eot" for cl in (clauses or ())):
-                code = getattr(self._card_stat(cid), "energyType", None)
-                for _ in range(self.functions.energy_provision(cid, evolution=evolution)):
+                for code in (self.provision_codes(cid, holder) or ()):
                     if code in units:
                         units.remove(code)
                         removed += 1

@@ -1066,6 +1066,24 @@ _Avoid_: "energy" unqualified for either (say Unit or Card), "attached energy co
 histogram (that is `attached_types`; the count is `energy_count`), "untyped Energy" for a colourless
 one (it has a type; the type is COLORLESS)
 
+**Provision**:
+The **Energy Units** one **Energy Card** puts on `energies` *for a given holder* — count and colour
+together, as one fact. It is a property of the HOLDER as much as of the card: Ignition Energy
+provides `{C}` on a Basic and `{C}{C}{C}` on an Evolution, so the same attached card renders `[0]`
+before an evolve and `[0,0,0]` after. **One reader** — `CombatMath.provision_codes(card_id,
+holder_stat)` (ADR-0125) — composes the colour (`CardStat.energyType`) with the count
+(`CardFunctions.energy_provision`, the `provides:N` / `provides_evo:N` parametric tags); everything
+else delegates, including the apply seam (`board_delta.units_for_cards`), the Attach Budget's hand
+leg, the expiry strip and the evolve hypothetical (`restage_energy`). Three answers, three different
+facts: codes = the provision, `()` = a CLAIM of zero (a Pokémon Tool rides `OptionType.ATTACH` and
+provides nothing), `None` = UNREADABLE — which the apply seam turns into an `Unmodellable` refusal
+and a decider turns into `provision_codes_or_floor`'s one-unit floor, because an option still has to
+be priced. Until Issue #418 four sites hardcoded *3 on an Evolution holding a `discard_eot` card, 1
+otherwise*, which is right only because Ignition is the pool's only card carrying either predicate.
+_Avoid_: "how much energy the card is worth" (that is a valuation; the Provision is a card fact),
+"provides" as a bare count (the colour is half the answer — a colourless provision pays colourless
+slots ONLY), `attach_units` (deleted; it took a count the caller had already guessed)
+
 **Attach Budget**:
 The turn's FULL self-side Energy-attach capacity toward one of my bodies: the manual attach (iff
 still unspent) plus the attach effect of every PLAYABLE accel/tutor card in my hand at its full

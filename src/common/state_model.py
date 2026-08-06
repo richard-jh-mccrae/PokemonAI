@@ -1434,10 +1434,10 @@ class MySide(_SideBase):
             return False                    # no claim — an unreadable body is not a demonstrable famine
         return not self.reachable_attach(body)
 
-    def best_reachable_damage(self, body: BodyView | None, *, extra_energy_ids=(),
+    def best_reachable_damage(self, body: BodyView | None, *, extra_unit_codes=(),
                               manual_spent: bool = False) -> float:
         """Biggest PRINTED damage ``body`` can reach this turn under its Budget — optionally over a
-        HYPOTHETICAL body carrying ``extra_energy_ids`` on top of the Energy it already holds.
+        HYPOTHETICAL body carrying ``extra_unit_codes`` on top of the Energy it already holds.
 
         The two legs of the attach counterfactual (ADR-0069 §2) are this read with and without the
         option's provision, at the SAME ``manual_spent`` residual capacity. The hypothetical body
@@ -1445,12 +1445,21 @@ class MySide(_SideBase):
         through its ``CardStat`` and its area, neither of which an attach changes — so committing an
         Energy never silently re-prices the accel clauses it is being compared against.
 
+        ⚠️ **``EnergyType`` UNIT codes, never card ids.** The parameter appends straight onto
+        ``energies``, which is a unit-code list and not a fifth card list (`common/board_cards.py`),
+        and until Issue #418 it was named ``extra_energy_ids`` and every caller fed it card ids. On a
+        Basic Energy the two coincide (Basic {W} is card 3 and WATER is 3) and the lie is invisible;
+        on Ignition Energy it is card **17**, which `combat.unit_colours` resolves to WILD — Energy
+        that pays every slot. Measured on a bare Mega Starmie ex, ``[17]`` reads Jetting Blow's {W}
+        as payable for 120.0 where the engine's own ``[0]`` reads 0.0. Callers take
+        `CombatMath.provision_codes`, which answers in this vocabulary by construction.
+
         Memoized by VALUE (card, area, attached Energy, provision, residual capacity), so the
         per-option sweep over an attach menu pays once per distinct hypothetical body rather than
         once per option."""
         if body is None:
             return 0.0
-        extra = tuple(extra_energy_ids)
+        extra = tuple(extra_unit_codes)
         key = ("best_reachable_damage", body.card_id, body.is_active, body.energy_key,
                extra, bool(manual_spent))
 
@@ -1482,7 +1491,7 @@ class MySide(_SideBase):
 
         Memoized by VALUE on the components the incumbent keys on and that vary here — card, area,
         attached Energy — plus the two that are new: the DEFENDER and the context. The incumbent's
-        ``extra_energy_ids`` and ``manual_spent`` legs are deliberately NOT carried: both exist for
+        ``extra_unit_codes`` and ``manual_spent`` legs are deliberately NOT carried: both exist for
         `attach_value`'s counterfactual PAIR (the same body with and without an option's provision,
         at the same residual capacity), a comparison this read is not part of. A keyword no caller
         passes is a surface that can only drift, so the Budget here is always the body's own and
@@ -1869,10 +1878,10 @@ class TheirSide(_SideBase):
         fuel = self._arming_recur_fuel(view) if fuelled else 0
         if fuel:
             # The reload is TYPED — `discard_recur_fuel` returns copies of the recur form's own
-            # `energyType` — so the augmented body must carry typed ids, not bare counts, or the
-            # oracle's typed leg would read them as colourless. The ids come from the discard itself:
-            # these are real cards moving zone, not synthesised Energy.
-            raw = dict(raw, energies=list(raw.get("energies") or ()) + self._recur_energy_ids(view, fuel))
+            # `energyType` — so the augmented body must carry typed UNIT CODES, not bare counts, or
+            # the oracle's typed leg would read them as colourless. The codes are the types of real
+            # cards in the discard: these are cards moving zone, not synthesised Energy.
+            raw = dict(raw, energies=list(raw.get("energies") or ()) + self._recur_unit_codes(view, fuel))
         return self._memoized(("turns_to_afford", self._key(raw), attaches_per_turn),
                               lambda: self._combat.turns_to_afford(
                                   raw, forward_ids=self._forward_ids,
@@ -1889,16 +1898,21 @@ class TheirSide(_SideBase):
                                   view.body, self.discard_energy_counts,
                                   forward_ids=self._forward_ids, scope="self_arming"))
 
-    def _recur_energy_ids(self, view: "BodyView", count: int) -> list:
-        """``count`` Basic-Energy card ids of the recur line's own type, taken from THEIR DISCARD.
+    def _recur_unit_codes(self, view: "BodyView", count: int) -> list:
+        """``count`` ``EnergyType`` UNIT codes of the recur line's own type, one per Basic Energy the
+        line can actually take back out of THEIR DISCARD.
 
-        Real ids rather than a synthetic marker, because the clock's typed leg matches an attack's
-        cost SHAPE against attached Energy by card identity — a placeholder would pay a colourless
-        slot and no typed one, silently under-crediting exactly the {F}/{M} lines this exists for.
-        The discard is public (`docs/rulebook.txt` L541), so picking the ids out of it is a sound
-        read, not an estimate; :attr:`discard_ids` is the zone and the combat oracle resolves each id's type.
-        Returns fewer ids than asked (possibly none) when the discard cannot supply them — the count
-        and the ids then disagree only in the fail-CLOSED direction."""
+        Typed codes rather than a synthetic marker, because the clock's typed leg matches an attack's
+        cost SHAPE against ``energies`` — a placeholder would pay a colourless slot and no typed one,
+        silently under-crediting exactly the {F}/{M} lines this exists for. Codes rather than card
+        ids since Issue #418: the augmented list IS ``energies``, and a card id there is only ever
+        right by the Basic-Energy id/type coincidence (`common/board_cards.py`).
+
+        Each code is still SOURCED from a real card — the discard is public
+        (`docs/rulebook.txt` L541), so counting what is actually in it is a sound read, not an
+        estimate; :attr:`discard_ids` is the zone and the combat oracle resolves each id's type.
+        Returns fewer codes than asked (possibly none) when the discard cannot supply them — the
+        count and the units then disagree only in the fail-CLOSED direction."""
         stat = view.stat
         recur_type = None
         for cid in self._recur_form_ids(view):
@@ -1916,7 +1930,7 @@ class TheirSide(_SideBase):
                 break
             st = self._combat._card_stat(cid)
             if st is not None and st.is_typed_basic_energy and st.energyType == recur_type:
-                out.append(cid)
+                out.append(int(st.energyType))
         return out
 
     def _recur_form_ids(self, view: "BodyView") -> tuple:

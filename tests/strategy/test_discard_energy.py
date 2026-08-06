@@ -24,7 +24,7 @@ def _pilot():
         1182: CardStat(synthetic=True, cardId=1182, hp=0, energyType=0),  # a Trainer -> not (energyType 0, NOT None)
         666: CardStat(cardId=666, hp=160, energyType=2),  # a Pokémon -> not (hp>0)
     })
-    return Pilot(Strategy(), deck=[], stats=stats, functions=CardFunctions({17: ["discard_eot"]}))
+    return Pilot(Strategy(), deck=[], stats=stats, functions=CardFunctions({17: ["discard_eot", "provides:1", "provides_evo:3"]}))
 
 
 def test_reusable_energy_detection_excludes_trainers_and_discard_energy():

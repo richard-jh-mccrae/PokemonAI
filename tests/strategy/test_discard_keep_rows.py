@@ -48,7 +48,7 @@ def _setup(hand_ids, *, minc=2, powered=False):
     })
     funcs = CardFunctions({SALVATORE: ["search", "rush_evolve"], HILDA: ["search"],
                            WALLYS: ["heal", "clutch_heal"], CINDERACE: ["opener"],
-                           IGNITION: ["discard_eot"], LILLIES: ["draw", "shuffle_hand"],
+                           IGNITION: ["discard_eot", "provides:1", "provides_evo:3"], LILLIES: ["draw", "shuffle_hand"],
                            HARLEQUIN: ["draw", "hand_disruption", "shuffle_hand"]})
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], SALVATORE: ["tutor"],
                             HILDA: ["tutor"]})

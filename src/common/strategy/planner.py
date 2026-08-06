@@ -722,13 +722,13 @@ class PlannerMixin:
                     continue
                 t = o.get("type")
                 if t == _ATTACH and o.get("inPlayArea") == _ACTIVE and tier_extra == 0:
-                    provided = self._attach_provided(obs, select, board, o)
-                    eid = self._option_card_id(obs, select, o)
-                    estat = self.stats.get(eid) if (self.stats and eid is not None) else None
+                    # Count AND colour off the ONE provision read (Issue #418) — a second lookup for
+                    # the type is a second chance to disagree with the first about the same card.
+                    codes = self._attach_provided(obs, select, board, o)
                     win = self._develop_wins(obs, board, opp, board.my_active_id,
-                                             board.my_active_energy + provided, body=ma,
-                                             extra_type=getattr(estat, "energyType", None),
-                                             extra_units=provided)
+                                             board.my_active_energy + len(codes), body=ma,
+                                             extra_type=codes[0] if codes else None,
+                                             extra_units=len(codes))
                     kind, why = "unlock", "lethal (unlock): the attach enables the winning KO"
                 elif t == _RETREAT:
                     win = any(self._develop_wins(obs, board, opp, p.get("id"),
@@ -899,18 +899,22 @@ class PlannerMixin:
                                               boost_type=boost_type,
                                               promote_bench_names=promote_bench_names) > 0
 
-    def _attach_provided(self, obs, select, board, option) -> int:
-        """Energy units this ATTACH provides the Active — 1 for a plain Energy; 3 for a
-        discard-burst (`discard_eot`, Ignition: CCC) onto an Evolution (mirrors
-        `_attach_lethal_tactical`'s model). 0 when the card can't be resolved."""
+    def _attach_provided(self, obs, select, board, option) -> tuple:
+        """The ``EnergyType`` UNIT codes this ATTACH provides the Active — one of its own colour for
+        a Basic Energy, CCC for a discard-burst (`discard_eot`, Ignition) onto an Evolution.
+        ``()`` when the card can't be resolved or provides no Energy.
+
+        CODES rather than a bare count since Issue #418, off the single seam
+        `CombatMath.provision_codes`: the develop-tier win test needs the COLOUR as well (an Energy
+        the line provides can't fund a specific-type slot it doesn't match — Ignition never pays a
+        {W}), and reading the count here and the colour at the call site is two readings of one
+        fact."""
         eid = self._option_card_id(obs, select, option)
         if eid is None:
-            return 0
-        etags = self.functions.tags(eid) if self.functions else []
+            return ()
         active_stat = (self.stats.get(board.my_active_id)
                        if (self.stats and board.my_active_id is not None) else None)
-        is_evo = bool(getattr(active_stat, "evolvesFrom", None))
-        return 3 if ("discard_eot" in etags and is_evo) else 1
+        return self.combat.provision_codes_or_floor(eid, active_stat)
 
     def _is_gust(self, obs, select, option) -> bool:
         """This PLAY option is a gust card (Function Tag `gust`, e.g. Boss's Orders)."""
@@ -1575,9 +1579,11 @@ class PlannerMixin:
         other Energy card, 0 when the hand holds none (`_attach_provided`'s model, hand-scanned:
         the 6858 heal-then-attach line re-powers Nebula Beam with the bounced-around Ignition, and
         a heal whose re-attach doesn't exist can no longer fake a preserved KO). Also the
-        gust-affordability read (`_board`'s ``payable`` — the f31 no-energy gust gate)."""
+        gust-affordability read (`_board`'s ``payable`` — the f31 no-energy gust gate).
+
+        The per-card provision is `CombatMath.provision_codes` since Issue #418, so the hand leg and
+        the board leg cannot disagree about what one Ignition is worth on one holder."""
         best = 0
-        is_evo = bool(getattr(active_stat, "evolvesFrom", None))
         for cid in hand_ids:
             st = self.stats.get(cid) if self.stats else None
             if st is None or getattr(st, "hp", 0):
@@ -1589,9 +1595,7 @@ class PlannerMixin:
                     or st.is_energy
                     or "discard_eot" in tags):
                 continue
-            best = max(best, 3 if ("discard_eot" in tags and is_evo) else 1)
-            if best == 3:
-                break
+            best = max(best, len(self.combat.provision_codes_or_floor(cid, active_stat)))
         return best
 
     def _engine_rank(self, obs, line: TurnLine) -> TurnLine:
