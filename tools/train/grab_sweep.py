@@ -43,6 +43,19 @@ import importlib
 
 _TO_HAND = 7
 
+#: Frames the DEVELOPER has ruled off-policy that the corpus predecessor scan cannot see — the play
+#: that opened the select was wrong, but nobody ever filed a Correction on that play, so there is no
+#: earlier ruled frame to detect. AUTHORED, with provenance, because the alternative is silently
+#: grading a board the agent should never have reached.
+#:
+#: `(agent, episode_id, frame)`.
+_RULED_OFF_POLICY = {
+    # "this one should not have played ultra ball in the first place. should have just placed Riolu
+    # on bench" — developer ruling, 2026-08-06, Issue #406 re-grill. (The select is actually posed by
+    # Poké Pad here rather than Ultra Ball; the ruling is about playing the search at all.)
+    ("mega_lucario", 84889011, 7),
+}
+
 
 def _ctx7(store: str) -> list:
     """Every correction whose select is a `_TO_HAND` search — read off the OBS the frame carries,
@@ -53,6 +66,39 @@ def _ctx7(store: str) -> list:
         if sel.get("context") == _TO_HAND:
             out.append(c)
     return out
+
+
+def _off_policy(c, by_ep: dict) -> list:
+    """Why this follow-up frame is UNGRADEABLE, or `[]` if nothing says it is.
+
+    **A follow-up select is only gradeable if the decision that opened it was correct.** A `_TO_HAND`
+    menu exists because the agent played a search; if playing that search was itself the blunder, the
+    board is one the agent should never have reached and the grab it makes there is not evidence
+    about the grab. This is `retest_span`'s own doctrine (ADR-0049) — *"it stops at the first
+    divergence, because every later obs was produced by the line the agent originally played"* —
+    applied WITHIN a turn instead of across one.
+
+    Two detectors, because neither is sufficient alone:
+
+    * the CORPUS scan — any other ruled Correction on an earlier frame of the same episode AND the
+      same turn. Sound (a recorded human ruling), and **incomplete by construction**: it only fires
+      where somebody happened to file on the predecessor.
+    * `_RULED_OFF_POLICY` — the developer's direct rulings, for the frames the scan misses.
+
+    Measured over the ctx-7 base when this was written: **14 of 30 frames flagged by the scan**, and
+    of the 5 the incumbent ladder misses, **4 are off-policy and only 1 is clean**. A sweep that
+    graded all 30 was reporting mostly on boards the agent should not have been on."""
+    fr = (c.decision or {}).get("frame")
+    turn = (c.decision or {}).get("turn")
+    why = []
+    for o in by_ep.get((c.agent, c.episode_id), ()):
+        of = (o.decision or {}).get("frame")
+        if of is not None and fr is not None and of < fr and (o.decision or {}).get("turn") == turn:
+            why.append(f"f{of} {o.category} "
+                       f"ctx{((o.obs or {}).get('select') or {}).get('context')}")
+    if (c.agent, c.episode_id, fr) in _RULED_OFF_POLICY:
+        why.append("developer-ruled (the search should not have been played)")
+    return why
 
 
 def _label(obs, i: int) -> str:
@@ -68,11 +114,14 @@ def sweep(agent_filter: str | None, store: str) -> int:
     corrs = _ctx7(store)
     if agent_filter:
         corrs = [c for c in corrs if c.agent == agent_filter]
+    by_ep: dict = {}
+    for c in load_corrections(store):
+        by_ep.setdefault((c.agent, c.episode_id), []).append(c)
     by_agent: dict = {}
     for c in corrs:
         by_agent.setdefault(c.agent, []).append(c)
 
-    moved, held, unruled = [], [], []
+    moved, held, unruled, offpolicy = [], [], [], []
     for agent, group in sorted(by_agent.items()):
         pilot, _seeds = tune._build_pilot(agent)
         for c in sorted(group, key=lambda x: (x.episode_id, (x.decision or {}).get("frame"))):
@@ -81,7 +130,11 @@ def sweep(agent_filter: str | None, store: str) -> int:
             after = (r.get("after") or {}).get("chosen")
             before = (r.get("before") or {}).get("chosen")
             correct = list(c.correct or [])
-            print(f"\n=== {agent} {key}  ({c.category}) ===")
+            stale = _off_policy(c, by_ep)
+            print(f"\n=== {agent} {key}  ({c.category}) ==="
+                  + ("   [OFF-POLICY — NOT GRADED]" if stale else ""))
+            if stale:
+                print(f"  ungradeable: {'; '.join(stale)}")
             print(f"  ruling  : {correct} {c.correct_label!r}")
             print(f"  before  : {before}   after: {after}   fixed: {r.get('fixed')}")
             dec = pilot.explain(c.obs)
@@ -99,19 +152,29 @@ def sweep(agent_filter: str | None, store: str) -> int:
                       f"score={t.score:8.2f}{extra}")
             if not correct:
                 unruled.append((agent, key))
+            elif stale:
+                offpolicy.append((agent, key, r.get("fixed")))
             elif r.get("fixed"):
                 held.append((agent, key))
             else:
                 moved.append((agent, key, correct, after))
 
     print("\n" + "=" * 78)
-    print(f"ruled ctx-7 frames : {len(corrs)}")
-    print(f"  agreeing         : {len(held)}")
-    print(f"  MOVED off ruling : {len(moved)}")
+    print(f"ctx-7 frames seen         : {len(corrs)}")
+    print(f"  no ruling recorded      : {len(unruled)}")
+    print(f"  OFF-POLICY (not graded) : {len(offpolicy)}")
+    for a, k, fixed in offpolicy:
+        print(f"      {a} {k}  (would have read fixed={fixed})")
+    graded = len(held) + len(moved)
+    print(f"\n  GRADEABLE               : {graded}")
+    print(f"      agreeing            : {len(held)}")
+    print(f"      MOVED off ruling    : {len(moved)}")
     for a, k, correct, after in moved:
-        print(f"      {a} {k}: ruling {correct} -> {after}")
-    if unruled:
-        print(f"  no ruling recorded: {len(unruled)} {unruled}")
+        print(f"          {a} {k}: ruling {correct} -> {after}")
+    print("\nOff-policy frames are EXCLUDED, not failed: the play that opened the select was itself")
+    print("ruled wrong, so the board is one the agent should never have reached and its grab is not")
+    print("evidence about the grab. See `_off_policy` — the corpus scan is sound but INCOMPLETE, so")
+    print("a frame reported gradeable may still be off-policy for a reason nobody filed.")
     return 0
 
 

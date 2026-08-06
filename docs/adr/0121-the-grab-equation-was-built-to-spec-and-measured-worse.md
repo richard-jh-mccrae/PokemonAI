@@ -28,7 +28,54 @@ So the defect the issue names is real: `doctrine_fetch._greedy_grab` states it a
 *"At a `_TO_HAND` grab there is no equation, only one-sided endorsement rungs"* — while both sibling
 contexts have one. The issue's **answer** is what does not survive.
 
-## Decision 1 — The specified build is six frames worse than the incumbent, and the measurement is controlled
+## Decision 0 — HALF THE VALIDATION BASE IS UNGRADEABLE, and this supersedes every count below
+
+**A follow-up select is only gradeable if the decision that opened it was correct.** A `_TO_HAND`
+menu exists because the agent played a search. If playing that search was itself the blunder, the
+board is one the agent should never have reached, and the grab it makes there is not evidence about
+the grab. This is `retest_span`'s own doctrine (ADR-0049) — *"it stops at the first divergence,
+because every later obs was produced by the line the agent originally played"* — applied WITHIN a
+turn rather than across turns, which nothing was doing.
+
+The developer ruled it on two frames during this re-grill (*"this one should not have played ultra
+ball in the first place. should have just placed Riolu on bench"* … *"also should never have played
+ultra ball in this situation"* … *"both cannot be honestly tested because the first decision was
+wrong"*). Generalised and measured over the whole ctx-7 base by scanning for a ruled Correction on an
+earlier frame of the SAME episode and turn:
+
+| | ctx-7 frames |
+|---|---:|
+| no ruling recorded | 1 |
+| **OFF-POLICY — an earlier decision in the same turn was itself ruled wrong** | **15** |
+| **gradeable** | **15** |
+
+**On the 15 gradeable frames the incumbent ladder scores 14/15.** It has exactly ONE demonstrable
+defect at this seam (`86088989-29` — Lillie's Determination over Team Rocket's Petrel, via Meowth
+ex's bench-drop tutor). Applying the same filter to the specified build's recorded misses — 6 of its
+13 are off-policy — puts it at **8/15**.
+
+|   | on all 30 ruled | on the 15 GRADEABLE |
+|---|---:|---:|
+| incumbent | 25 | **14 / 15** |
+| the spec | 17 | **8 / 15** |
+
+So the gap widens (6 frames on a 15-frame base) and, far more importantly, **the thing the issue set
+out to replace turns out to have one demonstrable defect.** Issue #406 proposed retiring 23 rungs
+at a seam where the incumbent is wrong once on evidence that can honestly be tested.
+
+**The detector is sound but INCOMPLETE, and that matters in the honest direction.** It only fires
+where somebody happened to file a Correction on the predecessor. `84889011-7` shows no ruled
+predecessor and is still off-policy — the developer ruled it directly, and it is carried in
+`grab_sweep._RULED_OFF_POLICY` with provenance. So 15 is a floor: the true gradeable base is at most
+15 and may be smaller, which can only make the incumbent look better and the case for replacing it
+weaker.
+
+**This is a corpus-wide methodological finding, not a ctx-7 one.** Of the 372 correction frames, 93
+are non-MAIN — every one a follow-up whose validity depends on its MAIN predecessor, and none of them
+checked. Anything graded on follow-up contexts (ctx 8 `_DISCARD`, 15 `_DAMAGE`, 21 `_ATTACH_FROM`, 4
+`_TO_ACTIVE`, …) inherits the same exposure.
+
+## Decision 1 — The specified build is worse than the incumbent, and the measurement is controlled
 
 Built exactly as ruled (R1–R10): `needs.keep_v2` over `hand ∪ {one candidate}` as the add-marginal,
 `capacity=None`, `include_general=True`, `intrinsic=0.0`, crossing to the damage scale as a
@@ -319,10 +366,13 @@ Two things follow, neither of which needed the equation to be true:
 
 ### What the successor should actually do — and what it should NOT
 
-Decision 3 is the load-bearing one, and it inverts the shape of the work. The grab does not need an
-equation, because the ladder is not abstaining: it decides 29 of 31 frames and misses 5. The
-successor's job is **five frames and five facts**, in ascending order of cost — each one is cheap,
-local, and independently measurable by `grab_sweep.py`:
+**Decision 0 supersedes what follows.** On gradeable evidence the incumbent misses ONE frame, so
+four of the five findings below rest on boards the agent should never have reached. They are kept
+because each is a real limit of the model, verified at source, and each will matter when a
+gradeable frame does exercise it — but **none of them is currently justified by evidence**, and the
+successor must not treat them as a work list. The single gradeable defect is `86088989-29` (F4/F5).
+
+What follows is therefore a REGISTER of known model limits, ordered by cost, not a plan:
 
 1. **F7 — the search's own cost.** The cheapest thing on this list: the fact is already in
    `obs["logs"]` as a `MOVE_CARD` HAND → DISCARD delta, four consumers already read that log, and it
@@ -346,8 +396,18 @@ local, and independently measurable by `grab_sweep.py`:
    so the cheaper first move is to RANK with it rather than price with it — `_order_key`'s
    ordering-leg shape, which by construction cannot dominate a working score.
 
-Items 1–3 touch no shared model at all, which is the point: **three of the five misses are reachable
-without going near `_resolve_needs`.**
+Items 1–3 touch no shared model at all. But **the honest next step is none of them.**
+
+Four of the five frames that motivated this register are off-policy, and the correct response to an
+off-policy frame is to fix the decision that produced it — the `_PLAY` side, where all 18 surviving
+fetch rungs already live. The developer's ruling on both Ultra Ball frames is exactly that: *"should
+have just placed Riolu on bench"* — a whether-to-play defect, not a which-card-to-take one. F7's
+cost-netting fact is the clearest case: *"we discarded a riolu to fetch a riolu"* is a reason not to
+PLAY the Ultra Ball, and pricing it at the grab would be treating the symptom on a board that should
+not exist.
+
+So the register's real use is as a **filter on future work**: when a gradeable ctx-7 frame fails,
+check it against F1–F7 before inventing anything new.
 
 **Items 4 and 5 change `needs.py`'s model, so each also perturbs the DISCARD decider and the REFRESH
 shed through the shared `_resolve_needs`.** Both main-watchdog gates must be re-measured for those,
@@ -356,4 +416,15 @@ failure recorded here is what happens when five gaps are closed at once by a sin
 
 **Do not** re-attempt the retirement as a bundle. The 23 rungs are worth ten frames over an empty
 seam and the assignment is worth two; any rung retired must be retired against the specific fact
-that replaced it, measured at ctx 7, one at a time.
+that replaced it, measured at ctx 7, one at a time — and now, on a GRADEABLE frame.
+
+### The recommendation, given Decision 0
+
+**Close Issue #406 rather than re-spec it.** The seam it targets has one demonstrable defect on
+honest evidence, which does not justify a new equation, a model extension, or a rung retirement. The
+two rulings that arrived during the re-grill both point at the `_PLAY` side instead, and that is
+where the next ctx-7-adjacent work belongs.
+
+The two artifacts that outlive it are the ones worth keeping: `grab_sweep.py`, which now segregates
+off-policy frames instead of grading them, and Decision 0's rule — **which should be applied to every
+non-MAIN context in the corpus before anything else is graded on one.**
