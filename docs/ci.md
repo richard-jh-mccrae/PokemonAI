@@ -249,6 +249,45 @@ gate's reference is stale, so it cannot speak; only the *explanation* was wrong.
 Measured 91 s over 267 frames (2026-07-28); main was verified green at `7d2a656` before this landed,
 so it was not born red.
 
+### The OFF-POLICY readout (both gates, report-only)
+
+Printed by the Discrimination Gate **and** the Decision Gate, from one implementation
+(`gates.print_off_policy_readout`). It names how much of what the gate just graded stands on a board
+the agent should never have reached — an **Off-policy Frame** (ADR-0126, Issue #412): a follow-up
+select whose opening decision was itself ruled wrong.
+
+```
+  OFF-POLICY (15) — graded anyway, NEVER excluded (Issue #412): the play that opened these
+  follow-up selects was itself ruled wrong. Reasons: tools/train/blunder/off_policy.py
+    ⚠️ 1 of them MOVED in the fail direction — this verdict rests on a board the agent should
+    never have reached:
+      82224509|1|decision|31     (b) The ruling ranks WHICH OF OUR BODIES receives the Energy…
+```
+
+Two tiers on purpose. The tally is context; the named list is the **only** actionable part, because
+a gate going red on an off-policy frame is reporting a change on evidence that cannot speak about
+that change. Naming all 15 on every push would make the section wallpaper — the failure mode the
+`VOIDED` readout documents for itself.
+
+**It never gates**, and that was a ruling, not an oversight. Excluding these frames from the two
+baselines would shrink the gated set without anyone ruling that it should shrink — the same class of
+act as the auto-recapture both gates already refuse (ADR-0094), and the identical argument Issue
+#251 settled for the **Unstatable Decline**. It is also the safer direction on the measurement: of
+34 frames the first (same-turn) detector flagged, only 15 survive the dependency test, so dropping
+on the raw flag would have deleted 19 gradeable frames.
+
+**Only the Decision Gate actually prints it today, and the silence on the other side is measured.**
+The Discrimination Gate's committed baseline holds 268 scorable rows and the corpus resolves 267 of
+them to `SelectContext.MAIN` — the Leaf Lab grades the develop-rung leaf and `is_leaf_frame` admits
+no follow-up select, so the intersection is empty by SHAPE, not by accident. Verified with the
+positive control the empty-output trap demands: the same join against `data/decider_lab/baseline.json`
+returns all 15. The wiring stays in `leaf_lab.py` because the leaf population could widen, and
+`test_the_DISCRIMINATION_gate_has_no_off_policy_exposure_today_and_this_is_a_tripwire` fails the
+moment it does. This is the same asymmetry the **Unstatable Decline** already has.
+
+`python tools/train/off_policy_census.py` prints the standing census; `--review` produces the
+packet for ruling any new candidate.
+
 ### Where to re-capture FROM
 
 **A commit that carries the ruling change but none of the code change under test.** This applies to

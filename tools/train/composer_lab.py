@@ -196,54 +196,44 @@ from common.board_delta import CONTEXT_MAIN as _CONTEXT_MAIN     # noqa: E402
 
 
 def off_policy_index(corrections) -> dict:
-    """``{(agent, episode id): [every Correction in that episode]}`` — the input
-    `grab_sweep._off_policy` takes.
+    """``{(agent, episode id): [every Correction in that episode]}`` — `off_policy.episode_index`,
+    **consumed**.
 
-    Built here rather than inside the row loop because it is a property of the whole store: the scan
-    asks *"did the human rule against an EARLIER decision in this same turn?"*, which no single frame
-    can answer about itself."""
-    by_ep: dict = {}
-    for c in corrections:
-        by_ep.setdefault((c.agent, c.episode_id), []).append(c)
-    return by_ep
+    It is a property of the whole store, not of a row: the scan asks *"did the human rule against an
+    EARLIER decision in this same turn?"*, which no single frame can answer about itself."""
+    from train.blunder.off_policy import episode_index
+    return episode_index(corrections)
 
 
 def off_policy_reasons(correction, by_ep: dict) -> list:
-    """Why this frame is not cleanly gradeable, or ``[]`` — `grab_sweep._off_policy`, **consumed**.
+    """Why this frame is not cleanly gradeable, or ``[]`` — `off_policy.reasons`, **consumed**.
 
     Issue #412's doctrine is *a follow-up select is only gradeable if the decision that opened it was
-    correct*: if the human ruled against an earlier decision in the same turn, this board is one the
-    agent should never have reached, and what it does here is not evidence about what it does.
+    correct*: if the ruled-CORRECT earlier play would have prevented this select or changed a board
+    fact this ruling names, what the agent does here is not evidence about what it does.
 
-    The detector is deliberately reused rather than re-spelled. `grab_sweep._off_policy` is already
-    **context-agnostic** — only its `_ctx7` caller is scoped to `_TO_HAND` selects — so pointing it at
-    the MAIN population is a change of population, not of instrument, and a second implementation
-    here would be the drift ADR-0087 charges for one store over.
+    The detector is deliberately reused rather than re-spelled, and it now lives in
+    `train/blunder/off_policy.py` rather than inside `grab_sweep` — this lab reaching across to
+    import a sibling sweep's private helper was the second-consumer signal to extract it.
 
     ⚠️ **This lab REPORTS the count and never filters on it.** Issue #412 ruled the doctrine for the
     *follow-up select*; extending it to MAIN -> MAIN within one turn is a **generalisation the
     developer has not ruled on**, and silently dropping those frames would be conforming to an
     unruled premise — exactly what this track forbids. Issue #412 owns the ruling; this column is the
     measurement it would be ruled against."""
-    from train.grab_sweep import _off_policy
-    return list(_off_policy(correction, by_ep))
+    from train.blunder.off_policy import reasons
+    return list(reasons(correction, by_ep))
 
 
 def off_policy_control(corrections) -> dict:
-    """The POSITIVE CONTROL for the column above: the same detector, over the ctx-7 population it was
-    built for and ruled on.
+    """The POSITIVE CONTROL for the column above — `off_policy.control`, **consumed**.
 
     *"Found nothing"* and *"my instrument is broken"* return the same empty output, so a MAIN-context
     count is worth nothing on its own. Issue #412 measured **15 of 30** ctx-7 frames flagged; if this
     control comes back silent, the reading against the MAIN population is an artifact and must not be
     reported as a finding."""
-    from train.grab_sweep import _TO_HAND
-    by_ep = off_policy_index(corrections)
-    ctx7 = [c for c in corrections
-            if ((c.obs or {}).get("select") or {}).get("context") == _TO_HAND]
-    flagged = sum(1 for c in ctx7 if off_policy_reasons(c, by_ep))
-    return {"population": len(ctx7), "flagged": flagged,
-            "healthy": bool(ctx7) and flagged > 0}
+    from train.blunder.off_policy import control
+    return control(corrections)
 
 
 # ── one frame ────────────────────────────────────────────────────────────────────────────────────

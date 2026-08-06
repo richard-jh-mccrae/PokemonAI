@@ -100,6 +100,33 @@ malformed (nearer, but says nothing about *whose* rule it breaks), schema violat
 layer; there is a constructor), unstatable (a different defect — that record's shape is legal, its
 ruling is not sayable)
 
+**Off-policy Frame**:
+A **follow-up** select (any non-MAIN context) whose board the agent should never have reached,
+because the decision that OPENED it was itself ruled wrong. *A follow-up select is only gradeable if
+the decision that opened it was correct* — **ADR-0049**'s across-turn `retest_span` doctrine
+(*"every later obs was produced by the line the agent originally played"*) applied WITHIN a turn.
+A Correction filed on one is not evidence about that decider; it is evidence about a board state
+that should not exist.
+The test is a **dependency** test, not a same-turn one (**ADR-0126**, Issue #412): a frame is
+off-policy only when the ruled-CORRECT predecessor play would have **(a)** prevented this select
+from opening, or **(b)** changed a board fact the follow-up ruling NAMES. Anything else is
+*orthogonal* and stays gradeable. The same-turn rule that shipped first is over-broad by more than
+2x — 34 flagged, 15 real — because a predecessor like *"play Pokégear 3.0 earlier in the turn"*
+(id 1122, top 7 of YOUR deck) cannot touch the opponent's Bench a snipe ruling names.
+`blunder/off_policy.py` splits the two halves the original helper conflated: `candidates()` is the
+mechanical scan and its output is a **question**, while `RULINGS` is the developer's verdict with the
+reason and the card id that settles it. An unruled candidate is **UNRULED** — reported, never
+filtered — and `classify()` never reaches OFF_POLICY on its own reasoning. `off_policy_census.py`
+tallies, lists and produces the review packet. **REPORTED, never excluded**, the same ruling the
+three entries above carry and for the sharper reason here: a baseline is a ruling record, so
+shrinking the gated set without a ruling is the auto-recapture both gates already refuse
+(**ADR-0094**). `gates.off_policy_frames` joins the ledger onto the **Frame Key** and both gate
+readouts print it; neither verdict consults it.
+_Avoid_: stale frame (says nothing about *why*), invalid / bad ruling (the human's ruling is
+presumably CORRECT for the board it describes — the board is the problem), held out (that is a
+STANDING ruling moved out of one gate's scope; this frame is graded and merely flagged), voided
+(a **Voided Ruling** is one the human disowned — this one stands)
+
 **Expired Coverage**:
 A `reviewed.json` entry whose justification names a **Rung Vocabulary** id that no longer exists —
 the closure's stated reason is gone, so the claim it makes about the shipped agent has never been
@@ -256,11 +283,12 @@ in the correction store, `[3]` in the fixture, and a mid-build measurement that 
 reached a false conclusion about a blocking premise. The lab overlays the fixture ruling via
 `gates.iter_keyed_fixtures` and names which store each row came from.
 
-It also reports the **off-policy count** (Issue #412): a frame whose ruled decision follows an
-earlier same-turn decision the human ruled *against* is not cleanly gradeable. Reported as a column,
-never filtered on — extending Issue #412's doctrine from follow-up-select to MAIN→MAIN is a
-generalisation nobody has ruled on, and silently dropping those frames would be conforming to an
-unruled premise.
+It also reports the **Off-policy Frame** count (Issue #412), through `blunder/off_policy.py` — the
+shared detector, consumed rather than re-spelled. Reported as a column, never filtered on, and the
+reason is stronger than it looks: this lab's population is **MAIN**, and extending the doctrine from
+follow-up-select to MAIN→MAIN is a generalisation nobody has ruled on. The ledger only ever
+addresses follow-up frames (asserted by a test), so every MAIN row here reports as a bare candidate
+count. Silently dropping those frames would be conforming to an unruled premise.
 
 **It does not grade the 41 verbatim ideal turn sequences, and that is deliberate.** Those are
 developer prose whose own file says *"Do not tidy these"*; a sequence parsed into option indices has
