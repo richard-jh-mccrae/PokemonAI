@@ -803,8 +803,16 @@ this spec adds. Cheapest safe route: prefer real cards with real facts and decla
 needs.
 
 1. a `choice` union enumerates ONE pool over both legs (Fighting Gong's shape)
-2. a conjunction enumerates the cross product, and an EMPTY leg SKIPS rather than refusing (Dawn's
-   measured shape — the test that would have caught treating leg-emptiness as a whiff)
+2. a conjunction enumerates the cross product — **use HILDA, not Dawn**. Hilda's legs are `energy` +
+   `evolution`, which match the EXISTING fixture pool (`E_F`, `Mega Lucario ex`) and read **no
+   `stage` field at all**, so this test needs no new `CardStat` row and carries no ordering
+   dependency on PR #411's fixture-audit change (§8 constraint 2). Dawn's cross product needs
+   `stage="stage1"`/`"stage2"` rows, whose audited ground truth CHANGES with #411 — verified: all 14
+   rows in `test_board_expectation.py` are visible to `test_cardstat_fixture_facts.py`
+2b. an EMPTY leg SKIPS rather than refusing — Dawn's measured shape, and the test that would have
+   caught treating leg-emptiness as a whiff. **Land this one AFTER #411**, since before it Dawn's
+   stage legs are empty for the wrong reason (an unmatchable matcher, not an empty board) and the
+   test would pass vacuously
 3. every leg empty still refuses
 4. an either-or (differing amounts) refuses with its own message (Brock's Scouting)
 5. a half-declared relation refuses (synthetic — no card has this shape, which is the point)
