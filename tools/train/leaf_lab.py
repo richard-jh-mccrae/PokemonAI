@@ -378,11 +378,18 @@ def main(argv=None) -> int:
     index = ruling_index(args.store)
     voided = voided_frames(index)
     orphans = orphan_rulings(args.store)
+    # The **off-policy** exposure (Issue #412), resolved here for the reason the Ruling Index is: it
+    # is a property of the CORPUS, not of a capture or a diff, so a capture and the diff reading it
+    # must not resolve two different sets. Reported only — it reaches no verdict, and Issue #412
+    # ruled that it should not (`gates.off_policy_frames`).
+    from train.gates import off_policy_frames, print_off_policy_readout
+    off_policy = off_policy_frames(args.store)
     rpt = _build_report(args.store, args.agent, voided=set(voided))
 
     if args.cmd == "capture":
-        from train.gates import (discrimination_fail_keys, guarded_capture, leaf_lab_diff,
-                                 print_ruling_readout, write_json_artifact)
+        from train.gates import (_scorable, discrimination_fail_keys, guarded_capture,
+                                 leaf_lab_diff, print_ruling_readout, rows_by_key,
+                                 write_json_artifact)
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
         # this build degrades OK -> MISS may only become the new reference once a human has ruled it.
         # The convention has HELD historically (every absorbed flip carried a ruling, measured over
@@ -392,6 +399,7 @@ def main(argv=None) -> int:
             write_json_artifact(args.out, {"git_rev": _git_rev(), "agent": args.agent, **rpt})
             _print_report(rpt)
             print_ruling_readout(index, voided, orphans=orphans, detail=True)
+            print_off_policy_readout(off_policy, present=rows_by_key(rpt, keep=_scorable))
             print(f"-> captured {rpt['scorable']} scorable frames at {_git_rev()} to {args.out}")
 
         return guarded_capture(
@@ -400,8 +408,9 @@ def main(argv=None) -> int:
             fail_keys_fn=discrimination_fail_keys)
 
     if args.cmd == "diff":
-        from train.gates import (discrimination_gate_verdict, held_out_frames, leaf_lab_diff,
-                                 print_agree_delta, print_ruling_moves, print_ruling_readout,
+        from train.gates import (_scorable, discrimination_fail_keys, discrimination_gate_verdict,
+                                 held_out_frames, leaf_lab_diff, print_agree_delta,
+                                 print_ruling_moves, print_ruling_readout, rows_by_key,
                                  write_json_artifact)
         before = json.loads(args.baseline.read_text(encoding="utf-8"))
         diff = leaf_lab_diff(before, rpt, voided=set(voided))
@@ -413,6 +422,11 @@ def main(argv=None) -> int:
         # the numbers above it.
         print_ruling_moves(diff["ruling_moves"])
         print_ruling_readout(index, voided, orphans=orphans)
+        # `moved` is the fail direction only — the flips this gate would go red on. An off-policy
+        # frame that improved needs no operator action, so naming it here would dilute the one list
+        # that must not become scenery.
+        print_off_policy_readout(off_policy, present=rows_by_key(rpt, keep=_scorable),
+                                 moved=discrimination_fail_keys(diff))
         print_agree_delta(diff["agree_delta"])
         _print_diff(diff, held_out, before, voided)
         if args.out:                      # US6: the gate's verdict as a machine-readable artifact

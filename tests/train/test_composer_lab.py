@@ -122,20 +122,29 @@ def test_the_sequence_vs_verdict_split_DISAGREES_with_the_prose_total_by_one():
 
 @pytest.mark.req("REQ-COMPOSERLAB-0004")
 def test_the_off_policy_detector_is_CONSUMED_not_re_implemented():
-    """Issue #412's detector is already **context-agnostic** — only its `_ctx7` caller is scoped to
+    """Issue #412's detector is **context-agnostic** — only `grab_sweep._ctx7` is scoped to
     `_TO_HAND` selects — so pointing it at the MAIN population is a change of POPULATION, not of
     instrument. A second implementation here would be the drift ADR-0087 charges for one store over,
     and it would drift silently: both copies would stay internally consistent while disagreeing.
+
+    The detector MOVED to `train/blunder/off_policy.py` when this lab became its second consumer;
+    this lab reaching across to import a sibling *sweep's* private helper was the extract signal.
+    Both this lab and `grab_sweep` now delegate, which is the property asserted — not which module
+    happens to hold the code today.
 
     Asserted structurally, because "did you reuse it" is not visible in a count."""
     import inspect
 
     from train import composer_lab, grab_sweep
+    from train.blunder import off_policy
 
-    assert "_off_policy" in inspect.getsource(composer_lab.off_policy_reasons)
-    # The detector really is unscoped: its own signature takes no context, and its `_ctx7` sibling is
-    # where the ctx-7 narrowing lives. If that ever inverts, this lab's MAIN reading is unsound.
+    assert "off_policy" in inspect.getsource(composer_lab.off_policy_reasons)
+    # The ORIGINAL home delegates too, so the ctx-7 sweep and this lab cannot answer differently.
+    assert "_off_policy_mod.reasons" in inspect.getsource(grab_sweep._off_policy)
+    # The detector really is unscoped: its own signature takes no context, and `_ctx7` is where the
+    # ctx-7 narrowing lives. If that ever inverts, this lab's MAIN reading is unsound.
     assert list(inspect.signature(grab_sweep._off_policy).parameters) == ["c", "by_ep"]
+    assert list(inspect.signature(off_policy.reasons).parameters) == ["correction", "by_ep"]
 
 
 @pytest.mark.req("REQ-COMPOSERLAB-0004")

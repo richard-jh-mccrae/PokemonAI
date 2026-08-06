@@ -37,24 +37,19 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
+from train.blunder import off_policy as _off_policy_mod  # noqa: E402
 from train.blunder.store import load_corrections  # noqa: E402
 from train.tuner.retest import retest  # noqa: E402
 import importlib
 
 _TO_HAND = 7
 
-#: Frames the DEVELOPER has ruled off-policy that the corpus predecessor scan cannot see — the play
-#: that opened the select was wrong, but nobody ever filed a Correction on that play, so there is no
-#: earlier ruled frame to detect. AUTHORED, with provenance, because the alternative is silently
-#: grading a board the agent should never have reached.
-#:
-#: `(agent, episode_id, frame)`.
-_RULED_OFF_POLICY = {
-    # "this one should not have played ultra ball in the first place. should have just placed Riolu
-    # on bench" — developer ruling, 2026-08-06, Issue #406 re-grill. (The select is actually posed by
-    # Poké Pad here rather than Ultra Ball; the ruling is about playing the search at all.)
-    ("mega_lucario", 84889011, 7),
-}
+#: Frames the DEVELOPER has ruled off-policy — MOVED to `train.blunder.off_policy.RULINGS` (Issue
+#: #412), which now carries every verdict and its reason rather than only the ones the corpus scan
+#: cannot see. Kept as a derived view because this module's docstring and ADR-0122 both name it.
+_RULED_OFF_POLICY = frozenset(
+    key for key, ruling in _off_policy_mod.RULINGS.items()
+    if ruling.verdict == _off_policy_mod.OFF_POLICY)
 
 
 def _ctx7(store: str) -> list:
@@ -69,36 +64,23 @@ def _ctx7(store: str) -> list:
 
 
 def _off_policy(c, by_ep: dict) -> list:
-    """Why this follow-up frame is UNGRADEABLE, or `[]` if nothing says it is.
+    """Why this follow-up frame is UNGRADEABLE, or `[]` if nothing says it is —
+    `train.blunder.off_policy.reasons`, **consumed**.
 
-    **A follow-up select is only gradeable if the decision that opened it was correct.** A `_TO_HAND`
-    menu exists because the agent played a search; if playing that search was itself the blunder, the
-    board is one the agent should never have reached and the grab it makes there is not evidence
-    about the grab. This is `retest_span`'s own doctrine (ADR-0049) — *"it stops at the first
-    divergence, because every later obs was produced by the line the agent originally played"* —
-    applied WITHIN a turn instead of across one.
+    The detector moved out of this module (Issue #412): it was never ctx-7-specific — only `_ctx7`
+    was — and `composer_lab.py` was already reaching across to import it, which is the second-consumer
+    moment ADR-0087 says to extract at. 96 of the corpus's 375 Corrections are non-MAIN and every
+    sweep and gate that grades one inherits the same exposure.
 
-    Two detectors, because neither is sufficient alone:
-
-    * the CORPUS scan — any other ruled Correction on an earlier frame of the same episode AND the
-      same turn. Sound (a recorded human ruling), and **incomplete by construction**: it only fires
-      where somebody happened to file on the predecessor.
-    * `_RULED_OFF_POLICY` — the developer's direct rulings, for the frames the scan misses.
-
-    Measured over the ctx-7 base when this was written: **14 of 30 frames flagged by the scan**, and
-    of the 5 the incumbent ladder misses, **4 are off-policy and only 1 is clean**. A sweep that
-    graded all 30 was reporting mostly on boards the agent should not have been on."""
-    fr = (c.decision or {}).get("frame")
-    turn = (c.decision or {}).get("turn")
-    why = []
-    for o in by_ep.get((c.agent, c.episode_id), ()):
-        of = (o.decision or {}).get("frame")
-        if of is not None and fr is not None and of < fr and (o.decision or {}).get("turn") == turn:
-            why.append(f"f{of} {o.category} "
-                       f"ctx{((o.obs or {}).get('select') or {}).get('context')}")
-    if (c.agent, c.episode_id, fr) in _RULED_OFF_POLICY:
-        why.append("developer-ruled (the search should not have been played)")
-    return why
+    **The test it applies changed, and the change is not cosmetic.** This used to flag any ruled
+    Correction on an earlier frame of the same turn. Measured corpus-wide that is over-broad: five
+    ctx-15 snipe frames were killed by a predecessor ruling *"play Pokégear 3.0 earlier in the
+    turn"*, and Pokégear (`EN_Card_Data.csv` id 1122) cannot touch the opponent's Bench the ruling
+    names. The scan is now a CANDIDATE list, and a human's `RULINGS` entry turns one into a verdict.
+    A candidate nobody has ruled reports as `UNRULED` and is still returned here, so a sweep that
+    printed "OFF-POLICY" keeps flagging exactly what it flagged before minus the two measured bugs
+    (endorsement predecessors; the null-episode collision)."""
+    return _off_policy_mod.reasons(c, by_ep)
 
 
 def _label(obs, i: int) -> str:

@@ -181,12 +181,21 @@ rationale, so how much agreement there is worth cannot be settled from the recor
 **no new production code**; the correctness is covered by regression tests
 (`test_attach_decider.py` `_CORPUS`) rather than left observed once.
 
-**`82224509-31` carried a RATIONALE-vs-FIELDS conflict, now RULED.** Its `rationale` names the empty
-Staryu (*"dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic
-energy, therefor should have attached on the other benched mon without any energy"*) while its
-`correct` field recorded the already-full Mega Starmie ex. The developer ruled `correct` the stale
-field on 2026-08-06 and it is amended `[0] -> [1]`, so all three ctx-21 frames are now gradeable and
-all three are covered by `_CORPUS`.
+**`82224509-31` carried a RATIONALE-vs-FIELDS conflict, now RULED — and then a SECOND defect
+surfaced.** Its `rationale` names the empty Staryu (*"dont attach more energy on a pokemon than it
+needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other benched
+mon without any energy"*) while its `correct` field recorded the already-full Mega Starmie ex. The
+developer ruled `correct` the stale field on 2026-08-06 and it is amended `[0] -> [1]`.
+
+⚠️ **Correction (ADR-0126, Issue #412, same day):** that repair did not make the frame gradeable —
+it is ruled **OFF-POLICY**. Its predecessor `82224509-29` (MAIN) is ruled `EVOLVE` onto
+`inPlayArea=5/inPlayIndex=1`; f31's own ruled-correct attach targets `area=5, index=1` — the SAME
+bench slot, which is exactly the body f31's rationale reasons about. Under the correct predecessor
+line this frame's Staryu is already a Mega Starmie ex, so **two of the three ctx-21 frames are
+gradeable and covered by `_CORPUS`** (`83116081-21`, `83007714-22`), not three. Neither this ADR's
+`ATTACH_FROM` conclusion nor `_attach_value` moves — the one frame it loses was never a source of
+new production code, only of regression coverage — but the frame count above is superseded by
+ADR-0126's, which should be read as the current one.
 
 ⚠️ **It was NOT a schema violation, and the first draft of this ADR said it was — corrected here
 because the difference is what the developer was actually being asked to rule on.** ADR-0015 does

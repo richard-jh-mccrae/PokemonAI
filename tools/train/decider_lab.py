@@ -109,8 +109,9 @@ sys.path[:0] = [str(REPO / "tools"), str(REPO / "src")]
 
 from train.gates import (REFUSED_SHAPE_RULES, classes_of, decider_lab_diff,  # noqa: E402
                          decision_gate_verdict, decision_fail_keys, equivalence_index,
-                         guarded_capture, held_out_frames, keyed_corrections, orphan_rulings,
-                         print_agree_delta, print_gate_report, print_ruling_moves,
+                         guarded_capture, held_out_frames, keyed_corrections, off_policy_frames,
+                         orphan_rulings, print_agree_delta, print_gate_report,
+                         print_off_policy_readout, print_ruling_moves,
                          print_ruling_readout, records_a_decline_it_cannot_state, refused_shapes,
                          restamp_artifact, rows_by_key, ruling_index, satisfies_human,
                          split_excused, voided_frames, write_json_artifact)
@@ -414,6 +415,11 @@ def main(argv=None) -> int:
     # which agent is being gated, and a record hidden by a filter is the one least likely to be
     # repaired. Reported only; it reaches no verdict.
     refused = refused_shapes(args.store)
+    # The **off-policy** exposure (Issue #412), resolved here for the reason every other corpus
+    # property above is: it belongs to the CORPUS, not to a capture or a diff. Reported only — it
+    # reaches no verdict, and Issue #412 ruled that it should not, for the same reason Issue #251
+    # ruled it for the Unstatable Decline (`gates.off_policy_frames`).
+    off_policy = off_policy_frames(args.store)
 
     if args.cmd == "capture":
         # A baseline is a RULING RECORD (CLAUDE.md), so overwriting one is guarded, not free: a frame
@@ -426,6 +432,7 @@ def main(argv=None) -> int:
             print_ruling_readout(index, voided, orphans=orphans, detail=True)
             print_unstatable_readout(exposed, rpt)
             print_refused_shape_readout(refused, rpt)
+            print_off_policy_readout(off_policy, present=rows_by_key(rpt))
             print(f"-> captured {rpt['n']} frames at {_git_rev()} to {args.out}")
 
         return guarded_capture(
@@ -457,6 +464,13 @@ def main(argv=None) -> int:
         print_ruling_readout(index, voided, orphans=orphans)
         print_unstatable_readout(exposed, rpt)
         print_refused_shape_readout(refused, rpt)
+        # `moved` is the fail direction only — a REGRESSION on an off-policy frame is a verdict
+        # resting on a board the agent should never have reached, and that is the subset an operator
+        # must act on. Read off `decision_fail_keys` so this and the gate cannot drift into two ideas
+        # of "worse". Present-set is the whole capture rather than `rows`, which `--context` narrows:
+        # the exposure is corpus-wide, exactly as `print_unstatable_readout` says of its own.
+        print_off_policy_readout(off_policy, present=rows_by_key(rpt),
+                                 moved=decision_fail_keys(diff))
         if args.context is None:
             print_agree_delta(diff["agree_delta"])
         else:

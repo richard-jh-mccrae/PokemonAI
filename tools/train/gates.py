@@ -1402,6 +1402,72 @@ def refused_shapes(store=None) -> list:
     return out
 
 
+def off_policy_frames(store=None) -> dict:
+    """``{frame key: reason}`` for every committed Correction the developer ruled **OFF-POLICY**
+    (Issue #412) — a follow-up select whose board the agent should never have reached.
+
+    A **follow-up select is only gradeable if the decision that opened it was correct**: if the
+    ruled-correct earlier play would have prevented the select, or changed a board fact the follow-up
+    ruling NAMES, then what the agent does here is not evidence about what it does. The verdicts and
+    their reasons live in `train.blunder.off_policy.RULINGS`; this is the join onto the **Frame Key**
+    both gates speak.
+
+    Read through `keyed_corrections` — THE **Corpus Reader** — for `refused_shapes`' own reason, and
+    keyed here rather than in the detector because ADR-0049's identity (scope + subject) is the
+    gates' vocabulary while the ledger addresses one Anchor frame of one game.
+
+    **It reaches no verdict, and Issue #412 ruled that it should not** (2026-08-06). Excluding these
+    frames from the two baselines was the obvious alternative and was rejected: a baseline is a
+    RULING RECORD (CLAUDE.md) and both gates already refuse to auto-recapture one, so silently
+    shrinking the gated set is the same class of act as auto-recapture — it makes a gate weaker
+    without anyone ruling that it should be. Warning first also produces the evidence needed to
+    decide exclusion later, per frame, which excluding first destroys.
+
+    The measurement that made warn-don't-drop the safe default: of 34 frames the naive same-turn
+    scan flagged, only **15** survive the dependency test. Dropping on the raw flag would have
+    deleted 19 perfectly gradeable frames — the same wrong-denominator error Issue #412 exists to
+    stop, pointed the other way."""
+    from train.blunder.off_policy import OFF_POLICY, RULINGS, ruling_key
+    out = {}
+    for key, c in keyed_corrections(store):
+        ruling = RULINGS.get(ruling_key(c))
+        if ruling is not None and ruling.verdict == OFF_POLICY:
+            out[key] = ruling.reason
+    return out
+
+
+def print_off_policy_readout(off_policy: dict, *, present=(), moved=()) -> None:
+    """Name the OFF-POLICY frames this run is grading — and say loudly which of them MOVED.
+
+    Two tiers, because they carry very different weight. The tally answers *"how much of what this
+    gate just graded is standing on a board the agent should not have reached?"*. The named list is
+    the frames whose verdict actually moved in the fail direction, which is the subset an operator
+    must act on: a gate going red on one of those is reporting a change on evidence that cannot
+    speak about the change.
+
+    The tally-then-detail shape is `print_ruling_readout`'s, and for its stated reason — a section
+    listing every frame on every push to `main` becomes wallpaper, which is the failure mode it
+    exists to prevent. Silent at zero, so a clean run prints a clean report.
+
+    ``present`` and ``moved`` are passed in rather than derived, so the section is testable without a
+    corpus and so the caller — which alone knows its own gated population — owns the denominator.
+    A printer with a private idea of the denominator is how `ruling_moves` came to describe a
+    different population than the diff beside it."""
+    hits = sorted(set(present) & set(off_policy))
+    if not hits:
+        return
+    print(f"\n  OFF-POLICY ({len(hits)}) — graded anyway, NEVER excluded (Issue #412): the play that "
+          f"opened these follow-up selects was itself ruled wrong. Reasons: "
+          f"tools/train/blunder/off_policy.py")
+    flagged = sorted(set(moved) & set(hits))
+    if flagged:
+        print(f"    ⚠️ {len(flagged)} of them MOVED in the fail direction — this verdict rests on a "
+              f"board the agent should never have reached:")
+        for key in flagged:
+            reason = " ".join((off_policy.get(key) or "").split())
+            print(f"      {key:<26} {reason[:88]}{'…' if len(reason) > 88 else ''}")
+
+
 def rows_by_key(rpt: dict, *, keep=None) -> dict:
     """A capture's rows indexed by **Frame Key** — the one place a capture is turned into a lookup.
 
