@@ -42,7 +42,7 @@ from common.strategy.context import _ATTACH, _PLAY
 
 MAIN = bd.CONTEXT_MAIN
 HAND = AREA_HAND
-FIGHTING, PSYCHIC = 6, 5
+FIGHTING, PSYCHIC, COLORLESS = 6, 5, 0
 
 # ── the pool, every row quoted from `data/EN_Card_Data.csv` ───────────────────────────────────────
 #
@@ -84,6 +84,11 @@ MASTER_BALL, POKE_PAD, ULTRA_BALL, DAWN, POWER_PRO, GEAR, ENERGY_SEARCH = (
 #                                    value the compendium never declared, reachable no other way.
 HILDA, GONG, BROCK, CYRANO, POFFIN, TROLLEY = 1225, 1142, 1210, 1205, 1086, 1126
 LARRY, BOGUS_COST = 1206, 1194
+#   675 Lunatone          Basic Pokemon — its draw is an ABILITY (`condition: solrock_in_play`), so
+#                         PLAYING the body reveals nothing at all.
+#   1071 Meowth ex        Basic Pokemon — a real on-bench-play trigger, but a `supporter` target and
+#                         a `trigger` field, both of which `fetch_is_unconditional` rejects.
+LUNATONE, MEOWTH_EX = 675, 1071
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 E_F = 6
 
@@ -112,6 +117,8 @@ _STATS = {
     TROLLEY: CardStat(TROLLEY, name="Precious Trolley", cardType=_ITEM),
     LARRY: CardStat(LARRY, name="Larry’s Skill", cardType=_SUPPORTER),
     BOGUS_COST: CardStat(BOGUS_COST, name="Colress’s Tenacity", cardType=_SUPPORTER),
+    LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING),
+    MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", hp=170, ex=True, energyType=COLORLESS),
 }
 
 #: The committed `card_effects.json` rows for these cards, copied verbatim. `POWER_PRO` is absent on
@@ -143,6 +150,10 @@ _CLAUSES = {
     LARRY: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_hand"}],
     # A cost value `COST_CARDS` has never heard of — the drift case, which no real card provides.
     BOGUS_COST: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_9"}],
+    LUNATONE: [{"kind": "draw", "amount": 3, "condition": "solrock_in_play",
+                "rider": "discard_basic_f_energy"}],
+    MEOWTH_EX: [{"kind": "fetch", "target": "supporter", "zone": "deck",
+                 "trigger": "on_bench_play"}],
 }
 
 
@@ -696,3 +707,52 @@ def test_an_undeclared_cost_value_fails_CLOSED():
     board = _search_board(hand=(BOGUS_COST,))
     with pytest.raises(bd.Unmodellable, match="not in `snapshot_coverage.COST_CARDS`"):
         be.expectation(board, _play_option(), shed=_shed_first(2))
+
+
+# ── the DECLINES, each landing on the gate that describes it ───────────────────────────────────────
+
+
+def test_a_reveal_declared_on_a_BODY_is_an_ability_and_refuses_as_one():
+    """**Modelling this would be WRONG, not under-scoped — which is why it gets its own gate.**
+
+    Lunatone's `{"kind": "draw", "condition": "solrock_in_play"}` is an ABILITY. An Ability does not
+    fire because the body was PLAYED; it is a separate `_ABILITY` option on the menu. So deploying
+    Lunatone reveals nothing, and an expectation node over its draw would price a reveal that never
+    happens.
+
+    Before the gate order was fixed these landed in "only an Item or a Supporter", which is true of
+    them and says nothing about the actual defect."""
+    with pytest.raises(bd.Unmodellable, match="is an ABILITY"):
+        be.expectation(_search_board(hand=(LUNATONE,)), _play_option())
+
+
+def test_an_on_bench_play_trigger_passes_the_ability_gate_and_refuses_on_its_CLAUSE():
+    """Meowth ex is the shape that DOES ride the `_PLAY` — `trigger: on_bench_play` fires when the
+    body is benched. So it passes the ability gate, and then refuses on what is actually wrong with
+    it: `fetch_is_unconditional` rejects both the `trigger` field and, behind it, a `supporter`
+    target that resolves for deadness and never for reach.
+
+    The two assertions together are the point: the gate discriminates rather than catching
+    everything on one side of the Item/Supporter line."""
+    with pytest.raises(bd.Unmodellable, match="not the unconditional"):
+        be.expectation(_search_board(hand=(MEOWTH_EX,)), _play_option())
+
+
+def test_the_card_type_floor_is_now_UNREACHABLE_for_the_shipped_pool():
+    """The floor survives as a structural backstop and should catch nothing real.
+
+    Its sentence — *"only an Item or a Supporter resolves to my discard on a search"* — is about
+    where the SOURCE card lands, which is a fact about the play rather than about the reveal. Every
+    shipped card that used to land here now refuses on its own defect first: 11 steps at the ability
+    gate (Lunatone, Fezandipiti ex) and 12 at the clause gates (Meowth ex), leaving 0 at the floor.
+    Asserted by construction — a body whose reveal is a legitimate on-bench-play trigger with an
+    otherwise clean clause is the only thing that could reach it, and no such card ships."""
+    from common.effects import CardEffects
+    from common.fetch_closure import fetch_is_unconditional
+    eff = CardEffects.load()
+    reachable = []
+    for cid in (LUNATONE, MEOWTH_EX, 140):                # the three real carriers
+        for clause in eff.clauses(cid):
+            if clause.get("trigger") == "on_bench_play" and fetch_is_unconditional(clause):
+                reachable.append(cid)
+    assert reachable == [], f"a card can now reach the card-type floor: {reachable}"
