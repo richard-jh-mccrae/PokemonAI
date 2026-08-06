@@ -857,9 +857,9 @@ is not an audit.
 
 ### Commit order (each independently revertible)
 
-0. **P0 — Issue #408**, a SEPARATE PR merged before this branch (§2.5). **Item 1's conjunction must
-   not land before it** — §4.4's empty-leg SKIP is unsound while a leg can be silently unmatchable.
-   This branch rebases onto it, so item 1's `score_diff` is taken against #408's merged state.
+0. ✅ **P0 — Issue #408 / PR #411: MERGED, and this branch is rebased onto it.** The prerequisite is
+   DISCHARGED (§2.5) — §4.4's empty-leg SKIP is now sound, and the census re-measured identically
+   (706 / 81, every bucket unchanged). Nothing to do; listed so the order stays legible.
 1. `deck_odds.p_contains_at_least` + delegation + tests — pure, no consumer
 2. `snapshot_coverage.COST_CARDS` + `choice_relation_problems` + audits
 3. compendium `choice` fix (1097, 1142) + re-stamp — **inert**, A7
