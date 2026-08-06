@@ -318,6 +318,24 @@ PROFILE = {
                                     # body per decision, resolved once behind
                                     # `_opponent_target_cache`. OFF is byte-identical: no fields
                                     # emitted, no gate computed, magnitude oracle still live.
+    "deferred_target_expansion": False,  # ADR-0121 (Issue #392) armed-OFF: the CHOICE node.
+                                    # ON, `apply_option` returns a `common.board_choice` Expectation
+                                    # over the boards a Deferred-Target Option's target can reach —
+                                    # a `_RETREAT`'s (which Energy to shed x which body to promote)
+                                    # — instead of the point transition, whose delta is the retreat
+                                    # allowance bit ALONE and so prices at ~0.0 against a
+                                    # board-reading leaf. Issue #263's own amendment rules what that
+                                    # means at ordering time: *"a 0 delta at ordering time means
+                                    # never explored, not undervalued."*
+                                    # ARMED-OFF rather than ON because nothing consumes it yet: the
+                                    # composer that takes the `max` over the classes is **Issue
+                                    # #385**, and until it exists the flag would only change what
+                                    # the ADR-0098 parity lane and both ADR-0072 gates see, which is
+                                    # the seam Issue #382 verified. Same contract, and the same
+                                    # reason, as `board_expectation` shipping inert at Issue #383.
+                                    # OFF is byte-identical: `board_choice` is never imported, and a
+                                    # `_RETREAT` resolves through `board_delta._retreat` exactly as
+                                    # the recorded native trace shows.
 }
 
 _ENGINE = object()   # sentinel: build the engine-backed seam unless the caller injects one

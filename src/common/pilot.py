@@ -15,6 +15,8 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 
 from common import deck_odds
+from common import retreat_cost                # ADR-0100 §8's grant-aware cost, shared with
+                                              # `board_choice`'s Energy-discard target space
 from common.board_cards import body_card_ids   # the ONE walk over a body's attached CARDS
 from common.evolve_value import EvolveBody, EvolveInputs, evolve_value
 from common.promote_retreat_value import (PromoteBody, PromoteRetreatInputs, RetreatSide,
@@ -33,7 +35,7 @@ from common.option_equivalence import canonical_keys   # ADR-0103: the ordering 
 
 # Engine vocab (enum mirrors, KO_SCORE, _ENGINE_TAGS) shared w/ doctrines -> common.strategy.context.
 # Doctrines own their Hypotheses + Pilot-side `*Mixin` code — see those modules.
-from common.grading import HORIZON as _HORIZON
+from common.grading import HORIZON as _HORIZON, halve as _halve
 from common.strategy.context import *  # noqa: F401,F403  (the engine-vocabulary constants + _fires/Board live there or below)
 from common.strategy.doctrines import FetchMixin, GustMixin, ShuffleRefreshMixin, ToolMixin
 from common.strategy.objectives import ObjectivesMixin
@@ -50,7 +52,7 @@ from common.snipe_relevance import K as _SNIPE_RELEVANCE_K  # noqa: E402
 from common.strategy.combat import (Budget, CURRENT_FORMS_ONLY,  # noqa: E402  (re-used
                                     _EFFICIENCY, HARVEST_UNAVOIDABLE, UNCHARGED)  # by the tactical scorers)
 from common.strategy.refresh import (fresh_cards, net_change, opponent_shuffles,  # noqa: E402
-                                     own_draw_count, refresh_branches)  # (ADR-0060 swing oracle)
+                                     refresh_branches)  # (ADR-0060 swing oracle)
 from common.strategy.sequence import followup_damage  # noqa: E402  (ADR-0061 horizon-2 lock oracle)
 from common.strategy.denial import coin_odds          # noqa: E402  (ADR-0062 energy denial)
 
@@ -109,11 +111,11 @@ _REFRESH_OPPONENT_HAND_FRESH = 2   # per stripped card THEY DREW LAST TURN (`opp
 # reader (ADR-0101). It reported beside the flat CYCLE and decided nothing, so it fell with
 # `_refresh_shed_shadow`; the promotion question it was measuring is now T3's, where a starved bench
 # is priced by the `development` term family rather than by a second credit inside this equation.
-_GRAB_REFRESH_DRAW = 0.1   # SUB-POINT tie-break at a TO_HAND draw-Supporter grab: prefer the refresh
-                           # with the bigger own-draw ceiling (Lillie's 8 early ≻ Judge 4). Scaled so a
-                           # draw Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain
-                           # opener or a +18 line piece. Breaks the flat-band tie, re-values nothing (the
-                           # PLAY swing is priced later by `_refresh_swing_tactical`). ep86088989 f29.
+# _GRAB_REFRESH_DRAW (the 0.1/card SUB-POINT grab tie-break) RETIRED 2026-08-06 (ADR-0122 amendment)
+# together with the `grab-a-draw-supporter-in-setup` +10 it decorated. It was sized so a draw
+# Supporter "tops out at <= +10.8 — never crossing the +15 chain opener", i.e. specified never to be
+# able to say what ep86088989 f29 needed it to say. `_grab_refresh_value` now prices the grab by the
+# refresh's real SWING (`_refresh_swing`), the same quantity the PLAY site scores.
 # The discard equation's engine-supporter keep floor (ADR-0065 seam-D) — mirrors the ladder's
 # `keep-engine-supporter-at-discard` (−8): a draw/search/dig SUPPORTER that is not hand_disruption
 # is a draw engine kept over pure filler. Discard-CONTEXT (not general worth), tuned to the −8 band.
@@ -1275,7 +1277,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                  promote_retreat_value=True, doom_matched_relax=False,
                  recur_fuel_relax=False, gust_target_slots=False,
                  deny_strip_delta=False, deny_relevance=False, scaled_threat_rank=False,
-                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False):
+                 snipe_relevance=False, leaf_option_equivalence=False, copy_top_value=False,
+                 deferred_target_expansion=False):
         self.strategy = strategy
         self.general = general_strategy or Strategy()   # deck-agnostic shared hypotheses (ADR-0008)
         self.overrides = overrides or {}                # machine-written weight overrides, by hyp id
@@ -1431,6 +1434,17 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # OFF = byte-identical to the pre-#247 rung.
         self.copy_top_value = copy_top_value            # Issue #289: Slowking's Seek Inspiration is valued
                                                         # only from a self-verified known top card.
+        self.deferred_target_expansion = deferred_target_expansion   # ADR-0121 (Issue #392),
+                                                        # armed-OFF: the apply seam returns a
+                                                        # `common.board_choice` CHOICE node — the
+                                                        # boards a Deferred-Target Option's target can
+                                                        # reach — instead of the point transition
+                                                        # whose 1-ply delta is a retreat's allowance
+                                                        # bit alone. Read by the composer (Issue
+                                                        # #385), which is what arms it; nothing on
+                                                        # this Pilot consumes it yet, so OFF is
+                                                        # byte-identical and ON changes no decision
+                                                        # until that consumer exists.
         self.develop_rollout = develop_rollout          # develop-rung Phase 1 kill-switch (default OFF):
                                                         # the within-turn rollout rung — on a develop turn
                                                         # (plan_turn else None) where greedy is weak/indifferent,
@@ -2167,7 +2181,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._snipe_tera_veto(ctx)      # card fact: a benched Tera takes NO damage
                     + self._refresh_swing_tactical(obs, board, ctx)
                     + self._hand_size_relief_tactical(obs, board, ctx)   # ADR-0102: the SURVIVAL leg
-                    + self._grab_refresh_draw_tactical(board, ctx)       # of the same refresh, summed
+                    + self._grab_refresh_value(obs, board, ctx)          # of the same refresh, summed
                                                                          # ACROSS axes (cards vs damage)
                     + self._top_deck_tactical(obs, select, board, option)
                     + self._denial_play_tactical(obs, board, ctx)
@@ -2891,72 +2905,24 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         reduction cost 8 points; under the convex build delta, over-charging one Energy on a 3-slot
         attacker is `(3/3)^2 - (2/3)^2 = 5/9 x maxDamage` ~ **117 damage of phantom cost**, and it
         would be systematic on an archetype built around free-retreat pivoting."""
-        if not ma or not self.stats:
-            return 0
-        stat = self.stats.get(ma.get("id"))
-        if stat is None:
-            return 0
-        hp = ma.get("hp") or 0
-        for tstat in self._attached_tool_stats(ma):
-            free_at = getattr(tstat, "retreatFreeAtHp", 0)
-            if free_at and hp and hp <= free_at:
-                return 0                                  # Rescue Board on a damaged holder
-        cost = getattr(stat, "retreatCost", 0) - self._attached_retreat_delta(ma)
-        if cost > 0 and self._retreat_free_granted(obs, ma, stat):
-            return 0
-        return max(0, cost)
+        return retreat_cost.effective_retreat_cost(
+            ma, stat_of=self._stat_of, my_bodies=self._my_in_play_raws(obs), combat=self.combat)
 
-    def _attached_tool_stats(self, body: dict | None):
-        """The ``CardStat`` of every Tool attached to ``body`` — the one place the engine's
-        ``tools`` list (ids or id-carrying dicts, both shapes appear) is resolved. Unknown ids are
-        skipped, so a caller only ever sees Tools it can actually read."""
-        if not body or not self.stats:
-            return
-        for tool in (body.get("tools") or []):
-            tid = tool.get("id") if isinstance(tool, dict) else tool
-            tstat = self.stats.get(tid) if tid is not None else None
-            if tstat is not None:
-                yield tstat
+    def _stat_of(self, card_id):
+        """This card's ``CardStat``, or None — the provider read as a CALLABLE, which is the shape
+        `common.retreat_cost` takes so a `StateModel` (whose accessor is `card_stat()`, not a
+        mapping) can supply the same card knowledge the Pilot does."""
+        return self.stats.get(card_id) if self.stats else None
+
+    def _my_in_play_raws(self, obs: dict) -> list:
+        """Every in-play body on MY side, Active first — the board scope a BOARD-LEVEL grant reads."""
+        me = self._my_player(obs) or {}
+        return [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
 
     def _attached_retreat_delta(self, body: dict | None) -> int:
-        """Σ ``retreatReduction`` over the Tools attached to ``body`` — the amount to SUBTRACT from a
-        printed Retreat Cost.
-
-        SIGNED, and extracted precisely because it is (Issue #306): Gravity Gemstone parses to −1,
-        so the sum can be negative and a retreat can cost MORE than printed. The four call sites that
-        needed this arithmetic each open-coded the loop, which is how one of them
-        (``_retreat_shortfall``) came to omit it entirely — survivable while every Tool was a
-        discount, unsound the moment one is a surcharge, because that site sizes a KO_SCORE-class
-        claim."""
-        return sum(getattr(t, "retreatReduction", 0) for t in self._attached_tool_stats(body))
-
-    def _retreat_free_granted(self, obs: dict, ma: dict, stat) -> bool:
-        """Does a BOARD-LEVEL Ability of mine give ``ma`` no Retreat Cost (ADR-0100 §8)?
-
-        The predicate travels WITH the grant (`CardStat.retreatFreeGrant`), so adding a card adds a
-        parse and a predicate rather than a call-site special case. Unknown predicate → False, which
-        is the fail-closed direction: we charge the printed cost.
-
-        ⚠️ This could not fire at all until Issue #408: `CardStat.stage` was declared and never
-        written, so the `"basic"` predicate below compared against None for every card in the pool.
-        It was dead for TWO independent reasons — that, and the fact that the only deck carrying the
-        grantor (`slowking`, 2× Latias ex) has no `strategy.py` and so is never built as a Pilot.
-        Issue #408 removed the first; the second is Issue #149's to close, and until it does this stays latent
-        rather than live. Worth stating plainly because the grant was modelled, covered by tests, and
-        reachable by neither route — the tests declared `stage` themselves."""
-        me = self._my_player(obs) or {}
-        bodies = [p for p in ((me.get("active") or []) + (me.get("bench") or [])) if p]
-        for body in bodies:
-            gstat = self.stats.get(body.get("id")) if body.get("id") is not None else None
-            grant = getattr(gstat, "retreatFreeGrant", None) if gstat is not None else None
-            # `stage` is the canonical "basic"/"stage1"/"stage2" (`provider.stage_from_card`), so the
-            # `.lower()` is redundant against a real provider — kept because the field crosses a
-            # provider boundary and a cheap coercion beats a silent miss on an injected row.
-            if grant == "basic" and (getattr(stat, "stage", None) or "").lower() == "basic":
-                return True
-            if grant == "metal_attached" and self._attached_type_counts(ma).get(_METAL):
-                return True
-        return False
+        """Σ ``retreatReduction`` over the Tools attached to ``body`` — the SIGNED amount to SUBTRACT
+        from a printed Retreat Cost (`common.retreat_cost`, Issue #306)."""
+        return retreat_cost.attached_retreat_delta(body, self._stat_of)
 
     def _valued_attack_types(self, cid) -> tuple:
         """The TYPED cost (per-slot EnergyType codes; 0 = colourless) of a card's biggest-damage attack
@@ -3975,6 +3941,29 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         jurisdiction). Silent (0) on anything that is not the PLAY of a known refresh."""
         if ctx.option_type != _PLAY:
             return 0.0
+        return self._refresh_swing(obs, board, ctx)
+
+    def _refresh_swing(self, obs: dict, board: Board, ctx) -> float:
+        """The refresh's own SWING, seam-free: ``CYCLE − SHED + STRIP + FRESH − GIFT`` for the card
+        ``ctx.card_id``, on the board as it stands. 0.0 for a card that is not a known refresh.
+
+        Extracted from `_refresh_swing_tactical` when the GRAB site needed the identical quantity
+        (ADR-0122 amendment). Written once because the alternative is the drift this file has already
+        paid for twice — `_removal_ranking_legs`' own docstring: *"a third leg reaches one site and
+        not the other, which is exactly how `Pilot._order_key` came to exist."*
+
+        **It is the same number at both seams, and that is a fact about the card rather than a
+        convenience.** What a refresh is WORTH is what playing it does to the two hands; grabbing one
+        buys exactly that, one step earlier. The only thing the grab site adds is WHEN it can be
+        cashed, which is the caller's discount to apply, not this function's.
+
+        Reading it at GRAB time is sound without adjustment, and the two hand terms are why.
+        ``my_hand`` is the hand that will be SHUFFLED, and the fetched refresh is not in it — a
+        played Supporter is discarded, not shuffled (`docs/rules.md`), so the shuffled set is the
+        hand as it stands right now, which is what `board.my_hand_size` already reports. The shed
+        side agrees by construction: `_refresh_shed_keepcost` excludes exactly one copy of
+        ``ctx.card_id``, which is the copy that gets played — a no-op when the card is still in the
+        deck, and correct when a duplicate is already held."""
         nets = net_change(ctx.card_id, my_hand=board.my_hand_size, opp_hand=board.opp_hand_size,
                           my_prizes_remaining=board.my_prizes_remaining,
                           opp_prizes_remaining=board.opp_prizes_remaining)
@@ -4106,21 +4095,46 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                   opp_prizes_remaining=board.opp_prizes_remaining)
         return prize_to_damage(needs.survival_value(survival_shift=shift, phase=phase))
 
-    def _grab_refresh_draw_tactical(self, board: Board, ctx) -> float:
-        """Sub-point tie-break at a TO_HAND draw-Supporter grab: rank a refresh by its own-draw
-        ceiling (ADR-0060 facts), so among the `grab-a-draw-supporter-in-setup` band the bigger-ceiling
-        refresh is grabbed (Lillie's redraws 8 early ≻ Judge's 4 — ep86088989 f29, CRITICAL). The +10
-        band could not tell them apart, so the option INDEX decided.
+    def _grab_refresh_value(self, obs: dict, board: Board, ctx) -> float:
+        """The DIFFERENCING value of grabbing a refresh: the swing playing it will produce
+        (`_refresh_swing` — the identical quantity the PLAY site scores), discounted only for when it
+        can be cashed. ADR-0122 amendment; ep86088989 f29 is the frame that forced it.
 
-        Mirrors the rung's gate exactly (setup TO_HAND, a `draw` Supporter CARD), plus `own_draw_count`
-        knowing the card — so it only ever SEPARATES cards the rung already tied, never lifts one out of
-        the band. Silent (0) otherwise; re-values nothing — the PLAY swing is priced by
-        `_refresh_swing_tactical` when the card is actually played."""
+        **What this replaced, and why the replacement is a different KIND of thing.** It was
+        ``_GRAB_REFRESH_DRAW × own_draw_count`` — 0.1 per card, deliberately sized so *"a draw
+        Supporter (base +10) tops out at ≤ +10.8 — never crossing the +15 chain opener or a +18 line
+        piece."* That constant did its stated job (it separated Lillie's 8 from Judge's 4 where the
+        flat rung tied them) and could not do the job the board actually needed, **because it was
+        specified never to.** On f29 — hand EMPTY, six prizes remaining, so Lillie's draws 8 — it
+        priced the difference between a hand of 8 and a hand of 0 at **0.4 points**, and
+        `grab-the-chain-opener` (+15) took a Team Rocket's Petrel instead.
+
+        A sub-point tie-break cannot express a magnitude, and this is a magnitude. The two candidates
+        do measurably different things to the board:
+
+            Lillie's Determination   draws 8, one-sided       CYCLE 20 − shed 0 − gift 0   = +20
+            Judge                    draws 4, REFILLS them 2  CYCLE 20 − shed 0 − gift 16  = +4
+
+        The gift leg is the half the old term could not see at all: Judge shuffles BOTH hands, so it
+        hands a 2-card opponent two fresh cards, while Lillie's touches only mine. Ranking by
+        ``own_draw_count`` alone (8 ≻ 4) gets the right order here by luck — it would rank a big
+        symmetric refill above a smaller one-sided one on a board where that is exactly backwards.
+
+        **The quota discount is the one thing the grab adds** to the play-side number, and it is the
+        shared convention rather than a rate invented here: a Supporter fetched after this turn's
+        Supporter is spent cannot be cashed until next turn, so it takes `grading.halve(1)` — the
+        same ADR-0070 §6 treatment `deploy_value` gives its own `supporter_quota_spent` leg.
+
+        Gate unchanged from the term it replaces (setup `_TO_HAND`, a `draw` Supporter CARD known to
+        `refresh_branches`), so this changes HOW MUCH the site says and never WHEN it speaks. Silent
+        (0) otherwise."""
         if (board.line_ready or ctx.select_context != _TO_HAND or "draw" not in ctx.tags
                 or not (ctx.stat and getattr(ctx.stat, "is_supporter", False))):
             return 0.0
-        draw = own_draw_count(ctx.card_id, board.my_prizes_remaining, board.opp_prizes_remaining)
-        return _GRAB_REFRESH_DRAW * draw if draw is not None else 0.0
+        swing = self._refresh_swing(obs, board, ctx)
+        if (obs.get("current") or {}).get("supporterPlayed"):
+            swing *= _halve(1)
+        return swing
 
     def _refresh_shed_keepcost(self, obs: dict, board: Board, ctx) -> float:
         """The graded SHED — the **v2 whole-hand assignment marginal** (ADR-0101, Issue #261 item 2b):

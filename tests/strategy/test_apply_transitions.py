@@ -333,6 +333,47 @@ def test_the_retreat_option_carries_no_target_and_the_module_says_so_where_it_is
     assert "Issue #385" in src
 
 
+@pytest.mark.req("REQ-APPLY-0002")
+def test_the_CHOICE_branch_changes_the_SHAPE_and_leaves_the_point_transition_exactly_as_it_was():
+    """**Issue #392's wiring, asserted from this file** — because the acceptance criterion it carries
+    is a NEGATIVE one: the two `_retreat` tests above must stay green, and if they go red the
+    implementation widened the seam rather than building beside it.
+
+    So the same board is applied twice. Unarmed, the seam returns the allowance-only `StateModel` the
+    two tests above pin, byte for byte. Armed with ``expand_deferred_targets=True`` it returns an
+    `Expectation` over the boards the deferred target can reach — a shape `apply_option` already
+    declares among its four returns — and the FATE is `MODELLED` either way, because what a choice
+    node changes is the shape and not the verdict.
+
+    `runtime.PROFILE["deferred_target_expansion"]` ships **False**, which is what keeps the ADR-0098
+    parity lane and both ADR-0072 gates seeing the seam Issue #382 verified until Issue #385's
+    composer exists to consume the other shape."""
+    obs = _obs(_player(active=_body(RIOLU, energy=[(E_F, (FIGHTING,))]),
+                       bench=[_body(MUNKIDORI, serial=2)]))
+    plain = _apply(obs, {"type": _RETREAT})
+    assert not isinstance(plain, ao.Expectation)
+    assert plain.retreated is True and plain.mine.active.card_id == RIOLU
+
+    expanded = _apply(obs, {"type": _RETREAT}, expand_deferred_targets=True)
+    assert isinstance(expanded, ao.Expectation)
+    assert [c.model.mine.active.card_id for c in expanded.classes] == [MUNKIDORI]
+    assert expanded.total_probability == pytest.approx(1.0)
+    assert ao.fate({"type": _RETREAT}) == ao.MODELLED
+    assert ao.fate({"type": _RETREAT}, deferred_target=True) == ao.MODELLED
+
+
+@pytest.mark.req("REQ-APPLY-0002")
+def test_the_shipped_PROFILE_leaves_deferred_target_expansion_OFF():
+    """The default is the load-bearing half of the test above, and it is pinned where an implementer
+    reading the retreat transition will meet it. `tests/agents/test_runtime.py` pins the whole
+    profile; this pins the one flag whose ON state would change what every gate in the repo sees."""
+    from common.runtime import PROFILE
+    assert PROFILE["deferred_target_expansion"] is False
+    import inspect
+    assert inspect.signature(ao.apply_option).parameters[
+        "expand_deferred_targets"].default is False
+
+
 # ── _PLAY ─────────────────────────────────────────────────────────────────────────────────────────
 
 

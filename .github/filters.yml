@@ -148,11 +148,34 @@ label:
 # nothing else imports src/cgpy at runtime (its only other reference is a conftest.py opt-in
 # env-var switch used solely by the parity suite itself), so a cgpy/parity change runs ONLY
 # tests/parity (and, conversely, an unrelated PR never pays for the heavy parity suite).
+#
+# The APPLY-SEAM sources are listed here too, and that was a real gap rather than a widening
+# (Issue #392). tests/parity holds two trace-replay lanes over those modules -- the point
+# transition's (test_apply_seam_parity.py, Issue #382) and the choice node's
+# (test_choice_seam_parity.py, this issue) -- and neither was reachable from a source change:
+# `common_agent_core` matches src/common/*.py but adds tests/agents ... tests/value and NOT
+# tests/parity, and `parity` matched only src/cgpy. So a PR editing board_delta.py could
+# rewrite a modelled transition and never replay a single trace against the recorded engine.
+# (Pushes to main run everything, so this only ever bit on PRs -- which is exactly where a
+# seam divergence is cheapest to catch.) The list is the modules a lane actually replays
+# THROUGH, not every module they transitively import: state_model and snapshot_coverage are
+# in because the lanes' comparison projection is built from the second and resolved against
+# the first, so a change to either moves what "agrees with the engine" means.
 parity:
   - 'src/cgpy/**'
   - 'tests/parity/**'
   - 'tests/fixtures/parity/**'
   - 'data/engine/coverage.json'
+  - 'src/common/apply_option.py'
+  - 'src/common/apply_engine.py'
+  - 'src/common/board_delta.py'
+  - 'src/common/board_expectation.py'
+  - 'src/common/board_choice.py'
+  - 'src/common/retreat_cost.py'
+  - 'src/common/state_model.py'
+  - 'src/common/snapshot_coverage.py'
+  - 'tools/train/apply_parity.py'
+  - 'tools/train/choice_parity.py'
 
 # Ignorable (no runtime surface) and a catch-all for the fail-safe in the plan step.
 docs:
