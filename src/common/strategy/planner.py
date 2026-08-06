@@ -3566,7 +3566,12 @@ class PlannerMixin:
         return StateModel.build(
             end, combat=self.combat, my_index=my_index, deck=self.deck,
             role_worth=self._role_value,
-            needs=lambda: self._leaf_needs_resolution(end, my_index))
+            # The BOUND METHOD, not a closure over ``end`` (Issue #400 Phase 2). `StateModel.build`
+            # binds a board-bound supplier to the observation it is building, so a hypothetical
+            # reached through `rebuilt` resolves its OWN hand instead of inheriting this one's — the
+            # staleness that made `state_value`'s `hand` family constant across a whole
+            # `composer.compose` call and priced a fetch at exactly 0.0.
+            needs=self._leaf_needs_resolution)
 
     def _leaf_needs_resolution(self, end, my_index: int):
         """The `needs.Resolution` for a simulated end board's HAND, or None when there is no hand to
