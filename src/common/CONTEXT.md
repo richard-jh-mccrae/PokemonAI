@@ -1907,7 +1907,13 @@ if no it is a planner defect. Verified empirically on `81905522|0|decision|64` �
 `+10.0` instead of `0.0`, changing nothing else, makes the greedy rollout reach the evolve from BOTH
 candidate openings.
 _Avoid_: sequence / line (a **Maneuver** is the ordered, dependent kind — say which), combo, turn
-plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a pricing bug)
+plan (the `turn_plan` correction payload, one layer up), ordering bug (it is a pricing bug),
+**Commutative Block** (the near-twin, and the two are NOT interchangeable: a Commutative Set is the
+DEFECT-OWNERSHIP test — *"do these actions commute, so is this an equation-pricing bug or a planner
+bug?"* — and it is decided by reading the rules. A Block is the composer's structural unit, decided
+by PROVING read/write footprint disjointness per pair and failing closed. A Set can be asserted from
+the rulebook; a Block has to be earned from `apply_option.footprints_commute`, which is why the
+worked triple both terms use was unprovable until the 2026-08-04 element-granularity ruling)
 
 **Option Equivalence Class**:
 A set of select-menu options that are **the same decision** — the board cannot tell them apart, so
@@ -1933,3 +1939,63 @@ _Avoid_: tie (options scoring equal is the SYMPTOM; being the same decision is t
 can score one class member 12× above another, see **Class Asymmetry**), duplicate (the cards are
 distinct objects with distinct serials; it is the DECISION that is one), transposition table (that is
 `transposition_probe.py`'s deliberately lossy search key, which drops `hp` — never reuse it to grade)
+
+**Commutative Block**:
+A set of menu options whose ORDER cannot change the resulting board, so the *n*! orderings are ONE
+candidate while *which subset* to play stays a real choice (Issue #263 § *Commutative-block collapse*;
+built in `common/composer.py`, POC-T4/4, Issue #385). A **different axis** from the **Option
+Equivalence Class** and it composes with it: OEC dedupes indistinguishable SIBLINGS at one ply, a
+block dedupes ORDERINGS of distinct options across depth.
+
+Licensed only by PROVEN per-option footprints (`apply_option.footprints_commute`) and fail-closed
+everywhere: an unknown or partial footprint commutes with nothing, and a play that REVEALS information
+can never join a block whatever its read/write sets say — a revealer changes the option SET, not only
+the board, so the fixed-option-set premise fails and it becomes a block BOUNDARY.
+
+Two properties do the work. The block is emitted as the **Subset Lattice** — 2**n candidates, one
+canonical ordering per subset, generated a-priori (8 / 16 / 32 for n = 3 / 4 / 5, against the
+16 / 65 / 326 ordered prefixes a naive tree holds), never generate-then-hash-then-merge. And the
+canonical in-block order is the **information-before-commitment tier order**, whose ratified reason
+travels with it: inside a block no function of the end state separates any ordering, so the doctrine
+order is the principled canonical choice. That canonicalisation is also what makes the Issue #254
+index-order bug class structurally impossible rather than hand-fixed.
+
+**The claim is about the resulting BOARD, never about option ENCODINGS**, and the gap between the two
+is the module's sharpest trap: an option names its card by hand INDEX, so a stored dict replayed from a
+permuted position applies a *different play* — silently, because a shifted index still resolves to *a*
+legal card. Every block member is therefore re-resolved by its `(hand serial, body serial)` instance
+key (`apply_option.option_serials` → `composer.resolve_against`) against the board it is actually
+applied to.
+_Avoid_: **Commutative Set** (the near-twin, defined above — that term is the DEFECT-OWNERSHIP test,
+read off the rules to decide whether a missed action is an equation-pricing bug or a planner bug. A
+Block is this module's structural unit and must be PROVED per pair from footprints, fail-closed, so
+the same three actions can be a Set by the rulebook and not a Block by the seam), transposition table
+(a block is generated a-priori; a transposition table merges after paying full generation cost, and
+needs a canonical state hash a block never forms), Option Equivalence Class (the other axis —
+siblings at one ply, not orderings across depth), commutativity as a per-KIND fact (`commutes()`
+answers by kind and licenses almost nothing; the per-OPTION footprint is what proves a block, since
+element-level granularity is what separates two writes to distinct instances)
+
+**Deferred-Target Expansion**:
+What the composer does with an option whose TARGET the engine defers to a follow-up select — a
+`_RETREAT` (whom do I promote?), a Boss's Orders (which of their bodies?), a Crispin (which Energy,
+onto whom?). Ruled by **ADR-0121** (Issue #392) and consumed here: the target class is resolved
+against the board and **one candidate per legal instance** is scored as a fully synthesized board,
+rather than the option being admitted at the ~0 its unexpanded transition prices. That number is not
+a rounding artifact — `board_delta._retreat` writes `allowance_retreat_used` alone and **no
+`state_value` family reads the retreat allowance**, so an unexpanded retreat's 1-ply delta is
+*exactly* 0.0. Expanded, `85046350|0|decision|32` prices +0.00075 over 2 classes and
+`86091435|0|decision|35` +0.00186 over 4.
+
+Three properties travel with it. **Expansion, not admission** (D1): a structural beam-admission
+whitelist was offered and rejected, because it buys *presence* without *comparability* — the score
+stays a lie and the beam ranks on it. **Parent-slot accounting** (D4): an expanded family holds ONE
+beam slot, taken by its best child, so it is an evaluation-time fan-out and beam width `k` keeps its
+pre-expansion meaning. **The follow-up select REPLANS** (D6): the same evaluator runs again on the
+real board rather than the first choice being committed, which is what makes *"retreat BECAUSE
+Cinderace is worth promoting, then promote Budew"* structurally impossible instead of a standing
+per-card proof obligation.
+_Avoid_: beam admission (the REJECTED option — presence without comparability), target selection (the
+downstream act; expansion is what makes it comparable in the first place), chance node (a target
+choice is a CHOICE node — the player sees the space and picks, so the composer takes the **max**, not
+`.expected()`), commitment (D6 ruled the opposite: the follow-up select re-decides)

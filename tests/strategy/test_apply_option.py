@@ -986,6 +986,48 @@ def test_an_expectation_yields_one_comparable_number_at_1_ply():
 
 
 @pytest.mark.req("REQ-APPLY-0006")
+def test_the_number_that_ORDERS_is_the_MAX_and_expected_is_the_reported_lower_bound():
+    """POC-T4/4 (Issue #385 §S3) settled which of the two orders, **against this class's own 2026-08-01
+    docstring**, which had named `expected()` *"the 1-ply ordering number"*.
+
+    Both producers of an `Expectation` emit a CHOICE node — `board_expectation` enumerates a search
+    (*the player sees the whole deck and picks*, so `probability` there is an AVAILABILITY weight) and
+    `board_choice` enumerates a deferred target (a pick by construction). The value of a choice is the
+    value of the best branch, so `best` orders and `expected` is kept as a reported lower bound.
+
+    The fixture is deliberately one where the two DISAGREE and where the max is NOT the likeliest
+    branch: a 4.0-weighted 0.75 against an 8.0-weighted 0.25 means an implementation that quietly
+    took the modal class, or the probability-weighted one, reads 5.0 rather than 8.0."""
+    e = ao.Expectation(classes=(ao.OutcomeClass(0.75, model="a"), ao.OutcomeClass(0.25, model="b")))
+    score = {"a": 4.0, "b": 8.0}.__getitem__
+    assert e.best(score) == pytest.approx(8.0)
+    assert e.expected(score) == pytest.approx(5.0)
+    assert e.best(score) > e.expected(score)
+
+
+@pytest.mark.req("REQ-APPLY-0006")
+def test_the_max_IGNORES_the_probabilities_because_the_chooser_picks():
+    """`best` must not weight. Averaging over a set the chooser gets to pick from prices the choice as
+    if it were made for them, which is the under-read `expected` deliberately keeps. Asserted by
+    moving the WEIGHTS only and requiring the answer not to move."""
+    score = {"a": 4.0, "b": 8.0}.__getitem__
+    flat = ao.Expectation(classes=(ao.OutcomeClass(0.5, model="a"), ao.OutcomeClass(0.5, model="b")))
+    skewed = ao.Expectation(classes=(ao.OutcomeClass(0.99, model="a"),
+                                     ao.OutcomeClass(0.01, model="b")))
+    assert flat.best(score) == skewed.best(score) == pytest.approx(8.0)
+    assert flat.expected(score) != pytest.approx(skewed.expected(score))
+
+
+@pytest.mark.req("REQ-APPLY-0006")
+def test_the_max_of_an_unenumerated_expectation_raises_rather_than_returning_zero():
+    """`expected()`'s reason, applied to the other bound: no classes is an un-enumerated effect, and
+    0.0 is a real score that would read as one. Both bounds must fail the same way or a caller that
+    switched between them would change its failure mode by accident."""
+    with pytest.raises(ValueError):
+        ao.Expectation().best(lambda m: 1.0)
+
+
+@pytest.mark.req("REQ-APPLY-0006")
 def test_a_truncated_expectation_orders_on_the_mass_it_enumerated():
     """Renormalised over the surviving mass, i.e. the expectation CONDITIONAL on the enumerated
     branches. Letting truncated mass contribute 0 would bias against the widest enumerations, and the

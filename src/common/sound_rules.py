@@ -378,6 +378,61 @@ WHITELIST: tuple[SoundRule, ...] = (
         reconciliation="Reviewed post-POC as the option-kind table grows; a floor that never fails "
                        "is as uninformative as one that always does.",
     ),
+    SoundRule(
+        id="composer-budget-caps",
+        entry="`composer.BEAM_WIDTH` / `composer.SEQUENCE_DEPTH` / `composer.EPSILON` "
+              "(+ `board_expectation.BRANCH_CAP`, declared here rather than three times)",
+        type=AUTHORED_SCAFFOLD,
+        fact="how much of the sequence tree one decision may explore",
+        reason="Structural search caps, not tuned strategy: they bound WHAT IS EXPLORED, never what "
+               "a candidate is worth, and every one of them reports its truncation rather than "
+               "capping in silence (`ComposerResult.stats`, `Expectation.truncated`). Owed by "
+               "Issue #385, which builds the composer and is therefore the first issue for which a "
+               "budget cap exists to be spent — `board_expectation`'s header and `board_choice`'s "
+               "both state the debt and name this entry. "
+               "THREE usages, not two, and the third is a REUSE rather than a new number: "
+               "(1) the beam's own width / depth / epsilon; "
+               "(2) `board_expectation.BRANCH_CAP` = 12, the expectation-branch cap on a CHANCE "
+               "node; and (3) that same `BRANCH_CAP`, read by `board_choice.deferred_target` as the "
+               "Target-Ranker top-`m` on a CHOICE node. A choice node and a chance node cost the "
+               "same thing — leaf evaluations on one option — so they take the same cap, and a "
+               "second constant for one fact is exactly the drift this whitelist exists to prevent. "
+               "Derived from the two measurements already on the record rather than guessed: "
+               "post-Option-Equivalence menu width P50 6 / P95 12 / max 23 and leaf P95 6.57 ms "
+               "(Issue #291 §3a, over the 372 corpus frames both gates replay), against the "
+               "grader's per-decision FLOOR of >= 3.0 s (2 vCPU x ~10 min per player per match, "
+               "P95 137 / max 198 decisions per match over the 377 committed native traces). "
+               "A full run costs at most (1 + 3 x 4) x 12 = 156 leaf evaluations ~ 1.03 s, i.e. "
+               "~34% of that floor — then MEASURED end to end at those caps, which CORRECTED the "
+               "bound: that arithmetic is quoted at the P95 width and therefore bounds the P95 "
+               "decision, not the max one. At the observed MAX width the same formula predicts "
+               "(1 + 3 x 4) x 27 = 351 against 323 measured, and the worst frame costs 2.4-2.6 s — "
+               "so the max can cross the grader floor. Recorded as a NAMED EXPOSURE rather than "
+               "tuned away, because it is leaf-bound and not beam-bound: ~100% of that frame's time "
+               "is inside `state_value`, and re-sizing was measured rather than assumed (k in "
+               "{2,3,4} x depth in {2,3,4} does not move the corpus max outside run-to-run noise, "
+               "since leaf evaluations SATURATE at depth 2). Shrinking a cap that does not move the "
+               "metric would be a constant changed to look responsive. See `composer.BEAM_WIDTH`'s "
+               "own note for the corpus figures and the machine they were taken on. "
+               "Anchored on the WIDTH half deliberately, for the reason `BRANCH_CAP` "
+               "records: the width is exactly 12 on every run while the millisecond half moves "
+               "~10% run-to-run and ~45% between boxes, so a cap keyed to a wall-clock figure is a "
+               "property of whoever ran it last. EPSILON is not authored at all — it is "
+               "`family_diag.DECIDER_FLOOR`, the corpus-calibrated threshold below which a family "
+               "cannot be any frame's decider, carried under its own name because `tools/` must "
+               "never be a `src/` dependency and asserted equal by test. It is SWEPT rather than "
+               "assumed (`composer_lab.py --epsilon-sweep`); the sweep now MOVES (three plateaus "
+               "over {0.0 ... 0.1}) where before deferred-target expansion it did not move at all, "
+               "which was a symptom — every option priced exactly 0.0, so nothing could be NEAR a "
+               "tie. The reading is recorded on the constant.",
+        reconciliation="Re-measured on GRADER hardware post-POC (Issue #273, POC-B3) — the figures "
+                       "above are a DEV-MACHINE number and Issue #291 §3a says so in as many "
+                       "words. The derived per-decision P95 it rests on is additionally a LOWER "
+                       "BOUND on the leaf half alone; the apply-seam transition cost joined the "
+                       "measurable set only at Issue #382 and the composer's own wall-clock is "
+                       "reported by `tools/train/composer_lab.py`. Re-fit when both halves are "
+                       "measured on the grader.",
+    ),
     # ── composed-into-the-leaf (added 2026-08-01 by the Issue #263 ordering ruling) ────────────────
     # The composer's ordering heuristic became uniform 1-ply differencing, so these four stop being
     # DECIDERS for any option the enumerator covers. They are listed here — not deleted, not
