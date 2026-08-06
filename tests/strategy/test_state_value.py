@@ -84,6 +84,8 @@ Issue #280 adds ONE, and it is the attacker the Damage Formula's context exists 
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
@@ -1430,6 +1432,18 @@ def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
     on the same prize, which is the double-counting rule this module's whole registry exists to
     enforce.
 
+    **Narrowed a SECOND time at ADR-0129, and the distinction is the whole point.** There are now
+    two call SITES, both inside that one consumer: `terminal_ev` prices the action a line ENDED on,
+    `continuation_ev` prices the one a line CUT short still has ahead of it. That is one consumer
+    reading one equation at two seams, not two opinions on one prize — and it is not an argument,
+    it is structural: `_terminal_candidate` and `_gap_or_reveal_candidate` are different branches of
+    `_expand`, so **no Candidate can ever carry both** (a terminal candidate has ``terminal`` set and
+    a truncated one has it None; `tests/strategy/test_composer.py` asserts each side directly).
+
+    So the assertion is by (file, enclosing function) rather than by file alone. A THIRD site, or
+    either of these two moving to a new function, still fails — which a bare "the file list is
+    [composer.py]" would not, and which is exactly the drift this test exists to catch.
+
     **A negative result needs a positive control**, so the same scan is pointed at `survival`, which
     MUST match (`state_value.py`'s `_terms` calls it). If the control goes quiet the instrument is
     broken and the empty result means nothing. `src/cg/` is excluded — the native-engine wrapper is
@@ -1443,24 +1457,42 @@ def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
     from pathlib import Path
 
     def _called(tree, name):
-        return [node.lineno for node in ast.walk(tree)
-                if isinstance(node, ast.Call)
-                and (getattr(node.func, "id", None) == name
-                     or getattr(node.func, "attr", None) == name)]
+        """``[(enclosing def name or '<module>', lineno)]`` for every CALL of ``name``.
+
+        The enclosing function is resolved by descending the def tree rather than by line-number
+        arithmetic, so a nested helper reports its own name and a call at module scope is not
+        silently attributed to whichever def happens to sit above it."""
+        out = []
+
+        def walk(node, where):
+            for child in ast.iter_child_nodes(node):
+                inner = (child.name if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                         else where)
+                if isinstance(child, ast.Call) and (getattr(child.func, "id", None) == name
+                                                    or getattr(child.func, "attr", None) == name):
+                    out.append((where, child.lineno))
+                walk(child, inner)
+
+        walk(tree, "<module>")
+        return out
 
     root = Path(__file__).resolve().parents[2]
     hits, controls = [], []
     for base in ("src", "tools"):
         for path in sorted((root / base).rglob("*.py")):
-            rel = path.relative_to(root)
-            if rel.parts[:2] == ("src", "cg"):
+            rel = path.relative_to(root).as_posix()
+            if rel.startswith("src/cg/"):
                 continue
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            hits += [f"{rel}:{n}" for n in _called(tree, "attack_ev")]
-            controls += [f"{rel}:{n}" for n in _called(tree, "survival")]
+            hits += [(rel, fn, n) for fn, n in _called(tree, "attack_ev")]
+            controls += [(rel, fn, n) for fn, n in _called(tree, "survival")]
     assert controls, "positive control silent: the scan is broken, not the tree"
-    assert [h.replace("\\", "/").split(":")[0] for h in hits] == ["src/common/composer.py"], (
-        f"`attack_ev` must have exactly ONE consumer — the composer's terminal sum. Found: {hits}")
+    assert sorted({(f, fn) for f, fn, _n in hits}) == [
+        ("src/common/composer.py", "continuation_ev"),
+        ("src/common/composer.py", "terminal_ev"),
+    ], (f"`attack_ev` must have exactly ONE consumer — the composer's terminal sum, read at its two "
+        f"mutually-exclusive seams (`terminal_ev` for a line that ENDED, `continuation_ev` for one "
+        f"that was CUT). Found: {sorted(hits)}")
 
 
 # ── the scalar over a real StateModel ─────────────────────────────────────────────────────────────
@@ -2173,7 +2205,15 @@ def test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is():
     zero makes every free Item strictly worth playing (the defect `_DENIAL_ITEM_COST` patches);
     pricing it too high makes the agent hoard. With no Needs resolution supplied the hand leg is a
     real zero — there are no slots for a card to cover — and that is asserted here rather than left
-    to be discovered as a mystery in wave-3 triage."""
+    to be discovered as a mystery in wave-3 triage.
+
+    ⚠️ **The claim is about the MARGINAL, not the level, and it was asserted on the level until
+    Issue #400 Phase 2.** The family is a LEDGER — held supply minus the position's unmet demand —
+    so a hand that exactly covers the position's only need nets to 0 and one that covers nothing
+    nets to `-demand`. Reading the level made "holding a useful card is worth something" look false
+    the moment the demand half existed, while the sentence it is defending has always been a
+    statement about the DIFFERENCE between holding the card and not holding it. That difference is
+    what this asserts now, and it is also the only reading a differencing leaf can support."""
     model = _lucario_board(hand=[MEGA_LUC, E_F])
     working: dict = {}
     sv.state_value(model, working=working)
@@ -2184,15 +2224,35 @@ def test_holding_a_useful_card_is_worth_something_but_less_than_playing_it_is():
     resolved.mine._needs = _resolution_for_one_wincon_slot()
     resolved_working: dict = {}
     sv.state_value(resolved, working=resolved_working)
-    assert resolved_working["hand"] > 0.0
-    assert resolved_working["hand"] < 1.0, "a hand may never be worth a whole prize"
+
+    without = _lucario_board(hand=[E_F])
+    without.mine._needs = _resolution_for_one_wincon_slot(covered=False)
+    without_working: dict = {}
+    sv.state_value(without, working=without_working)
+
+    held = resolved_working["hand"] - without_working["hand"]
+    assert held > 0.0, (
+        "holding the card that covers the position's only Need must beat not holding it — the "
+        "ADR-0097 sanity, read as the marginal the ledger actually expresses")
+    assert held < 1.0, "a hand may never be worth a whole prize"
+    assert resolved_working["hand"] == pytest.approx(0.0), (
+        "a hand that exactly covers the only live slot nets to zero deficit — the LEVEL, which is "
+        "not what the sanity above is about")
 
 
-def _resolution_for_one_wincon_slot():
+def _resolution_for_one_wincon_slot(*, covered: bool = True):
     """A minimal `needs.Resolution`: one Line slot at the win-condition tier, covered by the held
     Mega Lucario ex. The Pilot's `_resolve_needs` is what builds these in production; this is the
-    smallest one that exercises the `hand` family's spine."""
+    smallest one that exercises the `hand` family's spine.
+
+    ``covered=False`` is the same position with the covering card gone from hand — the counterfactual
+    the ADR-0097 marginal is taken against. The SLOT stays: not holding the wincon does not stop the
+    position needing one, which is the whole point of the demand half."""
     from common import needs
+    if not covered:
+        return needs.Resolution(
+            slots=(needs.Slot("line", 30.0, 99, "wincon"),),
+            eligibility=(frozenset(),), resupply=(0.0,), hand_ids=(E_F,), latent_worth=0.0)
     return needs.Resolution(
         slots=(needs.Slot("line", 30.0, 99, "wincon"),),
         eligibility=(frozenset({0}), frozenset()),
@@ -3846,3 +3906,74 @@ def test_the_gated_bodys_odds_are_asked_about_the_attack_that_actually_pays():
     one, and its cost is what the odds leg owes an answer about."""
     model = _lunar_board(bench=[_poke(LUNATONE, hp=110, serial=2)])
     assert model.mine.attack_payoff(model.mine.active).attack_id == COSMIC_BEAM
+
+
+# ── the `hand` LEDGER: supply against demand (Issue #400 Phase 2) ────────────────────────────────
+
+
+def _fund_attack_resolution(*, slots, covering_card: bool):
+    """A `needs.Resolution` with ``slots`` live `fund_attack` slots, optionally covered by one held
+    Energy. The shape `_resolve_needs` produces for an unfunded Active, minimised to the two facts
+    the ledger reads: how much the position NEEDS and how much the hand COVERS."""
+    from common import needs
+    return needs.Resolution(
+        slots=tuple(needs.Slot("fund_attack", 8.0, n, f"active:unit{n}") for n in range(slots)),
+        eligibility=(frozenset(range(slots)),) if covering_card else (),
+        resupply=(0.0,) * slots,
+        hand_ids=(E_F,) if covering_card else (),
+        latent_worth=0.0)
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_attaching_an_energy_that_retires_two_fund_slots_is_a_GAIN_not_a_loss():
+    """The Issue #400 Phase 2 defect, as its smallest reproduction.
+
+    An Active needing two Energy units carries two `fund_attack` slots (16 Worth of DEMAND) and one
+    held Energy covers them (8 Worth of SUPPLY). Attaching it retires BOTH slots — the attack is
+    funded — and costs the one card. Supply falls 8, demand falls 16, so the play is worth +8 Worth.
+
+    Before the demand leg existed the family priced supply alone and read **-8** Worth
+    (-0.0667 prizes), which is the sign inversion measured on 31 corpus frames where the human ruled
+    exactly this attach. The equation is asserted here rather than the corpus number, so the fix
+    cannot be undone by a fixture drifting."""
+    before = sv.hand(**_hand_legs_of(_fund_attack_resolution(slots=2, covering_card=True)))
+    after = sv.hand(**_hand_legs_of(_fund_attack_resolution(slots=0, covering_card=False)))
+    assert after - before == pytest.approx(8.0 * sv.POC_WORTH_PRIZE_RATE), (
+        "attaching the Energy retires 16 Worth of demand at a cost of 8 Worth of supply")
+    assert after > before, "the attach must be a GAIN — this is the whole defect"
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_a_play_that_retires_no_need_is_still_charged_its_hold():
+    """The counterweight ADR-0097 exists for, preserved. A card that covers nothing and retires
+    nothing still costs its latent Worth to play, so the demand leg cannot be read as "every play is
+    free now" — which is the defect `_DENIAL_ITEM_COST` patched and `common.hold_value` generalises."""
+    from common import needs
+    holding = needs.Resolution(slots=(), eligibility=(), resupply=(), hand_ids=(E_F,),
+                               latent_worth=9.0)
+    spent = needs.Resolution(slots=(), eligibility=(), resupply=(), hand_ids=(), latent_worth=0.0)
+    assert (sv.hand(**_hand_legs_of(spent)) - sv.hand(**_hand_legs_of(holding))
+            == pytest.approx(-9.0 * sv.POC_WORTH_PRIZE_RATE))
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_demand_half_excludes_FUEL_because_the_supply_half_does():
+    """One rule, both sides. `needs._keep_slot_dp` assigns over the ``supplied_by_pitch is False``
+    slots only, so a fuel slot never contributes to coverage; counting it as demand would credit its
+    retirement against a supply that never credited holding the fuel."""
+    from common import needs
+    with_fuel = needs.Resolution(
+        slots=(needs.Slot("fund_attack", 8.0, 0, "active:unit0"),
+               needs.Slot("fuel", 8.0, 99, "fuel", supplied_by_pitch=True)),
+        eligibility=(), resupply=(0.0, 0.0), hand_ids=(), latent_worth=0.0)
+    without = needs.Resolution(
+        slots=(needs.Slot("fund_attack", 8.0, 0, "active:unit0"),),
+        eligibility=(), resupply=(0.0,), hand_ids=(), latent_worth=0.0)
+    assert (_hand_legs_of(with_fuel)["slot_demand"]
+            == _hand_legs_of(without)["slot_demand"] == 8.0)
+
+
+def _hand_legs_of(resolution):
+    """`_hand_legs` over a bare Resolution — the extractor reads `model.mine.needs` and nothing
+    else, so a stub with that one attribute exercises it exactly."""
+    return sv._hand_legs(SimpleNamespace(mine=SimpleNamespace(needs=resolution)))

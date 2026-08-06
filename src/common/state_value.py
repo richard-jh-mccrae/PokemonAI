@@ -838,12 +838,14 @@ REGISTRY: tuple[TermFamily, ...] = (
     ),
     TermFamily(
         name="hand",
-        reads=("assignment_coverage", "re_access", "hand_worth"),
+        reads=("assignment_coverage", "re_access", "hand_worth", "slot_demand"),
         does_not_read=("body_payoff", "deploy_marginal"),
-        composition="Assignment coverage of LIVE slots plus re-access, on the `set_keep_v2` spine. "
-                    "Its Worth-denominated part is the one place POC_WORTH_PRIZE_RATE crosses. A "
+        composition="Assignment coverage of LIVE slots plus re-access, on the `set_keep_v2` spine, "
+                    "MINUS the demand those slots represent (Issue #400 Phase 2). Its "
+                    "Worth-denominated part is the one place POC_WORTH_PRIZE_RATE crosses. A "
                     "card's value once PLAYED belongs to `readiness` or `development`; this family "
-                    "prices it only while it is still in hand.",
+                    "prices it only while it is still in hand — but it also prices the NEED that "
+                    "playing it retires, which is what makes a play a gain rather than a loss.",
         blind_to=(
             "hand SIZE as such — a bigger hand is more options, but the assignment prices coverage "
             "of live slots and a card covering nothing contributes only its latent worth. A draw "
@@ -1657,13 +1659,22 @@ def _hand_legs(model: "StateModel") -> dict:
     Returns all-zero when no Needs resolution was supplied. That is a REAL zero rather than a
     hidden one: with no resolution there are no slots, so the hand covers nothing, and the
     alternative (re-resolving here) would put a second board→slots derivation in the codebase
-    beside the Pilot's, which is the duplication `MySide.needs` exists to prevent."""
+    beside the Pilot's, which is the duplication `MySide.needs` exists to prevent.
+
+    ``slot_demand`` is the DEMAND half of the same ledger — see :func:`hand` for why it exists at
+    all. **Fuel slots are excluded, because the supply half excludes them**: `needs._keep_slot_dp`
+    assigns over the ``supplied_by_pitch is False`` slots only, so counting fuel here would credit
+    a retired fuel slot against a supply that never credited holding the fuel. One rule, both sides.
+    Measured on the corpus the two spellings pick identically on all 270 MAIN ruled frames, so this
+    is a coherence choice rather than a scored one — and it is stated as such."""
     resolution = model.mine.needs
     if resolution is None:
-        return {"assignment_coverage": 0.0, "re_access": 0.0, "hand_worth": 0.0}
+        return {"assignment_coverage": 0.0, "re_access": 0.0, "hand_worth": 0.0, "slot_demand": 0.0}
     re_access, coverage = resolution.split()
     return {"assignment_coverage": float(coverage), "re_access": float(re_access),
-            "hand_worth": float(resolution.latent_worth)}
+            "hand_worth": float(resolution.latent_worth),
+            "slot_demand": float(sum(float(s.value) for s in resolution.slots
+                                     if not getattr(s, "supplied_by_pitch", False)))}
 
 
 def _development_legs(model: "StateModel") -> dict:
@@ -1885,8 +1896,28 @@ def readiness(bodies: Iterable[ReadyBody]) -> float:
 
 
 def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
-         worth_prize_rate: float | None = None) -> float:
-    """What is still IN HAND, in prizes.
+         slot_demand: float = 0.0, worth_prize_rate: float | None = None) -> float:
+    """What is still IN HAND **against what the position still needs**, in prizes.
+
+    ⚠️ **``slot_demand`` closes a HALF-LEDGER, and the omission inverted every card play**
+    (Issue #400 Phase 2). The three supply legs price what my hand COVERS; nothing priced the
+    DEMAND, so spending a card moved supply down and demand not at all, and every play read as a
+    loss. Measured on the 31 corpus frames where the human ruled an Energy attach: one Energy
+    retires **two** ``fund_attack`` slots — 16 Worth of demand — at a cost of 8 Worth of coverage,
+    and the leaf scored the attach at **-0.0667 prizes**. Under the completed ledger the same 31
+    frames read a median **+0.0118** and only 6 stay negative, all of them PARTIAL fundings where
+    the slot survives the attach (a `needs` slot is present-or-absent, never fractional — that
+    residual belongs to `_resolve_needs`' granularity, not here, and is recorded rather than
+    smoothed).
+
+    It is a LEG, not a new family, and deliberately: coverage, re-access, latent worth and demand
+    are four readings of ONE `needs.Resolution`, and splitting them across two families would put
+    one supplier behind two `does_not_read` contracts. It needs no new constant and no new
+    currency — the demand was always in the Resolution and was simply never read.
+
+    The signed total means *"the latent Worth I hold, minus the need my hand and deck cannot
+    meet"*, so a position whose needs outrun its hand scores NEGATIVE. That is deliberate and it is
+    `development`'s rule one family over: a cost clipped at zero would make the unmet need free.
 
     ``assignment_coverage`` and ``re_access`` are the `set_keep_v2` spine — which live slots the hand
     can fill, and how readily the deck can hand me another. ``hand_worth`` is the Worth-denominated
@@ -1920,8 +1951,12 @@ def hand(*, assignment_coverage: float, re_access: float, hand_worth: float,
     rate = POC_WORTH_PRIZE_RATE if worth_prize_rate is None else worth_prize_rate
     if not rate:
         return 0.0
-    worth = float(assignment_coverage) + float(re_access) + float(hand_worth)
-    return min(_HAND_CAP, max(0.0, worth) * float(rate))
+    worth = (float(assignment_coverage) + float(re_access) + float(hand_worth)
+             - float(slot_demand))
+    # Capped from ABOVE only. The old `max(0.0, worth)` floor predates the demand leg and would
+    # flatten every unmet-need board onto one number, which is the `development` cliff exactly:
+    # a cost clipped at zero makes the need free again.
+    return min(_HAND_CAP, worth * float(rate))
 
 
 def development(*, deploy_marginal: float, evolve_marginal: float, bench_slot_price: float,

@@ -33,6 +33,8 @@ than a hand-reading of the sentence:
     ITSELF, so the lock forbids one attack rather than the turn, and `strategy/sequence.py` prices
     the two differently on purpose (270+130 == 130+270, so a same-attack lock forfeits nothing).
 """
+import copy
+
 import pytest
 
 from common.cards import CardFunctions
@@ -1178,3 +1180,49 @@ def test_attack_profile_fails_closed_on_a_body_that_is_not_there():
     m = _luc_model()
     empty = m.attack_profile(None, AURA_JAB)
     assert empty.affordable is False and empty.damage == 0.0 and empty.rider_targets == ()
+
+
+# ── the Needs supplier is BOARD-BOUND, so a hypothetical resolves its OWN hand (Issue #400 P2) ────
+
+
+def test_a_board_bound_needs_supplier_is_REBOUND_by_rebuilt_not_inherited():
+    """`build` used to take ``needs`` as a zero-argument callable, and every caller built it as a
+    closure over the observation it was resolving. :meth:`StateModel.rebuilt` forwards `_origin`'s
+    kwargs verbatim, so every synthesized board inherited the ORIGINATING board's resolution —
+    `state_value`'s `hand` family reads `MySide.needs` and nothing else, so the family was CONSTANT
+    across a whole `composer.compose` call and a fetch differenced to exactly 0.0.
+
+    The supplier now takes ``(obs, my_index)`` and `build` binds it to the board it is building, so
+    the re-binding is a property of the type rather than of every caller remembering. This asserts
+    the property directly: the supplier is asked about the observation it is actually resolving."""
+    asked = []
+
+    def supplier(obs, my_index):
+        seat = ((obs.get("current") or {}).get("players") or [{}])[my_index] or {}
+        asked.append(tuple(c["id"] for c in (seat.get("hand") or ())))
+        return None
+
+    first = _obs(_player(active=_pult(), hand=[CRISPIN], prize=4),
+                 _player(active=_poke(RIOLU, hp=80, serial=3), prize=4))
+    model = StateModel.build(first, combat=_combat(), deck=DECK, needs=supplier)
+    assert model.mine.needs is None
+    assert asked == [(CRISPIN,)], "the supplier was asked about the board it was built on"
+
+    second = copy.deepcopy(first)
+    second["current"]["players"][0]["hand"] = []
+    assert model.rebuilt(second).mine.needs is None
+    assert asked[-1] == (), (
+        "the rebuild inherited the ORIGINAL board's hand — this is the Issue #400 Phase 2 defect, "
+        "and it is what made `state_value`'s `hand` family constant across a compose() call")
+
+
+def test_a_resolution_passed_directly_is_still_taken_verbatim():
+    """The other half of the contract, so the widening cannot be read as "needs must be callable":
+    a already-resolved `Resolution` (what every test fixture and any caller holding one passes) is
+    carried through untouched and never called."""
+    sentinel = object()
+    model = StateModel.build(
+        _obs(_player(active=_pult(), hand=[CRISPIN], prize=4),
+             _player(active=_poke(RIOLU, hp=80, serial=3), prize=4)),
+        combat=_combat(), deck=DECK, needs=sentinel)
+    assert model.mine.needs is sentinel

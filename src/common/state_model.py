@@ -2171,6 +2171,17 @@ class StateModel(_Lazily):
         carrying the deck tracker's exact ``{card id: copies left in my deck}`` because the model
         could not reproduce it. Issue #297 fixed the read it distrusted, so ``own_prizes`` is the
         only anchor the model needs — see :meth:`MySide._deck_facts`.
+
+        ``needs`` is either a resolved :class:`~common.needs.Resolution` or a **board-bound
+        supplier** ``(obs, my_index) -> Resolution``, and the second form is the one a hypothetical
+        needs (Issue #400 Phase 2). It used to be a zero-argument callable, which every caller built
+        as a closure over the observation it was resolving — and :meth:`rebuilt` forwards
+        :attr:`_origin`'s kwargs verbatim, so every synthesized board inherited the ORIGINATING
+        board's resolution. `state_value`'s `hand` family reads `MySide.needs` and nothing else, so
+        the family was CONSTANT across a whole `composer.compose` call and a fetch — whose entire
+        effect is on the hand — differenced to exactly 0.0. Taking the observation as an argument is
+        what makes the re-binding automatic: :attr:`_origin` stores the SUPPLIER, so a rebuild
+        re-wraps it against its own board and no caller has to remember to.
         """
         state = (obs or {}).get("current") or {}
         players = state.get("players") or []
@@ -2179,8 +2190,11 @@ class StateModel(_Lazily):
         opp = players[1 - mi] if 0 <= 1 - mi < len(players) and players[1 - mi] else {}
         my_prizes, opp_prizes = len(me.get("prize") or []), len(opp.get("prize") or [])
         boosts_for = getattr(turn_boosts, "boosts_for", None)
+        # A board-bound supplier is BOUND HERE, to THIS observation, and `_origin` below keeps the
+        # unbound one so `rebuilt` re-binds against its own board rather than inheriting this one.
+        resolver = (lambda: needs(obs, mi)) if callable(needs) else needs
         mine = MySide(me, combat=combat, deck=deck, deck_empty=deck_empty,
-                      own_prizes=(obs or {}).get("own_prizes"), needs=needs, role_worth=role_worth,
+                      own_prizes=(obs or {}).get("own_prizes"), needs=resolver, role_worth=role_worth,
                       energy_attached=bool(state.get("energyAttached")),
                       supporter_played=bool(state.get("supporterPlayed")),
                       more_prizes_than_opp=(my_prizes > opp_prizes),

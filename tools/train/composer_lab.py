@@ -106,7 +106,7 @@ RETREAT_RULING = ("Issue #392 — a `_RETREAT` option is TARGETLESS (5807/5807 i
 # ── Issue #291 §3c's index, consumed rather than re-derived ──────────────────────────────────────
 
 
-def fixture_rulings() -> dict:
+def fixture_rulings(fixtures_dir=None) -> dict:
     """``{frame key: [ruled option index]}`` from the committed FIXTURES — the authoritative ruling
     where one exists, overriding the `data/corrections/` record.
 
@@ -125,13 +125,61 @@ def fixture_rulings() -> dict:
 
     Read through `gates.iter_keyed_fixtures` — *"THE one corpus walk"* — rather than a second glob,
     for the reason that module gives: a hand-built second reader is the drift ADR-0087 charges for one
-    store over, and it already cost the Decision Gate 203 of its 372 keys."""
+    store over, and it already cost the Decision Gate 203 of its 372 keys.
+
+    ⚠️ **Several fixtures may declare ONE frame key — `gates.claim_agreement` rules that "legal and
+    load-bearing", and each is judged independently there.** This function used to flatten them with
+    `out[key] = ...` inside the walk, so where two fixtures DISAGREED the winner was decided by
+    `sorted(glob)` — i.e. by filename. Measured on `85164605|1|decision|41`:
+    `ms_item_over_supporter_indifferent_f41` claims `[3]` (the Correction's own ruling, held out to
+    Issue #145) and `ms_prefer_cheap_evolution_enabler_f41` claims `[4]` (what the Planner must
+    commit, a DECLARED divergence per ADR-0082); "p" sorts after "i", so every consumer of this lab
+    silently graded against `[4]` and the human's `[3]` was invisible. Every Issue #400 measurement
+    ran that way.
+
+    A disagreement is now **OMITTED and REPORTED** (:func:`fixture_ruling_conflicts`) rather than
+    resolved: this function's contract is *"the authoritative ruling where one exists"*, and where two
+    live claims disagree there is no authoritative ruling to return — so the caller falls back to the
+    Correction record, which is the human's own, instead of to whichever filename sorted last.
+    Omitting is deliberately not the same as guessing, and it is why the conflict has to be printed:
+    a frame that quietly left the ruled population would read as agreement."""
+    rulings, _conflicts = _fixture_rulings_and_conflicts(fixtures_dir)
+    return rulings
+
+
+def fixture_ruling_conflicts(fixtures_dir=None) -> list:
+    """``[{frame_key, claims: {tuple: [fixture names]}}, ...]`` — the frames :func:`fixture_rulings`
+    refused to resolve because two committed fixtures make different Decision Claims about them.
+
+    Reported by the lab's header so a conflict cannot sit unseen. `tests/test_fixture_ruling_conflicts.py`
+    is the structural guard that stops a NEW one appearing silently."""
+    _rulings, conflicts = _fixture_rulings_and_conflicts(fixtures_dir)
+    return conflicts
+
+
+def _fixture_rulings_and_conflicts(fixtures_dir=None) -> tuple:
+    """The one walk behind both readers, so they cannot disagree about what a conflict is.
+
+    ``fixtures_dir`` is injectable for the same reason `gates.ruling_index`'s stores are — *"so the
+    whole index tests against a ``tmp_path`` corpus"*. It is load-bearing rather than tidy here: the
+    committed corpus currently holds ZERO conflicts, so a test that proved this function distinguishes
+    anything by pointing it at the real store would be asserting on an empty set, and would silently
+    stop testing the moment the last conflict was ruled — which is exactly what happened the day this
+    was written."""
     from train.gates import iter_keyed_fixtures
-    out = {}
-    for _path, _fx, key, claims in iter_keyed_fixtures():
+    claims_by_key: dict = {}
+    for path, _fx, key, claims in iter_keyed_fixtures(fixtures_dir):
         if claims.decision and claims.decision.correct:
-            out[key] = list(claims.decision.correct)
-    return out
+            claims_by_key.setdefault(key, {}).setdefault(
+                tuple(claims.decision.correct), []).append(path.name)
+    out, conflicts = {}, []
+    for key, by_claim in claims_by_key.items():
+        if len(by_claim) == 1:
+            out[key] = list(next(iter(by_claim)))
+        else:
+            conflicts.append({"frame_key": key,
+                              "claims": {c: sorted(n) for c, n in sorted(by_claim.items())}})
+    return out, conflicts
 
 
 def ideal_index(path: Path = RULINGS) -> dict:
@@ -349,6 +397,10 @@ def composer_lab_report(pilot_for, corrections, **kwargs) -> dict:
                if r["margin"] and r["margin"]["margin_to_kth"] is not None]
     return {
         "caveat": COLUMN_CAVEAT,
+        # Frames NO single fixture ruling covers, because two committed fixtures disagree about them
+        # (see `fixture_rulings`). Carried so `_print_report` can surface them: a frame that quietly
+        # left the ruled population would read as agreement.
+        "ruling_conflicts": fixture_ruling_conflicts(),
         "caps": {"beam_width": kwargs.get("k") or cp.BEAM_WIDTH,
                  "sequence_depth": kwargs.get("depth") or cp.SEQUENCE_DEPTH,
                  "epsilon": kwargs.get("epsilon") if kwargs.get("epsilon") is not None
@@ -447,6 +499,16 @@ def _print_report(rpt, *, frame=None, index=None, verbatim=None) -> None:
     print(f"  caps: beam_width={caps['beam_width']}  sequence_depth={caps['sequence_depth']}  "
           f"epsilon={caps['epsilon']}   (whitelisted: sound_rules.composer-budget-caps)")
     print(f"\n  {rpt['caveat']}\n")
+    # A frame two fixtures rule DIFFERENTLY has no authoritative ruling, so it is DROPPED from the
+    # `ruled` population rather than resolved by filename order. Printed here because a frame that
+    # quietly left that population would read as agreement.
+    for conflict in rpt.get("ruling_conflicts") or ():
+        print(f"  [!] CONFLICTING fixture rulings on {conflict['frame_key']} — DROPPED from the "
+              f"`ruled` column until one is reconciled:")
+        for claim, names in conflict["claims"].items():
+            print(f"          correct={list(claim)}  <- {', '.join(names)}")
+    if rpt.get("ruling_conflicts"):
+        print()
     print(f"  composer == chosen : {rpt['agree_chosen']}/{rpt['comparable_chosen']}"
           "    (reproduces today's agent)")
     print(f"  composer == ruled  : {rpt['agree_ruled']}/{rpt['comparable_ruled']}"

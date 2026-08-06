@@ -652,6 +652,149 @@ def test_an_attack_with_no_matching_leg_is_a_COVERAGE_GAP_not_a_zero():
     assert "UNKNOWN" in gap and "999999" in gap
 
 
+# ── the CONTINUATION sum: a line the composer CUT is not one that ENDED (ADR-0129) ────────────────
+
+
+def _ranked(index, option, *, delta=0.0, after=None, refused=False, gap="", truncated=0):
+    """One `_Ranked` verdict, hand-built. The candidate constructors are unit-tested DIRECTLY here
+    rather than through a whole `compose` run, because the property under test is which summand each
+    constructor carries — a beam run would prove it only on whatever board happened to truncate."""
+    return cp._Ranked(index=index, option=option, key=(0, 0, index), delta=delta, after=after,
+                      fate="modelled", footprint=None, refused=refused, gap=gap,
+                      truncated=truncated)
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_a_board_with_no_affordable_attack_continues_at_exactly_zero():
+    """`attack_ev_legs` returns ``()`` when there is nothing to attack with, and ``default=0.0``
+    turns that into a real zero rather than a `max()` on an empty sequence."""
+    obs = _obs(_player(active=_body(RIOLU)))          # Riolu carries no attacks in the pool
+    assert cp.continuation_ev(_model(obs)) == 0.0
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+@pytest.mark.parametrize("blocker, current", [
+    ("asleep", {}),
+    ("paralyzed", {}),
+    # The starting player skips the attack step on turn 1 — `docs/rulebook.txt` L152 /
+    # `docs/rules.md` §first-turn, which `MySide.attack_blocked` reads as ``turn <= 1``.
+    (None, {"turn": 1}),
+])
+def test_a_board_the_RULES_forbid_an_attack_on_continues_at_zero(blocker, current):
+    """The continuation must never price a line the rules will not let the turn reach. Fail-closed,
+    the same reading `attack_ev_legs` gives its own empty return."""
+    me = _player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING]))
+    if blocker:
+        me[blocker] = True
+    assert cp.continuation_ev(_model(_obs(me, **current))) == 0.0
+    # Positive control: the SAME board without the blocker prices a real, non-zero continuation, so
+    # a zero above is the rule firing rather than a fixture that could never have scored.
+    clean = _player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING]))
+    assert cp.continuation_ev(_model(_obs(clean))) > 0.0
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_the_continuation_IS_terminal_evs_own_answer_for_the_best_attack_on_the_menu():
+    """Two spellings of one equation may not drift. `continuation_ev` reads the board and
+    `terminal_ev` reads the option, but where the menu offers exactly the attacks the board affords
+    they must agree to the last bit — this is the whole claim that ADR-0129 adds *no new math*."""
+    obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING])))
+    model = _model(obs)
+    per_option = [cp.terminal_ev(model, {"type": _ATTACK, "attackId": a})[0]
+                  for a in (AURA_JAB, MEGA_BRAVE)]
+    assert cp.continuation_ev(model) == max(per_option)
+    assert max(per_option) > 0.0                     # the comparison is not two zeros agreeing
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_a_TRUNCATED_line_carries_the_continuation_as_its_terminal_summand():
+    """The defect ADR-0129 fixes: a reveal-terminated candidate scored ``leaf + 0`` against attack
+    lines carrying a prize, so a partial line was compared as though it were a finished turn."""
+    obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING]), hand=[ITEM]))
+    model = _model(obs)
+    node = cp._Node(model=model, leaf=0.25)
+    cand = cp._gap_or_reveal_candidate(node, _ranked(0, {"type": _PLAY, "index": 0}, delta=0.5))
+    expected = cp.continuation_ev(model)
+    assert expected > 0.0                            # the assertion below is not 0 == 0
+    assert cand.terminal_ev == expected
+    assert cand.score == pytest.approx(cand.leaf + expected)
+    assert cand.leaf == pytest.approx(0.75)          # `_Ranked.delta` still enters the LEAF, not here
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_a_REFUSED_option_still_carries_EXACTLY_zero_and_keeps_the_nodes_own_leaf():
+    """The narrow spelling. A refusal's board never moved, so its value is UNKNOWN — a different
+    claim from *"the turn continues"* — and it keeps the gap flag `selection_key` sorts on."""
+    obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING]), hand=[ITEM]))
+    model = _model(obs)
+    assert cp.continuation_ev(model) > 0.0           # there IS a continuation to have been credited
+    node = cp._Node(model=model, leaf=0.25)
+    cand = cp._gap_or_reveal_candidate(
+        node, _ranked(0, {"type": _PLAY, "index": 0}, delta=0.5, refused=True, gap="unmodelled"))
+    assert cand.terminal_ev == 0.0
+    assert cand.leaf == 0.25 and cand.score == 0.25
+    assert cand.coverage_gap == "unmodelled"
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_NO_candidate_can_carry_BOTH_terminal_ev_and_the_continuation():
+    """The non-double-counting claim, asserted structurally rather than argued.
+
+    `attack_ev` now has two call sites — `terminal_ev` for a line that ENDED and `continuation_ev`
+    for one that was CUT — and `test_state_value.py`'s sole-consumer invariant permits that only
+    because no single candidate can ever be priced by both. They are different branches of `_expand`:
+    a terminal candidate has ``terminal`` SET, a truncated one has it None. That is what makes two
+    call sites one consumer instead of two opinions on the same prize."""
+    obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING]), hand=[ITEM]))
+    model = _model(obs)
+    node = cp._Node(model=model, leaf=0.25)
+
+    # Both candidates are built through the SHIPPED constructors, so the branches under test are the
+    # ones `_expand` actually calls rather than two hand-made Candidates.
+    attack = {"type": _ATTACK, "attackId": MEGA_BRAVE}
+    ev, _detail, _gap = cp.terminal_ev(model, attack)
+    ended = cp._terminal_candidate(
+        node, cp._Ranked(index=0, option=attack, key=(0, 0, 0), delta=0.0, after=None,
+                         fate="modelled", footprint=None, terminal=True, ev=ev))
+    cut = cp._gap_or_reveal_candidate(node, _ranked(1, {"type": _PLAY, "index": 0}, delta=0.5))
+
+    assert ended.terminal is not None and cut.terminal is None
+    assert ended.terminal_ev == ev and ev > 0.0
+    assert cut.terminal_ev == cp.continuation_ev(model)
+    # The two prices are the SAME quantity read at different seams — the continuation is the MAX over
+    # the board's attacks, so it can only meet or exceed any single one of them. Which is precisely
+    # why carrying both on one candidate would price one prize twice.
+    assert cut.terminal_ev >= ended.terminal_ev
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_the_refusal_exclusion_is_INERT_which_is_why_the_narrow_spelling_was_taken():
+    """Crediting a refusal too would change no decision anywhere, because `selection_key` leads with
+    ``bool(coverage_gap)`` and sorts every gap candidate behind every scored one whatever its score.
+    Asserted rather than argued: it is the reason ADR-0129 records the wider arm as equivalent."""
+    obs, _options = _menu_obs()
+    model = _model(obs)
+    clean = cp.Candidate(leaf=0.0, score=0.0)
+    gapped_high = cp.Candidate(leaf=99.0, score=99.0, coverage_gap="unmodelled")
+    assert cp.selection_key(model, clean) < cp.selection_key(model, gapped_high)
+
+
+@pytest.mark.req("REQ-COMPOSER-0004")
+def test_STOP_HERE_is_untouched_so_commit_nothing_can_never_out_score_a_real_line():
+    """The soundness half, and it is not hypothetical: `attack_ev_legs` answers from the BOARD, so
+    it prices an attack the engine never offered. Credit the root stop-here with that and *"commit
+    nothing"* wins outright — measured, 4 of 270 corpus frames produced no pick at all. The root
+    stop-here's ``first_index`` is None, which is what makes that a non-answer rather than a bad one."""
+    obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING])))
+    model = _model(obs)
+    assert cp.continuation_ev(model) > 0.0           # there IS something it could have inherited
+    root = cp._Node(model=model, leaf=0.25)
+    cand = cp._stop_here(None, root)
+    assert cand.terminal_ev == 0.0
+    assert cand.score == 0.25 == cand.leaf
+    assert cand.first_index is None
+
+
 # ── the composer end to end ──────────────────────────────────────────────────────────────────────
 
 
@@ -768,6 +911,43 @@ def test_the_selection_key_NEVER_falls_through_to_generation_order():
     left = cp.Candidate(steps=(cp.Step(stamped[0], 0, 3, ao.MODELLED),), score=1.0)
     right = cp.Candidate(steps=(cp.Step(stamped[2], 2, 0, ao.MODELLED),), score=1.0)
     assert cp.selection_key(model, left) != cp.selection_key(model, right)
+
+
+@pytest.mark.req("REQ-COMPOSER-0007")
+def test_one_ULP_of_float_noise_never_decides_a_tie_the_worth_leg_should():
+    """The float-noise floor on `selection_key`'s score leg (Issue #400 Phase 2 flip review).
+
+    Two orderings of one commutative block reach the SAME end board, so their scores are one sum
+    added in two orders — and floating-point addition is not associative, which `state_value._terms`
+    already states outright. Measured on `82226116|0|decision|70`: retreat-then-evolve scored
+    `0.9052836100260416` against evolve-then-retreat's `0.9052836100260415`, a difference of 1.11e-16,
+    and an EXACT score leg separated on it so the Worth leg never ran — handing a corpus frame to the
+    last bit of a sum instead of to the rule Issue #263 wrote for it. The Worth leg picks the ruled
+    evolve (-30.0 against -0.0) the moment the noise stops pre-empting it.
+
+    The two literals below are those measured scores, so this fails if the rounding is removed."""
+    obs, options = _menu_obs()
+    model = _model(obs)
+    stamped = [cp.stamp_origin(model, o) for o in options]
+    worthy = cp.Candidate(steps=(cp.Step(stamped[0], 0, 3, ao.MODELLED),),
+                          score=0.9052836100260415)
+    noisy = cp.Candidate(score=0.9052836100260416)          # no steps -> no card -> worth 0.0
+    assert noisy.score > worthy.score, "the fixture must reproduce the ULP, not assume it"
+    assert cp.selection_key(model, worthy) < cp.selection_key(model, noisy), (
+        "one ULP of float noise pre-empted the Worth leg — the tie-break fell through to arithmetic")
+
+
+@pytest.mark.req("REQ-COMPOSER-0007")
+def test_the_score_leg_still_separates_a_difference_the_leaf_can_actually_see():
+    """The other side of the floor, so the rounding cannot be read as "score stopped mattering".
+    A real 1-ply delta on this corpus runs 1e-5 to 1e-3; 12 places is six orders below the smallest
+    of those, so a genuine separation still decides before Worth is consulted."""
+    obs, options = _menu_obs()
+    model = _model(obs)
+    stamped = [cp.stamp_origin(model, o) for o in options]
+    better = cp.Candidate(score=1.00001)                     # worth 0.0, but a REAL margin
+    worthier = cp.Candidate(steps=(cp.Step(stamped[0], 0, 3, ao.MODELLED),), score=1.0)
+    assert cp.selection_key(model, better) < cp.selection_key(model, worthier)
 
 
 @pytest.mark.req("REQ-COMPOSER-0007")
