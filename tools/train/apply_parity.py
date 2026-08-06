@@ -238,16 +238,26 @@ class Report:
         return "\n".join(lines)
 
 
-def _load(path: Path) -> dict:
+def load(path: Path) -> dict:
+    """One committed trace, decompressed.
+
+    **PUBLIC since Issue #392**, with :func:`chosen_option`, :func:`offline_combat` and
+    :func:`zone_facts`: `tools/train/choice_parity.py` is a second lane over the same corpus and asks
+    the same four questions of it. A second consumer means a public name — never an underscore
+    reached across a module boundary — which is the rule `board_delta`'s copy-on-write scaffolding
+    states and the reason the two lanes must not grow separate trace readers: two ideas of *"which
+    option did this frame answer"* would let them quote different denominators for one corpus."""
     with gzip.open(path, "rb") as fh:
         return json.loads(fh.read().decode("utf-8"))
 
 
-def _chosen_option(frame: dict):
+def chosen_option(frame: dict):
     """The single option a frame's recorded ``choice`` answers, or None.
 
     Multi-pick answers (``maxCount > 1`` grabs) are skipped rather than approximated: the seam models
-    ONE option, and folding a two-card grab into one transition would be measuring something else."""
+    ONE option, and folding a two-card grab into one transition would be measuring something else.
+
+    **PUBLIC since Issue #392** — see :func:`load`."""
     choice = frame.get("choice")
     menu = ((frame.get("obs") or {}).get("select") or {}).get("option") or ()
     if not choice or len(choice) != 1:
@@ -270,7 +280,7 @@ def _card_of(obs: dict, option: dict, seat: int):
 def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> Report:
     """Replay one trace through the seam, accumulating into ``report``."""
     report = report or Report()
-    body = _load(path)
+    body = load(path)
     frames = body.get("frames") or []
     # Each seat's real 60-card decklist, off the trace's own meta (`Trace.decks`). Threaded into
     # every model so `deck_odds` and `my_deck_count` COMPARE something: built with `deck=None` the
@@ -281,7 +291,7 @@ def replay(path: Path, *, combat, kinds=None, report: Report | None = None) -> R
     report.frames += len(frames)
     effects = combat.effects
     for k in range(len(frames) - 1):
-        option = _chosen_option(frames[k])
+        option = chosen_option(frames[k])
         if not option:
             continue
         kind = int(option.get("type", -1))

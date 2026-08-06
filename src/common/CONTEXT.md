@@ -194,6 +194,22 @@ parallel per-mechanic dicts, and the synth fallback.)_
 _Avoid_: provider (bare — say Stat Provider), card database, CardStat/AttackStat (the records it hands
 out, not the seam), Function Tag / Effect Clause (behavioral JSON tables — separate, offline-built feeds)
 
+**Printed Stage**:
+A Pokémon's evolution rung as ONE canonical string — `"basic"` / `"stage1"` / `"stage2"`, or `None`
+for a card that is not a body. Carried as `CardStat.stage`, derived in exactly one place
+(`provider.stage_from_card`), which folds the engine's three `CardData.basic`/`.stage1`/`.stage2`
+booleans; `tools/meta_tracker/dump_cards.stage_of` delegates there rather than re-spelling it. The
+vocabulary is the ENGINE's, not the CSV's printed label (*"Stage 1 Pokémon"*) and not title-case —
+a fixture or doc using any other spelling is naming a value production cannot emit. Read by the FETCH
+closure's `stage1`/`stage2` target classes and by the Skyliner-style board grant
+(`retreatFreeGrant == "basic"`). Membership is `hp > 0`, not `cardType == POKEMON`: the five Antique
+Fossils print as Items and are played *"as if it were a 60-HP Basic {C} Pokémon"*, and the engine
+flags them `basic` accordingly.
+_(Issue #408, built 2026-08-06 — the field shipped declared-but-never-written, so both readers
+compared against `None` and the two target classes matched 461 cards' worth of nothing.)_
+_Avoid_: `"Basic"` / `"Stage 1"` (title-case drift), `"Basic Pokémon"` (the CSV's label),
+`stage2` bare (that is the separate engine boolean, kept for Gravity Mountain's opponent-board read)
+
 **Holder Gate**:
 The condition a Pokémon Tool's static modifier places on the body it is attached to — carried on
 `CardStat` and evaluated, always, through `CardStat.applies_to_holder(holder)`. **Two** conditions
@@ -1706,6 +1722,28 @@ not assumed.
 _Avoid_: apply / transition (bare — `apply_option` is the SEAM and owns the fate resolution; the Board
 Delta is the arithmetic underneath it), simulation / rollout (an engine steps those; this steps
 nothing), diff (that is the **parity lane**'s comparison, one layer up)
+
+**Deferred-Target Option**:
+An option the engine offers whose **target instance is not in the option** — the engine spends the
+allowance or commits the card, then poses a SEPARATE follow-up select to ask *which body*. Measured
+members (`board_delta.py:565`, `:604-616`): `_RETREAT` (5807/5807 offered as the bare `{"type": 12}`;
+poses `_DISCARD_ENERGY` ctx 30 then `_SWITCH` ctx 3) and 63 `_PLAY` steps — Boss's Orders ×30 (`gust`
+→ `_SWITCH` ctx 3), Crispin ×16 (`accel` → `_TO_HAND` ctx 7), Wally's Compassion ×14 (`heal` → ctx 17),
+Rosa's Encouragement ×2 (`accel` → ctx 22). **The defining fact is that this is NOT a coverage gap**:
+all four cards are `covers: "full"` (**Clause-Set Completeness**) and the compendium records the target
+CLASS (`CLAUSE_SELECTORS["target"]` — `any`, `any_pokemon`, `stage2`, `benched`, …). What is absent is
+the target INSTANCE, which only the board can supply. Before Issue #392 the class had two incoherent
+fates for one shape: a `_PLAY` REFUSED loudly (a surfaced coverage gap), while a `_RETREAT` priced at
+~0.0 and was pruned SILENTLY. The composer's answer (**ADR-0121**) is **Deferred-Target
+Expansion** — resolve the class against the board, emit one candidate per legal instance, prefilter
+with a cheap **Target Ranker**, and let the whole family hold ONE beam slot taken by its best child —
+never a widened seam, because modelling a swap the engine did not perform diverges from the recorded
+trace on the very next frame. Retreat carries TWO deferred dimensions, the promotion and the Energy
+discard (`rulebook.txt` L142: the Retreat Cost slot is colourless, so the set is ours to pick).
+_Avoid_: targetless (true of the OPTION dict, but the maneuver has a target — it is deferred, not
+absent), coverage gap / partial clause set (`covers: "partial"` is the ORTHOGONAL failure — these are
+`full` and still cannot be applied), multi-step / compound option (the engine's unit is still one step
+per select; expansion is a PLANNING model, not a claim about the engine's stepping)
 
 **SideState**:
 One side's half of the **StateModel** — mine or theirs — and the unit of **reuse**. Asymmetric by

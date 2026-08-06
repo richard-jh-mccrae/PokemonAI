@@ -31,6 +31,20 @@ docs/tuning/runs/** -text !eol
 # Native engine wrapper is vendored/off-limits; preserve bytes exactly.
 src/cg/** -text !eol
 
+# A deterministic BUILD artifact, not a record: `build_card_functions.shipped_bytes` is the one
+# writer, so the byte-identity test (`test_the_shipped_store_is_byte_identical_to_what_the_builder_
+# writes`) is written to hold on any OS the builder runs on — unlike the `data/**` family above,
+# whose committed bytes are inherently whichever OS produced that run. Under bare `text=auto` this
+# store still checked out CRLF on Windows (`core.eol` defaults to `native`; only an explicit `eol=`
+# attribute or `core.autocrlf=true/input` forces normalization on checkout, and neither was set),
+# so the test the builder's own docstring names as the guard (Issue #395 D6.4, cf. ADR-0116) was
+# red on every Windows checkout despite the blob itself being clean LF. `eol=lf` closes it the same
+# way `*.py` is closed above. Scoped to this one file rather than `src/common/*.json`: the sibling
+# `attack_overrides.json` deliberately tolerates "whichever OS runs this" per its own test docstring
+# (`tests/sim/test_generate_attack_overrides.py`), so a directory-wide rule would fight that file's
+# stated design rather than fix a defect.
+src/common/card_functions.json text eol=lf
+
 # Common binary artifacts.
 *.dll binary
 *.so binary

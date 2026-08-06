@@ -18,6 +18,16 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent / "cards.json"
 
+# Tools may import `src`; the reverse is forbidden. Done at module scope (not inside `main`) so
+# `stage_of` below is importable WITHOUT running `main` — which needs the native engine, while
+# `stage_of` needs nothing. Today the only such importer is the delegation test; the point is that
+# importing this module must not drag the DLL in. Lib-free: `provider` reaches for `cg.api` only
+# inside the engine adapter's lazy build.
+if str(REPO / "src") not in sys.path:
+    sys.path.insert(0, str(REPO / "src"))
+
+from common.scouting.provider import stage_from_card  # noqa: E402
+
 # CardType / EnergyType enum value -> label (see src/cg/api.py).
 CATEGORY = {0: "pokemon", 1: "item", 2: "tool", 3: "supporter",
             4: "stadium", 5: "basic_energy", 6: "special_energy"}
@@ -27,17 +37,17 @@ ENERGY = {0: "colorless", 1: "grass", 2: "fire", 3: "water", 4: "lightning",
 
 
 def stage_of(c) -> str | None:
-    if c.basic:
-        return "basic"
-    if c.stage1:
-        return "stage1"
-    if c.stage2:
-        return "stage2"
-    return None
+    """The card's printed stage — DELEGATES to `common.scouting.provider.stage_from_card`.
+
+    This dump minted the canonical vocabulary, but the field it feeds now also lives on `CardStat`,
+    so the derivation moved to the one place both read (Issue #408). Kept as a name so `main`'s
+    `cards.json` row stays readable at its call site; a second spelling here is exactly the drift
+    that let `CardStat.stage` sit unwritten while this file had the right answer all along.
+    """
+    return stage_from_card(c)
 
 
 def main() -> None:
-    sys.path.insert(0, str(REPO / "src"))
     from cg.api import all_attack, all_card_data  # noqa: E402
 
     attacks_by_id = {a.attackId: {"name": a.name, "damage": int(a.damage),

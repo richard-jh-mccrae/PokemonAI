@@ -247,12 +247,16 @@ def take_from_hand(seat: dict, index, what: str) -> dict:
     return card
 
 
-def _clear_conditions(seat: dict) -> bool:
+def clear_conditions(seat: dict) -> bool:
     """Clear the five Special-Condition flags; True when any was set.
 
     `docs/rules.md` §8 — they live on the Active alone and are cleared when it leaves the Active
     spot or evolves. Returns whether anything moved so the caller only declares the
-    ``special_conditions`` write when it happened, which keeps the per-kind write assertions exact."""
+    ``special_conditions`` write when it happened, which keeps the per-kind write assertions exact.
+
+    **PUBLIC since Issue #392**: a retreat's choice node moves the Active to the Bench, which
+    `docs/rulebook.txt` L143 says recovers it from every Special Condition — the same clause this
+    already implements for the evolve leg."""
     hit = [f for f in CONDITION_FLAGS if seat.get(f)]
     for flag in hit:
         seat[flag] = False
@@ -302,12 +306,17 @@ def _provided_units(combat, card_id, stat, *, onto_evolution: bool) -> tuple:
     return (int(colour),) * int(count)
 
 
-def _units_for_cards(combat, cards, *, onto_evolution: bool) -> list:
+def units_for_cards(combat, cards, *, onto_evolution: bool) -> list:
     """Every Energy CARD's provision, concatenated in attachment order — the ``energies`` list.
 
     Derived rather than carried, because the provision is a property of the HOLDER as well as of the
     card: Ignition Energy provides {C} on a Basic and {C}{C}{C} on an Evolution, so the same attached
-    card renders differently before and after an evolution."""
+    card renders differently before and after an evolution.
+
+    **PUBLIC since Issue #392**: a retreat's choice node discards a SUBSET of the Active's attached
+    Energy CARDS (`docs/rulebook.txt` L142 — the Retreat Cost slots are colourless, so which cards go
+    is the player's choice), and the surviving ``energies`` must be re-derived from the cards that
+    remain. Removing units by subtraction would need a second, hand-kept model of this derivation."""
     out: list = []
     for card in cards or ():
         card_id = (card or {}).get("id")
@@ -529,7 +538,7 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
         int(getattr(t_stat, "hpBonus", 0) or 0)
         for t_stat in (_stat(combat, (t or {}).get("id")) for t in tools)
         if t_stat is not None and t_stat.applies_to_holder(stat))
-    units_before = tuple(_units_for_cards(combat, energy_cards, onto_evolution=was_evolution))
+    units_before = tuple(units_for_cards(combat, energy_cards, onto_evolution=was_evolution))
     if units_before != tuple(body_unit_codes(target)):
         # A SELF-CHECK, not a formality: if the provision model already disagrees with the engine
         # about the body as it stands, re-deriving the post-evolution list from the same model would
@@ -546,7 +555,7 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
         "hp": max(0, max_hp - taken),
         "maxHp": max_hp,
         "appearThisTurn": True,
-        "energies": _units_for_cards(combat, energy_cards, onto_evolution=True),
+        "energies": units_for_cards(combat, energy_cards, onto_evolution=True),
         "energyCards": energy_cards,
         "tools": tools,
         "preEvolution": list(target.get("preEvolution") or ()) + [_card_ref(target, seat_index)],
@@ -558,7 +567,7 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
     # then this write was real and undeclared, and the parity lane's `_PLAY` control proved nothing
     # in the tree could see it.
     writes = {"my_hand_ids", "bodies_in_play", "new_in_play"}
-    if area == AREA_ACTIVE and _clear_conditions(me):
+    if area == AREA_ACTIVE and clear_conditions(me):
         writes.add("special_conditions")
     return Delta(obs=new_obs, writes=frozenset(writes))
 
@@ -747,4 +756,10 @@ def transition(obs: dict, option: dict, *, seat_index: int, combat, context=None
 
 
 __all__ = ("CONTEXT_MAIN", "CONDITION_FLAGS", "Unmodellable", "Delta", "TRANSITIONS", "transition",
-           "fork", "fork_player", "take_from_hand", "card_clauses")
+           "fork", "fork_player", "take_from_hand", "card_clauses",
+           # PUBLIC since POC-T4/5 (Issue #392), for the same reason the four above were promoted at
+           # POC-T4/2: `common.board_choice` synthesizes the board a retreat's CHOICE resolves to,
+           # which moves a body out of the Active Spot (clearing its Special Conditions,
+           # `docs/rulebook.txt` L143) and re-derives what its remaining Energy CARDS provide. A
+           # second consumer means a public name, never an underscore reached across a boundary.
+           "clear_conditions", "units_for_cards")

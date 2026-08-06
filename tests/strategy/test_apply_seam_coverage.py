@@ -316,3 +316,49 @@ def test_report_block_is_present_and_regenerable(census, tmp_path):
     text = (_ROOT / "docs" / "plans" / "apply-seam-coverage.md").read_text(encoding="utf-8")
     assert mod.BEGIN in text and mod.END in text
     assert text.index(mod.BEGIN) < text.index(mod.END)
+
+
+def test_the_deferred_target_vocabulary_is_closed_over_the_SHIPPED_compendium():
+    """**Issue #392's declared vocabulary, graded against real data rather than a fixture.**
+
+    `board_choice.CHOICE_CLAUSES` names the clause kinds whose write's TARGET is chosen at a follow-up
+    select — the 63-step census `board_delta._play` records: Boss's Orders x30 (`gust`), Crispin x16
+    (`accel`), Wally's Compassion x14 (`heal`), Rosa's Encouragement x2 (`accel`). `test_board_choice.py`
+    asserts the registries are closed over that vocabulary; this asserts the vocabulary is closed over
+    the COMPENDIUM, which is the direction a fixture cannot check.
+
+    Three assertions, and the middle one is the vacuity guard the other two would pass without:
+
+    1. every declared kind is a kind `snapshot_coverage.CLAUSE_WRITES` has heard of — a member
+       misspelled into the frozenset would otherwise be dead vocabulary nothing could distinguish
+       from an absent one;
+    2. every declared kind is carried by at least one SHIPPED card, so the census the vocabulary
+       claims to name is a census of something;
+    3. **the positive control** — the four census cards resolve to exactly the declared kinds, and
+       `fetch` (the shape `board_expectation` owns, whose target the searcher names on the spot) is
+       correctly NOT among them. Without it, a walk that silently found nothing would pass 1 and 2 on
+       an empty comparison."""
+    from common import board_choice as bc
+    from common import snapshot_coverage as sc
+    from common.effects import CardEffects
+
+    effects = CardEffects.load()
+
+    def kinds_of(card_id):
+        return {c.get("kind") for c in effects.clauses(card_id)}
+
+    assert bc.CHOICE_CLAUSES, "vacuity guard: an empty vocabulary passes every assertion below"
+    assert bc.CHOICE_CLAUSES <= set(sc.CLAUSE_WRITES), sorted(
+        bc.CHOICE_CLAUSES - set(sc.CLAUSE_WRITES))
+
+    shipped = set()
+    for card_id in (1182, 1198, 1229, 1240):                 # the census, by card
+        shipped |= kinds_of(card_id)
+    assert shipped == set(bc.CHOICE_CLAUSES), sorted(shipped ^ set(bc.CHOICE_CLAUSES))
+
+    # The positive control: a REVEALING clause kind is a different node (`board_expectation`'s chance
+    # node), and its target is named by the searcher on the spot rather than deferred. Master Ball
+    # (1125) is the worked case, and finding `fetch` on it proves this walk reads the store at all —
+    # without which the two assertions above would pass on an empty comparison.
+    assert kinds_of(1125) == {"fetch"}
+    assert not (kinds_of(1125) & bc.CHOICE_CLAUSES)
