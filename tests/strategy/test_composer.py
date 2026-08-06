@@ -60,9 +60,12 @@ COLORLESS, FIGHTING, PSYCHIC, DRAGON = 0, 6, 5, 9
 #   1159 (synthetic stand-in) a Pokemon Tool with a flat HP grant — the same treatment every other
 #                           Hero's Cape fixture in the tree gets, because the audit re-derives
 #                           `hpBonus` by parsing the CSV through a shim card and gets 0
+#   1200 Kofu              Supporter  — a REAL Supporter, used for the §S6 allowance case
+#   1242 Community Center  Stadium    — a REAL Stadium, likewise
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 AURA_JAB, MEGA_BRAVE = 982, 983
 E_F, TOOL, ITEM = 6, 1159, 1125
+SUPPORTER, STADIUM = 1200, 1242
 
 _STATS = {
     RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING),
@@ -74,6 +77,14 @@ _STATS = {
     TOOL: CardStat(TOOL, synthetic=True, name="Flat-HP Tool", cardType=2, hpBonus=100),
     ITEM: CardStat(ITEM, name="Master Ball", cardType=1),
 }
+#: The two Trainer rows §S6's allowance cases need, kept OUT of `_STATS` so every other fixture's
+#: menu stays what it was. Names and `cardType` are the CSV's own — `tests/scouting/
+#: test_cardstat_fixture_facts.py` audits every `CardStat(...)` literal in the tree against
+#: `data/EN_Card_Data.csv` field-for-field, so an invented name on a real id fails the build (this
+#: pair started life as "Test Supporter" on id 1200, which is really Kofu, and that audit caught it).
+_STATS_SUPPORTER = CardStat(SUPPORTER, name="Kofu", cardType=3)
+_STATS_STADIUM = CardStat(STADIUM, name="Community Center", cardType=4)
+
 _ATTACKS = {AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
             MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2,
                                    energyTypes=(FIGHTING, FIGHTING))}
@@ -297,15 +308,14 @@ def test_the_one_supporter_per_turn_is_spent_once():
 
     Carries the case that would OTHERWISE PASS, which is the point: on a fresh board the same option
     is legal, so this asserts the ALLOWANCE and not merely that the option is unrecognised."""
-    supporter = CardStat(1200, name="Test Supporter", cardType=3)
-    stats = {**_STATS, 1200: supporter}
+    stats = {**_STATS, SUPPORTER: _STATS_SUPPORTER}
     combat = CombatMath(DictCardStatProvider(stats, attacks=_ATTACKS),
                         functions=CardFunctions({}), transients=None, effects=CardEffects({}))
-    obs = _obs(_player(active=_body(RIOLU), hand=[1200]))
+    obs = _obs(_player(active=_body(RIOLU), hand=[SUPPORTER]))
     model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
     play = {"type": _PLAY, "area": HAND, "index": 0}
     assert cp._still_legal(model, play) is True                    # the otherwise-passing case
-    spent = _obs(_player(active=_body(RIOLU), hand=[1200]), supporterPlayed=True)
+    spent = _obs(_player(active=_body(RIOLU), hand=[SUPPORTER]), supporterPlayed=True)
     assert cp._still_legal(StateModel.build(spent, combat=combat, deck=[E_F] * 8), play) is False
 
 
@@ -316,19 +326,18 @@ def test_the_one_stadium_per_turn_is_spent_once_AND_must_differ_from_the_one_in_
     TWO limits on one option kind, which is why it gets two negative cases: a spent allowance and an
     identical Stadium already in play. Reading only the allowance would let the composer re-play the
     Stadium that is already down — legal-looking, board-neutral, and silently wrong."""
-    stadium = CardStat(1300, name="Test Stadium", cardType=4)
-    stats = {**_STATS, 1300: stadium}
+    stats = {**_STATS, STADIUM: _STATS_STADIUM}
     combat = CombatMath(DictCardStatProvider(stats, attacks=_ATTACKS),
                         functions=CardFunctions({}), transients=None, effects=CardEffects({}))
 
     def _m(**current):
-        obs = _obs(_player(active=_body(RIOLU), hand=[1300]), **current)
+        obs = _obs(_player(active=_body(RIOLU), hand=[STADIUM]), **current)
         return StateModel.build(obs, combat=combat, deck=[E_F] * 8)
 
     play = {"type": _PLAY, "area": HAND, "index": 0}
     assert cp._still_legal(_m(), play) is True                     # the otherwise-passing case
     assert cp._still_legal(_m(stadiumPlayed=True), play) is False   # the per-turn allowance
-    same = _m(stadium=[{"id": 1300, "serial": 77, "playerIndex": 0}])
+    same = _m(stadium=[{"id": STADIUM, "serial": 77, "playerIndex": 0}])
     assert cp._still_legal(same, play) is False, (
         "a Stadium identical to the one already in play is not a legal play — reading only the "
         "allowance would let the composer re-play it for a board-neutral, silently wrong step")
