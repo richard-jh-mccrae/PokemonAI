@@ -13,6 +13,7 @@ import dataclasses
 
 from collections import Counter
 from dataclasses import dataclass, field, replace
+from typing import NamedTuple
 
 from common import deck_odds
 from common import retreat_cost                # ADR-0100 §8's grant-aware cost, shared with
@@ -355,6 +356,20 @@ def _min_attack_cost(stats, payoff: int, default: int = 1) -> int:
     stat = stats.get(payoff) if stats else None
     cost = getattr(stat, "minAttackCost", None) if stat else None
     return cost if cost is not None else default
+
+
+class ShedPlan(NamedTuple):
+    """What a forced ``picks``-card discard would actually take, and what it costs — the return of
+    :meth:`Pilot._cost_shed`.
+
+    ``hand_indices`` are option-menu coordinates (the ``i`` on each priced row) and are what a
+    caller outside the Pilot wants; ``row_indices`` and ``rows`` are the resolver's own coordinates,
+    kept so the fetch doctrine can read the per-card facts (``pitch``, ``dup_hand``, ``in_play``)
+    its three bands need without resolving the assignment a second time."""
+    hand_indices: tuple
+    row_indices: tuple
+    rows: list
+    cost: float
 
 
 @dataclass
@@ -4565,6 +4580,68 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         enriches it carries no pitch terms at all, by design)."""
         return {"deadness": [r.get("deadness", 0) for r in rows],
                 "tiebreak": [r.get("worth", 0.0) * r.get("deploy", 1.0) for r in rows]}
+
+    def _cost_shed(self, obs: dict, board: Board = None, *, exclude_cid=None, picks: int):
+        """**The ONE answer to "which cards does a `picks`-card play cost actually take?"** —
+        `ShedPlan(hand_indices, row_indices, rows, cost)`, or ``None`` when the hand cannot legally
+        pay (fewer than ``picks`` other cards, the engine's own `handOthers` gate).
+
+        Two consumers, and they must not disagree:
+
+        * `doctrine_fetch._shed_signals`, the fetch doctrine's shed PREDICTOR, which asks what the
+          set costs so a dig can be priced. It used to spell this inline with a hardcoded ``2``.
+        * `cost_shed_indices`, the apply seam's oracle: `board_expectation` has to APPLY Ultra
+          Ball's *"discard 2 other cards"* before its search, and the set it assumes must be the set
+          the live decider would actually pick. Predicting with any other formula is precisely the
+          drift ADR-0103 Amendment A extracted `needs.removal_score` to close.
+
+        The answer is `needs.cheapest_removal` — the equation that already DECIDES the forced
+        discard — over the same rows, resolver and ordering legs `_needs_v2` uses. Deliberately NOT
+        `keep_v2` at the select: Issue #406 built that, measured it worse (incumbent 23/30 against
+        the spec's 17/30) and reverted it (ADR-0121).
+
+        ``intrinsics`` are all-0.0 and ``resupply`` all-0.0, both inherited rather than re-chosen: a
+        forced discard has no redraw window, and no v1 post-gate hedge exists over HAND rows.
+
+        ``board`` defaults through `_board_hypothetical`, so a caller holding only a synthesized
+        observation — which the apply seam always does — needs no `Board` of its own."""
+        from common import needs
+        board = self._board_hypothetical(obs) if board is None else board
+        rows = self._as_discard_rows(self._needs_hand_rows(obs, board, exclude_cid=exclude_cid),
+                                     obs, board)
+        if len(rows) < int(picks):
+            return None
+        slots, elig = self._resolve_needs(obs, board, rows)
+        resupply = [0.0] * len(slots)            # a forced discard has no redraw window (as `_needs_v2`)
+        intrinsics = [0.0] * len(rows)           # no v1 post-gate hedge exists over the HAND rows
+        pick = needs.cheapest_removal(slots, elig, resupply, intrinsics, int(picks),
+                                      **self._removal_ranking_legs(rows))
+        cost = needs.removal_score(slots, elig, resupply, intrinsics, pick)
+        return ShedPlan(hand_indices=tuple(sorted(rows[k]["i"] for k in pick)),
+                        row_indices=tuple(pick), rows=rows, cost=float(cost))
+
+    def cost_shed_indices(self, model, option: dict, picks: int) -> tuple:
+        """The `shed` seam `board_expectation.expectation` takes — the HAND INDICES a cost would
+        take, on the model's OWN observation.
+
+        Public and model-shaped because the apply seam has no Pilot and cannot get one:
+        `common/composer.py` holds no `Pilot` anywhere (its only `strategy` import is
+        `strategy.context`, a pure constants module), and `StateModel.mine.needs` is either `None`
+        in production or the LEAF resolution, which is resolved `include_general=False` with no
+        pitch terms and pinned to the ROOT observation (Issue #400 Phase 2). So the composer's
+        CALLER — which does hold a Pilot — passes this in, exactly as it already passes
+        `search_api` / `deterministic` / `clauses_cover`.
+
+        Raises nothing and returns ``()`` when the hand cannot pay, which the seam reads as a
+        refusal rather than as a free cost."""
+        obs = getattr(model, "source_obs", None) or {}
+        seat = int(getattr(model, "my_index", 0))
+        hand = ((obs.get("current") or {}).get("players") or [{}])[seat].get("hand") or ()
+        index = (option or {}).get("index")
+        played = (hand[index] or {}).get("id") if isinstance(index, int) and 0 <= index < len(hand) \
+            else None
+        plan = self._cost_shed(obs, exclude_cid=played, picks=picks)
+        return plan.hand_indices if plan is not None else ()
 
     def _resolve_needs(self, obs: dict, board: Board, rows: list, *, include_general: bool = True):
         """The shared keep-value v2 RESOLVER: the live board + the held-card ``rows`` resolved into
