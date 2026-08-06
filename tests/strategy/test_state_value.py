@@ -3977,3 +3977,91 @@ def _hand_legs_of(resolution):
     """`_hand_legs` over a bare Resolution — the extractor reads `model.mine.needs` and nothing
     else, so a stub with that one attribute exercises it exactly."""
     return sv._hand_legs(SimpleNamespace(mine=SimpleNamespace(needs=resolution)))
+
+
+def _hand_reading_supplier():
+    """A board-bound `needs` supplier whose Resolution is a pure function of MY HAND.
+
+    Deliberately minimal: one `fund_attack` slot per held Energy, so the legs it produces cannot
+    coincide across two boards with different hands. A supplier that read anything else would let
+    this fixture pass for a reason other than the one under test."""
+    def supplier(obs, my_index):
+        seat = ((obs.get("current") or {}).get("players") or [{}])[my_index] or {}
+        hand = list(seat.get("hand") or ())
+        energy = [c for c in hand if c.get("id") == E_F]
+        # DEMAND tracks the Energy specifically; latent Worth tracks the WHOLE hand. Keeping the two
+        # on different inputs is what lets a non-Energy card be a clean gain — with `eligibility=()`
+        # there is no assignment, so coverage is 0 and an added Energy would book 8.0 of demand
+        # against 1.0 of Worth. That is a property of this stub, not of `hand`.
+        return _needs.Resolution(
+            slots=tuple(_needs.Slot("fund_attack", 8.0, i, f"active:unit{i}")
+                        for i in range(len(energy))),
+            eligibility=(), resupply=(0.0,) * len(energy),
+            hand_ids=tuple(c["id"] for c in hand),
+            latent_worth=float(len(hand)))
+    return supplier
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_the_hand_legs_MOVE_when_the_hand_moves_across_a_rebuild():
+    """Issue #400 Phase 2's acceptance, end to end through the sanctioned seam.
+
+    `test_state_model.py` asserts the SUPPLIER is re-asked about the board being rebuilt. This
+    asserts the CONSEQUENCE, which is the thing that was actually broken: `_hand_legs` — the
+    extractor `state_value.hand` reads — must return different numbers for two boards that differ
+    only in my hand. Under the pinned build every hypothetical inherited the ROOT board's
+    Resolution, so these three numbers were CONSTANT across a whole `composer.compose` call and
+    every hand-moving play differenced to exactly 0.0.
+
+    **A test that only asserted "it changed" would pass on the pinned build too** — the pinned build
+    changes plenty, just never this. So the emptied-hand board is compared against the FULL one
+    through `rebuilt`, which is the exact path that forwarded the stale kwarg."""
+    import copy
+    me = _player(active=_poke(MEGA_LUC, hp=340), hand=[E_F, E_F], prize=4)
+    opp = _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4)
+    model = _model(me, opp, needs=_hand_reading_supplier())
+
+    full = sv._hand_legs(model)
+    assert full["slot_demand"] == 16.0 and full["hand_worth"] == 2.0
+
+    emptied = copy.deepcopy(model.source_obs)
+    emptied["current"]["players"][0]["hand"] = []
+    bare = sv._hand_legs(model.rebuilt(emptied))
+
+    assert bare != full, (
+        "`_hand_legs` is identical on a board with an EMPTY hand — the resolution was inherited "
+        "from the originating board, which is the Issue #400 Phase 2 defect")
+    assert bare["slot_demand"] == 0.0 and bare["hand_worth"] == 0.0
+
+
+@pytest.mark.req("REQ-STATEVALUE-0009")
+def test_a_hand_ONLY_difference_moves_the_LEAF_so_a_fetch_can_never_difference_to_zero():
+    """The defect stated as the composer meets it. Two boards differing in nothing but my hand must
+    produce different `state_value` scalars — otherwise a fetch, whose entire effect is on the hand,
+    prices at exactly 0.0 and *"a 0 delta is never explored, not undervalued"*.
+
+    Measured on the corpus before the fix: the ruled fetch differenced to exactly 0.0 on **all 12**
+    frames where a human ruled one, with `Expectation.best()` equal to `expected()` to the last bit
+    across five different fetched cards — because every outcome class scored the same number."""
+    import copy
+    me = _player(active=_poke(MEGA_LUC, hp=340), hand=[E_F, E_F], prize=4)
+    opp = _player(active=_poke(DRAGAPULT, hp=320, serial=9), prize=4)
+    model = _model(me, opp, needs=_hand_reading_supplier())
+
+    # A NON-Energy card, so the fetch is pure latent Worth and books no new demand — see the
+    # supplier's own note for why an Energy would not be a clean gain in this stub.
+    drawn = copy.deepcopy(model.source_obs)
+    drawn["current"]["players"][0]["hand"] = (
+        drawn["current"]["players"][0]["hand"] + [{"id": MEGA_LUC, "serial": 4242,
+                                                   "playerIndex": 0}])
+    drawn["current"]["players"][0]["handCount"] = 3
+
+    before, after = float(sv.state_value(model)), float(sv.state_value(model.rebuilt(drawn)))
+    assert after != before, (
+        "a board differing ONLY in my hand scored identically — every fetch differences to exactly "
+        "0.0 and the beam never explores one")
+    # Direction as well as movement: the fetched card adds latent Worth and no demand, so holding it
+    # must price ABOVE not holding it. Movement alone would be satisfied by a sign error.
+    assert after > before
+    assert sv._hand_legs(model.rebuilt(drawn))["slot_demand"] == 16.0, (
+        "the control: demand is UNCHANGED, so the whole delta is the Worth of the fetched card")
