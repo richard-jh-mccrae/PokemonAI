@@ -207,8 +207,26 @@ Wally's was committed at the MAIN menu one step earlier and ctx 17 cannot expres
 `hold-clutch-heal`'s question — whose own rationale is *"heal, re-power, and still attack the same
 turn"* — which decision 6 / R6 leaves to `baseline_heal.py` and Issue #386. Recording it as a ctx-17
 target correction would have misfiled a MAIN-menu blunder as a target defect and taught the ranker
-the wrong lesson. **It is evidence that the whether-to-play rung is worth revisiting, and it is
-logged here rather than silently dropped.**
+the wrong lesson.
+
+**And the whether-to-play defect it appeared to expose DOES NOT EXIST — measured at the origin
+frame, not assumed.** The obvious next inference from that ruling is that `dont-waste-clutch-heal`
+failed to suppress the play. It did not fail. `f125` is the MAIN select that played Wally's (16
+options, the trace picks opt11 = PLAY 1229); driving the shipped `mega_starmie` Pilot there reads
+`active_doomed = False` against `incoming_active_damage = 210` on a 310-HP Active — exactly as the
+ruling reasoned — **`dont-waste-clutch-heal` fires on both Wally's options at −40.00**, and the Pilot
+takes the attack at 1002.90 instead. The play is a `chaos:seed=5000` artefact and f126 is unreachable
+through the real Pilot.
+
+Positive control, because a rung that always said *"don't"* would look identical: drop that Active's
+HP to 150 (the ONE change) and the negative rung goes silent while `hold-clutch-heal` fires in its
+place at **+60.00**. The gate discriminates.
+
+So the developer's line — *"we whack them another time, then when we are doomed, we heal and attach
+Ignition to KO them"* — **is what the agent already does.** Recorded here because the near-miss is
+the point: a ruling taken on a chaos-policy board can indict a rung that is working, and only
+driving the origin frame tells them apart. Nothing is owed to `baseline_heal.py`, which also keeps
+this ADR clear of Issue #386's in-flight claim on that rung family (PR #399).
 
 Two structural facts these records establish, both first-of-their-kind:
 
