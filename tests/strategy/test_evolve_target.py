@@ -166,18 +166,31 @@ def test_every_real_board_prices_every_option_through_the_equation(trace, index)
 
 
 def test_the_widest_real_board_separates_the_bodies_the_string_sort_could_not():
-    """`ms_mirror_1001` f15 — the corpus's only three-wide ctx-18 menu, and the frame this term
-    exists for: three Staryu (Active 70/70 unenergised, Bench 70/70 carrying one Energy, Bench
-    70/70 unenergised) and nothing to choose between them.
+    """`ms_mirror_1001` f15 — the corpus's only three-wide ctx-18 menu: three Staryu (Active 70/70
+    unenergised, Bench 70/70 carrying an Ignition Energy, Bench 70/70 unenergised).
 
-    The Active wins, and it is the SURVIVAL leg that decides: its `turns_to_ko_me` is 1 (doomed
-    next swing) against the bench's 4, so evolving it into a 330-HP body is the only substitution
-    that moves `p_survive` at all — 0.125 to 0.250. Both benched Staryu read exactly 0.0, and that
-    tie is a real property of the equation rather than a failure to look: on the bench `p_survive`
-    is already 1.0 for the pre-evolution, and `turns_to_afford` is unchanged by the hop (Nebula
-    Beam's ●●● leaves 2 Energy owed either way), so `deploy(R) − deploy(B)` cancels to zero on
-    both. It is the DELTA that ranks, which is exactly right as an argmax: board value after
-    picking *i* is ``Σ_j deploy(B_j) + [deploy(R_i) − deploy(B_i)]``, and the sum is constant."""
+    ⚠️ **A FIXTURE, and explicitly NOT a ruling — the developer REJECTED this board on 2026-08-06**
+    (Issue #417 acceptance item 3). It carries an Ignition Energy on a BENCHED Staryu while the
+    ACTIVE Staryu has none, which is not a play any agent would make; it is what
+    `tools/parity/capture_match.py`'s randomised policy produced. So its recorded ``choice`` is
+    noise AND the position itself poses no question worth answering. What it is still good for is
+    the only thing asserted below: the term separates bodies on a genuine engine board state, where
+    before it returned 0.0 on every option and the pick fell out of a JSON string sort.
+
+    The Active wins on the SURVIVAL leg: its `turns_to_ko_me` is 1 against the bench's 4, so
+    evolving it into a 330-HP body is the only substitution that moves `p_survive` (0.125 -> 0.250).
+    Both benched Staryu read exactly 0.0, and that tie is a real property of the equation rather
+    than a failure to look: on the bench `p_survive` is already 1.0 for the pre-evolution, and
+    `turns_to_afford` is unchanged by the hop, so `deploy(R) - deploy(B)` cancels on both. It is the
+    DELTA that ranks, which is right as an argmax: board value after picking *i* is
+    ``Σ_j deploy(B_j) + [deploy(R_i) - deploy(B_i)]``, and the sum is constant across the menu.
+
+    Two model limits measured on this board are recorded in ADR-0124 and deliberately NOT fixed
+    here: `_evolve_substitution` copies `energies` verbatim, so the Ignition on bench 0 reads 1 unit
+    where the engine's own `units_for_cards(onto_evolution=True)` gives 3; and `payoff_damage`
+    pre-credits a pre-evolution with its whole line's payoff, which is what makes both bench deltas
+    cancel. Both are PRE-EXISTING in `_evolve_decision` and both move MAIN decisions, which
+    acceptance item 4 froze."""
     pilot = _shipped_pilot()
     terms, chosen = _terms(pilot, parity_frame(*WIDEST))
     assert len(terms) == 3

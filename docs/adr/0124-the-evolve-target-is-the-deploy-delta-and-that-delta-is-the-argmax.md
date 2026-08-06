@@ -124,19 +124,47 @@ be the bar — the same situation ADR-0123 faced. The substitute is that ADR's o
 * both ADR-0072 gates PASS, and the Decision Gate diff is **byte-identical** with the change stashed
   and unstashed — 0 picks moved across the corpus, which is what item 5 above claims.
 
-**The widest board's reading, recorded because it is what a ruling would be about.** On
-`ms_mirror_1001` f15 (three Staryu: Active unenergised and doomed at `ko=1`, one benched Staryu
-carrying 1 Energy, one empty) the term reads `[3.28, 0.0, 0.0]`. The Active wins on the survival leg
-alone — evolving it into a 330-HP body is the only substitution that moves `p_survive` (0.125 →
-0.250). **Both benched options tie at exactly 0.0, and the tie is a property of the equation rather
-than a failure to look:** on the bench `p_survive` is already 1.0 for the pre-evolution, and
-`turns_to_afford` is unchanged by the hop (Nebula Beam's ●●● leaves 2 Energy owed either way), so the
-delta cancels on both. ⚠️ **Two consequences are OPEN and flagged rather than resolved here**: the
-equation is PRIZE-BLIND by ADR-0070 §5, so putting a 3-prize Mega ex into a doomed Active spot is
-priced only through `p_survive` and not through the prizes a knockout would hand over; and the bench
-tie means `_prefer_soonest_arming_evolve`'s *"put it where the Energy is"* insight has nothing to
-express at this select. Both need a developer ruling on f15, requested with the build and not
-guessed at.
+**The widest board's reading — and why it yielded NO ruling.** On `ms_mirror_1001` f15 (three
+Staryu: Active unenergised, one benched Staryu carrying an Ignition Energy, one empty) the term reads
+`[3.28, 0.0, 0.0]`. The Active wins on the survival leg alone — evolving it into a 330-HP body is the
+only substitution that moves `p_survive` (0.125 -> 0.250). Both benched options tie at exactly 0.0,
+and the tie is a property of the equation rather than a failure to look: on the bench `p_survive` is
+already 1.0 for the pre-evolution and `turns_to_afford` is unchanged by the hop, so the delta cancels.
+
+**The developer REJECTED the frame as a ruling substrate on 2026-08-06, and that is the recorded
+outcome of acceptance item 3 — not a deferral.** The board is a chaos-capture artefact, not a
+position any agent would reach: it has an Ignition Energy attached to a BENCHED Staryu while the
+ACTIVE Staryu carries none, which is not a play, and the ranking question it poses is therefore not
+one worth answering. The corpus's only three-wide ctx-18 menu is unrulable, so **ctx 18 has zero
+ruled frames by ruling as well as by census** — which is exactly why the seven boards are used as
+CONSTRUCTED FIXTURES (the equation is exercised on genuine engine board states) and their recorded
+`choice` is discarded. `test_no_ruled_frame_carries_ctx_18_or_19` stands, and turns red the day a
+real one lands.
+
+⚠️ **Two model limits were measured on that board and are recorded rather than fixed, both
+PRE-EXISTING and neither this issue's to move:**
+
+* **`_evolve_substitution` does not re-derive the evolved body's Energy UNITS.** `result_raw =
+  dict(raw, id=target_cid)` copies `energies` verbatim, so an Ignition Energy — *"provides {C}… If
+  this card is attached to an Evolution Pokémon, it provides {C}{C}{C} instead"* (`EN_Card_Data.csv`
+  17, read at source) — reads as **1** unit on the hypothetical Mega where the engine gives **3**,
+  which is Nebula Beam's ●●● in full. Measured on f15 option [1]: `units_for_cards(onto_evolution=
+  True)` returns `[0, 0, 0]` while the substitution produces `energies=[0]`, holding `R.arm` at 2
+  where it should be 0. The apply seam already does this correctly (`board_delta._evolve` calls
+  `units_for_cards(..., onto_evolution=True)`); the DECIDER does not, and has not since ADR-0070.
+  Not fixed here because it moves `_evolve_decision` at MAIN — the one thing acceptance item 4
+  froze — so it owes its own corpus flips and gate rulings. Filed as a follow-up.
+* **`payoff_damage` pre-credits a pre-evolution with its whole line's payoff**, so a benched Staryu
+  is already valued at Mega Starmie's 210 whether or not a Mega ever arrives, and actually evolving
+  it adds nothing. That is ADR-0070's stated design (*"payoff_damage cancels in the difference"*) and
+  is sound at MAIN, where the card stays in hand. At a one-shot deck search it is shakier — the
+  Staryu that does NOT receive the Salvatore copy has no second one guaranteed. Recorded as a model
+  question, not touched: changing `_line_payoff_stat`'s reading has blast radius far beyond ctx 18.
+
+**What was NOT a defect, checked so it does not get filed as one:** the Active Staryu's `ko = 1`
+survives scrutiny even though the opponent's Active carries no Energy — they can attach a {W},
+evolve, and Jetting Blow for 120 inside one turn, which fells a 70-HP body. The clock is reading a
+legal line, not being carelessly pessimistic.
 
 ## Also in this issue (Part B): the `ATTACH_FROM` half was already built
 
