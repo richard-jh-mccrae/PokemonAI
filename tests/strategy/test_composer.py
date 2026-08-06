@@ -771,6 +771,43 @@ def test_the_selection_key_NEVER_falls_through_to_generation_order():
 
 
 @pytest.mark.req("REQ-COMPOSER-0007")
+def test_one_ULP_of_float_noise_never_decides_a_tie_the_worth_leg_should():
+    """The float-noise floor on `selection_key`'s score leg (Issue #400 Phase 2 flip review).
+
+    Two orderings of one commutative block reach the SAME end board, so their scores are one sum
+    added in two orders — and floating-point addition is not associative, which `state_value._terms`
+    already states outright. Measured on `82226116|0|decision|70`: retreat-then-evolve scored
+    `0.9052836100260416` against evolve-then-retreat's `0.9052836100260415`, a difference of 1.11e-16,
+    and an EXACT score leg separated on it so the Worth leg never ran — handing a corpus frame to the
+    last bit of a sum instead of to the rule Issue #263 wrote for it. The Worth leg picks the ruled
+    evolve (-30.0 against -0.0) the moment the noise stops pre-empting it.
+
+    The two literals below are those measured scores, so this fails if the rounding is removed."""
+    obs, options = _menu_obs()
+    model = _model(obs)
+    stamped = [cp.stamp_origin(model, o) for o in options]
+    worthy = cp.Candidate(steps=(cp.Step(stamped[0], 0, 3, ao.MODELLED),),
+                          score=0.9052836100260415)
+    noisy = cp.Candidate(score=0.9052836100260416)          # no steps -> no card -> worth 0.0
+    assert noisy.score > worthy.score, "the fixture must reproduce the ULP, not assume it"
+    assert cp.selection_key(model, worthy) < cp.selection_key(model, noisy), (
+        "one ULP of float noise pre-empted the Worth leg — the tie-break fell through to arithmetic")
+
+
+@pytest.mark.req("REQ-COMPOSER-0007")
+def test_the_score_leg_still_separates_a_difference_the_leaf_can_actually_see():
+    """The other side of the floor, so the rounding cannot be read as "score stopped mattering".
+    A real 1-ply delta on this corpus runs 1e-5 to 1e-3; 12 places is six orders below the smallest
+    of those, so a genuine separation still decides before Worth is consulted."""
+    obs, options = _menu_obs()
+    model = _model(obs)
+    stamped = [cp.stamp_origin(model, o) for o in options]
+    better = cp.Candidate(score=1.00001)                     # worth 0.0, but a REAL margin
+    worthier = cp.Candidate(steps=(cp.Step(stamped[0], 0, 3, ao.MODELLED),), score=1.0)
+    assert cp.selection_key(model, better) < cp.selection_key(model, worthier)
+
+
+@pytest.mark.req("REQ-COMPOSER-0007")
 def test_the_chosen_line_is_the_SAME_under_a_permuted_menu():
     """Permuting the menu must permute the keys with it and invent no new ones (ADR-0103). Asserted
     on the CARD the composer commits to, not on the index — the index is exactly what moved."""

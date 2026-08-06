@@ -87,10 +87,28 @@ passed directly is still taken verbatim and never called, so fixtures and any ca
 one are untouched.
 
 **4. The 6 residual negatives are RECORDED, not tuned away.** After the fix the ruled attach reads
-median **+0.01181** and stays negative on **6 of 31** — every one a PARTIAL funding, where the attach
-does not retire the slot because a `needs` slot is present-or-absent and never fractional. That
-residual belongs to `_resolve_needs`' slot granularity, one seam over, and is named here rather than
-absorbed by a constant.
+median **+0.01181** and stays negative on **6 of 31**.
+
+> ⚠️ **CORRECTED 2026-08-06, same day, before any of it was believed.** This decision first read
+> *"every one a PARTIAL funding, where the attach does not retire the slot because a `needs` slot is
+> present-or-absent and never fractional."* **That was a guess and it is wrong.** Measured on the six:
+> five retire **exactly 0.00** demand, and the cause is that `fund_attack` slots are ACTIVE-SCOPED —
+> **189 of 189** in the whole corpus carry an `active:*` key. There is no bench funding need in the
+> Needs model at all, so attaching to a benched body retires nothing, is charged the full hold, and
+> prices below attacking. That is not a granularity limit; it is a missing slot kind, and it sits in
+> `pilot._resolve_needs` rather than in this equation. The developer's rulings on those frames say the
+> same thing in their own words — *"attach energy to benched pokemon when able and they need it"*.
+>
+> **A bench `fund_attack` slot was then BUILT and MEASURED, and it is a WASH.** Two variants: one slot
+> per benched attacker, and (narrowed, because only one body can be promoted per turn) one slot for
+> the single best successor. Both make all six ruled plays price positive — 82752604-61 needs the
+> line PAYOFF's cost rather than the base's own, since Energy attached to a Staryu is still there when
+> it becomes Mega Starmie ex — and both trade even on the corpus: **8 fixed / 8 broken** for the wide
+> variant and **6 fixed / 6 broken** for the narrow one. The wide variant additionally loses both
+> ruled *"End the turn"* frames, because demand became so plentiful that retiring some of it always
+> beat doing nothing. **Not shipped.** The work is preserved verbatim at
+> `docs/plans/issue-400-bench-funding-slot.patch` and the disposition is owed a developer ruling —
+> ADR-0122's shape, recorded rather than shipped on a flat number.
 
 ## Consequences
 
@@ -146,7 +164,10 @@ retires nothing is still charged its latent Worth to play.
   now cancel inside ONE family at ONE rate. Whether the two bands should be reconciled is a separate
   question and is not settled here.
 - **It does not fix Issue #400 Phase 1** (a reveal-truncated sequence carrying `EV(terminal) = 0`).
-  Measured on top of this, Phase 1 adds a further +1 agreement (86 → 87) and moves `_PLAY` 9 → 15.
+  Measured on top of this, Phase 1 adds a further +1 agreement and moves `_PLAY` 9 → 15, and it
+  introduces **zero** regressions once the developer's 2026-08-06 rulings are applied.
+- **It does not fix the tie-break defect the same review found** — see **ADR-0126**, which is what
+  actually settles `82226116|0|decision|70`.
 - **It does not close the `_PLAY` gap.** 76 of the 92 frames where the composer misses a ruled
   `_PLAY` are seam REFUSALS, which no valuation ruling reaches; they are routed in Issue #400's body.
 

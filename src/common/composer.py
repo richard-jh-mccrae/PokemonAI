@@ -1060,6 +1060,28 @@ def choose_target(model, option: Mapping, *, seat_index=None, cap=None, ranker=N
 
 # ── the deterministic selection tie-break, in ONE place ──────────────────────────────────────────
 
+#: Decimal places the score leg of :func:`selection_key` is compared at — **a float-noise floor, not
+#: a band**, and deliberately NOT :data:`EPSILON`.
+#:
+#: Two orderings of one commutative block reach the SAME end board, so their scores are the same sum
+#: added in a different order — and floating-point addition is not associative, which
+#: `state_value._terms` already says outright (*"a reordering would move the last bits of the sum"*).
+#: Measured on `82226116|0|decision|70`: retreat-then-evolve scores `0.9052836100260416` and
+#: evolve-then-retreat `0.9052836100260415`, a difference of **1.11e-16** — one ULP. An EXACT `-score`
+#: leg separates on that, so the Worth leg below never runs, and the corpus frame is decided by the
+#: last bit of a sum rather than by the rule Issue #263 § *Beam-quality package* item 1 wrote for it
+#: (the Worth leg would have picked the ruled evolve, `-30.0` against `-0.0`). That is the same
+#: fall-through class as ADR-0062:29 and `mega_lucario` f33/f40/f44, reached through arithmetic
+#: instead of through generation order.
+#:
+#: **12 places is six orders of magnitude above the noise and six below anything real**: the observed
+#: 1-ply deltas on this corpus run 1e-5 to 1e-3 and the epsilon band is 5e-3, so rounding here cannot
+#: merge two candidates the leaf actually separates. :data:`EPSILON` is deliberately not reused — it
+#: is the corpus-calibrated ADMISSION band for not LOSING a near-tie during search, and Issue #263 is
+#: explicit that the two mechanisms must not be merged; quantising selection onto it would silently
+#: hand every sub-epsilon decision to the Worth leg, which is a different ruling nobody has made.
+_SCORE_PLACES = 12
+
 
 def selection_key(model, candidate: Candidate) -> tuple:
     """The ONE ordering key for choosing among candidates — Issue #263 § *Beam-quality package*
@@ -1092,7 +1114,7 @@ def selection_key(model, candidate: Candidate) -> tuple:
             card_id = int(getattr(stat, "cardId", -1) or -1)
             worth = float(model.mine.role_worth(stat.cardId))
     index = candidate.first_index
-    return (bool(candidate.coverage_gap), -candidate.score, -worth, card_id,
+    return (bool(candidate.coverage_gap), -round(candidate.score, _SCORE_PLACES), -worth, card_id,
             index if index is not None else 1 << 30)
 
 

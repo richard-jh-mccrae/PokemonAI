@@ -496,20 +496,22 @@
     2
   ],
   "correct": [
-    2
+    4,
+    5
   ],
   "chosen_label": "Attach Ignition Energy → Cinderace",
-  "correct_label": "Attach Ignition Energy → Cinderace",
-  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / bad_target. Ruling unchanged; scope moved to #329.",
+  "correct_label": "Attach Basic {W} Energy → Cinderace  ([4] and [5] are one Option-Equivalence class: HAND5 / HAND6, same play)",
+  "note": "POC-T3 held-out (Issue #262 wave 3). mega_starmie / bad_target. Ruling unchanged; scope moved to #329.  RE-RULED 2026-08-06 (Issue #400 Phase 2): correct [2] -> [4, 5]; the holdout owner is unchanged.",
   "frame_key": "81906131|1|decision|25",
   "claims": {
     "decision": {
       "correct": [
-        2
+        4,
+        5
       ],
       "owner": "#329",
-      "ruled": "2026-08-02",
-      "why": "`threat` saturates into ONE BIT — `needs.opponent_target_value` returns the prize value unscaled at the `survival_shift=0` this module passes, so `min(_THREAT_CAP, sum)` binds on every non-empty input and a 1-prize Basic prices identically to a 3-prize Mega ex. Measured across 22 frames: 0.0 on 20, exactly the cap on 2, never between. The ruling STANDS; Issue #329 owns the scale anchor."
+      "ruled": "2026-08-06",
+      "why": "RE-RULED 2026-08-06 (developer, Issue #400 Phase 2 flip review), superseding `correct=[2]`. **The record marked the wrong option and its own rationale said so.** The Correction's rationale reads *\"never attach ignition energy to Cinderace when can attach basic energy\"* — and `[2]` IS the Ignition Energy attach onto Cinderace, the exact play the prose forbids. The record additionally carried `chosen == correct == [2]`, so the FIELDS declared the agent right while the PROSE declared it wrong. Developer on review: *\"i marked the wrong decision as correct, but my rationale was right.\"* The ruling is the Basic {W} Energy attach onto Cinderace; `[4]` and `[5]` are the same play from two hand slots (one Option-Equivalence class, ADR-0091) so both are ruled in rather than one chosen arbitrarily. No instrument could see this — a gate grades fields against fields and never reads the prose, which is ADR-0124's finding reached again independently. The Issue #329 holdout below is UNAFFECTED and stands: it is about `threat`'s scale, not about which option is correct.\n\n--- prior claim, verbatim ---\n`threat` saturates into ONE BIT — `needs.opponent_target_value` returns the prize value unscaled at the `survival_shift=0` this module passes, so `min(_THREAT_CAP, sum)` binds on every non-empty input and a 1-prize Basic prices identically to a 3-prize Mega ex. Measured across 22 frames: 0.0 on 20, exactly the cap on 2, never between. The ruling STANDS; Issue #329 owns the scale anchor."
     }
   }
 }
