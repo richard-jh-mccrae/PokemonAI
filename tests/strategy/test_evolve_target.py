@@ -1,0 +1,317 @@
+"""The `_EVOLVES_FROM` target select (ctx 18) — `Pilot._evolve_target_tactical` (Issue #417).
+
+Salvatore evolves a body straight out of the deck, bypassing hand: *"Search your deck for a card
+that has no Abilities and evolves from 1 of your Pokémon, and put it onto that Pokémon to evolve
+it"* (`data/EN_Card_Data.csv` 1189, read at source). The engine poses `_EVOLVES_TO` (19 — which
+physical deck copy) and then this one, which is the real decision: with three Staryu in play, WHICH
+one becomes the Mega Starmie ex.
+
+Nothing scored it. `_evolve_decision`'s guard is ``ctx.option_type != _EVOLVE``, and `_EVOLVE` (9)
+is a MAIN-menu ACTION type while every ctx-18 option carries `_CARD` (3) — asserted below, off the
+real corpus — so the decider abstained on every Salvatore target-select unconditionally, and
+`_prefer_soonest_arming_evolve` (identical gate) could not reach it either. Every option therefore
+came back 0.0 and the pick fell out of `_order_key`'s canonical fingerprint: the same string-sort
+artefact `test_heal_target.py` records for ctx 17.
+
+**Validation is BY CONSTRUCTION, and that is forced rather than chosen.** Measured below over every
+committed correction file: **zero** ruled frames carry ctx 18, so *"no ruled frame moves"* is
+vacuous here and cannot be the bar — exactly the situation Issue #409 faced at ctx 17. What stands
+in for it is that issue's own substitute, unchanged:
+
+* the **seven real ctx-18 boards** in the committed parity corpus, used as constructed fixtures.
+  Their board states are genuine engine output; their recorded ``choice`` is DISCARDED, because
+  those traces are driven by `tools/parity/capture_match.py`'s randomised policy and reading a
+  coin flip as a ruling would anchor this file to noise.
+* unit assertions on the term's own legs, its gate, and its fail-closed floor.
+
+The corpus census is itself asserted, so a future capture that adds ctx-18 frames — or a ctx-19
+menu spanning more than one target SPECIES, which is the one case the mootness ruling excludes —
+makes this file say so rather than silently drifting.
+"""
+from __future__ import annotations
+
+import gzip
+import json
+from pathlib import Path
+
+import pytest
+
+from common.evolve_value import EvolveInputs, evolve_value
+from common.strategy.context import (_ACTIVE, _BENCH, _CARD, _DECK, _EVOLVE, _EVOLVES_FROM,
+                                     _EVOLVES_TO, _MAIN)
+from pilot_helpers import card_opt
+
+REPO = Path(__file__).resolve().parents[2]
+PARITY = REPO / "tests" / "fixtures" / "parity"
+
+SALVATORE = 1189       # Supporter — search the deck for an Ability-less evolution, put it on a body
+STARYU = 1030          # Basic, 70 HP, Water Gun {W} 20
+M_STARMIE = 1031       # Mega Starmie ex — Stage 1 from Staryu, 330 HP, Nebula Beam ●●● 210
+
+#: ``(trace, frame)`` of every ctx-18 step in the committed parity corpus. Three are width-1 (forced,
+#: no decision), three are width-2 and one — `ms_mirror_1001` f15 — is the only three-wide menu the
+#: corpus contains, so it is the discriminating board this term exists for.
+REAL_BOARDS = [("ms_mirror_1001", 15), ("ms_mirror_1001", 20), ("v2_ms_dx_5401", 42),
+               ("v2_ms_mirror_5000", 15), ("v2_ms_mirror_5000", 39), ("v2_ms_mirror_5000", 106),
+               ("v2_ms_ml_5301", 17)]
+WIDEST = ("ms_mirror_1001", 15)
+
+
+def _frame(trace: str, index: int) -> dict:
+    with gzip.open(PARITY / f"{trace}.trace.json.gz", "rt", encoding="utf-8") as fh:
+        return json.load(fh)["frames"][index]
+
+
+def _shipped_pilot():
+    """mega_starmie's REAL Pilot — every kill-switch at its shipped default, exactly as `main.py`
+    builds it. Every ctx-18 board in the corpus is a Mega Starmie game, so this is the agent that
+    actually faced them."""
+    import sys
+    sys.path.insert(0, str(REPO / "tools"))
+    from train.tune import _build_pilot
+    return _build_pilot("mega_starmie")[0]
+
+
+def _terms(pilot, frame: dict):
+    """``[term, …]`` per option of a ctx-18 frame, plus the Pilot's pick."""
+    obs = frame["obs"]
+    sel = obs["select"]
+    board = pilot._board(obs)
+    return ([pilot._evolve_target_tactical(obs, sel, board, o) for o in sel["option"]],
+            pilot.explain(obs).chosen)
+
+
+# ───────────────────────────────────────────────────────────────── the ground truth, re-measured
+def test_the_constants_land_where_the_engine_enum_says_they_should():
+    """`strategy/context.py` jumped straight from `_HEAL` (17) to `_ABILITY` (10)/`_ATTACH_FROM`
+    (21), so the next reader looking for 18 or 19 found nothing at all."""
+    from cg.api import SelectContext
+    assert _EVOLVES_FROM == int(SelectContext.EVOLVES_FROM) == 18
+    assert _EVOLVES_TO == int(SelectContext.EVOLVES_TO) == 19
+
+
+def test_corpus_ctx18_census_is_what_the_equation_was_built_on():
+    """The ground truth Issue #417 measured, re-measured here so a later capture cannot quietly
+    change it: 7 ctx-18 steps over the 377 committed traces, widths 1/2/3, every one a MANDATORY
+    single pick (`minCount`/`maxCount` 1/1), every option `OptionType.CARD` — **never** `_EVOLVE` —
+    over my ACTIVE and BENCH, and every ``contextCard`` the Mega Starmie ex being put down.
+
+    The option TYPE is the whole reason the select was unreachable: `_evolve_decision` and
+    `_prefer_soonest_arming_evolve` both gate on ``type == _EVOLVE``, so a menu of `_CARD` options
+    abstains through both of them no matter what the board says."""
+    steps, widths, ctx_cards, types, areas = 0, {}, set(), set(), set()
+    for path in sorted(PARITY.glob("*.trace.json.gz")):
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            frames = json.load(fh)["frames"]
+        for fr in frames:
+            sel = (fr.get("obs") or {}).get("select") or {}
+            if sel.get("context") != _EVOLVES_FROM:
+                continue
+            steps += 1
+            widths[len(sel["option"])] = widths.get(len(sel["option"]), 0) + 1
+            assert (sel.get("minCount"), sel.get("maxCount")) == (1, 1)
+            ctx_cards.add((sel.get("contextCard") or {}).get("id"))
+            types.update(o["type"] for o in sel["option"])
+            areas.update(o.get("area") for o in sel["option"])
+    assert steps == 7
+    assert widths == {1: 3, 2: 3, 3: 1}
+    assert ctx_cards == {M_STARMIE}
+    assert types == {_CARD} and _EVOLVE not in types
+    assert areas == {_ACTIVE, _BENCH}
+
+
+def test_corpus_ctx19_is_moot_because_every_menu_is_copies_of_one_species():
+    """The `_EVOLVES_TO` mootness ruling, MEASURED rather than assumed (Issue #417).
+
+    All 20 ctx-19 steps offer `area=DECK` options only, and on every multi-option menu the revealed
+    candidates are physically distinct copies of ONE species — picking among interchangeable copies
+    has no strategic content, so no term was built. This assertion is the tripwire: a future deck
+    running such a search over a line with more than one legal target species makes it fail, which
+    is the moment ctx 19 stops being moot."""
+    steps, multi_species = 0, []
+    for path in sorted(PARITY.glob("*.trace.json.gz")):
+        with gzip.open(path, "rt", encoding="utf-8") as fh:
+            frames = json.load(fh)["frames"]
+        for i, fr in enumerate(frames):
+            sel = (fr.get("obs") or {}).get("select") or {}
+            if sel.get("context") != _EVOLVES_TO:
+                continue
+            steps += 1
+            assert {o.get("area") for o in sel["option"]} == {_DECK}
+            deck = sel.get("deck") or []
+            ids = {(deck[o["index"]] or {}).get("id") for o in sel["option"]
+                   if 0 <= o["index"] < len(deck)}
+            if len(ids) > 1:
+                multi_species.append((path.name, i, sorted(ids)))
+    assert steps == 20
+    assert multi_species == []
+
+
+def test_no_ruled_frame_carries_ctx_18_or_19():
+    """Why validation here is by construction: the committed corpus rules **zero** ctx-18 and
+    ctx-19 frames, so there is no human ranking to hold this term against. Asserted rather than
+    stated so the first ruling that lands turns this file red and gets a real regression test."""
+    import sys
+    sys.path.insert(0, str(REPO / "tests"))
+    from corpus_helpers import corpus_index
+    ruled = {(c.decision or {}).get("select_context") for c in corpus_index().values()}
+    assert "EvolvesFrom" not in ruled and "EvolvesTo" not in ruled
+
+
+# ─────────────────────────────────────────────────────── the seven real boards, as fixtures
+@pytest.mark.parametrize("trace,index", REAL_BOARDS, ids=lambda v: str(v))
+def test_every_real_board_prices_every_option_through_the_equation(trace, index):
+    """On all seven the term IS `evolve_value`'s total for the body-substituted delta — recomputed
+    here from `_evolve_substitution`'s own two readings, so the test would catch the term reaching
+    for anything the equation does not sanction (a prize leg, an area bonus, a card-id special
+    case). The recorded ``choice`` is deliberately not asserted: those traces run a randomised
+    policy."""
+    pilot = _shipped_pilot()
+    frame = _frame(trace, index)
+    obs = frame["obs"]
+    sel = obs["select"]
+    board = pilot._board(obs)
+    target_cid = sel["contextCard"]["id"]
+    for option in sel["option"]:
+        raw = pilot._option_pokemon(obs, sel, option)
+        body, result, _ = pilot._evolve_substitution(obs, board, raw, target_cid,
+                                                     is_active=(option.get("area") == _ACTIVE))
+        expected = evolve_value(EvolveInputs(body=body, result=result)).total
+        assert pilot._evolve_target_tactical(obs, sel, board, option) == expected
+        # The income legs are structurally zero at this select (Salvatore's clause carries
+        # `no_ability: true`, and no body this deck offers has an Ability), so the whole term is the
+        # deploy delta — the claim the call site's comment makes, asserted rather than trusted.
+        assert expected == result.deploy() - body.deploy()
+
+
+def test_the_widest_real_board_separates_the_bodies_the_string_sort_could_not():
+    """`ms_mirror_1001` f15 — the corpus's only three-wide ctx-18 menu, and the frame this term
+    exists for: three Staryu (Active 70/70 unenergised, Bench 70/70 carrying one Energy, Bench
+    70/70 unenergised) and nothing to choose between them.
+
+    The Active wins, and it is the SURVIVAL leg that decides: its `turns_to_ko_me` is 1 (doomed
+    next swing) against the bench's 4, so evolving it into a 330-HP body is the only substitution
+    that moves `p_survive` at all — 0.125 to 0.250. Both benched Staryu read exactly 0.0, and that
+    tie is a real property of the equation rather than a failure to look: on the bench `p_survive`
+    is already 1.0 for the pre-evolution, and `turns_to_afford` is unchanged by the hop (Nebula
+    Beam's ●●● leaves 2 Energy owed either way), so `deploy(R) − deploy(B)` cancels to zero on
+    both. It is the DELTA that ranks, which is exactly right as an argmax: board value after
+    picking *i* is ``Σ_j deploy(B_j) + [deploy(R_i) − deploy(B_i)]``, and the sum is constant."""
+    pilot = _shipped_pilot()
+    terms, chosen = _terms(pilot, _frame(*WIDEST))
+    assert len(terms) == 3
+    active, bench_energised, bench_empty = terms
+    assert active > 0 and bench_energised == bench_empty == 0.0
+    assert chosen == [0]
+
+
+def test_the_pick_survives_reordering_so_it_is_the_term_and_not_the_fingerprint():
+    """The defect this term replaces was `_order_key` falling through to a lexicographic sort of a
+    serialized board fragment, which is a function of the option's AREA rather than of the board.
+    Reversing the menu on the widest real board must not move the winning BODY — under the old
+    behaviour the pick was the same array position regardless of what stood in it."""
+    pilot = _shipped_pilot()
+    frame = _frame(*WIDEST)
+    frame["obs"]["select"]["option"] = list(reversed(frame["obs"]["select"]["option"]))
+    terms, chosen = _terms(pilot, frame)
+    assert chosen == [2]                     # the Active, now last — the body moved, the pick with it
+    assert terms[2] > terms[0] == terms[1] == 0.0
+
+
+def test_a_forced_width_one_board_is_priced_but_cannot_move_anything():
+    """Three of the seven boards are width-1. The term still prices them — abstaining on width
+    would be a second, silent gate — but with one option there is nothing to rank, so this only
+    asserts the value is real and finite rather than the fail-closed floor."""
+    pilot = _shipped_pilot()
+    terms, chosen = _terms(pilot, _frame("v2_ms_ml_5301", 17))
+    assert len(terms) == 1 and terms[0] > 0.0
+    assert chosen == [0]
+
+
+# ─────────────────────────────────────────────────────────────────── the gate and the floor
+#
+# Every test below runs against a REAL corpus board with exactly ONE field changed, and each asserts
+# the unmodified board first. That positive control is the point: a 0.0 on a board that was never
+# going to score anyway proves nothing about the gate, and a purely synthetic fixture reads 0.0 for
+# a reason that has nothing to do with the branch under test — `turns_to_afford` returns None
+# without a real card table, `p_arrive` is then 0, and every leg collapses (CLAUDE.md: a negative
+# result needs a positive control).
+GATE_BOARD = ("v2_ms_mirror_5000", 15)      # width 2, one Active one Bench, BOTH options score
+
+
+def _gate_frame():
+    return _frame(*GATE_BOARD)
+
+
+def _term(pilot, frame, option, select=None):
+    obs = frame["obs"]
+    sel = select if select is not None else obs["select"]
+    return pilot._evolve_target_tactical(obs, sel, pilot._board(obs), option)
+
+
+def test_the_gate_board_scores_before_anything_is_changed():
+    """The positive control every test below leans on: on the untouched board both options price
+    non-zero, so a 0.0 in the tests that follow is the GATE talking and not the board."""
+    pilot = _shipped_pilot()
+    frame = _gate_frame()
+    assert all(_term(pilot, frame, o) != 0.0 for o in frame["obs"]["select"]["option"])
+
+
+def test_off_ctx_18_the_term_is_silent():
+    """Gated, like every sibling target term — so nothing outside this select can move."""
+    pilot = _shipped_pilot()
+    frame = _gate_frame()
+    frame["obs"]["select"]["context"] = _MAIN
+    assert all(_term(pilot, frame, o) == 0.0 for o in frame["obs"]["select"]["option"])
+
+
+def test_a_non_card_option_is_silent():
+    """The other half of the gate. Pricing an `_EVOLVE` (9) option here would double-count against
+    `_evolve_decision`, which owns that option type."""
+    pilot = _shipped_pilot()
+    frame = _gate_frame()
+    option = dict(frame["obs"]["select"]["option"][0], type=_EVOLVE)
+    assert _term(pilot, frame, option) == 0.0
+
+
+def test_an_opponent_owned_option_is_silent():
+    """The evolution only ever lands on MY own bodies — the same own-body guard
+    `_heal_target_tactical` carries, so a future card posing this select over both sides cannot have
+    the term rank an opponent's board for it."""
+    pilot = _shipped_pilot()
+    frame = _gate_frame()
+    yi = frame["obs"]["current"]["yourIndex"]
+    option = dict(frame["obs"]["select"]["option"][0], playerIndex=1 - yi)
+    assert _term(pilot, frame, option) == 0.0
+
+
+def test_no_context_card_fails_closed_rather_than_reading_the_option():
+    """A4. The target rides on the SELECT; the option's own (area, index) names the PRE-EVOLUTION.
+    With no ``contextCard`` there is no target to price, and the term returns 0.0 rather than
+    falling back to `_option_card_id` — which would silently compare each body against ITSELF and
+    rank every option at a flat zero delta while looking like it had priced them."""
+    pilot = _shipped_pilot()
+    frame = _gate_frame()
+    frame["obs"]["select"]["contextCard"] = None
+    assert all(_term(pilot, frame, o) == 0.0 for o in frame["obs"]["select"]["option"])
+
+
+def test_an_unresolvable_option_body_fails_closed():
+    """An option pointing at a bench slot that does not exist — 0.0, never a guess."""
+    pilot = _shipped_pilot()
+    assert _term(pilot, _gate_frame(), card_opt(_BENCH, 7)) == 0.0
+
+
+def test_the_target_is_read_off_the_select_and_not_off_the_option():
+    """The claim the whole term rests on, asserted directly: point ``contextCard`` at the
+    PRE-EVOLUTION and the substitution becomes body-for-itself, so every delta collapses to 0 — on
+    the very board that scores non-zero with the real target. If the term were reading the option's
+    own card (as `ctx.card_id` does at MAIN) this change could not move anything, because the
+    option's card already IS the pre-evolution."""
+    pilot = _shipped_pilot()
+    frame = _gate_frame()
+    real = [_term(pilot, frame, o) for o in frame["obs"]["select"]["option"]]
+    frame["obs"]["select"]["contextCard"] = dict(frame["obs"]["select"]["contextCard"], id=STARYU)
+    self_sub = [_term(pilot, frame, o) for o in frame["obs"]["select"]["option"]]
+    assert any(v != 0.0 for v in real)
+    assert self_sub == [0.0, 0.0]

@@ -55,6 +55,24 @@ _HEAL = 17        # pick WHICH of my Pokémon a heal card heals ("Heal all damag
                   # **and** BENCH; `minCount`/`maxCount` 1/1 on every corpus step. Distinct from
                   # `_REMOVE_DAMAGE_COUNTER` (16) above, which is a counter-MOVER's source — both
                   # take damage off my own bodies, and the two want OPPOSITE rules (Issue #409 R2).
+_EVOLVES_FROM = 18 # pick WHICH of my in-play Pokémon a searched-out evolution is put ONTO — the
+                   # target select of a deck-search evolve ("Search your deck for a card that has no
+                   # Abilities and evolves from 1 of your Pokémon, and put it onto that Pokémon to
+                   # evolve it" — Salvatore). Self-owned CARD options over my ACTIVE **and** BENCH;
+                   # `minCount`/`maxCount` 1/1 on every corpus step. NOT an `_EVOLVE` (9) option:
+                   # that is the MAIN-menu action type, and every option here carries `_CARD` (3),
+                   # which is why `_evolve_decision` and `_prefer_soonest_arming_evolve` both abstain
+                   # here unconditionally (Issue #417). `ctx.card_id` at this select names the
+                   # PRE-EVOLUTION (the option's own body), never the evolution — the card being put
+                   # down rides on `select["contextCard"]["id"]`, the same place `_attach_value`'s
+                   # `is_from` branch already reads its own context from.
+_EVOLVES_TO = 19  # ...and its sibling: pick WHICH physical deck copy of the evolution to search out.
+                  # Posed FIRST, before `_EVOLVES_FROM`. Nothing scores it: over the whole committed
+                  # parity corpus every option is `area=DECK` at a different `index`, i.e. physically
+                  # distinct copies of ONE species, and picking among interchangeable copies has no
+                  # strategic content. A deck running such a search over more than one legal target
+                  # SPECIES would need a real term here (Issue #417 flags this rather than declaring
+                  # the context closed).
 _ABILITY = 10     # OptionType.ABILITY — use an in-play Ability at the MAIN menu (Adrena-Brain)
 _NUMBER = 0       # OptionType.NUMBER — a numeric choice option ({number: N})
 _ATTACH_FROM = 21 # pick the Pokémon to attach Energy to
@@ -199,7 +217,7 @@ __all__ = [
     "_ENERGY", "_DISCARD_ENERGY",
     "_MAIN", "_SETUP_ACTIVE", "_SETUP_BENCH", "_SWITCH", "_TO_ACTIVE", "_TO_BENCH", "_TO_HAND",
     "_DISCARD", "_TO_DECK", "_DAMAGE", "_DAMAGE_COUNTER_ANY", "_DAMAGE_COUNTER", "_REMOVE_DAMAGE_COUNTER",
-    "_REMOVE_DAMAGE_COUNTER_COUNT", "_HEAL", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
+    "_REMOVE_DAMAGE_COUNTER_COUNT", "_HEAL", "_EVOLVES_FROM", "_EVOLVES_TO", "_ABILITY", "_NUMBER", "_ATTACH_FROM", "_ATTACH_TO", "_IS_FIRST", "_MULLIGAN", "_GRAB_CONTEXTS", "_BENCH_PLACEMENT_CONTEXTS",
     "_HAND", "_DECK", "_ACTIVE", "_BENCH", "_LOOKING", "_ZONE", "_SHUFFLE", "_DRAW", "_DRAW_REVERSE",
     "_MOVE_CARD", "_MOVE_CARD_REVERSE",
     "KO_SCORE", "ENERGY_RECOVER", "FOLLOWUP_W", "_METAL",

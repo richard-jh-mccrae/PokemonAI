@@ -136,18 +136,24 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
 
 def make_select(options, *, min_count: int = 1, max_count: int = 1,
                 context: int = 0, type: int = 0, current=None, deck=None,
-                remain_counters: int = 0, effect=None) -> dict:
+                remain_counters: int = 0, effect=None, context_card=None) -> dict:
     """An observation whose `select` offers `options` — i.e. a decision menu. `deck` supplies the
     revealed search candidates a DECK (area 1) option indexes into (a TO_HAND/search select).
     `remain_counters` sets `remainDamageCounter` (the budget at a DAMAGE_COUNTER_ANY spread-placement
-    select); `effect` sets the resolving-effect record (`{id: sourceCardId, …}`)."""
+    select); `effect` sets the resolving-effect record (`{id: sourceCardId, …}`).
+
+    `context_card` sets `select.contextCard` — the card the select is ABOUT, which is a different
+    fact from the option's own card and is the only place some selects carry theirs. At
+    `_EVOLVES_FROM` (ctx 18) the options name my in-play bodies and the evolution being put down
+    rides here (`{"id": …, "serial": …, "playerIndex": …}`); `_attach_value`'s `is_from` branch reads
+    the same field. Defaults to None, which is what every other select shape actually carries."""
     return {
         "select": {
             "type": type, "context": context,
             "minCount": min_count, "maxCount": max_count,
             "option": list(options),
             "remainDamageCounter": remain_counters, "remainEnergyCost": 0,
-            "deck": deck, "contextCard": None, "effect": effect,
+            "deck": deck, "contextCard": context_card, "effect": effect,
         },
         "logs": [],
         "current": current if current is not None else state(),
