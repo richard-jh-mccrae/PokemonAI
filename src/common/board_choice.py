@@ -493,6 +493,15 @@ def has_deferred_target(model, option: dict, *, seat_index: int) -> bool:
 # nobody registered), while a declared value with no predicate here is a scoped GAP with a name.
 
 
+def _stage(stat) -> str:
+    """``CardStat.stage`` normalised — ``"basic"`` / ``"stage1"`` / ``"stage2"``, or ``""``.
+
+    The `.lower()` is redundant against the real provider (`stage_from_card` already returns the
+    canonical string) and is kept for the reason `Pilot._retreat_free_granted` keeps its own: the
+    field crosses a provider boundary, and a cheap coercion beats a silent miss on an injected row."""
+    return (getattr(stat, "stage", None) or "").lower()
+
+
 class _BodyPlace(NamedTuple):
     """Where a candidate body sits — the facts a target class needs that its `CardStat` cannot say."""
     active: bool
@@ -504,22 +513,26 @@ class _BodyPlace(NamedTuple):
 #: and `tests/strategy/test_board_choice.py` asserts the containment with a vacuity guard — a
 #: predicate keyed by a value the compendium does not declare is dead code nothing else could catch.
 #:
-#: Read off `CardStat` as the engine actually populates it, verified rather than assumed: the shipped
-#: provider fills `evolvesFrom`, `stage2`, `ex`, `megaEx` and `tera`, and leaves `stage` **None**, so
-#: a predicate keyed on `stage` would silently match nothing. Basic is therefore *"a Pokemon that
-#: evolves from nothing"* and Stage 1 *"evolves from something and is not Stage 2"*.
+#: The stage legs read `CardStat.stage` — **the canonical field, not a second reading of it.**
+#: `provider.stage_from_card` is *"the ONE derivation (Issue #408)"* and folds the engine's own
+#: `CardData.basic` / `.stage1` / `.stage2` booleans into one string; its docstring rules out exactly
+#: what an earlier draft of this table did: *"Not derived from `evolvesFrom`: that is exact on today's
+#: pool but it is a second READING — inferring a printed stage from an evolution name — where the
+#: booleans are the engine's answer."* Measured before switching: the two agreed on **every** Pokémon
+#: in the pool, so this is a provenance fix rather than a behaviour change.
+#:
+#: FAIL-CLOSED on a missing `stage`: a body whose stage cannot be read matches no stage class, which
+#: narrows a target space rather than widening it. That direction matters — an unknown narrowing read
+#: as *no* narrowing is the one failure that silently hands a clause every body on the board.
 BODY_PREDICATES = {
     "any":             lambda stat, place: True,
     "pokemon":         lambda stat, place: bool(getattr(stat, "is_pokemon", False)),
     "any_pokemon":     lambda stat, place: bool(getattr(stat, "is_pokemon", False)),
-    "basic":           lambda stat, place: bool(getattr(stat, "is_pokemon", False))
-                                           and getattr(stat, "evolvesFrom", None) is None,
-    "basic_pokemon":   lambda stat, place: bool(getattr(stat, "is_pokemon", False))
-                                           and getattr(stat, "evolvesFrom", None) is None,
-    "evolution":       lambda stat, place: getattr(stat, "evolvesFrom", None) is not None,
-    "stage1":          lambda stat, place: getattr(stat, "evolvesFrom", None) is not None
-                                           and not getattr(stat, "stage2", False),
-    "stage2":          lambda stat, place: bool(getattr(stat, "stage2", False)),
+    "basic":           lambda stat, place: _stage(stat) == "basic",
+    "basic_pokemon":   lambda stat, place: _stage(stat) == "basic",
+    "evolution":       lambda stat, place: _stage(stat) in ("stage1", "stage2"),
+    "stage1":          lambda stat, place: _stage(stat) == "stage1",
+    "stage2":          lambda stat, place: _stage(stat) == "stage2",
     "mega":            lambda stat, place: bool(getattr(stat, "megaEx", False)),
     "pokemon_ex":      lambda stat, place: bool(getattr(stat, "is_ex_body", False)),
     "tera":            lambda stat, place: bool(getattr(stat, "tera", False)),

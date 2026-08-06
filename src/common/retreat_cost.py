@@ -93,7 +93,24 @@ def retreat_free_granted(active: dict | None, stat, *, my_bodies=(), stat_of, co
     fail-closed direction: we charge the printed cost.
 
     ``my_bodies`` is every in-play body on MY side (Active and Bench), because the granting body is
-    by construction not the one retreating."""
+    by construction not the one retreating.
+
+    ⚠️ **This could not fire at all until Issue #408**, and the note is carried here from
+    `Pilot._retreat_free_granted` — the method this module replaced — rather than lost with it.
+    `CardStat.stage` was declared and never written, so the ``"basic"`` predicate below compared
+    against `None` for every card in the pool. It was dead for TWO independent reasons: that, and the
+    fact that the only deck carrying the grantor (`slowking`, 2x Latias ex) has no `strategy.py` and
+    so is never built as a Pilot. Issue #408 removed the first; the second is Issue #149's to close,
+    and until it does this stays latent rather than live. Worth stating plainly because the grant was
+    modelled, covered by tests, and reachable by neither route — the tests declared `stage` themselves.
+
+    Verified through THIS module after the extraction and after Issue #408: a Basic at printed
+    Retreat Cost 2 reads **0** with Latias ex in play and **2** without, so the woken predicate
+    survives the move intact.
+
+    The ``.lower()`` is redundant against a real provider — `stage` is the canonical
+    ``"basic"``/``"stage1"``/``"stage2"`` from `provider.stage_from_card` — and is kept because the
+    field crosses a provider boundary and a cheap coercion beats a silent miss on an injected row."""
     if not active or stat is None or stat_of is None:
         return False
     for body in my_bodies or ():

@@ -68,10 +68,12 @@ E_F, E_P, E_D = 6, 5, 7                 # Basic {F} / {P} / {D} Energy
 _BASIC_ENERGY, _SUPPORTER = 5, 3
 
 _STATS = {
-    RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, retreatCost=2),
+    RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, retreatCost=2,
+                    stage="basic"),
     MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, ex=True,
-                       energyType=FIGHTING, evolvesFrom="Riolu", retreatCost=2),
-    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC, retreatCost=1),
+                       energyType=FIGHTING, evolvesFrom="Riolu", retreatCost=2, stage="stage1"),
+    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC, retreatCost=1,
+                        stage="basic"),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=_BASIC_ENERGY, energyType=FIGHTING),
     E_P: CardStat(E_P, name="Basic {P} Energy", cardType=_BASIC_ENERGY, energyType=PSYCHIC),
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=_BASIC_ENERGY, energyType=DARKNESS),
@@ -476,28 +478,39 @@ def test_the_resolver_fails_CLOSED_on_vocabulary_drift_in_BOTH_directions():
         bc.target_predicate({"kind": "gust", "target": "any", "unheard_of_key": 1})
 
 
-def test_the_predicates_read_CardStat_as_the_ENGINE_populates_it_not_as_the_CSV_prints_it():
-    """The trap this test exists for: the shipped provider leaves `CardStat.stage` **None** — verified
-    against the engine-backed provider, where Riolu, Mega Lucario ex and Munkidori all read
-    ``stage=None`` while `evolvesFrom` / `stage2` / `megaEx` are populated. A `basic` predicate keyed
-    on `stage == "Basic Pokémon"` would therefore match NOTHING and fail silently, in the widening
-    direction for a class the caller believed it had narrowed.
+def test_the_stage_predicates_read_the_CANONICAL_stage_field_not_a_second_reading():
+    """The stage legs read `CardStat.stage` — **the canonical field, and not a second reading of it.**
 
-    So Basic is *"a Pokémon that evolves from nothing"* and Stage 1 *"evolves from something and is
-    not Stage 2"*. Asserted against the fixture's own rows, whose facts
-    `tests/scouting/test_cardstat_fixture_facts.py` audits field-for-field against
-    `data/EN_Card_Data.csv`."""
+    An earlier draft of this table derived Basic from ``evolvesFrom is None`` and Stage 1 from
+    *"evolves from something and is not Stage 2"*, because the shipped provider left `stage` unwritten
+    and a `stage`-keyed predicate would have matched nothing. **Issue #408 landed while this was in
+    review and wrote the field**, and `provider.stage_from_card` rules the derivation out in terms
+    that name exactly what the draft did: *"Not derived from `evolvesFrom`: that is exact on today's
+    pool but it is a second READING — inferring a printed stage from an evolution name — where the
+    booleans are the engine's answer."*
+
+    Switched on a measurement rather than on the quote alone: the two readings agreed on **every**
+    Pokémon in the shipped pool, so this is a provenance fix and not a behaviour change. The place
+    legs are unaffected — `benched` is a fact about where a body sits, which no card field can say.
+
+    Stage values here are the CSV's: Riolu **Basic**, Mega Lucario ex **Stage 1** (`docs/rulebook.txt`
+    Appendix 1 — the single hop from Riolu, with no Stage 2 in this set's line), Munkidori **Basic**."""
     place = bc._BodyPlace(active=False, mine=True)
     riolu, mega = _STATS[RIOLU], _STATS[MEGA_LUC]
     assert bc.BODY_PREDICATES["basic"](riolu, place) is True
     assert bc.BODY_PREDICATES["basic"](mega, place) is False
     assert bc.BODY_PREDICATES["evolution"](mega, place) is True
-    assert bc.BODY_PREDICATES["mega"](mega, place) is True and \
-        bc.BODY_PREDICATES["mega"](riolu, place) is False
-    # Mega Lucario ex evolves from Riolu and is NOT a Stage 2 (`docs/rulebook.txt` Appendix 1 — the
-    # single-hop line), so it is the Stage 1 predicate's positive case.
     assert bc.BODY_PREDICATES["stage1"](mega, place) is True
     assert bc.BODY_PREDICATES["stage2"](mega, place) is False
+    assert bc.BODY_PREDICATES["mega"](mega, place) is True and \
+        bc.BODY_PREDICATES["mega"](riolu, place) is False
+    # FAIL-CLOSED on an unreadable stage: matches no stage class, which NARROWS a target space.
+    # A widening default is the one failure that hands a clause every body on the board.
+    # A row OUTSIDE the shipped pool, so it is not a source claim about any real card — the point is
+    # only that a `CardStat` reaching this table without a `stage` matches nothing.
+    stageless = CardStat(999_999, name="Unstaged Test Body", hp=80, energyType=FIGHTING)
+    assert bc.BODY_PREDICATES["basic"](stageless, place) is False
+    assert bc.BODY_PREDICATES["evolution"](stageless, place) is False
     # Place, not card: the same body is `benched` or not depending on where it sits.
     assert bc.BODY_PREDICATES["benched"](riolu, place) is True
     assert bc.BODY_PREDICATES["benched"](riolu, bc._BodyPlace(active=True, mine=True)) is False

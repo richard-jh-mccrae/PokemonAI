@@ -319,3 +319,30 @@ for the margin at a REAL beam, and it is not this issue's to build: no beam exis
 undefended `k`. On that instrument f35 discharges the criterion (margin to the 2nd candidate
 **0.001125 → 0.002985**, a 2.65x widening) and f32 cannot, because its menu scores a single candidate
 at any width. The two instruments answer different questions and neither substitutes for the other.
+
+### What Issue #394's merge changed about this ADR, recorded at the second rebase
+
+Issue #394's branch carried **Issue #408**, which wrote `CardStat.stage` — a field that had been
+declared and never populated. That falsified a claim this build had measured and written down:
+
+> *"the shipped provider fills `evolvesFrom`, `stage2`, `ex`, `megaEx` and `tera`, and leaves `stage`
+> **None**, so a predicate keyed on `stage` would silently match nothing."*
+
+True when written, false on the rebased base. Two consequences, both acted on rather than noted:
+
+1. **Decision 2's stage predicates now read the canonical field.** `provider.stage_from_card` is
+   *"the ONE derivation (Issue #408)"* and rules out precisely what this build had done: *"Not derived
+   from `evolvesFrom`: that is exact on today's pool but it is a second READING — inferring a printed
+   stage from an evolution name — where the booleans are the engine's answer."* Switched on a
+   measurement rather than on the quote: the two readings agreed on **every** Pokémon in the shipped
+   pool, so it is a provenance fix and not a behaviour change. The predicates fail CLOSED on a missing
+   `stage`, which narrows a target space rather than widening it.
+2. **The grant this issue extracted was woken by the same commit.** `common.retreat_cost`'s `"basic"`
+   predicate — moved out of `Pilot._retreat_free_granted` by this build — compared against `None` for
+   every card until Issue #408. Verified through the extracted module on the rebased base: a Basic at
+   printed Retreat Cost 2 reads **0** with Latias ex in play and **2** without, so the woken predicate
+   survives the move intact. That method's docstring note about the double-deadness travelled with the
+   code rather than being deleted alongside it.
+
+Neither changed the resolution-parity lane: **2254 steps, 2200 verified, 0 diverged, 0 unenumerated**,
+identical to the pre-rebase run.
