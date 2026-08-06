@@ -1994,6 +1994,50 @@ siblings at one ply, not orderings across depth), commutativity as a per-KIND fa
 answers by kind and licenses almost nothing; the per-OPTION footprint is what proves a block, since
 element-level granularity is what separates two writes to distinct instances)
 
+**Hand Ledger**:
+`state_value.hand` reads ONE `needs.Resolution` and prices both sides of it: what my hand and deck
+COVER (`assignment_coverage` + `re_access` + `hand_worth`) MINUS what the position DEMANDS
+(`slot_demand`), crossed once at `POC_WORTH_PRIZE_RATE`. Ruled by **ADR-0127** (Issue #400). Before
+the demand leg it priced supply alone, which under differencing inverts every card play — spending a
+card moved supply down and demand not at all, so the human-ruled Energy attach priced **negative on
+31 of 31** corpus frames. One Energy retires two `fund_attack` slots (16 Worth of demand) for 8 of
+supply. The total is SIGNED: a position whose needs outrun its hand scores below zero, and the old
+`max(0.0, ...)` floor is deleted because a cost clipped at zero makes the need free. Fuel slots
+(`supplied_by_pitch`) are excluded from demand because `needs._keep_slot_dp` excludes them from
+supply — one rule, both sides.
+_Avoid_: hand value (names the supply half only, which is the bug), hand size (`hand_size` is a
+`damage_facts` input and prices nothing), latent Worth (`hand_worth` is ONE of four legs, not the
+family)
+
+**Board-Bound Needs Supplier**:
+`MySide.needs` is supplied as `(obs, my_index) -> Resolution`, bound by `StateModel.build` to the
+observation it is building; `_origin` keeps the UNBOUND supplier so `rebuilt` re-binds against its
+own board. Ruled by **ADR-0127** alongside the ledger, and the two had to be found in that order. The
+prior spelling was a closure over the ROOT observation, and `rebuilt` forwards `_origin`'s kwargs
+verbatim — so every hypothetical board the composer synthesized read the ROOT board's Needs, and the
+whole `hand` family contributed *exactly* 0 to every 1-ply delta. A fetch, whose entire effect is on
+the hand, differenced to exactly 0.0. `rebuilt`'s promise that *"staleness is impossible by
+construction"* is true of the `state_value` MEMO and was false of this kwarg. A resolved `Resolution`
+passed directly is still taken verbatim and never called.
+_Avoid_: fresh model (the model WAS fresh — the kwarg it inherited was not), memo staleness (a
+different mechanism, and that one worked)
+
+**Continuation EV**:
+`composer.continuation_ev(model)` — the best terminal action still REACHABLE from a board, in prizes,
+for a line the composer **CUT** rather than one it finished. Ruled by **ADR-0129** (Issue #400). A
+reveal makes the engine re-present the menu, so the beam stops and replans; the attack allowance is
+untouched and the turn will still spend it, so the missing summand is that terminal action rather
+than zero. It composes the same `attack_ev_legs` / `attack_ev` pair `terminal_ev` composes, read at a
+SECOND seam — no new math and no constant. Two exclusions, both measured: `_stop_here` never gets it
+(the legs answer from the BOARD, not the menu, and the root stop-here has `first_index is None`, so
+crediting it let *"commit nothing"* win outright on 4 of 270 frames), and a REFUSAL never gets it
+(its board never moved — UNKNOWN, not "the turn continues"). Two call sites of `attack_ev`, ONE
+consumer: `_terminal_candidate` and `_gap_or_reveal_candidate` are different `_expand` branches, so
+no Candidate carries both.
+_Avoid_: terminal EV (`terminal_ev` is the sibling that prices a line that ENDED — naming the wrong
+one inverts the claim), rollout (nothing is simulated; the board is read once), lookahead (it is the
+CURRENT turn's remaining action, not a future turn)
+
 **Deferred-Target Expansion**:
 What the composer does with an option whose TARGET the engine defers to a follow-up select — a
 `_RETREAT` (whom do I promote?), a Boss's Orders (which of their bodies?), a Crispin (which Energy,
