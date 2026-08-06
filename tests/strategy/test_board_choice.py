@@ -822,3 +822,39 @@ def test_the_discard_rank_is_ORDERING_ONLY_and_never_a_magnitude():
     assert _delivered(exp) == sorted(tuple(sorted(k)) for _i, k in ranked)
     # ...and every class still carries the same uniform probability, i.e. the rank priced nothing.
     assert len({c.probability for c in exp.classes}) == 1
+
+
+def test_a_discard_fetch_carrying_an_UNHANDLED_key_fails_closed():
+    """The visible-zone half of the fail-closed rule, and it is deliberately NARROWER than the deck
+    half's. This node's applier writes a plain hand delivery, so a discard fetch that grew a `cost`,
+    a `dest` or a `trigger` would be applied as though it had none — silently, and in the widening
+    direction.
+
+    No shipped card carries one, which is exactly when the gate is cheap to add and impossible to
+    notice missing. Asserted on synthetics, since that is the only way to reach it, with the shipped
+    keys asserted clean as the positive control."""
+    from common.effects import CardEffects
+    for extra in ({"cost": "discard_2"}, {"dest": "bench"}, {"trigger": "on_bench_play"}):
+        clauses = {NIGHT_STRETCHER: [{"kind": "fetch", "target": "pokemon", "zone": "discard",
+                                      **extra}]}
+        obs = _obs(_player(active=_body(MEGA_LUC, serial=1), hand=(NIGHT_STRETCHER,),
+                           discard=(RIOLU,)))
+        model = StateModel.build(
+            obs, deck=[],
+            combat=CombatMath(DictCardStatProvider(_STATS), functions=CardFunctions({}),
+                              transients=None, effects=CardEffects(clauses)))
+        with pytest.raises(bd.Unmodellable, match="not in this node's handled set"):
+            bc.choice_key(model, {"type": _PLAY, "index": 0}, seat_index=0)
+
+    # The positive control: every SHIPPED discard fetch's keys are already inside the handled set,
+    # so the gate refuses drift rather than refusing the pool.
+    shipped = CardEffects.load()
+    seen = 0
+    for cid in (1097, 1109, 1110, 1118, 1184, 1238):
+        legs = [c for c in shipped.clauses(cid)
+                if c.get("kind") == "fetch" and c.get("zone") == "discard"]
+        assert legs, cid
+        for leg in legs:
+            assert set(leg) <= bc._HANDLED_DISCARD_KEYS, (cid, sorted(set(leg) - bc._HANDLED_DISCARD_KEYS))
+            seen += 1
+    assert seen >= 9, f"the walk reached only {seen} shipped discard legs"

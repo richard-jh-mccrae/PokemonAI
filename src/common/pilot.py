@@ -362,10 +362,14 @@ class ShedPlan(NamedTuple):
     """What a forced ``picks``-card discard would actually take, and what it costs — the return of
     :meth:`Pilot._cost_shed`.
 
-    ``hand_indices`` are option-menu coordinates (the ``i`` on each priced row) and are what a
-    caller outside the Pilot wants; ``row_indices`` and ``rows`` are the resolver's own coordinates,
-    kept so the fetch doctrine can read the per-card facts (``pitch``, ``dup_hand``, ``in_play``)
-    its three bands need without resolving the assignment a second time."""
+    ``hand_indices`` are positions in the REAL hand (each row's ``hand_i``) and are what a caller
+    outside the Pilot wants; ``row_indices`` and ``rows`` are the resolver's own coordinates, kept so
+    the fetch doctrine can read the per-card facts (``pitch``, ``dup_hand``, ``in_play``) its three
+    bands need without resolving the assignment a second time.
+
+    The two are NOT interchangeable and conflating them is a live defect, not a tidiness point:
+    `_needs_hand_rows` drops one copy of the played card before enumerating, so every row after it
+    has a row ordinal one short of its hand position."""
     hand_indices: tuple
     row_indices: tuple
     rows: list
@@ -4617,7 +4621,12 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         pick = needs.cheapest_removal(slots, elig, resupply, intrinsics, int(picks),
                                       **self._removal_ranking_legs(rows))
         cost = needs.removal_score(slots, elig, resupply, intrinsics, pick)
-        return ShedPlan(hand_indices=tuple(sorted(rows[k]["i"] for k in pick)),
+        # `hand_i`, NOT `i`. The rows are built with one copy of `exclude_cid` already dropped, so a
+        # row ordinal is short of the true hand position for every card sitting after the excluded
+        # one. Reading `i` here made the picks collide with the played card's own index, which
+        # `board_expectation._paid` then filtered out — turning a legal Ultra Ball into "not legal on
+        # this board" whenever it was not the last card in hand.
+        return ShedPlan(hand_indices=tuple(sorted(rows[k]["hand_i"] for k in pick)),
                         row_indices=tuple(pick), rows=rows, cost=float(cost))
 
     def cost_shed_indices(self, model, option: dict, picks: int) -> tuple:
@@ -5114,13 +5123,23 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             ids.remove(exclude_cid)
         counts = self._unseen_deck_counts(me, board)
         fuel_types = self._discard_fuel_types()
+        # ``i`` is the ROW ordinal — it indexes this list, which is the alignment `_resolve_needs`'
+        # eligibility and `needs.cheapest_removal`'s picks are in. ``hand_i`` is the card's position
+        # in the REAL hand, which is a different number the moment `exclude_cid` drops a card before
+        # it: with hand [X, Ball, Y] excluding Ball, Y is row 1 and hand index 2. Both are needed and
+        # neither can stand in for the other, so both are carried rather than one being re-derived —
+        # a caller re-spelling the filter would drift the day this one changes.
+        positions = [p for p, cid in enumerate(hand_ids)]
+        if exclude_cid in hand_ids:
+            positions.pop(hand_ids.index(exclude_cid))
         rows = []
         for k, cid in enumerate(ids):
             st = self.stats.get(cid) if self.stats else None
             fuel = bool(st is not None and getattr(st, "is_basic_energy", False)
                         and (None in fuel_types or getattr(st, "energyType", None) in fuel_types))
-            rows.append({"i": k, "cid": cid, "worth": round(self._role_value(cid), 1),
-                          "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
+            rows.append({"i": k, "hand_i": positions[k], "cid": cid,
+                         "worth": round(self._role_value(cid), 1),
+                         "deploy": self._deploy_odds(cid, board, counts), "fuel": fuel})
         return rows
 
     def _item_hold_price(self, obs: dict, board: Board, cid) -> float:

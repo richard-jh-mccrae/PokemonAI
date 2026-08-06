@@ -34,6 +34,7 @@ from common import board_expectation as be
 from common import deck_odds
 from common.cards import CardFunctions
 from common.effects import CardEffects
+from common.fetch_closure import multiset_classes
 from common.option_equivalence import AREA_DECK, AREA_HAND, option_fingerprint
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.state_model import StateModel
@@ -492,10 +493,10 @@ def test_a_multi_card_delivery_takes_SEVERAL_COPIES_of_one_card_when_the_pool_ho
     take a card more than once. A subset reading would offer only `(Riolu, Mega)` and would silently
     claim the deck cannot produce a third body it plainly can."""
     pool = {RIOLU: 3, MEGA_LUC: 1}
-    assert be.multiset_classes(pool, 3) == [(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)] or \
-        sorted(be.multiset_classes(pool, 3)) == sorted([(RIOLU, RIOLU, RIOLU),
+    assert multiset_classes(pool, 3) == [(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)] or \
+        sorted(multiset_classes(pool, 3)) == sorted([(RIOLU, RIOLU, RIOLU),
                                                         (RIOLU, RIOLU, MEGA_LUC)])
-    assert len(be.multiset_classes(pool, 3)) == 2
+    assert len(multiset_classes(pool, 3)) == 2
 
 
 def test_a_multi_card_class_weighs_each_card_at_the_multiplicity_it_needs():
@@ -524,13 +525,13 @@ def test_the_multiset_enumerator_degenerates_to_todays_classes_at_one_card():
     """The identity that stops the widening from regressing the single-card path: `multiset_classes`
     at m=1 is exactly one class per distinct pool card, which is what shipped before."""
     pool = {RIOLU: 3, MEGA_LUC: 1, E_F: 6}
-    assert be.multiset_classes(pool, 1) == [(E_F,), (RIOLU,), (MEGA_LUC,)][::1] or \
-        sorted(be.multiset_classes(pool, 1)) == sorted([(E_F,), (RIOLU,), (MEGA_LUC,)])
+    assert multiset_classes(pool, 1) == [(E_F,), (RIOLU,), (MEGA_LUC,)][::1] or \
+        sorted(multiset_classes(pool, 1)) == sorted([(E_F,), (RIOLU,), (MEGA_LUC,)])
     # A copy count BOUNDS the multiplicity — one Mega Lucario ex can never arrive twice.
-    assert all(k.count(MEGA_LUC) <= 1 for k in be.multiset_classes(pool, 3))
+    assert all(k.count(MEGA_LUC) <= 1 for k in multiset_classes(pool, 3))
     # …and the delivery is clamped by what the pool actually holds, never padded.
-    assert be.multiset_classes({MEGA_LUC: 1}, 3) == [(MEGA_LUC,)]
-    assert be.multiset_classes({}, 3) == []
+    assert multiset_classes({MEGA_LUC: 1}, 3) == [(MEGA_LUC,)]
+    assert multiset_classes({}, 3) == []
 
 
 def test_a_delivery_to_the_BENCH_still_refuses_and_now_says_so_for_the_right_reason():

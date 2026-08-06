@@ -628,10 +628,16 @@ COST_CARDS: dict[str, int | None] = {
     "bottom_2": None,
 }
 
-#: The `cost` values :data:`COST_CARDS` must cover — every `CLAUSE_WRITES` key that is a cost. Kept
-#: as an explicit tuple rather than inferred from a name prefix, so adding a cost called (say)
-#: ``"pitch_energy"`` cannot slip past the audit by failing to look like the others.
-COST_VALUES: tuple[str, ...] = ("discard_1", "discard_2", "discard_3", "discard_hand", "bottom_2")
+#: The `cost` values :data:`COST_CARDS` must cover — DERIVED from the compendium rather than listed.
+#:
+#: An earlier draft spelled these out, which made two of :func:`cost_card_problems`' legs grade a
+#: table against a hand-copy of its own keys — an audit that passes by agreeing with itself. Reading
+#: the shipped store instead means a sixth cost value shows up here the moment a card carries it,
+#: and `cost_card_problems` then demands a count for it.
+def cost_values(payload: Mapping) -> frozenset[str]:
+    """Every `cost` value the shipped compendium actually uses."""
+    return frozenset(c["cost"] for cs in clause_lists(payload).values() for c in cs
+                     if c.get("cost") is not None)
 
 #: Clauses that consult RNG. **Never eligible for the ENGINE-RESOLVED route** — the gate there is
 #: *provably deterministic*, and the engine has no deal-seed, so simulating one of these returns a
@@ -1225,25 +1231,23 @@ def covers_problems(payload: Mapping) -> list[str]:
     return problems
 
 
-def cost_card_problems() -> list[str]:
-    """Every way :data:`COST_CARDS` and :data:`CLAUSE_WRITES` disagree about the cost vocabulary.
-    Empty is the contract.
+def cost_card_problems(payload: Mapping) -> list[str]:
+    """Every way the shipped compendium, :data:`COST_CARDS` and :data:`CLAUSE_WRITES` disagree about
+    the cost vocabulary. Empty is the contract.
 
-    A biconditional, graded in BOTH directions, because either half failing is a live defect: a cost
-    with a write-set but no count is one the apply seam cannot charge, and a count for a value with
-    no write-set is a cost nobody declared the zones for."""
+    Graded against the STORE rather than against a second list of the same keys: a cost a card really
+    carries but that has no count is one the apply seam cannot charge, and one with no write-set
+    prices at exactly 0. A stale entry in `COST_CARDS` for a value no card carries is deliberately
+    NOT a problem — it is a declared refusal waiting for its carrier, which is how `bottom_2` and
+    `discard_hand` are meant to sit."""
     problems: list[str] = []
-    declared = set(COST_VALUES)
-    written = {v for v in CLAUSE_WRITES if v in declared}
-    for value in sorted(declared - set(COST_CARDS)):
-        problems.append(f"cost {value!r}: named in COST_VALUES but absent from COST_CARDS — the "
-                        f"apply seam has no count to charge for it")
-    for value in sorted(set(COST_CARDS) - declared):
-        problems.append(f"cost {value!r}: in COST_CARDS but not COST_VALUES — a count for a value "
-                        f"the vocabulary does not declare")
-    for value in sorted(declared - written):
-        problems.append(f"cost {value!r}: declared in COST_VALUES but has no CLAUSE_WRITES entry — "
-                        f"a cost whose ZONES are undeclared prices at exactly 0")
+    used = cost_values(payload)
+    for value in sorted(used - set(COST_CARDS)):
+        problems.append(f"cost {value!r}: carried by a shipped card but absent from COST_CARDS — "
+                        f"the apply seam has no count to charge for it")
+    for value in sorted(used - set(CLAUSE_WRITES)):
+        problems.append(f"cost {value!r}: carried by a shipped card but has no CLAUSE_WRITES entry "
+                        f"— a cost whose ZONES are undeclared prices at exactly 0")
     for value, count in sorted(COST_CARDS.items()):
         if count is not None and (not isinstance(count, int) or count < 1):
             problems.append(f"cost {value!r}: count {count!r} is neither None nor a positive int")
@@ -1362,7 +1366,7 @@ def clauses_writing_unhomed() -> dict:
 
 __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
-    "COST_CARDS", "COST_VALUES",
+    "COST_CARDS", "cost_values",
     "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS", "CLAUSE_PARAMETERS",
     "CLAUSE_SELECTORS", "UNCONSUMED_SELECTORS",
     "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",

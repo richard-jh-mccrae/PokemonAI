@@ -26,7 +26,7 @@ A reveal is resolved by whichever node owns the zone its search reads:
 
 `fetch` is deliberately NOT a `board_choice.CHOICE_CLAUSES` member: the clause KIND is the same on
 both sides and only the zone tells them apart. The two share one relation reader
-(`fetch_closure.reveal_legs`) and one multiset enumerator (:func:`multiset_classes`), so a card
+(`fetch_closure.reveal_legs`) and one multiset enumerator (`fetch_closure.multiset_classes`), so a card
 cannot be read one way here and another way there.
 
 ## Never a sampled engine shuffle
@@ -198,7 +198,7 @@ half-declared relation, the unhandled clause KEY, and the undeclared cost VALUE.
 counts is not absent from the code.
 
 The 85 RNG steps and the 180 non-reveals are refusals no widening can retire. The largest remaining
-scoped families are the 58 `dest` (Issue #410 owns the Bench half; this module's `multiset_classes`
+scoped families are the 58 `dest` (Issue #410 owns the Bench half; `fetch_closure.multiset_classes`
 is what unblocks it) and the 61 `dig`, which is a genuinely different probability model —
 *P(target in the top N)* rather than *P(target still in deck)* — and is filed rather than buried
 here. Pokégear 3.0 is live in a shipped deck, so that deferral is real work rather than a dead one.
@@ -234,7 +234,8 @@ from itertools import product
 
 from common import board_delta, deck_odds, snapshot_coverage
 from common.board_delta import Unmodellable
-from common.fetch_closure import fetch_is_unconditional, fetch_target_matches, reveal_legs
+from common.fetch_closure import (fetch_is_unconditional, fetch_target_matches,
+                                  multiset_classes, reveal_legs)
 from common.option_equivalence import AREA_HAND, option_fingerprint
 from common.strategy.context import _PLAY
 
@@ -405,7 +406,7 @@ def _class_weight(model, delivered: tuple) -> float:
     return weight
 
 
-def _paid(model, option, legs, *, seat_index, card_id, name, shed) -> tuple:
+def _cost_indices(model, option, legs, *, seat_index, card_id, name, shed) -> tuple:
     """The HAND INDICES this play's cost takes, ``()`` when it is free, or a refusal.
 
     **The seam, not a second formula.** WHICH cards a cost discards is a live decision the Pilot's
@@ -416,9 +417,14 @@ def _paid(model, option, legs, *, seat_index, card_id, name, shed) -> tuple:
 
     Indices are validated against the hand and de-duplicated, and the played card is excluded: the
     engine's own gate is `handOthers`, *"discard 2 OTHER cards"*."""
-    cost = next((leg.get("cost") for leg in legs.legs if leg.get("cost") is not None), None)
-    if cost is None:
+    costs = {leg.get("cost") for leg in legs.legs if leg.get("cost") is not None}
+    if not costs:
         return ()
+    if len(costs) > 1:
+        _no(card_id, name, f"its legs declare DIFFERENT costs {sorted(costs)} — a play has one "
+                           f"price, so this is either a compendium defect or a shape with no single "
+                           f"payment to charge; refusing rather than picking one")
+    cost = costs.pop()
     picks = snapshot_coverage.COST_CARDS[cost]          # `_check_clause` proved it is a real count
     if shed is None:
         _no(card_id, name, f"its cost {cost!r} takes {picks} card(s) from my hand and no `shed` "
@@ -504,45 +510,6 @@ def _fingerprint(obs, indices: tuple, seat_index) -> tuple:
     return tuple(option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": index,
                                      "playerIndex": seat_index}, obs)
                  for index in indices)
-
-
-def multiset_classes(pool: dict, m: int) -> list:
-    """The ``m``-card deliveries a ``{card id: copies}`` pool can produce, as sorted id tuples.
-
-    A **MULTISET** enumerator, not a subset one, and the difference is the whole point: a pool holds
-    *copies*, so taking two of the same card is a legal and distinct outcome. Measured on the corpus,
-    1205 Cyrano's pool is a single distinct card id on all four of its steps — where a subset
-    enumerator returns one class and is simply wrong about what a three-card search delivers.
-
-    Two clamps, both from the engine: a card can never arrive more times than the pool holds copies
-    of it, and the delivery is clamped to what the pool actually holds (`min(m, total)`) rather than
-    padded — the engine spells the same clamp as `min(max, matches)`.
-
-    **Deliveries of exactly `min(m, total)` cards, never fewer.** *"Up to 3"* also permits taking
-    two, but for a free search into HAND taking fewer is dominated: it costs nothing, forfeits a
-    card, and the composer takes the max over classes anyway. Enumerating the shorter deliveries
-    would multiply the class count for outcomes that can never win. (This does NOT hold for a Bench
-    delivery, where each arrival hands over Prize-Path exposure — which is one more reason that
-    destination is Issue #410's and refuses here.)"""
-    total = sum(pool.values())
-    take = min(int(m), total)
-    if take < 1 or not pool:
-        return []
-    ids = sorted(pool)
-    out: list = []
-
-    def walk(i: int, left: int, acc: tuple) -> None:
-        if left == 0:
-            out.append(acc)
-            return
-        if i >= len(ids):
-            return                                  # this branch cannot fill the delivery
-        cid = ids[i]
-        for count in range(min(int(pool[cid]), left), -1, -1):
-            walk(i + 1, left - count, acc + (cid,) * count)
-
-    walk(0, take, ())
-    return sorted(out)
 
 
 def _classes_for(legs, pools: tuple) -> list:
@@ -638,10 +605,12 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     if not (getattr(stat, "is_item", False) or getattr(stat, "is_supporter", False)):
         triggers = {leg.get("trigger") for leg in legs.legs}
         if triggers != {"on_bench_play"}:
-            _no(card_id, name, f"its revealing clause is an ABILITY, not this play — trigger(s) "
-                               f"{sorted(t for t in triggers if t)} do not fire because the body was "
-                               f"PLAYED (an Ability is a separate `_ABILITY` option), so deploying "
-                               f"it reveals nothing and modelling a reveal here would be WRONG "
+            named = sorted(t for t in triggers if t)
+            carried = f"trigger(s) {named}" if named else "no `trigger` at all"
+            _no(card_id, name, f"its revealing clause is an ABILITY, not this play — it carries "
+                               f"{carried}, and only `on_bench_play` fires because the body was "
+                               f"PLAYED (an Ability is a separate `_ABILITY` option). So deploying "
+                               f"it reveals nothing, and modelling a reveal here would be WRONG "
                                f"rather than under-scoped")
     for leg in legs.legs:
         _check_clause(leg, card_id, name)
@@ -649,7 +618,7 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
         _no(card_id, name, "only an Item or a Supporter resolves to my discard on a search; this "
                            "card's structural floor is a different one")
 
-    paid = _paid(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
+    paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
     pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
     candidates = _classes_for(legs, pools)
     if not candidates:
@@ -679,4 +648,4 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     return Expectation(classes=tuple(classes), truncated=len(dropped))
 
 
-__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "multiset_classes", "expectation")
+__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "expectation")

@@ -222,6 +222,29 @@ agreement forecast: of Issue #400's 76 seam refusals on human-ruled `_PLAY` fram
 **13** — Hilda 6, Night Stretcher 4, Ultra Ball 3. Poffin's 8 are the Bench half; 30 are RNG; 12 were
 gust/heal/accel; Salvatore's 5 are `dest: in_play`; Pokégear's 8 are the `dig` decline.
 
+### `composer_lab`, before and after — and agreement did NOT move
+
+`python tools/train/composer_lab.py`, this branch against `origin/main` @ `643c4155`:
+
+| | main | this | |
+|---|---:|---:|---|
+| frames with a coverage gap | 255 | **241** | −14 |
+| expectation nodes | 879 | **1322** | +443 |
+| composer == chosen | 50 | **53** | +3 |
+| **composer == ruled** | **82 / 270** | **82 / 270** | **0** |
+| truncated by the branch cap | 4 | 4 | 0 |
+
+The coverage claim is validated and the agreement number is **flat**, which is the expected result
+rather than a disappointing one — and recording it is the point. Issue #400 Phase 1 measures why: a
+reveal-terminated line scores `EV(terminal) = 0` against attack lines carrying a prize, so *"a
+reveal's leaf delta is exactly 0.0, and it can only ever TIE"*. Enumerating more reveals gives the
+composer boards to difference; it does not give a reveal line a terminal value to compete on. **That
+summand is Phase 1's, and it is still unbuilt.**
+
+So this issue delivers exactly what it claimed — supply — and nothing it did not. A reader looking
+for the agreement move should look at Issue #400 Phase 1, not here. Had the ADR reported only the
++443 and the −14, it would have implied a result this change cannot produce alone.
+
 **Evidence, and what could not be evidence.** Every module touched except one is dark, so
 `score_diff` and both ADR-0072 gates are NULL CONTROLS here and are reported as such rather than
 quietly satisfied (PR #411's lesson). What did bite: the apply-seam parity lane (1361 tests green),

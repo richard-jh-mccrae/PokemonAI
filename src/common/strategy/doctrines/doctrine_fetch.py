@@ -523,10 +523,17 @@ class FetchMixin:
         """How many cards this card's `cost` takes, off `snapshot_coverage.COST_CARDS`. ``None`` for
         a card with no cost, or one whose cost names no fixed count (`discard_hand`, `bottom_2`).
 
-        The count used to be the literal ``2`` here, which was right for Ultra Ball and silently
-        wrong for every other `cost_discard` carrier the deck could run — 1092 Secret Box discards
-        THREE and 1233 Canari ONE. Reading it off the declared table also means a sixth cost value
-        cannot be minted without `cost_card_problems()` demanding a count for it."""
+        The count used to be the literal ``2`` here. **That was not a live defect and must not be
+        described as one** — `_shed_signals` gates on the `cost_discard` FUNCTION TAG, and measured
+        over the shipped stores exactly ONE card carries it (1121 Ultra Ball, whose cost really is
+        `discard_2`). 1092 Secret Box (`discard_3`) and 1233 Canari (`discard_1`) carry a cost CLAUSE
+        and NOT the tag, so they never reach here; an earlier draft of this docstring claimed they
+        were being mispriced, and that claim was false.
+
+        What the lookup buys is that the two stores can no longer drift apart silently: the day the
+        tag is widened to a second carrier — or a sixth cost value is minted — this reads the real
+        count instead of Ultra Ball's, and `cost_card_problems()` demands a count for any value a
+        card actually carries."""
         from common import board_delta, snapshot_coverage as sc
         for clause in board_delta.card_clauses(self.combat, card_id):
             value = clause.get("cost")

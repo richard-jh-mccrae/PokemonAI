@@ -796,3 +796,44 @@ def test_the_dig_class_fetcher_never_claims_to_fill_a_need():
     obs = make_select([play_gear, opt(END)], current=cur)
     obs["own_prizes"] = {FILLER: 6}
     assert "fetch-when-it-fills-a-need" not in _fired(pilot.explain(obs).options[0])
+
+
+# ── the cost oracle's coordinates ─────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.req("REQ-GEN-0065")
+def test_cost_shed_indices_are_HAND_positions_not_row_ordinals():
+    """**The two coordinate systems are not interchangeable, and conflating them is a live defect.**
+
+    `_needs_hand_rows` drops one copy of the played card BEFORE it enumerates, so each row's ``i`` —
+    the ordinal `_resolve_needs` eligibility and `needs.cheapest_removal`'s picks are aligned to — is
+    one short of that card's real hand position for every card sitting AFTER the excluded one.
+
+    `Pilot.cost_shed_indices` is consumed by `board_expectation._paid`, which pops the indices it
+    returns out of the REAL hand. Reading ``i`` there made the picks collide with the played card's
+    own index, and `_paid` — which drops the played index by design (the engine's `handOthers` gate)
+    — then reported the payment short and refused a legal Ultra Ball as *"not legal on this board"*.
+
+    The board here puts the played card in the MIDDLE of the hand, which is the only arrangement
+    that separates the two numbers: with it last, every row ordinal happens to equal its hand
+    position and the bug is invisible. That is why nothing caught this."""
+    pilot = _netting_pilot(deck=[WINC, JUNKMON])
+    obs = make_select([opt(PLAY, index=1), opt(14)], context=MAIN,
+                      current=state(active=poke(900, energy=1),
+                                    bench=[poke(JUNKMON), poke(702)],
+                                    hand=[JUNKMON, ULTRA, JUNKMON, JUNKMON]))
+    model = pilot._leaf_state_model(obs, 0)
+    taken = pilot.cost_shed_indices(model, {"type": PLAY, "index": 1}, 2)
+
+    hand = obs["current"]["players"][0]["hand"]
+    assert len(taken) == 2, taken
+    assert 1 not in taken, "the played card is never its own payment (the engine's `handOthers`)"
+    assert all(0 <= i < len(hand) for i in taken), (taken, len(hand))
+    # Every index names a card that is really there, and never the Ultra Ball itself.
+    assert [hand[i]["id"] for i in taken] == [JUNKMON, JUNKMON]
+    # The row ordinals it came from are DIFFERENT numbers — the assertion that makes this a
+    # measurement rather than a coincidence of this particular hand.
+    plan = pilot._cost_shed(obs, exclude_cid=ULTRA, picks=2)
+    assert plan.row_indices != plan.hand_indices or 1 in plan.row_indices, (
+        "fixture is vacuous unless the two coordinate systems actually diverge here")
+    assert plan.hand_indices == taken

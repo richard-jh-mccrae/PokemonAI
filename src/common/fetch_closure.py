@@ -310,6 +310,45 @@ def reveal_legs(clauses) -> RevealLegs:
     return RevealLegs("union", legs, caps.pop())
 
 
+def multiset_classes(pool: dict, m: int) -> list:
+    """The ``m``-card deliveries a ``{card id: copies}`` pool can produce, as sorted id tuples.
+
+    A **MULTISET** enumerator, not a subset one, and the difference is the whole point: a pool holds
+    *copies*, so taking two of the same card is a legal and distinct outcome. Measured on the corpus,
+    1205 Cyrano's pool is a single distinct card id on all four of its steps — where a subset
+    enumerator returns one class and is simply wrong about what a three-card search delivers.
+
+    Two clamps, both from the engine: a card can never arrive more times than the pool holds copies
+    of it, and the delivery is clamped to what the pool actually holds (`min(m, total)`) rather than
+    padded — the engine spells the same clamp as `min(max, matches)`.
+
+    **Deliveries of exactly `min(m, total)` cards, never fewer.** *"Up to 3"* also permits taking
+    two, but for a free search into HAND taking fewer is dominated: it costs nothing, forfeits a
+    card, and the composer takes the max over classes anyway. Enumerating the shorter deliveries
+    would multiply the class count for outcomes that can never win. (This does NOT hold for a Bench
+    delivery, where each arrival hands over Prize-Path exposure — which is one more reason that
+    destination is Issue #410's and refuses here.)"""
+    total = sum(pool.values())
+    take = min(int(m), total)
+    if take < 1 or not pool:
+        return []
+    ids = sorted(pool)
+    out: list = []
+
+    def walk(i: int, left: int, acc: tuple) -> None:
+        if left == 0:
+            out.append(acc)
+            return
+        if i >= len(ids):
+            return                                  # this branch cannot fill the delivery
+        cid = ids[i]
+        for count in range(min(int(pool[cid]), left), -1, -1):
+            walk(i + 1, left - count, acc + (cid,) * count)
+
+    walk(0, take, ())
+    return sorted(out)
+
+
 def _leg_cap(clause: dict) -> int:
     """How many cards ONE leg delivers. Absent ``amount`` is 1 — the shape 1097/1142 print (*"a
     Pokémon or a Basic Energy card"*). ``"all"`` is not a number here and is left to the caller to

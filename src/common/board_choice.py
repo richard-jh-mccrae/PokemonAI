@@ -214,7 +214,7 @@ from typing import NamedTuple, NoReturn
 from common import (board_delta, board_expectation, currency, needs, retreat_cost,
                     snapshot_coverage)
 from common.board_delta import Unmodellable
-from common.fetch_closure import fetch_target_matches, reveal_legs
+from common.fetch_closure import fetch_target_matches, multiset_classes, reveal_legs
 from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND, option_fingerprint
 from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
 from common.scouting.matchup_plan import ROLE_REGISTRY
@@ -240,6 +240,18 @@ CHOICE_CLAUSES: frozenset[str] = frozenset({"gust", "heal", "accel"})
 #: *"that zone is visible — so it is a pure CHOICE node, not an expectation"* — and until Issue #394
 #: the sentence pointed at a registry entry nobody had built.
 FETCH_DISCARD: str = "fetch_discard"
+
+#: The clause keys a `FETCH_DISCARD` leg may carry — the visible-zone twin of
+#: `board_expectation._HANDLED_FETCH_KEYS`, and deliberately NARROWER than it.
+#:
+#: Absent on purpose, each because this node's applier would silently ignore it: `cost` (it charges
+#: nothing), `dest` (it always delivers to hand), and the reach fields `trigger` / `dig` / `condition`
+#: / `name_family` (it asks no reach question). `zone` is admitted because the routing already read
+#: it. Every shipped discard fetch's keys are a subset of this set, which is precisely when a
+#: fail-closed gate is cheap to add and impossible to notice missing.
+_HANDLED_DISCARD_KEYS: frozenset[str] = frozenset({
+    "kind", "target", "zone", "amount", "choice", "energy_type", "no_rule_box", "no_ability",
+})
 
 #: **Every key :data:`CHOICE_REGISTRY` is allowed to carry** — the closure, in ONE store rather than
 #: recomputed by each reader. Three families, and they are keyed differently because they ARE
@@ -462,15 +474,31 @@ def choice_key(model, option: dict, *, seat_index: int):
     # entry which did not. Asked BEFORE the `CHOICE_CLAUSES` membership test because `fetch` is
     # deliberately not a member: a DECK fetch is the chance node's, and only the zone tells them
     # apart.
+    # The card must be a discard search AND NOTHING ELSE to route here. Claiming one that also
+    # carries, say, a `gust` would take an option the deferred-target family already owns and refuse
+    # it — a behaviour change for an EXISTING registry key, which this addition must not cause. No
+    # card mixes the two today; falling through rather than refusing is what keeps that true if one
+    # ever does.
     fetches = tuple(c for c in every if c.get("kind") == "fetch")
-    if fetches and all(c.get("zone") == "discard" for c in fetches):
-        if len(every) > len(fetches):
-            _no(f"{card_id} {name}",
-                "it carries a non-fetch clause as well, whose writes this node does not place")
+    if fetches and len(fetches) == len(every) and all(c.get("zone") == "discard" for c in fetches):
         try:
             reveal_legs(every)              # the ONE relation reader, shared with the chance node
         except ValueError as gap:
             _no(f"{card_id} {name}", str(gap))
+        # The SAME fail-closed rule the chance node keeps for its own clauses, and it has to be here
+        # rather than assumed: this applier writes a plain hand delivery, so a discard fetch that
+        # grew a `cost`, a `dest` or a `trigger` would be applied as though it had none. No shipped
+        # card carries one today — every discard fetch's keys are a subset of `_HANDLED_DISCARD_KEYS`
+        # — which is exactly when a gate is cheap to add and impossible to notice missing. Without
+        # it this module's own header claim, *"a card cannot be read one way here and another way
+        # there"*, would be false in the widening direction.
+        for leg in reveal_legs(every).legs:
+            unknown = sorted(set(leg) - _HANDLED_DISCARD_KEYS)
+            if unknown:
+                _no(f"{card_id} {name}",
+                    f"clause key(s) {unknown} are not in this node's handled set — fail closed "
+                    f"against vocabulary drift, exactly as `board_expectation._check_clause` does "
+                    f"for the deck half")
         return FETCH_DISCARD
     deferred = tuple(c for c in every if c.get("kind") in CHOICE_CLAUSES)
     if not deferred:
@@ -746,7 +774,7 @@ def _discard_matches(model, option: dict, *, seat_index: int) -> tuple:
     every copy counted is a copy I can take. So no `deck_odds` call is made or wanted here.
 
     A union's legs pool together, the same walk the chance node performs for its own union."""
-    legs = reveal_legs(board_delta.card_clauses(model.combat, _played_id(model, option, seat_index)))
+    legs = reveal_legs(board_delta.card_clauses(model.combat, _played_id(model, option, seat_index=seat_index)))
     discard = _my_side(model.source_obs, seat_index).get("discard") or ()
     pool: dict = {}
     for card in discard:
@@ -772,7 +800,7 @@ def _discard_space(model, option: dict, *, seat_index: int) -> tuple:
     signature for one member would push that member's shape onto every other."""
     legs, pool = _discard_matches(model, option, seat_index=seat_index)
     index = int(option.get("index"))
-    return tuple((index, klass) for klass in board_expectation.multiset_classes(pool, legs.cap))
+    return tuple((index, klass) for klass in multiset_classes(pool, legs.cap))
 
 
 def _apply_discard_fetch(model, candidate, *, seat_index: int) -> tuple:
@@ -827,7 +855,7 @@ def _rank_discard(model, candidate) -> float:
     return float(sum(model.mine.role_worth(cid) for cid in delivered))
 
 
-def _played_id(model, option: dict, seat_index: int):
+def _played_id(model, option: dict, *, seat_index: int):
     """The card id of the `_PLAY` option's hand card. Resolved rather than threaded, exactly as
     :func:`_clause_of` is and for the same reason."""
     hand = _my_side(model.source_obs, seat_index).get("hand") or ()
@@ -1053,6 +1081,8 @@ CHOICE_REGISTRY: dict = {
         space=_discard_space, canonical=_canonical_identity, rank=_rank_discard,
         apply=_apply_discard_fetch, fingerprint=_fingerprint_discard),
 }
+
+assert set(CHOICE_REGISTRY) <= CHOICE_KEYS, sorted(set(CHOICE_REGISTRY) - CHOICE_KEYS)
 
 TARGET_RANKERS.update({key: k.rank for key, k in CHOICE_REGISTRY.items() if k.rank is not None})
 

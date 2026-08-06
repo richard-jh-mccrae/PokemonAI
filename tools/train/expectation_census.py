@@ -100,7 +100,14 @@ def _census_shed(model, option, picks):
     enumerate this step at all?"*, and the pool a search ranges over does not depend on WHICH hand
     cards paid for it — `MySide.visible_counts` counts hand and discard alike, so a hand->discard
     move leaves `unseen_counts` untouched. It would NOT be sound for anything that reads the
-    resulting board's hand."""
+    resulting board's hand.
+
+    ⚠️ **It also makes the enumerated figure an UPPER BOUND relative to production**, and the reason
+    is a real difference rather than a rounding one: this pays whenever the hand holds enough cards,
+    while `Pilot._cost_shed` returns `None` — and `cost_shed_indices` then `()`, which the seam
+    refuses — when the priced ROWS come up short. Rows can be fewer than cards. So a board where the
+    cost is nominally payable but the resolver declines counts as enumerable here and would refuse
+    live. Reported as a bound, never as the live number."""
     hand = ((model.source_obs.get("current") or {}).get("players") or [{}])[
         int(getattr(model, "my_index", 0))].get("hand") or ()
     return [i for i in range(len(hand)) if i != option.get("index")][:picks]
@@ -118,6 +125,10 @@ def walk(paths, *, combat):
     refusal sentence names the other module."""
     effects = combat.effects
     rows, enumerated, choices, refused = [], Counter(), Counter(), 0
+    #: Per-step sizing for the VISIBLE-zone half, keyed by card. `--sizes` cannot show it: that
+    #: report builds rows for REFUSED steps only, so a discard search vanishes from it the moment it
+    #: starts enumerating. Collected here so the choice node's pool is reportable at all.
+    discard_sizes: dict = defaultdict(list)
     for path in paths:
         body = load(path)
         frames = body.get("frames") or []
@@ -147,12 +158,15 @@ def walk(paths, *, combat):
             except Exception as exc:
                 message = str(exc)
             try:                                  # the sibling node: a visible zone is a CHOICE
-                choices[len(bc.deferred_target(pre, option, seat_index=seat).classes)] += 1
+                n = len(bc.deferred_target(pre, option, seat_index=seat).classes)
+                choices[n] += 1
+                me = ((obs.get("current") or {}).get("players") or [{}])[seat] or {}
+                discard_sizes[card_id].append((len(me.get("discard") or ()), n))
                 continue
             except Exception:
                 pass                              # neither node reaches it — it is a real refusal
             rows.append((card_id, bucket_of(message), _facts(pre, combat, card_id, obs, seat)))
-    return rows, enumerated, choices, refused
+    return rows, enumerated, choices, discard_sizes, refused
 
 
 def _facts(model, combat, card_id, obs, seat) -> dict:
@@ -225,6 +239,27 @@ def report_sizes(rows, cards, out=print) -> None:
         "never branches wider than its own pool.")
 
 
+def report_discard_sizes(discard_sizes, cards, out=print) -> None:
+    """The VISIBLE-zone pool, per step — the half `--sizes` structurally cannot report.
+
+    `--sizes` builds its rows from REFUSED steps, so a discard search disappears from it the moment
+    it starts enumerating; without this the choice node's branching would be unmeasurable exactly
+    because it works. Reports the discard's SIZE (what the search looks at) beside the CLASS count
+    (what it resolved to), and the gap between them is the duplicate-collapse doing its job."""
+    if not discard_sizes:
+        return
+    out("")
+    out(f"{'card':>5} {'name':22} {'n':>4} {'discard size':>16} {'classes':>16}")
+    out("-" * 68)
+    for card_id, pairs in sorted(discard_sizes.items(), key=lambda kv: -len(kv[1])):
+        name = ((cards.get(str(card_id)) or {}).get("name") or "?")[:22]
+        out(f"{card_id:>5} {name:22} {len(pairs):>4} "
+            f"{_span(p for p, _c in pairs):>16} {_span(c for _p, c in pairs):>16}")
+    out("")
+    out("A class count BELOW the discard size is the duplicate collapse: copies of one card in the")
+    out("pile are ONE decision, because `option_fingerprint` strips `serial`.")
+
+
 def _span(values) -> str:
     vs = sorted(values)
     return f"{vs[0]}-{vs[-1]} ({vs[len(vs) // 2]})" if vs else "-"
@@ -241,12 +276,13 @@ def main(argv=None) -> int:
     paths = sorted(TRACES.glob("*.trace.json.gz"))[:args.limit or None]
     print(f"traces: {len(paths)}")
     combat = offline_combat()
-    rows, enumerated, choices, refused = walk(paths, combat=combat)
+    rows, enumerated, choices, discard_sizes, refused = walk(paths, combat=combat)
     cards = json.loads((Path(__file__).resolve().parents[2] / "tools" / "meta_tracker"
                         / "cards.json").read_text(encoding="utf-8"))
 
     if args.families or not args.sizes:
         report_families(rows, enumerated, choices, refused, cards)
+        report_discard_sizes(discard_sizes, cards)
     if args.sizes:
         report_sizes(rows, cards)
     if args.json:

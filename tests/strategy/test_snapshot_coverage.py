@@ -400,7 +400,7 @@ def test_the_cost_vocabulary_declares_both_its_zones_and_its_count():
     fine while nothing applied a cost. `COST_CARDS` makes the count data, and this grades the
     biconditional in BOTH directions: a cost with zones but no count cannot be charged, and a count
     for a value with no zones is a cost nobody declared."""
-    assert sc.cost_card_problems() == [], sc.cost_card_problems()
+    assert sc.cost_card_problems(_compendium()) == [], sc.cost_card_problems(_compendium())
     # The counts themselves, read off the printed text quoted in `CLAUSE_WRITES`' own comment block.
     assert sc.COST_CARDS["discard_1"] == 1        # 1233 Canari, "discard another card"
     assert sc.COST_CARDS["discard_2"] == 2        # 1121 Ultra Ball, "discard 2 other cards"
@@ -410,30 +410,35 @@ def test_the_cost_vocabulary_declares_both_its_zones_and_its_count():
     assert sc.COST_CARDS["bottom_2"] is None      # returns cards to the DECK, so the pool moves
     # Every cost value the compendium actually uses is one this table covers. Read off the shipped
     # store rather than restated, so a sixth value cannot be minted without landing here.
-    used = {c.get("cost") for cs in sc.clause_lists(_compendium()).values() for c in cs
-            if c.get("cost") is not None}
+    used = sc.cost_values(_compendium())
     assert used, "vacuity guard: no card carries a cost, so the assertion below compares nothing"
     assert used <= set(sc.COST_CARDS), sorted(used - set(sc.COST_CARDS))
+    assert used <= set(sc.CLAUSE_WRITES), sorted(used - set(sc.CLAUSE_WRITES))
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_the_cost_vocabulary_audit_actually_bites():
-    """The positive control. A green biconditional means nothing unless it can go red, and it must
-    go red from EITHER side."""
+    """The positive control. A green audit means nothing unless it can go red, and this one is graded
+    against the SHIPPED STORE rather than against a second list of the same keys — an audit that
+    compares a table with a hand-copy of its own keys passes by agreeing with itself."""
     real = dict(sc.COST_CARDS)
+    payload = _compendium()
     try:
-        sc.COST_CARDS.pop("discard_2")
-        assert any("discard_2" in p and "COST_VALUES" in p for p in sc.cost_card_problems())
-        sc.COST_CARDS.update(real)
-        sc.COST_CARDS["discard_99"] = 99
-        assert any("discard_99" in p for p in sc.cost_card_problems())
+        sc.COST_CARDS.pop("discard_2")                  # Ultra Ball really carries it
+        assert any("discard_2" in p and "no count" in p for p in sc.cost_card_problems(payload))
         sc.COST_CARDS.update(real)
         sc.COST_CARDS["discard_2"] = 0
-        assert any("discard_2" in p and "positive int" in p for p in sc.cost_card_problems())
+        assert any("discard_2" in p and "positive int" in p
+                   for p in sc.cost_card_problems(payload))
     finally:
         sc.COST_CARDS.clear()
         sc.COST_CARDS.update(real)
-    assert sc.cost_card_problems() == []
+    assert sc.cost_card_problems(payload) == []
+    # A cost value a card carries but `CLAUSE_WRITES` never declared is the OTHER direction, and it
+    # is reachable only on a synthetic — no shipped card has one, which is the point of the check.
+    fabricated = {"901": [{"kind": "fetch", "target": "pokemon", "zone": "deck",
+                           "cost": "pitch_energy"}]}
+    assert [p for p in sc.cost_card_problems(fabricated) if "pitch_energy" in p]
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
