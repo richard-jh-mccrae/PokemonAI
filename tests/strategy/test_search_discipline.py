@@ -9,6 +9,7 @@ See docs/tuning/methodology.md, ADR-0008.
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
@@ -105,7 +106,7 @@ def test_fetch_energy_when_starved_takes_a_reusable_basic():
 def test_fetch_energy_when_starved_skips_a_discard_energy_for_a_reusable_one():
     stats = DictCardStatProvider({IGNITION: CardStat(IGNITION, energyType=0),       # colourless special
                                   BASIC_W: CardStat(BASIC_W, energyType=WATER)})     # reusable Basic
-    funcs = CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]})
+    funcs = CardFunctions({IGNITION: ignition_tags()})
     pilot = Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=funcs)
     obs = make_select([card_opt(DECK, 0), card_opt(DECK, 1)], context=TO_HAND,
                       deck=[{"id": IGNITION}, {"id": BASIC_W}],

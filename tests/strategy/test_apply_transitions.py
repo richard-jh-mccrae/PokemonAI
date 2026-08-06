@@ -36,6 +36,7 @@ from dataclasses import dataclass
 
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common import apply_option as ao
 from common import board_delta as bd
 from common import state_value as sv
@@ -110,7 +111,7 @@ _ATTACKS = {AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGH
             MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2,
                                    energyTypes=(FIGHTING, FIGHTING))}
 #: Ignition's two provisions, the pair `CardFunctions.energy_provision` reads (Issue #142).
-_TAGS = {IGNITION: ["provides:1", "provides_evo:3"]}
+_TAGS = {IGNITION: ignition_tags()}
 #: Boss's Orders' `gust` clause — the reason a Supporter's `_PLAY` refuses rather than pricing its
 #: structural floor as the whole play. The two Stadium clauses are `card_effects.json`'s own entries
 #: for 1252 and 1260, key for key: `applies_to` is part of each and dropping it here would make the

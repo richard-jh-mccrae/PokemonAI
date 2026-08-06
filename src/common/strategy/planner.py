@@ -724,7 +724,7 @@ class PlannerMixin:
                 if t == _ATTACH and o.get("inPlayArea") == _ACTIVE and tier_extra == 0:
                     # Count AND colour off the ONE provision read (Issue #418) — a second lookup for
                     # the type is a second chance to disagree with the first about the same card.
-                    codes = self._attach_provided(obs, select, board, o)
+                    codes = self._attach_provision_codes(obs, select, board, o)
                     win = self._develop_wins(obs, board, opp, board.my_active_id,
                                              board.my_active_energy + len(codes), body=ma,
                                              extra_type=codes[0] if codes else None,
@@ -899,7 +899,7 @@ class PlannerMixin:
                                               boost_type=boost_type,
                                               promote_bench_names=promote_bench_names) > 0
 
-    def _attach_provided(self, obs, select, board, option) -> tuple:
+    def _attach_provision_codes(self, obs, select, board, option) -> tuple:
         """The ``EnergyType`` UNIT codes this ATTACH provides the Active — one of its own colour for
         a Basic Energy, CCC for a discard-burst (`discard_eot`, Ignition) onto an Evolution.
         ``()`` when the card can't be resolved or provides no Energy.
@@ -1576,10 +1576,10 @@ class PlannerMixin:
     def _best_hand_attach_units(self, hand_ids, active_stat) -> int:
         """Energy units the best single attach from MY hand (``hand_ids``) provides my Active — 3
         for a discard-burst special (`discard_eot`, Ignition: CCC) onto an Evolution, 1 for any
-        other Energy card, 0 when the hand holds none (`_attach_provided`'s model, hand-scanned:
-        the 6858 heal-then-attach line re-powers Nebula Beam with the bounced-around Ignition, and
-        a heal whose re-attach doesn't exist can no longer fake a preserved KO). Also the
-        gust-affordability read (`_board`'s ``payable`` — the f31 no-energy gust gate).
+        other Energy card, 0 when the hand holds none. `_attach_provision_codes`'s model,
+        hand-scanned: the 6858 heal-then-attach line re-powers Nebula Beam with the bounced-around
+        Ignition, and a heal whose re-attach doesn't exist can no longer fake a preserved KO. Also
+        the gust-affordability read (`_board`'s ``payable`` — the f31 no-energy gust gate).
 
         The per-card provision is `CombatMath.provision_codes` since Issue #418, so the hand leg and
         the board leg cannot disagree about what one Ignition is worth on one holder."""

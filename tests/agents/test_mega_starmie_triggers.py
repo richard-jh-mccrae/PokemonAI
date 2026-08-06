@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import Pilot
@@ -110,7 +111,7 @@ _IGN_STATS = DictCardStatProvider({
 # {C}{C}{C} on an Evolution is read off `provides_evo:3`, where before it was inferred from
 # `discard_eot` + `evolvesFrom` by a hardcode that is right only because Ignition is the sole card
 # carrying both. A fixture that omits the provision tags is asserting a card fact that is not true.
-_IGN_TAGS = CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"],
+_IGN_TAGS = CardFunctions({IGNITION: ignition_tags(),
                            CINDERACE: ["opener"]})
 
 

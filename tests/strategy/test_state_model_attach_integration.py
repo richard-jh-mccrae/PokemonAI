@@ -16,6 +16,7 @@ Card facts VERIFIED at source (`data/EN_Card_Data.csv`) — never recalled:
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import (AttackStat, CardStat, DictCardStatProvider, _BASIC_ENERGY,
@@ -50,7 +51,7 @@ def _pilot():
     strat = Strategy(roles={MEGA: ["win_condition", "primary_attacker"], STARYU: ["starter"]})
     return Pilot(strat, deck=[WATER] * 8 + [MEGA] * 3 + [STARYU] * 4 + [IGNITION],
                  general_strategy=GENERAL_STRATEGY, stats=_stats(),
-                 functions=CardFunctions({IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}))
+                 functions=CardFunctions({IGNITION: ignition_tags()}))
 
 
 def _obs(*, active, bench=(), hand=(), opp_active=None, turn=6):

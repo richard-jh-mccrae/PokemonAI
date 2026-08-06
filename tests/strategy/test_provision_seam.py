@@ -1,7 +1,7 @@
 """The **provision seam** — `CombatMath.provision_codes` (Issue #418, ADR-0125).
 
 *"How many units does this Energy card provide this body, and in what colour?"* is ONE question.
-Before Issue #418 the tree answered it five ways: `board_delta._provided_units` and
+Before Issue #418 the tree answered it SIX ways: `board_delta._provided_units` and
 `CombatMath._special_energy_groups` composed the declared accessors and were right, while
 `pilot._attach_provision`, `pilot._attach_lethal_tactical`, `planner._attach_provided` and
 `planner._best_hand_attach_units` each hardcoded *three units on an Evolution holding a
@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.board_delta import Unmodellable, units_for_cards
 from common.cards import CardFunctions
 from common.effects import CardEffects
@@ -71,8 +72,9 @@ def _combat(tags, *, stats=None):
                       functions=CardFunctions(tags), transients=None, effects=CardEffects({}))
 
 
-#: The REAL tags, as committed. Asserted against the store below rather than trusted.
-_REAL = {IGNITION: ["discard_eot", "provides:1", "provides_evo:3"],
+#: The REAL tags, as committed. Ignition's come from `tests/card_facts.py` — the ONE copy every
+#: fixture in the suite takes — and are asserted against the store below rather than trusted.
+_REAL = {IGNITION: ignition_tags(),
          BOOMERANG: ["provides:1"], TELEPATH: ["provides:1", "search"]}
 
 
@@ -104,11 +106,14 @@ def test_the_shipped_pool_welds_discard_eot_to_provides_evo():
         "card; the seam handles it, but this file's premise has changed")
 
 
-def test_the_committed_tags_are_what_this_files_fixtures_claim():
-    """A fixture that trims a card's tags to the one a test happens to read is asserting a card fact
-    that is not true — the failure `test_mega_starmie_triggers`'s Ignition fixture carried until
-    Issue #418, where the missing ``provides:*`` pair was invisible only because a hardcode was
-    supplying the 3."""
+def test_the_committed_tags_are_what_the_shared_fixture_claims():
+    """`tests/card_facts.IGNITION_TAGS` is the ONE copy of Ignition's tags the whole suite takes, and
+    it is a LITERAL rather than a read of the store — a constant that loaded the store could only
+    ever agree with it, which would make this assertion vacuous. So the literal is checked here.
+
+    A fixture that trims a card's tags to the one a test happens to read is asserting a card fact
+    that is not true. Fifteen of them did until Issue #418, and the missing ``provides:*`` pair was
+    invisible only because a hardcode was supplying the 3 those tags should have."""
     real = CardFunctions.load()
     for cid, tags in _REAL.items():
         assert sorted(real.tags(cid)) == sorted(tags)

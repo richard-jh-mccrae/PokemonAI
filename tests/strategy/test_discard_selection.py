@@ -12,6 +12,7 @@ those graded HOW the answer was reached, and the answer is what the blunders wer
 """
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.pilot import Pilot
 from common.scouting.provider import CardStat, DictCardStatProvider
@@ -79,7 +80,7 @@ def _powered_setup(hand_ids, *, active_energy):
                                         attacks=(10, 11))
     pilot.stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
     pilot.functions = CardFunctions({**{k: list(v) for k, v in pilot.functions._table.items()},
-                                     IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]})
+                                     IGNITION: ignition_tags()})
     me = obs["current"]["players"][0]
     me["active"] = [{"id": MEGA, "hp": 330, "maxHp": 330, "energies": [0] * active_energy,
                      "energyCards": [], "tools": [], "preEvolution": []}]

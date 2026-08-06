@@ -86,6 +86,7 @@ from __future__ import annotations
 
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common import currency, needs as _needs, state_value as sv
 from common.card_worth import ROLE_TIER, TAG_TIER
 from common.cards import CardFunctions
@@ -335,7 +336,7 @@ BLACK_BELT = (40, None, True)
 #: (`CardFunctions.energy_provision`, the accessor the Attach Budget already sizes a hand attach
 #: with). Restated here rather than loaded from disk for the same reason every other fact in this
 #: file is: a fixture that read the shipped stores would move whenever they did.
-_IGNITION_TAGS = {IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]}
+_IGNITION_TAGS = {IGNITION: ignition_tags()}
 _IGNITION_CLAUSES = {IGNITION: [{"kind": "energy_provide", "amount": 1, "amount_on_evolution": 3,
                                  "type": "colorless", "rider": "discard_eot"}]}
 

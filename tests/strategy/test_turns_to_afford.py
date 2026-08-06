@@ -19,6 +19,7 @@ the `exclude_expiring` leg of `MySide.turns_to_afford`. The oracle itself is unt
 `pilot._opp_turns_to_ready` delegates to it byte-identically, so a change there would move
 corpus-ruled deny decisions. The strip is a SIBLING at the model accessor.
 """
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.strategy.combat import CombatMath
@@ -224,8 +225,7 @@ def _ignition_combat():
                 NEBULA_BEAM: AttackStat(NEBULA_BEAM, damage=210, cost=3,
                                         energyTypes=(COLORLESS, COLORLESS, COLORLESS))})
     return CombatMath(stats,
-                      functions=CardFunctions({IGNITION: ["discard_eot", "provides:1",
-                                                         "provides_evo:3"]}),
+                      functions=CardFunctions({IGNITION: ignition_tags()}),
                       transients=None,
                       effects=CardEffects({IGNITION: [{"kind": "energy_provide", "amount": 1,
                                                        "amount_on_evolution": 3,

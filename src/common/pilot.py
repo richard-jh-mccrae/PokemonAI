@@ -3802,7 +3802,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # riding `OptionType.ATTACH` provides. This term is KO_SCORE-class, so an over-read here is a
         # phantom knockout.
         codes = self.combat.provision_codes_or_floor(eid, active_stat)
-        provided = len(codes)
+        provided_units = len(codes)
         etype = codes[0] if codes else None
         me = self._my_player(obs)
         ma = next((p for p in (me.get("active") or []) if p), None)
@@ -3829,7 +3829,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         cur = board.my_active_energy
         if best_affordable(cur) >= opp_hp:                  # already lethal — no attach needed
             return 0
-        if best_affordable(cur + provided, extra_units=provided) >= opp_hp:
+        if best_affordable(cur + provided_units, extra_units=provided_units) >= opp_hp:
             return KO_SCORE + self._prize_value(opp)
         return 0
 

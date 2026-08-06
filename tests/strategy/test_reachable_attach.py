@@ -15,6 +15,7 @@ Card facts VERIFIED at source (`data/EN_Card_Data.csv`, `src/common/card_functio
     playable only while I hold MORE Prize cards remaining than my opponent.
   * Basic Energy card ids: 2 = {R}, 5 = {P}, 7 = {D}.
 """
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
@@ -582,7 +583,7 @@ def _special_combat(tags):
                       functions=CardFunctions(tags), transients=None, effects=CardEffects({}))
 
 
-_IGNITION_TAGS = {IGNITION: ["discard_eot", "provides:1", "provides_evo:3"],
+_IGNITION_TAGS = {IGNITION: ignition_tags(),
                   BOOMERANG: ["provides:1"]}
 
 

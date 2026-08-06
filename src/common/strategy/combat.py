@@ -878,9 +878,19 @@ class CombatMath:
         if not need or target is None:
             return True
         attached = self.attached_type_counts(target)
-        if extra_type not in (None, 0) and extra_units > 0:
+        # The EXTRA's colour is read the way every other colour in this module is read — through
+        # :func:`unit_colours` — so ``extra_type`` obeys the same rule the paragraph above states for
+        # an ATTACHED unit: it counts as typed coverage only when it names exactly one SPECIFIC
+        # colour. Behaviour-identical to the older ``extra_type not in (None, 0)`` test on every code
+        # the enum has (COLORLESS resolves to {0}, which ``need`` has already filtered out; RAINBOW,
+        # TEAM_ROCKET and an unknown code named a key ``need`` never queries, so each contributed
+        # nothing then and contributes nothing now) — but true by construction rather than by
+        # arithmetic accident, which matters now that `provision_codes_or_floor` can hand this leg
+        # ``WILD_CODE`` for an Energy whose colour could not be pinned down (Issue #418).
+        specific = unit_colours(extra_type) - {0} if extra_type is not None else frozenset()
+        if len(specific) == 1 and extra_units > 0:
             attached = attached.copy()
-            attached[extra_type] += extra_units
+            attached[next(iter(specific))] += extra_units
         unresolved = sum(1 for code in self.attached_unit_codes(target)
                          if len(unit_colours(code)) != 1)
         missing = sum(max(0, n - attached.get(t, 0)) for t, n in need.items())
@@ -1307,12 +1317,12 @@ class CombatMath:
         *"How many units does this Energy card provide this body, and in what colour?"* is ONE
         question, and this is the ONE place its two halves are composed — the colour from
         ``CardStat.energyType`` and the count from `CardFunctions.energy_provision`. Before Issue
-        #418 five readers answered it: two composed the accessors (this function's ancestor
-        `board_delta._provided_units`, and :meth:`_special_energy_groups`) and four hardcoded
-        a hardcoded 3 whenever the holder was an Evolution and the card carried the ``discard_eot``
-        rider, and 1 otherwise. That hardcode is right only by the coincidence
-        that Ignition Energy is the sole card carrying BOTH ``discard_eot`` and ``provides_evo`` — a
-        future ``provides_evo`` card without the rider would read 1 where it should read N.
+        #418 SIX readers answered it: two composed the accessors (this function's ancestor
+        `board_delta._provided_units`, and :meth:`_special_energy_groups`) and four hardcoded a 3
+        whenever the holder was an Evolution and the card carried the ``discard_eot`` rider, and a 1
+        otherwise. That hardcode is right only by the coincidence that Ignition Energy is the sole
+        card carrying BOTH ``discard_eot`` and ``provides_evo`` — a future ``provides_evo`` card
+        without the rider would read 1 where it should read N.
 
         ``holder_stat`` is the RECIPIENT's `CardStat`, not the Energy card's, because the provision
         is a property of the holder as well as of the card: Ignition Energy provides {C} on a Basic

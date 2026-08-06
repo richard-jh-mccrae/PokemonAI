@@ -12,7 +12,9 @@ parametric tags unchanged — **no card data moved**. Lifts the freeze **ADR-012
 ## Context
 
 *"How many units does this Energy card provide this body, in what colour, and does it survive the
-turn?"* is ONE question. Measured on `e8141b8`, the tree answered it **five** ways.
+turn?"* is ONE question. Measured on `e8141b8`, the tree answered it **six** ways. (Issue #418's
+body says *"FIVE answers"* and then enumerates two plus four. Every defect it names is real and
+verified below; the count in that one sentence is not.)
 
 Two composed the declared accessors — the colour from `CardStat.energyType`, the count from
 `CardFunctions.energy_provision` — and were right: `board_delta._provided_units` (the apply seam)
@@ -197,6 +199,17 @@ Gun never beats the alternatives on the boards that carry it. **The defect was L
 harmless**: `_attach_lethal_tactical` is a KO_SCORE-class term reading exactly this class of
 quantity, and 20 damage decides a lethal on a board the corpus has not yet captured.
 
+**The acceptance grep is a weak instrument, and is recorded as one.** Issue #418's item 2 asks that
+`grep -rn "discard_eot.*else 1\|3 if .*is_evo" src/` return zero, *"positive control: the same grep on
+the pre-fix tree finds four"*. It did find four — but the four were three code sites and a
+**docstring**. It never matched `_attach_provision`, whose rule is spelled
+`if burst and evolvesFrom: return 3` across two statements, so the grep could not see the very site
+D1 names first. The criterion is met and the docstrings that carried the literal were reworded rather
+than left to satisfy it falsely, but the guarantee that all four sites are gone comes from reading
+them, not from the grep. What actually holds the line is
+`test_provision_seam.py` plus the one-call-site property: `CardFunctions.energy_provision` is now
+invoked from exactly one place in `src/`.
+
 **One latent disagreement closed on the way.** `_special_energy_groups` and `attach_units` spelled
 their colour pool `frozenset({etype})` while `_attached_units` used `unit_colours` — so the hand leg
 and the board leg disagreed for `RAINBOW` (a real pool code: Neo Upper 10, Legacy 12, Prism 16 all
@@ -205,13 +218,27 @@ made unreachable today only because none of those five cards carries a `provides
 run through `units_for_codes`, and `_special_energy_groups`' claim that *"colour follows
 `_attached_units` exactly"* is a fact instead of a promise.
 
-**Test fixtures gained their real card facts.** Fifteen fixtures tagged Ignition Energy
-`["discard_eot"]` alone — asserting a card fact that is not true, and invisible only because a
-hardcode was supplying the 3 the missing `provides_evo:3` should have. All now carry the committed
-triple, and `test_the_committed_tags_are_what_this_files_fixtures_claim` asserts the fixtures against
-the store. Two were left deliberately incomplete and say so: the fail-closed probe
-`test_an_untagged_special_energy_provides_nothing` and the tag-vs-clause probe
-`test_the_strip_reads_the_CLAUSE_not_the_TAG`.
+**Test fixtures gained their real card facts, and now have ONE copy of them.** Fifteen fixtures
+tagged Ignition Energy `["discard_eot"]` alone — asserting a card fact that is not true, and
+invisible only because a hardcode was supplying the 3 the missing `provides_evo:3` should have.
+Rather than paste the committed triple into seventeen files (the same one-store-per-fact failure this
+ADR is about, one layer down), it lives once in **`tests/card_facts.py`** as
+`IGNITION_TAGS`/`ignition_tags()`, checked against the store by
+`test_the_committed_tags_are_what_the_shared_fixture_claims`. It is a LITERAL rather than a read of
+`card_functions.json`, because a constant that loaded the store could only ever agree with it and
+would make that assertion vacuous. Two fixtures are deliberately incomplete and say so in their
+names: the fail-closed probe `test_an_untagged_special_energy_provides_nothing` and the tag-vs-clause
+probe `test_the_strip_reads_the_CLAUSE_not_the_TAG`.
+
+**`attack_type_payable`'s typed-EXTRA leg now reads `unit_colours` too.** It tested
+`extra_type not in (None, 0)`, which is *"names one specific colour"* by arithmetic accident rather
+than by construction — fine while every caller passed a card's raw `energyType`, and worth making
+structural now that `provision_codes_or_floor` can hand that leg `WILD_CODE`. The new test is
+`len(unit_colours(extra_type) - {0}) == 1`, which is **behaviour-identical on every code the enum
+has**: COLORLESS resolves to `{0}` (which `need` has already filtered out), and RAINBOW,
+TEAM_ROCKET and an unknown code each named a `Counter` key `need` never queries, so all four
+contributed nothing before and contribute nothing now. The paragraph the method already carries
+about an ATTACHED unit that "names no single colour" now describes both of its legs.
 
 **What this does not touch.** `payoff_damage` still pre-credits a pre-evolution with its whole line's
 payoff — the second of ADR-0124's two recorded model limits, and the reason both bench deltas cancel

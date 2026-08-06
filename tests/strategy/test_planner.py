@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from card_facts import ignition_tags                    # the committed Ignition Energy tags, ONE copy
 from common.cards import CardFunctions
 from common.strategy.general_strategy import GENERAL_STRATEGY
 from common.pilot import KO_SCORE, Pilot
@@ -1071,7 +1072,7 @@ def _ignition_pilot(**kw):
     stats._stats[IGNITION] = CardStat(IGNITION, name="Ignition Energy", hp=0, energyType=0)
     stats._stats[BRUISER] = CardStat(BRUISER, synthetic=True, name="bruiser", hp=180, energyType=7,
                                      minAttackCost=1, minCostDamage=210, maxDamage=210)
-    fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ["discard_eot", "provides:1", "provides_evo:3"]})
+    fns = CardFunctions({WALLYS: ["heal", "clutch_heal"], IGNITION: ignition_tags()})
     return Pilot(strat, deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats, functions=fns,
                  **kw)
 
