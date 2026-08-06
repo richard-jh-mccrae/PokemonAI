@@ -70,8 +70,17 @@ an unproven pair gets both orderings. The defect was only ever in how the two we
 
 - `82226116|0|decision|70` now agrees with the developer's ruling: the composer commits option 11,
   the ruled evolve, instead of option 16.
-- **Corpus agreement 88 → 90 of 270** MAIN ruled frames (against the developer's 2026-08-06
+- **Corpus agreement 87 → 89 of 270** MAIN ruled frames (against the developer's 2026-08-06
   re-rulings), on top of ADR-0125. No frame regresses.
+
+  > ⚠️ **Both absolutes were first reported one HIGHER (88 → 90), and the correction is worth keeping
+  > rather than quietly overwriting.** `composer_lab.fixture_rulings` flattened the fixture walk with
+  > `out[key] = ...`, so on `85164605|1|decision|41` — the one frame two committed fixtures rule
+  > DIFFERENTLY — the grading claim was whichever FILENAME sorted last (`[4]`, not the Correction's
+  > own `[3]`). Every measurement in this ADR's review ran that way. The **delta is unaffected**,
+  > because that frame grades identically on both sides of the comparison, but the levels were each
+  > one frame optimistic. Fixed by dropping a conflicted frame from the ruled population rather than
+  > resolving it by filename, and guarded by `tests/test_fixture_ruling_conflicts.py`.
 - Cost is nil — one `round()` per candidate at selection time, off the leaf path entirely.
 - Both ADR-0072 gates unmoved: `selection_key` lives in the composer, which is still DARK.
 
