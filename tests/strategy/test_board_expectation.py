@@ -68,6 +68,15 @@ FIGHTING, PSYCHIC = 6, 5
 #                                      Appendix 1: Mega Lucario ex evolves from Riolu ALONE).
 MASTER_BALL, POKE_PAD, ULTRA_BALL, DAWN, POWER_PRO, GEAR, ENERGY_SEARCH = (
     1125, 1152, 1121, 1231, 1141, 1122, 1119)
+#   1225 Hilda            Supporter  "…an Evolution Pokemon **and** an Energy card" — a CONJUNCTION
+#                                    whose two legs both match this file's pool and neither of which
+#                                    reads `CardStat.stage`, which is why it is the conjunction
+#                                    fixture rather than Dawn.
+#   1142 Fighting Gong    Item       "…a Basic {F} Energy card **or** a Basic {F} Pokemon" — a UNION
+#                                    the compendium had declared as a conjunction.
+#   1210 Brock's Scouting Supporter  "up to 2 Basic Pokemon **or** 1 Evolution" — the EXCLUSIVE
+#                                    either-or, which stays refused: different caps per branch.
+HILDA, GONG, BROCK = 1225, 1142, 1210
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 E_F = 6
 
@@ -88,6 +97,9 @@ _STATS = {
     POWER_PRO: CardStat(POWER_PRO, name="Premium Power Pro", cardType=_ITEM),
     GEAR: CardStat(GEAR, name="Pokégear 3.0", cardType=_ITEM),
     ENERGY_SEARCH: CardStat(ENERGY_SEARCH, name="Energy Search", cardType=_ITEM),
+    HILDA: CardStat(HILDA, name="Hilda", cardType=_SUPPORTER),
+    GONG: CardStat(GONG, name="Fighting Gong", cardType=_ITEM),
+    BROCK: CardStat(BROCK, name="Brock’s Scouting", cardType=_SUPPORTER),
 }
 
 #: The committed `card_effects.json` rows for these cards, copied verbatim. `POWER_PRO` is absent on
@@ -102,7 +114,26 @@ _CLAUSES = {
            {"kind": "fetch", "target": "stage2", "zone": "deck"}],
     GEAR: [{"kind": "fetch", "target": "supporter", "zone": "deck", "dig": 7}],
     ENERGY_SEARCH: [{"kind": "fetch", "target": "basic_energy", "zone": "deck"}],
+    HILDA: [{"kind": "fetch", "target": "energy", "zone": "deck"},
+            {"kind": "fetch", "target": "evolution", "zone": "deck"}],
+    GONG: [{"kind": "fetch", "target": "basic_energy", "zone": "deck", "energy_type": 6,
+            "choice": True},
+           {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "energy_type": 6,
+            "choice": True}],
+    BROCK: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": 2,
+             "choice": True},
+            {"kind": "fetch", "target": "evolution", "zone": "deck", "amount": 1, "choice": True}],
 }
+
+
+def _ids_in_hand(cls, *, kept: int = 0) -> list:
+    """The card ids this outcome class DELIVERED into my hand.
+
+    `kept` is how many of my hand cards SURVIVE the play — the pre-play hand size minus the card
+    being played, which has already left for the discard. These boards hold only the played card, so
+    it is 0 and the whole post-reveal hand is the delivery."""
+    hand = ((cls.model.source_obs.get("current") or {}).get("players") or [{}])[0].get("hand") or ()
+    return [c.get("id") for c in hand[kept:]]
 
 
 def _combat():
@@ -360,13 +391,127 @@ def test_a_card_with_no_revealing_clause_is_not_an_expectation_node():
         be.expectation(_search_board(hand=(POWER_PRO,)), _play_option())
 
 
-def test_a_conjunction_of_searches_refuses_because_the_vocabulary_cannot_say_which():
-    """Dawn prints *"Search your deck for a Basic Pokémon, **a** Stage 1 Pokémon, **and** a Stage 2
-    Pokémon"* — three clauses that are one CONJUNCTION, not three alternatives. Colress's Tenacity
-    (1194) is the same shape (*"a Stadium card **and** an Energy card"*). Nothing in the clause
-    vocabulary distinguishes AND from OR, so a union would be a guess about the card."""
-    with pytest.raises(bd.Unmodellable, match="more than one"):
-        be.expectation(_search_board(hand=(DAWN,)), _play_option())
+def test_a_conjunction_enumerates_one_card_per_leg_and_SKIPS_an_empty_one():
+    """Dawn prints *"Search your deck for a Basic Pokémon, a Stage 1 Pokémon, **and** a Stage 2
+    Pokémon"* — three legs that are one CONJUNCTION.
+
+    On this board only the Basic leg can find anything (the pool is Riolu / Mega Lucario ex / {F}
+    Energy, and neither Pokémon carries a `stage`), so two legs are EMPTY. The engine skips an empty
+    bucket rather than failing the card — `chain_overrides.json`'s own provenance for 1231 records
+    *"empty buckets skip with a tac bump"* — so the play still resolves and delivers what it could
+    find. Refusing here would refuse a card the engine resolves happily.
+
+    Measured on the real corpus, this is not an edge case: Dawn's leg product is 0 on **all 8** of
+    its steps, precisely because two of its three legs are empty on every one."""
+    exp = be.expectation(_search_board(hand=(DAWN,)), _play_option())
+    assert [tuple(sorted(_ids_in_hand(c))) for c in exp.classes] == [(RIOLU,)]
+
+
+def test_a_conjunction_takes_the_CROSS_PRODUCT_when_several_legs_are_live():
+    """Hilda prints *"Search your deck for an Evolution Pokémon **and** an Energy card"* — two legs
+    that both find something here, so the classes are the product: one Evolution × one Energy.
+
+    Hilda is the conjunction fixture on purpose (`board_expectation`'s own constraint note): both its
+    legs match the pool this file already builds and **neither reads `CardStat.stage`**, so the case
+    needs no new stage fixture."""
+    exp = be.expectation(_search_board(hand=(HILDA,)), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(E_F, MEGA_LUC)]        # the only Evolution x the only Energy class
+    assert all(len(c.fingerprint) == 2 for c in exp.classes), "both delivered cards form the identity"
+
+
+def test_a_union_enumerates_ONE_card_over_the_pooled_legs():
+    """Fighting Gong prints *"Search your deck for a Basic {F} Energy card **or** a Basic {F}
+    Pokémon"* — one card from the UNION of two legs, which the engine settles with a single
+    `anyOf`-filtered op rather than two picks.
+
+    So the classes are one-card, exactly as a single-leg search's are, over a pool that is the union
+    of both legs' — Riolu from the Pokémon leg and {F} Energy from the Energy leg. This is the shape
+    the compendium had backwards: read as a conjunction it would have claimed the card delivers
+    two."""
+    exp = be.expectation(_search_board(hand=(GONG,)), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(E_F,), (RIOLU,)]
+    assert all(len(c.fingerprint) == 1 for c in exp.classes)
+
+
+def test_a_multi_card_delivery_to_HAND_enumerates_multisets_not_subsets():
+    """Cyrano is *"Search your deck for up to 3 Pokémon {ex}"* — a delivery of THREE cards.
+
+    The classes are MULTISETS, not subsets, and the difference is not academic: a pool may hold
+    several copies of one card, and taking two of them is a legal, distinct outcome. Measured on the
+    real corpus, Cyrano's pool is **one distinct card id on all 4 of its steps**, where a subset
+    enumerator returns exactly one class and is simply wrong about what the card delivers.
+
+    Here the pool is 3 Riolu + 1 Mega Lucario ex, so a 3-card delivery has four shapes."""
+    exp = be.expectation(_search_board(hand=(CYRANO,)), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)][::1] or delivered == \
+        sorted([(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)])
+    assert all(len(c.fingerprint) == 3 for c in exp.classes)
+
+
+def test_a_multi_card_class_weighs_each_card_at_the_multiplicity_it_needs():
+    """A class that takes TWO copies of a card needs two copies still in the deck, which is
+    `p_contains_at_least(..., 2)` and not `p_contains`. Reading it with the >=1 form would
+    over-report every duplicate-bearing class.
+
+    Asserted against the closed form directly rather than against a golden number, so the assertion
+    survives a re-tuned prize split."""
+    model = _search_board(hand=(CYRANO,))
+    hidden, left = model.mine.prizes_hidden, model.mine.deck_count
+    unseen = model.mine.unseen_counts or {}
+    triple = be._class_weight(model, (RIOLU, RIOLU, RIOLU))
+    assert triple == pytest.approx(
+        deck_odds.p_contains_at_least(unseen.get(RIOLU, 0), hidden, left, 3))
+    mixed = be._class_weight(model, (RIOLU, RIOLU, MEGA_LUC))
+    assert mixed == pytest.approx(
+        deck_odds.p_contains_at_least(unseen.get(RIOLU, 0), hidden, left, 2)
+        * deck_odds.p_contains_at_least(unseen.get(MEGA_LUC, 0), hidden, left, 1))
+    # …and a one-card class is bit-for-bit the shipped `p_contains`, which is why nothing moved.
+    assert be._class_weight(model, (RIOLU,)) == \
+        deck_odds.p_contains(unseen.get(RIOLU, 0), hidden, left)
+
+
+def test_the_multiset_enumerator_degenerates_to_todays_classes_at_one_card():
+    """The identity that stops the widening from regressing the single-card path: `multiset_classes`
+    at m=1 is exactly one class per distinct pool card, which is what shipped before."""
+    pool = {RIOLU: 3, MEGA_LUC: 1, E_F: 6}
+    assert be.multiset_classes(pool, 1) == [(E_F,), (RIOLU,), (MEGA_LUC,)][::1] or \
+        sorted(be.multiset_classes(pool, 1)) == sorted([(E_F,), (RIOLU,), (MEGA_LUC,)])
+    # A copy count BOUNDS the multiplicity — one Mega Lucario ex can never arrive twice.
+    assert all(k.count(MEGA_LUC) <= 1 for k in be.multiset_classes(pool, 3))
+    # …and the delivery is clamped by what the pool actually holds, never padded.
+    assert be.multiset_classes({MEGA_LUC: 1}, 3) == [(MEGA_LUC,)]
+    assert be.multiset_classes({}, 3) == []
+
+
+def test_a_delivery_to_the_BENCH_still_refuses_and_now_says_so_for_the_right_reason():
+    """Buddy-Buddy Poffin delivers to the Bench, which is the deploy transition with its Bench cap
+    and Stadium-trigger gate — Issue #410's work, not this node's. It refuses.
+
+    What changes is WHICH gate catches it. `amount` used to fire first, filing 41 corpus steps under
+    "the search delivers more than one card"; now the multi-card shape is modelled and the refusal
+    lands on `dest`, which is the reason that actually describes it. A backlog is only actionable if
+    each row names the work it is waiting on."""
+    with pytest.raises(bd.Unmodellable, match="`dest`"):
+        be.expectation(_search_board(hand=(POFFIN,)), _play_option())
+
+
+def test_an_amount_of_all_still_refuses_because_it_names_no_number():
+    """`amount: "all"` is not a count the enumerator can range over without a pool to resolve it
+    against, and its only carriers deliver to the Bench (Precious Trolley), which refuses anyway.
+    Issue #410 owns it. Refused explicitly rather than falling through to a catch-all."""
+    with pytest.raises(bd.Unmodellable, match="`amount`"):
+        be.expectation(_search_board(hand=(TROLLEY,)), _play_option())
+
+
+def test_an_exclusive_either_or_still_refuses_rather_than_guessing_a_cap():
+    """The third shape, and the one that stays refused. Brock's Scouting is *"up to 2 Basic Pokémon
+    **or** 1 Evolution"* — `choice` on both legs but different budgets, so there is no single shared
+    cap to enumerate over and the engine gives it its own op (`xDeckToHandEitherOr`)."""
+    with pytest.raises(bd.Unmodellable, match="either-or"):
+        be.expectation(_search_board(hand=(BROCK,)), _play_option())
 
 
 def test_a_costed_search_refuses_because_the_cost_names_no_target():

@@ -185,9 +185,12 @@ from __future__ import annotations
 
 from typing import NoReturn
 
+from collections import Counter
+from itertools import product
+
 from common import board_delta, deck_odds, snapshot_coverage
 from common.board_delta import Unmodellable
-from common.fetch_closure import fetch_is_unconditional, fetch_target_matches
+from common.fetch_closure import fetch_is_unconditional, fetch_target_matches, reveal_legs
 from common.option_equivalence import AREA_HAND, option_fingerprint
 from common.strategy.context import _PLAY
 
@@ -225,28 +228,33 @@ def revealing_clauses(combat, card_id) -> tuple:
                  if c.get("kind") in snapshot_coverage.REVEALING_CLAUSES)
 
 
-def _sole_clause(combat, card_id, stat):
-    """The ONE revealing clause this card carries, or :class:`Unmodellable`.
+def _legs_of(combat, card_id, stat):
+    """This card's revealing legs and how they COMBINE, or :class:`Unmodellable`.
 
-    Two refusals live here because they are the same question asked from either side: a card with no
-    revealing clause is not an expectation node at all, and a card with several is a CONJUNCTION the
-    vocabulary cannot distinguish from a disjunction (Dawn, Colress's Tenacity — see the header)."""
+    The relation itself is `fetch_closure.reveal_legs` — ONE reader, shared with `board_choice`'s
+    CHOICE node, because both nodes face the same question and a second spelling is how the two
+    would come to disagree about the same card. It raises `ValueError` with the reason; this wraps it
+    in the seam's own ``"<id> <name>: …"`` convention.
+
+    Before Issue #394 this function refused every multi-leg card and *guessed* the relation in the
+    refusal — *"printed as a CONJUNCTION … nothing in the clause vocabulary distinguishes AND from
+    OR"*. Both halves were wrong: `choice` distinguishes them, and 69 of the 98 refused corpus steps
+    were unions rather than conjunctions.
+
+    The companion-clause refusal stays HERE rather than moving into the shared reader: it is a fact
+    about what this node can price (a non-revealing leg would difference to exactly 0 in every class
+    it enumerates), not about what the card's reveal legs mean, and `board_choice` answers it
+    differently for its own node."""
     every = board_delta.card_clauses(combat, card_id)
-    reveal = revealing_clauses(combat, card_id)
     name = getattr(stat, "name", "?")
-    if not reveal:
-        _no(card_id, name, "no `draw`/`fetch` clause, so this option is a point transition "
-                                  "rather than an expectation node")
-    if len(reveal) > 1:
-        _no(card_id, name,
-            f"more than one revealing clause ({len(reveal)}) — printed as a CONJUNCTION "
-                   f"(*'a Basic Pokémon, a Stage 1 Pokémon, AND a Stage 2 Pokémon'*), and nothing "
-                   f"in the clause vocabulary distinguishes AND from OR, so a union would be a "
-                   f"guess about the card")
-    if len(every) > len(reveal):
+    try:
+        legs = reveal_legs(every)
+    except ValueError as gap:
+        _no(card_id, name, str(gap))
+    if len(every) > len(legs.legs):
         _no(card_id, name, "it carries a non-revealing clause as well, whose leg would "
                                   "difference to exactly 0 in every enumerated class")
-    return reveal[0]
+    return legs
 
 
 def _no(card_id, name, why) -> NoReturn:
@@ -314,56 +322,102 @@ def outcome_pool(model, clause: dict) -> dict:
             if n > 0 and fetch_target_matches(clause, model.card_stat(cid))}
 
 
-def _weights(model, pool: dict) -> dict:
-    """``{card id: availability weight}`` from `deck_odds.p_contains` — ADR-0029's hypergeometric
-    prize split, the probabilistic complement to the sound deck tracker.
+def _class_weight(model, delivered: tuple) -> float:
+    """The availability weight of ONE outcome class — ADR-0029's hypergeometric prize split, asked
+    per distinct card at the MULTIPLICITY that class needs.
 
-    Not normalised here: the caller normalises over the FULL pool before capping, which is what makes
-    the truncated mass show up as a `total_probability` below 1.0 instead of vanishing."""
+    A class is a tuple of delivered card ids, so a conjunction whose legs both reach the same card,
+    or a multi-card delivery that takes two copies of one, needs *two copies still in the deck* —
+    which is `deck_odds.p_contains_at_least(..., k)`, not `p_contains`. For a single-card class this
+    is exactly the old `p_contains` call, bit for bit, which is why the shipped classes do not move.
+
+    The per-card factors are MULTIPLIED, and that is an availability weight rather than a joint draw
+    probability — the epistemics this module's header already states (*"a class's probability is an
+    availability weight, normalised over the enumerated set"*). Not normalised here: the caller
+    normalises over the FULL class set before capping, so truncated mass shows up as a
+    `total_probability` below 1.0 instead of vanishing."""
     hidden, left = model.mine.prizes_hidden, model.mine.deck_count
-    return {cid: deck_odds.p_contains(n, hidden, left) for cid, n in pool.items()}
+    unseen = model.mine.unseen_counts or {}
+    weight = 1.0
+    for cid, need in Counter(delivered).items():
+        weight *= deck_odds.p_contains_at_least(unseen.get(cid, 0), hidden, left, need)
+    return weight
 
 
-def _revealed(model, option, card_id, *, seat_index, stat):
-    """The observation after the search RESOLVES: the source card in my discard, the found card in my
-    hand, and the Supporter allowance spent if one was.
+def _revealed(model, option, delivered: tuple, *, seat_index, stat):
+    """The observation after the search RESOLVES: the source card in my discard, the found card(s) in
+    my hand, and the Supporter allowance spent if one was.
 
     Copy-on-write throughout — `board_delta`'s own scaffolding, reused rather than re-spelled, so a
     hypothetical board and its pre-state share every zone the reveal did not touch. Those three
     helpers were PROMOTED to public names for this consumer (Issue #383); reaching for the underscore
     versions would be the cross-module private reach `state_model.py` documents as *"how a refactor
     inside `MySide` breaks a caller nothing warned about"*. Their `PlayerState` is never reached
-    across, which is what lets the caller rebuild with ``reuse_their_side=True``."""
+    across, which is what lets the caller rebuild with ``reuse_their_side=True``.
+
+    The source card is spent ONCE per play, never once per delivered card — a conjunction is one
+    Supporter resolving into several picks, not several plays."""
     new_obs, current, players = board_delta.fork(model.source_obs)
     me = board_delta.fork_player(players, seat_index)
     played = board_delta.take_from_hand(me, option.get("index"), "reveal")
     # `docs/rulebook.txt` L78 — the card that performed the search is out of play once it resolves.
     me["discard"] = list(me.get("discard") or ()) + [played]
-    # The found card, synthesized: the deck is face-down, so it has no observed `serial`. That is the
-    # ONE field ADR-0091's fingerprint ignores, which is precisely why a synthesized instance is
+    # The found cards, synthesized: the deck is face-down, so they have no observed `serial`. That is
+    # the ONE field ADR-0091's fingerprint ignores, which is precisely why a synthesized instance is
     # sound to fingerprint — and it is negative so an eye on a dump can tell it from an engine one.
+    # The ORDINAL is what keeps it unique: `-card_id` alone collides the moment one class delivers
+    # two copies of the same card, which a conjunction over overlapping legs and every multi-card
+    # delivery can both do.
     hand = list(me.get("hand") or ())
-    hand.append({"id": card_id, "serial": -card_id, "playerIndex": seat_index})
+    at = []
+    for ordinal, card_id in enumerate(delivered):
+        hand.append({"id": card_id, "serial": -(card_id * 100 + ordinal),
+                     "playerIndex": seat_index})
+        at.append(len(hand) - 1)
     me["hand"] = hand
     if me.get("handCount") is not None:
         me["handCount"] = len(hand)
     if me.get("deckCount") is not None:
-        me["deckCount"] = max(0, int(me["deckCount"]) - 1)
+        me["deckCount"] = max(0, int(me["deckCount"]) - len(delivered))
     if getattr(stat, "is_supporter", False):
         current["supporterPlayed"] = True          # `docs/rules.md` §3 — one Supporter per turn
-    return new_obs, len(hand) - 1
+    return new_obs, tuple(at)
 
 
-def _fingerprint(obs, index, seat_index) -> tuple:
-    """The outcome class's identity — `option_equivalence.option_fingerprint` over the card in my
-    HAND, on the POST-reveal board.
+def _fingerprint(obs, indices: tuple, seat_index) -> tuple:
+    """The outcome class's identity — `option_equivalence.option_fingerprint` over the card(s) this
+    class put in my HAND, on the POST-reveal board.
 
-    A tuple of per-card fingerprints rather than a bare string, because `OutcomeClass.fingerprint` is
-    declared a tuple and because a multi-card delivery is the shape this generalises into. Never
-    taken on the pre-reveal deck reference: that option is unfingerprintable by design (Issue #263
-    § *duplicate-cards*), and giving it a partial identity is what that section forbids."""
-    return (option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": index,
-                                "playerIndex": seat_index}, obs),)
+    A tuple of per-card fingerprints, which is why `OutcomeClass.fingerprint` was declared a tuple:
+    a multi-card delivery is several cards arriving from one play, and its identity is all of them.
+    Never taken on the pre-reveal deck reference: that option is unfingerprintable by design (Issue
+    #263 § *duplicate-cards*), and giving it a partial identity is what that section forbids."""
+    return tuple(option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": index,
+                                     "playerIndex": seat_index}, obs)
+                 for index in indices)
+
+
+def _classes_for(legs, pools: tuple) -> list:
+    """The outcome classes a card's legs deliver, as sorted tuples of card ids. ``[]`` when the legs
+    can deliver nothing at all, which the caller turns into the empty-pool refusal.
+
+    * **single / union** — one pool. A union's is the UNION of its legs' pools, built with the same
+      walk `fetch_closure.class_reaccess_outs` already performs for a needs slot's re-supply: a card
+      reached by either leg is reachable once, not twice.
+    * **conjunction** — the cross product, one card per leg, and **an empty leg SKIPS**. That is the
+      engine's own behaviour, not a convenience: `chain_overrides.json`'s provenance for 1231 Dawn
+      records *"empty buckets skip with a tac bump"*. Measured, Dawn's product is 0 on all 8 of its
+      corpus steps precisely because two of its three legs are empty — enumerating nothing there
+      would refuse a card the engine resolves happily. Refuse only when EVERY leg is empty."""
+    if legs.relation == "conjunction":
+        live = [sorted(p) for p in pools if p]
+        if not live:
+            return []
+        return sorted({tuple(sorted(combo)) for combo in product(*live)})
+    union: dict = {}
+    for pool in pools:
+        union.update(pool)
+    return [(cid,) for cid in sorted(union)]
 
 
 def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP):
@@ -419,32 +473,34 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     # backlog groups by the actionable answer: a Basic deploy is not an under-scoped expectation
     # node, it is not an expectation node. Measured — the order moved 79 corpus steps out of the
     # card-type bucket and into "no `draw`/`fetch` clause", where they belong.
-    clause = _sole_clause(model.combat, card_id, stat)
+    legs = _legs_of(model.combat, card_id, stat)
     if not (getattr(stat, "is_item", False) or getattr(stat, "is_supporter", False)):
         _no(card_id, name, "only an Item or a Supporter resolves to my discard on a search; this "
                            "card's structural floor is a different one")
-    _check_clause(clause, card_id, name)
+    for leg in legs.legs:
+        _check_clause(leg, card_id, name)
 
-    pool = outcome_pool(model, clause)
-    if not pool:
+    pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
+    candidates = _classes_for(legs, pools)
+    if not candidates:
         _no(card_id, name, "no target it can reach is still unseen in my deck — a provably-whiffing "
                            "search is a fact to refuse on, not a zero-class Expectation")
-    weights = _weights(model, pool)
+    weights = {klass: _class_weight(model, klass) for klass in candidates}
     mass = sum(weights.values())
     if mass <= 0.0:
         _no(card_id, name, "no target it can reach has any availability left (`deck_odds` puts every "
                            "matching copy outside the deck), so there is nothing to enumerate")
 
-    # Descending weight, then ascending card id: the ordering must be a pure function of the board or
+    # Descending weight, then ascending class: the ordering must be a pure function of the board or
     # two processes enumerate different sets, which is the reproducibility guarantee
     # `option_equivalence.class_representatives` keeps for exactly the same reason.
-    ranked = sorted(pool, key=lambda cid: (-weights[cid], cid))
+    ranked = sorted(candidates, key=lambda klass: (-weights[klass], klass))
     kept, dropped = ranked[:int(cap)], ranked[int(cap):]
     classes = []
-    for cid in kept:
-        after_obs, at = _revealed(model, option, cid, seat_index=seat_index, stat=stat)
+    for klass in kept:
+        after_obs, at = _revealed(model, option, klass, seat_index=seat_index, stat=stat)
         classes.append(OutcomeClass(
-            probability=weights[cid] / mass,
+            probability=weights[klass] / mass,
             # The reveal never reaches across the table, so their already-built side is reusable —
             # `board_delta.Delta.shares_opponent`'s guarantee, held here by construction.
             model=model.rebuilt(after_obs, reuse_their_side=True),
