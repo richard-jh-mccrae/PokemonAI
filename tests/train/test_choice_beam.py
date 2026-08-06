@@ -64,8 +64,9 @@ def test_the_item3_MARGIN_telemetry_at_every_width_the_frame_can_support(probes)
     """**Issue #263 § *Beam-quality package* item 3, and the criterion it discharges** — *"rank at
     1-ply ordering relative to `k`, and score margin to the k-th candidate."*
 
-    **Rank: 1 on both frames, in both modes**, so the line survives any `k >= 1`. That is the whole
-    of the rank half.
+    **Rank: 1 on f35, in both modes**, so that line survives any `k >= 1`. **f32 is rank 2 as of
+    Issue #410** — see below, this is the seam-coverage-growth case this docstring already warned
+    about, not a defect.
 
     **Margin: reported as a CURVE, because `k` is not derived anywhere.** Neither Issue #263 nor Issue
     #392 fixes a beam width, so quoting one figure at an undefended `k` would report the caller's
@@ -75,26 +76,42 @@ def test_the_item3_MARGIN_telemetry_at_every_width_the_frame_can_support(probes)
     * **f35 discharges the criterion.** Two scored candidates, so `k=2` is real: the margin to the
       2nd candidate is **0.001125 unexpanded** and **0.002985 expanded** — expansion widens the line's
       lead over its rival by **2.65x**. That is exactly the demonstration the criterion asks for.
-    * **f32 cannot, and the reason is coverage rather than ordering.** Its menu scores ONE candidate
-      (3 refused, 1 terminal), so no `k >= 2` margin exists to measure at any width. A refusal is not a
-      pruned option — `must_expand` makes it the always-expand path — so this is a fact about how much
-      of a Trainer-heavy menu the apply seam can price at this commit, and it will become computable
-      when that coverage grows rather than when Issue #385's composer lands.
+    * **f32 no longer can, and Issue #410 is exactly the widening this docstring predicted.**
+      Before it, f32's menu scored ONE candidate (3 refused, 1 terminal) — this file's own prior
+      wording read that as *"a fact about how much of a Trainer-heavy menu the apply seam can price
+      at this commit... it will become computable when that coverage grows."* It grew: option 1 is a
+      bench `_EVOLVE` that the OLD blanket `_stadium_gate` refused only because Risky Ruins (1260,
+      a `stadium_trigger` on `on: "bench_play"`) happened to be in play — a trigger an evolution can
+      never fire (`board_delta.stadium_clauses_for` narrows exactly this case; R2's own census names
+      it: *"27 `_EVOLVE` + Risky Ruins + Stage 1: no — `on: bench_play`"*). The evolve applies NO
+      Stadium clause (Risky Ruins' scope cannot reach it) and is otherwise the plain `_evolve`
+      arithmetic this suite already covers elsewhere — so its delta (**+0.00375**) is not a Stadium
+      effect, it is the seam finally being ABLE to look at an ordinary evolve that used to be
+      invisible. And a plain evolve genuinely beats a near-zero retreat under raw 1-ply ordering,
+      which is exactly the shallow-heuristic property Issue #392's own header names (*"the magnitudes
+      are small because a retreat moves bodies rather than prizes and the leaf is prize-denominated"*)
+      — `decide()` is untouched (`apply_option`/`board_delta` are still unwired from production play,
+      per `apply_option.apply_option`'s own docstring), so this is a measurement-tool consequence
+      only, not a change in what the Pilot actually plays at this frame.
 
     Pinned as numbers so a commit that widens seam coverage turns this red at the line that stopped
-    being true, instead of leaving a stale claim in prose."""
-    f32, f35 = probes["f32"], probes["f35"]
-    for report in (f32, f35):
-        assert report["unexpanded"]["rank"] == 1 and report["expanded"]["rank"] == 1, report
+    being true, instead of leaving a stale claim in prose. Issue #410 is that commit for f32; this is
+    the update it predicted, not a regression."""
+    f35 = probes["f35"]
+    assert f35["unexpanded"]["rank"] == 1 and f35["expanded"]["rank"] == 1, f35
 
     assert f35["expanded"]["scored"] == 2, f35
     assert f35["unexpanded"]["margin_by_k"][2] == pytest.approx(0.001125, abs=1e-6)
     assert f35["expanded"]["margin_by_k"][2] == pytest.approx(0.002985, abs=1e-6)
     assert f35["expanded"]["margin_by_k"][2] > f35["unexpanded"]["margin_by_k"][2] * 2
 
-    assert f32["expanded"]["scored"] == 1, f32
-    assert f32["expanded"]["refused"] == 3, f32
-    assert list(f32["expanded"]["margin_by_k"]) == [1], f32     # no k >= 2 exists on this menu
+    f32 = probes["f32"]
+    assert f32["unexpanded"]["rank"] == 2 and f32["expanded"]["rank"] == 2, f32
+    assert f32["expanded"]["scored"] == 2, f32
+    assert f32["expanded"]["refused"] == 2, f32
+    assert list(f32["expanded"]["margin_by_k"]) == [1, 2], f32   # k >= 2 now exists on this menu
+    assert f32["expanded"]["margin_by_k"][2] == 0.0, f32          # k=2: retreat IS the 2nd candidate
+    assert f32["unexpanded"]["margin_by_k"][1] < 0.0, f32         # k=1: the now-visible evolve leads
 
 
 @pytest.mark.req("REQ-APPLY-0002")

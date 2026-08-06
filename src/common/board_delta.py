@@ -346,13 +346,38 @@ def card_clauses(combat, card_id) -> tuple:
     return tuple(effects.clauses(card_id) if effects is not None else ())
 
 
-def _clause_writes(combat, card_id) -> frozenset:
-    """Every `snapshot_coverage` zone this card's Effect Clauses write, unioned over all four
-    vocabulary axes (``kind`` / ``rider`` / ``effect`` / ``cost``).
+def _one_clause_writes(combat, card_id, clause) -> frozenset:
+    """Every `snapshot_coverage` zone ONE clause writes, unioned over all four vocabulary axes
+    (``kind`` / ``rider`` / ``effect`` / ``cost``).
 
     The registry is the source, so a clause value nobody declared cannot quietly union to nothing:
     `snapshot_coverage.undeclared_clauses` raises the flag one layer up (the audit test walks the
     whole compendium), and here an undeclared value is treated as *unknown*, which refuses.
+
+    Split out of :func:`_clause_writes` at Issue #410 because :func:`stadium_clauses_for` asks the
+    same question **per clause** — *"is THIS clause one that writes the board?"* — and a second walk
+    of `clause_values` beside this one would be a second place for the RNG / reveal / drift refusals
+    to be forgotten."""
+    out: set = set()
+    for value in snapshot_coverage.clause_values(clause):
+        if value not in snapshot_coverage.CLAUSE_WRITES:
+            raise Unmodellable(
+                f"{card_id}: clause value {value!r} is not in `snapshot_coverage.CLAUSE_WRITES` "
+                f"— the vocabulary moved underneath the seam")
+        if value in snapshot_coverage.NONDETERMINISTIC_CLAUSES:
+            raise Unmodellable(
+                f"{card_id}: clause {value!r} consults RNG — a simulated shuffle is one sample, "
+                f"not a distribution (the engine has no deal-seed)")
+        if value in snapshot_coverage.REVEALING_CLAUSES:
+            raise Unmodellable(
+                f"{card_id}: clause {value!r} REVEALS information — it belongs to an Expectation "
+                f"node over outcome classes (POC-T4/2, Issue #383), not to a point transition")
+        out |= snapshot_coverage.CLAUSE_WRITES[value]
+    return frozenset(out)
+
+
+def _clause_writes(combat, card_id) -> frozenset:
+    """Every `snapshot_coverage` zone this card's Effect Clauses write, unioned over every clause.
 
     ⚠️ **An empty union is not proof the card writes nothing** — a card the compendium has never
     heard of unions to the empty set, which is the blind spot `apply_option.footprints_writing_unhomed`
@@ -361,75 +386,285 @@ def _clause_writes(combat, card_id) -> frozenset:
     CALLERS here never treat "wrote nothing" as a licence on its own — see :func:`_play`."""
     out: set = set()
     for clause in card_clauses(combat, card_id):
-        for value in snapshot_coverage.clause_values(clause):
-            if value not in snapshot_coverage.CLAUSE_WRITES:
-                raise Unmodellable(
-                    f"{card_id}: clause value {value!r} is not in `snapshot_coverage.CLAUSE_WRITES` "
-                    f"— the vocabulary moved underneath the seam")
-            if value in snapshot_coverage.NONDETERMINISTIC_CLAUSES:
-                raise Unmodellable(
-                    f"{card_id}: clause {value!r} consults RNG — a simulated shuffle is one sample, "
-                    f"not a distribution (the engine has no deal-seed)")
-            if value in snapshot_coverage.REVEALING_CLAUSES:
-                raise Unmodellable(
-                    f"{card_id}: clause {value!r} REVEALS information — it belongs to an Expectation "
-                    f"node over outcome classes (POC-T4/2, Issue #383), not to a point transition")
-            out |= snapshot_coverage.CLAUSE_WRITES[value]
+        out |= _one_clause_writes(combat, card_id, clause)
     return frozenset(out)
 
 
-def _stadium_gate(current: dict, combat, *, why: str) -> None:
-    """Refuse while a Stadium whose effect WRITES the board is in play.
+#: Damage per damage COUNTER (`docs/rulebook.txt`: a counter is 10 damage). The compendium prints a
+#: Stadium trigger's tax in COUNTERS (Risky Ruins `amount: 2`) and the engine prints it in DAMAGE
+#: (`chain_overrides.json` `{"onBench": {"damage": 20}}`), so one of the two has to be converted and
+#: this is where. The two spellings cross-check each other: 2 x 10 == 20.
+_COUNTER = 10
 
-    **Measured, not anticipated.** The parity lane's first full sweep found 82 divergences over 41
-    steps, and every one of them was a live board-level effect re-writing a body the moment it
-    entered or changed — a class the option's own clauses cannot see, because the card doing the work
-    belongs to the board rather than to the play:
+#: `cg.api.EnergyType.DARKNESS`. Spelled as the constant rather than imported, for the same reason
+#: `option_equivalence` holds the `AreaType` numbers: this module is DLL-free by contract and the
+#: strategy suite must run without the engine.
+#:
+#: WARNING: **`TEAM_ROCKET` (11) is deliberately NOT here**, even though `cg.api` comments it as
+#: *"PSYCHIC and DARKNESS"*. The engine's own bench-trigger gate is `int(stat.energyType) in
+#: trig["unlessEnergyType"]` against the literal `[7]` (`cgpy/turn.py:_after_benched`,
+#: `chain_overrides.json` 1260), so a Team Rocket's {D} body IS taxed by Risky Ruins. Mirroring the
+#: engine is the whole contract here; reading the card's flavour instead would diverge.
+_DARKNESS = 7
 
-    * **Risky Ruins (1260)**, a `stadium_trigger`: *"Whenever any player puts a Basic non-{D} Pokémon
-      onto their Bench during their turn, place 2 damage counters on that Pokémon."* 28 deploys
-      arrived at full HP in the seam and at 2 counters in the engine.
-    * **Gravity Mountain (1252)**, a `stadium_static` `hp_delta`: *"Each Stage 2 Pokémon in play (both
-      yours and your opponent's) gets -30 HP."* 7 evolutions into a Stage 2 arrived 30 HP too high —
-      Dragapult ex at 320/320 where the engine says 290/290.
+#: The transitions a Stadium clause can be ABOUT, in :func:`stadium_clauses_for`'s ``event``
+#: vocabulary. Not the compendium's namespace: ``bench_play`` is also a `stadium_trigger`'s ``on``
+#: value, while ``stage_change`` and ``displace`` are this seam's names for the two transitions that
+#: have no trigger of their own but still re-read a Stadium (an evolution re-classes a body; a
+#: displacement ends the modifier on every body at once).
+STADIUM_EVENTS: frozenset = frozenset({"bench_play", "stage_change", "displace"})
 
-    So the gate is *"is a Stadium with a NON-EMPTY `CLAUSE_WRITES` union in play?"*, read off the same
-    registry every other refusal here consults. A Stadium whose effects are `damage_reduction` /
-    `damage_boost` / `prevent_damage` writes nothing (declared empty, deliberately — `CombatMath`
-    reads those off the `stadium` zone when it prices an attack and stores nothing), so those do not
-    gate. Cost of the gate, measured on the same corpus: **104 refused steps of 14581** (67 Risky
-    Ruins, 37 Gravity Mountain).
+#: The ``on`` values a `stadium_trigger` may name. One today (Risky Ruins), and an ``on`` outside
+#: this set is UNKNOWN rather than non-matching -- see :func:`stadium_clauses_for`.
+_TRIGGER_EVENTS: frozenset = frozenset({"bench_play"})
 
-    **Three callers, and the third is the one nobody would guess.** A body ENTERING play is what a
-    trigger fires on (`_play`'s deploy) and a body CHANGING stage is what a static HP delta re-reads
-    (`_evolve`) — but **displacing** the Stadium ENDS its effect (`docs/rulebook.txt` L137: *"discard
-    the old one and end its effects"*), which re-writes every body it was modifying. Verified on the
-    corpus rather than reasoned: `ml_dx_2001` carries Dragapult ex at **290/290 while Gravity Mountain
-    is in play (f172) and at 320/320 once it is gone (f181)**. The committed corpus happens to contain
-    zero steps that play a QUIET Stadium over a writing one — all four displacements play a writing
-    Stadium, which refuses on its own union — so the parity lane's clean sweep does not cover that
-    path, and the gate is here on the rule rather than on the measurement.
 
-    Refused rather than modelled, and that is a scope ruling worth stating: applying a Stadium's
-    trigger means reading its clause parameters and its restriction (*"Basic non-{D}"*) and deciding
-    which body it lands on — clause APPLICATION, which is what POC-T4/2 (Issue #383) scopes. Half of
-    it here would be exactly the three-quarters-of-a-card modelling Issue #300's `_covers` verdict
-    exists to refuse."""
+def _is_basic(stat) -> bool:
+    """A Basic Pokemon, off `CardStat.stage` -- the canonical ``"basic"``/``"stage1"``/``"stage2"``
+    string, the ONE derivation of `CardData.basic`/`.stage1`/`.stage2` (Issue #408 / PR #411).
+
+    Not `evolvesFrom is None and not stage2`, which was this function's shape before #408 landed:
+    that combination is exact on today's pool but is a second READING of the same fact `stage`
+    already states directly -- and `stage_from_card`'s own docstring names that exact drift as the
+    reason it exists (`provider.py`)."""
+    return getattr(stat, "stage", None) == "basic"
+
+
+def _admits_stage2(stat):
+    """Gravity Mountain's scope: *"Each Stage 2 Pokemon in play"* (`data/EN_Card_Data.csv` 1252).
+
+    The engine's own gate is `"stage2HpDelta" in sdef and gs.stat(p.top).stage2`
+    (`cgpy/chain.py:stadium_hp_delta`)."""
+    return bool(getattr(stat, "stage2", False))
+
+
+def _admits_basic_non_dark(stat):
+    """Risky Ruins' scope: *"a Basic non-{D} Pokemon"*, verbatim from `data/EN_Card_Data.csv` 1260.
+
+    The engine spells the same gate as `if not stat.basic or int(stat.energyType) in
+    trig.get("unlessEnergyType", []): return` (`cgpy/turn.py:_after_benched`), and
+    ``unlessEnergyType`` is `[7]` for this card.
+
+    Returns None -- *unknown*, which refuses -- when the body has no ``energyType`` at all, because
+    the {D} half of the gate then cannot be evaluated and guessing it either way would tax (or
+    spare) a body the engine does not."""
+    if getattr(stat, "energyType", None) is None:
+        return None
+    return _is_basic(stat) and int(stat.energyType) != _DARKNESS
+
+
+#: The `applies_to` resolvers, keyed by the compendium's own body-class vocabulary
+#: (`snapshot_coverage.CLAUSE_VALUES["applies_to"]`).
+#:
+#: **Two entries, and the other four are absent on purpose.** ``basic`` / ``metal`` /
+#: ``name_family`` / ``no_rule_box`` appear only on `damage_reduction` / `damage_boost` /
+#: `prevent_damage`, whose write-sets are declared EMPTY -- `CombatMath` reads those off the
+#: `stadium` zone when it prices an attack and stores nothing -- so they never survive
+#: :func:`stadium_clauses_for`'s writing-clause filter at all. A resolver for a class no writing
+#: clause names would be a reader for a case that cannot occur, and if one ever does occur the
+#: MISSING key is what makes it refuse rather than silently mis-apply.
+_APPLIES_TO = {
+    "stage2": _admits_stage2,
+    "basic_non_dark": _admits_basic_non_dark,
+}
+
+
+def _admits(clause: dict, stats: tuple):
+    """Does ``clause``'s ``applies_to`` admit any of these body classes? True / False / None.
+
+    None is *unknown* -- an `applies_to` value with no resolver, a resolver that could not decide, or
+    no body class to test at all. Every caller treats None as refuse, which is the fail-closed half
+    of Issue #410's R1: `applies_to` values are `snapshot_coverage` PARAMETERS rather than
+    :data:`VOCABULARY_KEYS`, so `undeclared_clauses` does not walk them and drift here is invisible
+    to the compendium audit."""
+    key = clause.get("applies_to")
+    if key is None:
+        # No body scope named: the clause is about the board rather than about a class of body.
+        return True
+    resolver = _APPLIES_TO.get(key)
+    if resolver is None:
+        return None
+    verdicts = [resolver(stat) for stat in stats if stat is not None]
+    if not verdicts or None in verdicts:
+        return None
+    return any(verdicts)
+
+
+def stadium_clauses_for(current: dict, combat, *, event: str, stat=None) -> tuple:
+    """The in-play Stadium's clauses that AFFECT this event/body -- ``()`` when it cannot reach it.
+
+    ``event`` is one of :data:`STADIUM_EVENTS`: ``"bench_play"`` (a body entering the Bench),
+    ``"stage_change"`` (a body being re-classed by an evolution) or ``"displace"`` (the Stadium
+    itself leaving play). ``stat`` is the body class in question -- a single `CardStat`, or a tuple
+    of them for ``stage_change``, where the delta may START or STOP applying and both the old and
+    the new body have to be asked.
+
+    ## Why this replaced a blanket gate (Issue #410)
+
+    Its predecessor `_stadium_gate` asked *"is a Stadium with a NON-EMPTY `CLAUSE_WRITES` union in
+    play?"* -- read off the registry with no reference to the option, the body or the event. Measured
+    over the 377 committed parity traces that refused **104 steps**, and splitting them by what the
+    Stadium could actually DO to the step showed **73 of the 104 needed no clause application at
+    all**:
+
+    ==== =========== ================ ========================== ==========================
+      n  option      Stadium in play  card played / evolved into can the Stadium affect it?
+    ==== =========== ================ ========================== ==========================
+      28 ``_PLAY``   Risky Ruins      Basic                      **yes** -- the tax fires
+       3 ``_EVOLVE`` Gravity Mountain Stage 2                    **yes** -- gains the -30
+      27 ``_EVOLVE`` Risky Ruins      Stage 1                    no -- ``on: bench_play``
+      12 ``_EVOLVE`` Risky Ruins      Stage 2                    no -- same
+      19 ``_EVOLVE`` Gravity Mountain Stage 1                    no -- ``applies_to: stage2``
+      15 ``_PLAY``   Gravity Mountain Basic                      no -- a Basic is not a Stage 2
+    ==== =========== ================ ========================== ==========================
+
+    ## The matching rules
+
+    * a `stadium_trigger` matches when its ``on`` equals the event **and** ``applies_to`` admits the
+      body -- an evolution is not a bench play, which is the 39 Risky-Ruins rows above;
+    * a `stadium_static` matches when ``applies_to`` admits the body, with **no** event filter: a
+      static is a FLOATING modifier (`cgpy/chain.py:stadium_hp_delta` is called by
+      `render.pokemon_dict` on every render, per body, and is never stored), so it re-reads wherever
+      the seam mints or re-classes a body. Gravity Mountain not reaching a `_PLAY` deploy is then
+      structural rather than a special case -- a Basic is not a Stage 2 (Issue #410 R5);
+    * ``displace`` returns **every** writing clause, because ending a Stadium re-renders bodies the
+      transition never touched, on both sides (R6);
+    * **an unrecognised ``kind`` / ``on`` / ``applies_to`` returns the clause anyway**, so the caller
+      refuses. Fail-closed against vocabulary drift, exactly as :func:`_clause_writes` refuses an
+      undeclared clause VALUE.
+
+    Clauses whose own write-set is empty never match: those are the three damage modifiers
+    `CombatMath` reads off the `stadium` zone and stores nothing for, so they gate nothing and never
+    did."""
+    if event not in STADIUM_EVENTS:
+        raise Unmodellable(f"stadium_clauses_for: {event!r} is not one of {sorted(STADIUM_EVENTS)}")
     card = (current.get("stadium") or [None])[0]
     if not card:
-        return
+        return ()
     card_id = card.get("id")
+    stats = tuple(stat) if isinstance(stat, (tuple, list)) else (stat,)
+    out = []
     try:
-        writes = _clause_writes(combat, card_id)
+        for clause in card_clauses(combat, card_id):
+            if not _one_clause_writes(combat, card_id, clause):
+                continue
+            if event == "displace":
+                out.append(clause)
+                continue
+            kind = clause.get("kind")
+            if kind == "stadium_trigger":
+                on = clause.get("on")
+                if on not in _TRIGGER_EVENTS:
+                    out.append(clause)              # unknown `on` -- fail closed
+                    continue
+                if on != event:
+                    continue
+            elif kind != "stadium_static":
+                out.append(clause)                  # unknown clause kind -- fail closed
+                continue
+            if _admits(clause, stats) is not False:
+                out.append(clause)                  # True, or unknown -- fail closed
     except Unmodellable as gap:
-        raise Unmodellable(f"a Stadium is in play whose effect the seam cannot model — {gap}")
-    if writes:
-        stat = _stat(combat, card_id)
+        raise Unmodellable(f"a Stadium is in play whose effect the seam cannot model -- {gap}")
+    return tuple(out)
+
+
+def _stadium_ref(current: dict, combat) -> str:
+    """``"<id> <name>"`` for the in-play Stadium -- the head of a refusal message."""
+    card_id = ((current.get("stadium") or [{}])[0] or {}).get("id")
+    return f"{card_id} {getattr(_stat(combat, card_id), 'name', '?')}"
+
+
+def bench_body(card_id, stat, *, seat_index: int, serial) -> dict:
+    """One freshly benched body, at full HP with nothing attached.
+
+    **The single definition**, because a Basic reaches the Bench two ways -- played from hand
+    (:func:`_play`) and delivered there by a deck search (`board_expectation`'s ``dest: "bench"``) --
+    and two spellings of *"what a new body looks like"* is the drift ADR-0087 charges for. Public for
+    the same reason :func:`fork` / :func:`take_from_hand` are (Issue #383): *"a private reach across
+    a module boundary is how a refactor inside `MySide` breaks a caller nothing warned about"*.
+
+    Field-for-field the engine's own renderer over a fresh `PokemonInPlay`:
+    `cgpy/turn.py:_new_in_play` mints ``hp == max_hp == stat.hp`` with ``entered_turn`` the current
+    turn, and `cgpy/render.py:pokemon_dict` renders that as these ten keys. ``appearThisTurn`` is
+    True because ``entered_turn >= gs.turn`` holds the turn it arrives.
+
+    ``seat_index`` is the body's OWNER -- the arriving card's own ``playerIndex`` where it carries
+    one. The Stadium's arrival tax is NOT applied here; it is :func:`apply_bench_arrival`'s, so that
+    a caller which has asked :func:`stadium_clauses_for` applies it exactly once and a caller that
+    has not cannot get a half-taxed body by forgetting to."""
+    return {
+        "id": card_id,
+        "serial": serial,
+        "playerIndex": seat_index,
+        "hp": int(stat.hp),
+        "maxHp": int(stat.hp),
+        "appearThisTurn": True,
+        "energies": [], "energyCards": [], "tools": [], "preEvolution": [],
+    }
+
+
+def apply_bench_arrival(body: dict, clauses, stat) -> frozenset:
+    """Apply the in-play Stadium's bench-play clauses to a body that just arrived. Returns its zones.
+
+    Mutates ``body`` in place -- every caller has just minted it with :func:`bench_body` and owns it
+    outright, so a copy would be a copy of a copy.
+
+    **A trigger is a one-shot EVENT and the damage is STORED**, which is the distinction the whole of
+    Issue #410 turns on: `cgpy/turn.py:_after_benched` queues the trigger when a body is benched,
+    `chain.op_bench_counter_damage` resolves it once as ``p.hp = max(0, p.hp - damage)``, and nothing
+    re-evaluates it afterwards. So ``hp`` moves and **``maxHp`` does not** -- the sharp difference
+    from :func:`_attach`'s Tool bonus, which moves both because a Tool raises the maximum and a
+    damage counter does not.
+
+    Anything else in ``clauses`` REFUSES, including a `stadium_static` that reached a bench play and
+    a clause whose ``applies_to`` :func:`_admits` could not resolve. :func:`stadium_clauses_for`
+    returns an unknown-vocabulary clause on purpose so that this is where it lands."""
+    writes: set = set()
+    for clause in clauses:
+        admits = _admits(clause, (stat,))
+        if (clause.get("kind") == "stadium_trigger" and clause.get("on") == "bench_play"
+                and clause.get("effect") == "damage_counters" and admits is True):
+            damage = int(clause.get("amount") or 0) * _COUNTER
+            if damage:
+                body["hp"] = max(0, int(body.get("hp") or 0) - damage)
+                writes.add("damage_counters")
+            continue
         raise Unmodellable(
-            f"{card_id} {getattr(stat, 'name', '?')} is in play and its effect writes "
-            f"{sorted(writes)}; {why} — the transition would produce a board the engine does not "
-            f"(measured: Risky Ruins' 2 counters on a benched Basic, Gravity Mountain's -30 on a "
-            f"Stage 2, and that same -30 coming BACK when the Stadium is displaced)")
+            f"a Stadium clause {clause!r} reaches a body arriving on the Bench and the seam has no "
+            f"applier for it (`applies_to` admits: {admits!r}) -- a half-applied Stadium is the "
+            f"three-quarters-of-a-card modelling Issue #300's `_covers` verdict exists to refuse")
+    return frozenset(writes)
+
+
+def stadium_hp_delta(clauses, stat) -> int:
+    """The in-play Stadium's FLOATING HP modifier for a body of this class (0 when none reaches it).
+
+    Named after `cgpy/chain.py:stadium_hp_delta`, which is the same quantity on the engine's side of
+    the seam, and the mirror is the point: *"Damage counters live on stored hp/max_hp"* -- a static
+    is never stored, which is why the body renders back at full HP the moment the Stadium leaves
+    (`ml_dx_2001`: Dragapult ex 290/290 at f172 with Gravity Mountain out, 320/320 at f181 without
+    it).
+
+    ``stat`` is the body the delta is being asked about, and it is re-tested here rather than trusted
+    from :func:`stadium_clauses_for`: that predicate is asked about the OLD and the NEW body together
+    at a ``stage_change``, since the delta may start or stop applying, while the ARITHMETIC only ever
+    wants the body that ends up on the board. A clause that reached the old body and not the new one
+    therefore contributes 0 here, which is correct -- the delta stopped.
+
+    Refuses on any clause it cannot price, for :func:`apply_bench_arrival`'s reasons."""
+    delta = 0
+    for clause in clauses:
+        admits = _admits(clause, (stat,))
+        if (clause.get("kind") == "stadium_static"
+                and clause.get("effect") == "hp_delta" and admits is not None):
+            delta += int(clause.get("amount") or 0) if admits else 0
+            continue
+        raise Unmodellable(
+            f"a Stadium clause {clause!r} reaches a body this transition re-classes and the seam has "
+            f"no applier for it (`applies_to` admits: {admits!r}) -- the transition would produce a "
+            f"board the engine does not")
+    return delta
 
 
 # ── the four transitions ──────────────────────────────────────────────────────────────────────────
@@ -518,13 +753,17 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
     target = _body_at(me, area, index)
     if target is None:
         raise Unmodellable(f"evolve names ({area!r}, {index!r}), which is not a body on my board")
-    _stadium_gate(current, combat,
-                  why="a body CHANGING stage is what a static HP delta re-reads")
 
     tools = list(target.get("tools") or ())
     energy_cards = list(target.get("energyCards") or ())
     target_stat = _stat(combat, target.get("id"))
     was_evolution = getattr(target_stat, "evolvesFrom", None) is not None
+
+    # A body CHANGING stage is what a static HP delta re-reads (Issue #410 R4). BOTH stats are asked,
+    # because the delta may START applying (Stage 1 -> Stage 2 under Gravity Mountain) or STOP, and
+    # the seam must engage either way; the ARITHMETIC below then prices it against the NEW body only.
+    stadium_clauses = stadium_clauses_for(current, combat, event="stage_change",
+                                          stat=(target_stat, stat))
 
     # Both of these are what *"evolving keeps attached cards"* (`docs/rules.md` §4) actually means:
     # the cards carry, and so do their EFFECTS — re-evaluated against the body they are now on.
@@ -534,10 +773,16 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
     #   * A Special Energy's PROVISION can change with the stage. Ignition Energy provides {C} on a
     #     Basic and {C}{C}{C} on an Evolution, so the same card renders `[0]` before and `[0, 0, 0]`
     #     after — measured on `v2_ms_mirror_5001` f60 and `v2_ms_ml_5300` f35.
+    #   * A Stadium's static HP delta FLOATS on top of both, and the composition order is the
+    #     engine's rather than a choice: tool bonuses are STORED in `max_hp` and the Stadium delta is
+    #     applied at RENDER (`cgpy/render.py:pokemon_dict`: `maxHp = p.max_hp + delta`). So the delta
+    #     is added AFTER the tool sum and never folded into it — a Tool-carrying body evolving into a
+    #     Stage 2 under Gravity Mountain lands at `printed + bonus - 30`.
+    stadium_delta = stadium_hp_delta(stadium_clauses, stat)
     max_hp = int(stat.hp) + sum(
         int(getattr(t_stat, "hpBonus", 0) or 0)
         for t_stat in (_stat(combat, (t or {}).get("id")) for t in tools)
-        if t_stat is not None and t_stat.applies_to_holder(stat))
+        if t_stat is not None and t_stat.applies_to_holder(stat)) + stadium_delta
     units_before = tuple(units_for_cards(combat, energy_cards, onto_evolution=was_evolution))
     if units_before != tuple(body_unit_codes(target)):
         # A SELF-CHECK, not a formality: if the provision model already disagrees with the engine
@@ -547,6 +792,9 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
             f"the attached-Energy provision model disagrees with this board before the evolution "
             f"even happens (seam {units_before}, engine {tuple(body_unit_codes(target))}), so the "
             f"re-derived post-evolution units cannot be trusted")
+    # Damage as a DELTA, and it is **invariant to a floating Stadium modifier**: the rendered `hp`
+    # and `maxHp` both carry the delta, so it cancels in the subtraction. That is why applying the
+    # Stadium above needed no re-derivation of the carry (Issue #410 R4).
     taken = max(0, int(target.get("maxHp") or 0) - int(target.get("hp") or 0))
     body = {
         "id": card.get("id"),
@@ -567,6 +815,12 @@ def _evolve(obs, option, *, seat_index, combat) -> Delta:
     # then this write was real and undeclared, and the parity lane's `_PLAY` control proved nothing
     # in the tree could see it.
     writes = {"my_hand_ids", "bodies_in_play", "new_in_play"}
+    if stadium_delta:
+        # `damage_counters` is the zone that homes the HP read (`…active.hp_remaining`) — the same
+        # reading `snapshot_coverage` gives Gravity Mountain's `hp_delta` and `_attach`'s Tool grant.
+        # Declared only when the delta is NON-ZERO: a clause that reached the body and priced at 0
+        # assigned nothing, and `Delta.writes` is *"zone ids this step ASSIGNED"*.
+        writes.add("damage_counters")
     if area == AREA_ACTIVE and clear_conditions(me):
         writes.add("special_conditions")
     return Delta(obs=new_obs, writes=frozenset(writes))
@@ -626,7 +880,7 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
       Compassion ×14 poses (17); Rosa's Encouragement ×2 poses (22). No closed-form transition exists
       for these at this step, whatever the clause vocabulary says.
     * **19 resolve wholly at MAIN**, and of those 13 are the two writing Stadiums (whose effect is the
-      BOARD's, not the play's — see :func:`_stadium_gate`). That leaves **6 steps in the whole corpus**
+      BOARD's, not the play's — see :func:`stadium_clauses_for`). That leaves **6 steps in the corpus**
       — Cook ×4, Fennel ×1, Crispin ×1 — where a clause could genuinely be applied here and is not.
       Deferred deliberately: a heal applier built for 6 corpus steps is the thin end of the clause
       application the sub-issue split assigned to Issues #383/#386, and half of it here is exactly the
@@ -657,25 +911,21 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
         if not stat.hp:
             raise Unmodellable(f"{card_id} {stat.name}: no `CardStat` HP, so the deployed body's "
                                f"maximum is unknown")
-        _stadium_gate(current, combat,
-                      why="a body ENTERING play is what a Stadium trigger fires on")
+        # A body ENTERING play is what a Stadium trigger fires on (Issue #410 R3). Asked BEFORE the
+        # Bench cap so that a Stadium whose vocabulary the seam cannot read still refuses on the
+        # vocabulary rather than on whichever check happens to run first.
+        stadium_clauses = stadium_clauses_for(current, combat, event="bench_play", stat=stat)
         bench = list(me.get("bench") or ())
         if len(bench) >= int(me.get("benchMax") or _BENCH_MAX):
             raise Unmodellable(f"{card_id} {stat.name}: the Bench is full, so this deploy is not a "
                                f"legal play on this board")
-        bench.append({
-            "id": card_id,
-            "serial": card.get("serial"),
-            "playerIndex": card.get("playerIndex", seat_index),
-            "hp": int(stat.hp),
-            "maxHp": int(stat.hp),
-            "appearThisTurn": True,
-            "energies": [], "energyCards": [], "tools": [], "preEvolution": [],
-        })
+        body = bench_body(card_id, stat, seat_index=card.get("playerIndex", seat_index),
+                          serial=card.get("serial"))
+        writes = {"my_hand_ids", "bodies_in_play", "bench_occupancy", "new_in_play"}
+        writes |= apply_bench_arrival(body, stadium_clauses, stat)
+        bench.append(body)
         me["bench"] = bench
-        return Delta(obs=new_obs,
-                     writes=frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy",
-                                       "new_in_play"}))
+        return Delta(obs=new_obs, writes=frozenset(writes))
 
     if stat.is_stadium:
         old = (current.get("stadium") or [None])[0]
@@ -685,11 +935,24 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
         # DISPLACEMENT ends the old Stadium's effect (`docs/rulebook.txt` L137), which re-writes every
         # body it was modifying — a Gravity Mountain leaving play gives every Stage 2 its 30 HP back
         # (`ml_dx_2001`: Dragapult ex 290/290 at f172 with GM out, 320/320 at f181 without it). So the
-        # gate belongs here as much as on the two body-moving transitions, and this is the caller the
-        # parity lane could NOT have found: the committed corpus contains no step that plays a QUIET
-        # Stadium over a writing one, so a clean sweep is not evidence about this path.
-        _stadium_gate(current, combat,
-                      why="DISPLACING it ends its effect on every body it was modifying")
+        # refusal belongs here as much as on the two body-moving transitions, and this is the caller
+        # the parity lane could NOT have found: the committed corpus contains no step that plays a
+        # QUIET Stadium over a writing one, so a clean sweep is not evidence about this path.
+        #
+        # **This site stays conservative and keeps refusing** (Issue #410 R6), which is why
+        # `stadium_clauses_for` returns EVERY writing clause for `displace` rather than narrowing:
+        # what ends is the modifier on every body on BOTH sides, including bodies this transition
+        # never touched, so there is no per-body question to narrow to. Measured on the corpus: of 35
+        # Stadium plays, 31 play onto an empty zone and all 4 displacements play a WRITING Stadium,
+        # which refuses on its own clause union above — so the path is unreachable today, recorded
+        # rather than left for a later reader to mistake for untested.
+        displaced = stadium_clauses_for(current, combat, event="displace")
+        if displaced:
+            raise Unmodellable(
+                f"{_stadium_ref(current, combat)} is in play and DISPLACING it ends its effect on "
+                f"every body it was modifying, on both sides — {len(displaced)} writing clause(s) "
+                f"the transition would have to un-apply board-wide (measured: Gravity Mountain's "
+                f"-30 coming BACK, `ml_dx_2001` f172 290/290 vs f181 320/320)")
         writes = {"my_hand_ids", "stadium", "allowance_stadium_played"}
         if old is not None:
             owner = old.get("playerIndex")

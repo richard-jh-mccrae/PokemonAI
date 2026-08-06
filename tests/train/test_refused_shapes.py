@@ -226,7 +226,7 @@ def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
     `test_the_constructor_really_refuses_each_shape_the_audit_names`), so "0 here" reads as "clean",
     not as "broken".
 
-    **372 → 375 on 2026-08-06** (Issue #409 / ADR-0122): the first ctx-17 (`SelectContext.HEAL`)
+    **372 → 375 on 2026-08-06** (Issue #409 / ADR-0123): the first ctx-17 (`SelectContext.HEAL`)
     rulings, `data/corrections/mega_starmie_20260806_parity-ctx17/`. This is the denominator moving
     because the corpus really grew, not a shape being admitted — `refused_shapes` above still returns
     `[]`, so all three are clean by the same predicate. The count going red first is this census
@@ -255,7 +255,7 @@ def test_the_corpus_now_holds_no_match_scope_records_at_all():
     This is the corpus-composition half of that repair. `test_the_repaired_record_still_grades_the_
     same_way` below is the grading half — the fix must be a pure re-label, not a value change.
 
-    **`decision` 354 → 357 on 2026-08-06** (Issue #409 / ADR-0122): three ctx-17 HEAL-target rulings,
+    **`decision` 354 → 357 on 2026-08-06** (Issue #409 / ADR-0123): three ctx-17 HEAL-target rulings,
     all `decision` scope. `turn` is untouched and `match` is still absent, which is the assertion
     this test actually makes — the decision count is the denominator that carries it."""
     from collections import Counter
