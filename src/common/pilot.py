@@ -2193,6 +2193,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._heal_target_tactical(obs, select, board, option)   # ctx 17 (Issue #409):
                                                                        # the 4th target-select term
+                    + self._evolve_target_tactical(obs, select, board, option, ctx)  # ctx 18 (#417 —
+                                                                       # Issue #417): the 5th, and
+                                                                       # WHERE a searched-out
+                                                                       # evolution lands
                     + self._gust_stall_target_tactical(obs, select, board, option)
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
@@ -2397,23 +2401,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         body_cid = raw.get("id")
         me = self._my_player(obs)
         is_active = any(raw is p for p in (me.get("active") or []))
-        bench = self._my_bench_raws(obs)
-        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active, bench=bench)
-        # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
-        # hypothetical body differs from the real one ONLY in which card it is — exactly the
-        # substitution the deploy delta is asking about.
-        result_raw = dict(raw, id=ctx.card_id)
-        rstat = self.stats.get(ctx.card_id) if self.stats else None
-        if rstat is not None and getattr(rstat, "hp", None):
-            result_raw["hp"] = rstat.hp
-        # SUBSTITUTE the hypothetical into the bench rather than reading it alone. `result_raw` is a
-        # COPY, so without this the Harvest would read B among its bench-mates and R in isolation —
-        # and R would look fragile purely for being alone, which is not a fact about evolving. Both
-        # sides must see the same bench with exactly one body swapped (ADR-0070's body-substituted
-        # delta; ADR-0071 makes the bench read sensitive to the company a body keeps).
-        result_bench = [result_raw if b is raw else b for b in bench]
-        result = self._evolve_side(obs, board, result_raw, ctx.card_id, is_active=is_active,
-                                   bench=result_bench)
+        body, result, result_raw = self._evolve_substitution(obs, board, raw, ctx.card_id,
+                                                             is_active=is_active)
         btags = self.functions.tags(body_cid) if (self.functions and body_cid is not None) else []
         inp = EvolveInputs(
             body=body, result=result,
@@ -2430,6 +2419,116 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 "income_loss": val.income_loss, "tactical": val.total,
                 "body": {"this_turn": body.this_turn, "arm": body.arm, "ko": body.ko},
                 "result": {"this_turn": result.this_turn, "arm": result.arm, "ko": result.ko}}
+
+    def _evolve_substitution(self, obs: dict, board: Board, raw: dict, target_cid, *,
+                             is_active: bool):
+        """The BODY-SUBSTITUTED delta both evolve readers share (ADR-0070 §2): read the
+        pre-evolution ``raw`` and the hypothetical form it becomes into two `EvolveBody` readings,
+        against the SAME bench with exactly one body swapped. Returns
+        ``(body, result, result_raw)``.
+
+        Extracted (Issue #417) because a SECOND caller arrived — `_evolve_target_tactical`, the
+        `_EVOLVES_FROM` (ctx 18) target select — and the substitution below is exactly the kind of
+        subtle, comment-carrying step two hand-rolled copies are free to drift apart on (ADR-0087:
+        one store per fact). `_evolve_decision`'s gate, inputs and return are unchanged; only the
+        five statements that were already a self-contained unit moved.
+
+        The two callers differ ONLY in where the pair of card ids comes from. At MAIN an `_EVOLVE`
+        option names its body by ``inPlayArea``/``inPlayIndex`` and the evolution by the option's own
+        hand card (`ctx.card_id`); at ctx 18 the option names the BODY (so `ctx.card_id` resolves to
+        the pre-evolution, not the target) and the evolution rides on ``select["contextCard"]["id"]``.
+        Everything downstream of that pair is identical, which is why it lives here once."""
+        body_cid = raw.get("id")
+        bench = self._my_bench_raws(obs)
+        body = self._evolve_side(obs, board, raw, body_cid, is_active=is_active, bench=bench)
+        # The result inherits the pre-evolution's attached Energy (rules.md §4) and its slot, so the
+        # hypothetical body differs from the real one ONLY in which card it is — exactly the
+        # substitution the deploy delta is asking about.
+        result_raw = dict(raw, id=target_cid)
+        rstat = self.stats.get(target_cid) if self.stats else None
+        if rstat is not None and getattr(rstat, "hp", None):
+            result_raw["hp"] = rstat.hp
+        # SUBSTITUTE the hypothetical into the bench rather than reading it alone. `result_raw` is a
+        # COPY, so without this the Harvest would read B among its bench-mates and R in isolation —
+        # and R would look fragile purely for being alone, which is not a fact about evolving. Both
+        # sides must see the same bench with exactly one body swapped (ADR-0070's body-substituted
+        # delta; ADR-0071 makes the bench read sensitive to the company a body keeps).
+        result_bench = [result_raw if b is raw else b for b in bench]
+        result = self._evolve_side(obs, board, result_raw, target_cid, is_active=is_active,
+                                   bench=result_bench)
+        return body, result, result_raw
+
+    def _evolve_target_tactical(self, obs: dict, select: dict, board: Board, option: dict,
+                                ctx) -> float:
+        """Rank WHICH of my in-play Pokémon a searched-out evolution is put ONTO, at the
+        `_EVOLVES_FROM` target select (ctx 18, Issue #417).
+
+        Salvatore evolves a body straight out of the deck, bypassing hand: *"Search your deck for a
+        card that has no Abilities and evolves from 1 of your Pokémon, and put it onto that Pokémon
+        to evolve it."* The engine poses `_EVOLVES_TO` (19, which physical deck copy — moot, every
+        corpus option is an interchangeable copy of one species) and then this one, which is the real
+        decision: with three Staryu in play, WHICH becomes the Mega Starmie ex.
+
+        **Nothing scored it.** `_evolve_decision`'s guard is ``ctx.option_type != _EVOLVE``, and
+        `_EVOLVE` (9) is a MAIN-menu ACTION type; every ctx-18 option carries `_CARD` (3), so the
+        decider abstains here unconditionally. `_prefer_soonest_arming_evolve` carries the identical
+        ``type == _EVOLVE`` gate, so its own insight — *put the evolution where the Energy already
+        is* — is exactly relevant here and exactly unreachable here. With every option at 0.0 the
+        pick fell through to `_order_key`'s canonical-fingerprint leg, the same string-sort artefact
+        `_heal_target_tactical` records for ctx 17.
+
+        **No new equation.** `evolve_value` is a pure function of two `EvolveBody` readings and
+        nothing in it is MAIN-specific, so this term is `_evolve_decision`'s own body re-pointed at
+        ctx-18's option shape through the shared `_evolve_substitution`. What it measures is
+        `deploy(R) − deploy(B)` — and that already carries the survival dimension the mechanic
+        creates: evolving keeps attached cards AND damage counters (rules.md §4), so a *damaged* body
+        arrives relatively healthier (absolute damage fixed, ceiling jumped), which `EvolveBody.ko`
+        reads off the body's actual HP at damage time. Nothing extra to model.
+
+        **The two income legs are structurally zero here, by the CARD rather than by assumption.**
+        Salvatore's clause carries ``"no_ability": true`` (`card_effects.json` 1189), so the search
+        target is guaranteed Ability-less and `ready_gain` is 0 by the card's own restriction;
+        `ready_loss` is 0 for every body this deck can offer (Staryu has no Ability). Both are left
+        at their `EvolveInputs` defaults rather than plumbed — see the call site's own note, which
+        flags what a deck running such a search over an Ability-BEARING pre-evolution would owe.
+
+        A **tactical**, not an override: `_option_trace` already carries a family of context-gated
+        target terms (`_gust_target_tactical` ctx 3, `_snipe_relevance_tactical` ctx 15,
+        `_denial_target_tactical` ctx 30, `_heal_target_tactical` ctx 17), and routing through
+        ``tactical`` preserves `_order_key`'s canonical tie-break (ADR-0103) instead of bypassing it.
+        A SIBLING of `_evolve_decision` rather than a widening of its gate: that decider's return
+        also drives `_prefer_soonest_arming_evolve`'s ordering and is stored as ``evolve_working`` on
+        `OptionTrace`, and neither consumer was built to see a select.
+
+        Fails CLOSED at 0.0 on anything it cannot price — no ``contextCard``, an unresolvable option
+        body, no snapshot — matching `_heal_target_tactical`'s R3 and `_evolve_decision`'s own
+        ``or {}`` discipline. Every option then reads 0.0 and the ordering degrades to today's
+        behaviour rather than to a wrong answer."""
+        if (select or {}).get("context") != _EVOLVES_FROM or option.get("type") != _CARD:
+            return 0.0
+        state = obs.get("current") or {}
+        yi = state.get("yourIndex", 0)
+        if option.get("playerIndex", yi) != yi:
+            return 0.0                        # the evolution only ever lands on MY own bodies
+        # The target rides on the SELECT, not the option: `ctx.card_id` here resolves the option's
+        # own (area, index) and so names the PRE-EVOLUTION — the wrong card for any reader that
+        # assumes it is "the card this option is about" the way it is at MAIN. `context_card_id` is
+        # the DECLARED store for `select.contextCard` (it already feeds mega_lucario's ACTIVATE
+        # rungs), so this reads it rather than minting a second walk of the same field (ADR-0087).
+        # That is also why this term takes `ctx` where its ctx-17 sibling does not:
+        # `_heal_target_tactical` reads `select.effect.id`, for which no Context field exists.
+        target_cid = getattr(ctx, "context_card_id", None)
+        raw = self._option_pokemon(obs, select, option)
+        if target_cid is None or not raw or self._state_model is None:
+            return 0.0
+        body, result, _result_raw = self._evolve_substitution(
+            obs, board, raw, target_cid, is_active=(option.get("area") == _ACTIVE))
+        # `ready_gain`/`ready_loss` LEFT AT THEIR DEFAULTS (0.0), and that is a ruling rather than an
+        # omission: the searching card's own clause restricts the target to an Ability-less card, so
+        # the gain leg cannot fire; the loss leg is zero for every pre-evolution this select can
+        # currently offer. A future deck posing ctx 18 over an Ability-BEARING pre-evolution would
+        # owe `_evolve_income_delta` plumbing here — flagged, not silently assumed (Issue #417).
+        return evolve_value(EvolveInputs(body=body, result=result)).total
 
     def _ability_on_menu(self, obs: dict, card_id) -> bool:
         """Is this card's Ability still offered on the current menu — i.e. not yet used this turn?

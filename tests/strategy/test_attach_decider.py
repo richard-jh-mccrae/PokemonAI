@@ -20,8 +20,10 @@ from common.pilot import (Pilot, _ATTACH_ABILITY_FUEL, _ATTACH_RETREAT_EQUITY, _
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.strategy.context import _CARD, _DECK
 from common.strategy.strategy import Line
 from common.telemetry import to_record
+from pilot_helpers import parity_selects
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -514,6 +516,13 @@ _CORPUS = {
     ("84889539", 87): None,              # route to the Riolu line, not a partnerless Solrock
     ("82525101", 69): (ACTIVE, 0),       # go down swinging: the bench Mega cannot pay its retreat
     ("83007714", 65): "none",            # ... but here it CAN: retreat into it, don't feed the doomed
+    # Turbo Flare's recipient pick (ctx 21) on a bench of SAME-SPECIES bodies at different charge
+    # levels — the accel shape `is_from` was built for, and no ruled test covered it (Issue #417 B3).
+    ("83007714", 22): None,              # spread to the EMPTY Mega ex, not the started Staryu ...
+    ("83116081", 21): None,              # ... but CONCENTRATE onto the started Staryu over a fresh
+                                         #   one: convexity, and the harder of the two directions
+    ("82224509", 31): None,              # don't over-attach a body that is already 3/3 — ruled
+                                         #   2026-08-06 (Issue #417 B1), see the module note below
 }
 
 
@@ -559,3 +568,124 @@ def test_the_working_is_silent_on_a_supporter_selection_frame():
     decider prices nothing and stays silent rather than pretending to own the frame."""
     rec = _frame("85786096", 70)
     assert _tune()._build_pilot(_agent(rec))[0].explain(rec.obs).attach_working is None
+
+
+# ------------------------------------------------- Turbo Flare's two selects (Issue #417, Part B)
+#
+# Cinderace's Turbo Flare — *"Search your deck for up to 3 Basic Energy cards and attach them to
+# your Benched Pokémon in any way you like"* (`data/EN_Card_Data.csv` 666, read at source) — poses
+# `ATTACH_TO` (22, WHICH Energy cards) and then, per card, `ATTACH_FROM` (21, WHICH bench body).
+#
+# Issue #417 set out to build a decider for both and found ctx 21 ALREADY BUILT: `_attach_value`'s
+# `is_from` branch (ADR-0069) prices the recipient by convex, typed slot-fraction progress, live and
+# unconditional. Its correctness on this exact accel shape — several same-species bench recipients
+# at different charge levels — had never been asserted, only observed. The two `_CORPUS` entries
+# above are that assertion; what follows is the part the `_CORPUS` table cannot carry.
+
+CINDERACE, TURBO_FLARE_CTX = 666, 22
+# `W_ENERGY`/`F_ENERGY` above are Style A synthetics that happen to carry the REAL card ids these
+# tests need — Water Energy is card id 3 and Basic {F} Energy is card id 6 (`data/EN_Card_Data.csv`,
+# checked at source). Reused deliberately rather than re-spelled, but noted because the coincidence
+# is the exact one `pilot_helpers.poke` warns about and it does NOT hold for every Energy.
+
+
+def test_the_82224509_31_legs_are_the_convexity_and_not_a_coincidence():
+    """`82224509-31`, the frame whose record was RE-RULED on 2026-08-06 (Issue #417 B1).
+
+    As committed it contradicted itself: the ``rationale`` — *"dont attach more energy on a pokemon
+    than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the
+    other benched mon without any energy"* — names index 1, the only bench body with no Energy,
+    while `correct` recorded index 0, the already-3/3 Mega Starmie ex. Three independent facts said
+    `correct` was the stale field (the embedded ``live_trace`` records ``chosen: [0]``; the
+    rationale resolves only to index 1; the shipped decider already picks index 1), and the
+    developer ruled it `[1]`. The `_CORPUS` entry above now asserts the ranking.
+
+    ⚠️ **`correct == chosen` was NOT the defect**, recorded because the tempting shortcut is wrong
+    and would break a shipped ruling: that shape is deliberately supported on a MANDATORY select
+    here — `tests/train/test_unstatable_decline_records.py::test_a_mandatory_select_is_never_
+    excluded_even_when_chosen_equals_correct` reads it as *the pick was right*, and 13 committed
+    records still rely on it. Only the rationale conflict made this frame different.
+
+    What this test adds beyond the `_CORPUS` ranking is the WORKING: the pick is the convex build
+    delta doing its job, not a tie broken by luck. The already-3/3 Mega ex prices at exactly 0.0 —
+    there is no build progress left to buy — so the margin is structural."""
+    rec = _frame("82224509", 31)
+    dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
+    rows = {r["i"]: r for r in (dec.attach_working or {}).get("eq", ())}
+    assert rows, "the decider priced nothing at a ctx-21 select"
+    assert max(rows.values(), key=lambda r: r["tactical"])["i"] == 1
+    assert rows[0]["tactical"] == 0.0        # the already-3/3 Mega ex: no build left to buy
+    assert rows[1]["tactical"] > 0.0
+
+
+def test_every_real_turbo_flare_attach_to_menu_is_copies_of_one_basic_energy():
+    """B4's premise, MEASURED. Both real Turbo Flare `ATTACH_TO` steps in the committed corpus are
+    `minCount`/`maxCount` 0/3 over `area=DECK` options that resolve to copies of a SINGLE Basic
+    Energy card — so the menu holds nothing to rank and taking the first `min(3, offered)` is
+    correct by construction rather than by a rule.
+
+    The tripwire half: a capture that ever poses a mixed-colour Turbo Flare menu makes this fail,
+    which is the moment ctx 22 stops being moot for this card."""
+    steps = parity_selects(TURBO_FLARE_CTX, effect_id=CINDERACE)
+    assert len(steps) == 2
+    for name, index, sel in steps:
+        assert (sel["minCount"], sel["maxCount"]) == (0, 3), f"{name} f{index}"
+        deck = sel.get("deck") or []
+        ids = {(deck[o["index"]] or {}).get("id") for o in sel["option"]
+               if o.get("area") == _DECK and 0 <= o["index"] < len(deck)}
+        assert {o.get("area") for o in sel["option"]} == {_DECK}, f"{name} f{index}"
+        assert len(ids) == 1, f"{name} f{index}: mixed-colour Turbo Flare menu {sorted(ids)}"
+
+
+def _turbo_flare_attach_to(rec, *, energy_id, offered):
+    """`83007714`'s REAL Turbo Flare board with the ctx-21 recipient select replaced by the ctx-22
+    Energy select the engine poses one step earlier — the two real ctx-22 Turbo Flare boards in the
+    corpus belong to a foreign Fire deck, so the mono-colour claim has to be posed on ours."""
+    import copy
+    obs = copy.deepcopy(rec.obs)
+    yi = obs["current"]["yourIndex"]
+    obs["select"] = {
+        "type": _CARD, "context": TURBO_FLARE_CTX, "minCount": 0, "maxCount": 3,
+        "option": [{"type": _CARD, "area": _DECK, "index": i, "playerIndex": yi}
+                   for i in range(offered)],
+        "deck": [{"id": energy_id, "serial": 900 + i, "playerIndex": yi} for i in range(offered)],
+        "remainDamageCounter": 0, "remainEnergyCost": 0, "contextCard": None,
+        "effect": {"id": CINDERACE, "serial": 1, "playerIndex": yi},
+    }
+    return obs
+
+
+@pytest.mark.parametrize("offered,expected", [(2, [0, 1]), (5, [0, 1, 2])])
+def test_turbo_flare_takes_min_three_and_remaining_at_the_energy_select(offered, expected):
+    """B4. `ATTACH_TO` is not in `_GRAB_CONTEXTS`, so `_greedy_grab` never fires and the ordinary
+    ``order[:max_count]`` path takes the first `min(3, offered)`. With every option an
+    interchangeable Water Energy and nothing scoring negative, taking all of them is what a free,
+    no-downside search should do — asserted so a future rung that starts scoring here has to say
+    so out loud."""
+    rec = _frame("83007714", 22)
+    obs = _turbo_flare_attach_to(rec, energy_id=W_ENERGY, offered=offered)
+    assert _tune()._build_pilot(_agent(rec))[0].explain(obs).chosen == expected
+
+
+def test_the_off_colour_demotion_is_silent_on_this_mono_colour_deck_and_fires_when_it_should():
+    """B4's second half, WITH ITS POSITIVE CONTROL. `attach-off-color-at-fixed-recipient` is the one
+    surviving `_ATTACH_TO` rung and its own rationale says it is *"silent for a mono-colour deck
+    (every colour on-board)"*. mega_starmie's only Basic Energy is Water (`deck.txt`: *9 Water
+    Energy SVE 3*; Ignition is a Special and no Turbo Flare target), so it can never fire here.
+
+    A silence assertion alone would pass against a rung that had been deleted, so the same board is
+    posed a second time with a Fighting Energy: the rung then fires at its full −8. That is the
+    control that makes the silence mean something (CLAUDE.md)."""
+    rec = _frame("83007714", 22)
+    pilot = _tune()._build_pilot(_agent(rec))[0]
+
+    def _fired(energy_id):
+        obs = _turbo_flare_attach_to(rec, energy_id=energy_id, offered=3)
+        board = pilot._board(obs)
+        trace = pilot._option_trace(obs, obs["select"], board, obs["select"]["option"][0], 0)
+        return [h.id for h, _w in trace.fired], trace.score
+
+    on_colour, on_score = _fired(W_ENERGY)
+    off_colour, off_score = _fired(F_ENERGY)
+    assert "attach-off-color-at-fixed-recipient" not in on_colour and on_score == 0.0
+    assert "attach-off-color-at-fixed-recipient" in off_colour and off_score == -8.0
