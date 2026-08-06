@@ -433,9 +433,28 @@ _MAX_KEEP_SLOTS = 16    # bitmask-DP bound; beyond it the lowest-weight slots ar
 def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
     """The exact-coverage core: over the KEEP slots (``supplied_by_pitch`` excluded), maximise
     Σ_covered v_j·(1−r_j) by assigning each non-excluded card to ≤1 eligible slot — lib-free
-    bitmask DP over slot subsets (≤ `_MAX_KEEP_SLOTS` × ≤ ~10 cards ⇒ trivial). Returns
-    (base, best): ``base`` = Σ_j v_j·r_j (what the closure re-supplies even with no held card) and
-    ``best`` = the optimal held coverage on top. V = base + best.
+    bitmask DP over slot subsets. Returns (base, best): ``base`` = Σ_j v_j·r_j (what the closure
+    re-supplies even with no held card) and ``best`` = the optimal held coverage on top.
+    V = base + best.
+
+    **COST: trivial at the eligibility real hands produce, super-linear in BREADTH — and this
+    docstring used to claim the wrong one** (ADR-0122, Issue #406). It read *"(≤
+    `_MAX_KEEP_SLOTS` × ≤ ~10 cards ⇒ trivial)"*, which reads as a claim about the BOUND. At the
+    bound it names — 16 slots, 12 cards, every card eligible for every slot — it measures **748 ms
+    per call**, three orders of magnitude off. Cost is driven by how many slots ONE card can supply
+    (the mask space each row opens), not by the slot count `_MAX_KEEP_SLOTS` caps:
+
+        eligible slots per card    1      2      3      4      5     16 (the declared bound)
+        ms per call             1.63   4.49  10.06  23.64  61.37    748
+
+    What makes it trivial in practice is that real hands are SPARSE. Censused over the ctx-7
+    correction corpus (`tools/train/grab_sweep.py --breadth`, n = 1177 resolves): breadth **max 7,
+    mean 1.57**, slot count **max 15**. Two things follow for anyone changing this file. The slot
+    count is ONE below `_MAX_KEEP_SLOTS`, so the truncation below is adjacent rather than
+    hypothetical; and a change that widens eligibility — a new slot kind many rows can supply, or a
+    row made eligible for a class it merely reaches — buys cost on the curve above, not on the
+    bound. `pilot._needs_v2` runs one `keep_v2` per hand row at every forced discard and that path
+    DECIDES, so the exposure is already live and not confined to any new caller.
 
     ``capacity`` (ADR-0086, Issue #197) bounds how many cards may be assigned AT ONCE — the Bench
     holds 5, and that cap is the only reason a deploy displaces anything. Because each card takes at
