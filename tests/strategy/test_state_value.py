@@ -1432,6 +1432,18 @@ def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
     on the same prize, which is the double-counting rule this module's whole registry exists to
     enforce.
 
+    **Narrowed a SECOND time at ADR-0127, and the distinction is the whole point.** There are now
+    two call SITES, both inside that one consumer: `terminal_ev` prices the action a line ENDED on,
+    `continuation_ev` prices the one a line CUT short still has ahead of it. That is one consumer
+    reading one equation at two seams, not two opinions on one prize — and it is not an argument,
+    it is structural: `_terminal_candidate` and `_gap_or_reveal_candidate` are different branches of
+    `_expand`, so **no Candidate can ever carry both** (a terminal candidate has ``terminal`` set and
+    a truncated one has it None; `tests/strategy/test_composer.py` asserts each side directly).
+
+    So the assertion is by (file, enclosing function) rather than by file alone. A THIRD site, or
+    either of these two moving to a new function, still fails — which a bare "the file list is
+    [composer.py]" would not, and which is exactly the drift this test exists to catch.
+
     **A negative result needs a positive control**, so the same scan is pointed at `survival`, which
     MUST match (`state_value.py`'s `_terms` calls it). If the control goes quiet the instrument is
     broken and the empty result means nothing. `src/cg/` is excluded — the native-engine wrapper is
@@ -1445,24 +1457,42 @@ def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
     from pathlib import Path
 
     def _called(tree, name):
-        return [node.lineno for node in ast.walk(tree)
-                if isinstance(node, ast.Call)
-                and (getattr(node.func, "id", None) == name
-                     or getattr(node.func, "attr", None) == name)]
+        """``[(enclosing def name or '<module>', lineno)]`` for every CALL of ``name``.
+
+        The enclosing function is resolved by descending the def tree rather than by line-number
+        arithmetic, so a nested helper reports its own name and a call at module scope is not
+        silently attributed to whichever def happens to sit above it."""
+        out = []
+
+        def walk(node, where):
+            for child in ast.iter_child_nodes(node):
+                inner = (child.name if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+                         else where)
+                if isinstance(child, ast.Call) and (getattr(child.func, "id", None) == name
+                                                    or getattr(child.func, "attr", None) == name):
+                    out.append((where, child.lineno))
+                walk(child, inner)
+
+        walk(tree, "<module>")
+        return out
 
     root = Path(__file__).resolve().parents[2]
     hits, controls = [], []
     for base in ("src", "tools"):
         for path in sorted((root / base).rglob("*.py")):
-            rel = path.relative_to(root)
-            if rel.parts[:2] == ("src", "cg"):
+            rel = path.relative_to(root).as_posix()
+            if rel.startswith("src/cg/"):
                 continue
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-            hits += [f"{rel}:{n}" for n in _called(tree, "attack_ev")]
-            controls += [f"{rel}:{n}" for n in _called(tree, "survival")]
+            hits += [(rel, fn, n) for fn, n in _called(tree, "attack_ev")]
+            controls += [(rel, fn, n) for fn, n in _called(tree, "survival")]
     assert controls, "positive control silent: the scan is broken, not the tree"
-    assert [h.replace("\\", "/").split(":")[0] for h in hits] == ["src/common/composer.py"], (
-        f"`attack_ev` must have exactly ONE consumer — the composer's terminal sum. Found: {hits}")
+    assert sorted({(f, fn) for f, fn, _n in hits}) == [
+        ("src/common/composer.py", "continuation_ev"),
+        ("src/common/composer.py", "terminal_ev"),
+    ], (f"`attack_ev` must have exactly ONE consumer — the composer's terminal sum, read at its two "
+        f"mutually-exclusive seams (`terminal_ev` for a line that ENDED, `continuation_ev` for one "
+        f"that was CUT). Found: {sorted(hits)}")
 
 
 # ── the scalar over a real StateModel ─────────────────────────────────────────────────────────────

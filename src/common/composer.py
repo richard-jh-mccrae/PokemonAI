@@ -202,14 +202,22 @@ Two further ceilings, stated because they bound this module and are not defects 
   the two orderings (`apply_option`'s header; ADR-0095 decision 3). That is why the tier order above
   is a STRUCTURAL canonical choice and why `information-before-commitment` stays on the sound-rule
   whitelist as a preempting rule rather than being retired into this beam.
-* **A sequence that ends at a REVEAL is a partial line, and this is ISSUE #400.** The engine
-  re-presents the menu after a draw/search, so the composer stops there and replans — which means
-  such a candidate carries `EV(terminal) = 0` and is compared head-to-head against full attack lines
-  that carry a prize. **Its size is measured, not estimated:** armed at MAIN, the composer plays a
-  card from hand on **11 of 270** ruled frames where the human ruled **94**, and Decision-Gate
-  agreement moves **251/340 -> 169/340**. It is a named ceiling here and Issue #386's blocker; it is
-  deliberately NOT fixed in this module, because a fix belongs where the terminal valuation is and
-  that is its own issue. It is also the second reason the structural information rule is kept.
+* **A sequence that ends at a REVEAL was a partial line priced as a finished one — RULED, ADR-0127.**
+  The engine re-presents the menu after a draw/search, so the composer stops there and replans; such
+  a candidate used to carry `EV(terminal) = 0` and be compared head-to-head against full attack lines
+  carrying a prize. It now carries :func:`continuation_ev` — the best attack still reachable from the
+  pre-reveal board, the same `attack_ev_legs` / `attack_ev` pair :func:`terminal_ev` composes, read at
+  the truncation seam. `_stop_here` and a REFUSAL are excluded, each for its own recorded reason.
+  Measured over the 270 MAIN ruled frames: agreement **90 -> 92**, `_PLAY` picks **9 -> 15**,
+  **2 fixed / 0 broken**, and `leaf_evals` **identical** — the continuation is not a leaf call.
+
+  **What it does NOT close is the `_PLAY` gap, and the size of that is measured too.** The human
+  rules a `_PLAY` on **95** frames and the composer picks one on 15; of the 92 it misses, **77 are
+  seam REFUSALS** that no valuation ruling can reach (`selection_key` sorts a gap candidate last
+  whatever EV it carries) and are owned elsewhere — RNG-class under Issue #178's no-sampled-shuffle
+  doctrine, `board_expectation` enumeration gaps under Issues #301 / #302, `board_delta` choice-key
+  gaps under Issues #303 / #304 / #403 / #410. This ceiling is now a COVERAGE ceiling, not a
+  valuation one. It remains the second reason the structural information rule is kept.
 
 ## Budget — the caps are STRUCTURAL constants chosen from a measurement
 
@@ -942,6 +950,31 @@ def terminal_ev(model, option: Mapping) -> tuple:
         f"pricing it 0.0 would rank a real attack below every scored line")
 
 
+def continuation_ev(model) -> float:
+    """The best terminal action still REACHABLE from this board, in prizes — the second summand of a
+    line the composer CUT rather than one it finished (ADR-0127, Issue #400 Phase 1).
+
+    A sequence that ends at a REVEAL is not a turn that ENDED. The engine re-presents the menu after
+    a draw or a search, so the attack allowance is untouched and the turn will still spend it; the
+    missing summand is that terminal action, not zero. :func:`_stop_here` and a REFUSAL are both
+    excluded from this — see :func:`_gap_or_reveal_candidate` for why each exclusion is a soundness
+    property rather than a preference.
+
+    Floored at 0 by ``default=0.0`` because ending the turn is always available and
+    ``EV(end-turn) = 0``, so a board whose only attacks price negative continues at 0 rather than
+    below it. **No new math and no constant:** this composes the same `attack_ev_legs` /
+    `attack_ev` pair :func:`terminal_ev` composes for an `_ATTACK` option, read at a SECOND seam —
+    the truncation point. Reads ``AttackEV.total``, never the working-dict sum, for the reason that
+    function's own warning gives.
+
+    ⚠️ **Answers from the BOARD, not from the menu**, which is exactly why the empty line must never
+    inherit it: `attack_ev_legs` will happily price an attack the engine did not offer. That is
+    harmless at a truncation (the turn really does continue) and unsound at ``_stop_here`` (the root
+    stop-here has ``first_index is None``, so "commit nothing" would win a decision outright — 4 of
+    270 corpus frames produced no pick at all when that arm was measured)."""
+    return max((float(attack_ev(**leg.kwargs).total) for leg in attack_ev_legs(model)), default=0.0)
+
+
 # ── deferred-target expansion (ADR-0121 decisions 1, 4 and 6) ────────────────────────────────────
 
 
@@ -1485,7 +1518,13 @@ def _stop_here(state: _Run, node: _Node) -> Candidate:
 
     Distinct from the `_END` option's candidate even though they score the same: `_END` is only on the
     menu at a MAIN select, and the composer must be able to value a line at every decision point it
-    visits (Issue #263 § *Every fresh decision point is a composer decision*)."""
+    visits (Issue #263 § *Every fresh decision point is a composer decision*).
+
+    ⚠️ **It does NOT carry :func:`continuation_ev`, and that is a soundness property.** Stopping here
+    is a CHOICE to stop, which is what `EV(end-turn) = 0` already means; and because the root
+    stop-here has ``first_index is None``, crediting it would let *"commit nothing"* win a decision
+    outright — measured, 4 of 270 corpus frames produced no pick at all under that arm. ADR-0127's
+    reveal credit is for a line the composer CUT, never for one it declined to start."""
     return Candidate(steps=node.steps, terminal=None, leaf=node.leaf, terminal_ev=0.0,
                      score=node.leaf, truncated=node.truncated)
 
@@ -1507,11 +1546,24 @@ def _gap_or_reveal_candidate(node: _Node, entry: _Ranked) -> Candidate:
     moved, and the flag is what carries the fact that its value is UNKNOWN rather than zero. A reveal
     keeps its Expectation's `best()` — the **max** over the classes, which is the value of a choice
     (§S3). `expected()` is reported alongside it as the lower bound (`ComposerResult.bounds`), never
-    used to rank; ranking on it under-prices every reveal-bearing sequence."""
+    used to rank; ranking on it under-prices every reveal-bearing sequence.
+
+    **A reveal additionally carries :func:`continuation_ev` as its terminal summand (ADR-0127).** The
+    line was CUT at a replan point, not ended, so the turn's remaining attack is still ahead of it;
+    pricing it 0 compared a partial line head-to-head against full attack lines carrying a prize.
+
+    **A REFUSAL is deliberately excluded, and the exclusion is measured rather than argued.** Its
+    board never moved and its value is UNKNOWN — a different claim from *"the turn continues"*.
+    Crediting it too was measured as its own arm and is byte-identical, because :func:`selection_key`
+    leads with ``bool(candidate.coverage_gap)`` and sorts every gap candidate behind every scored one
+    whatever its score. The narrow spelling is taken and the wider one recorded as equivalent."""
     step = _step_of(entry)
-    leaf = node.leaf if entry.refused else node.leaf + entry.delta
-    return Candidate(steps=node.steps + (step,), terminal=None, leaf=leaf, terminal_ev=0.0,
-                     score=leaf, coverage_gap=entry.gap,
+    if entry.refused:
+        leaf, ev = node.leaf, 0.0
+    else:
+        leaf, ev = node.leaf + entry.delta, continuation_ev(node.model)
+    return Candidate(steps=node.steps + (step,), terminal=None, leaf=leaf, terminal_ev=ev,
+                     score=leaf + ev, coverage_gap=entry.gap,
                      truncated=node.truncated + entry.truncated)
 
 
@@ -1582,7 +1634,7 @@ __all__ = (
     "TIER_INFORMATIVE", "TIER_COMMIT_FREE", "TIER_SUPPORTER", "TIER_COMMITMENT", "TIER_SHUFFLE",
     "TIER_ENDER",
     "Step", "Candidate", "Margin", "Bounds", "ComposerResult", "ScoredTarget", "TargetChoice",
-    "compose", "selection_key", "terminal_ev", "canonical_tier", "canonical_key",
+    "compose", "selection_key", "terminal_ev", "continuation_ev", "canonical_tier", "canonical_key",
     "commutative_blocks", "subset_lattice", "resolve_against", "stamp_origin", "strip_origin",
     "rank_targets", "choose_target",
 )
