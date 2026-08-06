@@ -39,7 +39,10 @@ SOLROCK, LUNATONE, MAKUHITA, HARIYAMA, MEOWTH_EX = 676, 675, 673, 674, 1071
 FIGHTING_ENERGY = 6
 ULTRA_BALL, FIGHTING_GONG, POKE_PAD, PREMIUM_POWER_PRO, SWITCH = 1121, 1142, 1152, 1141, 1123
 LILLIES, JUDGE, BOSS_ORDERS = 1227, 1213, 1182
-AIR_BALLOON, GRAVITY_MOUNTAIN = 1174, 1252
+AIR_BALLOON = 1174
+# GRAVITY_MOUNTAIN=1252 dropped with `gravity-mountain-vs-stage2` (Issue #424): the rung was its only
+# reader, and `_boost_lethal_tactical` reaches the card through its `card_effects.json` clause rather
+# than through an id, so nothing deck-side keys off it any more.
 # Trainer-swap 2026-07-03 — all covers-as-is (general layer), so no const keys off them:
 #   UNFAIR_STAMP=1080 (ACE SPEC, aceSpec+hand_disruption guards), BLACK_BELTS=1211 (damage-boost model),
 #   PETREL=1219 (general search), WALLYS=1229 (clutch_heal heal doctrine).
@@ -337,17 +340,16 @@ HYPOTHESES = [
         #   (+25) landing on the benched-Mega attach in the famine case (ml f42/f54); the weak-preevo case's
         #   weaker Riolu-active competitor is unaffected.
         weight=30, status="assumed"),
-    Hypothesis(
-        id="gravity-mountain-vs-stage2",
-        rationale="Gravity Mountain (−30 HP to every Stage 2, both sides) NEVER touches our board — "
-                  "the whole deck is Basics + single-hop Stage 1s (engine stage flags, Phase-A §1) — "
-                  "so against a Stage-2 board it is pure one-sided tech: play it when the opponent "
-                  "has a Stage 2 in play (`opp_has_stage2`), where the −30 crosses our breakpoints "
-                  "(Mega Brave 270 reaches a 300-HP Stage 2, Wild Press 210 a 240). A Stadium play "
-                  "is free (no Supporter slot), so a modest weight just lifts it above idle options.",
-        when=lambda c: c.option_type == _PLAY and c.card_id == GRAVITY_MOUNTAIN
-        and c.board.opp_has_stage2,
-        weight=15, status="assumed"),
+    # (gravity-mountain-vs-stage2 RETIRED 2026-08-06, Issue #424 — `_boost_lethal_tactical` now
+    # COMPUTES the question the +15 could only gesture at. The rung's own rationale named the
+    # arithmetic it could not perform — "the −30 crosses our breakpoints (Mega Brave 270 reaches a
+    # 300-HP Stage 2, Wild Press 210 a 240)" — and a flat weight cannot tell a board where that
+    # crossing happens from one where it does not. The term reads the delta through
+    # `board_delta.stadium_hp_delta`, so the `applies_to: stage2` class test is the shipped predicate
+    # (which is also why the symmetric half is structurally 0 for THIS deck: Makuhita→Hariyama and
+    # Riolu→Mega Lucario ex are both single-hop Basic→Stage 1, so no body of ours is ever admitted),
+    # and it DIFFERENCES against the Stadium already in play, because playing one discards the other
+    # and ends its effects (`docs/rulebook.txt` L136).
     # (watchtower-vs-colorless-abilities REMOVED 2026-07-03 — Team Rocket's Watchtower was cut from the
     # deck. The general Board.opp_has_colorless_ability signal remains for any deck that runs it.)
 ]

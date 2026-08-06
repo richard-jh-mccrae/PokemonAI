@@ -411,7 +411,20 @@ _DARKNESS = 7
 #: value, while ``stage_change`` and ``displace`` are this seam's names for the two transitions that
 #: have no trigger of their own but still re-read a Stadium (an evolution re-classes a body; a
 #: displacement ends the modifier on every body at once).
-STADIUM_EVENTS: frozenset = frozenset({"bench_play", "stage_change", "displace"})
+#:
+#: ``static`` is the fourth and it is not a transition at all -- it names the FLOATING modifier read,
+#: *"what does this Stadium do to a body of this class, right now"*, with no board event in flight.
+#: Added by Issue #424 for the Pilot's counterfactual (*"would playing this Stadium cross a KO
+#: breakpoint?"*), which asks exactly that question and nothing else. Spelling it as one of the three
+#: transitions would have worked -- a `stadium_static` carries no event filter, so ``stage_change``
+#: selects the same clauses -- and would have been a lie in the caller: nothing is evolving.
+STADIUM_EVENTS: frozenset = frozenset({"bench_play", "stage_change", "displace", "static"})
+
+#: :data:`STADIUM_EVENTS`' floating-modifier member, NAMED so the one consumer outside this module
+#: (`pilot._stadium_hp_shift`) spells it by import rather than by literal. The vocabulary is this
+#: module's, so the constant is too -- a private copy in the caller would be the same string owned
+#: twice, and the drift ADR-0087 charges for.
+STADIUM_STATIC: str = "static"
 
 #: The ``on`` values a `stadium_trigger` may name. One today (Risky Ruins), and an ``on`` outside
 #: this set is UNKNOWN rather than non-matching -- see :func:`stadium_clauses_for`.
@@ -455,13 +468,23 @@ def _admits_basic_non_dark(stat):
 #: The `applies_to` resolvers, keyed by the compendium's own body-class vocabulary
 #: (`snapshot_coverage.CLAUSE_VALUES["applies_to"]`).
 #:
-#: **Two entries, and the other four are absent on purpose.** ``basic`` / ``metal`` /
-#: ``name_family`` / ``no_rule_box`` appear only on `damage_reduction` / `damage_boost` /
-#: `prevent_damage`, whose write-sets are declared EMPTY -- `CombatMath` reads those off the
-#: `stadium` zone when it prices an attack and stores nothing -- so they never survive
+#: **Two entries.** ``metal`` / ``name_family`` / ``no_rule_box`` appear only on `damage_reduction` /
+#: `damage_boost` / `prevent_damage`, whose write-sets are declared EMPTY -- `CombatMath` reads those
+#: off the `stadium` zone when it prices an attack and stores nothing -- so they never survive
 #: :func:`stadium_clauses_for`'s writing-clause filter at all. A resolver for a class no writing
 #: clause names would be a reader for a case that cannot occur, and if one ever does occur the
 #: MISSING key is what makes it refuse rather than silently mis-apply.
+#:
+#: ⚠️ **``basic`` is NOT such a class, and this note used to say it was** (corrected at Issue #424).
+#: **Lively Stadium (1251)** -- *"Each Basic Pokemon in play (both yours and your opponent's) gets
+#: +30 HP"* -- parses to ``{"kind": "stadium_static", "effect": "hp_delta", "amount": 30,
+#: "applies_to": "basic", "symmetric": true}``, a WRITING clause, so it does survive the filter and
+#: then refuses here for want of a resolver. Every reader in this module therefore refuses under
+#: Lively Stadium: fail-closed and correct, but a real gap rather than a case that cannot occur.
+#: Measured: 1251 appears in **no** agent decklist and in **0 of the 377** committed parity traces
+#: (positive control on the same sweep: 1252 in 8 traces, 1260 in 8), so nothing is mis-priced today.
+#: A resolver is deliberately NOT added here -- turning a seam-wide refusal into an answer is its own
+#: design decision, and it is scoped to its own issue.
 _APPLIES_TO = {
     "stage2": _admits_stage2,
     "basic_non_dark": _admits_basic_non_dark,
@@ -493,8 +516,9 @@ def stadium_clauses_for(current: dict, combat, *, event: str, stat=None) -> tupl
     """The in-play Stadium's clauses that AFFECT this event/body -- ``()`` when it cannot reach it.
 
     ``event`` is one of :data:`STADIUM_EVENTS`: ``"bench_play"`` (a body entering the Bench),
-    ``"stage_change"`` (a body being re-classed by an evolution) or ``"displace"`` (the Stadium
-    itself leaving play). ``stat`` is the body class in question -- a single `CardStat`, or a tuple
+    ``"stage_change"`` (a body being re-classed by an evolution), ``"displace"`` (the Stadium
+    itself leaving play), or ``"static"`` (no transition at all -- just the floating modifier on a
+    body of this class). ``stat`` is the body class in question -- a single `CardStat`, or a tuple
     of them for ``stage_change``, where the delta may START or STOP applying and both the old and
     the new body have to be asked.
 
@@ -540,7 +564,34 @@ def stadium_clauses_for(current: dict, combat, *, event: str, stat=None) -> tupl
     card = (current.get("stadium") or [None])[0]
     if not card:
         return ()
-    card_id = card.get("id")
+    return stadium_clauses_of(combat, card.get("id"), event=event, stat=stat)
+
+
+def stadium_clauses_of(combat, card_id, *, event: str, stat=None) -> tuple:
+    """The clauses of the Stadium **card** ``card_id`` that affect this event/body.
+
+    The card-keyed core of :func:`stadium_clauses_for`, which is this function plus the read of
+    ``current["stadium"]``. Split out at Issue #424 for the one caller that cannot go through that
+    read: `pilot._stadium_hp_shift` asks the COUNTERFACTUAL -- *"what would a Stadium still in my
+    HAND do to this defender?"* -- and answering it by handing the shipped function a synthetic
+    ``{"stadium": [...]}`` dict would be a caller reaching into another module's internals.
+
+    The matching rules and the fail-closed refusals live here, with the code; the WHY of each is in
+    :func:`stadium_clauses_for`'s docstring, which is where Issue #410 measured them.
+
+    ## The refusal that is load-bearing today
+
+    An ``applies_to`` value with no resolver in :data:`_APPLIES_TO` makes :func:`_admits` answer
+    *unknown*, so the clause comes back and the arithmetic refuses. **Lively Stadium (1251) is that
+    card**: *"Each Basic Pokemon in play (both yours and your opponent's) gets +30 HP"* parses to a
+    WRITING `hp_delta` clause carrying ``applies_to: "basic"``, for which no resolver exists -- so
+    every reader here refuses under it rather than mis-pricing it. That is correct fail-closed
+    behaviour and it is also a real gap; `_APPLIES_TO`'s own docstring claims the four absent values
+    reach only write-EMPTY clauses, which 1251 falsifies."""
+    if event not in STADIUM_EVENTS:
+        raise Unmodellable(f"stadium_clauses_of: {event!r} is not one of {sorted(STADIUM_EVENTS)}")
+    if card_id is None:
+        return ()
     stats = tuple(stat) if isinstance(stat, (tuple, list)) else (stat,)
     out = []
     try:
@@ -556,15 +607,15 @@ def stadium_clauses_for(current: dict, combat, *, event: str, stat=None) -> tupl
                 if on not in _TRIGGER_EVENTS:
                     out.append(clause)              # unknown `on` -- fail closed
                     continue
-                if on != event:
-                    continue
+                if on != event:                     # incl. every known trigger under `static`, which
+                    continue                        # names no event at all
             elif kind != "stadium_static":
                 out.append(clause)                  # unknown clause kind -- fail closed
                 continue
             if _admits(clause, stats) is not False:
                 out.append(clause)                  # True, or unknown -- fail closed
     except Unmodellable as gap:
-        raise Unmodellable(f"a Stadium is in play whose effect the seam cannot model -- {gap}")
+        raise Unmodellable(f"a Stadium whose effect the seam cannot model -- {gap}")
     return tuple(out)
 
 
