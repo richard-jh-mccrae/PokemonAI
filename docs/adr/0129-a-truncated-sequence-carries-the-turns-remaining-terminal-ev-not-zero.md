@@ -1,14 +1,19 @@
-# ADR-0127: A truncated sequence carries the turn's REMAINING terminal EV, not zero
+# ADR-0129: A truncated sequence carries the turn's REMAINING terminal EV, not zero
 
 **Status.** Accepted (Issue #400 Phase 1, measured and built 2026-08-06). BUILT.
 
 **Context issue.** Issue #400 (POC-T4), which blocks Issue #386 (T4/5, the arming swap). Ships in the
-same PR as **ADR-0125** (Phase 2, the `hand` ledger) and **ADR-0126** (the selection tie-break's
+same PR as **ADR-0127** (Phase 2, the `hand` ledger) and **ADR-0128** (the selection tie-break's
 float-noise floor), because the three were found in one drill and the first two are what let this one
 matter.
 
-> ⚠️ **Numbered 0127, not 0126.** Issue #400's body reserves *"ADR-0126"* for this ruling; that number
-> was taken the same day by the tie-break floor found during the same flip review. The issue body's
+> ⚠️ **Numbered 0129, and the trail to that number is worth one line.** Issue #400's body
+> reserves *"ADR-0126"* for this ruling. That number went to the tie-break floor found in the same
+> flip review — and then, at rebase time, `main` turned out to have merged its OWN **ADR-0125**
+> (the provision seam, Issue #418) and **ADR-0126** (the off-policy predecessor test, Issue #412)
+> while this branch was building. Per `docs/adr/README.md`'s collision convention the first-merged
+> keeps the number, so this branch's three renumbered together: **0125 -> 0127** (the `hand`
+> ledger), **0126 -> 0128** (the tie-break floor), **0127 -> 0129** (this one). Issue #400's body
 > reference is stale, not a duplicate.
 
 ## Context
@@ -118,7 +123,7 @@ Expectation by `max over classes of (state_value(class) + continuation_ev(class)
 ## Consequences
 
 **Measured over the 270 MAIN single-pick corpus frames carrying a ruling, paired per frame, at
-`abdfe46c` — i.e. ON TOP of ADR-0125 and ADR-0126 and the developer's 2026-08-06 re-rulings:**
+`abdfe46c` — i.e. ON TOP of ADR-0127 and ADR-0128 and the developer's 2026-08-06 re-rulings:**
 
 | kind | human | base | **+ Phase 1 (shipped)** |
 |---|---|---|---|
@@ -207,7 +212,7 @@ permanent under Issue #178's no-sampled-shuffle doctrine (the engine has no deal
 `fetch_is_unconditional`) belong to Issues #301 / #302; `board_delta` choice-key gaps (`gust`, `heal`,
 `accel`) to Issues #303 / #304 / #403 / #410.
 
-**It also does not settle the bench `fund_attack` slot**, ADR-0125's own recorded residual — built,
+**It also does not settle the bench `fund_attack` slot**, ADR-0127's own recorded residual — built,
 measured a WASH, preserved at `docs/plans/issue-400-bench-funding-slot.patch` and owed a developer
 ruling.
 
@@ -218,8 +223,8 @@ is REWRITTEN by this ADR from a deferral into a ruling plus its measurement. **A
 precedent — a structural zero dissolved rather than admitted to the beam — and **ADR-0122** the
 counter-precedent, a spec'd equation rejected on measurement; this lands between them, which is why
 the fallback (*"if Phase 2 cannot hold, Phase 1 ships alone with flat agreement"*) was written down
-before either was measured. **ADR-0126** is why the 2 fixed frames are 2 and not 3: the tie-break
-floor already recovered `82226116|0|decision|70`, which the pre-ADR-0126 arm had counted here.
+before either was measured. **ADR-0128** is why the 2 fixed frames are 2 and not 3: the tie-break
+floor already recovered `82226116|0|decision|70`, which the pre-ADR-0128 arm had counted here.
 
 *Positive control on the measurement instrument*, because a paired A/B that silently fails to arm
 reports a clean +0: the armed arm moved the winning SCORE on 14 frames and the first step on 8, and

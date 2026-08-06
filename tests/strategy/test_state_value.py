@@ -1432,7 +1432,7 @@ def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
     on the same prize, which is the double-counting rule this module's whole registry exists to
     enforce.
 
-    **Narrowed a SECOND time at ADR-0127, and the distinction is the whole point.** There are now
+    **Narrowed a SECOND time at ADR-0129, and the distinction is the whole point.** There are now
     two call SITES, both inside that one consumer: `terminal_ev` prices the action a line ENDED on,
     `continuation_ev` prices the one a line CUT short still has ahead of it. That is one consumer
     reading one equation at two seams, not two opinions on one prize — and it is not an argument,

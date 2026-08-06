@@ -202,7 +202,7 @@ Two further ceilings, stated because they bound this module and are not defects 
   the two orderings (`apply_option`'s header; ADR-0095 decision 3). That is why the tier order above
   is a STRUCTURAL canonical choice and why `information-before-commitment` stays on the sound-rule
   whitelist as a preempting rule rather than being retired into this beam.
-* **A sequence that ends at a REVEAL was a partial line priced as a finished one — RULED, ADR-0127.**
+* **A sequence that ends at a REVEAL was a partial line priced as a finished one — RULED, ADR-0129.**
   The engine re-presents the menu after a draw/search, so the composer stops there and replans; such
   a candidate used to carry `EV(terminal) = 0` and be compared head-to-head against full attack lines
   carrying a prize. It now carries :func:`continuation_ev` — the best attack still reachable from the
@@ -952,7 +952,7 @@ def terminal_ev(model, option: Mapping) -> tuple:
 
 def continuation_ev(model) -> float:
     """The best terminal action still REACHABLE from this board, in prizes — the second summand of a
-    line the composer CUT rather than one it finished (ADR-0127, Issue #400 Phase 1).
+    line the composer CUT rather than one it finished (ADR-0129, Issue #400 Phase 1).
 
     A sequence that ends at a REVEAL is not a turn that ENDED. The engine re-presents the menu after
     a draw or a search, so the attack allowance is untouched and the turn will still spend it; the
@@ -1523,7 +1523,7 @@ def _stop_here(state: _Run, node: _Node) -> Candidate:
     ⚠️ **It does NOT carry :func:`continuation_ev`, and that is a soundness property.** Stopping here
     is a CHOICE to stop, which is what `EV(end-turn) = 0` already means; and because the root
     stop-here has ``first_index is None``, crediting it would let *"commit nothing"* win a decision
-    outright — measured, 4 of 270 corpus frames produced no pick at all under that arm. ADR-0127's
+    outright — measured, 4 of 270 corpus frames produced no pick at all under that arm. ADR-0129's
     reveal credit is for a line the composer CUT, never for one it declined to start."""
     return Candidate(steps=node.steps, terminal=None, leaf=node.leaf, terminal_ev=0.0,
                      score=node.leaf, truncated=node.truncated)
@@ -1548,7 +1548,7 @@ def _gap_or_reveal_candidate(node: _Node, entry: _Ranked) -> Candidate:
     (§S3). `expected()` is reported alongside it as the lower bound (`ComposerResult.bounds`), never
     used to rank; ranking on it under-prices every reveal-bearing sequence.
 
-    **A reveal additionally carries :func:`continuation_ev` as its terminal summand (ADR-0127).** The
+    **A reveal additionally carries :func:`continuation_ev` as its terminal summand (ADR-0129).** The
     line was CUT at a replan point, not ended, so the turn's remaining attack is still ahead of it;
     pricing it 0 compared a partial line head-to-head against full attack lines carrying a prize.
 

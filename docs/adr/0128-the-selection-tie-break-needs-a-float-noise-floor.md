@@ -1,4 +1,4 @@
-# ADR-0126: The selection tie-break needs a FLOAT-NOISE FLOOR — one ULP was deciding corpus frames
+# ADR-0128: The selection tie-break needs a FLOAT-NOISE FLOOR — one ULP was deciding corpus frames
 
 **Status.** Accepted (Issue #400 Phase 2 flip review, 2026-08-06). BUILT.
 
@@ -71,7 +71,7 @@ an unproven pair gets both orderings. The defect was only ever in how the two we
 - `82226116|0|decision|70` now agrees with the developer's ruling: the composer commits option 11,
   the ruled evolve, instead of option 16.
 - **Corpus agreement 88 → 90 of 270** MAIN ruled frames (against the developer's 2026-08-06
-  re-rulings), on top of ADR-0125. No frame regresses.
+  re-rulings), on top of ADR-0127. No frame regresses.
 
   > ⚠️ **These levels moved twice on the day, and the round trip is the point.** They were first
   > reported as 88 → 90, then corrected to **87 → 89**, then landed back on 88 → 90. The middle value

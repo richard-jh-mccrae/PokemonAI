@@ -1,4 +1,4 @@
-# ADR-0125: The `hand` family is a LEDGER — supply without demand inverts every card play
+# ADR-0127: The `hand` family is a LEDGER — supply without demand inverts every card play
 
 **Status.** Accepted (Issue #400 Phase 2, measured and built 2026-08-06). BUILT.
 
@@ -166,7 +166,7 @@ retires nothing is still charged its latent Worth to play.
 - **It does not fix Issue #400 Phase 1** (a reveal-truncated sequence carrying `EV(terminal) = 0`).
   Measured on top of this, Phase 1 adds a further +1 agreement and moves `_PLAY` 9 → 15, and it
   introduces **zero** regressions once the developer's 2026-08-06 rulings are applied.
-- **It does not fix the tie-break defect the same review found** — see **ADR-0126**, which is what
+- **It does not fix the tie-break defect the same review found** — see **ADR-0128**, which is what
   actually settles `82226116|0|decision|70`.
 - **It does not close the `_PLAY` gap.** 76 of the 92 frames where the composer misses a ruled
   `_PLAY` are seam REFUSALS, which no valuation ruling reaches; they are routed in Issue #400's body.

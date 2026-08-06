@@ -652,7 +652,7 @@ def test_an_attack_with_no_matching_leg_is_a_COVERAGE_GAP_not_a_zero():
     assert "UNKNOWN" in gap and "999999" in gap
 
 
-# ── the CONTINUATION sum: a line the composer CUT is not one that ENDED (ADR-0127) ────────────────
+# ── the CONTINUATION sum: a line the composer CUT is not one that ENDED (ADR-0129) ────────────────
 
 
 def _ranked(index, option, *, delta=0.0, after=None, refused=False, gap="", truncated=0):
@@ -697,7 +697,7 @@ def test_a_board_the_RULES_forbid_an_attack_on_continues_at_zero(blocker, curren
 def test_the_continuation_IS_terminal_evs_own_answer_for_the_best_attack_on_the_menu():
     """Two spellings of one equation may not drift. `continuation_ev` reads the board and
     `terminal_ev` reads the option, but where the menu offers exactly the attacks the board affords
-    they must agree to the last bit — this is the whole claim that ADR-0127 adds *no new math*."""
+    they must agree to the last bit — this is the whole claim that ADR-0129 adds *no new math*."""
     obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING])))
     model = _model(obs)
     per_option = [cp.terminal_ev(model, {"type": _ATTACK, "attackId": a})[0]
@@ -708,7 +708,7 @@ def test_the_continuation_IS_terminal_evs_own_answer_for_the_best_attack_on_the_
 
 @pytest.mark.req("REQ-COMPOSER-0004")
 def test_a_TRUNCATED_line_carries_the_continuation_as_its_terminal_summand():
-    """The defect ADR-0127 fixes: a reveal-terminated candidate scored ``leaf + 0`` against attack
+    """The defect ADR-0129 fixes: a reveal-terminated candidate scored ``leaf + 0`` against attack
     lines carrying a prize, so a partial line was compared as though it were a finished turn."""
     obs = _obs(_player(active=_body(MEGA_LUC, energy=[FIGHTING, FIGHTING]), hand=[ITEM]))
     model = _model(obs)
@@ -771,7 +771,7 @@ def test_NO_candidate_can_carry_BOTH_terminal_ev_and_the_continuation():
 def test_the_refusal_exclusion_is_INERT_which_is_why_the_narrow_spelling_was_taken():
     """Crediting a refusal too would change no decision anywhere, because `selection_key` leads with
     ``bool(coverage_gap)`` and sorts every gap candidate behind every scored one whatever its score.
-    Asserted rather than argued: it is the reason ADR-0127 records the wider arm as equivalent."""
+    Asserted rather than argued: it is the reason ADR-0129 records the wider arm as equivalent."""
     obs, _options = _menu_obs()
     model = _model(obs)
     clean = cp.Candidate(leaf=0.0, score=0.0)
