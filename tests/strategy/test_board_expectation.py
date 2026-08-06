@@ -76,7 +76,10 @@ MASTER_BALL, POKE_PAD, ULTRA_BALL, DAWN, POWER_PRO, GEAR, ENERGY_SEARCH = (
 #                                    the compendium had declared as a conjunction.
 #   1210 Brock's Scouting Supporter  "up to 2 Basic Pokemon **or** 1 Evolution" — the EXCLUSIVE
 #                                    either-or, which stays refused: different caps per branch.
-HILDA, GONG, BROCK = 1225, 1142, 1210
+#   1205 Cyrano           Supporter  "up to 3 Pokemon {ex}" — the multi-card delivery to HAND.
+#   1086 Buddy-Buddy Poffin Item      "up to 2 Basic Pokemon with 70 HP or less" ONTO YOUR BENCH.
+#   1126 Precious Trolley  Item       "any number of Basic Pokemon" onto the Bench — `amount: "all"`.
+HILDA, GONG, BROCK, CYRANO, POFFIN, TROLLEY = 1225, 1142, 1210, 1205, 1086, 1126
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 E_F = 6
 
@@ -100,6 +103,9 @@ _STATS = {
     HILDA: CardStat(HILDA, name="Hilda", cardType=_SUPPORTER),
     GONG: CardStat(GONG, name="Fighting Gong", cardType=_ITEM),
     BROCK: CardStat(BROCK, name="Brock’s Scouting", cardType=_SUPPORTER),
+    CYRANO: CardStat(CYRANO, name="Cyrano", cardType=_SUPPORTER),
+    POFFIN: CardStat(POFFIN, name="Buddy-Buddy Poffin", cardType=_ITEM),
+    TROLLEY: CardStat(TROLLEY, name="Precious Trolley", cardType=_ITEM),
 }
 
 #: The committed `card_effects.json` rows for these cards, copied verbatim. `POWER_PRO` is absent on
@@ -123,6 +129,11 @@ _CLAUSES = {
     BROCK: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": 2,
              "choice": True},
             {"kind": "fetch", "target": "evolution", "zone": "deck", "amount": 1, "choice": True}],
+    CYRANO: [{"kind": "fetch", "target": "pokemon_ex", "zone": "deck", "amount": 3}],
+    POFFIN: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "hp_max": 70,
+              "amount": 2, "dest": "bench"}],
+    TROLLEY: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": "all",
+               "dest": "bench"}],
 }
 
 
@@ -443,12 +454,28 @@ def test_a_multi_card_delivery_to_HAND_enumerates_multisets_not_subsets():
     real corpus, Cyrano's pool is **one distinct card id on all 4 of its steps**, where a subset
     enumerator returns exactly one class and is simply wrong about what the card delivers.
 
-    Here the pool is 3 Riolu + 1 Mega Lucario ex, so a 3-card delivery has four shapes."""
+    Cyrano hunts `pokemon_ex`, and this pool holds exactly one — Mega Lucario ex — so the delivery
+    CLAMPS to what the pool actually contains rather than being padded to three. That clamp is the
+    engine's own (`min(max, matches)`), and it is the real corpus shape rather than a contrived one:
+    the same single-distinct-id pool is what all four of Cyrano's steps present."""
     exp = be.expectation(_search_board(hand=(CYRANO,)), _play_option())
     delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
-    assert delivered == [(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)][::1] or delivered == \
-        sorted([(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)])
-    assert all(len(c.fingerprint) == 3 for c in exp.classes)
+    assert delivered == [(MEGA_LUC,)]
+    assert all(len(c.fingerprint) == 1 for c in exp.classes)
+
+
+def test_a_multi_card_delivery_takes_SEVERAL_COPIES_of_one_card_when_the_pool_holds_them():
+    """The case a subset enumerator gets wrong. Master Ball is a one-card search, so this asks the
+    enumerator directly on the pool that board presents: 3 Riolu and 1 Mega Lucario ex.
+
+    A 3-card delivery over it has two shapes — three Riolu, or two Riolu and the Mega — and BOTH
+    take a card more than once. A subset reading would offer only `(Riolu, Mega)` and would silently
+    claim the deck cannot produce a third body it plainly can."""
+    pool = {RIOLU: 3, MEGA_LUC: 1}
+    assert be.multiset_classes(pool, 3) == [(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)] or \
+        sorted(be.multiset_classes(pool, 3)) == sorted([(RIOLU, RIOLU, RIOLU),
+                                                        (RIOLU, RIOLU, MEGA_LUC)])
+    assert len(be.multiset_classes(pool, 3)) == 2
 
 
 def test_a_multi_card_class_weighs_each_card_at_the_multiplicity_it_needs():

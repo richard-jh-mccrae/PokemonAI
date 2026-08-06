@@ -296,9 +296,11 @@ def _check_clause(clause: dict, card_id, name) -> None:
                            "follow-up select, structurally the same case as the seam's 63 "
                            "target-at-a-select refusals")
     amount = clause.get("amount")
-    if amount not in (None, 1):
-        _no(card_id, name, f"`amount` {amount!r}: the search delivers more than one card, and a "
-                           f"one-card outcome class prices a fraction of the play")
+    if amount is not None and not (isinstance(amount, int) and not isinstance(amount, bool)
+                                   and amount >= 1):
+        _no(card_id, name, f"`amount` {amount!r} names no number the enumerator can range over — "
+                           f"only `\"all\"` reaches here, and resolving it needs a pool to count "
+                           f"against plus the Bench cap its carriers deliver into (Issue #410)")
     if clause.get("dest") is not None:
         _no(card_id, name, f"`dest` {clause.get('dest')!r}: the found body arrives IN PLAY, which is "
                            f"the deploy transition with its Bench cap and Stadium-trigger gate, not "
@@ -397,6 +399,45 @@ def _fingerprint(obs, indices: tuple, seat_index) -> tuple:
                  for index in indices)
 
 
+def multiset_classes(pool: dict, m: int) -> list:
+    """The ``m``-card deliveries a ``{card id: copies}`` pool can produce, as sorted id tuples.
+
+    A **MULTISET** enumerator, not a subset one, and the difference is the whole point: a pool holds
+    *copies*, so taking two of the same card is a legal and distinct outcome. Measured on the corpus,
+    1205 Cyrano's pool is a single distinct card id on all four of its steps — where a subset
+    enumerator returns one class and is simply wrong about what a three-card search delivers.
+
+    Two clamps, both from the engine: a card can never arrive more times than the pool holds copies
+    of it, and the delivery is clamped to what the pool actually holds (`min(m, total)`) rather than
+    padded — the engine spells the same clamp as `min(max, matches)`.
+
+    **Deliveries of exactly `min(m, total)` cards, never fewer.** *"Up to 3"* also permits taking
+    two, but for a free search into HAND taking fewer is dominated: it costs nothing, forfeits a
+    card, and the composer takes the max over classes anyway. Enumerating the shorter deliveries
+    would multiply the class count for outcomes that can never win. (This does NOT hold for a Bench
+    delivery, where each arrival hands over Prize-Path exposure — which is one more reason that
+    destination is Issue #410's and refuses here.)"""
+    total = sum(pool.values())
+    take = min(int(m), total)
+    if take < 1 or not pool:
+        return []
+    ids = sorted(pool)
+    out: list = []
+
+    def walk(i: int, left: int, acc: tuple) -> None:
+        if left == 0:
+            out.append(acc)
+            return
+        if i >= len(ids):
+            return                                  # this branch cannot fill the delivery
+        cid = ids[i]
+        for count in range(min(int(pool[cid]), left), -1, -1):
+            walk(i + 1, left - count, acc + (cid,) * count)
+
+    walk(0, take, ())
+    return sorted(out)
+
+
 def _classes_for(legs, pools: tuple) -> list:
     """The outcome classes a card's legs deliver, as sorted tuples of card ids. ``[]`` when the legs
     can deliver nothing at all, which the caller turns into the empty-pool refusal.
@@ -417,7 +458,7 @@ def _classes_for(legs, pools: tuple) -> list:
     union: dict = {}
     for pool in pools:
         union.update(pool)
-    return [(cid,) for cid in sorted(union)]
+    return multiset_classes(union, legs.cap)
 
 
 def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP):
@@ -508,4 +549,4 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     return Expectation(classes=tuple(classes), truncated=len(dropped))
 
 
-__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "expectation")
+__all__ = ("BRANCH_CAP", "revealing_clauses", "outcome_pool", "multiset_classes", "expectation")
