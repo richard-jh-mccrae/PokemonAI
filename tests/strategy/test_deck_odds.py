@@ -72,6 +72,79 @@ def test_p_contains_never_raises_and_stays_in_unit_interval():
         assert isinstance(v, float) and 0.0 <= v <= 1.0
 
 
+# ------------------------------------------------- the >= k generalisation (Issue #394 item F4)
+# `p_contains` answers ">=1 copy still in deck". A multi-card delivery may legally take TWO copies
+# of one card, so the enumerator needs ">= k". Same model, same split, one summation wider — and
+# `p_contains` must BE its k=1 case rather than a second spelling of it.
+
+def _at_least_by_enumeration(u, hidden, deck, need) -> float:
+    """The oracle: enumerate WHICH hidden positions the `u` unseen copies occupy.
+
+    Positions ``0..deck-1`` are deck slots and ``deck..deck+hidden-1`` are face-down prize slots;
+    exchangeability says every size-`u` subset is equally likely. Counts the fraction with at least
+    `need` copies landing on a deck slot. No closed form, no simulation."""
+    from itertools import combinations
+    h = deck + hidden
+    if u > h:
+        return float("nan")                       # not a board the model describes
+    subsets = list(combinations(range(h), u))
+    hits = sum(1 for s in subsets if sum(1 for i in s if i < deck) >= need)
+    return hits / len(subsets)
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_at_least_k_matches_brute_force_over_the_whole_small_parameter_grid():
+    """Zero mismatches against the enumeration oracle across every reachable small board."""
+    from common.deck_odds import p_contains_at_least
+    checked = 0
+    for deck in range(0, 8):
+        for hidden in range(0, 7):
+            for u in range(0, min(5, deck + hidden) + 1):
+                for need in range(1, 5):
+                    exact = _at_least_by_enumeration(u, hidden, deck, need)
+                    got = p_contains_at_least(u, hidden, deck, need)
+                    assert got == pytest.approx(exact), (u, hidden, deck, need, got, exact)
+                    checked += 1
+    assert checked > 500, "the grid collapsed — this assertion is the positive control"
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_p_contains_is_exactly_the_k_equals_one_case():
+    """The delegation is an IDENTITY, not an approximation: one closed form, not two."""
+    from common.deck_odds import p_contains_at_least
+    for deck in range(0, 9):
+        for hidden in range(0, 8):
+            for u in range(0, 6):
+                assert p_contains(u, hidden, deck) == p_contains_at_least(u, hidden, deck, 1)
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_at_least_k_is_monotone_and_bounded_by_its_own_extremes():
+    """Demanding more copies is never more likely; k<=0 asks nothing; k beyond the unseen count or
+    beyond the deck's size is impossible."""
+    from common.deck_odds import p_contains_at_least
+    ladder = [p_contains_at_least(4, 6, 20, k) for k in (1, 2, 3, 4)]
+    assert ladder == sorted(ladder, reverse=True)
+    assert all(0.0 <= v <= 1.0 for v in ladder)
+    assert p_contains_at_least(4, 6, 20, 0) == 1.0        # ">= 0 copies" is vacuously true
+    assert p_contains_at_least(2, 6, 20, 3) == 0.0        # only 2 unseen: 3 is unreachable
+    assert p_contains_at_least(4, 6, 2, 3) == 0.0         # deck holds 2 cards: 3 cannot fit
+    assert p_contains_at_least(4, 0, 20, 4) == 1.0        # no hidden prizes -> every copy in deck
+    assert p_contains_at_least(5, 2, 20, 3) == 1.0        # pigeonhole: at most 2 can be prized
+
+
+@pytest.mark.req("REQ-GEN-0053")
+def test_at_least_k_never_raises_and_keeps_the_suppressor_fail_direction():
+    """Same grader-safety contract as `p_contains`: garbage -> 1.0 ("assume present"), never a
+    raise, never a suppression on bad input."""
+    from common.deck_odds import p_contains_at_least
+    for args in [(-1, 6, 30, 2), (1, -5, 3, 2), (2, 6, -9, 2), ("x", 6, 30, 2),
+                 (1, None, 3, 2), (10**9, 6, 30, 2), (2, 6, 30, "x")]:
+        v = p_contains_at_least(*args)
+        assert isinstance(v, float) and 0.0 <= v <= 1.0
+    assert p_contains_at_least("x", 6, 30, 2) == 1.0
+
+
 @pytest.mark.req("REQ-GEN-0053")
 def test_contains_odds_builds_a_per_card_dict():
     odds = contains_odds(decklist={7: 3, 8: 4}, visible={7: 1}, deck_count=30, prizes_hidden=6)
