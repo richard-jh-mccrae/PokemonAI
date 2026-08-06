@@ -420,14 +420,14 @@ _TRIGGER_EVENTS: frozenset = frozenset({"bench_play"})
 
 
 def _is_basic(stat) -> bool:
-    """A Basic Pokemon: it evolves from nothing and is not a Stage 2.
+    """A Basic Pokemon, off `CardStat.stage` -- the canonical ``"basic"``/``"stage1"``/``"stage2"``
+    string, the ONE derivation of `CardData.basic`/`.stage1`/`.stage2` (Issue #408 / PR #411).
 
-    Both legs, not just the first: `CardStat.evolvesFrom` is the Previous-stage NAME and `stage2` is
-    the engine's own `CardData.stage2` flag, and testing only one of them would misclassify a card
-    whose line the compendium records asymmetrically. `CardStat.stage` -- the canonical
-    ``"basic"``/``"stage1"``/``"stage2"`` string -- is declared but NOT populated on this base
-    (Issue #408 / PR #411 is still open), which is exactly why this reads the two fields that are."""
-    return getattr(stat, "evolvesFrom", None) is None and not getattr(stat, "stage2", False)
+    Not `evolvesFrom is None and not stage2`, which was this function's shape before #408 landed:
+    that combination is exact on today's pool but is a second READING of the same fact `stage`
+    already states directly -- and `stage_from_card`'s own docstring names that exact drift as the
+    reason it exists (`provider.py`)."""
+    return getattr(stat, "stage", None) == "basic"
 
 
 def _admits_stage2(stat):

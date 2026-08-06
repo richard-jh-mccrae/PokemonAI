@@ -82,18 +82,21 @@ ZORUA = 136
 #: rather than claiming to BE that card, and the real +100 is verified where it counts: against the
 #: recorded engine on `ms_mirror_1000` f13, by the parity lane.
 _STATS = {
-    RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING),
+    RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, stage="basic"),
     MEGA_LUC: CardStat(MEGA_LUC, name="Mega Lucario ex", hp=340, megaEx=True, ex=True,
-                       energyType=FIGHTING, evolvesFrom="Riolu", attacks=(AURA_JAB, MEGA_BRAVE),
+                       energyType=FIGHTING, evolvesFrom="Riolu", stage="stage1",
+                       attacks=(AURA_JAB, MEGA_BRAVE),
                        minAttackCost=1, minCostDamage=130, maxDamage=270, maxDamageCost=2),
-    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC),
+    MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC, stage="basic"),
     # The Dragapult line, read at source: Dreepy (Basic) → Drakloak (Stage 1, 90 HP) → Dragapult ex
-    # (Stage 2, **320 HP**). `stage2` is the engine's own `CardData.stage2` flag and is what
-    # `applies_to: stage2` resolves — `CardStat.stage` is declared but unpopulated on this base.
-    DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON, evolvesFrom="Dreepy"),
+    # (Stage 2, **320 HP**). `stage` is the canonical string (Issue #408 / PR #411) and `stage2` is
+    # the engine's own separate `CardData.stage2` boolean that `applies_to: stage2` resolves — both
+    # declared, since `_is_basic` reads the former and `_admits_stage2` the latter.
+    DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON, evolvesFrom="Dreepy",
+                       stage="stage1"),
     DRAGAPULT_EX: CardStat(DRAGAPULT_EX, name="Dragapult ex", hp=320, energyType=DRAGON, ex=True,
-                           evolvesFrom="Drakloak", stage2=True),
-    ZORUA: CardStat(ZORUA, name="Zorua", hp=70, energyType=DARKNESS),
+                           evolvesFrom="Drakloak", stage2=True, stage="stage2"),
+    ZORUA: CardStat(ZORUA, name="Zorua", hp=70, energyType=DARKNESS, stage="basic"),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     CAPE: CardStat(CAPE, synthetic=True, name="Flat-HP Tool", cardType=2, hpBonus=100),
