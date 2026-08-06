@@ -445,8 +445,11 @@ def _is_basic(stat) -> bool:
 def _admits_stage2(stat):
     """Gravity Mountain's scope: *"Each Stage 2 Pokemon in play"* (`data/EN_Card_Data.csv` 1252).
 
-    The engine's own gate is `"stage2HpDelta" in sdef and gs.stat(p.top).stage2`
-    (`cgpy/chain.py:stadium_hp_delta`)."""
+    The engine's own gate is the ``{"hpDelta": {"amount": -30, "filter": {"stage2": true}}}`` def
+    that `cgpy/chain.py:stadium_hp_delta` matches with `_card_matches` -- a bespoke ``stage2HpDelta``
+    key until Issue #435 generalized it so the twin could express 1251's ``basic`` scope with the
+    same machinery. The two engines are held to the same answer by
+    `tests/parity/test_stadium_static_cross_engine.py`."""
     return bool(getattr(stat, "stage2", False))
 
 
@@ -710,16 +713,21 @@ def apply_bench_arrival(body: dict, clauses, stat) -> frozenset:
     un-refusing without an applier would mint a body 30 HP light on every deploy.
 
     ⚠️ The authority for that is the **card text and the NATIVE engine** (whose traces are the parity
-    corpus), NOT `src/cgpy/`: the pure-Python twin does not implement this card at all. Measured --
-    `cgpy.chain.def_for(1251)` carries no ``stadium`` key and is flagged ``deferred: "stadium passive
-    unpinned"``, and `cgpy/chain.py:stadium_hp_delta` branches on ``stage2HpDelta`` alone (positive
-    control: 1252 returns ``{"stage2HpDelta": -30}``, 1260 returns its ``onBench`` tax). That twin gap
-    is real and is its own issue; it is named here so a later reader does not "verify" this note
-    against cgpy and conclude the opposite.
+    corpus), NOT `src/cgpy/` -- and when Issue #433 wrote this note the twin did not implement the
+    card at all: `def_for(1251)` carried no ``stadium`` key and was flagged ``deferred: "stadium
+    passive unpinned"``. So the composer priced +30 while the rollout engine rendered 0, and no test
+    could see it. **Issue #435 closed that**, and the ruling above is unchanged by it: `bench_body`
+    still mints the printed maximum, the twin now agrees the rendered value is ``printed + 30``, and
+    the two engines are held to one answer by
+    `tests/parity/test_stadium_static_cross_engine.py`. The order still matters -- a later reader
+    must not "verify" this note against cgpy and conclude anything, because the twin is the mirror
+    and the native engine is the face.
 
     Refusing costs nothing today: 1251 appears in **no** agent decklist and in **0 of the 377**
     committed parity traces (`tests/fixtures/parity/*.trace.json.gz`; positive control on the same
-    sweep -- 251 distinct card ids seen, 1252 in 8 traces, 1260 in 8)."""
+    sweep -- 251 distinct card ids seen, 1252 in 8 traces, 1260 in 8). That silence is exactly why
+    the twin gap survived as long as it did: the corpus is the evidence, and where it says nothing
+    only a hand-built board can."""
     writes: set = set()
     for clause in clauses:
         admits = _admits(clause, (stat,))
