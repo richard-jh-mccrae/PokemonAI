@@ -430,8 +430,8 @@ def _tool_pilot(tool_stat):
     """A Pilot holding `tool_stat` in hand, with one family body and one plain body on the board."""
     stats = DictCardStatProvider({
         tool_stat.cardId: tool_stat,
-        FAM_BODY: CardStat(FAM_BODY, name="Cynthia's Garchomp ex", hp=100, ex=True, stage="Basic"),
-        PLAIN_BODY: CardStat(PLAIN_BODY, name="Garchomp", hp=100, stage="Basic"),
+        FAM_BODY: CardStat(FAM_BODY, name="Cynthia's Garchomp ex", hp=100, ex=True, stage="basic"),
+        PLAIN_BODY: CardStat(PLAIN_BODY, name="Garchomp", hp=100, stage="basic"),
         OPP: CardStat(OPP, name="Opponent", hp=300, maxDamage=60, maxDamageCost=1,
                       minAttackCost=1, attacks=(A_HIT,)),
     }, attacks={A_HIT: AttackStat(A_HIT, damage=60, cost=1)})
@@ -490,11 +490,11 @@ def _boost_pilot():
     stats = DictCardStatProvider({
         CHOICE_BAND: CardStat(CHOICE_BAND, synthetic=True, name="Hop's Choice Band", cardType=2, damageBoost=30,
                               attackCostReduction=1, holderNameFamily="Hop's"),
-        FAM_BODY: CardStat(FAM_BODY, name="Hop's Zacian ex", hp=230, ex=True, stage="Basic",
+        FAM_BODY: CardStat(FAM_BODY, name="Hop's Zacian ex", hp=230, ex=True, stage="basic",
                            maxDamage=90, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
-        PLAIN_BODY: CardStat(PLAIN_BODY, name="Zacian ex", hp=230, ex=True, stage="Basic",
+        PLAIN_BODY: CardStat(PLAIN_BODY, name="Zacian ex", hp=230, ex=True, stage="basic",
                              maxDamage=90, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
-        OPP: CardStat(OPP, name="Opponent", hp=110, stage="Basic"),
+        OPP: CardStat(OPP, name="Opponent", hp=110, stage="basic"),
     }, attacks={A_HIT: AttackStat(A_HIT, damage=90, cost=1, damageMax=90)})
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({CHOICE_BAND: ["tool"]}))
@@ -549,11 +549,11 @@ def _bangle_pilot():
     stats = DictCardStatProvider({
         BRAVE_BANGLE: CardStat(BRAVE_BANGLE, name="Brave Bangle", cardType=2, damageBoost=30,
                                damageBoostVsEx=True, holderNoRuleBox=True),
-        PLAIN_BODY: CardStat(PLAIN_BODY, name="Slowking", hp=120, stage="Stage 1",
+        PLAIN_BODY: CardStat(PLAIN_BODY, name="Slowking", hp=120, stage="stage1",
                              maxDamage=120, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
-        FAM_BODY: CardStat(FAM_BODY, name="Mega Kangaskhan ex", hp=300, megaEx=True, stage="Basic",
+        FAM_BODY: CardStat(FAM_BODY, name="Mega Kangaskhan ex", hp=300, megaEx=True, stage="basic",
                            maxDamage=120, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
-        OPP: CardStat(OPP, name="Opponent ex", hp=150, ex=True, stage="Basic"),
+        OPP: CardStat(OPP, name="Opponent ex", hp=150, ex=True, stage="basic"),
     }, attacks={A_HIT: AttackStat(A_HIT, damage=120, cost=1, damageMax=120)})
     return Pilot(Strategy(), deck=[1] * 60, general_strategy=GENERAL_STRATEGY, stats=stats,
                  functions=CardFunctions({BRAVE_BANGLE: ["tool"]}))
@@ -606,7 +606,7 @@ def _gem_pilot():
     stats = DictCardStatProvider({
         GEMSTONE: CardStat(GEMSTONE, synthetic=True, name='Gravity Gemstone', cardType=2, retreatReduction=-1),
         AIR_BALLOON: CardStat(AIR_BALLOON, synthetic=True, name='Air Balloon', cardType=2, retreatReduction=2),
-        PLAIN_BODY: CardStat(PLAIN_BODY, name="Walker", hp=120, stage="Basic", retreatCost=2,
+        PLAIN_BODY: CardStat(PLAIN_BODY, name="Walker", hp=120, stage="basic", retreatCost=2,
                              maxDamage=60, maxDamageCost=1, minAttackCost=1, attacks=(A_HIT,)),
         OPP: CardStat(OPP, name="Opponent", hp=300),
     }, attacks={A_HIT: AttackStat(A_HIT, damage=60, cost=1)})

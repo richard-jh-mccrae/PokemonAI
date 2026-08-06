@@ -194,6 +194,22 @@ parallel per-mechanic dicts, and the synth fallback.)_
 _Avoid_: provider (bare — say Stat Provider), card database, CardStat/AttackStat (the records it hands
 out, not the seam), Function Tag / Effect Clause (behavioral JSON tables — separate, offline-built feeds)
 
+**Printed Stage**:
+A Pokémon's evolution rung as ONE canonical string — `"basic"` / `"stage1"` / `"stage2"`, or `None`
+for a card that is not a body. Carried as `CardStat.stage`, derived in exactly one place
+(`provider.stage_from_card`), which folds the engine's three `CardData.basic`/`.stage1`/`.stage2`
+booleans; `tools/meta_tracker/dump_cards.stage_of` delegates there rather than re-spelling it. The
+vocabulary is the ENGINE's, not the CSV's printed label (*"Stage 1 Pokémon"*) and not title-case —
+a fixture or doc using any other spelling is naming a value production cannot emit. Read by the FETCH
+closure's `stage1`/`stage2` target classes and by the Skyliner-style board grant
+(`retreatFreeGrant == "basic"`). Membership is `hp > 0`, not `cardType == POKEMON`: the five Antique
+Fossils print as Items and are played *"as if it were a 60-HP Basic {C} Pokémon"*, and the engine
+flags them `basic` accordingly.
+_(Issue #408, built 2026-08-06 — the field shipped declared-but-never-written, so both readers
+compared against `None` and the two target classes matched 461 cards' worth of nothing.)_
+_Avoid_: `"Basic"` / `"Stage 1"` (title-case drift), `"Basic Pokémon"` (the CSV's label),
+`stage2` bare (that is the separate engine boolean, kept for Gravity Mountain's opponent-board read)
+
 **Holder Gate**:
 The condition a Pokémon Tool's static modifier places on the body it is attached to — carried on
 `CardStat` and evaluated, always, through `CardStat.applies_to_holder(holder)`. **Two** conditions

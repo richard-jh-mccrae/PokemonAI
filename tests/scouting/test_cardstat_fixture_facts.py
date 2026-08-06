@@ -1,5 +1,6 @@
 import ast
 import csv
+from collections import Counter
 from dataclasses import fields
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,12 +15,18 @@ from common.scouting.provider import (
     _TOOL,
     _parse_tool_hp_bonus,
     _parse_tool_retreat_reduction,
+    stage_from_card,
 )
 
 
 ROOT = Path(__file__).resolve().parents[2]
 CSV_PATH = ROOT / "data" / "EN_Card_Data.csv"
 TESTS_ROOT = ROOT / "tests"
+
+#: The one CSV column carrying BOTH the Pokémon stage and the Trainer/Energy type — read twice
+#: below (through `CARD_TYPES` for `cardType`, through `STAGE_LABELS` for `stage`), so the two
+#: facts are drawn from one source and cannot disagree.
+STAGE_COLUMN = "Stage (Pokémon)/Type (Energy and Trainer)"
 
 TYPE_CODES = {
     "{C}": 0,
@@ -41,6 +48,14 @@ CARD_TYPES = {
     "Stadium": _STADIUM,
     "Basic Energy": _BASIC_ENERGY,
     "Special Energy": _SPECIAL_ENERGY,
+}
+#: The Pokémon half of `STAGE_COLUMN`, in the CANONICAL vocabulary production emits (Issue #408).
+#: The printed label is what the audit must MAP, not what it demands: a fixture declaring
+#: `stage="Basic Pokémon"` would be claiming a value `_build_cache` cannot produce.
+STAGE_LABELS = {
+    "Basic Pokémon": "basic",
+    "Stage 1 Pokémon": "stage1",
+    "Stage 2 Pokémon": "stage2",
 }
 COVERED_FIELDS = {
     "name",
@@ -64,95 +79,103 @@ COVERED_FIELDS = {
     "retreatReduction",
 }
 UNCOVERED_FIELDS = sorted({f.name for f in fields(CardStat)} - COVERED_FIELDS - {"cardId", "synthetic"})
+#: Fixture rows that deliberately keep a source card NAME while declaring `synthetic=True`, because
+#: the test exercises topology or card-effect lookup keyed by that name. The row is still arbitrary:
+#: at least one other declared source-covered fact differs from the CSV.
+#:
+#: Keyed `(path, enclosing def, cardId)` — POSITION-INDEPENDENT. It was keyed by line number until
+#: Issue #408, where three unrelated edits to `test_retreat_cost_grants.py` (a docstring paragraph, a
+#: constant, a test) shifted three entries and failed two tests with a message about fixture hygiene
+#: — describing a violation that had not occurred. Line numbers now appear only in failure messages,
+#: where they help. `(path, cardId)` is NOT sufficient on its own and neither is adding `name` (a row
+#: is here BECAUSE its name matches the CSV, so name is a function of cardId): 22 rows share a
+#: `(path, cardId)`, and `test_the_ledger_key_identifies_exactly_one_row_each` holds that line.
 SYNTHETIC_SOURCE_NAME_SITES = {
-    # These synthetic rows deliberately keep a source card name because the test exercises topology
-    # or card-effect lookup keyed by that name. The row is still arbitrary: at least one other
-    # declared source-covered fact differs from the CSV.
-    ("tests/agents/test_mega_starmie_triggers.py", 42, 665),
-    ("tests/scouting/test_retreat_cost_grants.py", 184, 1157),
-    ("tests/scouting/test_retreat_cost_grants.py", 186, 184),
-    ("tests/scouting/test_retreat_cost_grants.py", 188, 170),
-    ("tests/scouting/test_scouting_provider.py", 97, 678),
-    ("tests/scouting/test_tool_holder_facts.py", 459, 1173),
-    ("tests/scouting/test_tool_holder_facts.py", 470, 1173),
-    ("tests/scouting/test_tool_holder_facts.py", 607, 1166),
-    ("tests/scouting/test_tool_holder_facts.py", 608, 1174),
-    ("tests/sim/test_diff_attack_audit.py", 19, 1031),
-    ("tests/sim/test_diff_attack_audit.py", 20, 345),
-    ("tests/strategy/test_attach_decider.py", 70, 65),
-    ("tests/strategy/test_board_cards.py", 41, 677),
-    ("tests/strategy/test_combat.py", 275, 333),
-    ("tests/strategy/test_combat.py", 277, 678),
-    ("tests/strategy/test_damage_oracle.py", 18, 1031),
-    ("tests/strategy/test_damage_oracle.py", 20, 345),
-    ("tests/strategy/test_damage_oracle.py", 127, 330),
-    ("tests/strategy/test_damage_oracle.py", 128, 83),
-    ("tests/strategy/test_damage_oracle.py", 130, 158),
-    ("tests/strategy/test_damage_oracle.py", 131, 383),
-    ("tests/strategy/test_damage_oracle.py", 160, 158),
-    ("tests/strategy/test_damage_oracle.py", 168, 383),
-    ("tests/strategy/test_damage_oracle.py", 254, 723),
-    ("tests/strategy/test_discard_keep_rows.py", 43, 666),
-    ("tests/strategy/test_discard_recur_fuel.py", 27, 677),
-    ("tests/strategy/test_discard_selection.py", 29, 666),
-    ("tests/strategy/test_empty_bench_rung.py", 139, 677),
-    ("tests/strategy/test_empty_bench_rung.py", 193, 677),
-    ("tests/strategy/test_gust_target_slot_resolver.py", 55, 677),
-    ("tests/strategy/test_incoming_curve.py", 35, 677),
-    ("tests/strategy/test_lethal.py", 737, 345),
-    ("tests/strategy/test_needs_deny_resolver.py", 87, 677),
-    ("tests/strategy/test_opponent_deck_accel.py", 38, 647),
-    ("tests/strategy/test_opponent_deck_accel.py", 40, 648),
-    ("tests/strategy/test_posture_cardfacts.py", 37, 743),
-    ("tests/strategy/test_predicted_loss_rung.py", 38, 677),
-    ("tests/strategy/test_promote_preserve_wincon.py", 58, 190),
-    ("tests/strategy/test_reachable_attach.py", 34, 121),
-    ("tests/strategy/test_reachable_attach.py", 140, 121),
-    ("tests/strategy/test_reachable_attach.py", 264, 163),
-    ("tests/strategy/test_reachable_attach.py", 277, 163),
-    ("tests/strategy/test_reachable_attach.py", 299, 677),
-    ("tests/strategy/test_reachable_attach.py", 330, 121),
-    ("tests/strategy/test_reachable_attach.py", 347, 163),
-    ("tests/strategy/test_reachable_attach.py", 363, 163),
-    ("tests/strategy/test_reachable_attach.py", 572, 678),
-    ("tests/strategy/test_reachable_attach.py", 574, 677),
-    ("tests/strategy/test_reachable_incoming.py", 29, 677),
-    ("tests/strategy/test_reachable_incoming.py", 78, 677),
-    ("tests/strategy/test_reachable_incoming.py", 105, 1031),
-    ("tests/strategy/test_reachable_incoming.py", 122, 677),
-    ("tests/strategy/test_reachable_incoming.py", 166, 120),
-    ("tests/strategy/test_reachable_incoming.py", 168, 121),
-    ("tests/strategy/test_snipe_threat_rank.py", 109, 64),
-    ("tests/strategy/test_snipe_threat_rank.py", 147, 743),
-    ("tests/strategy/test_state_model.py", 71, 121),
-    ("tests/strategy/test_state_model.py", 75, 112),
-    ("tests/strategy/test_state_model.py", 81, 677),
-    ("tests/strategy/test_state_model.py", 84, 678),
-    ("tests/strategy/test_state_model.py", 88, 676),
-    ("tests/strategy/test_state_model.py", 91, 675),
-    ("tests/strategy/test_state_model.py", 94, 216),
-    ("tests/strategy/test_state_model.py", 97, 215),
-    ("tests/strategy/test_state_model.py", 98, 217),
-    ("tests/strategy/test_state_value.py", 148, 121),
-    ("tests/strategy/test_state_value.py", 152, 112),
-    ("tests/strategy/test_state_value.py", 157, 677),
-    ("tests/strategy/test_state_value.py", 160, 678),
-    ("tests/strategy/test_state_value.py", 165, 1031),
-    ("tests/strategy/test_state_value.py", 169, 46),
-    ("tests/strategy/test_state_value.py", 173, 345),
-    ("tests/strategy/test_state_value.py", 177, 1008),
-    ("tests/strategy/test_state_value.py", 182, 743),
-    ("tests/strategy/test_state_value.py", 187, 163),
-    ("tests/strategy/test_state_value.py", 199, 1030),
-    ("tests/strategy/test_state_value.py", 202, 119),
-    ("tests/strategy/test_state_value.py", 205, 120),
-    ("tests/strategy/test_state_value.py", 217, 676),
-    ("tests/strategy/test_state_value.py", 220, 675),
-    ("tests/strategy/test_state_value.py", 223, 276),
-    ("tests/strategy/test_state_value.py", 226, 43),
-    ("tests/strategy/test_turns_to_afford.py", 45, 677),
-    ("tests/strategy/test_turns_to_afford.py", 123, 190),
-    ("tests/strategy/test_turns_to_afford.py", 162, 677),
+    ("tests/agents/test_mega_starmie_triggers.py", "<module>", 665),
+    ("tests/scouting/test_retreat_cost_grants.py", "_pilot", 170),
+    ("tests/scouting/test_retreat_cost_grants.py", "_pilot", 184),
+    ("tests/scouting/test_retreat_cost_grants.py", "_pilot", 1157),
+    ("tests/scouting/test_scouting_provider.py", "test_forward_max_damage_folds_max_over_same_name_printings", 678),
+    ("tests/scouting/test_tool_holder_facts.py", "_gem_pilot", 1166),
+    ("tests/scouting/test_tool_holder_facts.py", "_gem_pilot", 1174),
+    ("tests/scouting/test_tool_holder_facts.py", "test_the_deploy_picker_refuses_a_body_the_owner_gate_excludes", 1173),
+    ("tests/scouting/test_tool_holder_facts.py", "test_the_deploy_picker_still_equips_a_body_inside_the_family", 1173),
+    ("tests/sim/test_diff_attack_audit.py", "<module>", 345),
+    ("tests/sim/test_diff_attack_audit.py", "<module>", 1031),
+    ("tests/strategy/test_attach_decider.py", "_stats", 65),
+    ("tests/strategy/test_board_cards.py", "<module>", 677),
+    ("tests/strategy/test_combat.py", "test_active_doomed_sees_the_forward_evolution_threat", 333),
+    ("tests/strategy/test_combat.py", "test_active_doomed_sees_the_forward_evolution_threat", 678),
+    ("tests/strategy/test_damage_oracle.py", "<module>", 83),
+    ("tests/strategy/test_damage_oracle.py", "<module>", 158),
+    ("tests/strategy/test_damage_oracle.py", "<module>", 330),
+    ("tests/strategy/test_damage_oracle.py", "<module>", 345),
+    ("tests/strategy/test_damage_oracle.py", "<module>", 383),
+    ("tests/strategy/test_damage_oracle.py", "<module>", 1031),
+    ("tests/strategy/test_damage_oracle.py", "test_flat_reduction_applies_after_weakness_and_is_pierced_by_ignores_effects", 383),
+    ("tests/strategy/test_damage_oracle.py", "test_hidden_scaler_feeds_the_incoming_ceiling", 723),
+    ("tests/strategy/test_damage_oracle.py", "test_threshold_prevention_zeroes_only_big_hits", 158),
+    ("tests/strategy/test_discard_keep_rows.py", "_setup", 666),
+    ("tests/strategy/test_discard_recur_fuel.py", "_combat", 677),
+    ("tests/strategy/test_discard_selection.py", "_setup", 666),
+    ("tests/strategy/test_empty_bench_rung.py", "test_the_guard_covers_the_PLANNER_branch_too", 677),
+    ("tests/strategy/test_empty_bench_rung.py", "test_when_the_guard_overrides_the_planner_no_line_is_reported", 677),
+    ("tests/strategy/test_gust_target_slot_resolver.py", "_setup", 677),
+    ("tests/strategy/test_incoming_curve.py", "_combat", 677),
+    ("tests/strategy/test_lethal.py", "test_ignore_effects_attack_bypasses_a_prevent_damage_ability_for_the_win", 345),
+    ("tests/strategy/test_needs_deny_resolver.py", "_setup", 677),
+    ("tests/strategy/test_opponent_deck_accel.py", "_combat", 647),
+    ("tests/strategy/test_opponent_deck_accel.py", "_combat", 648),
+    ("tests/strategy/test_posture_cardfacts.py", "_stats", 743),
+    ("tests/strategy/test_predicted_loss_rung.py", "_pilot", 677),
+    ("tests/strategy/test_promote_preserve_wincon.py", "_pilot", 190),
+    ("tests/strategy/test_reachable_attach.py", "<module>", 121),
+    ("tests/strategy/test_reachable_attach.py", "_special_combat", 677),
+    ("tests/strategy/test_reachable_attach.py", "_special_combat", 678),
+    ("tests/strategy/test_reachable_attach.py", "test_a_type_locked_accel_cannot_eat_a_colour_the_discard_lacks", 163),
+    ("tests/strategy/test_reachable_attach.py", "test_crispin_units_must_take_distinct_types", 121),
+    ("tests/strategy/test_reachable_attach.py", "test_rosa_never_funds_a_non_stage_2_body", 677),
+    ("tests/strategy/test_reachable_attach.py", "test_the_discard_cap_binds_by_COLOUR_not_merely_by_count", 121),
+    ("tests/strategy/test_reachable_attach.py", "test_two_discard_accelerators_share_one_pile", 163),
+    ("tests/strategy/test_reachable_attach.py", "test_wondrous_patch_funds_a_benched_psychic_body", 163),
+    ("tests/strategy/test_reachable_attach.py", "test_wondrous_patch_needs_the_energy_visible_in_the_discard", 163),
+    ("tests/strategy/test_reachable_incoming.py", "_bench_combat", 120),
+    ("tests/strategy/test_reachable_incoming.py", "_bench_combat", 121),
+    ("tests/strategy/test_reachable_incoming.py", "_combat", 677),
+    ("tests/strategy/test_reachable_incoming.py", "test_charged_burst_does_not_apply_to_a_basic_form", 677),
+    ("tests/strategy/test_reachable_incoming.py", "test_charged_colorless_burst_pays_a_colorless_nuke_but_never_a_typed_cost", 1031),
+    ("tests/strategy/test_reachable_incoming.py", "test_old_style_current_form_only_when_no_forward_exists", 677),
+    ("tests/strategy/test_snipe_threat_rank.py", "test_forward_card_ids_collects_the_whole_descendant_line", 743),
+    ("tests/strategy/test_snipe_threat_rank.py", "test_the_rank_generalises_to_a_scaler_no_function_tag_covers", 64),
+    ("tests/strategy/test_state_model.py", "<module>", 112),
+    ("tests/strategy/test_state_model.py", "<module>", 121),
+    ("tests/strategy/test_state_model.py", "<module>", 215),
+    ("tests/strategy/test_state_model.py", "<module>", 216),
+    ("tests/strategy/test_state_model.py", "<module>", 217),
+    ("tests/strategy/test_state_model.py", "<module>", 675),
+    ("tests/strategy/test_state_model.py", "<module>", 676),
+    ("tests/strategy/test_state_model.py", "<module>", 677),
+    ("tests/strategy/test_state_model.py", "<module>", 678),
+    ("tests/strategy/test_state_value.py", "<module>", 43),
+    ("tests/strategy/test_state_value.py", "<module>", 46),
+    ("tests/strategy/test_state_value.py", "<module>", 112),
+    ("tests/strategy/test_state_value.py", "<module>", 119),
+    ("tests/strategy/test_state_value.py", "<module>", 120),
+    ("tests/strategy/test_state_value.py", "<module>", 121),
+    ("tests/strategy/test_state_value.py", "<module>", 163),
+    ("tests/strategy/test_state_value.py", "<module>", 276),
+    ("tests/strategy/test_state_value.py", "<module>", 345),
+    ("tests/strategy/test_state_value.py", "<module>", 675),
+    ("tests/strategy/test_state_value.py", "<module>", 676),
+    ("tests/strategy/test_state_value.py", "<module>", 677),
+    ("tests/strategy/test_state_value.py", "<module>", 678),
+    ("tests/strategy/test_state_value.py", "<module>", 743),
+    ("tests/strategy/test_state_value.py", "<module>", 1008),
+    ("tests/strategy/test_state_value.py", "<module>", 1030),
+    ("tests/strategy/test_state_value.py", "<module>", 1031),
+    ("tests/strategy/test_turns_to_afford.py", "_combat", 677),
+    ("tests/strategy/test_turns_to_afford.py", "_recur_model", 190),
+    ("tests/strategy/test_turns_to_afford.py", "test_the_clock_refuses_an_on_attack_bench_only_reload", 677),
 }
 
 
@@ -188,6 +211,28 @@ def _damage(value):
         return 0
     digits = "".join(ch for ch in text if ch.isdigit())
     return int(digits) if digits else 0
+
+
+def _stage_flags(stage_text, effect_texts):
+    """The engine's three stage booleans (`CardData.basic`/`.stage1`/`.stage2`), read off the CSV.
+
+    The audit's ground truth has to stay INDEPENDENT of the code it grades, so the flags come from
+    the source column — but the fold from three booleans to one string is `stage_from_card`, reused
+    rather than respelled, exactly as this function already reuses `_parse_tool_hp_bonus`. One
+    derivation, two inputs: the engine's own booleans in production, the CSV's here.
+
+    The five Antique Fossils print as `Item` yet the engine reports `basic=True`, and it is right —
+    *"Play this card as if it were a 60-HP Basic {C} Pokémon."* Read from the effect text, which is
+    where the CSV states it, rather than from a hardcoded id list. Over all 1267 cards this agrees
+    with the engine exactly (`test_csv_stage_truth_matches_the_engine_pool`); without it the audit
+    would demand `None` from a Fossil fixture that production stamps `"basic"`.
+    """
+    canonical = STAGE_LABELS.get(stage_text)
+    if canonical is None and any("as if it were" in t and "Basic" in t for t in effect_texts):
+        canonical = "basic"
+    return {"basic": canonical == "basic",
+            "stage1": canonical == "stage1",
+            "stage2": canonical == "stage2"}
 
 
 def _literal(node, constants):
@@ -239,10 +284,12 @@ def _csv_truth(*, hp_shift=0):
                               default=0) if min_cost is not None else 0
         max_damage_costs = [cost for damage, cost in zip(damages, costs)
                             if cost is not None and damage == max_damage]
+        effect_texts = [_norm_text(row.get("Effect Explanation")) or "" for row in rows]
         fake_card = SimpleNamespace(
             name=_norm_text(first.get("Card Name")) or "",
-            cardType=CARD_TYPES.get(_norm_text(first.get("Stage (Pokémon)/Type (Energy and Trainer)"))),
-            skills=[_norm_text(row.get("Effect Explanation")) or "" for row in rows],
+            cardType=CARD_TYPES.get(_norm_text(first.get(STAGE_COLUMN))),
+            skills=effect_texts,
+            **_stage_flags(_norm_text(first.get(STAGE_COLUMN)), effect_texts),
         )
         truth[cid] = {
             "name": _norm_text(first.get("Card Name")) or "",
@@ -252,7 +299,7 @@ def _csv_truth(*, hp_shift=0):
             "resistance": _energy_type(first.get("Resistance (Type)")),
             "retreatCost": _norm_int(first.get("Retreat")) if _norm_text(first.get("Retreat")) else None,
             "evolvesFrom": _norm_text(first.get("Previous stage")),
-            "stage": _norm_text(first.get("Stage (Pokémon)/Type (Energy and Trainer)")),
+            "stage": stage_from_card(fake_card),
             "ex": "Pokémon ex" in (first.get("Rule") or ""),
             "megaEx": "Mega Pokémon ex" in (first.get("Rule") or ""),
             "aceSpec": "ACE SPEC" in (first.get("Rule") or ""),
@@ -268,10 +315,35 @@ def _csv_truth(*, hp_shift=0):
     return truth
 
 
+def _scopes(tree):
+    """``{id(CardStat call node) -> dotted enclosing def/class path}`` — the STABLE half of a site's
+    identity. ``ast.walk`` flattens the tree and loses this, so descend explicitly, carrying the
+    prefix. A row at module scope reports ``"<module>"``."""
+    found = {}
+
+    def descend(node, prefix):
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                descend(child, prefix + (child.name,))
+                continue
+            if isinstance(child, ast.Call) and getattr(child.func, "id", None) == "CardStat":
+                found[id(child)] = ".".join(prefix) or "<module>"
+            descend(child, prefix)
+
+    descend(tree, ())
+    return found
+
+
 def _cardstat_calls():
+    """Yield ``(path, line, scope, cardId, kwargs)`` for every literal ``CardStat(...)`` in tests.
+
+    ``line`` is for HUMANS — it goes in failure messages so a reader can jump to the row. ``scope``
+    is for the LEDGER key: a site's line number changes whenever anything above it in the file does,
+    which made an unrelated docstring edit fail two tests with a message about fixture hygiene."""
     for path in sorted(TESTS_ROOT.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         constants = _constants(tree)
+        scopes = _scopes(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or getattr(node.func, "id", None) != "CardStat":
                 continue
@@ -280,22 +352,38 @@ def _cardstat_calls():
             if cid is None and "cardId" in kwargs:
                 cid = kwargs["cardId"]
             if isinstance(cid, int):
-                yield path, node.lineno, cid, kwargs
+                yield path, node.lineno, scopes.get(id(node), "<module>"), cid, kwargs
+
+
+def _site(path, scope, cid):
+    """The ledger key for one fixture row — position-independent by construction."""
+    return (path.relative_to(ROOT).as_posix(), scope, cid)
+
+
+def _source_named_synthetic_rows(truth):
+    """``[(site, line)]`` for every synthetic row that keeps its card's real CSV name."""
+    rows = []
+    for path, line, scope, cid, kwargs in _cardstat_calls():
+        expected = truth.get(cid)
+        if (expected is not None and kwargs.get("synthetic") is True
+                and kwargs.get("name") == expected["name"]):
+            rows.append((_site(path, scope, cid), line))
+    return rows
 
 
 def _audit(*, hp_shift=0):
     truth = _csv_truth(hp_shift=hp_shift)
     failures = []
-    for path, line, cid, kwargs in _cardstat_calls():
+    for path, line, scope, cid, kwargs in _cardstat_calls():
         expected = truth.get(cid)
         if expected is None:
             continue
         if kwargs.get("synthetic") is True:
-            site = (path.relative_to(ROOT).as_posix(), line, cid)
+            site = _site(path, scope, cid)
             if kwargs.get("name") == expected["name"] and site not in SYNTHETIC_SOURCE_NAME_SITES:
                 failures.append(f"{path.relative_to(ROOT)}:{line} id={cid} synthetic row keeps "
                                 f"real name {expected['name']!r}; use a non-pool name or record "
-                                "why the source name is required")
+                                f"why the source name is required (ledger key: {site})")
             continue
         declared = {field: value for field, value in kwargs.items() if field in COVERED_FIELDS}
         if not declared:
@@ -321,14 +409,49 @@ def test_cardstat_fixture_source_claims_match_card_data():
 
 
 def test_source_named_synthetic_site_ledger_matches_live_rows():
-    live = set()
-    truth = _csv_truth()
-    for path, line, cid, kwargs in _cardstat_calls():
-        expected = truth.get(cid)
-        if (expected is not None and kwargs.get("synthetic") is True
-                and kwargs.get("name") == expected["name"]):
-            live.add((path.relative_to(ROOT).as_posix(), line, cid))
-    assert live == SYNTHETIC_SOURCE_NAME_SITES
+    rows = _source_named_synthetic_rows(_csv_truth())
+    assert {site for site, _line in rows} == SYNTHETIC_SOURCE_NAME_SITES
+
+
+def test_the_ledger_key_identifies_exactly_one_row_each():
+    """The ledger is a SET, so two rows sharing a key would collapse into one entry and a newly
+    added source-named row could hide behind an existing one — the audit would read green for the
+    wrong reason. Guard the key's discriminating power directly rather than trusting it.
+
+    This is why the key is `(path, scope, cardId)` and not the more obvious `(path, cardId, name)`:
+    a row only reaches this ledger BECAUSE its `name` equals the CSV name for its `cardId`, so name
+    is a function of cardId here and adds nothing — and `(path, cardId)` alone collides 9 times
+    across 22 rows (`test_reachable_attach.py` declares card 163 four separate times). The enclosing
+    def is what actually separates them."""
+    rows = _source_named_synthetic_rows(_csv_truth())
+    duplicated = sorted(k for k, n in Counter(site for site, _ in rows).items() if n > 1)
+    assert duplicated == []
+    assert len(rows) == len(SYNTHETIC_SOURCE_NAME_SITES)      # no row lost to set collapse
+
+
+def test_the_ledger_key_survives_a_line_shift():
+    """The property the old line-number key lacked: inserting a line above a listed row must not
+    change its identity. Simulated by re-deriving one file's keys from a copy of its source with a
+    blank line spliced in at the top — same keys, different line numbers."""
+    path = ROOT / "tests" / "scouting" / "test_tool_holder_facts.py"
+    original = path.read_text(encoding="utf-8")
+    shifted = "\n" * 5 + original
+
+    def keys_and_lines(text):
+        tree = ast.parse(text)
+        constants, scopes = _constants(tree), _scopes(tree)
+        out = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", None) == "CardStat":
+                kwargs = {kw.arg: _literal(kw.value, constants) for kw in node.keywords if kw.arg}
+                cid = _literal(node.args[0], constants) if node.args else kwargs.get("cardId")
+                if isinstance(cid, int):
+                    out.append(((scopes.get(id(node), "<module>"), cid), node.lineno))
+        return sorted(out)
+
+    before, after = keys_and_lines(original), keys_and_lines(shifted)
+    assert [k for k, _ in before] == [k for k, _ in after]        # identity held
+    assert [n for _, n in before] != [n for _, n in after]        # …and lines really did move
 
 
 def test_cardstat_fixture_audit_has_positive_control():
