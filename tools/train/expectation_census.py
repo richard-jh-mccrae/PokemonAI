@@ -31,17 +31,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections import Counter, defaultdict
 from math import comb
 from pathlib import Path
 
-from common import apply_option as seam
-from common import board_delta, board_expectation as be
-from common import snapshot_coverage as sc
-from common.fetch_closure import fetch_target_matches
-from common.state_model import StateModel
-from common.strategy.context import _PLAY
-from train.apply_parity import TRACES, _card_of, _chosen_option, _load, offline_combat
+# Self-bootstrapping, as every sibling CLI in this directory is (`frame_view.py`,
+# `blunder_correction.py`): the Usage lines above are bare `python tools/train/...`, and without
+# this they cannot run from a clean checkout.
+REPO = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO / "tools"))
+sys.path.insert(0, str(REPO / "src"))
+
+from common import apply_option as seam  # noqa: E402
+from common import board_delta, board_expectation as be  # noqa: E402
+from common import snapshot_coverage as sc  # noqa: E402
+from common.fetch_closure import fetch_target_matches  # noqa: E402
+from common.state_model import StateModel  # noqa: E402
+from common.strategy.context import _PLAY  # noqa: E402
+from train.apply_parity import TRACES, _card_of, chosen_option, load, offline_combat  # noqa: E402
 
 #: The refusal-message fragments `expectation` raises, each mapped to the backlog bucket it names.
 #: Matched as substrings of the message TAIL (the part after ``"<id> <name>: "``), because the
@@ -87,11 +95,11 @@ def walk(paths, *, combat):
     effects = combat.effects
     rows, enumerated, refused = [], Counter(), 0
     for path in paths:
-        body = _load(path)
+        body = load(path)
         frames = body.get("frames") or []
         decks = (body.get("meta") or {}).get("decks") or [[], []]
         for k in range(len(frames) - 1):
-            option = _chosen_option(frames[k])
+            option = chosen_option(frames[k])
             if not option or int(option.get("type", -1)) != _PLAY:
                 continue
             obs, nxt = frames[k]["obs"], frames[k + 1]["obs"]
