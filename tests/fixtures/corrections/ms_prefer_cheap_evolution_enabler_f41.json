@@ -559,8 +559,8 @@
       "correct": [
         4
       ],
-      "ruled": "2026-07-29",
-      "why": "DECLARED DIVERGENCE from Correction 85164605-41, which records the human's correct=[3] Play Mega Signal. Both are live and neither supersedes the other: the sibling fixture ms_item_over_supporter_indifferent_f41 carries that [3] held out to #145 (ruled 2026-07-27, 'the correction is valid (Item before Supporter) but immaterial HERE'), while THIS fixture asserts what the Planner must commit on the same board -- the FREE direct-evolve [4], which ties the tutor line on prizes and survival but spends no card and no Supporter slot, so the cheapest-enabler tier must break the tie toward it (test_planner_engine.py::test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler). Recorded per ADR-0082: reconcile to the sibling, never re-adjudicate."
+      "ruled": "2026-08-06",
+      "why": "RATIFIED 2026-08-06 by developer ruling — this is no longer a declared divergence but THE ruling. Its sibling `ms_item_over_supporter_indifferent_f41` has been re-ruled from [3] to [4] and the two now agree; see that fixture for the card-fact record (1145 Mega Signal puts a card in HAND and does not evolve; 1189 Salvatore evolves from deck; HAND5 already holds a Mega Starmie ex, so the tutor fetches a redundant copy). The original text follows.\n\n--- prior claim, verbatim ---\nDECLARED DIVERGENCE from Correction 85164605-41, which records the human's correct=[3] Play Mega Signal. Both are live and neither supersedes the other: the sibling fixture ms_item_over_supporter_indifferent_f41 carries that [3] held out to #145 (ruled 2026-07-27, 'the correction is valid (Item before Supporter) but immaterial HERE'), while THIS fixture asserts what the Planner must commit on the same board -- the FREE direct-evolve [4], which ties the tutor line on prizes and survival but spends no card and no Supporter slot, so the cheapest-enabler tier must break the tie toward it (test_planner_engine.py::test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler). Recorded per ADR-0082: reconcile to the sibling, never re-adjudicate."
     }
   },
   "frame_key": "85164605|1|decision|41"

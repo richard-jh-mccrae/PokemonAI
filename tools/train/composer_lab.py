@@ -106,7 +106,7 @@ RETREAT_RULING = ("Issue #392 — a `_RETREAT` option is TARGETLESS (5807/5807 i
 # ── Issue #291 §3c's index, consumed rather than re-derived ──────────────────────────────────────
 
 
-def fixture_rulings() -> dict:
+def fixture_rulings(fixtures_dir=None) -> dict:
     """``{frame key: [ruled option index]}`` from the committed FIXTURES — the authoritative ruling
     where one exists, overriding the `data/corrections/` record.
 
@@ -143,25 +143,32 @@ def fixture_rulings() -> dict:
     Correction record, which is the human's own, instead of to whichever filename sorted last.
     Omitting is deliberately not the same as guessing, and it is why the conflict has to be printed:
     a frame that quietly left the ruled population would read as agreement."""
-    rulings, _conflicts = _fixture_rulings_and_conflicts()
+    rulings, _conflicts = _fixture_rulings_and_conflicts(fixtures_dir)
     return rulings
 
 
-def fixture_ruling_conflicts() -> list:
+def fixture_ruling_conflicts(fixtures_dir=None) -> list:
     """``[{frame_key, claims: {tuple: [fixture names]}}, ...]`` — the frames :func:`fixture_rulings`
     refused to resolve because two committed fixtures make different Decision Claims about them.
 
     Reported by the lab's header so a conflict cannot sit unseen. `tests/test_fixture_ruling_conflicts.py`
     is the structural guard that stops a NEW one appearing silently."""
-    _rulings, conflicts = _fixture_rulings_and_conflicts()
+    _rulings, conflicts = _fixture_rulings_and_conflicts(fixtures_dir)
     return conflicts
 
 
-def _fixture_rulings_and_conflicts() -> tuple:
-    """The one walk behind both readers, so they cannot disagree about what a conflict is."""
+def _fixture_rulings_and_conflicts(fixtures_dir=None) -> tuple:
+    """The one walk behind both readers, so they cannot disagree about what a conflict is.
+
+    ``fixtures_dir`` is injectable for the same reason `gates.ruling_index`'s stores are — *"so the
+    whole index tests against a ``tmp_path`` corpus"*. It is load-bearing rather than tidy here: the
+    committed corpus currently holds ZERO conflicts, so a test that proved this function distinguishes
+    anything by pointing it at the real store would be asserting on an empty set, and would silently
+    stop testing the moment the last conflict was ruled — which is exactly what happened the day this
+    was written."""
     from train.gates import iter_keyed_fixtures
     claims_by_key: dict = {}
-    for path, _fx, key, claims in iter_keyed_fixtures():
+    for path, _fx, key, claims in iter_keyed_fixtures(fixtures_dir):
         if claims.decision and claims.decision.correct:
             claims_by_key.setdefault(key, {}).setdefault(
                 tuple(claims.decision.correct), []).append(path.name)

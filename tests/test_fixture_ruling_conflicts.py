@@ -30,6 +30,7 @@ NEW conflict fails this test instead of joining a silent backlog.
 from __future__ import annotations
 
 import collections
+import json
 import sys
 from pathlib import Path
 
@@ -42,17 +43,12 @@ sys.path[:0] = [str(_REPO / "tools"), str(_REPO / "src")]
 #: forgotten. Declared as data so a NEW conflict fails this test instead of joining a silent
 #: backlog — `test_adr_index.py::_INDEX_EXEMPT`'s convention, and for the same reason. Emptying this
 #: needs a developer ruling on the frame, not a code change.
-_CONFLICT_EXEMPT: dict[str, str] = {
-    "85164605|1|decision|41":
-        "ms_item_over_supporter_indifferent_f41 claims [3] (the Correction's own ruling, held out to "
-        "Issue #145 as a NEAR-INDIFFERENT turn) while ms_prefer_cheap_evolution_enabler_f41 claims "
-        "[4] (what the Planner must commit, a declared ADR-0082 divergence backed by "
-        "test_planner_engine.py::test_f41_prefers_the_free_direct_evolve_over_the_tutor_enabler). "
-        "Both are individually well-formed; the second's own `why` says 'reconcile to the sibling, "
-        "never re-adjudicate' and nobody has. Owed a developer ruling — the developer's recorded "
-        "words on this frame were 'it doesn't really matter', which points at correct_alternatives "
-        "rather than at one of the two being wrong.",
-}
+#:
+#: **Currently EMPTY, and that is a result rather than a default.** Its one entry —
+#: `85164605|1|decision|41` — was ruled by the developer on 2026-08-06 to `[4]`, the free
+#: direct-evolve, and both fixtures were reconciled to it. The list is kept because the mechanism it
+#: guards is permanent even when the backlog is not.
+_CONFLICT_EXEMPT: dict[str, str] = {}
 
 
 def _claims_by_key() -> dict:
@@ -94,30 +90,66 @@ def test_every_exemption_still_names_a_REAL_conflict(key):
         f"`_CONFLICT_EXEMPT` entry.\n  reason on file: {_CONFLICT_EXEMPT[key]}")
 
 
-def test_a_conflicting_frame_is_DROPPED_from_the_lab_ruling_index_not_resolved_by_filename():
-    """The consumer half, asserted rather than assumed. `composer_lab.fixture_rulings` must not
-    return a claim for a frame whose fixtures disagree — its contract is *"the authoritative ruling
-    where one exists"*, and where two live claims disagree there is none. Dropping it makes the lab
-    fall back to the Correction record (the human's own) instead of to whichever filename sorted
-    last, and `fixture_ruling_conflicts` is what stops that drop being silent."""
+def _write_fixture(directory, name, frame_key, correct):
+    """One minimal keyed fixture — `iter_keyed_fixtures` needs only `frame_key` plus a Decision
+    Claim, and `parse_claims` synthesises the claim from a bare `correct`."""
+    (directory / name).write_text(
+        json.dumps({"frame_key": frame_key, "correct": list(correct)}), encoding="utf-8")
+
+
+def test_a_conflicting_frame_is_DROPPED_from_the_lab_ruling_index_not_resolved_by_filename(tmp_path):
+    """The consumer half, proved against a SYNTHETIC corpus.
+
+    `composer_lab.fixture_rulings` must not return a claim for a frame whose fixtures disagree — its
+    contract is *"the authoritative ruling where one exists"*, and where two live claims disagree
+    there is none. Dropping it makes the lab fall back to the Correction record (the human's own)
+    instead of to whichever filename sorted last.
+
+    ⚠️ **Built on `tmp_path` deliberately, and the first version of this test was not.** It asserted
+    against the committed store and opened with *"the probe found no conflicts at all"* as its
+    instrument check — which passed only while the corpus still HELD a conflict. The moment
+    `85164605|1|decision|41` was ruled, that check failed and the real assertion below had nothing
+    left to run on. A control that evaporates when the bug is fixed is not a control; the corpus is
+    the thing under test, never the instrument that proves the test works."""
     from train.composer_lab import fixture_ruling_conflicts, fixture_rulings
-    rulings, conflicts = fixture_rulings(), fixture_ruling_conflicts()
-    conflicted = {c["frame_key"] for c in conflicts}
-    assert conflicted, "the probe found no conflicts at all — it cannot be distinguishing anything"
-    for key in conflicted:
-        assert key not in rulings, (
-            f"{key} has disagreeing fixture claims yet still resolved to {rulings[key]} — the "
-            f"filename-order collapse is back")
+    # "a" sorts before "z", so a filename-order collapse would resolve this to [9], never to [1].
+    _write_fixture(tmp_path, "a_claims_one.json", "ep|0|decision|7", [1])
+    _write_fixture(tmp_path, "z_claims_nine.json", "ep|0|decision|7", [9])
+    _write_fixture(tmp_path, "b_uncontested.json", "ep|0|decision|8", [2])
+
+    rulings = fixture_rulings(tmp_path)
+    conflicts = fixture_ruling_conflicts(tmp_path)
+
+    assert "ep|0|decision|7" not in rulings, (
+        f"the conflicted frame resolved to {rulings.get('ep|0|decision|7')} — the filename-order "
+        f"collapse is back")
+    assert rulings.get("ep|0|decision|8") == [2], "an uncontested frame must still be ruled"
+    assert [c["frame_key"] for c in conflicts] == ["ep|0|decision|7"]
+    assert conflicts[0]["claims"] == {(1,): ["a_claims_one.json"], (9,): ["z_claims_nine.json"]}, (
+        "the report must name BOTH claims and the fixture each came from — a conflict a human "
+        "cannot act on is the silence this replaces")
 
 
-def test_the_agreeing_duplicates_are_still_RULED_and_not_collateral_damage():
-    """The positive control the test above owes. Dropping conflicts must not drop the five legal
-    duplicate keys as well — if it did, this file would be enforcing "one fixture per frame", which
-    `gates.claim_agreement` explicitly rules against."""
+def test_two_fixtures_that_AGREE_are_not_collateral_damage(tmp_path):
+    """The other direction, and the reason this file rejects only DISAGREEING duplicates. Two
+    fixtures making the SAME claim about one frame are legal and load-bearing (`gates.claim_agreement`),
+    so they must still resolve — dropping them would turn this guard into an unruled "one fixture per
+    frame" policy."""
+    from train.composer_lab import fixture_ruling_conflicts, fixture_rulings
+    _write_fixture(tmp_path, "named_behaviour.json", "ep|0|decision|9", [5])
+    _write_fixture(tmp_path, "t3holdout_sibling.json", "ep|0|decision|9", [5])
+    assert fixture_rulings(tmp_path) == {"ep|0|decision|9": [5]}
+    assert fixture_ruling_conflicts(tmp_path) == []
+
+
+def test_the_committed_store_still_carries_agreeing_duplicates():
+    """...and that the pairing above is a real convention rather than a hypothetical this test
+    invented: the committed corpus pairs named behavioural fixtures with `*_t3holdout_*` siblings,
+    and every one of those keys must still be RULED."""
     from train.composer_lab import fixture_rulings
     rulings = fixture_rulings()
     agreeing = [key for key, by_claim in _claims_by_key().items()
                 if len(by_claim) == 1 and sum(len(n) for n in by_claim.values()) > 1]
-    assert agreeing, "no agreeing duplicate keys found — the control cannot fire"
+    assert agreeing, "no agreeing duplicate keys in the committed store — the convention is gone"
     missing = [key for key in agreeing if key not in rulings]
     assert not missing, f"legal duplicate keys were dropped along with the conflicts: {missing}"
