@@ -197,12 +197,18 @@ REFUSED: it is the evolve transition, not a deploy.
 
 ---
 
-## 2.5 P0 — a BLOCKING prerequisite, now **Issue #408**: `CardStat.stage` is never populated
+## 2.5 P0 — a BLOCKING prerequisite, LANDED as Issue #408 / PR #411: `CardStat.stage` was never populated
 
-> **Filed as Issue #408 and specced there in full.** It lands as its own PR, merged BEFORE this one,
-> because it is a production behaviour change (it moves hydrapple's re-access outs) while everything
-> in this spec is inert — folding the two would leave one `score_diff` unable to attribute either.
-> Summarised here because §4.4 is unsound without it; the ruling detail lives in #408.
+> ✅ **MERGED (PR #411, 2026-08-06). This branch is rebased onto it, so the prerequisite is
+> DISCHARGED** and §4.4's empty-leg SKIP is now sound. Kept in full below because it is the reason
+> §4.4 is written the way it is, and because two of its corrections became this spec's own evidence
+> rules (§8 constraints 1–3). Verified on the rebased branch: `stage` is populated for all 1061
+> Pokémon (`basic` 600 / `stage1` 345 / `stage2` 116), and `provider.stage_from_card` is on `main`.
+>
+> **The re-measurement is the acceptance, and it holds:** with `stage1`/`stage2` newly matchable, the
+> census still reports **706 refused / 81 enumerated** and every bucket unchanged — because Dawn's
+> Stage-1/Stage-2 legs and Hyper Aroma's pool are empty on those corpus boards for a BOARD reason,
+> exactly as this section predicted with a corrected matcher before #411 existed.
 
 **`fetch_target_matches`' `stage1` and `stage2` target classes match NOTHING, in production, and
 always have.** Found by sizing the conjunction legs pool-wide and getting two zeroes that no deck
@@ -260,13 +266,21 @@ exactly the failure `_covers` exists to prevent. The corpus cannot catch this (m
 is guarded by a TEST rather than by a measurement: a fixture board holding an unseen Stage 1 and
 Stage 2 must produce a three-leg product.
 
-**Lands as Issue #408's own PR, merged first.** It is a **production behaviour change** — it
+**Landed as Issue #408 / PR #411, merged first, as specced.** It was a **production behaviour change** — it
 un-blinds 461 cards to two target classes, and measured, it moves exactly one agent (hydrapple: four
 line pieces gain +2 re-access outs from its 2× Dawn; all five other agents are unchanged) — so it
 ships alone and `score_diff`-gated rather than folded into item 1. #408 carries the full spec: the
 canonical derivation, the fixture-audit vocabulary mapping, and the instrument gap that let it
 survive (`test_cardstat_fixture_facts.py` cannot see helper-constructed `CardStat` rows, and the only
 fixtures using the production vocabulary are built through a helper).
+
+**Two claims in #408's body were FALSIFIED by its own build, and both are recorded here because they
+are this spec's evidence rules, not footnotes.** (1) *"No shipped deck runs Latias ex"* — false;
+slowking runs 2×, and the grep behind the claim could not have found it, because `deck.csv` holds
+bare ids one per line **and is CRLF**. (2) R4's *"every non-Pokémon type → None"* breaks on five
+Antique Fossil cards (Item `cardType`, engine `basic=True`). The first is why §8's constraints demand
+a positive control before any "none found", and why every deck scan in this spec reads
+CRLF-safely.
 
 ---
 
