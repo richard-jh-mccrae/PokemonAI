@@ -220,15 +220,22 @@ def test_the_committed_corpus_holds_no_refused_shapes():
 def test_the_census_positive_control_the_reader_and_the_predicate_both_work():
     """**The control the census is worthless without.** An empty corpus, a broken reader, or a
     predicate that only ever returns ``[]`` would all satisfy "0 refused shapes" while proving
-    nothing. So: the reader finds all 372 records, every one is clean — including the repaired
+    nothing. So: the reader finds all 375 records, every one is clean — including the repaired
     record, checked by name — and the synthetic + differential tests above already established the
     predicate really does fire (`test_a_match_scope_correct_is_caught`,
     `test_the_constructor_really_refuses_each_shape_the_audit_names`), so "0 here" reads as "clean",
-    not as "broken"."""
+    not as "broken".
+
+    **372 → 375 on 2026-08-06** (Issue #409 / ADR-0122): the first ctx-17 (`SelectContext.HEAL`)
+    rulings, `data/corrections/mega_starmie_20260806_parity-ctx17/`. This is the denominator moving
+    because the corpus really grew, not a shape being admitted — `refused_shapes` above still returns
+    `[]`, so all three are clean by the same predicate. The count going red first is this census
+    working: a corpus-size assertion is a ruling record, and it must be re-taken deliberately rather
+    than loosened."""
     from train.gates import keyed_corrections
     recs = keyed_corrections(REPO / "data" / "corrections")
-    assert len(recs) == 372
-    assert sum(1 for _k, c in recs if not refuses(c)) == 372
+    assert len(recs) == 375
+    assert sum(1 for _k, c in recs if not refuses(c)) == 375
     the_record = next(c for k, c in recs if k == THE_RECORD)
     assert refuses(the_record) == []
     assert the_record.scope == "decision" and the_record.correct == [0]
@@ -246,12 +253,16 @@ def test_the_corpus_now_holds_no_match_scope_records_at_all():
     tag can still use it.
 
     This is the corpus-composition half of that repair. `test_the_repaired_record_still_grades_the_
-    same_way` below is the grading half — the fix must be a pure re-label, not a value change."""
+    same_way` below is the grading half — the fix must be a pure re-label, not a value change.
+
+    **`decision` 354 → 357 on 2026-08-06** (Issue #409 / ADR-0122): three ctx-17 HEAL-target rulings,
+    all `decision` scope. `turn` is untouched and `match` is still absent, which is the assertion
+    this test actually makes — the decision count is the denominator that carries it."""
     from collections import Counter
 
     from train.gates import keyed_corrections
     recs = keyed_corrections(REPO / "data" / "corrections")
-    assert Counter(c.scope for _k, c in recs) == {"decision": 354, "turn": 18}
+    assert Counter(c.scope for _k, c in recs) == {"decision": 357, "turn": 18}
 
 
 @pytest.mark.req("REQ-GATE-0009")

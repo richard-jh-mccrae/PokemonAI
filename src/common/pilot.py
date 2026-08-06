@@ -2191,6 +2191,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._snipe_ko_dominator(ctx)   # armed: the KO rung, as structure not a weight
                     + self._gust_tactical(obs, select, board, option)
                     + self._gust_target_tactical(obs, select, board, option)
+                    + self._heal_target_tactical(obs, select, board, option)   # ctx 17 (Issue #409):
+                                                                       # the 4th target-select term
                     + self._gust_stall_target_tactical(obs, select, board, option)
                     + self._attach_lethal_tactical(obs, select, board, option)
                     + self._boost_lethal_tactical(obs, select, board, option)
@@ -3214,6 +3216,186 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                 best, best_dmg = (o.get("area"), o.get("index"), o.get("playerIndex")), dmg
         return best
 
+    def _heal_target_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
+        """Rank WHICH of my Pokémon a heal card heals, at the HEAL target select (ctx 17, Issue
+        #409).
+
+        Nothing scored this select at all. `SelectContext.HEAL` appeared nowhere in the strategy
+        layer — not as a constant, not in a `Hypothesis.when`, not in a tactical — so every option
+        came back 0.0 and `_order_key` fell through to its canonical-fingerprint leg, which sorts a
+        serialized JSON board fragment lexicographically. `option_fingerprint` writes ``[area, card]``
+        and `AreaType.ACTIVE` is 4 against `BENCH`'s 5, so ``"4" < "5"`` and **the Pilot healed the
+        Active on every board, for every heal card** — not as a policy anyone chose, as an artefact of
+        string comparison. Same class of defect `_deploy_decision` records for `_TO_BENCH` before
+        Issue #261 item 2d.
+
+        **The rule is NOT the ctx-16 one, and the corpus says why.** `_best_counter_source_slot`
+        picks our MOST-DAMAGED body at `_REMOVE_DAMAGE_COUNTER`, which is right there and wrong here:
+        at `v2_ms_mirror_5000` f126 the most-damaged body IS the Active (120 to the bench's 50) — but
+        healing it under Wally's Compassion bounces its **two attached Energy** to hand, and
+        `hold-clutch-heal`'s own rationale is that the play works only when you *"heal, re-power, and
+        still attack the same turn"*. Most-damaged is a proxy that cannot see the rider. So:
+
+            heal_target_value(body) = survival_gain(body) − bounce_cost(body)
+
+        and the two legs pull OPPOSITE ways by construction — the Active has the most survival to
+        gain and the most to lose by being stripped — which is exactly why a one-dimensional rule
+        cannot express the f126 dilemma.
+
+        A **tactical**, not an override returning ``(area, index)`` like the ctx-16 selector.
+        `_option_trace` already carries a family of context-gated TARGET terms doing exactly this —
+        `_denial_target_tactical` (ctx 30), `_snipe_relevance_tactical` (ctx 15),
+        `_gust_target_tactical` (ctx 3) — so a fourth member is the established shape, and routing
+        through ``tactical`` PRESERVES `_order_key`'s canonical tie-break (ADR-0103) instead of
+        bypassing it. The ctx-16 override predates that family and is not extended.
+
+        **Every option on this menu is a heal target**, so the two legs are weighed only against each
+        other; the term is a pure argmax within the select and never competes with a scorer elsewhere.
+
+        Fails CLOSED at 0.0 on anything it cannot price (R3) — an unreadable restriction or a
+        condition the closed form can't evaluate contributes nothing rather than a guess, and the
+        ordering then degrades to today's behaviour rather than to a wrong answer. Every shipped heal
+        reader already errs this way: `_heal_body_candidate` skips an unevaluable ``condition``,
+        `_heal_restriction_targets` refuses an unknown ``restriction``."""
+        if (select or {}).get("context") != _HEAL or option.get("type") != _CARD:
+            return 0.0
+        state = obs.get("current") or {}
+        yi = state.get("yourIndex", 0)
+        if option.get("playerIndex", yi) != yi:
+            return 0.0                                # a heal only ever reaches MY own bodies
+        cid = ((select or {}).get("effect") or {}).get("id")
+        body = self._option_pokemon(obs, select, option)
+        stat = self.stats.get(body.get("id")) if (self.stats and body) else None
+        if cid is None or not body or stat is None or not self._state_model:
+            return 0.0
+        is_active = option.get("area") == _ACTIVE
+        attached = len(body.get("energies") or [])
+        attach_units = (0 if board.energy_attached
+                        else self._best_hand_attach_units(board.hand_ids, stat))
+        # The restore ceiling is the BODY's `maxHp`, not the card's printed HP: a Hero's Cape (+100)
+        # puts a 330-HP Mega Starmie ex on 430, and `amount: "all"` heals to that. Measured on
+        # `ms_mirror_1001` f90, where reading the printed HP under-heals the caped Active by 100 and
+        # so under-reads its survival.
+        cand = self._heal_body_candidate(cid, stat, is_active=is_active,
+                                         cur_hp=int(body.get("hp") or 0),
+                                         attached=attached, attach_units=attach_units,
+                                         max_hp=int(body.get("maxHp") or 0) or None)
+        if cand is None:
+            return 0.0                                # unreadable target: 0.0, never a guess (R3)
+        healed_hp, energy_total = cand
+        # `attach_units` is threaded rather than re-derived: the bounce leg needs the SAME manual
+        # attach the candidate was priced against, and a second `_best_hand_attach_units` call is a
+        # second chance to disagree with the first.
+        return (self._heal_survival_gain(obs, body, stat, cid, healed_hp, is_active=is_active)
+                - self._heal_bounce_cost(obs, body, energy_total, attach_units,
+                                         is_active=is_active))
+
+    def _heal_survival_gain(self, obs: dict, body: dict, stat, cid,
+                            healed_hp: int, *, is_active: bool) -> float:
+        """What healing ``body`` to ``healed_hp`` BUYS, in damage currency — the positive leg of
+        `_heal_target_tactical`'s objective (Issue #409 R2).
+
+        **REACH is the whole read.** ``incoming`` against this body, at the policy
+        `Board.incoming_active_damage` already uses, answers R2's question literally — *what can
+        actually reach it?* — and it is area-correct by construction: for the Active it is the
+        opponent's biggest attack; for a benched body `my_benched=True` routes
+        `CombatMath.form_damage_vs` to the snipe/spread RIDERS only, because printed damage always
+        lands on the Active (ADR-0070 §9), and to a flat 0 for a Tera (rules.md §185). So the bench
+        asymmetry R2 names is DERIVED from a shipped read rather than authored as a discount: a
+        benched body nobody can hit has ``reach`` 0 and this whole leg is 0.0.
+
+        Two terms on that one read:
+
+        * **the prizes the knockout would have handed them** — credited only when the body is doomed
+          NOW and the heal flips it (`_heal_body_averts_doom` at the same ``reach``). A Mega ex is 3
+          Prizes, a Staryu 1; `prize_to_damage` crosses to the damage scale on the shipped
+          `PRIZE_DAMAGE_RATE`. Saving a body that dies anyway, or one that was never in danger, is
+          worth nothing and reads 0.
+        * **the damage the heal DENIES their next swing** — ``min(hp restored, reach)``, in damage,
+          at the same 1.0 points-per-damage `_denial_target_tactical` prices a strip at. This is the
+          leg that separates two bodies whose doom does not flip, and the cap is what makes it a
+          reading rather than a raw count: HP restored beyond what can actually be taken back off
+          this body buys nothing, which is the same "score it by what it actually denies" the
+          Crushing Hammer target ranker is built on.
+
+        **`needs.survival_value` was tried here and REJECTED, measured** — recorded because it is the
+        obvious instrument and the reason it fails is not obvious. It is the natural fit on paper:
+        the sub-prize turns-of-survival currency, over the Δ on `turns_to_ko_me`, exactly as
+        `_hand_size_relief_tactical` reads it. Two things sank it, both on real corpus boards:
+
+        * its `phase_scale` multiplier is [0, 1] and hits **exactly 0** when I am comfortably ahead —
+          at `v2_ms_mirror_5000` f126 (my 2 Prizes to their 6) it clamps to 0, zeroing the only
+          discriminator on the very frame this issue exists to fix, and handing the pick straight
+          back to the canonical string sort this term replaces. A scaler calibrated to stop survival
+          outranking a PRIZE has nothing to weigh at a select where every option is a heal target.
+        * the turns-Δ systematically INVERTS the ranking it is asked for. A benched body is chipped
+          for 50 a turn and an Active hit for 210, so healing the bench always buys more *turns* —
+          at f82 it read the bench 90 to the Active's 15, i.e. it rewarded a body precisely for being
+          hard to reach. ``min(restored, reach)`` reads the same board the other way round, which is
+          the way R2 asks for.
+
+        The energy policy is `UNCHARGED` — the DOOM policy, named rather than inherited, for the
+        reason `_hand_size_relief_tactical` states at length: a survival read must never say *"I
+        cannot tell what this costs, so assume it cannot reach me"*, and threading the Read's own
+        budget would let a matched Brief quietly relax it (ADR-0064 keeps that per-consumer).
+        `CURRENT_FORMS_ONLY` matches `Board.incoming_active_damage`: a heal's breakpoint is tested
+        against what the body in front of me hits for TODAY."""
+        from common.currency import prize_to_damage
+        cur_hp = int(body.get("hp") or 0)
+        reach = int(self._state_model.theirs.incoming(
+            body, 1, bodies=[self._opp_active(obs)], charged=UNCHARGED,
+            forward_ids=CURRENT_FORMS_ONLY, context=self._opp_attack_context,
+            my_benched=not is_active))
+        prizes = 0.0
+        if reach >= cur_hp and self._heal_body_averts_doom(
+                cid, stat, is_active=is_active, cur_hp=cur_hp, incoming=reach,
+                max_hp=int(body.get("maxHp") or 0) or None):
+            prizes = float(getattr(stat, "prize_value", 0) or 0)
+        denied = min(max(0, int(healed_hp) - cur_hp), reach)
+        return prize_to_damage(prizes) + float(denied)
+
+    def _heal_bounce_cost(self, obs: dict, body: dict, energy_total: int, attach_units: int, *,
+                          is_active: bool) -> float:
+        """What healing ``body`` FORFEITS this turn, in damage — the negative leg of
+        `_heal_target_tactical`'s objective (Issue #409 R2): the attack the heal's Energy rider
+        takes away.
+
+        ``best_affordable(E_before) − best_affordable(E_after)``, floored at 0 — the deny oracle's
+        own shape (ADR-0062), pointed at my own body instead of theirs. ``E_after`` is
+        `_heal_body_candidate`'s ``energy_total``, which is where the rider is already modelled:
+        ``bounce_energy_to_hand`` leaves only the manual re-attach paying (Wally's), and
+        ``discard_own_energy`` takes one (Super Potion). A clause with no Energy rider leaves the two
+        reads equal and the cost is 0 by arithmetic rather than by a branch.
+
+        **0.0 for a benched body, and that is the ruling rather than an approximation** (R2: *"zero
+        for a body that was not going to attack this turn"*). Only the Active can swing, so stripping
+        a benched body's Energy forfeits no damage THIS turn — it costs future tempo, which this term
+        deliberately does not price. The direction is the honest one for a *cost*: under-counting a
+        bench bounce can only make the bench look more attractive, and the bench is the option the
+        survival leg already refuses to pay for.
+
+        The two reads are deliberately ASYMMETRIC on the colour gate. ``E_before`` passes the real
+        ``body``, so a specific-type slot its attached Energy cannot cover fails the attack.
+        ``E_after`` does not, so the post-bounce Energy counts as WILD — because it IS wild: a bounce
+        rider returns the cards to hand and the re-attach may bring back any of the bounced types,
+        which is the same reading `_stabilize_then_ko_lines` states outright when it skips ``body``
+        (*"a bounce rider re-attaches ANY bounced type — attached counts are stale here"*). Fail-open
+        on the after-read is the direction that under-states the cost.
+
+        ``attach_units`` is threaded in by the caller rather than re-derived here, so both legs price
+        against the SAME manual attach `_heal_body_candidate` folded into ``energy_total`` — a second
+        `_best_hand_attach_units` call is a second chance to disagree with the first."""
+        if not is_active:
+            return 0.0                                # only the Active swings this turn
+        opp = self._opp_active(obs)
+        if not (opp and opp.get("hp")):
+            return 0.0
+        before = self._best_affordable_damage(
+            body.get("id"), len(body.get("energies") or []) + attach_units, opp, body=body,
+            extra_units=attach_units)
+        after = self._best_affordable_damage(body.get("id"), int(energy_total), opp)
+        return max(0.0, float(before) - float(after))
+
     def _max_counter_move_number(self, select: dict) -> int:
         """At a REMOVE_DAMAGE_COUNTER_COUNT (ctx 40) select, the LARGEST count offered (move as many
         counters as possible — max offense + max heal). 0 off ctx 40."""
@@ -3516,12 +3698,11 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             # Type-guarded (sound-or-silent): a specific-type slot the attach can't fund fails the
             # attack even when the COUNT suffices. Passes `atk_bench_names` (exact bound) so a
             # requiresBench attack with its partner absent is zeroed, not credited a phantom KO.
-            return max((self.predicted_damage(board.my_active_id, aid, opp,
-                                              context={"atk_bench_names": bench_names})
-                        for aid in (active_stat.attacks or ())
-                        if self._attack_cost(aid) <= energy
-                        and self._attack_type_payable(aid, ma, extra_type=etype,
-                                                      extra_units=extra_units)), default=0)
+            # The loop itself is `combat.best_affordable_damage` (Issue #409) — extracted when a
+            # third consumer arrived, so the count gate and the colour gate keep ONE home.
+            return self._best_affordable_damage(
+                board.my_active_id, energy, opp, body=ma, extra_type=etype,
+                extra_units=extra_units, context={"atk_bench_names": bench_names})
 
         cur = board.my_active_energy
         if best_affordable(cur) >= opp_hp:                  # already lethal — no attach needed
@@ -3596,6 +3777,21 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             extra_type=extra_type, extra_units=extra_units,
             boost_amount=boost_amount, boost_type=boost_type,
             promote_bench_names=promote_bench_names, attack_p=attack_p, budget=budget)
+
+    def _best_affordable_damage(self, attacker_id, energy: int, defender: dict | None, *,
+                                body: dict | None = None, extra_type=None, extra_units: int = 0,
+                                bound: str = "exact", context: dict | None = None) -> float:
+        """The biggest damage a hypothetical attacker's AFFORDABLE attacks reach — the KO oracle's
+        ``best_affordable_damage`` (Issue #409), the sub-lethal sibling of
+        :meth:`_best_affordable_ko_value`.
+
+        A PURE forward, unlike that sibling (which injects ``board.opp_bench``) — and that is the
+        house shape for reaching `CombatMath`, not an oversight: :meth:`_attack_cost`,
+        :meth:`predicted_damage` and :meth:`_attack_type_payable` are each exactly this, so the
+        Pilot's call sites speak one vocabulary and the oracle stays the single combat home."""
+        return self.combat.best_affordable_damage(
+            attacker_id, energy, defender, body=body, extra_type=extra_type,
+            extra_units=extra_units, bound=bound, context=context)
 
     def _boost_lethal_tactical(self, obs: dict, select: dict, board: Board, option: dict) -> float:
         """KO_SCORE-class value for a damage-boost Trainer that UNLOCKS a knockout this turn — the

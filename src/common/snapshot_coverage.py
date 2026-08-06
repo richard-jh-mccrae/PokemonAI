@@ -873,10 +873,14 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
                                  "unread",
     "on=bench_play": "1260 Risky Ruins. The one `stadium_trigger` EVENT; the trigger fires on the "
                      "option `apply_option` already prices, so nothing dispatches on the string",
-    "restriction=active_dragon_only": "1105 Dragon Elixir. `_heal_restriction_ok` fails closed on it, "
-                                      "so the heal never counts toward survival — under-count",
+    "restriction=active_dragon_only": "1105 Dragon Elixir. `_heal_restriction_targets` (and its "
+                                      "Active-spot wrapper `_heal_restriction_ok`) fails closed on "
+                                      "it, so the heal never counts toward survival and never ranks "
+                                      "a HEAL target — under-count, at both consumers",
     "restriction=arvens_pokemon": "1130 Arven's Sandwich. An owner family wearing the `restriction` "
-                                  "key rather than `name_family`; same Issue #301 refusal",
+                                  "key rather than `name_family`; same Issue #301 refusal. The card "
+                                  "carries a SECOND heal clause gated only on `active_only`, so the "
+                                  "refusal costs its 30 branch nothing",
     "source=opponent_attack": "1244 Full Metal Lab, 1247 Neutralization Zone. Names the OPPONENT's "
                               "attack as the material a modifier acts on; the damage readers branch "
                               "on the effect instead",
