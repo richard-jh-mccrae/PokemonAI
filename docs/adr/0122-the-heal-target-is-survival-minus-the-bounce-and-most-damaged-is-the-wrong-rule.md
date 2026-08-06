@@ -209,24 +209,43 @@ turn"* — which decision 6 / R6 leaves to `baseline_heal.py` and Issue #386. Re
 target correction would have misfiled a MAIN-menu blunder as a target defect and taught the ranker
 the wrong lesson.
 
-**And the whether-to-play defect it appeared to expose DOES NOT EXIST — measured at the origin
-frame, not assumed.** The obvious next inference from that ruling is that `dont-waste-clutch-heal`
-failed to suppress the play. It did not fail. `f125` is the MAIN select that played Wally's (16
-options, the trace picks opt11 = PLAY 1229); driving the shipped `mega_starmie` Pilot there reads
-`active_doomed = False` against `incoming_active_damage = 210` on a 310-HP Active — exactly as the
-ruling reasoned — **`dont-waste-clutch-heal` fires on both Wally's options at −40.00**, and the Pilot
-takes the attack at 1002.90 instead. The play is a `chaos:seed=5000` artefact and f126 is unreachable
-through the real Pilot.
+**Where the f126 whether-to-play question BELONGS: the differencing system, and it cannot answer it
+today.** Developer ruling, 2026-08-06: heal whether-to-play is **not** a rung question. ADR-0092
+names this family outright — *"every still-weight-driven family (the ~45-rung fetch ladder, **heal**,
+tools, stadium, draw economy, **gust whether-to-play**) is priced as `state_value(after) −
+state_value(before)`"* — so `hold-clutch-heal` / `dont-waste-clutch-heal` are the incumbents being
+RETIRED by that swap, not the surface a fix lands on. Any f126 fix is a differencing fix.
 
-Positive control, because a rung that always said *"don't"* would look identical: drop that Active's
-HP to 150 (the ONE change) and the negative rung goes silent while `hold-clutch-heal` fires in its
-place at **+60.00**. The gate discriminates.
+And differencing is **structurally blind to this play**, which is the actual finding:
 
-So the developer's line — *"we whack them another time, then when we are doomed, we heal and attach
-Ignition to KO them"* — **is what the agent already does.** Recorded here because the near-miss is
-the point: a ruling taken on a chaos-policy board can indict a rung that is working, and only
-driving the origin frame tells them apart. Nothing is owed to `baseline_heal.py`, which also keeps
-this ADR clear of Issue #386's in-flight claim on that rung family (PR #399).
+- **`board_delta._play` refuses Wally's Compassion, by name and by count.** Its own docstring: *"63
+  have their write's TARGET chosen at a follow-up select, so the `_PLAY` option does not determine
+  it… **Wally's Compassion ×14 poses (17)**. No closed-form transition exists for these at this
+  step."* No "after" board is produced, so `state_value(after) − state_value(before)` has nothing to
+  difference. The play is unpriceable rather than mispriced.
+- **The refusal is for exactly the select this ADR builds a ranker for.** The `(17)` in that sentence
+  IS `SelectContext.HEAL`. The deferred target is why the composer cannot close the play, and
+  supplying the target's value is what `_heal_target_tactical` does.
+- **Issue #392's CHOICE node is the mechanism, and its `heal` entry is DECLARED BUT UNBUILT.** On
+  `origin/claude/issue-392-twc3gx` (PR #407, in flight), `CHOICE_CLAUSES` is
+  `{"gust", "heal", "accel"}` while `CHOICE_REGISTRY` holds only `_RETREAT` and `gust`;
+  `target_space` refuses the rest in as many words — *"declared in `CHOICE_CLAUSES` as a member of
+  the deferred-target census, but no target SPACE resolver is built for it."* A `heal` entry needs a
+  target space, an applier, and a **ranker** — and this ADR's objective is that ranker, which is why
+  Issue #409's Prior art says it *"supplies the objective that registry would need"*.
+
+So the f126 fix is a `heal` entry in `board_choice.CHOICE_REGISTRY`, **not** a rung edit — and it is
+Issue #392's scope, in flight. Nothing is built for it here, which also keeps this ADR clear of
+Issue #386's claim on the `baseline_heal.py` family (PR #399). Recorded so the next reader finds the
+destination rather than re-deriving it.
+
+*One measurement kept, demoted to a footnote because it answers the retiring system's question rather
+than this one:* at `f125` (the MAIN select that played Wally's) the shipped Pilot does not play it —
+`active_doomed=False` against 210 incoming on a 310-HP Active, `dont-waste-clutch-heal` fires at
+−40.00 on both Wally's options, and the attack wins at 1002.90. The trace's play is a
+`chaos:seed=5000` artefact. That says the incumbent rung is not the thing failing on this board; it
+says nothing about whether differencing will price the play correctly once it can price it at all,
+and it is **not** grounds for calling the question closed.
 
 Two structural facts these records establish, both first-of-their-kind:
 
