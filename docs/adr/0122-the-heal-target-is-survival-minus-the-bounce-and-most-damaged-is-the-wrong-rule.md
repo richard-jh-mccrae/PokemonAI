@@ -192,6 +192,49 @@ tests.
 **0 picks moved** — expected, since the term is gated on a context with no rulings, and now recorded
 rather than assumed. `tests/strategy` 2523 passed.
 
-**Still owed, and named rather than left silent:** no human ruling exists on any ctx-17 frame. The
-four boards above are the natural first entries in `data/corrections/`, and until they are ruled this
-term is validated by construction only.
+## The ruling (2026-08-06)
+
+**THREE of the four boards are now ruled HEAL THE ACTIVE** — the first ctx-17 entries this corpus has
+ever held (`data/corrections/mega_starmie_20260806_parity-ctx17/`). The reason is the one decision 3
+derives: printed damage always lands on the Active, so a benched body is reachable only by a rider —
+here Jetting Blow's 50 — and HP restored to the bench beyond that 50 can never be taken back off.
+
+**`v2_ms_mirror_5000` f126 is deliberately NOT ruled, and the reason is a scope boundary worth
+recording.** The developer's verdict there was *"heal the Active is wrong here — we whack them
+another time, then when we are doomed, we heal and attach Ignition to KO them."* That is a
+**whether-to-play** ruling, not a target ruling: `supporterPlayed` is already `YES` at that frame, so
+Wally's was committed at the MAIN menu one step earlier and ctx 17 cannot express it. It is
+`hold-clutch-heal`'s question — whose own rationale is *"heal, re-power, and still attack the same
+turn"* — which decision 6 / R6 leaves to `baseline_heal.py` and Issue #386. Recording it as a ctx-17
+target correction would have misfiled a MAIN-menu blunder as a target defect and taught the ranker
+the wrong lesson. **It is evidence that the whether-to-play rung is worth revisiting, and it is
+logged here rather than silently dropped.**
+
+Two structural facts these records establish, both first-of-their-kind:
+
+- **`episode_id` is `null`.** Every prior correction carries a real 8-digit Kaggle episode; these
+  come from committed engine-parity captures, which have no episode behind them. `Correction` already
+  types the field `int | None` and `frame_key_of` already renders `None` as empty, so nothing needed
+  changing — but it makes the **Frame Key** `|0|decision|90` rather than `<ep>|0|decision|90`, and
+  that key is only unique here **by luck of the frame numbers**. Two parity-sourced rulings sharing a
+  seat and frame index across different traces would collide silently. Measured at write time: 375
+  unique keys of 375. A future parity-sourced ruling must re-check that, and the trace name lives in
+  the `rationale` because it has nowhere else to go.
+- **`chosen == correct` on all three, deliberately.** The trace's own recorded pick is chaos-policy
+  noise and is DISCARDED (the whole reason this file argues against reading it); `chosen` is instead
+  the shipped Pilot's pick at ruling time, asserted at write time rather than recalled. So these are
+  **endorsements** — regression guards — not blunder reports. That shape is not new to the corpus:
+  14 existing records already have `chosen == correct`, one of them under this same `bad_target`
+  category.
+
+**Measured with the rulings in place**, attributed by physically removing them and re-running (a
+`git stash` of the path is a NO-OP here — the directory is untracked, and the empty `git diff --stat`
+was the tell): Decision Gate `agree 251/340 → 254/343`, **all three new frames agree**, 0 picks
+moved, PASS. Discrimination Gate unchanged and PASS — correctly, since the Leaf Lab scores MAIN-select
+frames only and ctx 17 is not one. The `+1 / −1` corpus shift both gates report is **pre-existing**
+(the baselines predate an earlier re-ruling of `82867148|0|decision|87`, `correct [3] → [8]`); this
+change takes the decider's to `+4 / −1`.
+
+Because a frame absent from a baseline cannot regress against it, these three only begin gating at
+the next **deliberate** baseline recapture. That is stated rather than glossed: the guard is recorded
+now and armed later, and neither gate may ever auto-recapture to close the gap.

@@ -140,10 +140,15 @@ def test_the_decline_census_the_writer_relaxation_was_sized_against():
       When a `decision`-scope decline is first recorded this fails, and that is the shape working.
     * **28 decision-scope optional selects, 2 exposed** — the other 26 name a `correct` that differs
       from `chosen`, i.e. state a real preference. The gap was never "every optional select".
-    """
+
+    **372 → 375 on 2026-08-06** (Issue #409 / ADR-0122): the first ctx-17 (`SelectContext.HEAL`)
+    rulings. Only the corpus-size denominator moves — every load-bearing number below is unchanged,
+    and that is the point of re-taking it rather than loosening it. The three new records are
+    mandatory selects (`minCount`/`maxCount` 1/1) naming a non-empty `correct`, so they are neither
+    declines nor optional-select records and touch none of the three counts this test exists for."""
     from train.gates import keyed_corrections
     recs = keyed_corrections()
-    assert len(recs) == 372
+    assert len(recs) == 375
 
     declines = [(k, c) for k, c in recs if c.correct == []]
     assert len(declines) == 10
@@ -158,7 +163,9 @@ def test_the_decline_census_the_writer_relaxation_was_sized_against():
     # POSITIVE CONTROL. Every assertion above is a shape that must NOT be found; an empty corpus, a
     # broken reader or a mis-typed field would satisfy all of them at once. A reader that finds no
     # ruling at all is a broken instrument, not a clean corpus.
-    assert sum(1 for _k, c in recs if c.correct) == 362
+    # 362 -> 365 on 2026-08-06 (Issue #409 / ADR-0122): the three ctx-17 HEAL rulings each name a
+    # non-empty `correct`, and 375 total - 10 declines = 365 keeps this in step with `len(recs)`.
+    assert sum(1 for _k, c in recs if c.correct) == 365
 
 
 # ---------------------------------------------------------------------------
