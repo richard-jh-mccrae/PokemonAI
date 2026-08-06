@@ -229,25 +229,33 @@ from common.strategy.context import _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RET
 #: the width is exactly 12 on every run while the millisecond half moves ~10% run-to-run and ~45%
 #: between boxes, so a cap keyed to a wall-clock figure is a property of whoever ran it last.
 #:
-#: ⚠️ **Measured end to end, and the arithmetic above is quoted at the P95 WIDTH, so it under-predicts
-#: the worst case by ~2x.** `python tools/train/composer_lab.py` over the 374 corpus frames (278
-#: composed) at these caps, three fresh processes on the machine named below: per-decision wall-clock
-#: **median 35-58 ms, P95 0.58-1.14 s, max 2.45-4.05 s**. The LEAF-EVAL count is dead stable at
-#: **3465** across runs (the composer is pure; only wall-clock moves), so the spread is the box, not
-#: the search. The same formula at the observed MAX width predicts it correctly —
-#: ``(1 + 3 x 4) x 27 = 351`` against **323** measured on the worst frame — which is the honest
-#: statement of the bound: *P95 width bounds the P95 decision, not the max one.*
+#: **Measured end to end** — `python tools/train/composer_lab.py` over the 374 corpus frames (278
+#: composed) at these caps, three fresh processes on an OTHERWISE-IDLE box: per-decision wall-clock
+#: **median 23.9 ms, P95 0.35-0.38 s, max 1.41-1.43 s**. The bound holds with room to spare: the max
+#: is ~**46%** of the grader's >= 3.0 s per-decision floor and the P95 ~13%.
 #:
-#: **The max exceeds the grader's 3.0 s floor on some runs, and that is a NAMED EXPOSURE rather than
-#: a tuned-away one.** It is **leaf-bound, not beam-bound**: profiling the worst frame
-#: (`86090164|1|turn|6`, 27 options, 2.4-2.6 s) puts ~100% of the time inside `state_value` —
-#: `_hand_legs` -> `needs` -> `_leaf_needs_resolution` -> `pilot._board`. Re-sizing was MEASURED
-#: rather than assumed: over ``k`` in {2,3,4} x ``depth`` in {2,3,4} the corpus max does not move
-#: outside run-to-run noise, because leaf evaluations SATURATE at depth 2 (323 at depth 2, 3 and 4
-#: alike — the beam exhausts the legal options before the depth cap binds). Shrinking a cap that does
-#: not move the metric would be a constant changed to look responsive. The lever is the leaf unit
-#: cost, which is T3's and Issue #273's; this composer is DARK, so the exposure is an input to
-#: Issue #386's arming decision rather than a live risk here.
+#: ⚠️ **Two cautions on that number, both learned the hard way.**
+#:
+#: 1. **The arithmetic above is quoted at the P95 WIDTH, so it under-predicts the widest menus by
+#:    ~2x.** The LEAF-EVAL count — which is what the formula actually bounds — is **3465** corpus-wide
+#:    and **323** on the widest frame, against the 156 the P95-width form predicts. The same formula
+#:    at the observed MAX width gets it right: ``(1 + 3 x 4) x 27 = 351`` against 323. So the honest
+#:    statement is *P95 width bounds the P95 decision, not the max one* — quote both or quote neither.
+#: 2. **Wall-clock here is only meaningful on an idle machine, and a first pass at these figures was
+#:    taken while a full pytest run was in flight.** It read median 35-58 ms / P95 0.58-1.14 s / max
+#:    2.45-4.05 s and produced a false alarm — *"the max crosses the grader floor"* — that a review's
+#:    independent re-measurement refuted. The tell was available and ignored: the LEAF-EVAL count is
+#:    **identical (3465) under load and idle**, because the composer is pure, so any spread is the box
+#:    rather than the search. Re-measure quiet, and cross-check against leaf evals before believing a
+#:    millisecond figure. This is the same trap `BRANCH_CAP` records when it anchors on the WIDTH half.
+#:
+#: What survives that correction: the cost is **leaf-bound, not beam-bound**. Profiling the widest
+#: frame (`86090164|1|turn|6`, 27 options) puts ~100% of the time inside `state_value` — `_hand_legs`
+#: -> `needs` -> `_leaf_needs_resolution` -> `pilot._board`. Re-sizing was MEASURED rather than
+#: assumed: over ``k`` in {2,3,4} x ``depth`` in {2,3,4} the corpus max does not move outside noise,
+#: because leaf evaluations SATURATE at depth 2 (323 at depth 2, 3 and 4 alike — the beam exhausts the
+#: legal options before the depth cap binds). Shrinking a cap that does not move the metric would be a
+#: constant changed to look responsive, so the caps stand as derived.
 #:
 #: Machine, because Issue #291 §3a requires a dev-machine number be labelled one: Windows 11,
 #: Python 3.11.9, Intel64 Family 6 Model 186 (12 logical cores) — **not** the grader's 2 vCPU.
@@ -980,11 +988,17 @@ def rank_targets(model, expectation) -> TargetChoice:
 
     Deterministic by construction: ties on the leaf fall through to the enumeration order, which
     `board_choice.deferred_target` already fixes as a pure function of the board (ranker-descending,
-    then the candidate itself). No dict iteration decides anything."""
+    then the candidate itself). No dict iteration decides anything.
+
+    ⚠️ **``leaf`` is the same MAX that `Expectation.best` computes, reached a second way** — the sort
+    is needed for the ranking anyway, so taking ``scored[0]`` is free where a second pass over the
+    classes would not be. Two spellings of one rule is exactly the drift ADR-0087 charges for one
+    store over, so the agreement is not left to inspection: `test_composer.py` asserts
+    ``rank_targets(m, e).leaf == e.best(state_value)`` on a fixture where the classes differ."""
     scored = sorted(
         (ScoredTarget(rank=0, leaf=float(state_value(c.model)), model=c.model,
                       fingerprint=tuple(c.fingerprint or ()), probability=float(c.probability))
-         for n, c in enumerate(expectation.classes)),
+         for c in expectation.classes),
         key=lambda s: (-s.leaf, s.fingerprint))
     ranked = tuple(ScoredTarget(rank=n + 1, leaf=s.leaf, model=s.model, fingerprint=s.fingerprint,
                                 probability=s.probability) for n, s in enumerate(scored))

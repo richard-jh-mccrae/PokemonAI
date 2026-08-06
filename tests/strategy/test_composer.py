@@ -33,6 +33,7 @@ from common import apply_option as ao
 from common import board_delta as bd
 from common import composer as cp
 from common import sound_rules
+from common.board_delta import Unmodellable
 from common.cards import CardFunctions
 from common.effects import CardEffects
 from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND
@@ -289,6 +290,51 @@ def test_a_beam_that_keeps_no_candidates_is_CALLER_ERROR_and_raises():
 
 
 @pytest.mark.req("REQ-COMPOSER-0003")
+def test_the_one_supporter_per_turn_is_spent_once():
+    """`docs/rules.md` §3 — Supporter is 1 per turn. Untested until the review found it: the branch
+    at `_still_legal`'s `is_supporter` leg was implemented and never exercised, so an inverted test
+    (`model.supporter_played` read the wrong way) would have shipped green.
+
+    Carries the case that would OTHERWISE PASS, which is the point: on a fresh board the same option
+    is legal, so this asserts the ALLOWANCE and not merely that the option is unrecognised."""
+    supporter = CardStat(1200, name="Test Supporter", cardType=3)
+    stats = {**_STATS, 1200: supporter}
+    combat = CombatMath(DictCardStatProvider(stats, attacks=_ATTACKS),
+                        functions=CardFunctions({}), transients=None, effects=CardEffects({}))
+    obs = _obs(_player(active=_body(RIOLU), hand=[1200]))
+    model = StateModel.build(obs, combat=combat, deck=[E_F] * 8)
+    play = {"type": _PLAY, "area": HAND, "index": 0}
+    assert cp._still_legal(model, play) is True                    # the otherwise-passing case
+    spent = _obs(_player(active=_body(RIOLU), hand=[1200]), supporterPlayed=True)
+    assert cp._still_legal(StateModel.build(spent, combat=combat, deck=[E_F] * 8), play) is False
+
+
+@pytest.mark.req("REQ-COMPOSER-0003")
+def test_the_one_stadium_per_turn_is_spent_once_AND_must_differ_from_the_one_in_play():
+    """`docs/rules.md` §3 — Stadium is 1 per turn, *"and only if it differs from the one in play"*.
+
+    TWO limits on one option kind, which is why it gets two negative cases: a spent allowance and an
+    identical Stadium already in play. Reading only the allowance would let the composer re-play the
+    Stadium that is already down — legal-looking, board-neutral, and silently wrong."""
+    stadium = CardStat(1300, name="Test Stadium", cardType=4)
+    stats = {**_STATS, 1300: stadium}
+    combat = CombatMath(DictCardStatProvider(stats, attacks=_ATTACKS),
+                        functions=CardFunctions({}), transients=None, effects=CardEffects({}))
+
+    def _m(**current):
+        obs = _obs(_player(active=_body(RIOLU), hand=[1300]), **current)
+        return StateModel.build(obs, combat=combat, deck=[E_F] * 8)
+
+    play = {"type": _PLAY, "area": HAND, "index": 0}
+    assert cp._still_legal(_m(), play) is True                     # the otherwise-passing case
+    assert cp._still_legal(_m(stadiumPlayed=True), play) is False   # the per-turn allowance
+    same = _m(stadium=[{"id": 1300, "serial": 77, "playerIndex": 0}])
+    assert cp._still_legal(same, play) is False, (
+        "a Stadium identical to the one already in play is not a legal play — reading only the "
+        "allowance would let the composer re-play it for a board-neutral, silently wrong step")
+
+
+@pytest.mark.req("REQ-COMPOSER-0003")
 def test_the_one_manual_retreat_is_spent_once():
     """`docs/rules.md` §3 — Retreat (manual) is 1 per turn."""
     obs = _obs(_player(active=_body(RIOLU, energy=[FIGHTING]),
@@ -367,6 +413,75 @@ def test_the_composer_ranks_a_CHOICE_node_by_MAX_and_never_by_expected():
     delta = dict(result.order)[0]
     assert delta == pytest.approx(hi - state_value(model)), "ranked by max"
     assert delta != pytest.approx(mean - state_value(model)), "NOT ranked by the mean"
+
+
+@pytest.mark.req("REQ-COMPOSER-0009")
+def test_rank_targets_leaf_IS_Expectation_best_reached_a_second_way():
+    """`rank_targets` sorts and takes `scored[0]`; `Expectation.best` maxes. **Two spellings of one
+    rule**, which is the drift ADR-0087 charges for one store over — so the agreement is asserted
+    rather than left to inspection.
+
+    The sort is not redundant work: the ranking needs it anyway (D4 reports the runner-up), so
+    `scored[0]` is free where a second pass would not be. What must never happen is the two
+    disagreeing, which on a fixture with distinct class values is exactly what a `min`/`max` slip or
+    an inverted sort key would produce."""
+    from common import board_choice
+
+    model = _retreat_board()
+    expectation = board_choice.deferred_target(model, {"type": _RETREAT}, seat_index=0)
+    assert len({round(state_value(c.model), 12) for c in expectation.classes}) > 1, (
+        "fixture is vacuous unless the classes actually differ")
+    assert cp.rank_targets(model, expectation).leaf == pytest.approx(
+        expectation.best(state_value))
+
+
+@pytest.mark.req("REQ-COMPOSER-0009")
+def test_the_OTHER_expectation_producer_is_also_ranked_by_MAX(monkeypatch):
+    """§S12.1 asks for the max-not-mean fixture on **both** `Expectation` producers, and the two
+    reach `_one_ply` by different branches: `board_choice` through the seam's CHOICE dispatch
+    (asserted above), and `board_expectation` through this module's own REVEAL routing. A test
+    covering only the first leaves the reveal branch free to drift back to `.expected()` — which is
+    where it started, and which under-prices every reveal-bearing sequence.
+
+    **The producer is stubbed, and that is the point rather than a shortcut.** The claim under test is
+    *"the reveal branch ranks by max"*, which is a property of `_one_ply`. Driving it through a real
+    deck search would additionally require `state_value` to price two fetched cards differently — and
+    measurably **it does not** in this fixture pool: a Master Ball over 3 Riolu + 1 Mega Lucario ex
+    enumerates two classes that score *identically* (0.099677083 each), because a Pokemon in HAND is
+    priced by Worth and no Roles are declared against a dict-backed provider. A fixture built that way
+    would pass whichever bound the composer used, which is the vacuous-instrument failure this suite
+    exists to avoid. So the enumeration is supplied directly, with classes that genuinely differ.
+
+    The ROUTING is still real — the option reaches `bx.expectation` because its `fetch` clause makes
+    `_reveal_rides` true — so this asserts the live branch and not a hand-called helper."""
+    from common import board_expectation as bx
+
+    # Real routing: Master Ball's committed `card_effects.json` clause shape, so the option is
+    # genuinely classified as a reveal rather than forced down that path.
+    clauses = {ITEM: [{"kind": "fetch", "target": "pokemon", "zone": "deck"}]}
+    deck = [RIOLU] * 3 + [MEGA_LUC] + [E_F] * 6 + [ITEM]
+    obs = _obs(_player(active=_body(RIOLU, energy=[FIGHTING]), hand=[ITEM],
+                       deck_count=len(deck)))
+    model = StateModel.build(obs, combat=_combat(clauses), deck=deck)
+    play = {"type": _PLAY, "area": HAND, "index": 0}
+    assert cp._reveal_rides(model, play), "positive control: the option must really route as a reveal"
+
+    # Two classes that DO differ, borrowed from a producer whose outputs are known to separate.
+    donor = _retreat_board()
+    real = __import__("common.board_choice", fromlist=["x"]).deferred_target(
+        donor, {"type": _RETREAT}, seat_index=0)
+    stub = ao.Expectation(classes=(ao.OutcomeClass(0.75, model=real.classes[0].model),
+                                   ao.OutcomeClass(0.25, model=real.classes[1].model)))
+    hi, mean = stub.best(state_value), stub.expected(state_value)
+    assert hi != pytest.approx(mean), "fixture is vacuous unless the two bounds disagree"
+    monkeypatch.setattr(bx, "expectation", lambda *a, **kw: stub)
+
+    result = cp.compose(model, [play, {"type": _END}])
+    delta = dict(result.order)[0]
+    assert delta == pytest.approx(hi - state_value(model)), "the reveal branch must rank by MAX"
+    assert delta != pytest.approx(mean - state_value(model)), "NOT by the availability-weighted mean"
+    assert result.bounds[0].best == pytest.approx(hi)
+    assert result.bounds[0].expected == pytest.approx(mean)
 
 
 @pytest.mark.req("REQ-COMPOSER-0009")
