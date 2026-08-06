@@ -214,7 +214,8 @@ from typing import NamedTuple, NoReturn
 from common import (board_delta, board_expectation, currency, needs, retreat_cost,
                     snapshot_coverage)
 from common.board_delta import Unmodellable
-from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, option_fingerprint
+from common.fetch_closure import fetch_target_matches, reveal_legs
+from common.option_equivalence import AREA_ACTIVE, AREA_BENCH, AREA_HAND, option_fingerprint
 from common.promote_retreat_value import PromoteBody, PromoteRetreatInputs, promote_value
 from common.scouting.matchup_plan import ROLE_REGISTRY
 from common.strategy.context import _PLAY, _RETREAT
@@ -229,6 +230,22 @@ CHOICE_KINDS: frozenset[int] = frozenset({_RETREAT})
 #: resolver built and which have a board synthesis. A member declared here with neither is a
 #: recorded census entry, not a silent omission — see this module's header.
 CHOICE_CLAUSES: frozenset[str] = frozenset({"gust", "heal", "accel"})
+
+#: The registry key for a search of a VISIBLE zone — a `fetch` whose every leg reads `zone: discard`.
+#:
+#: Deliberately NOT a `CHOICE_CLAUSES` member, and the distinction is the zone rather than the kind:
+#: a DECK fetch is the chance node's (hidden zone, `deck_odds` probabilities) and a DISCARD fetch is
+#: this node's (face-up zone, no probability to compute at all). Folding `fetch` into the frozenset
+#: would claim both. `board_expectation` refuses the discard case in terms that name this module —
+#: *"that zone is visible — so it is a pure CHOICE node, not an expectation"* — and until Issue #394
+#: the sentence pointed at a registry entry nobody had built.
+FETCH_DISCARD: str = "fetch_discard"
+
+#: **Every key :data:`CHOICE_REGISTRY` is allowed to carry** — the closure, in ONE store rather than
+#: recomputed by each reader. Three families, and they are keyed differently because they ARE
+#: different: an option kind (int) for a structural deferral, a clause kind (str) for a card's, and
+#: a zone-qualified clause family for a search whose zone decides which node owns it.
+CHOICE_KEYS: frozenset = frozenset(CHOICE_KINDS) | CHOICE_CLAUSES | frozenset({FETCH_DISCARD})
 
 @dataclass(frozen=True)
 class ChoiceKind:
@@ -439,6 +456,22 @@ def choice_key(model, option: dict, *, seat_index: int):
     stat = model.card_stat(card_id)
     name = getattr(stat, "name", "?")
     every = board_delta.card_clauses(model.combat, card_id)
+    # A search of a VISIBLE zone is this node's, and `board_expectation` says so in its own refusal:
+    # *"a `discard`-zone search carries NO chance — that zone is visible — so it is a pure CHOICE
+    # node, not an expectation"*. That sentence pointed at a module which existed and at a registry
+    # entry which did not. Asked BEFORE the `CHOICE_CLAUSES` membership test because `fetch` is
+    # deliberately not a member: a DECK fetch is the chance node's, and only the zone tells them
+    # apart.
+    fetches = tuple(c for c in every if c.get("kind") == "fetch")
+    if fetches and all(c.get("zone") == "discard" for c in fetches):
+        if len(every) > len(fetches):
+            _no(f"{card_id} {name}",
+                "it carries a non-fetch clause as well, whose writes this node does not place")
+        try:
+            reveal_legs(every)              # the ONE relation reader, shared with the chance node
+        except ValueError as gap:
+            _no(f"{card_id} {name}", str(gap))
+        return FETCH_DISCARD
     deferred = tuple(c for c in every if c.get("kind") in CHOICE_CLAUSES)
     if not deferred:
         _no(f"{card_id} {name}",
@@ -704,15 +737,113 @@ def _clause_of(model, option: dict, *, seat_index: int) -> dict:
                 if c.get("kind") in CHOICE_CLAUSES)
 
 
+def _discard_matches(model, option: dict, *, seat_index: int) -> tuple:
+    """``(legs, {card id: copies in my discard this search can take})``.
+
+    The pool of a VISIBLE-zone search. Two things separate it from the chance node's `outcome_pool`,
+    and both come from the zone being face-up: the counts are what my discard actually HOLDS rather
+    than what my decklist has not been seen to spend, and there is no availability question at all —
+    every copy counted is a copy I can take. So no `deck_odds` call is made or wanted here.
+
+    A union's legs pool together, the same walk the chance node performs for its own union."""
+    legs = reveal_legs(board_delta.card_clauses(model.combat, _played_id(model, option, seat_index)))
+    discard = _my_side(model.source_obs, seat_index).get("discard") or ()
+    pool: dict = {}
+    for card in discard:
+        cid = (card or {}).get("id")
+        stat = model.card_stat(cid)
+        if stat is None:
+            continue
+        if any(fetch_target_matches(leg, stat) for leg in legs.legs):
+            pool[cid] = pool.get(cid, 0) + 1
+    return legs, pool
+
+
+def _discard_space(model, option: dict, *, seat_index: int) -> tuple:
+    """The distinct deliveries a discard search can make, as ``(hand index, (card id, …))``.
+
+    Enumerated over CARD IDS rather than discard indices, and that is the collapse the identity would
+    perform anyway: `option_fingerprint` strips `serial`, so three copies of one card sitting in the
+    discard are one outcome, not three. Doing it here keeps the class count at the number of real
+    decisions instead of paying for a fingerprint pass to discover the same thing.
+
+    The played card's hand index rides in the candidate because a `ChoiceKind`'s ``apply`` is handed
+    only ``(model, candidate)`` — the retreat family needs no option, and widening the registry
+    signature for one member would push that member's shape onto every other."""
+    legs, pool = _discard_matches(model, option, seat_index=seat_index)
+    index = int(option.get("index"))
+    return tuple((index, klass) for klass in board_expectation.multiset_classes(pool, legs.cap))
+
+
+def _apply_discard_fetch(model, candidate, *, seat_index: int) -> tuple:
+    """``(post-choice observation, the zones it wrote)`` for one discard-search delivery.
+
+    `board_expectation._revealed` minus the two things a visible zone does not have — no synthesized
+    serial (these cards are real and already carry one) and no `deckCount` decrement (nothing left
+    the deck) — plus the one it does: the taken cards LEAVE my discard. The source card lands there
+    in the same move (`docs/rulebook.txt` L78), and the order matters: it is discarded AFTER the
+    search resolves, so it can never be one of the cards taken."""
+    hand_index, delivered = candidate
+    new_obs, current, players = board_delta.fork(model.source_obs)
+    me = board_delta.fork_player(players, seat_index)
+    played = board_delta.take_from_hand(me, hand_index, "discard search")
+    discard = list(me.get("discard") or ())
+    hand = list(me.get("hand") or ())
+    for cid in delivered:
+        at = next(i for i, c in enumerate(discard) if (c or {}).get("id") == cid)
+        hand.append(discard.pop(at))
+    me["discard"] = discard + [played]
+    me["hand"] = hand
+    if me.get("handCount") is not None:
+        me["handCount"] = len(hand)
+    stat = model.card_stat((played or {}).get("id"))
+    if getattr(stat, "is_supporter", False):
+        current["supporterPlayed"] = True          # `docs/rules.md` §3 — one Supporter per turn
+    return new_obs, frozenset({"my_hand_ids", "my_discard_contents"})
+
+
+def _fingerprint_discard(after_obs: dict, candidate, *, seat_index: int, kind) -> tuple:
+    """The class identity — `option_fingerprint` over the card(s) this delivery put in my HAND, on
+    the post-choice board. A tuple, because a delivery of several cards is identified by all of
+    them; the same shape `board_expectation._fingerprint` takes for its own multi-card classes."""
+    _hand_index, delivered = candidate
+    hand = ((after_obs.get("current") or {}).get("players") or [{}])[seat_index].get("hand") or ()
+    first = len(hand) - len(delivered)
+    return tuple(option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": i,
+                                     "playerIndex": seat_index}, after_obs)
+                 for i in range(first, len(hand)))
+
+
+def _rank_discard(model, candidate) -> float:
+    """The delivery's declared Role Worth — **ordering only**.
+
+    `deferred_target` sorts by rank before it caps at `BRANCH_CAP`, so a space with no ranker has its
+    survivors chosen by discard-pile order, which is arbitrary. This is the same declared quantity
+    `composer.selection_key` already uses as an ordering leg one layer up, and it is used the same
+    way: it enters no score, adds to no delta, and only decides which classes survive the cap — the
+    composer still takes the max over the survivors. A magnitude here would be a rung; a sort key is
+    not."""
+    _hand_index, delivered = candidate
+    return float(sum(model.mine.role_worth(cid) for cid in delivered))
+
+
+def _played_id(model, option: dict, seat_index: int):
+    """The card id of the `_PLAY` option's hand card. Resolved rather than threaded, exactly as
+    :func:`_clause_of` is and for the same reason."""
+    hand = _my_side(model.source_obs, seat_index).get("hand") or ()
+    return (hand[int(option.get("index"))] or {}).get("id")
+
+
 def target_space(model, option: dict, *, seat_index: int) -> tuple:
     """The legal target INSTANCES, resolved from the declared target CLASS against the board.
 
     A product space returns tuples — for a retreat, ``(discard set, promoted bench index)``. Empty is
     never returned: a resolver that finds no instance refuses, because a zero-class Expectation is an
     un-enumerated effect whose ``expected()`` raises inside the ordering loop."""
-    entry = CHOICE_REGISTRY.get(choice_key(model, option, seat_index=seat_index))
+    key = choice_key(model, option, seat_index=seat_index)
+    entry = CHOICE_REGISTRY.get(key)
     if entry is None:
-        _no(f"choice key {choice_key(model, option, seat_index=seat_index)!r}",
+        _no(f"choice key {key!r}",
             "declared in `CHOICE_CLAUSES` as a member of the deferred-target census, but no target "
             "SPACE resolver is built for it (Issue #392 § Scope: `_RETREAT` is buildable now, the "
             "`_PLAY` members are not)")
@@ -918,6 +1049,9 @@ CHOICE_REGISTRY: dict = {
                    "and graded; only the clause application is missing, and NO ISSUE CURRENTLY OWNS "
                    "IT (Issue #392 § Scope — Issue #383 shipped chance nodes gated on "
                    "REVEALING_CLAUSES, Issue #303 minted the clause kind)"),
+    FETCH_DISCARD: ChoiceKind(
+        space=_discard_space, canonical=_canonical_identity, rank=_rank_discard,
+        apply=_apply_discard_fetch, fingerprint=_fingerprint_discard),
 }
 
 TARGET_RANKERS.update({key: k.rank for key, k in CHOICE_REGISTRY.items() if k.rank is not None})
@@ -1046,7 +1180,8 @@ def deferred_target(model, option: dict, *, seat_index=None, context=None,
         truncated=total - len(kept))
 
 
-__all__ = ("CHOICE_KINDS", "CHOICE_CLAUSES", "TARGET_VALUE_CEILING", "ChoiceKind",
+__all__ = ("CHOICE_KINDS", "CHOICE_CLAUSES", "FETCH_DISCARD", "CHOICE_KEYS",
+           "TARGET_VALUE_CEILING", "ChoiceKind",
            "CHOICE_REGISTRY", "TARGET_RANKERS", "role_span", "gust_rank_key", "choice_key", "target_space",
            "rank_retreat", "has_deferred_target", "candidate_class", "realise",
            "deferred_target")

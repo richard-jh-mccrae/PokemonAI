@@ -44,6 +44,7 @@ sys.path.insert(0, str(REPO / "tools"))
 sys.path.insert(0, str(REPO / "src"))
 
 from common import apply_option as seam  # noqa: E402
+from common import board_choice as bc  # noqa: E402
 from common import board_delta, board_expectation as be  # noqa: E402
 from common import snapshot_coverage as sc  # noqa: E402
 from common.fetch_closure import fetch_target_matches  # noqa: E402
@@ -91,9 +92,15 @@ def leg_pool(model, clause: dict) -> dict:
 def walk(paths, *, combat):
     """Every refused `_PLAY` step, as ``(card_id, bucket, facts)`` rows. One pass serves both
     reports — the walk is the expensive half (a `StateModel` per step), and running it twice to
-    print two tables would double a minutes-long measurement for nothing."""
+    print two tables would double a minutes-long measurement for nothing.
+
+    **Both reveal nodes are asked, and that is a correction rather than a widening.** A reveal is
+    resolved by whichever node owns its zone: `board_expectation` for a DECK search (hidden, so a
+    distribution) and `board_choice` for a DISCARD one (face-up, so a pure choice). Asking only the
+    first under-reported the seam by every visible-zone search — 46 steps sat in a bucket whose own
+    refusal sentence names the other module."""
     effects = combat.effects
-    rows, enumerated, refused = [], Counter(), 0
+    rows, enumerated, choices, refused = [], Counter(), Counter(), 0
     for path in paths:
         body = load(path)
         frames = body.get("frames") or []
@@ -121,8 +128,13 @@ def walk(paths, *, combat):
                 continue
             except Exception as exc:
                 message = str(exc)
+            try:                                  # the sibling node: a visible zone is a CHOICE
+                choices[len(bc.deferred_target(pre, option, seat_index=seat).classes)] += 1
+                continue
+            except Exception:
+                pass                              # neither node reaches it — it is a real refusal
             rows.append((card_id, bucket_of(message), _facts(pre, combat, card_id, obs, seat)))
-    return rows, enumerated, refused
+    return rows, enumerated, choices, refused
 
 
 def _facts(model, combat, card_id, obs, seat) -> dict:
@@ -149,19 +161,23 @@ def _facts(model, combat, card_id, obs, seat) -> dict:
     }
 
 
-def report_families(rows, enumerated, refused, cards, out=print) -> None:
+def report_families(rows, enumerated, choices, refused, cards, out=print) -> None:
     by_bucket: Counter = Counter()
     per_card: dict = defaultdict(Counter)
     for card_id, bucket, _f in rows:
         by_bucket[bucket] += 1
         per_card[bucket][f"{card_id} {(cards.get(str(card_id)) or {}).get('name')}"] += 1
-    total = sum(enumerated.values())
+    chance, choice = sum(enumerated.values()), sum(choices.values())
+    total = chance + choice
     share = f" ({100.0 * total / refused:.1f}%)" if refused else ""
+    both = Counter(enumerated) + Counter(choices)
     out(f"\n_PLAY steps the deterministic seam refuses: {refused}")
-    out(f"  enumerated by board_expectation: {total}{share}")
-    out(f"  class-count distribution: {dict(sorted(enumerated.items()))}")
+    out(f"  ENUMERATED by a reveal node: {total}{share}")
+    out(f"    board_expectation (chance node, hidden zone): {chance}")
+    out(f"    board_choice      (choice node, visible zone): {choice}")
+    out(f"  class-count distribution: {dict(sorted(both.items()))}")
     out(f"  truncated at BRANCH_CAP={be.BRANCH_CAP}: "
-        f"{sum(n for c, n in enumerated.items() if c >= be.BRANCH_CAP)}")
+        f"{sum(n for c, n in both.items() if c >= be.BRANCH_CAP)}")
     out(f"\nrefusal buckets ({len(rows)} steps):")
     for bucket, n in by_bucket.most_common():
         out(f"  {n:5d}  {bucket}")
@@ -207,17 +223,18 @@ def main(argv=None) -> int:
     paths = sorted(TRACES.glob("*.trace.json.gz"))[:args.limit or None]
     print(f"traces: {len(paths)}")
     combat = offline_combat()
-    rows, enumerated, refused = walk(paths, combat=combat)
+    rows, enumerated, choices, refused = walk(paths, combat=combat)
     cards = json.loads((Path(__file__).resolve().parents[2] / "tools" / "meta_tracker"
                         / "cards.json").read_text(encoding="utf-8"))
 
     if args.families or not args.sizes:
-        report_families(rows, enumerated, refused, cards)
+        report_families(rows, enumerated, choices, refused, cards)
     if args.sizes:
         report_sizes(rows, cards)
     if args.json:
         args.json.write_bytes(json.dumps(
             {"refused": refused, "class_counts": dict(enumerated),
+             "choice_class_counts": dict(choices),
              "rows": [{"card": c, "bucket": b, **{k: list(v) if isinstance(v, tuple) else v
                                                   for k, v in f.items()}} for c, b, f in rows]},
             indent=1).encode("utf-8"))
