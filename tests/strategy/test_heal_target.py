@@ -27,8 +27,6 @@ so a future capture that adds ctx-17 frames makes this file say so rather than s
 """
 from __future__ import annotations
 
-import gzip
-import json
 from pathlib import Path
 
 import pytest
@@ -40,10 +38,9 @@ from common.scouting.provider import CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.context import _ACTIVE, _BENCH, _CARD, _HEAL, _MAIN
 from common.strategy.general_strategy import GENERAL_STRATEGY
-from pilot_helpers import card_opt, make_select, poke, state
+from pilot_helpers import card_opt, make_select, parity_frame, parity_selects, poke, state
 
 REPO = Path(__file__).resolve().parents[2]
-PARITY = REPO / "tests" / "fixtures" / "parity"
 
 WALLYS = 1229          # Wally's Compassion — heal all from 1 of your Mega ex, bounce its Energy
 POTION = 1117          # Potion — heal 30 from 1 of your Pokémon (no restriction, no rider)
@@ -60,11 +57,6 @@ CAPE = 1159            # Hero's Cape — +100 HP
 #: (menu width 2). The other eleven ctx-17 steps are width 1 — forced, no decision to make.
 REAL_CHOICES = [("ms_mirror_1001", 90), ("v2_ms_mirror_5000", 82),
                 ("v2_ms_mirror_5000", 126), ("v2_ms_mirror_5001", 100)]
-
-
-def _frame(trace: str, index: int) -> dict:
-    with gzip.open(PARITY / f"{trace}.trace.json.gz", "rt", encoding="utf-8") as fh:
-        return json.load(fh)["frames"][index]
 
 
 def _shipped_pilot():
@@ -105,20 +97,14 @@ def test_corpus_ctx17_census_is_what_the_equation_was_built_on():
     change it: 15 ctx-17 steps over the 377 committed traces, 11 of them FORCED (menu width 1) and
     4 offering a real choice; Wally's Compassion x14 and Potion x1; every one a mandatory single
     pick (`minCount`/`maxCount` 1/1)."""
-    steps, widths, cards = 0, {}, {}
-    for path in sorted(PARITY.glob("*.trace.json.gz")):
-        with gzip.open(path, "rt", encoding="utf-8") as fh:
-            frames = json.load(fh)["frames"]
-        for fr in frames:
-            sel = (fr.get("obs") or {}).get("select") or {}
-            if sel.get("context") != _HEAL:
-                continue
-            steps += 1
-            widths[len(sel["option"])] = widths.get(len(sel["option"]), 0) + 1
-            cid = (sel.get("effect") or {}).get("id")
-            cards[cid] = cards.get(cid, 0) + 1
-            assert (sel.get("minCount"), sel.get("maxCount")) == (1, 1)
-    assert steps == 15
+    steps = parity_selects(_HEAL)
+    widths, cards = {}, {}
+    for _trace, _index, sel in steps:
+        widths[len(sel["option"])] = widths.get(len(sel["option"]), 0) + 1
+        cid = (sel.get("effect") or {}).get("id")
+        cards[cid] = cards.get(cid, 0) + 1
+        assert (sel.get("minCount"), sel.get("maxCount")) == (1, 1)
+    assert len(steps) == 15
     assert widths == {1: 11, 2: 4}
     assert cards == {WALLYS: 14, POTION: 1}
 
@@ -138,7 +124,7 @@ def test_the_four_real_boards_rank_by_the_equation_and_not_by_a_string_sort(trac
     The recorded ``choice`` on these frames is deliberately NOT asserted: `meta.policy` is
     ``chaos:seed=NNNN`` on every trace, so it is a random pick and proves nothing about good play."""
     pilot = _shipped_pilot()
-    legs, chosen = _legs(pilot, _frame(trace, index))
+    legs, chosen = _legs(pilot, parity_frame(trace, index))
     assert len(legs) == 2
     (active_is_active, active_term, _ag, _ab), (bench_is_active, bench_term, _bg, _bb) = legs
     assert (active_is_active, bench_is_active) == (True, False)
@@ -158,7 +144,7 @@ def test_bounce_cost_is_zero_on_every_real_corpus_board_and_the_reason_is_the_re
     dilemma is real, but the corpus does not happen to contain it, so it has to be CONSTRUCTED."""
     pilot = _shipped_pilot()
     for trace, index in REAL_CHOICES:
-        legs, _ = _legs(pilot, _frame(trace, index))
+        legs, _ = _legs(pilot, parity_frame(trace, index))
         assert [round(b, 6) for _a, _t, _g, b in legs] == [0.0, 0.0], f"{trace} f{index}"
 
 
@@ -171,7 +157,7 @@ def test_the_bounce_rider_flips_the_pick_when_the_re_attach_is_gone():
     ctx-16 rule (`_best_counter_source_slot`'s most-damaged body) picks the Active here; this term
     picks the BENCH, which is the whole reason R2 refuses to reuse it."""
     pilot = _shipped_pilot()
-    frame = _frame("v2_ms_mirror_5000", 126)
+    frame = parity_frame("v2_ms_mirror_5000", 126)
     cur = frame["obs"]["current"]
     me = cur["players"][cur["yourIndex"]]
     me["hand"] = [c for c in me["hand"] if c["id"] != 17]      # drop the Ignition: no re-attach
@@ -250,7 +236,7 @@ def test_a_bench_body_no_attack_can_reach_gains_nothing():
     opponent's Benched Pokémon"*, so reach is 50 and the gain is non-zero. Without the control, a
     broken reach read and a genuinely-unreachable body return the same 0.0."""
     pilot = _shipped_pilot()
-    frame = _frame("v2_ms_mirror_5001", 100)
+    frame = parity_frame("v2_ms_mirror_5001", 100)
     obs = frame["obs"]
     yi = obs["current"]["yourIndex"]
     bench_body = obs["current"]["players"][yi]["bench"][0]
@@ -336,7 +322,7 @@ def test_the_pick_survives_a_permuted_menu_and_is_not_the_string_sort():
     same body is healed from either menu order, and it is the body the string sort would NOT have
     chosen."""
     pilot = _shipped_pilot()
-    frame = _frame("v2_ms_mirror_5000", 126)
+    frame = parity_frame("v2_ms_mirror_5000", 126)
     obs = frame["obs"]
     cur = obs["current"]
     me = cur["players"][cur["yourIndex"]]

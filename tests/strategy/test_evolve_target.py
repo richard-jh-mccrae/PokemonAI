@@ -30,8 +30,6 @@ makes this file say so rather than silently drifting.
 """
 from __future__ import annotations
 
-import gzip
-import json
 from pathlib import Path
 
 import pytest
@@ -39,10 +37,9 @@ import pytest
 from common.evolve_value import EvolveInputs, evolve_value
 from common.strategy.context import (_ACTIVE, _BENCH, _CARD, _DECK, _EVOLVE, _EVOLVES_FROM,
                                      _EVOLVES_TO, _MAIN)
-from pilot_helpers import card_opt
+from pilot_helpers import card_opt, parity_frame, parity_selects
 
 REPO = Path(__file__).resolve().parents[2]
-PARITY = REPO / "tests" / "fixtures" / "parity"
 
 SALVATORE = 1189       # Supporter — search the deck for an Ability-less evolution, put it on a body
 STARYU = 1030          # Basic, 70 HP, Water Gun {W} 20
@@ -55,11 +52,6 @@ REAL_BOARDS = [("ms_mirror_1001", 15), ("ms_mirror_1001", 20), ("v2_ms_dx_5401",
                ("v2_ms_mirror_5000", 15), ("v2_ms_mirror_5000", 39), ("v2_ms_mirror_5000", 106),
                ("v2_ms_ml_5301", 17)]
 WIDEST = ("ms_mirror_1001", 15)
-
-
-def _frame(trace: str, index: int) -> dict:
-    with gzip.open(PARITY / f"{trace}.trace.json.gz", "rt", encoding="utf-8") as fh:
-        return json.load(fh)["frames"][index]
 
 
 def _shipped_pilot():
@@ -77,8 +69,8 @@ def _terms(pilot, frame: dict):
     obs = frame["obs"]
     sel = obs["select"]
     board = pilot._board(obs)
-    return ([pilot._evolve_target_tactical(obs, sel, board, o) for o in sel["option"]],
-            pilot.explain(obs).chosen)
+    return ([pilot._evolve_target_tactical(obs, sel, board, o, pilot._context(obs, sel, board, o))
+             for o in sel["option"]], pilot.explain(obs).chosen)
 
 
 # ───────────────────────────────────────────────────────────────── the ground truth, re-measured
@@ -99,21 +91,15 @@ def test_corpus_ctx18_census_is_what_the_equation_was_built_on():
     The option TYPE is the whole reason the select was unreachable: `_evolve_decision` and
     `_prefer_soonest_arming_evolve` both gate on ``type == _EVOLVE``, so a menu of `_CARD` options
     abstains through both of them no matter what the board says."""
-    steps, widths, ctx_cards, types, areas = 0, {}, set(), set(), set()
-    for path in sorted(PARITY.glob("*.trace.json.gz")):
-        with gzip.open(path, "rt", encoding="utf-8") as fh:
-            frames = json.load(fh)["frames"]
-        for fr in frames:
-            sel = (fr.get("obs") or {}).get("select") or {}
-            if sel.get("context") != _EVOLVES_FROM:
-                continue
-            steps += 1
-            widths[len(sel["option"])] = widths.get(len(sel["option"]), 0) + 1
-            assert (sel.get("minCount"), sel.get("maxCount")) == (1, 1)
-            ctx_cards.add((sel.get("contextCard") or {}).get("id"))
-            types.update(o["type"] for o in sel["option"])
-            areas.update(o.get("area") for o in sel["option"])
-    assert steps == 7
+    steps = parity_selects(_EVOLVES_FROM)
+    widths, ctx_cards, types, areas = {}, set(), set(), set()
+    for _trace, _index, sel in steps:
+        widths[len(sel["option"])] = widths.get(len(sel["option"]), 0) + 1
+        assert (sel.get("minCount"), sel.get("maxCount")) == (1, 1)
+        ctx_cards.add((sel.get("contextCard") or {}).get("id"))
+        types.update(o["type"] for o in sel["option"])
+        areas.update(o.get("area") for o in sel["option"])
+    assert len(steps) == 7
     assert widths == {1: 3, 2: 3, 3: 1}
     assert ctx_cards == {M_STARMIE}
     assert types == {_CARD} and _EVOLVE not in types
@@ -128,22 +114,16 @@ def test_corpus_ctx19_is_moot_because_every_menu_is_copies_of_one_species():
     has no strategic content, so no term was built. This assertion is the tripwire: a future deck
     running such a search over a line with more than one legal target species makes it fail, which
     is the moment ctx 19 stops being moot."""
-    steps, multi_species = 0, []
-    for path in sorted(PARITY.glob("*.trace.json.gz")):
-        with gzip.open(path, "rt", encoding="utf-8") as fh:
-            frames = json.load(fh)["frames"]
-        for i, fr in enumerate(frames):
-            sel = (fr.get("obs") or {}).get("select") or {}
-            if sel.get("context") != _EVOLVES_TO:
-                continue
-            steps += 1
-            assert {o.get("area") for o in sel["option"]} == {_DECK}
-            deck = sel.get("deck") or []
-            ids = {(deck[o["index"]] or {}).get("id") for o in sel["option"]
-                   if 0 <= o["index"] < len(deck)}
-            if len(ids) > 1:
-                multi_species.append((path.name, i, sorted(ids)))
-    assert steps == 20
+    steps = parity_selects(_EVOLVES_TO)
+    multi_species = []
+    for trace, index, sel in steps:
+        assert {o.get("area") for o in sel["option"]} == {_DECK}
+        deck = sel.get("deck") or []
+        ids = {(deck[o["index"]] or {}).get("id") for o in sel["option"]
+               if 0 <= o["index"] < len(deck)}
+        if len(ids) > 1:
+            multi_species.append((trace, index, sorted(ids)))
+    assert len(steps) == 20
     assert multi_species == []
 
 
@@ -167,7 +147,7 @@ def test_every_real_board_prices_every_option_through_the_equation(trace, index)
     case). The recorded ``choice`` is deliberately not asserted: those traces run a randomised
     policy."""
     pilot = _shipped_pilot()
-    frame = _frame(trace, index)
+    frame = parity_frame(trace, index)
     obs = frame["obs"]
     sel = obs["select"]
     board = pilot._board(obs)
@@ -177,7 +157,8 @@ def test_every_real_board_prices_every_option_through_the_equation(trace, index)
         body, result, _ = pilot._evolve_substitution(obs, board, raw, target_cid,
                                                      is_active=(option.get("area") == _ACTIVE))
         expected = evolve_value(EvolveInputs(body=body, result=result)).total
-        assert pilot._evolve_target_tactical(obs, sel, board, option) == expected
+        ctx = pilot._context(obs, sel, board, option)
+        assert pilot._evolve_target_tactical(obs, sel, board, option, ctx) == expected
         # The income legs are structurally zero at this select (Salvatore's clause carries
         # `no_ability: true`, and no body this deck offers has an Ability), so the whole term is the
         # deploy delta — the claim the call site's comment makes, asserted rather than trusted.
@@ -198,7 +179,7 @@ def test_the_widest_real_board_separates_the_bodies_the_string_sort_could_not():
     both. It is the DELTA that ranks, which is exactly right as an argmax: board value after
     picking *i* is ``Σ_j deploy(B_j) + [deploy(R_i) − deploy(B_i)]``, and the sum is constant."""
     pilot = _shipped_pilot()
-    terms, chosen = _terms(pilot, _frame(*WIDEST))
+    terms, chosen = _terms(pilot, parity_frame(*WIDEST))
     assert len(terms) == 3
     active, bench_energised, bench_empty = terms
     assert active > 0 and bench_energised == bench_empty == 0.0
@@ -211,7 +192,7 @@ def test_the_pick_survives_reordering_so_it_is_the_term_and_not_the_fingerprint(
     Reversing the menu on the widest real board must not move the winning BODY — under the old
     behaviour the pick was the same array position regardless of what stood in it."""
     pilot = _shipped_pilot()
-    frame = _frame(*WIDEST)
+    frame = parity_frame(*WIDEST)
     frame["obs"]["select"]["option"] = list(reversed(frame["obs"]["select"]["option"]))
     terms, chosen = _terms(pilot, frame)
     assert chosen == [2]                     # the Active, now last — the body moved, the pick with it
@@ -223,7 +204,7 @@ def test_a_forced_width_one_board_is_priced_but_cannot_move_anything():
     would be a second, silent gate — but with one option there is nothing to rank, so this only
     asserts the value is real and finite rather than the fail-closed floor."""
     pilot = _shipped_pilot()
-    terms, chosen = _terms(pilot, _frame("v2_ms_ml_5301", 17))
+    terms, chosen = _terms(pilot, parity_frame("v2_ms_ml_5301", 17))
     assert len(terms) == 1 and terms[0] > 0.0
     assert chosen == [0]
 
@@ -239,28 +220,29 @@ def test_a_forced_width_one_board_is_priced_but_cannot_move_anything():
 GATE_BOARD = ("v2_ms_mirror_5000", 15)      # width 2, one Active one Bench, BOTH options score
 
 
-def _gate_frame():
-    return _frame(*GATE_BOARD)
+def _gateparity_frame():
+    return parity_frame(*GATE_BOARD)
 
 
-def _term(pilot, frame, option, select=None):
-    obs = frame["obs"]
-    sel = select if select is not None else obs["select"]
-    return pilot._evolve_target_tactical(obs, sel, pilot._board(obs), option)
+def _term(pilot, frame, option):
+    obs, sel = frame["obs"], frame["obs"]["select"]
+    board = pilot._board(obs)
+    return pilot._evolve_target_tactical(obs, sel, board, option,
+                                         pilot._context(obs, sel, board, option))
 
 
 def test_the_gate_board_scores_before_anything_is_changed():
     """The positive control every test below leans on: on the untouched board both options price
     non-zero, so a 0.0 in the tests that follow is the GATE talking and not the board."""
     pilot = _shipped_pilot()
-    frame = _gate_frame()
+    frame = _gateparity_frame()
     assert all(_term(pilot, frame, o) != 0.0 for o in frame["obs"]["select"]["option"])
 
 
 def test_off_ctx_18_the_term_is_silent():
     """Gated, like every sibling target term — so nothing outside this select can move."""
     pilot = _shipped_pilot()
-    frame = _gate_frame()
+    frame = _gateparity_frame()
     frame["obs"]["select"]["context"] = _MAIN
     assert all(_term(pilot, frame, o) == 0.0 for o in frame["obs"]["select"]["option"])
 
@@ -269,7 +251,7 @@ def test_a_non_card_option_is_silent():
     """The other half of the gate. Pricing an `_EVOLVE` (9) option here would double-count against
     `_evolve_decision`, which owns that option type."""
     pilot = _shipped_pilot()
-    frame = _gate_frame()
+    frame = _gateparity_frame()
     option = dict(frame["obs"]["select"]["option"][0], type=_EVOLVE)
     assert _term(pilot, frame, option) == 0.0
 
@@ -279,7 +261,7 @@ def test_an_opponent_owned_option_is_silent():
     `_heal_target_tactical` carries, so a future card posing this select over both sides cannot have
     the term rank an opponent's board for it."""
     pilot = _shipped_pilot()
-    frame = _gate_frame()
+    frame = _gateparity_frame()
     yi = frame["obs"]["current"]["yourIndex"]
     option = dict(frame["obs"]["select"]["option"][0], playerIndex=1 - yi)
     assert _term(pilot, frame, option) == 0.0
@@ -291,7 +273,7 @@ def test_no_context_card_fails_closed_rather_than_reading_the_option():
     falling back to `_option_card_id` — which would silently compare each body against ITSELF and
     rank every option at a flat zero delta while looking like it had priced them."""
     pilot = _shipped_pilot()
-    frame = _gate_frame()
+    frame = _gateparity_frame()
     frame["obs"]["select"]["contextCard"] = None
     assert all(_term(pilot, frame, o) == 0.0 for o in frame["obs"]["select"]["option"])
 
@@ -299,7 +281,7 @@ def test_no_context_card_fails_closed_rather_than_reading_the_option():
 def test_an_unresolvable_option_body_fails_closed():
     """An option pointing at a bench slot that does not exist — 0.0, never a guess."""
     pilot = _shipped_pilot()
-    assert _term(pilot, _gate_frame(), card_opt(_BENCH, 7)) == 0.0
+    assert _term(pilot, _gateparity_frame(), card_opt(_BENCH, 7)) == 0.0
 
 
 def test_the_target_is_read_off_the_select_and_not_off_the_option():
@@ -309,7 +291,7 @@ def test_the_target_is_read_off_the_select_and_not_off_the_option():
     own card (as `ctx.card_id` does at MAIN) this change could not move anything, because the
     option's card already IS the pre-evolution."""
     pilot = _shipped_pilot()
-    frame = _gate_frame()
+    frame = _gateparity_frame()
     real = [_term(pilot, frame, o) for o in frame["obs"]["select"]["option"]]
     frame["obs"]["select"]["contextCard"] = dict(frame["obs"]["select"]["contextCard"], id=STARYU)
     self_sub = [_term(pilot, frame, o) for o in frame["obs"]["select"]["option"]]

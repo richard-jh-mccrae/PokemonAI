@@ -6,6 +6,10 @@ native lib. Mirrors `scouting_helpers`.
 """
 from __future__ import annotations
 
+import gzip as _gzip
+import json as _json
+from pathlib import Path as _Path
+
 # AreaType / OptionType / SelectContext values (see src/cg/api.py).
 DECK, HAND, DISCARD, ACTIVE, BENCH = 1, 2, 3, 4, 5
 CARD, PLAY, ATTACH, ATTACK = 3, 7, 8, 13
@@ -136,25 +140,56 @@ def state(*, your_index: int = 0, active=None, bench=(), hand=(), discard=(),
 
 def make_select(options, *, min_count: int = 1, max_count: int = 1,
                 context: int = 0, type: int = 0, current=None, deck=None,
-                remain_counters: int = 0, effect=None, context_card=None) -> dict:
+                remain_counters: int = 0, effect=None) -> dict:
     """An observation whose `select` offers `options` — i.e. a decision menu. `deck` supplies the
     revealed search candidates a DECK (area 1) option indexes into (a TO_HAND/search select).
     `remain_counters` sets `remainDamageCounter` (the budget at a DAMAGE_COUNTER_ANY spread-placement
-    select); `effect` sets the resolving-effect record (`{id: sourceCardId, …}`).
-
-    `context_card` sets `select.contextCard` — the card the select is ABOUT, which is a different
-    fact from the option's own card and is the only place some selects carry theirs. At
-    `_EVOLVES_FROM` (ctx 18) the options name my in-play bodies and the evolution being put down
-    rides here (`{"id": …, "serial": …, "playerIndex": …}`); `_attach_value`'s `is_from` branch reads
-    the same field. Defaults to None, which is what every other select shape actually carries."""
+    select); `effect` sets the resolving-effect record (`{id: sourceCardId, …}`)."""
     return {
         "select": {
             "type": type, "context": context,
             "minCount": min_count, "maxCount": max_count,
             "option": list(options),
             "remainDamageCounter": remain_counters, "remainEnergyCost": 0,
-            "deck": deck, "contextCard": context_card, "effect": effect,
+            "deck": deck, "contextCard": None, "effect": effect,
         },
         "logs": [],
         "current": current if current is not None else state(),
     }
+
+
+# ── the committed parity corpus ─────────────────────────────────────────────────────────────────
+#: The parity traces are the ENGINE's own recorded output, so a census over them is the one way a
+#: test can say what the engine really poses rather than what a fixture author believes it poses.
+#: Three modules had grown their own `glob` + `gzip.open` + context-filter walk of them
+#: (`test_heal_target`, `test_evolve_target`, `test_attach_decider`), which is the many-slightly-
+#: different-ideas-of-what-the-corpus-is shape ADR-0087/ADR-0089 charge for — the corrections corpus
+#: got its single reader (`tests/corpus_helpers.py`) for exactly this reason, and the parity corpus
+#: had none.
+_PARITY = _Path(__file__).resolve().parent / "fixtures" / "parity"
+
+
+def parity_frame(trace: str, index: int) -> dict:
+    """One frame of one committed parity trace, by name and position."""
+    with _gzip.open(_PARITY / f"{trace}.trace.json.gz", "rt", encoding="utf-8") as fh:
+        return _json.load(fh)["frames"][index]
+
+
+def parity_selects(context: int, *, effect_id: int | None = None) -> list:
+    """``[(trace_name, frame_index, select)]`` for every step in the committed parity corpus at
+    `context`, optionally narrowed to one resolving card (`select.effect.id`).
+
+    Ordered by trace filename then frame index, so a census built on it is stable across platforms
+    (`sorted(glob)`, not the filesystem's order)."""
+    out = []
+    for path in sorted(_PARITY.glob("*.trace.json.gz")):
+        with _gzip.open(path, "rt", encoding="utf-8") as fh:
+            frames = _json.load(fh)["frames"]
+        for index, frame in enumerate(frames):
+            select = (frame.get("obs") or {}).get("select") or {}
+            if select.get("context") != context:
+                continue
+            if effect_id is not None and (select.get("effect") or {}).get("id") != effect_id:
+                continue
+            out.append((path.name.replace(".trace.json.gz", ""), index, select))
+    return out

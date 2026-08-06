@@ -86,6 +86,18 @@ extracted to `_evolve_substitution` and called by both. Two hand-rolled copies o
 what ADR-0087 charges for. `_evolve_decision`'s gate, inputs and return are unchanged, verified by
 the Decision Gate reading **byte-identical** before and after over all 371 frames.
 
+**5a. The term takes `ctx`, unlike its ctx-17 sibling, and that asymmetry is deliberate.**
+`Context.context_card_id` is the DECLARED store for `select.contextCard` (it already feeds
+mega_lucario's ACTIVATE rungs), so the term reads it rather than minting a second walk of the same
+JSON path — ADR-0087. `_heal_target_tactical` reads `select.effect.id` raw because **no `Context`
+field exists for it**, so the two are not inconsistent; each reads the store where there is one.
+`_snipe_relevance_tactical(obs, select, board, option, ctx)` is the shape precedent.
+
+Two further divergences from the issue's literal A1 sketch, both deliberate: `is_active` is read as
+`option.get("area") == _ACTIVE` (the sibling's own idiom) rather than the sketch's
+`any(raw is p for p in me["active"])`, so it does not depend on object identity surviving the
+snapshot; and the snapshot guard is `self._state_model is None` rather than a truthiness test.
+
 **6. Fail CLOSED at 0.0** on an unreadable target (`contextCard` absent), an unresolvable option
 body, or no snapshot — matching ADR-0123's R3. Every option then reads 0.0 and the ordering degrades
 to today's behaviour rather than to a wrong answer.
@@ -131,22 +143,38 @@ guessed at.
 Cinderace's Turbo Flare poses `ATTACH_TO` (22, which Energy) then `ATTACH_FROM` (21, which bench
 body). **The second was NOT a gap**: `_attach_value`'s `is_from` branch (ADR-0069) has priced the
 recipient by convex, typed slot-fraction progress since it shipped. Replayed through the live Pilot
-against the three real human-ruled ctx-21 Cinderace frames, it matches the human on the two that can
-be graded — including the harder direction, `83116081-21`'s *concentrate onto the already-started
-body rather than spread to a fresh one*. Ruling: **no new production code**; the correctness is
-pinned as regression tests (`test_attach_decider.py` `_CORPUS`) rather than left observed once.
+against the three real human-ruled ctx-21 Cinderace frames, it agrees with the human on both frames whose
+fields are self-consistent. ⚠️ **The issue's own "2 of 3 pass" framing overstates its evidence, and
+the build corrects it:** only `83116081-21` is an unambiguous pass — it is the sole frame where the
+human OVERRODE the agent (`correct [0]` against `chosen [1]`) and the live decider now lands on the
+human's pick, which is also the harder direction (*concentrate onto the already-started body rather
+than spread to a fresh one*). On `83007714-22` the record's `chosen` conflicts with its own
+rationale, so how much agreement there is worth cannot be settled from the record. Ruling stands:
+**no new production code**; the correctness is covered by regression tests
+(`test_attach_decider.py` `_CORPUS`) rather than left observed once.
 
-⚠️ **`82224509-31` is a DATA-INTEGRITY defect, reported and not adjudicated.** Its `rationale` names
-the empty Staryu (*"Mega Starmie already had 3 basic energy, therefor should have attached on the
-other benched mon without any energy"*) while its `correct` field records the already-full Mega
-Starmie ex. ADR-0015's own validation settles that the record is not gradeable as it stands —
-*"`correct` must … differ from `chosen`"* — and here `correct == chosen == [0]`; the embedded
-`live_trace` (`chosen: [0]`, independent of both fields) says it is `correct` that is stale. The
-shipped decider picks the body the rationale argues for. No ranking is pinned until a human re-rules
-it; a tripwire test asserts the defect so the pin becomes OWED the moment it is fixed. The same
-instrument found the mirror defect on `83007714-22` (`correct == chosen == [1]`, rationale agreeing
-with `correct`, so only `chosen` is untrustworthy there) and **17 such records corpus-wide** — a
-finding for the corrections store, out of scope for this issue.
+⚠️ **`82224509-31` carries a RATIONALE-vs-FIELDS conflict, reported and not adjudicated.** Its
+`rationale` names the empty Staryu (*"Mega Starmie already had 3 basic energy, therefor should have
+attached on the other benched mon without any energy"*) while its `correct` field records the
+already-full Mega Starmie ex.
+
+**It is NOT a schema violation, and the first draft of this ADR said it was — corrected here because
+the difference changes what the developer is being asked.** ADR-0015 does specify that `correct`
+*"must … differ from `chosen`"*, and here `correct == chosen == [0]`. But this repo has knowingly
+declined to enforce that clause on MANDATORY selects:
+`tests/train/test_unstatable_decline_records.py::test_a_mandatory_select_is_never_
+excluded_even_when_chosen_equals_correct` rules the shape means *the pick was right*, its own docstring warns that
+excluding those records "would blind the gate", and **14 committed records rely on that reading**
+(re-measured through the Corpus Reader, not a raw JSONL walk: 17 records carry `chosen == correct`,
+14 of them mandatory). So the shape alone settles nothing. What it does is SHARPEN the conflict — the
+fields ENDORSE the agent's pick while the rationale CONDEMNS it and names the other body — and
+exactly one of the 14 has that problem.
+
+Three independent facts say `correct` is the stale field: the embedded `live_trace` (`chosen: [0]`,
+a different artefact from either field), the rationale resolving unambiguously to bench index 1 (the
+only body with an empty `energies` list), and the shipped decider already picking that body. No
+ranking is asserted until a human re-rules it; `tests/train/test_correction_rationale_conflicts.py`
+asserts the conflict so the coverage becomes OWED the moment it is fixed.
 
 `ATTACH_TO` (22) is moot for this deck and MEASURED, not assumed: both real Turbo Flare ctx-22 steps
 in the corpus are `minCount`/`maxCount` 0/3 over copies of a SINGLE Basic Energy card, so

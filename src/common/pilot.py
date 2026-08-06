@@ -2193,8 +2193,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                     + self._gust_target_tactical(obs, select, board, option)
                     + self._heal_target_tactical(obs, select, board, option)   # ctx 17 (Issue #409):
                                                                        # the 4th target-select term
-                    + self._evolve_target_tactical(obs, select, board, option)  # ctx 18 (#417): the
-                                                                       # 5th — WHERE a searched-out
+                    + self._evolve_target_tactical(obs, select, board, option, ctx)  # ctx 18 (#417 —
+                                                                       # Issue #417): the 5th, and
+                                                                       # WHERE a searched-out
                                                                        # evolution lands
                     + self._gust_stall_target_tactical(obs, select, board, option)
                     + self._attach_lethal_tactical(obs, select, board, option)
@@ -2457,8 +2458,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                    bench=result_bench)
         return body, result, result_raw
 
-    def _evolve_target_tactical(self, obs: dict, select: dict, board: Board,
-                                option: dict) -> float:
+    def _evolve_target_tactical(self, obs: dict, select: dict, board: Board, option: dict,
+                                ctx) -> float:
         """Rank WHICH of my in-play Pokémon a searched-out evolution is put ONTO, at the
         `_EVOLVES_FROM` target select (ctx 18, Issue #417).
 
@@ -2509,10 +2510,14 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         yi = state.get("yourIndex", 0)
         if option.get("playerIndex", yi) != yi:
             return 0.0                        # the evolution only ever lands on MY own bodies
-        # The target rides on the SELECT, not the option: `_option_card_id` here resolves the
-        # option's own (area, index) and so names the PRE-EVOLUTION — the wrong card for any reader
-        # that assumes `ctx.card_id` is "the card this option is about" the way it is at MAIN.
-        target_cid = ((select or {}).get("contextCard") or {}).get("id")
+        # The target rides on the SELECT, not the option: `ctx.card_id` here resolves the option's
+        # own (area, index) and so names the PRE-EVOLUTION — the wrong card for any reader that
+        # assumes it is "the card this option is about" the way it is at MAIN. `context_card_id` is
+        # the DECLARED store for `select.contextCard` (it already feeds mega_lucario's ACTIVATE
+        # rungs), so this reads it rather than minting a second walk of the same field (ADR-0087).
+        # That is also why this term takes `ctx` where its ctx-17 sibling does not:
+        # `_heal_target_tactical` reads `select.effect.id`, for which no Context field exists.
+        target_cid = getattr(ctx, "context_card_id", None)
         raw = self._option_pokemon(obs, select, option)
         if target_cid is None or not raw or self._state_model is None:
             return 0.0

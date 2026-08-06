@@ -20,8 +20,10 @@ from common.pilot import (Pilot, _ATTACH_ABILITY_FUEL, _ATTACH_RETREAT_EQUITY, _
 from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
 from common.strategy import Strategy
 from common.strategy.general_strategy import GENERAL_STRATEGY
+from common.strategy.context import _CARD, _DECK
 from common.strategy.strategy import Line
 from common.telemetry import to_record
+from pilot_helpers import parity_selects
 
 REPO = Path(__file__).resolve().parents[2]
 
@@ -515,7 +517,7 @@ _CORPUS = {
     ("82525101", 69): (ACTIVE, 0),       # go down swinging: the bench Mega cannot pay its retreat
     ("83007714", 65): "none",            # ... but here it CAN: retreat into it, don't feed the doomed
     # Turbo Flare's recipient pick (ctx 21) on a bench of SAME-SPECIES bodies at different charge
-    # levels — the accel shape `is_from` was built for and had no ruled pin (Issue #417 B3).
+    # levels — the accel shape `is_from` was built for, and no ruled test covered it (Issue #417 B3).
     ("83007714", 22): None,              # spread to the EMPTY Mega ex, not the started Staryu ...
     ("83116081", 21): None,              # ... but CONCENTRATE onto the started Staryu over a fresh
                                          #   one: convexity, and the harder of the two directions
@@ -576,75 +578,36 @@ def test_the_working_is_silent_on_a_supporter_selection_frame():
 # `is_from` branch (ADR-0069) prices the recipient by convex, typed slot-fraction progress, live and
 # unconditional. Its correctness on this exact accel shape — several same-species bench recipients
 # at different charge levels — had never been asserted, only observed. The two `_CORPUS` entries
-# above are that assertion; what follows is the part the pin table cannot carry.
+# above are that assertion; what follows is the part the `_CORPUS` table cannot carry.
 
 CINDERACE, TURBO_FLARE_CTX = 666, 22
-_CARD_OPT = 3                         # OptionType.CARD — what every ctx-21/22 option carries
-PARITY = REPO / "tests" / "fixtures" / "parity"
 # `W_ENERGY`/`F_ENERGY` above are Style A synthetics that happen to carry the REAL card ids these
 # tests need — Water Energy is card id 3 and Basic {F} Energy is card id 6 (`data/EN_Card_Data.csv`,
 # checked at source). Reused deliberately rather than re-spelled, but noted because the coincidence
 # is the exact one `pilot_helpers.poke` warns about and it does NOT hold for every Energy.
 
 
-def _parity_selects(context, effect_id=None):
-    """``[(trace, frame, select)]`` for every step in the committed parity corpus at `context`
-    (optionally narrowed to one resolving card). The traces ARE the engine, so this is what the
-    engine really poses rather than what a fixture author believes it poses."""
-    import gzip
-    import json
-    out = []
-    for path in sorted(PARITY.glob("*.trace.json.gz")):
-        with gzip.open(path, "rt", encoding="utf-8") as fh:
-            frames = json.load(fh)["frames"]
-        for i, fr in enumerate(frames):
-            sel = (fr.get("obs") or {}).get("select") or {}
-            if sel.get("context") != context:
-                continue
-            if effect_id is not None and (sel.get("effect") or {}).get("id") != effect_id:
-                continue
-            out.append((path.name, i, sel))
-    return out
-
-
-def test_the_82224509_31_ruling_cannot_be_graded_and_so_is_not_pinned():
-    """**A data-integrity tripwire, not a ranking.** The corpus's third ctx-21 Cinderace record
+def test_the_live_decider_follows_the_82224509_31_rationale_not_its_correct_field():
+    """The third ctx-21 Cinderace frame is the one `_CORPUS` above cannot cover, because the record
     contradicts itself: its ``rationale`` reads *"dont attach more energy on a pokemon than it
     needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other
-    benched mon without any energy"* — which names the Staryu at index 1 — while its ``correct``
-    field records index 0, the already-full Mega Starmie ex.
+    benched mon without any energy"* — which names index 1, the only bench body with no Energy —
+    while `correct` records index 0, the already-3/3 Mega Starmie ex.
 
-    ADR-0015's own validation settles that this record is not gradeable as it stands: *"`correct`
-    must index legal option positions and **differ from `chosen`** (otherwise it is not a
-    blunder)"*, and here ``correct == chosen == [0]``. The embedded ``live_trace`` — the shipped
-    agent's own telemetry, independent of both fields — records ``chosen: [0]``, so it is `correct`
-    that is stale, not `chosen`. No ranking is pinned until a human re-rules the record; asserting
-    the defect instead means the pin becomes OWED the moment it is fixed, rather than the frame
-    being quietly forgotten.
+    **The contradiction is between the rationale and the fields, NOT a schema violation**, and the
+    distinction matters because this repo has already ruled on the shape. `correct == chosen` on a
+    MANDATORY select is deliberately supported here — `tests/train/test_unstatable_decline_records
+    .py::test_a_mandatory_select_is_never_excluded_even_when_chosen_equals_correct` rules it means
+    *the pick was right*, and 13 other committed records rely on that reading — so ADR-0015's
+    *"differ from `chosen`"* line does not by itself settle this frame. What it does do is sharpen
+    the conflict: the fields ENDORSE the agent's pick while the rationale CONDEMNS it and names the
+    other body. That needs a human, and the record-shape half of the finding is asserted in
+    `tests/train/test_correction_rationale_conflicts.py`, where the corpus-integrity axis lives.
 
-    Reported alongside it, because the same instrument found it: `83007714-22` carries the mirror
-    defect (``correct == chosen == [1]`` with a rationale describing a Staryu attach the agent did
-    not, per this field, make) — there the RATIONALE and `correct` agree, so that frame is pinned
-    above and only its `chosen` is untrustworthy."""
-    rec = _frame("82224509", 31)
-    assert rec.decision["select_context"] == "AttachFrom"
-    assert rec.correct == rec.chosen == [0], \
-        "82224509-31 has been re-ruled — pin the ranking in _CORPUS and delete this tripwire"
-    assert "without any energy" in (rec.rationale or "")
-    # The body the rationale names is index 1: the only bench body carrying no Energy at all.
-    cur = rec.decision["current"]
-    bench = cur["players"][cur["yourIndex"]]["bench"]
-    assert [len(b["energies"]) for b in bench] == [3, 0]
-
-
-def test_the_live_decider_follows_the_82224509_31_rationale_not_its_correct_field():
-    """The measurement that makes the tripwire above actionable. On `82224509-31` the shipped
-    decider picks index 1 — the empty Staryu, i.e. exactly the body the rationale argues for and
-    the opposite of the recorded `correct`. So whichever way the record is re-ruled, this frame
-    needs no new production code to satisfy the rationale; it already does.
-
-    Asserted rather than left as prose because it is the whole basis of Issue #417's ruling B2 (no
-    new `ATTACH_FROM` code unless the re-ruling finds a real defect), and a silent drift here would
+    What is asserted HERE is the decider measurement, because it is the whole basis of Issue #417's
+    ruling B2 — *no new `ATTACH_FROM` code unless the re-ruling finds a real defect*: the shipped
+    decider already picks the body the rationale argues for, so whichever way the record is
+    re-ruled, no production change is owed to satisfy the rationale. A silent drift here would
     invalidate that ruling without anyone noticing."""
     rec = _frame("82224509", 31)
     dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
@@ -663,14 +626,14 @@ def test_every_real_turbo_flare_attach_to_menu_is_copies_of_one_basic_energy():
 
     The tripwire half: a capture that ever poses a mixed-colour Turbo Flare menu makes this fail,
     which is the moment ctx 22 stops being moot for this card."""
-    steps = _parity_selects(TURBO_FLARE_CTX, effect_id=CINDERACE)
+    steps = parity_selects(TURBO_FLARE_CTX, effect_id=CINDERACE)
     assert len(steps) == 2
     for name, index, sel in steps:
         assert (sel["minCount"], sel["maxCount"]) == (0, 3), f"{name} f{index}"
         deck = sel.get("deck") or []
         ids = {(deck[o["index"]] or {}).get("id") for o in sel["option"]
-               if o.get("area") == 1 and 0 <= o["index"] < len(deck)}
-        assert {o.get("area") for o in sel["option"]} == {1}, f"{name} f{index}"
+               if o.get("area") == _DECK and 0 <= o["index"] < len(deck)}
+        assert {o.get("area") for o in sel["option"]} == {_DECK}, f"{name} f{index}"
         assert len(ids) == 1, f"{name} f{index}: mixed-colour Turbo Flare menu {sorted(ids)}"
 
 
@@ -682,8 +645,8 @@ def _turbo_flare_attach_to(rec, *, energy_id, offered):
     obs = copy.deepcopy(rec.obs)
     yi = obs["current"]["yourIndex"]
     obs["select"] = {
-        "type": _CARD_OPT, "context": TURBO_FLARE_CTX, "minCount": 0, "maxCount": 3,
-        "option": [{"type": _CARD_OPT, "area": 1, "index": i, "playerIndex": yi}
+        "type": _CARD, "context": TURBO_FLARE_CTX, "minCount": 0, "maxCount": 3,
+        "option": [{"type": _CARD, "area": _DECK, "index": i, "playerIndex": yi}
                    for i in range(offered)],
         "deck": [{"id": energy_id, "serial": 900 + i, "playerIndex": yi} for i in range(offered)],
         "remainDamageCounter": 0, "remainEnergyCost": 0, "contextCard": None,
