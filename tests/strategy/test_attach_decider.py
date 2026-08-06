@@ -521,6 +521,8 @@ _CORPUS = {
     ("83007714", 22): None,              # spread to the EMPTY Mega ex, not the started Staryu ...
     ("83116081", 21): None,              # ... but CONCENTRATE onto the started Staryu over a fresh
                                          #   one: convexity, and the harder of the two directions
+    ("82224509", 31): None,              # don't over-attach a body that is already 3/3 — ruled
+                                         #   2026-08-06 (Issue #417 B1), see the module note below
 }
 
 
@@ -587,28 +589,26 @@ CINDERACE, TURBO_FLARE_CTX = 666, 22
 # is the exact one `pilot_helpers.poke` warns about and it does NOT hold for every Energy.
 
 
-def test_the_live_decider_follows_the_82224509_31_rationale_not_its_correct_field():
-    """The third ctx-21 Cinderace frame is the one `_CORPUS` above cannot cover, because the record
-    contradicts itself: its ``rationale`` reads *"dont attach more energy on a pokemon than it
-    needs. Mega Starmie already had 3 basic energy, therefor should have attached on the other
-    benched mon without any energy"* — which names index 1, the only bench body with no Energy —
-    while `correct` records index 0, the already-3/3 Mega Starmie ex.
+def test_the_82224509_31_legs_are_the_convexity_and_not_a_coincidence():
+    """`82224509-31`, the frame whose record was RE-RULED on 2026-08-06 (Issue #417 B1).
 
-    **The contradiction is between the rationale and the fields, NOT a schema violation**, and the
-    distinction matters because this repo has already ruled on the shape. `correct == chosen` on a
-    MANDATORY select is deliberately supported here — `tests/train/test_unstatable_decline_records
-    .py::test_a_mandatory_select_is_never_excluded_even_when_chosen_equals_correct` rules it means
-    *the pick was right*, and 13 other committed records rely on that reading — so ADR-0015's
-    *"differ from `chosen`"* line does not by itself settle this frame. What it does do is sharpen
-    the conflict: the fields ENDORSE the agent's pick while the rationale CONDEMNS it and names the
-    other body. That needs a human, and the record-shape half of the finding is asserted in
-    `tests/train/test_correction_rationale_conflicts.py`, where the corpus-integrity axis lives.
+    As committed it contradicted itself: the ``rationale`` — *"dont attach more energy on a pokemon
+    than it needs. Mega Starmie already had 3 basic energy, therefor should have attached on the
+    other benched mon without any energy"* — names index 1, the only bench body with no Energy,
+    while `correct` recorded index 0, the already-3/3 Mega Starmie ex. Three independent facts said
+    `correct` was the stale field (the embedded ``live_trace`` records ``chosen: [0]``; the
+    rationale resolves only to index 1; the shipped decider already picks index 1), and the
+    developer ruled it `[1]`. The `_CORPUS` entry above now asserts the ranking.
 
-    What is asserted HERE is the decider measurement, because it is the whole basis of Issue #417's
-    ruling B2 — *no new `ATTACH_FROM` code unless the re-ruling finds a real defect*: the shipped
-    decider already picks the body the rationale argues for, so whichever way the record is
-    re-ruled, no production change is owed to satisfy the rationale. A silent drift here would
-    invalidate that ruling without anyone noticing."""
+    ⚠️ **`correct == chosen` was NOT the defect**, recorded because the tempting shortcut is wrong
+    and would break a shipped ruling: that shape is deliberately supported on a MANDATORY select
+    here — `tests/train/test_unstatable_decline_records.py::test_a_mandatory_select_is_never_
+    excluded_even_when_chosen_equals_correct` reads it as *the pick was right*, and 13 committed
+    records still rely on it. Only the rationale conflict made this frame different.
+
+    What this test adds beyond the `_CORPUS` ranking is the WORKING: the pick is the convex build
+    delta doing its job, not a tie broken by luck. The already-3/3 Mega ex prices at exactly 0.0 —
+    there is no build progress left to buy — so the margin is structural."""
     rec = _frame("82224509", 31)
     dec = _tune()._build_pilot(_agent(rec))[0].explain(rec.obs)
     rows = {r["i"]: r for r in (dec.attach_working or {}).get("eq", ())}

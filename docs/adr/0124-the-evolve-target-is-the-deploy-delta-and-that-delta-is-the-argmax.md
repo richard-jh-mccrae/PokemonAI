@@ -153,28 +153,32 @@ rationale, so how much agreement there is worth cannot be settled from the recor
 **no new production code**; the correctness is covered by regression tests
 (`test_attach_decider.py` `_CORPUS`) rather than left observed once.
 
-⚠️ **`82224509-31` carries a RATIONALE-vs-FIELDS conflict, reported and not adjudicated.** Its
-`rationale` names the empty Staryu (*"Mega Starmie already had 3 basic energy, therefor should have
-attached on the other benched mon without any energy"*) while its `correct` field records the
-already-full Mega Starmie ex.
+**`82224509-31` carried a RATIONALE-vs-FIELDS conflict, now RULED.** Its `rationale` names the empty
+Staryu (*"dont attach more energy on a pokemon than it needs. Mega Starmie already had 3 basic
+energy, therefor should have attached on the other benched mon without any energy"*) while its
+`correct` field recorded the already-full Mega Starmie ex. The developer ruled `correct` the stale
+field on 2026-08-06 and it is amended `[0] -> [1]`, so all three ctx-21 frames are now gradeable and
+all three are covered by `_CORPUS`.
 
-**It is NOT a schema violation, and the first draft of this ADR said it was — corrected here because
-the difference changes what the developer is being asked.** ADR-0015 does specify that `correct`
-*"must … differ from `chosen`"*, and here `correct == chosen == [0]`. But this repo has knowingly
-declined to enforce that clause on MANDATORY selects:
-`tests/train/test_unstatable_decline_records.py::test_a_mandatory_select_is_never_
-excluded_even_when_chosen_equals_correct` rules the shape means *the pick was right*, its own docstring warns that
-excluding those records "would blind the gate", and **14 committed records rely on that reading**
-(re-measured through the Corpus Reader, not a raw JSONL walk: 17 records carry `chosen == correct`,
-14 of them mandatory). So the shape alone settles nothing. What it does is SHARPEN the conflict — the
-fields ENDORSE the agent's pick while the rationale CONDEMNS it and names the other body — and
-exactly one of the 14 has that problem.
+⚠️ **It was NOT a schema violation, and the first draft of this ADR said it was — corrected here
+because the difference is what the developer was actually being asked to rule on.** ADR-0015 does
+specify that `correct` *"must … differ from `chosen`"*, and this record had `correct == chosen ==
+[0]`. But the repo has knowingly declined to enforce that clause on MANDATORY selects:
+`tests/train/test_unstatable_decline_records.py::test_a_mandatory_select_is_never_excluded_even_
+when_chosen_equals_correct` rules the shape means *the pick was right*, its own docstring warns that
+excluding those records "would blind the gate", and **13 committed records still rely on that
+reading** (measured through the Corpus Reader, not the raw JSONL walk the first count used, which
+read 17 where the Reader reads 16). So the shape settled nothing. What it did was SHARPEN the
+conflict — the fields ENDORSED the agent's pick while the rationale CONDEMNED it and named the other
+body — and exactly one record had that problem.
 
-Three independent facts say `correct` is the stale field: the embedded `live_trace` (`chosen: [0]`,
-a different artefact from either field), the rationale resolving unambiguously to bench index 1 (the
-only body with an empty `energies` list), and the shipped decider already picking that body. No
-ranking is asserted until a human re-rules it; `tests/train/test_correction_rationale_conflicts.py`
-asserts the conflict so the coverage becomes OWED the moment it is fixed.
+**The reusable finding is that no instrument the repo has could see it.** Both ADR-0072 gates passed
+over this record for six weeks: a gate grades fields against fields and never reads the prose, and
+`records_a_decline_it_cannot_state` is scoped to OPTIONAL selects by design. The three facts that
+identified `correct` as the stale side were the embedded `live_trace` (`chosen: [0]`, an artefact
+independent of both fields), the rationale resolving to the only bench body with an empty
+`energies`, and the shipped decider already picking it. `tests/train/test_correction_rationale_
+conflicts.py` keeps the guard pointing the other way now — that the record stays coherent.
 
 `ATTACH_TO` (22) is moot for this deck and MEASURED, not assumed: both real Turbo Flare ctx-22 steps
 in the corpus are `minCount`/`maxCount` 0/3 over copies of a SINGLE Basic Energy card, so
