@@ -1,4 +1,9 @@
-# ADR-0122 - The HEAL target is SURVIVAL minus the BOUNCE, and "most damaged" is the wrong rule
+# ADR-0123 - The HEAL target is SURVIVAL minus the BOUNCE, and "most damaged" is the wrong rule
+
+> **Renumbered 0122 → 0123 on 2026-08-06.** Issue #406's grab ADR (PR #413, merge `78bb5943`) landed
+> on `main` first and KEEPS 0122; this one (PR #415, merge `0926eba7`) collided and renumbers past
+> the highest on disk, per the numbering convention in `README.md`. Both merged the same day and
+> `tests/test_adr_index.py::test_no_two_adrs_claim_the_same_number` was red on `main` in between.
 
 **Status:** Accepted (Issue #409, 2026-08-06); BUILT. Does **not** amend ADR-0091/ADR-0103 — the
 canonical-fingerprint tie-break stays exactly as specified; this removes a select from the set where
