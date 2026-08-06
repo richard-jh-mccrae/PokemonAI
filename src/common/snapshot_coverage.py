@@ -825,9 +825,14 @@ UNCONSUMED_SELECTORS: dict[str, str] = {
                               "but no consumer multiplies by it yet; both heal readers decline it in "
                               "the under-counting direction",
     # Stadium scopes. `CombatMath` reads the stadium zone for the damage modifiers but branches on
-    # the `effect`, never on these two body-class narrowings.
-    "applies_to=basic_non_dark": "1260 Risky Ruins. The bench-tax trigger's scope; the Deploy "
-                                 "Marginal prices the option, not the {D} exemption",
+    # the `effect`, never on this body-class narrowing.
+    #
+    # ⚠️ **`applies_to=basic_non_dark` LEFT this ledger at Issue #410**, and so did `applies_to=stage2`
+    # (which was never in it). `board_delta._APPLIES_TO` resolves both — the two scopes that ride a
+    # WRITING Stadium clause — so the apply seam now applies Risky Ruins' bench tax and Gravity
+    # Mountain's HP delta instead of refusing every transition under either card. `metal` stays,
+    # because it scopes a `damage_reduction` whose write-set is EMPTY: nothing is stored, so there is
+    # nothing for a resolver to narrow.
     "applies_to=metal": "1244 Full Metal Lab. A {M}-body scope on a damage modifier read off the "
                         "stadium zone, which branches on the effect rather than this narrowing",
     # `_condition_holds` evaluates `remaining_hp_30_or_less` and `energy_3_plus` and fails CLOSED on

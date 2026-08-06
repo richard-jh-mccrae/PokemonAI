@@ -50,17 +50,23 @@ from common.strategy.context import _ATTACH, _EVOLVE, _PLAY, _RETREAT
 # EnergyType codes (cg.api.EnergyType). The AreaType numbers come from `option_equivalence`, the
 # one module that holds them DLL-free with a test pinning them to the engine enum — a fourth spelling
 # in this file would be a fourth thing to keep true.
-COLORLESS, FIGHTING, PSYCHIC = 0, 6, 5
+COLORLESS, FIGHTING, PSYCHIC, DARKNESS, DRAGON = 0, 6, 5, 7, 9
 HAND, ACTIVE, BENCH = AREA_HAND, AREA_ACTIVE, AREA_BENCH
 MAIN = bd.CONTEXT_MAIN
 
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 AURA_JAB, MEGA_BRAVE = 982, 983
 E_F, IGNITION = 6, 17
-# Two Stadiums with NO Effect Clauses (`card_effects.json` returns [] for both) and one with an
-# `hp_delta` — so a displacement can be tested both ways round.
+# Two Stadiums with NO Effect Clauses (`card_effects.json` returns [] for both) and two with a
+# WRITING clause — so a displacement can be tested both ways round, and Issue #410's two appliers
+# each have their card.
 CAPE, BOSS, GRAVITY_MOUNTAIN = 1159, 1182, 1252
-BATTLE_CAGE, JAMMING_TOWER = 1264, 1246
+BATTLE_CAGE, JAMMING_TOWER, RISKY_RUINS = 1264, 1246, 1260
+# The Dragapult line, for the Stage-2 half of Issue #410: `applies_to: stage2` needs a real Stage 2
+# and the Stage 1 it evolves from, and `_EVOLVE` needs the body already in play.
+DRAKLOAK, DRAGAPULT_EX = 120, 121
+# A {D} Basic, for Risky Ruins' `unlessEnergyType` control — the case that must stay UNTAXED.
+ZORUA = 136
 
 #: Every row is a SOURCE claim, checked field-for-field against `data/EN_Card_Data.csv` by
 #: `tests/scouting/test_cardstat_fixture_facts.py`. Munkidori is HP **110** and Mega Lucario ex's
@@ -81,6 +87,13 @@ _STATS = {
                        energyType=FIGHTING, evolvesFrom="Riolu", attacks=(AURA_JAB, MEGA_BRAVE),
                        minAttackCost=1, minCostDamage=130, maxDamage=270, maxDamageCost=2),
     MUNKIDORI: CardStat(MUNKIDORI, name="Munkidori", hp=110, energyType=PSYCHIC),
+    # The Dragapult line, read at source: Dreepy (Basic) → Drakloak (Stage 1, 90 HP) → Dragapult ex
+    # (Stage 2, **320 HP**). `stage2` is the engine's own `CardData.stage2` flag and is what
+    # `applies_to: stage2` resolves — `CardStat.stage` is declared but unpopulated on this base.
+    DRAKLOAK: CardStat(DRAKLOAK, name="Drakloak", hp=90, energyType=DRAGON, evolvesFrom="Dreepy"),
+    DRAGAPULT_EX: CardStat(DRAGAPULT_EX, name="Dragapult ex", hp=320, energyType=DRAGON, ex=True,
+                           evolvesFrom="Drakloak", stage2=True),
+    ZORUA: CardStat(ZORUA, name="Zorua", hp=70, energyType=DARKNESS),
     E_F: CardStat(E_F, name="Basic {F} Energy", cardType=5, energyType=FIGHTING),
     IGNITION: CardStat(IGNITION, name="Ignition Energy", cardType=6, energyType=COLORLESS),
     CAPE: CardStat(CAPE, synthetic=True, name="Flat-HP Tool", cardType=2, hpBonus=100),
@@ -88,6 +101,7 @@ _STATS = {
     GRAVITY_MOUNTAIN: CardStat(GRAVITY_MOUNTAIN, name="Gravity Mountain", cardType=4),
     BATTLE_CAGE: CardStat(BATTLE_CAGE, name="Battle Cage", cardType=4),
     JAMMING_TOWER: CardStat(JAMMING_TOWER, name="Jamming Tower", cardType=4),
+    RISKY_RUINS: CardStat(RISKY_RUINS, name="Risky Ruins", cardType=4),
 }
 _ATTACKS = {AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGHTING,)),
             MEGA_BRAVE: AttackStat(MEGA_BRAVE, damage=270, cost=2,
@@ -95,10 +109,15 @@ _ATTACKS = {AURA_JAB: AttackStat(AURA_JAB, damage=130, cost=1, energyTypes=(FIGH
 #: Ignition's two provisions, the pair `CardFunctions.energy_provision` reads (Issue #142).
 _TAGS = {IGNITION: ["provides:1", "provides_evo:3"]}
 #: Boss's Orders' `gust` clause — the reason a Supporter's `_PLAY` refuses rather than pricing its
-#: structural floor as the whole play. Gravity Mountain's `hp_delta` is the Stadium gate's input.
+#: structural floor as the whole play. The two Stadium clauses are `card_effects.json`'s own entries
+#: for 1252 and 1260, key for key: `applies_to` is part of each and dropping it here would make the
+#: fixture answer a question the shipped compendium does not ask (Issue #410).
 _CLAUSES = {
     BOSS: [{"kind": "gust"}],
-    GRAVITY_MOUNTAIN: [{"kind": "stadium_static", "effect": "hp_delta", "amount": -30}],
+    GRAVITY_MOUNTAIN: [{"kind": "stadium_static", "effect": "hp_delta", "amount": -30,
+                        "applies_to": "stage2", "symmetric": True}],
+    RISKY_RUINS: [{"kind": "stadium_trigger", "on": "bench_play", "effect": "damage_counters",
+                   "amount": 2, "applies_to": "basic_non_dark", "symmetric": True}],
 }
 
 
@@ -476,32 +495,159 @@ def test_replaying_the_stadium_already_in_play_refuses_as_an_illegal_play():
 # ── the board-level modifiers the option's own clauses cannot see ─────────────────────────────────
 
 
-@pytest.mark.req("REQ-APPLY-0005")
-def test_a_stadium_that_writes_the_board_refuses_every_transition_that_puts_a_body_in_play():
-    """The parity lane's first full sweep found 35 diverging steps and every one was this: a live
-    Stadium re-writing a body the moment it entered or changed. Gravity Mountain's *"-30 HP"* landed
-    a Dragapult ex at 320 in the seam and 290 in the engine; Risky Ruins' 2 counters landed 28
-    deploys at full HP that the engine had already damaged.
+def _bench(after_obs, index=0):
+    """The raw benched body dict off a synthesized observation.
 
-    The gate reads the same `CLAUSE_WRITES` registry every other refusal here consults, so a Stadium
-    whose effects write NOTHING (`damage_reduction` / `damage_boost` / `prevent_damage` — read off
-    the zone at attack time and stored nowhere) does not gate."""
-    stadium = [{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}]
-    evolve = _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC]), stadium=stadium)
+    Read raw rather than through `StateModel`, because the assertions here are about ``hp`` AND
+    ``maxHp`` together — a projection that exposed only one of them could not tell a stored damage
+    counter (moves ``hp``) from a floating Stadium delta (moves both), which is the exact distinction
+    Issue #410 turns on."""
+    return after_obs["current"]["players"][0]["bench"][index]
+
+
+@pytest.mark.req("REQ-APPLY-0005")
+def test_a_stadium_that_CANNOT_reach_the_transition_stops_gating_it():
+    """Issue #410 R2, and the largest single result in that issue: **73 of the blanket gate's 104
+    refused corpus steps needed no clause application whatsoever.**
+
+    Its predecessor `_stadium_gate` asked *"is a Stadium with a non-empty `CLAUSE_WRITES` union in
+    play?"* — a question with no reference to the option, the body or the event — so Gravity Mountain
+    refused 19 evolutions into a Stage 1 and 15 Basic deploys, and Risky Ruins refused 39 evolutions.
+    `stadium_clauses_for` asks whether the clause reaches THIS event and THIS body, so all four of
+    these transition normally and write nothing new.
+
+    The rules behind each row, at source: Risky Ruins (1260) is *"Whenever any player puts a Basic
+    non-{D} Pokémon onto their **Bench**"* — an evolution is not a bench play. Gravity Mountain
+    (1252) is *"Each **Stage 2** Pokémon in play"* — a Basic is not one, and neither is a Stage 1."""
+    ruins = [{"id": RISKY_RUINS, "serial": 55, "playerIndex": 1}]
+    mountain = [{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}]
+
+    # Risky Ruins + an evolution: `on: bench_play` cannot see a stage change, into either stage.
+    for stadium in (ruins,):
+        into_stage1 = _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC]), stadium=stadium)
+        after = _apply(into_stage1, {"type": _EVOLVE, "area": HAND, "index": 0,
+                                     "inPlayArea": ACTIVE, "inPlayIndex": 0})
+        assert after.mine.active.card_id == MEGA_LUC
+        into_stage2 = _obs(_player(active=_body(DRAKLOAK), hand=[DRAGAPULT_EX]), stadium=stadium)
+        after = _apply(into_stage2, {"type": _EVOLVE, "area": HAND, "index": 0,
+                                     "inPlayArea": ACTIVE, "inPlayIndex": 0})
+        assert after.mine.active.card_id == DRAGAPULT_EX
+        assert after.mine.active.hp_remaining == 320          # untaxed: the trigger never fired
+
+    # Gravity Mountain + a Stage 1 body, and + a Basic deploy: `applies_to: stage2` admits neither.
+    into_stage1 = _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC]), stadium=mountain)
+    after = _apply(into_stage1, {"type": _EVOLVE, "area": HAND, "index": 0,
+                                 "inPlayArea": ACTIVE, "inPlayIndex": 0})
+    assert after.mine.active.card_id == MEGA_LUC
+    assert after.mine.active.hp_remaining == 340              # the printed maximum, undelta'd
+
+    deploy = _obs(_player(active=_body(RIOLU), hand=[MUNKIDORI]), stadium=mountain)
+    delta = bd.transition(deploy, {"type": _PLAY, "index": 0}, seat_index=0, combat=_combat(),
+                          context=MAIN)
+    assert _bench(delta.obs) == {"id": MUNKIDORI, "serial": 700, "playerIndex": 0,
+                                 "hp": 110, "maxHp": 110, "appearThisTurn": True,
+                                 "energies": [], "energyCards": [], "tools": [], "preEvolution": []}
+    assert delta.writes == frozenset({"my_hand_ids", "bodies_in_play", "bench_occupancy",
+                                      "new_in_play"})
+
+
+@pytest.mark.req("REQ-APPLY-0005")
+def test_a_stadium_whose_clause_DOES_reach_the_transition_still_refuses():
+    """The other 31 of the blanket gate's 104 steps, which R1 does not retire and must not pretend to.
+
+    Risky Ruins DOES tax a Basic non-{D} arriving on the Bench, and Gravity Mountain DOES lower the
+    Stage 2 an evolution produces. `stadium_clauses_for` returns those clauses, and each call site
+    refuses on them — applying them is Issue #410's R3/R4, landing next so that the parity lane
+    verifies this un-gating on its own.
+
+    Stated as a test rather than left implicit, because *"the seam stopped refusing"* and *"the seam
+    started lying"* are the two ways this change could have gone and only one of them is wanted."""
+    deploy = _obs(_player(active=_body(RIOLU), hand=[MUNKIDORI]),
+                  stadium=[{"id": RISKY_RUINS, "serial": 55, "playerIndex": 1}])
+    r = _apply(deploy, {"type": _PLAY, "index": 0})
+    assert isinstance(r, ao.Refusal) and "1260" in r.reason and "bench trigger" in r.reason
+
+    evolve = _obs(_player(active=_body(DRAKLOAK), hand=[DRAGAPULT_EX]),
+                  stadium=[{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}])
     r = _apply(evolve, {"type": _EVOLVE, "area": HAND, "index": 0,
                         "inPlayArea": ACTIVE, "inPlayIndex": 0})
-    assert isinstance(r, ao.Refusal) and "1252" in r.reason and "damage_counters" in r.reason
+    assert isinstance(r, ao.Refusal) and "1252" in r.reason and "static HP delta" in r.reason
 
-    deploy = _obs(_player(active=_body(RIOLU), hand=[MUNKIDORI]), stadium=stadium)
-    assert isinstance(_apply(deploy, {"type": _PLAY, "index": 0}), ao.Refusal)
 
-    # ...and the same board with a clause-free Stadium transitions normally, so the gate is the
-    # WRITE-SET doing the work rather than the mere presence of a Stadium.
-    quiet = _obs(_player(active=_body(RIOLU), hand=[MEGA_LUC]),
-                 stadium=[{"id": BATTLE_CAGE, "serial": 55, "playerIndex": 1}])
-    after = _apply(quiet, {"type": _EVOLVE, "area": HAND, "index": 0,
-                           "inPlayArea": ACTIVE, "inPlayIndex": 0})
-    assert after.mine.active.card_id == MEGA_LUC
+@pytest.mark.req("REQ-APPLY-0005")
+def test_an_UNRECOGNISED_stadium_vocabulary_value_makes_the_caller_REFUSE():
+    """The fail-closed half of R1, and it needs its own test because nothing else can see it.
+
+    `applies_to` and `on` are `snapshot_coverage` **PARAMETERS** rather than `VOCABULARY_KEYS`, so
+    `undeclared_clauses` does not walk their VALUES and drift there is invisible to the compendium
+    audit — the one place in this system where a new clause value could arrive unaudited. So
+    `stadium_clauses_for` returns an unrecognised clause ANYWAY and the applier refuses on it,
+    exactly as `_clause_writes` refuses an undeclared clause VALUE.
+
+    Four synthetic clauses across the three drift axes, plus the CONTRAST: ``kind`` is a
+    `VOCABULARY_KEYS` axis, so an undeclared value there is already caught one layer down by
+    `_clause_writes` and refuses with the registry's own message.
+
+    While every call site refuses on any reaching clause (R3/R4 land next), what this asserts is that
+    a drifted value is not silently sorted into the ``()`` half — which would UN-gate a transition
+    the Stadium may well reach. The refusal is the observable; the direction is the point."""
+    drifted = {
+        "unknown applies_to": ({"kind": "stadium_trigger", "on": "bench_play",
+                                "effect": "damage_counters", "amount": 2,
+                                "applies_to": "a_body_class_nobody_declared"}, "REACH"),
+        "unknown on": ({"kind": "stadium_trigger", "on": "an_event_nobody_declared",
+                        "effect": "damage_counters", "amount": 2,
+                        "applies_to": "basic_non_dark"}, "REACH"),
+        "a declared kind that is not a Stadium's": ({"kind": "gust"}, "REACH"),
+        "an UNDECLARED kind": ({"kind": "stadium_something_new", "effect": "damage_counters",
+                                "amount": 2, "applies_to": "basic_non_dark"},
+                               "vocabulary moved underneath the seam"),
+    }
+    for name, (clause, expected) in drifted.items():
+        combat = CombatMath(DictCardStatProvider(_STATS, attacks=_ATTACKS),
+                            functions=CardFunctions(_TAGS),
+                            transients=None, effects=CardEffects({**_CLAUSES,
+                                                                  RISKY_RUINS: [clause]}))
+        obs = _obs(_player(active=_body(RIOLU), hand=[MUNKIDORI]),
+                   stadium=[{"id": RISKY_RUINS, "serial": 55, "playerIndex": 1}])
+        r = ao.apply_option(StateModel.build(obs, combat=combat, deck=[E_F] * 8),
+                            {"type": _PLAY, "index": 0})
+        assert isinstance(r, ao.Refusal), name
+        assert expected in r.reason, (name, r.reason)
+
+
+@pytest.mark.req("REQ-APPLY-0005")
+def test_stadium_clauses_for_narrows_by_EVENT_and_BODY_and_widens_for_a_DISPLACEMENT():
+    """The predicate itself, at the unit level — the four answers the three call sites depend on.
+
+    ``displace`` is the widening one and it is not symmetry for its own sake (R6): ending a Stadium
+    re-renders every body it was modifying, on BOTH sides, including bodies the transition never
+    touched. There is no per-body question to narrow to, so it returns every writing clause and the
+    caller refuses."""
+    combat = _combat()
+    ruins = {"stadium": [{"id": RISKY_RUINS, "serial": 55, "playerIndex": 1}]}
+    mountain = {"stadium": [{"id": GRAVITY_MOUNTAIN, "serial": 55, "playerIndex": 1}]}
+    quiet = {"stadium": [{"id": BATTLE_CAGE, "serial": 55, "playerIndex": 1}]}
+    basic, stage1, stage2 = _STATS[MUNKIDORI], _STATS[MEGA_LUC], _STATS[DRAGAPULT_EX]
+
+    reaches = bd.stadium_clauses_for(ruins, combat, event="bench_play", stat=basic)
+    assert len(reaches) == 1 and reaches[0]["effect"] == "damage_counters"
+    assert bd.stadium_clauses_for(ruins, combat, event="bench_play", stat=_STATS[ZORUA]) == ()
+    assert bd.stadium_clauses_for(ruins, combat, event="stage_change",
+                                  stat=(stage1, stage2)) == ()
+    assert bd.stadium_clauses_for(mountain, combat, event="bench_play", stat=basic) == ()
+    assert bd.stadium_clauses_for(mountain, combat, event="stage_change",
+                                  stat=(basic, stage1)) == ()
+    assert len(bd.stadium_clauses_for(mountain, combat, event="stage_change",
+                                      stat=(stage1, stage2))) == 1
+
+    # A Stadium whose effects write NOTHING never reaches anything, and neither does an empty zone —
+    # `damage_reduction` / `damage_boost` / `prevent_damage` are read off the `stadium` zone by
+    # `CombatMath` when it prices an attack and stored nowhere, so they gate nothing and never did.
+    assert bd.stadium_clauses_for(quiet, combat, event="displace") == ()
+    assert bd.stadium_clauses_for({}, combat, event="displace") == ()
+    assert len(bd.stadium_clauses_for(mountain, combat, event="displace")) == 1
+    assert len(bd.stadium_clauses_for(ruins, combat, event="displace")) == 1
 
 
 @pytest.mark.req("REQ-APPLY-0005")

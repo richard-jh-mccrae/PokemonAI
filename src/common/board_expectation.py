@@ -98,7 +98,8 @@ raw clock instead would license a cap two orders of magnitude larger than the de
 Everything it cannot enumerate exactly it REFUSES, by raising :class:`~common.board_delta.Unmodellable`
 for the caller to turn into a `Refusal` — the always-expand path. Same discipline as
 `board_delta._play`, which refuses 706 of 2398 `_PLAY` steps rather than price a structural floor as
-a whole card, and `board_delta._stadium_gate`, which refuses rather than half-apply a Stadium trigger.
+a whole card, and `board_delta.stadium_clauses_for`, which narrows a Stadium refusal to the events and
+bodies its clauses can actually reach and refuses the rest rather than half-apply one (Issue #410).
 
 * **`draw`** — `deck_odds`' shipped forms answer *"P(>=1 target in the window)"*, never the JOINT
   distribution over which n cards arrived. Enumerating single-card classes for an n-card draw is a

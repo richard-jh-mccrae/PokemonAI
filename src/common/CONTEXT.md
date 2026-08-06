@@ -409,7 +409,15 @@ body Active, the clause says *which* class it may pull (`target: any | basic`) a
 A clause kind may also delegate its write to an `effect` value instead of carrying one itself: `coin`
 does (the flip is an RNG read; `effect` names the leg it resolves into), and so do Issue #304's
 `stadium_static` / `stadium_trigger`, where `effect` is `hp_delta` / `damage_reduction` /
-`damage_boost` / `prevent_damage` / `damage_counters`. The audit walks all four of `kind`, `rider`,
+`damage_boost` / `prevent_damage` / `damage_counters`. The two Stadium kinds are **not one
+mechanism** and the engine draws the line in code rather than in prose (Issue #410): a *trigger* is a
+one-shot EVENT whose result is STORED (`cgpy/turn.py:_after_benched` queues Risky Ruins' counters
+once when a body is benched, and nothing re-evaluates them), while a *static* is a FLOATING modifier
+recomputed per body on every render (`cgpy/chain.py:stadium_hp_delta`, called from
+`render.pokemon_dict`) — which is why a Gravity Mountain body renders back at full HP the moment the
+Stadium leaves. So a trigger is applied at the event and a static wherever the apply seam mints or
+re-classes a body; `board_delta.stadium_clauses_for` is the one predicate that answers *which* of a
+Stadium's clauses reaches a given event and body, and the ONE reader of `applies_to` anywhere. The audit walks all four of `kind`, `rider`,
 `effect` and `cost` for exactly that reason — a kind whose write-set reads empty is not a kind that
 writes nothing.
 `cost` is the fourth (Issue #350) and it is VOCABULARY, not a parameter: its values are a closed set
@@ -459,8 +467,8 @@ Active-spot wrappers and fail closed through them, so the vocabulary has one hom
 one per area. **Unlike the value namespace
 above it is keyed PER KEY, not flat**, and that is measured rather than aesthetic: `"basic"` means
 three different things across `target` / `applies_to` / `energy`, and `"deck"` / `"discard"` two
-each across `zone` / `source`, so one flat set would have to accept `{"zone": "basic"}`. The 33 of
-74 values that reach no consumer are declared legal and ledgered in `UNCONSUMED_SELECTORS` with a
+each across `zone` / `source`, so one flat set would have to accept `{"zone": "basic"}`. The values
+that reach no consumer are declared legal and ledgered in `UNCONSUMED_SELECTORS` with a
 written reason each — `WRITABLE`'s `owed` discipline, one axis over — so the registry cannot become
 a mere transcription of the store. The module docstring carries the ruling and the two rejected
 shapes.
