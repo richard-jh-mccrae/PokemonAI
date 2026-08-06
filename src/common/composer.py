@@ -112,6 +112,27 @@ Three properties, each load-bearing:
   the follow-up select, where it RE-DECIDES on the real board rather than replaying this node's pick.
   Its docstring carries the reason, which is not the obvious one.
 
+**What expansion COSTS, measured on the acceptance frames rather than asserted away.** A retreat that
+used to price at a flat 0.0 now prices at a real number, and a real number can outrank something else
+— so the ordering moves in both directions:
+
+===== ============================ ============================
+frame  ruled first step UNEXPANDED  ruled first step EXPANDED
+===== ============================ ============================
+f32    rank 4, delta **exactly 0**  rank 2, delta **+0.00224**
+f35    rank 2, delta 0.0            rank 3, delta 0.0
+f82    rank 4, **in beam**          rank 5, **OUT** (margin −0.093)
+===== ============================ ============================
+
+Corpus-wide the trade is positive — agreement with the human's ruling goes **79 → 82 of 270** — and
+f32 is the case the whole ruling was written about: it reached the beam on the canonical tie-break
+before and now EARNS its place on a score. **f82 is the counter-example and it is recorded, not
+tuned around.** Its ruled step is an evolve that expansion pushes to rank 5 at ``k = 4``. Widening
+the beam to 5 would make it pass, which is exactly what Issue #385 §S12.2 forbids — *"a near-miss
+re-sizes the width from the measurement and records it, it does NOT get widened until it passes"* —
+and :data:`BEAM_WIDTH` is derived from a TIME budget, not from acceptance coverage. So the cap stands
+and the miss is reported here and by ``composer_lab.py --acceptance``.
+
 ## Re-resolution by INSTANCE — the trap the commutativity ruling flagged in advance
 
 Element-level commutativity is a claim about the resulting BOARD, never about option ENCODINGS. An
@@ -231,13 +252,19 @@ from common.strategy.context import _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RET
 #:
 #: **Measured end to end** — `python tools/train/composer_lab.py` over the 374 corpus frames (278
 #: composed) at these caps, three fresh processes on an OTHERWISE-IDLE box: per-decision wall-clock
-#: **median 23.9 ms, P95 0.35-0.38 s, max 1.41-1.43 s**. The bound holds with room to spare: the max
-#: is ~**46%** of the grader's >= 3.0 s per-decision floor and the P95 ~13%.
+#: **median 24.8-26.5 ms, P95 0.40-0.43 s, max 1.31-1.40 s**. The bound holds with room to spare: the
+#: max is ~**44-47%** of the grader's >= 3.0 s per-decision floor and the P95 ~14%.
+#:
+#: The width is **not** derived from acceptance COVERAGE, and the distinction matters because the two
+#: readings disagree: the human-ruled first step lands at rank P50 **2** / P90 **6** / P95 **7** over
+#: the 361 gradeable frames, so ``k = 4`` reaches **81.7%** of ruled first steps (k=5 -> 88.1%,
+#: k=6 -> 93.6%, k=8 -> 97.5%). Re-deriving the cap from that curve would be a different design call
+#: — a coverage budget rather than a time budget — and is not made here.
 #:
 #: ⚠️ **Two cautions on that number, both learned the hard way.**
 #:
 #: 1. **The arithmetic above is quoted at the P95 WIDTH, so it under-predicts the widest menus by
-#:    ~2x.** The LEAF-EVAL count — which is what the formula actually bounds — is **3465** corpus-wide
+#:    ~2x.** The LEAF-EVAL count — which is what the formula actually bounds — is **3515** corpus-wide
 #:    and **323** on the widest frame, against the 156 the P95-width form predicts. The same formula
 #:    at the observed MAX width gets it right: ``(1 + 3 x 4) x 27 = 351`` against 323. So the honest
 #:    statement is *P95 width bounds the P95 decision, not the max one* — quote both or quote neither.
@@ -245,8 +272,8 @@ from common.strategy.context import _ATTACH, _ATTACK, _END, _EVOLVE, _PLAY, _RET
 #:    taken while a full pytest run was in flight.** It read median 35-58 ms / P95 0.58-1.14 s / max
 #:    2.45-4.05 s and produced a false alarm — *"the max crosses the grader floor"* — that a review's
 #:    independent re-measurement refuted. The tell was available and ignored: the LEAF-EVAL count is
-#:    **identical (3465) under load and idle**, because the composer is pure, so any spread is the box
-#:    rather than the search. Re-measure quiet, and cross-check against leaf evals before believing a
+#:    **identical under load and idle**, because the composer is pure, so any spread is the box rather
+#:    than the search. Re-measure quiet, and cross-check against leaf evals before believing a
 #:    millisecond figure. This is the same trap `BRANCH_CAP` records when it anchors on the WIDTH half.
 #:
 #: What survives that correction: the cost is **leaf-bound, not beam-bound**. Profiling the widest
@@ -286,9 +313,9 @@ SEQUENCE_DEPTH = 4
 #: --epsilon-sweep`, 374 frames, 278 composed). Over epsilon in
 #: {0.0, 0.001, 0.005, 0.01, 0.05, 0.1}:
 #:
-#:     0.0            earned top-k 152/278   band-only 38   agree(ruled) 83   agree(chosen) 49
-#:     0.001 - 0.01   earned top-k 150/278   band-only 40   agree(ruled) 82   agree(chosen) 49
-#:     0.05 - 0.1     earned top-k 148/278   band-only 42   agree(ruled) 82   agree(chosen) 49
+#:     0.0            earned top-k 152/278   band-only 38   agree(ruled) 83   agree(chosen) 50
+#:     0.001 - 0.01   earned top-k 150/278   band-only 40   agree(ruled) 82   agree(chosen) 50
+#:     0.05 - 0.1     earned top-k 148/278   band-only 42   agree(ruled) 82   agree(chosen) 50
 #:
 #: ⚠️ **The sweep MOVES now, and its predecessor's not moving was a symptom rather than a result.**
 #: Before deferred-target expansion (§S7) every band read identically, which meant the 39 band-only
