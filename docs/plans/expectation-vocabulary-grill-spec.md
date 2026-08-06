@@ -391,6 +391,26 @@ Then `python tools/build_card_effects.py --limit 0` and commit the re-stamped ar
 touch **only** those two entries and their `_covers` rows — anything else means the accumulate path
 moved and the change is not inert.
 
+**⚠️ Do the `.gitattributes` rule FIRST, or this step is a whole-file diff on Windows.**
+`src/common/card_effects.json` sits under the bare `* text=auto` default with **no explicit `eol=`**,
+and PR #411 established the root cause for its sibling: on Windows the checkout EOL for such a file
+follows `core.eol` (default `native` → CRLF), *independent of `core.autocrlf`*. The builder writes LF
+(`out.write_bytes(...)`, deliberately — its own comment says *"this repo builds on Windows and grades
+on Linux, so the store must not depend on which one last touched it"*), so on a Windows checkout the
+rebuild rewrites every line and A7's inertness check fails on a change that is genuinely inert.
+
+Add, beside PR #411's rule for `card_functions.json` and for the same reason:
+
+```gitattributes
+src/common/card_effects.json text eol=lf
+```
+
+Verified: the blob is already LF, so this changes no bytes — it stops the *checkout* from diverging.
+**The CI line-ending guard cannot catch this** — `ci.yml:58` matches `attr/text eol=lf` only, so a
+file under bare `text=auto` is invisible to it (PR #411 surveyed 29 such JSON stores, 14 already
+carrying CRLF blobs). Scoped to this one file, not the directory: PR #411 declined a bulk fix because
+`attack_overrides.json` has a test that deliberately tolerates platform-native output.
+
 ### 4.2 `board_expectation` — replacing `_sole_clause`
 
 `_sole_clause` is replaced by **`_reveal_legs(combat, card_id, stat) -> tuple[tuple[dict, ...], str]`**
@@ -589,6 +609,20 @@ the four new carriers start firing them. It therefore lands as its **own commit*
 `score_diff` run, and if it moves rulings it is reverted and re-filed — it is a doctrine change
 wearing a compendium change's clothes.
 
+**Name the expected mover, do not just "run `score_diff`".** PR #411's acceptance item 6 was
+undeliverable as written because its only mover had no `strategy.py` and could not be built as a
+Pilot — so `score_diff` reported `0 divergent` as a *null control*, not as evidence. Measured here
+across all six decks (CRLF-safe read — `deck.csv` is CRLF, which silently broke a naive `grep` in
+PR #411):
+
+| new carrier | decks running it |
+|---|---|
+| 1092 Secret Box | **grimmsnarl_ex (BUILT)**, slowking (no `strategy.py`) |
+| 1187 Morty's Conviction · 1208 Iris's Fighting Spirit · 1233 Canari | **none** |
+
+So the expected and only expected mover is **grimmsnarl_ex**. A `0 divergent` result here is a
+genuine null and must be reported as one; movement on any other built agent is a build failure.
+
 **Measured search space:** hand sizes 3–9 at the 65 Ultra Ball steps ⇒ `C(hand−1, 2)` ≤ **28**
 subsets, against `cheapest_removal`'s own *"n ≤ ~10 ⇒ ≤ ~250 subsets — trivial."*
 
@@ -709,8 +743,8 @@ it is **not** this issue's to make.
 | A3 | `BRANCH_CAP` re-checked against the new distribution | the class-count histogram + `--sizes`, same run |
 | A4 | No engine shuffle; `NONDETERMINISTIC_CLAUSES` still refused | existing tests, unchanged |
 | A5 | Suite green | `python -m pytest tests/ -q` |
-| A6 | Both ADR-0072 gates **byte-identical** | the module stays INERT — nothing in production calls it |
-| A7 | The compendium re-stamp is inert | `cmp` on `card_effects.json`; diff touches 2 entries + 2 `_covers` |
+| A6 | Both ADR-0072 gates **byte-identical** for commits 1–8 | `apply_option`'s own docstring: *"Nothing in production calls this yet."* Verified — `grep` for `apply_option`/`board_delta` in `pilot.py` / `runtime.py` / `strategy/` returns **0 hits**. Commit 9 is the ONLY live change (§5.4) |
+| A7 | The compendium re-stamp is inert | `git status --porcelain` clean after rebuild; diff touches 2 entries + 2 `_covers`. **Add the `.gitattributes` rule first — see §4.1** |
 | A8 | The parity lane is unmoved | `APPLY_PARITY_FULL=1 pytest tests/parity/test_apply_seam_parity.py` |
 | A9 | P0: every card's `CardStat.stage` agrees with the engine's own `basic`/`stage1`/`stage2` | new test, all 1267 cards |
 | A10 | P0 is the ONE spelling of the stage question | `dump_cards.stage_of` delegates; asserted by test |
@@ -746,7 +780,27 @@ built to avoid.
 
 New tests in `tests/strategy/test_board_expectation.py`, on the existing DLL-free fixture seam
 (`DictCardStatProvider` + hand-built zones); the shipped `_CLAUSES` rows for the new cards are copied
-verbatim from `card_effects.json`, as that file's convention requires:
+verbatim from `card_effects.json`, as that file's convention requires.
+
+**⚠️ New `CardStat` rows are audited, and Issue #408 changed how.** `test_cardstat_fixture_facts.py`
+walks every `CardStat(...)` in `tests/` and diffs its declared facts against
+`data/EN_Card_Data.csv`. Two consequences for the rows this spec adds — both new since PR #411:
+
+* **`stage` is now audited in the CANONICAL vocabulary** (`"basic"` / `"stage1"` / `"stage2"` /
+  `None`), because #408 mapped `_csv_truth` off the raw CSV string. **This matters directly for
+  item 1's conjunction test**, which needs a real Stage 1 and a real Stage 2 to give Dawn's legs
+  something to match: a hand-built row must declare `stage="stage1"` / `"stage2"` (and `stage2=True`
+  for a Stage 2), matching the card's real facts. `"Stage 1"` — the pre-#408 fixture spelling — is
+  now a test failure.
+* **Any row whose facts do NOT match its real card must carry `synthetic=True`**, and a synthetic row
+  may not keep the real card's name. #408 also rekeyed `SYNTHETIC_SOURCE_NAME_SITES` from
+  `(path, line, cardId)` to `(path, enclosing_def, cardId)`, so adding rows above an existing entry no
+  longer shifts the ledger — but a new synthetic row that reuses a source name still needs its own
+  entry.
+
+The existing `_STATS` rows in this file declare no `stage` today, so the risk is confined to the rows
+this spec adds. Cheapest safe route: prefer real cards with real facts and declare only what the test
+needs.
 
 1. a `choice` union enumerates ONE pool over both legs (Fighting Gong's shape)
 2. a conjunction enumerates the cross product, and an EMPTY leg SKIPS rather than refusing (Dawn's
