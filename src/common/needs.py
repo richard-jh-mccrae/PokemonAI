@@ -438,7 +438,7 @@ def _keep_slot_dp(slots, eligibility, resupply, exclude, capacity=None):
     V = base + best.
 
     **COST: trivial at the eligibility real hands produce, super-linear in BREADTH — and this
-    docstring used to claim the wrong one** (ADR-0121, Issue #406). It read *"(≤
+    docstring used to claim the wrong one** (ADR-0122, Issue #406). It read *"(≤
     `_MAX_KEEP_SLOTS` × ≤ ~10 cards ⇒ trivial)"*, which reads as a claim about the BOUND. At the
     bound it names — 16 slots, 12 cards, every card eligible for every slot — it measures **748 ms
     per call**, three orders of magnitude off. Cost is driven by how many slots ONE card can supply

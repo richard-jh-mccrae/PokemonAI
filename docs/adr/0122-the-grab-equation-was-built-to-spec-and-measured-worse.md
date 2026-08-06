@@ -1,4 +1,4 @@
-# ADR-0121 - The `_TO_HAND` grab equation was BUILT to spec and measured SIX FRAMES WORSE — five things the assignment must learn first
+# ADR-0122 - The `_TO_HAND` grab equation was BUILT to spec and measured SIX FRAMES WORSE — five things the assignment must learn first
 
 **Status:** **Rejected as specified** (Issue #406, built and measured 2026-08-06). The build is
 preserved at commit `bd9187d7` and reverted by its successor; Issue #406 returns to

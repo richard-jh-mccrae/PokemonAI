@@ -1,5 +1,5 @@
 """Replay every RULED `_TO_HAND` (ctx 7) correction frame through the real Pilot — the seam-scoped
-gate the grab has lacked (ADR-0121, Issue #406).
+gate the grab has lacked (ADR-0122, Issue #406).
 
     python tools/train/grab_sweep.py                 # every agent, every ruled ctx-7 frame
     python tools/train/grab_sweep.py --agent mega_lucario
@@ -19,10 +19,10 @@ MAIN's 279, of which 30 name a `correct` option), so it can and should be graded
 with a `needs.keep_v2` add-marginal. Built to spec and run here, the equation scored **17/30**
 against the incumbent ladder's **23/30** — and at four times its band, **14**, below doing nothing
 at all. Nothing about that was visible from the seam's own unit tests, which all passed. The build
-is preserved at commit `bd9187d7` and ADR-0121 records the five structural findings; this tool now
+is preserved at commit `bd9187d7` and ADR-0122 records the five structural findings; this tool now
 grades whatever the successor proposes, and the incumbent in the meantime.
 
-Note the asymmetry ADR-0121 closes on, because it is the reason to run this at all: ctx 5 — the
+Note the asymmetry ADR-0122 closes on, because it is the reason to run this at all: ctx 5 — the
 `_TO_BENCH` seam whose Deploy Marginal that equation was modelled on — has exactly ONE ruled corpus
 frame. A design validated at one frame was carried onto a seam with thirty.
 """
@@ -140,7 +140,7 @@ def sweep(agent_filter: str | None, store: str) -> int:
             dec = pilot.explain(c.obs)
             for t in dec.options:
                 # `grab_working` is populated only while a grab EQUATION is wired. It is absent on
-                # `main` (Issue #406's build was measured worse and reverted, ADR-0121), so the
+                # `main` (Issue #406's build was measured worse and reverted, ADR-0122), so the
                 # sweep degrades to score + fired rungs rather than breaking — which is exactly the
                 # view needed to grade the incumbent ladder it now measures.
                 w = getattr(t, "grab_working", None) or {}
