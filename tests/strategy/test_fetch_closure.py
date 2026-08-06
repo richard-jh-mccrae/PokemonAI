@@ -564,3 +564,122 @@ def test_deadness_widening_never_leaks_into_the_endorser_set():
     ms = _shipped_pilot("mega_starmie")
     assert ms._search_deck_set(1122) == set()           # Pokégear: no endorsement claim, as before
     assert ms._fetch_deadness_set(1122)                 # ...but it CAN now be read as dead
+
+
+# ============================================================ the multi-leg reveal RELATION (F1)
+# `board_expectation` and `board_choice` each refuse a card with more than one revealing clause, and
+# each guesses "CONJUNCTION" in its refusal message. `reveal_legs` is the ONE reader that answers it
+# for both, so the relation cannot be spelled twice and drift.
+
+def _effects():
+    from common.effects import CardEffects
+    return CardEffects.load(REPO / "src" / "common" / "card_effects.json")
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_reveal_legs_reads_the_relation_off_the_SHIPPED_compendium():
+    """Every multi-leg reveal card in the store, classified. Read off real data rather than a
+    fixture, because the relation is a property of the compendium and a fixture cannot check it."""
+    from common.fetch_closure import reveal_legs
+    eff = _effects()
+
+    def relation(cid):
+        try:
+            return reveal_legs(eff.clauses(cid)).relation
+        except ValueError as gap:
+            return f"refused: {gap}"
+
+    # UNIONS — "or", one shared cap. 1097/1142 are the two the compendium had backwards.
+    for cid in (1097, 1142, 1094, 1110, 1184, 1215, 1238):
+        assert relation(cid) == "union", (cid, relation(cid))
+    # CONJUNCTIONS — "and", one card per leg.
+    for cid in (1225, 1231, 1194):
+        assert relation(cid) == "conjunction", (cid, relation(cid))
+    # SINGLE-leg cards keep their own relation rather than being special-cased by the caller.
+    for cid in (1121, 1205, 1086, 1145):
+        assert relation(cid) == "single", (cid, relation(cid))
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_reveal_legs_refuses_an_exclusive_either_or_rather_than_guessing_a_cap():
+    """1210 Brock's Scouting: *"up to 2 Basic Pokemon OR 1 Evolution"*. `choice` on both legs but the
+    amounts DIFFER, so the two branches carry different budgets and there is no single shared cap to
+    enumerate over. The engine spells it with its own op (`xDeckToHandEitherOr`), distinct from the
+    union filter it gives 1097/1142 — so this is a real third shape, not a mis-declaration."""
+    from common.fetch_closure import reveal_legs
+    with pytest.raises(ValueError, match="either-or"):
+        reveal_legs(_effects().clauses(1210))
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_reveal_legs_refuses_a_reach_gated_leg_rather_than_skipping_it():
+    """**The three-quarters-of-a-card refusal, on real carriers.** `supporter` and `any` are
+    `FETCH_DEADNESS_ONLY_TARGETS`: `fetch_target_matches` returns `deadness` for them, which is False
+    at the REACH reading every pool walk uses. So such a leg matches NOTHING structurally — not "on
+    this board", on every board.
+
+    Skipping it would enumerate three of Secret Box's four legs and report completeness, which is
+    exactly what `board_delta._play`'s clause-union gate exists to refuse. 1092 Secret Box and 1206
+    Larry's Skill each carry one."""
+    from common.fetch_closure import reveal_legs
+    for cid in (1092, 1206):
+        with pytest.raises(ValueError, match="reach-gated|matches nothing"):
+            reveal_legs(_effects().clauses(cid))
+    # …and those two are the ONLY carriers, so the rule is scoped rather than a blanket.
+    eff, gated = _effects(), []
+    for cid in (1094, 1097, 1110, 1142, 1184, 1194, 1215, 1225, 1231, 1238):
+        reveal_legs(eff.clauses(cid))          # every other multi-leg card still resolves
+        gated.append(cid)
+    assert len(gated) == 10
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_a_SINGLE_reach_gated_leg_is_not_refused_here():
+    """**The asymmetry, and it is the whole point of the rule.**
+
+    With one leg there is no OTHER leg to enumerate, so no partial answer can be manufactured — the
+    hazard the multi-leg refusal exists for cannot arise. The card simply reaches nothing, and its
+    caller already says so precisely and at the right altitude (`board_expectation`'s empty-pool
+    refusal, *"no target it can reach is still unseen in my deck"*).
+
+    Refusing here instead would move eight real cards off the refusal reasons that describe them —
+    Pokégear 3.0 refuses for its `dig`, Meowth ex for its `trigger` — and onto one that does not.
+    Asserted on the real carriers, so the scoping cannot silently widen."""
+    from common.fetch_closure import reveal_legs
+    eff = _effects()
+    for cid in (1122, 1071, 1077, 1109, 1101, 1134):   # single-leg `supporter` targets
+        assert reveal_legs(eff.clauses(cid)).relation == "single", cid
+    for cid in (1185, 1193):                           # single-leg `any` targets
+        assert reveal_legs(eff.clauses(cid)).relation == "single", cid
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_reveal_legs_refuses_a_half_declared_relation():
+    """`choice` on some legs and not others: neither reading is available, so the seam must refuse
+    rather than pick one. No carrier in the shipped store — `snapshot_coverage.choice_relation_problems`
+    keeps it that way — so this is asserted on a synthetic, which is the only way to reach it."""
+    from common.fetch_closure import reveal_legs
+    half = [{"kind": "fetch", "target": "pokemon", "zone": "deck", "choice": True},
+            {"kind": "fetch", "target": "energy", "zone": "deck"}]
+    with pytest.raises(ValueError, match="half-declared"):
+        reveal_legs(half)
+
+
+@pytest.mark.req("REQ-WORTH-0002")
+def test_reveal_legs_carries_the_shared_cap_and_ignores_non_revealing_companions():
+    """The cap is what the enumerator ranges over, so it must come back with the legs.
+
+    A union's cap is the shared `amount` (absent ⇒ 1, which is why 1097/1142 read as "one card from
+    the union"); a conjunction's is 1 per leg by construction. Non-revealing clauses are not legs —
+    `revealing_clauses` already filters them — and a card with none at all is not a reveal."""
+    from common.fetch_closure import reveal_legs
+    eff = _effects()
+    assert reveal_legs(eff.clauses(1097)).cap == 1        # "a Pokemon or a Basic Energy card"
+    assert reveal_legs(eff.clauses(1142)).cap == 1        # "a Basic {F} Energy or a Basic {F} Pokemon"
+    assert reveal_legs(eff.clauses(1184)).cap == 3        # Lana's Aid, "up to 3 in any combination"
+    assert reveal_legs(eff.clauses(1110)).cap == 5        # Max Rod, "up to 5 in any combination"
+    assert reveal_legs(eff.clauses(1205)).cap == 3        # Cyrano, "up to 3 Pokemon ex"
+    assert len(reveal_legs(eff.clauses(1231)).legs) == 3  # Dawn: Basic + Stage 1 + Stage 2
+    assert reveal_legs(eff.clauses(1231)).cap == 1        # one card per leg
+    with pytest.raises(ValueError, match="no `draw`/`fetch`"):
+        reveal_legs([{"kind": "heal", "amount": 30}])
