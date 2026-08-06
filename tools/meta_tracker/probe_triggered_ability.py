@@ -83,6 +83,16 @@ SCHEMA = "triggered-ability-selects/1"
 #: board-dependent record (see ``probe_cards._accept_capture_is_exhausted``). Punk Up's "up to 5"
 #: caps its own ``max_count``; Last-Ditch Catch finds exactly one, so ``None`` means "the select
 #: must be posed at all".
+#:
+#: EVERY key here except ``search_ceiling`` is SERIALIZED into the fixture (see ``capture``), which
+#: `tests/strategy/test_triggered_ability_shape.py` compares byte-for-byte against the live re-run.
+#: So a prose edit to a ``why`` is not a comment — it reddens that test. Note caveats HERE, above
+#: the table, rather than inside a subject.
+#:
+#: **Punk Up's `deck` no longer exists.** PR #436 deleted `src/agents/grimmsnarl_ex/` (2026-08-06),
+#: which is where card 648 lived. The probe builds its own list rather than reading that directory,
+#: so `capture()` still drives both subjects and the committed fixture still re-measures green; the
+#: `deck` field is provenance for where the subject was FOUND, and that deck is gone.
 SUBJECTS: tuple[dict, ...] = (
     {"card_id": 648, "trigger": "on_evolve", "ability": "Punk Up", "deck": "grimmsnarl_ex",
      "search_ceiling": 5,

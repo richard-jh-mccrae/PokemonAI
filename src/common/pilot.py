@@ -4603,7 +4603,7 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         # played covers NOTHING. Applied to the ELIGIBILITY construction rather than to any one
         # slot's value, which is the whole point — the shipped `deploy` factor already zeroes the
         # slots keyed on the card ITSELF (`line`, `general`), but left the row eligible for every
-        # SHARED slot, so a stranded Froslass both covered `grimmsnarl_ex`'s draw need (the real
+        # SHARED slot, so a stranded engine evolution both covered its deck's draw need (the real
         # Supporter beside it priced 0 and shed for free) and RAISED that slot's band to the
         # engine-BODY tier, because the band reads off its eligible rows. `deploy` is also the wrong
         # predicate to reuse: it folds in the fetcher and need-met gates, whose cards are perfectly
@@ -4626,8 +4626,10 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             candidate list rather than only to `_emit`, because two legs read their SLOT VALUE off
             the candidates: `draw_engine`'s band is the engine-BODY tier if any candidate is an
             engine body, and the general-worth suppression set is keyed off the same list. Filtering
-            only at emission would have left a dead Froslass pricing `grimmsnarl_ex`'s draw need at
-            12 instead of the engine-supporter band 8."""
+            only at emission would have left a dead engine body pricing its deck's draw need at 12
+            instead of the engine-supporter band 8 (measured on `grimmsnarl_ex`'s stranded Froslass;
+            that deck was deleted by PR #436, and `tests/strategy/test_playability_gate.py` now
+            carries the case on `slowking`'s Slowpoke -> Slowking)."""
             return [k for k in ks if k not in unplayable]
 
         def _tags(cid) -> set:

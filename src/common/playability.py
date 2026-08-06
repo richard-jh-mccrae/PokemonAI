@@ -17,10 +17,13 @@ pattern) and this module owns only the graph walk:
 * **the Rare Candy escape.** *"Choose 1 of your Basic Pokémon in play. If you have a Stage 2 card in
   your hand that evolves from that Pokémon, put that card onto the Basic Pokémon to evolve it,
   skipping the Stage 1"* (card text, ``data/EN_Card_Data.csv`` id 1079). A missing Stage 1 therefore
-  does NOT prove a Stage 2 dead, and `grimmsnarl_ex` — 1 Rare Candy plus the Marnie's Impidimp ->
-  Morgrem -> Grimmsnarl ex line — is a shipped deck that reaches exactly that board. Omitting the
-  escape would have made this gate strip a deck's win condition while the enabler sat in hand, which
-  is a worse error than the one it fixes.
+  does NOT prove a Stage 2 dead. Omitting the escape would have made this gate strip a deck's win
+  condition while the enabler sat in hand, which is a worse error than the one it fixes. The board
+  that forced it was `grimmsnarl_ex`'s — 1 Rare Candy plus the Marnie's Impidimp -> Morgrem ->
+  Grimmsnarl ex line — and **that deck was deleted by PR #436 (2026-08-06)**: NO shipped deck runs
+  Rare Candy today, so the escape is now unexercised by any real decklist and its tests feed the
+  Candy in by fixture. It stays because the next deck to run one is a deck-building decision, not a
+  code change, and because the failure it prevents is silent.
 * **fail OPEN — *unreadable is not unplayable*.** An unknown card, or one whose ``evolvesFrom`` names
   a card the pool holds no printing of, makes NO claim and keeps everything. Only a base that is
   **provably** absent from all three zones takes anything away. Same direction as

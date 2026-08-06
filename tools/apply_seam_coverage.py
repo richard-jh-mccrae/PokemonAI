@@ -899,7 +899,7 @@ def build_report(sites: list[Site], aside: dict, ours: collections.Counter,
 
     add("### Win-plan critical path")
     add("")
-    add("A card the deck's own authored doctrine names. `grimmsnarl_ex` and `slowking` ship no "
+    add("A card the deck's own authored doctrine names. `hydrapple` and `slowking` ship no "
         "`STRATEGY.md`, so they cannot be scanned and are absent here — not clean.")
     add("")
     rows = []

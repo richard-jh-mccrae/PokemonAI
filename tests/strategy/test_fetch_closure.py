@@ -530,9 +530,14 @@ def test_every_shipped_copy_of_the_family_resolves_a_deadness_set():
     and can never be dead.
 
     The coverage set is asserted, not just iterated: a card dropping out of every deck fails here
-    rather than quietly reducing the test to nothing (which is exactly how the #164 hole survived)."""
+    rather than quietly reducing the test to nothing (which is exactly how the #164 hole survived).
+
+    `grimmsnarl_ex` dropped off this walk when PR #436 deleted the deck (2026-08-06). The asserted
+    coverage set is UNCHANGED by that: it ran 1122 Pokégear and 1219 Petrel, and both are still
+    reached — Pokégear through `mega_starmie`, Petrel through `mega_lucario` — so the four-card
+    expectation below still measures four decks' worth of the family, from three decks."""
     covered = set()
-    for agent in ("mega_starmie", "mega_lucario", "dragapult_ex", "grimmsnarl_ex"):
+    for agent in ("mega_starmie", "mega_lucario", "dragapult_ex"):
         pilot = _shipped_pilot(agent)
         for cid, (name, _target) in UNCOVERED_BEFORE_ADR_0073.items():
             if cid not in set(pilot.deck):
