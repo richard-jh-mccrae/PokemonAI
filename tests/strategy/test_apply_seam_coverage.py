@@ -184,10 +184,11 @@ def test_six_stadiums_reach_the_seam_closed_form_and_the_rest_stay_honestly_miss
 def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do_not(census):
     """**Issue #302's acceptance, as a measurement, in both directions.**
 
-    NINE of the 14 conditional draw Supporters now resolve MODELLED-FULL, and the exposure is
-    concentrated in one of them: 1227 Lillie's Determination is 24 copies across our decks, named by
-    three authored doctrines, and its clause stated the card's MAXIMUM (8) on every board where the
-    real number is 6.
+    NINE of the 13 conditional draw Supporters now resolve MODELLED-FULL, and the exposure is
+    concentrated in one of them: 1227 Lillie's Determination is 20 copies across our decks — 4 in
+    every one of the five, the only card of which that is true — named by all three authored
+    doctrines, and its clause stated the card's MAXIMUM (8) on every board where the real number
+    is 6. (24 until PR #436 deleted `grimmsnarl_ex`, which ran its own 4.)
 
     The ninth arrived at Issue #349: 1187 Morty's Conviction was one of Issue #302's declared errors
     — *"the MAGNITUDE is one card per opponent BENCHED Pokemon, a board-scaled count no clause field
@@ -198,35 +199,46 @@ def test_the_conditional_draw_supporters_move_and_the_symmetric_ones_honestly_do
     refreshes — Judge, Unfair Stamp, Harlequin, Lucian — did **not** quietly become MODELLED. Each
     carries its own leg exactly and stays `partial` on the opponent's shuffle-and-redraw, which needs
     a `state_value` term that prices their hand and which the seam already refuses as an accepted POC
-    unknown. Naveen keeps its optional pre-discard. Five declared errors are the deliverable as much
-    as the nine fixes are.
+    unknown. Four declared errors are the deliverable as much as the nine fixes are.
+
+    **The fifth declared error left the POOL, not the ruling** (2026-08-06). 1239 Naveen — the
+    optional pre-discard — was in the census only through `grimmsnarl_ex`'s 2 copies, and PR #436
+    deleted that deck; no other agent deck and none of the 122 scouting builds runs it, so it has no
+    site to resolve and is dropped from the fourteen here. Its `partial` ruling is untouched in the
+    compendium and it re-enters this measurement the moment any deck runs it again. Naveen and 1091
+    Accompanying Flute are the only two cards the deletion took out of the pool (385 -> 383).
 
     Both lists are read off the SAME census run through the same predicate, so "nine moved" cannot be
-    an artefact of a walk that reaches nothing — the five that stayed are the positive control."""
+    an artefact of a walk that reaches nothing — the four that stayed are the positive control."""
     mod, cards, effects, covers, pool = census
     from common.strategy.context import _PLAY
     sites, _aside = mod.census(pool, cards, effects, covers)
-    the_14 = (1227, 1213, 1080, 1223, 1239, 1192, 1216, 1187, 1208, 1199, 1200, 1181, 1237, 1203)
-    draw = {s.card_id: s for s in sites if s.card_id in the_14}
-    assert sorted(draw) == sorted(the_14), sorted(draw)
+    the_13 = (1227, 1213, 1080, 1223, 1192, 1216, 1187, 1208, 1199, 1200, 1181, 1237, 1203)
+    draw = {s.card_id: s for s in sites if s.card_id in the_13}
+    assert sorted(draw) == sorted(the_13), sorted(draw)
     assert all(s.kind == _PLAY and s.clauses for s in draw.values())
+    # ...and the fourteenth is absent for the stated reason — out of the POOL — rather than for any
+    # reason inside the seam. Asserted, so a Naveen that quietly returns to a deck reddens here
+    # instead of slipping past the measurement above unmeasured.
+    assert 1239 not in pool, "Naveen is back in the pool — restore it to the conditional-draw walk"
+    assert covers[1239]["covers"] == "partial", "Naveen's declared error is still the ruling"
 
     fixed = (1181, 1187, 1192, 1199, 1200, 1203, 1208, 1216, 1227)
     for cid in fixed:
         assert draw[cid].fate == seam.MODELLED, (cid, draw[cid].fate)
         assert draw[cid].report_class == mod.FULL, (cid, draw[cid].report_class)
-    # The symmetric four, plus Naveen's optional pre-discard. Still PARTIAL, still failing closed,
-    # each with the leg it misses quoted in its verdict.
-    for cid in (1213, 1080, 1223, 1237, 1239):
+    # The symmetric four. Still PARTIAL, still failing closed, each with the leg it misses quoted in
+    # its verdict. (Naveen was the fifth until it left the pool — see the docstring.)
+    for cid in (1213, 1080, 1223, 1237):
         assert draw[cid].report_class == mod.PARTIAL, (cid, draw[cid].report_class)
         assert draw[cid].fate != seam.MODELLED, (cid, draw[cid].fate)
         assert draw[cid].note.strip(), cid
-    assert set(fixed) | {1213, 1080, 1223, 1237, 1239} == set(the_14)
+    assert set(fixed) | {1213, 1080, 1223, 1237} == set(the_13)
 
     # Where the exposure actually is: Lillie's alone is more copies than the whole residual partial
     # table. Read off the census's own deck load rather than restated, so a deck edit moves it.
     ours = mod.our_copies(mod.load_our_decks())
-    assert ours[1227] == 24, ours[1227]
+    assert ours[1227] == 20, ours[1227]
     residue = [s for s in sites if s.report_class == mod.PARTIAL]
     assert sum(ours.get(s.card_id, 0) for s in residue) < ours[1227]
 

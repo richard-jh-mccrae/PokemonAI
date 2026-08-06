@@ -201,7 +201,7 @@ def _parse_tool_retreat_reduction(card) -> int:
 # Scoped deliberately to the shapes our decks and the tracked meta run — NOT a general effects DSL.
 # Verified against `data/EN_Card_Data.csv`: the set holds six retreat-grant texts beyond Air
 # Balloon's flat one, and the deck scan puts Latias ex in `slowking` and Air Balloon in
-# `grimmsnarl_ex`/`mega_lucario`.
+# `mega_lucario` (it was in `grimmsnarl_ex` too until PR #436 deleted that deck, 2026-08-06).
 
 # Rescue Board: "…is {C} less. If that Pokémon's remaining HP is 30 or less, it has no Retreat Cost."
 # The flat leg is already `_RETREAT_TOOL_RE`'s; this is the CONDITIONAL second sentence.

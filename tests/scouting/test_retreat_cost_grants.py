@@ -76,9 +76,10 @@ removed only the first, so item 1 below still stands.
    five unrelated surfaces in a commit that must land one cause at a time — and three of them are
    deliberately fail-open against the opponent, where the fix is not obviously a fix.
 
-   **This is LATENT, not live**: every reader agrees on the four decks that have strategy modules,
-   because none of them runs a board-level grant (`grimmsnarl_ex`/`mega_lucario` run Air Balloon,
-   which is an attached Tool every reader already handles). It goes live the moment #149 onboards
+   **This is LATENT, not live**: every reader agrees on the decks that have strategy modules,
+   because none of them runs a board-level grant (`mega_lucario` runs Air Balloon — and so did
+   `grimmsnarl_ex` until PR #436 deleted it, 2026-08-06 — which is an attached Tool every reader
+   already handles). It goes live the moment #149 onboards
    slowking — which is exactly why it is recorded here. The fail direction is safe meanwhile:
    `_can_retreat` under-claims, refusing a legal free retreat rather than asserting an illegal one.
 """

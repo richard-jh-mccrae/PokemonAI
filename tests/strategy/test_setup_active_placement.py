@@ -497,10 +497,16 @@ def test_every_authored_agent_declares_a_win_condition_line():
 def test_the_exempt_agents_are_exactly_the_pre_doctrine_ones():
     """The exemption is asserted EXPLICITLY (ADR-0079 amendment A), so adding an agent cannot
     silently opt out of the invariant above — a new deck either gains a STRATEGY.md and a declaration
-    or it fails here. `grimmsnarl_ex` (strategy.py but no doctrine), `hydrapple` (a decklist only,
-    PR #337) and `slowking` (a decklist only) are the known pre-doctrine decks; all are
-    /deck-genie's job, and /deck-align's "≥2 startable bodies, no starter_priority" check is what
-    surfaces them.
+    or it fails here. `hydrapple` (a decklist only, PR #337) and `slowking` (a decklist only) are
+    the known pre-doctrine decks; both are /deck-genie's job, and /deck-align's "≥2 startable
+    bodies, no starter_priority" check is what surfaces them.
+
+    **`grimmsnarl_ex` left this list by DELETION, not by gaining a doctrine** (2026-08-06, PR #436
+    removed `src/agents/grimmsnarl_ex/`). It was the third pre-doctrine deck and the one shaped
+    unlike the other two — it shipped a `strategy.py` with declarations but no STRATEGY.md, which is
+    why the exemption is keyed on the doctrine marker rather than on the module. That shape is now
+    unexercised: both survivors are decklist-only, so a future `strategy.py`-without-doctrine deck
+    would be exempted here with nothing having measured that path since.
 
     **`hydrapple` was DECLARED here, not skipped past** (2026-08-03). PR #337 added
     `src/agents/hydrapple/` as `deck.csv` + `deck.txt` with no doctrine, and this assertion went red
@@ -509,4 +515,4 @@ def test_the_exempt_agents_are_exactly_the_pre_doctrine_ones():
     DATA change rather than a skip. A skip would retire the invariant for every deck added after
     hydrapple, which is the silent opt-out ADR-0079 amendment A exists to make impossible — a
     strictly larger concession than the one actually needed. Authoring the doctrine remains owed."""
-    assert _exempt_agents() == ["grimmsnarl_ex", "hydrapple", "slowking"]
+    assert _exempt_agents() == ["hydrapple", "slowking"]

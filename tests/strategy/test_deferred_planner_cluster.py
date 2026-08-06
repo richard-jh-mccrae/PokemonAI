@@ -308,9 +308,12 @@ def test_energy_chain_line_appears_only_with_the_flag_on():
 # choose an in-play Basic (not appearThisTurn, not turn ≤ 1) → put an in-hand Stage-2 whose chain roots at
 # that Basic onto it, SKIPPING the Stage-1 → attach → KO.
 #
-# These cover the MECHANISM on a synthetic pool. `grimmsnarl_ex` runs Rare Candy and a real
-# Basic→Stage-1→Stage-2 line, so the branch is no longer forward-looking generality — the real-deck
-# coverage lives in `tests/agents/test_grimmsnarl_ex_triggers.py` (Issue #288 follow-up).
+# These cover the MECHANISM on a synthetic pool, and since 2026-08-06 they are the ONLY coverage it
+# has. `grimmsnarl_ex` was the one shipped deck running Rare Candy plus a real Basic→Stage-1→Stage-2
+# line; PR #436 deleted it, taking `tests/agents/test_grimmsnarl_ex_triggers.py` (the Issue #288
+# follow-up, which drove this branch through a real engine-backed Pilot) with it. No surviving deck
+# runs Rare Candy, so the branch is forward-looking generality again — see
+# `planner._rare_candy_ko_candidate`'s HONEST NOTE.
 
 _RC_BASIC, _RC_MID, _RC_TOP, _RC_AID = 210, 211, 212, 9903
 _RARE_CANDY_ID = 1079        # Rare Candy (Item, SVI 191), carried locally now that the planner

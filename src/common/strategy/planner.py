@@ -3047,19 +3047,22 @@ class PlannerMixin:
         Unlike the item tutor, Rare Candy is NOT a tutor — the Stage-2 must ALREADY be in hand
         (``board.hand_ids``), so no ``deck_definitely_has`` whiff-check is needed (in-hand is certain).
 
-        HONEST NOTE (updated 2026-08-02, Issue #288): this was recorded as INERT because none of the then-3
-        agent decks ran Rare Candy or a Basic→Stage-1→Stage-2 line. **`grimmsnarl_ex` runs both** — 1 Rare
-        Candy and Marnie's Impidimp → Morgrem → Grimmsnarl ex — so the branch is live for that deck, and the
-        same pair is what forces the Rare Candy escape in `common.playability` (ADR-0104 decision 3). The
-        other three decks are still inert.
+        HONEST NOTE (updated 2026-08-06): this branch is **INERT on every shipped deck again**. It was
+        recorded inert when none of the then-3 agent decks ran Rare Candy or a Basic→Stage-1→Stage-2 line;
+        Issue #288 retired that note because `grimmsnarl_ex` ran both — 1 Rare Candy and Marnie's Impidimp →
+        Morgrem → Grimmsnarl ex — and measured the branch correct there on 2026-08-02. PR #436 then deleted
+        that deck, and NO surviving deck runs Rare Candy at all (checked across all five `src/agents/*/
+        deck.csv`, 2026-08-06), so the branch is forward-looking generality once more. Its real-deck test
+        went with the deck; `tests/strategy/test_deferred_planner_cluster.py` carries the whole mechanism on
+        a synthetic four-card pool — compose, turn-1, `appearThisTurn`, Stage-2-not-in-hand, and the flag
+        gate. The same deletion cost `common.playability`'s Rare Candy escape (ADR-0104 decision 3) its
+        shipped-deck instance in the same way.
 
-        **Measured on that deck 2026-08-02** and now pinned there (`tests/agents/test_grimmsnarl_ex_triggers
-        .py`), because "armed ON in the PROFILE, live on a shipped deck, covered only by a synthetic
-        four-card pool" is not a state to leave alone. It composes correctly: the Candy skips Morgrem, the
-        Attach Budget pays the {D}{D}, and Mean Kick's 180 takes the KO — with every refusal clause (turn 1,
-        `appearThisTurn`, Stage-2 not in hand, no reachable KO) holding on the same board. One trap is worth
-        carrying forward: a stand-down for want of ENERGY looks exactly like a broken branch from outside,
-        and the first probe of this code was misread that way. None when no composite reaches a KO."""
+        Two findings from the 2026-08-02 measurement are worth carrying forward even though the deck is
+        gone. The composer is correct on a real engine-backed board, not only on the synthetic pool. And a
+        stand-down for want of ENERGY looks exactly like a broken branch from outside — the first probe of
+        this code was misread that way, because attack 937 cost {D}{D} and the fixture's Attach Budget could
+        offer nothing. None when no composite reaches a KO."""
         if board.turn <= 1:
             return None                                   # Rare Candy is illegal on your first turn
         if not self.stats:

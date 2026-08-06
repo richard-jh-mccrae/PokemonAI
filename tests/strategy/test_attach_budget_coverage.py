@@ -36,8 +36,11 @@ KNOWN_UNMODELLED = {
 SELF_SIDE_OWED = {
     648: "Marnie's Grimmsnarl ex — [Ability] Punk Up attaches up to 5 Basic {D} from the deck when "
          "the card is played from HAND TO EVOLVE (verified, data/EN_Card_Data.csv), and it does NOT "
-         "end the turn, so Cinderace's ruling above does not cover it: on `grimmsnarl_ex` this is a "
-         "live self-side accel the Budget cannot see, which is the f70 false-famine class. "
+         "end the turn, so Cinderace's ruling above does not cover it: this is a self-side accel the "
+         "Budget cannot see, which is the f70 false-famine class. NO LONGER SHIPPED — PR #436 deleted "
+         "`grimmsnarl_ex` (2026-08-06), the only deck that ran it, so the gap is latent rather than "
+         "live; the entry stays because the gap is in the BUDGET, not in that decklist, and the audit "
+         "above scans the card data rather than the decks. "
          "SURFACED by POC-T1 (Issue #260), which tagged the card for the OPPONENT-facing Threat "
          "Clock (Issue #257) — `card_functions.json` had no entry for 648 at all, so the gap existed "
          "and this gate could not see it. Closing it is ISSUE #137's charter, not #260's: "
