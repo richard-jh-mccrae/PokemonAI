@@ -468,7 +468,9 @@ The refinement widens what can be **proved** disjoint; it widens nothing that is
   builds the benched body as `{"id": card_id, "serial": card.get("serial"), …}`. Resolved only for a
   Basic Pokémon: a Trainer that moves a body moves someone ELSE's (a `gust` writes the opponent's
   Active), so keying that by my hand card would be false precision.
-- **`_option_serials` honours the option's `playerIndex`.** An option naming the opponent's board
+- **`option_serials` honours the option's `playerIndex`** (private `_option_serials` until POC-T4/4,
+  Issue #385, which made it public so the composer could re-resolve a block member by instance rather
+  than write a second walk beside it). An option naming the opponent's board
   resolves to no element rather than to my own body at that index — a serial from the wrong side is
   false precision, the one direction that can license a bad reorder. Unreachable today, guarded
   anyway.

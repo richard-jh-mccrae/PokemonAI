@@ -2043,7 +2043,9 @@ def attack_ev(*, damage: float, target_hp: float, target_prizes: float,
 # terminal family had none, so `attack_ev` shipped complete, tested and unreachable — nothing in
 # `src/` produced the seven floats it takes. This is that missing bridge, and it is the whole of
 # what Issue #384 builds: the SUM (a caller that actually invokes `attack_ev`) is the composer's,
-# and `attack_ev` still has zero production callers when this lands.
+# and `attack_ev` had zero production callers when this landed. POC-T4/4 (Issue #385) supplied that
+# caller — `common/composer.py:terminal_ev`, and exactly that one, asserted by
+# `test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else`.
 
 
 class AttackLegs(NamedTuple):

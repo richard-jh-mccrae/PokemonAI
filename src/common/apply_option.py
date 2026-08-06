@@ -707,7 +707,7 @@ def option_footprint(model, option: Mapping, *, clauses_cover: bool | None = Non
     drop = _structural_drop(model, kind, card)
     reads = (set(base.reads) - drop) | clause_zones
     writes = (set(base.writes) - drop) | clause_zones
-    hand_serial, body_serial = _option_serials(model, option)
+    hand_serial, body_serial = option_serials(model, option)
     body_serial = _deployed_body_serial(model, kind, card, hand_serial, body_serial)
     return Footprint(reads=frozenset(reads), writes=frozenset(writes), complete=bool(complete),
                      reveals_information=reveals,
@@ -762,8 +762,17 @@ def _deployed_body_serial(model, kind: int, card, hand_serial, body_serial):
     return hand_serial if is_basic else None
 
 
-def _option_serials(model, option: Mapping):
+def option_serials(model, option: Mapping):
     """``(hand card serial, targeted body serial)``, either of which may be None.
+
+    **Public since POC-T4/4** (Issue #385), and for the reason its own ruling comment gives: the
+    composer emits a block's subsets in an order the original menu did not have, so a stored option
+    dict replayed from a permuted position names its card by a STALE hand index — and the failure is
+    silent, because a shifted index still resolves to *a* legal card. The composer re-resolves each
+    block member by the instance key this function already produces (`common.composer.resolve_against`)
+    rather than re-deriving the same walk beside it, which is the drift ADR-0087 charges for one
+    store over. It was private only because nothing outside this module had yet needed an option's
+    instance identity.
 
     The engine's ``serial`` is the instance number, and it is the SAME field ADR-0091's Option
     Equivalence deliberately IGNORES. That is not a contradiction and is worth stating once: the
@@ -925,9 +934,28 @@ class Expectation:
 
     **Orderable at 1 ply, not merely expandable** (amended 2026-08-01). The composer ranks a draw
     Supporter against a Tool attach on the same scale before it decides whether to expand anything,
-    so an Expectation has to yield a single comparable number on demand: that is :meth:`expected`.
-    An expectation shape usable only inside a sequence expansion would leave every draw Supporter
-    unranked, which is the pruning failure the ordering amendment exists to fix.
+    so an Expectation has to yield a single comparable number on demand. An expectation shape usable
+    only inside a sequence expansion would leave every draw Supporter unranked, which is the pruning
+    failure the ordering amendment exists to fix.
+
+    **Two numbers, and WHICH ONE ORDERS was settled against this docstring** (POC-T4/4, Issue #385
+    §S3; amended here 2026-08-06). The 2026-08-01 text named :meth:`expected` *"the 1-ply ordering
+    number"*, and that sentence predates both producing modules' own rulings — `board_expectation`'s
+    header (*"For a choice node the true value is the max … The composer takes the max over
+    `classes`"*, unchanged since Issue #383's first commit) and `board_choice.deferred_target`
+    (*"the composer takes the max over `classes`, never `.expected()`"*). Those rule the seam's
+    contract, so:
+
+    * :meth:`best` — the **max**, and the number that ORDERS. Both producers emit CHOICE nodes: a
+      deck search reveals the whole deck and the player *picks*, and a deferred target is a pick by
+      construction. The value of a choice is the value of the best branch.
+    * :meth:`expected` — the availability-weighted mean, kept as a reported **lower-bound
+      diagnostic**. Its behaviour is unchanged.
+
+    Both are reported per node by `tools/train/composer_lab.py`, because each is wrong in a
+    different direction — `expected` under-reads a choice, `best` over-reads a 5%-likely target at
+    its full value — and the GAP between them is the epistemic exposure this seam carries. Recorded
+    rather than smoothed away by picking a third number nobody ruled on.
 
     **Branching is capped**, and this seam promises only the shape: the cap VALUE is
     `common.board_expectation.BRANCH_CAP` (POC-T4/2, Issue #383), a structural constant chosen from
@@ -948,8 +976,37 @@ class Expectation:
         truncation, which is what makes a capped branch legible instead of merely smaller."""
         return float(sum(c.probability for c in self.classes))
 
+    def best(self, score: Callable[[object], float]) -> float:
+        """The MAXIMUM of ``score`` over the enumerated classes — **the 1-ply ordering number**.
+
+        Both producers of an :class:`Expectation` emit a CHOICE node, and this is the value of a
+        choice. `board_expectation` enumerates a search's reachable boards, and a search is not a
+        chance node in the way a draw is: the player sees the whole deck and *chooses*, so
+        :attr:`OutcomeClass.probability` there is an **availability weight** — *"is this target in
+        the deck at all"*, `deck_odds.p_contains` — rather than a chance-node probability.
+        `board_choice` enumerates a deferred target, which is a pick by construction.
+
+        Deliberately ignores :attr:`OutcomeClass.probability`, because averaging over a set the
+        chooser gets to pick from prices the choice as if it were made for them. What the weights
+        DO carry — that the best branch may not be available — is real exposure and is reported
+        rather than folded in: see :meth:`expected` and the class docstring's *two numbers* note.
+
+        Raises `ValueError` on an empty enumeration, for :meth:`expected`'s reason: no classes is an
+        un-enumerated effect, and 0.0 is a real answer that would read as one."""
+        if not self.classes:
+            raise ValueError(
+                "cannot order an Expectation with no enumerated classes — that is an un-enumerated "
+                "effect, and returning 0.0 would price it as a worthless one")
+        return max(float(score(c.model)) for c in self.classes)
+
     def expected(self, score: Callable[[object], float]) -> float:
-        """``score`` averaged over the enumerated classes — the 1-ply ordering number.
+        """``score`` averaged over the enumerated classes — a reported **lower-bound diagnostic**,
+        NOT the ordering number.
+
+        :meth:`best` orders (see the class docstring). This one is kept, unchanged, because the gap
+        between the two bounds is the honest measure of what an availability-weighted enumeration
+        does not know, and `tools/train/composer_lab.py` emits both per node so that exposure is
+        visible instead of argued about.
 
         **Renormalised over the enumerated mass**, i.e. the expectation CONDITIONAL on the branches
         that survived the cap. The alternative — treating truncated mass as contributing 0 — biases
@@ -1393,6 +1450,7 @@ __all__: Sequence[str] = (
     "NONDETERMINISM_SCOPE", "NO_ENGINE_SCOPE",
     "KIND_COVERAGE", "TERMINAL_KINDS", "TRANSITION_KINDS", "ENGINE_ROUTE_KINDS", "REFUSED_KINDS",
     "Footprint", "FOOTPRINTS", "footprint", "commutes", "footprints_commute", "option_footprint",
+    "option_serials",
     "EngineResolved", "Refusal", "OutcomeClass", "Expectation", "UnsupportedTransition",
     "transition_kind", "coverage", "fate", "is_terminal", "refuse", "must_expand", "require_model",
     "apply_option", "quarantined_kinds", "QUARANTINED_KINDS",

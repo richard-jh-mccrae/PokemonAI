@@ -233,6 +233,49 @@ between them left only 169 of 372 frames correctly named and put 4 of the 11 **H
 rulings out of the gate's reach entirely.
 _Avoid_: decision test, decider suite, regression run (it is an instrument; its readings are picks)
 
+**Composer Lab**:
+The third lab in the family, and the only one that is **not** a gate and never becomes one
+(`tools/train/composer_lab.py`, POC-T4/4, Issue #385). It replays every replayable **Correction**
+through `common.composer.compose` and reports what the sequence composer *would* commit to — run on
+demand, offline, never a runtime shadow (ADR-0092 decision 4). It is T4/5's pre-arming evidence and
+T4/7's verification instrument, and the composer it drives is DARK, so nothing it reports has yet
+changed a decision.
+
+It renders **three columns that are three different questions**, labelled in the OUTPUT rather than
+only in a docstring (the `family_diag` lesson, Issue #356 — a session that had read the surrounding
+docs still misread the columns): `composer` is `compose`'s best sequence and is NOT a decision the
+agent made; `chosen` is the committed decision off the Correction, produced by the whole Pilot ladder;
+`ruled` is the human's `correct` picks, the only one of the three that is a judgement. Agreement is
+reported against both, and neither is called right — matching `chosen` says the composer reproduces
+today's agent, matching `ruled` says it plays better.
+
+Every row carries `ruled_from`, because a re-ruled frame reads **two ways**: a re-ruling lands in the
+FIXTURE store and never rewrites the Correction record, so `data/corrections/` can be stale where
+`tests/fixtures/corrections/` is authoritative. `85046350|0|decision|32` is the worked case — `[1]`
+in the correction store, `[3]` in the fixture, and a mid-build measurement that read the stale store
+reached a false conclusion about a blocking premise. The lab overlays the fixture ruling via
+`gates.iter_keyed_fixtures` and names which store each row came from.
+
+It also reports the **off-policy count** (Issue #412): a frame whose ruled decision follows an
+earlier same-turn decision the human ruled *against* is not cleanly gradeable. Reported as a column,
+never filtered on — extending Issue #412's doctrine from follow-up-select to MAIN→MAIN is a
+generalisation nobody has ruled on, and silently dropping those frames would be conforming to an
+unruled premise.
+
+**It does not grade the 41 verbatim ideal turn sequences, and that is deliberate.** Those are
+developer prose whose own file says *"Do not tidy these"*; a sequence parsed into option indices has
+already been interpreted once. The lab prints the developer's line verbatim beside the composer's and
+a human reads them, while Issue #291 §3c's index is consumed for the `sequence` / `pointer` /
+`verdict-only` classification — 16 of the 41 name a single action and cannot falsify a *sequence*
+composer at all.
+
+Two readings it keeps deliberately apart, because collapsing them would report a pass it never
+measured: a first step that **earned** a scored top-k slot, versus one merely **admitted** — a
+terminal or refused option is admitted unconditionally at delta 0.0 (the always-expand contract).
+_Avoid_: composer gate (it reports and exits 0 — a metric nobody has ruled on must not fail `main`),
+shadow (ADR-0092 decision 4 forbids a runtime one; this is on demand), turn-plan grader (it renders
+the ideal lines, it does not parse them)
+
 **Satisfying a Correction**:
 What it means for a pick to match a human ruling: `correct ⊆ chosen`, never `correct == chosen`
 (`gates.satisfies_human`, ADR-0085 Amendment J). A Correction's `correct` names **the card the ruling

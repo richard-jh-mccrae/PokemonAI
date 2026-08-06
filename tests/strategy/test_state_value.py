@@ -1079,9 +1079,10 @@ def test_attack_ev_working_decomposes_the_total_rather_than_narrating_it():
 # `_ready_bodies`, `_hand_legs`, `_development_legs`); the terminal family had none, so the term was
 # complete, tested and unreachable. `attack_ev_legs` is that missing bridge.
 #
-# It lands INERT. Nothing calls `attack_ev` in production when this closes — the SUM is the
-# composer's (Issue #385/#386) — and `test_attack_ev_still_has_zero_production_callers` asserts that
-# rather than assuming it.
+# It landed INERT at Issue #384: nothing called `attack_ev` in production, because the SUM was the
+# composer's. POC-T4/4 (Issue #385) built that composer, so the caller now exists and is exactly one
+# — `common/composer.py:terminal_ev`. `test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else`
+# asserts that rather than assuming it, which is the same claim narrowed rather than retired.
 
 def _starmie_rider_board(*, bench_hp=50):
     """MY Mega Starmie ex against their Dragapult ex, with a 3-prize body on THEIR Bench.
@@ -1413,11 +1414,20 @@ def test_a_consumer_must_read_total_and_never_the_working_dicts_sum():
 
 
 @pytest.mark.req("REQ-STATEVALUE-0007")
-def test_attack_ev_still_has_zero_production_callers():
-    """Issue #384's acceptance, ASSERTED rather than assumed. This issue builds the extractor; the
-    SUM is the composer's (Issue #385/#386), so `attack_ev` must still be uncalled in `src/` and
-    `tools/` when it closes — and the day the composer wires it, this test is the reminder to
-    retire this line rather than a mystery failure.
+def test_attack_ev_is_called_by_the_COMPOSER_and_by_nothing_else():
+    """Issue #384's acceptance, KEPT rather than deleted when the composer landed.
+
+    It shipped as *"`attack_ev` still has zero production callers"* — the extractor was Issue #384's
+    and the SUM was the composer's, so an early caller would have meant something wired the terminal
+    leg before the seam that consumes it existed. That test named its own successor: *"the day the
+    composer wires it, this test is the reminder to retire this line rather than a mystery
+    failure."* POC-T4/4 (Issue #385) is that day, and `common/composer.py:terminal_ev` is that
+    caller — it is `score(sequence) = state_value(end board) + EV(terminal action)`'s second summand.
+
+    Narrowed rather than dropped, because the assertion the original was really making is still
+    worth making: the terminal leg has EXACTLY ONE consumer. A second one would be a second opinion
+    on the same prize, which is the double-counting rule this module's whole registry exists to
+    enforce.
 
     **A negative result needs a positive control**, so the same scan is pointed at `survival`, which
     MUST match (`state_value.py`'s `_terms` calls it). If the control goes quiet the instrument is
@@ -1448,7 +1458,8 @@ def test_attack_ev_still_has_zero_production_callers():
             hits += [f"{rel}:{n}" for n in _called(tree, "attack_ev")]
             controls += [f"{rel}:{n}" for n in _called(tree, "survival")]
     assert controls, "positive control silent: the scan is broken, not the tree"
-    assert hits == [], f"attack_ev gained a production caller: {hits}"
+    assert [h.replace("\\", "/").split(":")[0] for h in hits] == ["src/common/composer.py"], (
+        f"`attack_ev` must have exactly ONE consumer — the composer's terminal sum. Found: {hits}")
 
 
 # ── the scalar over a real StateModel ─────────────────────────────────────────────────────────────
