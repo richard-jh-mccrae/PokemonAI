@@ -44,6 +44,25 @@ It is executed against the CURRENT module's collaborators (`_admits`, `card_clau
 `stadium_clauses_for` itself, holding everything it calls fixed. Of those collaborators only
 `STADIUM_EVENTS` changed at all, and this file overrides it back to its pre-change value and asserts
 the two differ by exactly ``{"static"}``.
+
+## What Issue #433 changed here, and why the diff is in the COVERAGE half
+
+Issue #433 added a ``basic`` resolver to `board_delta._APPLIES_TO`, which changes what `_admits`
+answers under **Lively Stadium (1251)** — from *unknown* (fail-closed: the clause comes back) to a
+real class test. That is a deliberate behaviour change, and this file is one of the places it is
+supposed to be visible.
+
+It does **not** show up in the old-vs-new sweep, and the reason is structural rather than convenient:
+`_admits` is a *collaborator*, held fixed by construction, so both versions see the resolver and the
+comparison stays at zero differences — the extraction is still a pure one, which is what that sweep
+exists to say. It shows up in the **coverage assertion**, which counts the CURRENT function only:
+**65 non-empty cells became 59**. The six are Lively Stadium against a Stage 1, a Stage 2 and the
+(Stage 1, Stage 2) pair, on ``bench_play`` and ``stage_change`` — bodies its *"Each Basic Pokémon"*
+clause does not reach and which it previously returned anyway for want of a resolver. They are named
+individually in :data:`_RESOLVED_AWAY` rather than absorbed into a changed total, together with the
+**fifteen** 1251 cells that must NOT have moved (4 ``bench_play`` + 4 ``stage_change`` + 7
+``displace``), so a resolver that over- or under-reached fails on the cell that is wrong instead of
+on an arithmetic that happens to balance.
 """
 from __future__ import annotations
 
@@ -185,6 +204,36 @@ def _sweep(new_fn, old_fn, combat, bodies, stadium_states):
     return same, message_only, real
 
 
+#: The six cells Issue #433's `basic` resolver moved from NON-EMPTY to empty, measured. All six are
+#: Lively Stadium (1251) against a body its clause does not reach, on the two body-scoped events;
+#: ``displace`` is absent because it returns every writing clause regardless of `applies_to`, and the
+#: four Basic-or-unknown classes are absent because the clause still reaches them.
+_RESOLVED_AWAY = frozenset({("1251", event, body)
+                            for event in ("bench_play", "stage_change")
+                            for body in ("stage1", "stage2", "tuple_stage1_stage2")})
+
+
+def _assert_the_only_movement_is_the_1251_resolver(non_empty: set) -> None:
+    """Assert the `basic` resolver's effect CELL BY CELL, not just as a count.
+
+    A bare ``== 59`` would be satisfied by any six cells going quiet, including six that had nothing
+    to do with this change. These assertions say which six, and — more importantly — which fifteen
+    1251 cells must still be non-empty, so a resolver that had gone too far (answering False for a
+    Basic) fails here rather than passing on an unchanged total."""
+    assert not (_RESOLVED_AWAY & non_empty), (
+        f"{sorted(_RESOLVED_AWAY & non_empty)} should have been resolved AWAY by `_admits_basic` — "
+        f"Lively Stadium does not reach an evolved body")
+
+    lively = {(event, body) for stadium, event, body in non_empty if stadium == "1251"}
+    by_event = {e: sorted(b for ev, b in lively if ev == e)
+                for e in ("bench_play", "stage_change", "displace")}
+    reached = ["basic_dark", "basic_non_dark", "none", "tuple_basic_stage1"]
+    assert by_event["bench_play"] == reached, "the Basic classes must still be REACHED, not filtered"
+    assert by_event["stage_change"] == reached, "same, on the other body-scoped event"
+    assert len(by_event["displace"]) == 7, \
+        "`displace` returns every writing clause regardless of `applies_to` — it must NOT have moved"
+
+
 def test_the_extraction_changed_no_outcome_on_any_input(combat, bodies, stadium_states):
     """27 stadium states × 3 pre-existing events × 7 body classes = **567 cells**, both versions.
 
@@ -205,12 +254,18 @@ def test_the_extraction_changed_no_outcome_on_any_input(combat, bodies, stadium_
     # ── the sweep DESCRIBES ITS OWN COVERAGE, so "567 matched" cannot be 567 trivial cells ──
     # Without this, a provider that returned no clauses at all would make every cell an identical
     # empty tuple and the test would pass while proving nothing.
-    outcomes = [_outcome(new_fn, current, combat, event=event, stat=bodies[body])
-                for (_n, current), event, body in itertools.product(
-                    stadium_states, _COMPARABLE_EVENTS, sorted(bodies))]
-    assert all(o[0] == "return" for o in outcomes), "no pool Stadium refuses on a valid event"
-    assert sum(1 for o in outcomes if o[1]) == 65, \
-        "65 of the 567 cells return a NON-EMPTY clause tuple — the ones that do real selection work"
+    cells = [((sname, event, body),
+              _outcome(new_fn, current, combat, event=event, stat=bodies[body]))
+             for (sname, current), event, body in itertools.product(
+                 stadium_states, _COMPARABLE_EVENTS, sorted(bodies))]
+    assert all(o[0] == "return" for _cell, o in cells), "no pool Stadium refuses on a valid event"
+
+    non_empty = {cell for cell, o in cells if o[1]}
+    assert len(non_empty) == 59, (
+        "59 of the 567 cells return a NON-EMPTY clause tuple — the ones that do real selection "
+        "work. Was 65 before Issue #433 added the `basic` resolver; 65 − 6 = 59, and the six are "
+        "named individually below.")
+    _assert_the_only_movement_is_the_1251_resolver(non_empty)
 
 
 def test_the_comparator_can_actually_fail(combat, bodies, stadium_states):

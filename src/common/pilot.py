@@ -4037,18 +4037,22 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         ``opp_hp`` arrives with the current delta baked in and the shift is what CHANGES.
 
         None — *unknown, refuse* — when either reading names a clause the seam cannot price, which
-        includes a defender with no `CardStat` (the `applies_to` test cannot be evaluated) and any
-        board carrying **Lively Stadium (1251)**, whose ``applies_to: "basic"`` has no resolver.
+        includes a defender with no `CardStat` (the `applies_to` test cannot be evaluated).
 
-        ⚠️ **The subtraction is a forward contract, INERT on every board reachable today**, and that
-        is worth stating rather than implying. Only two cards in the pool carry an `hp_delta` clause
-        at all — 1252 and 1251 — and neither can put a non-zero ``delta_now`` under a legal play:
-        1252 over 1252 is not a legal play (*"You can't play a Stadium card if a Stadium with the
-        same name is already in play"*, `docs/rulebook.txt` L137, enforced at `cgpy/options.py`),
-        and 1251 refuses above. So the difference never currently changes an answer. It is here
-        because the alternative is a one-sided add that is WRONG the moment a second reducing
-        Stadium exists, and because reading `delta_now` is what makes the term honest about the
-        board it is standing on rather than about the card alone."""
+        ⚠️ **The subtraction stopped being a forward contract at Issue #433, and the change of state
+        is the point.** It shipped INERT: only two cards in the pool carry an `hp_delta` clause at
+        all — 1252 and 1251 — and neither could put a non-zero ``delta_now`` under a legal play.
+        1252 over 1252 is not one (*"You can't play a Stadium card if a Stadium with the same name is
+        already in play"*, `docs/rulebook.txt` L137, enforced at `cgpy/options.py`), and **1251
+        refused**, for want of a ``basic`` resolver in `board_delta._APPLIES_TO`.
+
+        That resolver now exists, so ``delta_now`` is LIVE: with Lively Stadium out, a Basic defender
+        is rendered 30 HP above its printed maximum, and playing **any** other Stadium ends that lift.
+        Measured on the shipped term — a Basic rendered at 300 with Mega Brave's 270 on the board is
+        out of reach until Risky Ruins displaces the Lively, at which point the shift is −30, the bar
+        falls to 270 and the play is priced KO_SCORE-class. A one-sided add would have read that
+        board as 0 and missed the knockout, which is exactly the case the subtraction was written
+        for before one existed."""
         current = obs.get("current") or {}
         try:
             now = board_delta.stadium_hp_delta(

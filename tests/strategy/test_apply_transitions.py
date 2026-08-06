@@ -470,7 +470,8 @@ def test_DISPLACING_a_stadium_whose_effect_writes_refuses_because_the_effect_END
     """The caller of the Stadium gate the parity lane could not have found, and the reason it is here
     on the RULE rather than on the measurement.
 
-    *"…discard the old one and **end its effects**"* (`docs/rulebook.txt` L137). Gravity Mountain
+    *"…discard the old one and **end its effects**"* (`docs/rulebook.txt` L136 — L137 is the
+    SAME-NAME restriction, a different bullet; corrected at Issue #433). Gravity Mountain
     leaving play gives every Stage 2 in play its 30 HP back — verified on the corpus rather than
     reasoned: `ml_dx_2001` carries Dragapult ex at **290/290 at f172 while Gravity Mountain is out,
     and 320/320 at f181 once it is gone**. A structural swap that only moved the `stadium` zone would

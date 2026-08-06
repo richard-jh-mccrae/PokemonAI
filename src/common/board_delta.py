@@ -450,6 +450,22 @@ def _admits_stage2(stat):
     return bool(getattr(stat, "stage2", False))
 
 
+def _admits_basic(stat):
+    """Lively Stadium's scope: *"Each Basic Pokemon in play"*, verbatim from `data/EN_Card_Data.csv`
+    1251.
+
+    :func:`_is_basic` is the whole test, so ``stage`` stays the ONE derivation (Issue #408 / PR #411)
+    and this is not a second reading of it. Deliberately NOT ``evolvesFrom is None``, which is exact
+    on today's pool and is the drift `stage_from_card`'s own docstring exists to name.
+
+    Unlike :func:`_admits_basic_non_dark` this never answers *unknown*: that resolver needs a second
+    field (``energyType``) to evaluate the {D} half of its gate and refuses when it is absent, while
+    the class question here is answered by ``stage`` alone. Measured over the whole pool, all 1061
+    Pokemon carry one (600 basic / 345 stage1 / 116 stage2, zero missing), and a card with no
+    ``stage`` is not a Pokemon and so is never a body this predicate is asked about."""
+    return _is_basic(stat)
+
+
 def _admits_basic_non_dark(stat):
     """Risky Ruins' scope: *"a Basic non-{D} Pokemon"*, verbatim from `data/EN_Card_Data.csv` 1260.
 
@@ -468,25 +484,34 @@ def _admits_basic_non_dark(stat):
 #: The `applies_to` resolvers, keyed by the compendium's own body-class vocabulary
 #: (`snapshot_coverage.CLAUSE_VALUES["applies_to"]`).
 #:
-#: **Two entries.** ``metal`` / ``name_family`` / ``no_rule_box`` appear only on `damage_reduction` /
-#: `damage_boost` / `prevent_damage`, whose write-sets are declared EMPTY -- `CombatMath` reads those
-#: off the `stadium` zone when it prices an attack and stores nothing -- so they never survive
-#: :func:`stadium_clauses_for`'s writing-clause filter at all. A resolver for a class no writing
-#: clause names would be a reader for a case that cannot occur, and if one ever does occur the
-#: MISSING key is what makes it refuse rather than silently mis-apply.
+#: **Three entries, and the other three are absent on purpose.** ``metal`` / ``name_family`` /
+#: ``no_rule_box`` appear only on `damage_reduction` / `damage_boost` / `prevent_damage`, whose
+#: write-sets are declared EMPTY -- `CombatMath` reads those off the `stadium` zone when it prices an
+#: attack and stores nothing -- so they never survive :func:`stadium_clauses_for`'s writing-clause
+#: filter at all. A resolver for a class no writing clause names would be a reader for a case that
+#: cannot occur, and if one ever does occur the MISSING key is what makes it refuse rather than
+#: silently mis-apply. That claim is **re-measured** rather than inherited, over every Stadium in the
+#: pool: `tests/strategy/test_lively_stadium_basic.py`.
 #:
-#: ⚠️ **``basic`` is NOT such a class, and this note used to say it was** (corrected at Issue #424).
-#: **Lively Stadium (1251)** -- *"Each Basic Pokemon in play (both yours and your opponent's) gets
-#: +30 HP"* -- parses to ``{"kind": "stadium_static", "effect": "hp_delta", "amount": 30,
-#: "applies_to": "basic", "symmetric": true}``, a WRITING clause, so it does survive the filter and
-#: then refuses here for want of a resolver. Every reader in this module therefore refuses under
-#: Lively Stadium: fail-closed and correct, but a real gap rather than a case that cannot occur.
-#: Measured: 1251 appears in **no** agent decklist and in **0 of the 377** committed parity traces
-#: (positive control on the same sweep: 1252 in 8 traces, 1260 in 8), so nothing is mis-priced today.
-#: A resolver is deliberately NOT added here -- turning a seam-wide refusal into an answer is its own
-#: design decision, and it is scoped to its own issue.
+#: ⚠️ **``basic`` was in that list until Issue #424 and did not belong there** -- Issue #424 struck it
+#: from the list and recorded the falsification; Issue #433 is what RESOLVED it, by adding the
+#: resolver below. The note claimed a case that cannot occur, and **Lively Stadium (1251)** is that
+#: case. *"Each Basic Pokemon in play
+#: (both yours and your opponent's) gets +30 HP"* parses to ``{"kind": "stadium_static", "effect":
+#: "hp_delta", "amount": 30, "applies_to": "basic", "symmetric": true}``, a WRITING clause, so it does
+#: survive the filter -- and with no resolver :func:`_admits` answered *unknown* and every reader in
+#: this module refused under it. Fail-closed and correct, but a real gap. :func:`_admits_basic` closes
+#: it; the resolver is why 1251 is priced rather than refused, and it is the ONLY behaviour Issue #433
+#: changed.
+#:
+#: **What that did NOT change is the deploy.** A `stadium_static` reaching a bench arrival still
+#: refuses in :func:`apply_bench_arrival`, which has an applier for a trigger's damage counters and
+#: for nothing else -- a path `_admits` never influences, since the clause comes back either way
+#: (True now, unknown before). Ruled deliberately at Issue #433 rather than left implicit: see that
+#: function's own note for why un-refusing it needs an applier first.
 _APPLIES_TO = {
     "stage2": _admits_stage2,
+    "basic": _admits_basic,
     "basic_non_dark": _admits_basic_non_dark,
 }
 
@@ -579,15 +604,15 @@ def stadium_clauses_of(combat, card_id, *, event: str, stat=None) -> tuple:
     The matching rules and the fail-closed refusals live here, with the code; the WHY of each is in
     :func:`stadium_clauses_for`'s docstring, which is where Issue #410 measured them.
 
-    ## The refusal that is load-bearing today
+    ## The refusal that is load-bearing, and the one that stopped being
 
     An ``applies_to`` value with no resolver in :data:`_APPLIES_TO` makes :func:`_admits` answer
-    *unknown*, so the clause comes back and the arithmetic refuses. **Lively Stadium (1251) is that
-    card**: *"Each Basic Pokemon in play (both yours and your opponent's) gets +30 HP"* parses to a
-    WRITING `hp_delta` clause carrying ``applies_to: "basic"``, for which no resolver exists -- so
-    every reader here refuses under it rather than mis-pricing it. That is correct fail-closed
-    behaviour and it is also a real gap; `_APPLIES_TO`'s own docstring claims the four absent values
-    reach only write-EMPTY clauses, which 1251 falsifies."""
+    *unknown*, so the clause comes back and the arithmetic refuses. **Lively Stadium (1251) used to
+    be that card** -- *"Each Basic Pokemon in play (both yours and your opponent's) gets +30 HP"*
+    parses to a WRITING `hp_delta` clause carrying ``applies_to: "basic"`` -- and Issue #433 added
+    :func:`_admits_basic`, so the class is now answered and the delta priced. The mechanism is
+    unchanged and still live for the next such value: a clause this table cannot resolve comes back
+    and the caller refuses rather than mis-applying it."""
     if event not in STADIUM_EVENTS:
         raise Unmodellable(f"stadium_clauses_of: {event!r} is not one of {sorted(STADIUM_EVENTS)}")
     if card_id is None:
@@ -669,7 +694,32 @@ def apply_bench_arrival(body: dict, clauses, stat) -> frozenset:
 
     Anything else in ``clauses`` REFUSES, including a `stadium_static` that reached a bench play and
     a clause whose ``applies_to`` :func:`_admits` could not resolve. :func:`stadium_clauses_for`
-    returns an unknown-vocabulary clause on purpose so that this is where it lands."""
+    returns an unknown-vocabulary clause on purpose so that this is where it lands.
+
+    ⚠️ **A `stadium_static` at a bench arrival keeps refusing, and Issue #433 ruled that deliberately
+    rather than leaving it implicit.** Adding :func:`_admits_basic` un-refused :func:`_evolve` under
+    **Lively Stadium (1251)** and pointedly did NOT un-refuse :func:`_play`: measured before and
+    after, the refusal here is raised at the same SITE either way, because the clause reaches this
+    function under the resolver (`_admits` True) exactly as it did without one (unknown), and the
+    branch above wants a `stadium_trigger`. Only the message moved, from ``admits: None`` to
+    ``admits: True``.
+
+    Keeping it is correct, not merely tolerable. :func:`bench_body` mints ``hp = maxHp = stat.hp``,
+    the PRINTED maximum, while 1251 reads *"Each Basic Pokemon in play … gets +30 HP"*
+    (`data/EN_Card_Data.csv`) -- so a Basic arriving on the Bench renders at ``printed + 30`` and
+    un-refusing without an applier would mint a body 30 HP light on every deploy.
+
+    ⚠️ The authority for that is the **card text and the NATIVE engine** (whose traces are the parity
+    corpus), NOT `src/cgpy/`: the pure-Python twin does not implement this card at all. Measured --
+    `cgpy.chain.def_for(1251)` carries no ``stadium`` key and is flagged ``deferred: "stadium passive
+    unpinned"``, and `cgpy/chain.py:stadium_hp_delta` branches on ``stage2HpDelta`` alone (positive
+    control: 1252 returns ``{"stage2HpDelta": -30}``, 1260 returns its ``onBench`` tax). That twin gap
+    is real and is its own issue; it is named here so a later reader does not "verify" this note
+    against cgpy and conclude the opposite.
+
+    Refusing costs nothing today: 1251 appears in **no** agent decklist and in **0 of the 377**
+    committed parity traces (`tests/fixtures/parity/*.trace.json.gz`; positive control on the same
+    sweep -- 251 distinct card ids seen, 1252 in 8 traces, 1260 in 8)."""
     writes: set = set()
     for clause in clauses:
         admits = _admits(clause, (stat,))
@@ -980,8 +1030,10 @@ def _play(obs, option, *, seat_index, combat) -> Delta:
         if old and old.get("id") == card_id:
             raise Unmodellable(f"{card_id} {stat.name}: a Stadium of the same name is already in "
                                f"play, so this is not a legal play (`docs/rulebook.txt` L137)")
-        # DISPLACEMENT ends the old Stadium's effect (`docs/rulebook.txt` L137), which re-writes every
-        # body it was modifying — a Gravity Mountain leaving play gives every Stage 2 its 30 HP back
+        # DISPLACEMENT ends the old Stadium's effect (`docs/rulebook.txt` L136 -- L137 above is the
+        # SAME-NAME restriction, a different bullet; the off-by-one corrected at Issue #433), which
+        # re-writes every body it was modifying — a Gravity Mountain leaving play gives every Stage 2
+        # its 30 HP back
         # (`ml_dx_2001`: Dragapult ex 290/290 at f172 with GM out, 320/320 at f181 without it). So the
         # refusal belongs here as much as on the two body-moving transitions, and this is the caller
         # the parity lane could NOT have found: the committed corpus contains no step that plays a

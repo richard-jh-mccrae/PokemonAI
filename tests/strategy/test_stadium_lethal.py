@@ -26,7 +26,9 @@ equation's own legs.
   (`docs/rulebook.txt` L136), so the counterfactual is a DIFFERENCE of two readings and duplicating
   an in-play Gravity Mountain is worth exactly 0;
 * the **sign**: `stadium_hp_delta` is signed and nothing branches on it, so an HP-*increasing*
-  Stadium is priced as making a KO harder, never easier;
+  Stadium is priced as making a KO harder, never easier. Shipped SYNTHETIC — the pool's one
+  HP-increasing Stadium, Lively Stadium (1251), was unpriceable for want of an ``applies_to:
+  "basic"`` resolver — and **re-grounded on the real card at Issue #433**, which added it;
 * the **symmetric leg**, which is structurally silent for this deck by the `applies_to` predicate
   rather than by assertion — with a Stage-2 positive control proving it is live and not dead;
 * the `damageBoost` path, unchanged.
@@ -36,13 +38,7 @@ from __future__ import annotations
 import pytest
 
 from common import board_delta
-from common.cards import CardFunctions
-from common.effects import CardEffects
-from common.pilot import Pilot
-from common.scouting.provider import AttackStat, CardStat, DictCardStatProvider
-from common.strategy import Strategy
 from common.strategy.context import KO_SCORE, _END, _MAIN, _PLAY
-from common.strategy.general_strategy import GENERAL_STRATEGY
 from pilot_helpers import make_select, opt, poke, state
 
 # ── real cards, every fact read at source (data/EN_Card_Data.csv, src/common/card_effects.json) ──
@@ -54,7 +50,6 @@ PREMIUM_POWER_PRO = 1141  # Item, +30 for a {F} attacker — the `damageBoost` l
 MEGA_LUCARIO_EX = 678     # Stage 1 (from Riolu), 340 HP; Mega Brave {F}{F} 270 — the attacker below
 RIOLU, MAKUHITA, HARIYAMA, SOLROCK, LUNATONE, MEOWTH_EX = 677, 673, 674, 676, 675, 1071
 F_ENERGY = 6              # Basic {F} Energy
-FIGHTING = 6              # EnergyType.FIGHTING
 
 #: Two real Stage 2 bodies with **no Weakness and no Resistance** (`data/EN_Card_Data.csv`), so the
 #: crossing arithmetic below is the Stadium's and nothing else's. Their printed HP bounds what a
@@ -67,9 +62,6 @@ MEGA_DRAGONITE_EX = 904   # Stage 2, 370 HP, weakness n/a, resistance n/a
 #: are weakness/resistance-clean against a {F} attacker (`data/EN_Card_Data.csv`).
 ALOLAN_EXEGGUTOR_EX = 193   # Stage 1, 300 HP, weakness n/a, resistance n/a
 MEGA_LATIAS_EX = 754        # Basic,   280 HP, weakness n/a, resistance n/a
-
-STADIUM_CARD_TYPE = 4     # CardType.STADIUM      (`common.scouting.provider`)
-BASIC_ENERGY_CARD_TYPE = 5  # CardType.BASIC_ENERGY (same enum)
 
 
 def _real_pilot():
@@ -226,66 +218,78 @@ def test_the_symmetric_half_is_zero_for_THIS_deck_by_the_predicate_not_by_a_bran
 
 
 # ── the SIGN: an HP-increasing Stadium makes a KO harder, never easier ────────────────────────────
+#
+# These four tests were SYNTHETIC when Issue #424 shipped them — two invented Stadiums differing only
+# in the sign of `amount` — because the pool's one HP-increasing Stadium could not be priced:
+# `board_delta._APPLIES_TO` carried no resolver for `applies_to: "basic"`, so every reader in that
+# module refused under it. Issue #433 added the resolver, and its acceptance criterion 4 is this
+# replacement: the sign is now exercised on the REAL card, so what is under test is the shipped
+# compendium entry rather than a fixture written to agree with the code.
 
-DROP, LIFT = 9603, 9604   # two synthetic Stadiums differing ONLY in the sign of `amount`
-SLUGGER, TOWER = 9601, 9602
-HAYMAKER = 9701
-
-
-def _sign_pilot():
-    """A pilot over two Stadiums identical but for the sign of their `hp_delta`.
-
-    Synthetic — but NOT because the pool has no HP-increasing Stadium. It has exactly one:
-    **Lively Stadium (1251)**, *"Each Basic Pokémon in play (both yours and your opponent's) gets
-    +30 HP"*, which parses to ``amount: +30`` with ``applies_to: "basic"``. It cannot be used here
-    because `board_delta._APPLIES_TO` carries no resolver for ``basic``, so every reader in that
-    module REFUSES under it (fail-closed, and its own gap — see that constant's note). The synthetic
-    pair is what lets the SIGN be tested while it is unpriceable, and holding everything but
-    `amount` constant is what makes the sign the only variable."""
-    def stadium(cid, amount):
-        return [{"kind": "stadium_static", "effect": "hp_delta", "amount": amount,
-                 "applies_to": "stage2", "symmetric": True}]
-
-    stats = DictCardStatProvider({
-        SLUGGER: CardStat(SLUGGER, synthetic=True, name="Slugger", energyType=FIGHTING, hp=340,
-                          stage="basic", attacks=(HAYMAKER,), minAttackCost=2, maxDamage=270,
-                          maxDamageCost=2, minCostDamage=270),
-        TOWER: CardStat(TOWER, synthetic=True, name="Tower", hp=400, stage="stage2", stage2=True),
-        DROP: CardStat(DROP, synthetic=True, name="Drop Tower", hp=0, cardType=STADIUM_CARD_TYPE),
-        LIFT: CardStat(LIFT, synthetic=True, name="Lift Tower", hp=0, cardType=STADIUM_CARD_TYPE),
-        F_ENERGY: CardStat(F_ENERGY, hp=0, energyType=FIGHTING,
-                           cardType=BASIC_ENERGY_CARD_TYPE),                   # Basic {F} Energy
-    }, attacks={HAYMAKER: AttackStat(HAYMAKER, damage=270, cost=2)})
-    effects = CardEffects({str(DROP): stadium(DROP, -30), str(LIFT): stadium(LIFT, +30)})
-    return Pilot(Strategy(), deck=[F_ENERGY] * 60, general_strategy=GENERAL_STRATEGY,
-                 stats=stats, functions=CardFunctions({}), effects=effects)
+LIVELY_STADIUM = 1251     # Stadium: "Each Basic Pokémon in play (both yours and your opponent's)
+                          # gets +30 HP." -> stadium_static / hp_delta / +30 / basic / symmetric.
+                          # The pool's ONLY HP-increasing Stadium. Its defender below is
+                          # MEGA_LATIAS_EX, declared above: the Basic control is also the one body
+                          # class Lively reaches, so the two uses share one constant.
 
 
-def _sign_menu(stadium_card):
-    cur = state(active=poke(SLUGGER, energy=2, energy_card=F_ENERGY, hp=340),
-                hand=[stadium_card], opp_active=poke(TOWER, hp=280),
-                turn=6, prizes=6, opp_prizes=6)
-    return make_select([opt(_PLAY, index=0), opt(_END)], context=_MAIN, current=cur)
+@pytest.mark.parametrize("stadium, defender, amount", [(GRAVITY_MOUNTAIN, DRAGAPULT_EX, -30),
+                                                       (LIVELY_STADIUM, MEGA_LATIAS_EX, +30)])
+def test_the_shift_carries_the_clauses_sign(stadium, defender, amount):
+    """Both signs, both real cards, read off `card_effects.json` rather than off a fixture.
 
-
-@pytest.mark.parametrize("card, amount", [(DROP, -30), (LIFT, 30)])
-def test_the_shift_carries_the_clauses_sign(card, amount):
-    pilot = _sign_pilot()
-    obs = _sign_menu(card)
-    assert pilot._stadium_hp_shift(obs, card, pilot.stats.get(TOWER)) == amount
+    The pairing is forced by the cards themselves: Gravity Mountain's −30 reaches only a Stage 2 and
+    Lively Stadium's +30 only a Basic, so each defender is the class its Stadium names."""
+    pilot = _real_pilot()
+    obs = _menu(poke(defender, hp=300), hand=[stadium])
+    assert pilot._stadium_hp_shift(obs, stadium, pilot.stats.get(defender)) == amount
 
 
 def test_an_hp_increasing_stadium_makes_the_ko_harder_never_easier():
-    """Acceptance criterion 5 / ruling G2. One expression serves both signs::
+    """Acceptance criterion 5 / ruling G2, now on the real card (Issue #433 AC4). One expression
+    serves both signs::
 
         dmg >= opp_hp + hp_shift
 
-    A 280-HP Stage 2 is out of a 270-damage attack's reach. The −30 Stadium lowers the bar to 250
-    and the crossing fires; the +30 Stadium raises it to 310 and it does not — priced as making the
-    knockout harder, for free, with no branch on the sign anywhere in the term."""
-    pilot = _sign_pilot()
-    assert _term(pilot, _sign_menu(DROP)) >= KO_SCORE
-    assert _term(pilot, _sign_menu(LIFT)) == 0.0
+    Mega Latias ex is a Basic at 280 HP and Mega Brave is 270 — 10 short. Lively Stadium's +30 raises
+    the bar to 310, so the term claims nothing: priced as making the knockout *harder*, for free,
+    with no branch on the sign anywhere in the term.
+
+    The board is **discriminating rather than merely quiet**, which is what makes the 0.0 mean
+    something: 280 sits within 30 of Mega Brave's 270, so a shift wrongly applied with the opposite
+    sign would put the bar at 250 and the term would claim a KO. The positive control asserts the
+    shift really is +30 there, so the 0.0 is the sign being respected and not the Stadium going
+    unread — the exact failure the synthetic fixture could not distinguish."""
+    pilot = _real_pilot()
+    obs = _menu(poke(MEGA_LATIAS_EX, hp=280), hand=[LIVELY_STADIUM])
+    assert pilot._stadium_hp_shift(obs, LIVELY_STADIUM, pilot.stats.get(MEGA_LATIAS_EX)) == 30
+    assert _term(pilot, obs) == 0.0
+
+
+def test_DISPLACING_lively_stadium_is_itself_a_lethal_play():
+    """The subtraction stopped being a forward contract at Issue #433, and this is the board that
+    proves it.
+
+    `_stadium_hp_shift` is ``delta_after − delta_now``, and until the ``basic`` resolver existed no
+    legal play could put a non-zero ``delta_now`` on the board — 1252 over 1252 is illegal
+    (`docs/rulebook.txt` L137) and 1251 refused. Now Lively Stadium renders a Basic 30 above its
+    printed maximum, and playing **any** other Stadium ends that lift (`docs/rulebook.txt` L136).
+
+    Mega Latias ex rendered at 300 is out of Mega Brave's 270 reach. Playing Risky Ruins — which
+    moves no HP itself — displaces the Lively, the shift is −30, the bar falls to exactly 270 and the
+    knockout is on. A one-sided add that ignored ``delta_now`` would read this board as 0 and miss it.
+
+    The 320 control is the discriminating half: same cards, same call, bar at 290, no crossing."""
+    pilot = _real_pilot()
+    stat = pilot.stats.get(MEGA_LATIAS_EX)
+
+    crosses = _menu(poke(MEGA_LATIAS_EX, hp=300), hand=[RISKY_RUINS], stadium=LIVELY_STADIUM)
+    assert pilot._stadium_hp_shift(crosses, RISKY_RUINS, stat) == -30
+    assert _term(pilot, crosses) >= KO_SCORE
+
+    short = _menu(poke(MEGA_LATIAS_EX, hp=320), hand=[RISKY_RUINS], stadium=LIVELY_STADIUM)
+    assert pilot._stadium_hp_shift(short, RISKY_RUINS, stat) == -30
+    assert _term(pilot, short) == 0.0
 
 
 # ── the damageBoost path, unchanged ───────────────────────────────────────────────────────────────
