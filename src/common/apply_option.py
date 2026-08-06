@@ -447,7 +447,13 @@ FOOTPRINTS: dict[int, Footprint] = {
         # "Evolving keeps attached cards + damage counters; CLEARS Special Conditions and attack
         # effects" (`docs/rules.md` §4, rulebook-sourced). So this writes a zone that is still OWED —
         # which `footprints_writing_unhomed()` reports rather than letting it price 0.
-        writes=frozenset({"bodies_in_play", "my_hand_ids", "special_conditions", "new_in_play"}),
+        #
+        # `damage_counters` joined at Issue #410: an in-play Stadium's STATIC HP delta re-reads the
+        # body an evolution re-classes (Gravity Mountain's *"-30 HP"* on the Stage 2 it becomes), and
+        # `damage_counters` is the zone homing the HP read — the same reading `snapshot_coverage`
+        # gives `hp_delta` and the same one `_ATTACH`'s Tool grant already declares.
+        writes=frozenset({"bodies_in_play", "my_hand_ids", "special_conditions", "new_in_play",
+                          "damage_counters"}),
         complete=True),
     _RETREAT: Footprint(
         reads=frozenset({"bodies_in_play", "attached_energy", "allowance_retreat_used"}),
@@ -492,12 +498,17 @@ FOOTPRINTS: dict[int, Footprint] = {
     #                                play's own legality does not depend on it. Joined at T4/3
     #                                (Issue #391); `board_delta._play` already set the bit and no
     #                                declaration named it.
+    #   damage_counters              that same deploy AGAIN, under a Stadium whose trigger taxes it:
+    #                                Risky Ruins' *"place 2 damage counters"* on a Basic non-{D}
+    #                                arriving on the Bench. Joined at Issue #410 with the applier.
+    #                                `stadium` is already a declared READ, which is what makes the
+    #                                write conditional on the board rather than on the card.
     _PLAY: Footprint(
         reads=frozenset({"my_hand_ids", "stadium", "allowance_stadium_played",
                          "allowance_supporter_played", "bench_occupancy"}),
         writes=frozenset({"my_hand_ids", "my_discard_contents", "their_discard_contents",
                           "stadium", "allowance_stadium_played", "allowance_supporter_played",
-                          "bodies_in_play", "bench_occupancy", "new_in_play"}),
+                          "bodies_in_play", "bench_occupancy", "new_in_play", "damage_counters"}),
         complete=False),
 }
 
@@ -823,10 +834,11 @@ def _structural_drop(model, kind: int, card) -> frozenset:
       (*"Attach Energy from hand | **1** (manual attachment; card effects can add more)"*) and a Tool
       is an ordinary Trainer play.
     * `_ATTACH` **Energy leg** — `attached_energy` + `allowance_energy_attached`.
-    * `_PLAY` **Basic Pokémon deploy** — exactly
-      ``{"my_hand_ids", "bodies_in_play", "bench_occupancy", "new_in_play"}``. The fourth joined at
-      T4/3 (Issue #391) from the same source as the other three: it is `board_delta._play`'s own
-      returned write-set, and the deployed body arrives with ``appearThisTurn: True``.
+    * `_PLAY` **Basic Pokémon deploy** — exactly ``{"my_hand_ids", "bodies_in_play",
+      "bench_occupancy", "new_in_play"}``, plus ``damage_counters``. The fourth joined at T4/3
+      (Issue #391) from the same source as the other three: it is `board_delta._play`'s own returned
+      write-set, and the deployed body arrives with ``appearThisTurn: True``. The fifth joined at
+      Issue #410, when a Stadium bench trigger became something the seam APPLIES rather than refuses.
     * `_PLAY` **Stadium** — `my_hand_ids`, `stadium`, `allowance_stadium_played`, and whichever
       discard owned the displaced one (`docs/rulebook.txt` L78 — *"Each player has their own discard
       pile"*), so BOTH discards stay declared: which one is written depends on whose Stadium it was,
@@ -869,8 +881,13 @@ def _structural_drop(model, kind: int, card) -> frozenset:
         return frozenset()                      # neither leg — `board_delta._attach` refuses it
     # `_PLAY`, and only for the two sub-cases `board_delta._play` actually models.
     if getattr(stat, "is_pokemon", False) and not getattr(stat, "evolvesFrom", None):
+        # `damage_counters` is KEPT for every deploy rather than only under a taxing Stadium, for the
+        # Tool leg's reason one paragraph up: whether Risky Ruins is in play is a fact about the
+        # BOARD, and this function is handed only the option and the card. An extra declared write
+        # can only make `footprints_commute` refuse a block; a missing one would license a reorder
+        # that changes the board (Issue #410).
         return frozenset(everything - {"my_hand_ids", "bodies_in_play", "bench_occupancy",
-                                       "new_in_play"})
+                                       "new_in_play", "damage_counters"})
     if getattr(stat, "is_stadium", False):
         return frozenset(everything - {"my_hand_ids", "stadium", "allowance_stadium_played",
                                        "my_discard_contents", "their_discard_contents"})
