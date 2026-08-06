@@ -51,8 +51,9 @@ earlier frame of the SAME episode and turn:
 
 **On the 15 gradeable frames the incumbent ladder scores 14/15.** It has exactly ONE demonstrable
 defect at this seam (`86088989-29` — Lillie's Determination over Team Rocket's Petrel, via Meowth
-ex's bench-drop tutor). Applying the same filter to the specified build's recorded misses — 6 of its
-13 are off-policy — puts it at **8/15**.
+ex's bench-drop tutor; root cause is **F8** below, a flat category credit losing to a computed one).
+Applying the same filter to the specified build's recorded misses — 6 of its 13 are off-policy —
+puts it at **8/15**.
 
 |   | on all 30 ruled | on the 15 GRADEABLE |
 |---|---:|---:|
@@ -205,6 +206,47 @@ human is reasoning with **already exists** — `doctrine_fetch._chain_grab_value
 `δ × max` over the reachable set — and the retirement orphans it along with its three consuming
 rungs.
 
+### F8 (NEW, corrects the earlier F4/F5 attribution) — `grab-a-draw-supporter-in-setup` is FLAT; the deck it fires on can score a draw effect that is not flat
+
+`86088989-29` is the single gradeable defect (Decision 0), and the earlier draft filed it under
+F4/F5. It is neither. Measured, both rungs fire and neither is silent:
+
+```
+Lillie's Determination   score=10.80   fired=['grab-a-draw-supporter-in-setup']
+Judge                    score=10.40   fired=['grab-a-draw-supporter-in-setup']
+Team Rocket's Petrel     score=15.00   fired=['grab-the-chain-opener']    <== taken, human wants Lillie's
+```
+
+The board (developer ruling, 2026-08-06): hand **empty**, **6 prizes remaining each side**. Read at
+source:
+
+```
+Lillie's Determination (1227): "Shuffle your hand into your deck. Then, draw 6 cards.
+                                 If you have exactly 6 Prize cards remaining, draw 8 cards instead."
+Judge                  (1213): "Each player shuffles their hand into their deck and draws 4 cards."
+Team Rocket's Petrel   (1219): "Search your deck for a Trainer card, reveal it, and put it into your hand."
+Fighting Gong          (1142): "Search your deck for a Basic {F} Energy card or a Basic {F} Pokémon..."
+```
+
+**`grab-a-draw-supporter-in-setup` scores Lillie's and Judge identically (10.80 vs 10.40, the ~0.4
+gap is ladder-tuning noise, not board-read).** It is a flat `"draw" in c.tags` credit — the rung's
+own rationale says so: *"take a `draw` Supporter (Lillie's / Judge) to keep digging."* It has no
+route to Lillie's PRINTED effect size, let alone its condition — a card that draws 6 everywhere else
+and **8 exactly on this board** reads no differently from a flat 4-card Judge. `grab-the-chain-opener`
+by contrast pays for a COMPUTED number (`_chain_grab_value`, δ × the reachable set) and wins on raw
+score even though what it computed is real but modest: Petrel legitimately chains to Fighting Gong
+(the human's own rationale on a sibling frame confirms the chain), and Fighting Gong's own reach ends
+at a Basic {F} Energy/Pokémon — one more hop, no further.
+
+So this is neither "the tutor chain is unrepresentable" (F4 — the chain here is priced, not zero) nor
+"the band is uncalibrated against a surviving deck rung" (F5 — no deck-specific rung is in play). It
+is the narrower and more concrete defect: **a category credit (`"draw" in tags`) competing against a
+COMPUTED value (`_chain_grab_value`) will lose whenever the category member's real effect is unusually
+large, because the category credit cannot see how large.** The fix is local to this one rung — read
+the printed draw count (and Lillie's conditional doubling) off `card_effects.json`'s `draw` clause
+the way `_chain_grab_value` already reads its own clauses, rather than widening `needs.py`'s model at
+all. It needs no slot kind and perturbs neither the discard decider nor the refresh shed.
+
 ### F5 — the band is NOT free: a surviving DECK rung is calibrated against two of the deleted ones
 
 R8 argues the band is *"nearly free"* because *"a ctx-7 menu is homogeneous — every option is a grab,
@@ -309,7 +351,7 @@ frames, and they are a short list with short causes:
 | `86091728-47` | Night Stretcher | Ultra Ball | **F4** — the recycle line (Drakloak → evolve → ability) is a chain the ladder prices at 0 |
 | `83661652-31` | Mega Lucario ex | Riolu | **F7** — the Ultra Ball's own `discard_2` had just paid the Riolu it then re-fetched |
 | `84889011-7` | Riolu | Makuhita | **F1** — `dont-grab-a-card-already-in-hand` (−12) demotes the second line base the line actually needs |
-| `86088989-29` | Lillie's Determination | Team Rocket's Petrel | **F4/F5** — `grab-the-chain-opener` (+15) out-scores `grab-a-draw-supporter-in-setup` (+10) |
+| `86088989-29` | Lillie's Determination | Team Rocket's Petrel | **F8** — a flat `draw`-tag credit (10.80) loses to a COMPUTED chain value (15.00) because it cannot see Lillie's is an 8-card draw on THIS board, not a generic Supporter |
 
 **Every one is a missing FACT, not a missing marginal.** That is the re-grill's actual agenda, and
 it is far smaller than either the issue or the first draft of this ADR implied.
@@ -370,7 +412,7 @@ Two things follow, neither of which needed the equation to be true:
 four of the five findings below rest on boards the agent should never have reached. They are kept
 because each is a real limit of the model, verified at source, and each will matter when a
 gradeable frame does exercise it — but **none of them is currently justified by evidence**, and the
-successor must not treat them as a work list. The single gradeable defect is `86088989-29` (F4/F5).
+successor must not treat them as a work list. The single gradeable defect is `86088989-29`, **F8** — a local fix to one rung, not a `needs.py` model change.
 
 What follows is therefore a REGISTER of known model limits, ordered by cost, not a plan:
 
