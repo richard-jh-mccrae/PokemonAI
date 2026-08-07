@@ -6,7 +6,7 @@ Build: #141 (Phase 1c of the Value System, tracker #136). Companion vocabulary:
 [`CONTEXT.md`](../../src/common/CONTEXT.md). The currency precedent is ADR-0070 decision 1 (#140);
 the combiner discipline is ADR-0069 §1 (#139); the layer-ownership test is ADR-0070 amendment J /
 **Commutative Set · Maneuver**; the shadow-era rulings this amends are the 2026-07-22 promote/retreat
-grill (`docs/archive/plans/promote-retreat-grill-spec.md`, six rulings).
+grill (`ADR-0100`, six rulings).
 
 ## Context
 

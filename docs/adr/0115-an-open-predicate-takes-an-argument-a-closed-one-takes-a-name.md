@@ -129,7 +129,7 @@ card-identity axis.
 
 - **One shipped damage number moved, in the sound direction.** 651 and 708 fall from a flat 80 to
   `40 × count`, which is 40 on the common board. Any Discrimination/Decision Gate flip is recorded in
-  `docs/archive/plans/issue-361-wave3-packet.md`, never conformed.
+  `ADR-0115`, never conformed.
 - **The three closed filtered counts are NOT migrated.** They could be, later; doing it here would
   move the oracle for attacks this ruling never examined. `tests/strategy/test_visible_state_scalers.py`
   is the test that says so.

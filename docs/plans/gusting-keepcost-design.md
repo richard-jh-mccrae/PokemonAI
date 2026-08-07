@@ -1,6 +1,6 @@
 # Gusting keep-cost — the full-equation DESIGN (design-only, not built)
 
-**Status.** DESIGNED 2026-07-19 under the grill rulings recorded in `gusting-grill-spec.md`
+**Status.** DESIGNED 2026-07-19 under the grill rulings recorded in `ADR-0066`
 (scope: "small build + design the full equation"; denial ceiling: "up to ~1 effective prize of
 override"; stall: separate tactical, settled). **Nothing here is built.** ADR-0066 shipped the
 three measured fixes; every leg below carries an EVIDENCE GATE — a description of the correction

@@ -13,7 +13,7 @@ number is a rebase artifact, not an identifier, so cite the issue alongside it.
 
 **Context issues:** #187 (this grill), #186 / ADR-0076 (the slot-family split this extends and partly
 supersedes), #136 (the Value System build tracker), #143 (the un-split original, closed),
-`docs/archive/plans/opponent-value-equation-unification.md` (the design), ADR-0062 (the denial oracle),
+`ADR-0078` (the design), ADR-0062 (the denial oracle),
 ADR-0100 (the Prize Damage Rate), ADR-0065 (the no-fudge discipline this is disciplined by).
 
 ## Context
@@ -120,7 +120,7 @@ sweep the corrections corpus for DISCARD-context frames holding a Hammer, adjudi
 discriminate.
 
 **Corpus availability — correcting a claim repeated throughout the design doc.**
-`docs/archive/plans/opponent-value-equation-unification.md` describes the corrections corpus as *"gitignored"*
+`ADR-0078` describes the corrections corpus as *"gitignored"*
 in four places (the S2/S3a sweep bullets, the S1b next-step, the `opp_target_shadow` note), and this
 ADR inherited that phrasing. **It is wrong.** `data/corrections/` is **tracked** — 33 files across 30
 agent/commit directories, `corrections.jsonl` per directory — and the root `.gitignore` excludes only

@@ -3,7 +3,7 @@
 **Status.** Accepted (grilled 2026-07-16, six locked decisions). **BUILT 2026-07-16/17** — the threat read, the refactor, the loss rung,
 grant-awareness AND the charged matched-Read relaxation landed and suite-green; only the promote
 stand-down (Decision 4 consumer) remains (see §Build status). Deprecates ADR-0043; amends the
-`incoming-affordability.md` WON'T-FIX.
+`ADR-0064` WON'T-FIX.
 
 ## Build status
 
@@ -81,7 +81,7 @@ Three constraints shaped the fix:
    affordability ("counts each body's biggest attack once it can afford its cheapest"), so a naive
    evolution extension credits a 1-Energy Mega Lucario ex with Mega Brave 270 — collapsing both
    directions into "always doomed" and playing scared everywhere.
-2. **The WON'T-FIX.** `docs/todo/incoming-affordability.md` records that a blind affordability cap on
+2. **The WON'T-FIX.** `ADR-0064` records that a blind affordability cap on
    the survival read was built and **reverted (2026-07-07)**: on the real CRITICAL states
    `planner_6858`/`planner_0cbc`, a Mega Starmie mirror at 1 Energy held a hidden **Ignition Energy**
    and fired Nebula Beam next turn — the capped read said "not doomed" and re-opened the blunder.
@@ -199,7 +199,7 @@ win/KO rung — it only adjusts sub-prize survival scoring, the loss rung, and p
 
 ## Consequences
 
-- **`docs/todo/incoming-affordability.md` is amended** (pointer added): the survival read becomes
+- **`ADR-0064` is amended** (pointer added): the survival read becomes
   charged-with-archetype-budget with a worst-case fallback; `active_doomed` itself stays worst-case
   until its own follow-up. `test_critical_0cbc_*` / `test_critical_6858_*` re-verified on their REAL
   states are the amendment's safety gate.

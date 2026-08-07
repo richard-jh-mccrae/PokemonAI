@@ -214,6 +214,6 @@ to fire Nebula Beam. A naive 1-attach affordability cap reads it as *not* doomed
 **survival-critical `active_doomed` stays worst-case** (Incoming reads the ceiling); the Threat Clock's
 affordability model is the **multi-turn PREP read** only (off-by-a-turn is recoverable). So the ADR's
 "fixes the affordability over-doom as a side effect" is **withdrawn** for the survival boolean — the
-incoming-affordability.md fix is unsound as specified (it ignores hidden burst Energy). This is the one
+ADR-0064 fix is unsound as specified (it ignores hidden burst Energy). This is the one
 place the build corrected the design; the Threat Clock still provides the accurate multi-turn projection the
 Match Planner's confidence and prep reads consume.

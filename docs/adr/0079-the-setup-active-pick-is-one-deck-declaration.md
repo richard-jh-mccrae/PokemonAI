@@ -7,7 +7,7 @@ ADR-0077 (a ranked count consumer reads `expected`) and ADR-0078 (the three curr
 reached `main` while this branch was open. All are strategy ADRs, so the README's tooling-moves-first
 rule never applied and the 0071/0072 precedent governed each time — first-merged keeps the number.
 The commit history and the Issue #161 comments therefore say 0075; this file is the same ADR. **Overturns** the 2026-07-15 evolve grill's Ruling 5
-(`docs/plans/evolve-valuation-grill-spec.md`) in its remaining half, and completes
+(`ADR-0070`) in its remaining half, and completes
 **ADR-0070 §4**, which re-ruled `f2` out of the evolve decider's scope and parked it as "a placement
 follow-up". Applies **ADR-0034** (deck rules fold general when the vocabulary is general) and
 **ADR-0046** (analysis proposes, one skill applies).

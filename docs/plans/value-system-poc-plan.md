@@ -109,7 +109,7 @@ A1 Term sufficiency audit      (parallel AUDIT lane; blocks nothing, read-only)
 A2 Apply-seam coverage report  (parallel AUDIT lane; blocks nothing, read-only)
 ```
 
-**A1 — term sufficiency audit** (Issue #268, report: `term-sufficiency-audit.md`). Walks the four
+**A1 — term sufficiency audit** (Issue #268, report: `ADR-0104`). Walks the four
 DECKS rather than the corpus, because the corpus records what the OLD rung-driven agent looked at,
 so a term the new architecture needs and the old agent never exercised leaves no trace in either
 gate. Feeds T3's registry (its `blind_to` lists) and T4's blind-spot checklist. Read-only — it

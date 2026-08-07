@@ -107,7 +107,7 @@ one decision) so it never disturbs `_sticky_path`'s card-id cross-turn coherence
 
 **Consequences.** New kill-switches (or a fold under `objectives_path`), each A/B'd before default-ON.
 The snipe baseline gains the off-path-redundant suppression and the forced-promotion redirect;
-`objectives.py`'s on-path snipe check matches the specific body identity. `deferred-multi-turn-criticals.md`
+`objectives.py`'s on-path snipe check matches the specific body identity. `ADR-0040`
 records the three resolved (a `REQ-OBJ` gate for #30; build-this-closed-form for #107/#45). T6 remains
 parked with its ADR-0043 evidence unchanged. The value model's feature set is unaffected (these are
 target-selection reads, not new leaf features).

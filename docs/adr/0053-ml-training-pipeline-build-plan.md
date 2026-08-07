@@ -5,7 +5,7 @@ of the status ledger in [docs/plans/ml-training-build.md](../plans/ml/ml-trainin
 "not started", and `value_model` is still `PROFILE=False`).
 
 - **Status:** accepted (2026-07-13)
-- **Input:** `docs/archive/research/ml-training-system.md` (deep-research report, 2026-07-11)
+- **Input:** `docs/research/ml-training-system.md` (deep-research report, 2026-07-11)
 - **Operational plan:** `docs/plans/ml-training-build.md` (per-session playbook + status ledger)
 - **Numbering note:** 0052 (KO Oracle) and 0056 (Stat Provider seam, renumbered from a 0051 that
   collided with the MatchupPlan spine) are taken on an unpushed arch-review worktree branch; this

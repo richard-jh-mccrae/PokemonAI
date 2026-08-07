@@ -202,7 +202,7 @@ and the rollout rung ranks only reproducible (coin-free) end boards. Two regress
 | `src/common/{card_worth,deck_odds,gate_library,fetch_closure}.py` | the v1 oracle (Worth · Odds · Gates · Closure) |
 | `src/common/playability.py` | BACKWARD line topology (ADR-0104): can a held card ever be played? The gate on eligibility, and the `deploy` gate's own answer |
 | `docs/adr/0065-glossary.md` | the five-term ubiquitous language |
-| `docs/plans/keep-value-needs-assignment-grill-spec.md` | the grill, rulings, WP build log with all measurements |
-| `docs/plans/keep-value-v2-session-handoff.md` | live state + open threads for the next session |
+| `ADR-0065` | the grill, rulings, WP build log with all measurements |
+| `ADR-0065` | live state + open threads for the next session |
 | `tests/strategy/test_needs.py`, `test_discard_shadow.py` | the mechanism's pinned proofs |
 | `tools/train/probes/needs_sweep.py` | reproduces the acceptance numbers |

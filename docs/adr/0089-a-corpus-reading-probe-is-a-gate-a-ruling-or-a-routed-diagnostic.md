@@ -231,7 +231,7 @@ with no directory of its own, and dropping the fallback would have crashed a rep
 | `attach_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic + the ADR-0069 retune grid |
 | `evolve_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic; OLD arm already gone |
 | `promote_retreat_decider_sweep.py` | **ROUTE** | live term-breakdown diagnostic; OLD arm already gone |
-| `needs_sweep.py` | **ROUTE** | `docs/archive/writeup-from-corrections-to-needs.md` promises its numbers reproduce |
+| `needs_sweep.py` | **ROUTE** | `docs/writeup-from-corrections-to-needs.md` promises its numbers reproduce |
 | `threat_sweep.py` | **ROUTE, −2 modes** | `--doom`/`--recur`/`--target` live; **delete `--slots`** (same-vs-same, 0 flips by construction) and **`--rank`** (answered ADR-0083, covered by `test_scaled_rank_corpus.py`); fix the stale line-17 docstring |
 | 11 files under `tests/strategy/` | **ROUTE** | 9 globbing + 2 fixed-path; one carried the identical 40-record filter |
 
@@ -265,8 +265,8 @@ Five modules leave `tools/train/probes/`; five stay, routed. The tree loses two 
 never have had — a gate that could only report FIX, and the last hand-built frame key — and
 `probes/` stops being a place where a dead instrument can sit looking alive.
 
-Cost, stated: `docs/plans/deploy-decider-swap-review.md`, `ADR-0076:235`'s slots numbers,
-`opponent-value-equation-unification.md` and several ADR references become historical rather than
+Cost, stated: `ADR-0086`, `ADR-0076:235`'s slots numbers,
+`ADR-0078` and several ADR references become historical rather than
 live; if the denial lane reopens, its harness is rebuilt from ADR-0080 / ADR-0084's description
 rather than edited. That is the trade this ADR takes deliberately — a stale harness is a trap, not a
 head start.

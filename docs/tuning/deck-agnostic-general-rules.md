@@ -152,6 +152,6 @@ priority-key audit on the next support-heavy deck.)
   of why a flat develop rung could not rank the wincon base; the fix now lives in the
   equation.
 - Gate: `tests/strategy/test_blunder_20260703_develop_wincon_base.py` (3 replay fixtures + negative).
-- Run report: `docs/archive/tuning/runs/mega_lucario_20260705-130130.md`.
+- Run report: `docs/tuning/runs/mega_lucario_20260705-130130.md`.
 - Ledger: `data/corrections/reviewed.json` (f30/f33/f44 covered/rule-fixed, real-Pilot confirmed).
 - Method: `docs/tuning/methodology.md` (W-route vs H attribution; the retest closes the loop).

@@ -38,7 +38,7 @@ without a fully wired Pilot.
   variants — their shared frames died into the oracle, and one more forced abstraction would
   either shift scores or be a parameter-per-difference shallow wrapper. Likewise the
   Incoming-affordability stance is UNCHANGED (worst-case by design;
-  `docs/todo/incoming-affordability.md`) and the γ/forward-forms orchestration stays with the
+  `ADR-0064`) and the γ/forward-forms orchestration stays with the
   objectives that own it.
 
 **Considered options.** Growing `damage.py` with free functions (rejected: callers keep

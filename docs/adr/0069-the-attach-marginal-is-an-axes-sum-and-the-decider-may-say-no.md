@@ -6,7 +6,7 @@ swap, so its shape (fold → delete → retune → corpus re-rule → paired A/B
 follow. Companion vocabulary: **Retreat Equity · Ability Fuel** in the Agent Runtime
 [`CONTEXT.md`](../../src/common/CONTEXT.md); the Budget/reachability family is ADR-0067 (#137);
 the snapshot it reads is ADR-0068 (#138); the shadow-era rulings it amends are the 2026-07-21
-attach grill (`docs/archive/plans/attach-valuation-grill-spec.md`).
+attach grill (`ADR-0069`).
 
 ## Context
 
@@ -121,7 +121,7 @@ resurrectable, per the tracker's deletion directive.
 ## Amendments from the build (2026-07-25, #139)
 
 Five refinements the corpus forced during the swap. Each STATES a rule the decision above implied but
-did not spell out; none reverses a ruling. Evidence: `docs/plans/attach-decider-swap-review.md`.
+did not spell out; none reverses a ruling. Evidence: `ADR-0069`.
 
 1. **The survival gate has a THIS-TURN half.** Decision 4 gave it a build half only, so a doomed
    Active could be armed in front of an available pivot — 83007714-65, the charter frame of the very
@@ -156,7 +156,7 @@ build, seat-balanced, n=200 per arm):
 **delta +2.92 pp, 95% CI [−0.46, +6.30] pp, 0 crashes in 2400 games** — the grilled flip rule
 (`delta >= 0 AND CI-lo >= -1% AND crashes == 0`) PASSES. It passes on the delta, not on precision:
 ±3.4 pp could never have cleared −1% on width alone. Five of six matchups improve or hold. Full
-table: `docs/plans/attach-decider-swap-review.md`.
+table: `ADR-0069`.
 
 ## Alternatives rejected
 

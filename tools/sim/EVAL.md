@@ -3,7 +3,7 @@
 Offline G2 instrument: a **candidate** vs a **baseline** over a shared opponent field, paired per
 matchup×seat so the raw deck matchup cancels and only the candidate−baseline effect remains. Emits
 the C3 report (`docs/plans/ml/ml-training-contracts.md`) the adoption gate reads. Design:
-`docs/archive/plans/ml/ml-training-design-s2b.md`.
+`ADR-0053`.
 
 ## Run
 

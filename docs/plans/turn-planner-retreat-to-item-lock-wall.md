@@ -1,6 +1,6 @@
 # Turn-planner scenario — the retreat-to-item-lock-wall maneuver (handoff, 2026-07-15)
 
-Surfaced during the evolve-valuation grill (`evolve-valuation-grill-spec.md`, Phase-2 swap). This is
+Surfaced during the evolve-valuation grill (`ADR-0070`, Phase-2 swap). This is
 **line evaluation, not single-action pricing** — it belongs to the Turn Planner (ADR-0037), not the
 `evolve_value` equation, which is why it is split out here. The `evolve_value` swap made a single evolve
 out-score the maneuver's step-1 retreat; the fix is NOT to nerf the equation (the standalone evolve is a
@@ -63,7 +63,7 @@ so it is not competing on the per-option score axis with `evolve_value` at all. 
   re-plan after the Recon draw. How does a committed line accommodate a mid-line reconsider?
 - **Sibling maneuvers.** This shares machinery with the OFFENSIVE disruptor-lock
   (`_can_lock_line_with_disruptor`, dragapult f20) and the promote-retreat grill
-  (`promote-retreat-grill-spec.md`) — ideally one session owns the maneuver-ownership question across
+  (`ADR-0100`) — ideally one session owns the maneuver-ownership question across
   all three.
 - **Cross-layer guard for the evolve swap:** until the planner owns it, the swap must keep the
   retreat-to-wall value dominant over any single-action score so

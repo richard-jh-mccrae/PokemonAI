@@ -248,7 +248,7 @@ played-well-lost report produced.
 Orchestration CLI chaining the loop: corpus → train → G1 validate → label → expert-retune →
 G2 eval; scheduled-run wiring (meta-tracker precedent); docs for the rotation/meta-shift
 workflow (new deck → deck-genie doctrine seeds → corpus regen → fine-tune → retune → labeler
-surfaces residuals). Update `docs/architecture/tier-5-value-model.md` and `docs/tuning/` to
+surfaces residuals). Update `docs/architecture/tiers.md` and `docs/tuning/` to
 reflect the new pipeline.
 
 ## WP5 — league/exploiter (deferred)
