@@ -277,7 +277,7 @@ def _threads_context(call: ast.Call, fn: ast.FunctionDef) -> bool:
 #: asserts this set EQUALS the modules the sweep finds sites in. Deriving it from the sweep would
 #: make that assertion true by construction; a module listed here with no site is a real failure.
 #: `pilot.py` is absent deliberately — the split moved every one of its sites into a family.
-CONSUMERS = ("src/common/state_value.py", "src/common/strategy/planner.py",
+CONSUMERS = ("src/common/state_value.py", "src/common/strategy/planning/leaf.py",
              "src/common/deciders/board_build.py", "src/common/deciders/deny.py",
              "src/common/deciders/doom.py", "src/common/deciders/evolve.py",
              "src/common/deciders/hand.py", "src/common/deciders/heal.py",

@@ -454,7 +454,7 @@ def test_the_LEAF_board_state_value_actually_scores_threads_NEITHER_clock_parame
         "the LIVE path stopped threading the clock parameters — the two equivalence tests above "
         "have gone vacuous and must be re-pointed, not deleted")
 
-    leaf_kwargs = _sole_build(REPO / "src" / "common" / "strategy" / "planner.py")
+    leaf_kwargs = _sole_build(REPO / "src" / "common" / "strategy" / "planning" / "leaf.py")
     assert not ({"forward_ids", "charged"} & leaf_kwargs), (
         "the LEAF path now threads a clock parameter. That is a scoring change at every `survival` "
         "read, not a refactor — rule it, then update this test's finding.")
