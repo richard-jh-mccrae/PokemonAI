@@ -506,22 +506,40 @@ class FetchMixin:
         All False off a PLAY / a free fetch / with < 2 other cards (engine legality)."""
         if option.get("type") != _PLAY or "cost_discard" not in tags:
             return False, False, False
-        from common import needs
         from common.card_worth import ACE_SPEC_TIER
         fetch_cid = self._option_card_id(obs, None, option)
-        rows = self._as_discard_rows(self._needs_hand_rows(obs, board, exclude_cid=fetch_cid),
-                                     obs, board)
-        if len(rows) < 2:
+        picks = self._cost_picks(fetch_cid)
+        if picks is None:
             return False, False, False
-        slots, elig = self._resolve_needs(obs, board, rows)
-        resupply = [0.0] * len(slots)            # a forced discard has no redraw window (as `_needs_v2`)
-        intrinsics = [0.0] * len(rows)           # no v1 post-gate hedge exists over the HAND rows
-        shed = needs.cheapest_removal(slots, elig, resupply, intrinsics, 2,
-                                      **self._removal_ranking_legs(rows))
-        cost = needs.removal_score(slots, elig, resupply, intrinsics, shed)
+        plan = self._cost_shed(obs, board, exclude_cid=fetch_cid, picks=picks)
+        if plan is None:
+            return False, False, False
+        rows, cost = plan.rows, plan.cost
         junk = cost <= 0.0 and all(rows[i].get("pitch", 0) > 0 or rows[i].get("dup_hand")
-                                   or rows[i].get("in_play") for i in shed)
+                                   or rows[i].get("in_play") for i in plan.row_indices)
         return junk, cost > 0.0, cost >= ACE_SPEC_TIER
+
+    def _cost_picks(self, card_id):
+        """How many cards this card's `cost` takes, off `snapshot_coverage.COST_CARDS`. ``None`` for
+        a card with no cost, or one whose cost names no fixed count (`discard_hand`, `bottom_2`).
+
+        The count used to be the literal ``2`` here. **That was not a live defect and must not be
+        described as one** — `_shed_signals` gates on the `cost_discard` FUNCTION TAG, and measured
+        over the shipped stores exactly ONE card carries it (1121 Ultra Ball, whose cost really is
+        `discard_2`). 1092 Secret Box (`discard_3`) and 1233 Canari (`discard_1`) carry a cost CLAUSE
+        and NOT the tag, so they never reach here; an earlier draft of this docstring claimed they
+        were being mispriced, and that claim was false.
+
+        What the lookup buys is that the two stores can no longer drift apart silently: the day the
+        tag is widened to a second carrier — or a sixth cost value is minted — this reads the real
+        count instead of Ultra Ball's, and `cost_card_problems()` demands a count for any value a
+        card actually carries."""
+        from common import board_delta, snapshot_coverage as sc
+        for clause in board_delta.card_clauses(self.combat, card_id):
+            value = clause.get("cost")
+            if value is not None:
+                return sc.COST_CARDS.get(value)
+        return None
 
     def _top_fetch_priority_id(self, select: dict | None, exclude: frozenset = frozenset()) -> int | None:
         """The highest-priority card id the deck WANTS most among a search's revealed candidates — the

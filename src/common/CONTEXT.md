@@ -1028,6 +1028,35 @@ among the 6 drawn" vs "none") — never raw card permutations. Weighted exactly:
 is known (decklist − seen), with prize uncertainty split hypergeometrically (Deck-Content Odds).
 _Avoid_: outcome/branch (unqualified), sample (implies Monte-Carlo)
 
+**Reveal Node**:
+Either of the two apply-seam nodes that resolve a card whose effect REVEALS cards, and **which one
+owns a given card is decided by the ZONE its search reads, never by the clause kind** (ADR-0130). A
+`fetch` of the **deck** is a Chance Node — the zone is hidden, so the outcome is a distribution and
+`common/board_expectation.py` weights it from Deck-Content Odds. A `fetch` of the **discard** is a
+pure Choice Node — the zone is face-up, so there is nothing to weigh and `common/board_choice.py`
+enumerates it under the `FETCH_DISCARD` key with **no `deck_odds` call at all**. This is why `fetch`
+is deliberately absent from `board_choice.CHOICE_CLAUSES`: the kind is identical on both sides and
+folding it in would claim both. The two share ONE relation reader (`fetch_closure.reveal_legs`) and
+ONE multiset enumerator (`board_expectation.multiset_classes`), so a card cannot be read one way in
+one node and another way in the other.
+_Avoid_: expectation node (bare — it names only the chance half, and the discard half is the larger
+of the two by corpus steps), fetch node / search node (says nothing about which node), stochastic
+option (a discard search reveals and is not stochastic)
+
+**Reveal Relation**:
+How a card's several revealing clauses COMBINE — `single` / `union` / `conjunction`, read by
+`fetch_closure.reveal_legs` from the per-leg `choice` flag plus `amount`. A **union** shares one
+budget over the union of its legs' targets (*"a Pokémon **or** a Basic Energy card"*); a
+**conjunction** takes one card per leg (*"an Evolution **and** an Energy card"*); differing caps on
+`choice` legs are an **exclusive either-or**, which refuses. Verified 1:1 against three structurally
+different engine ops, which is the cross-STORE check that caught two cards declared backwards.
+Distinguish three things a leg can fail at, because they are not interchangeable: **empty on this
+board** SKIPS (the engine's own behaviour), **reach-gated on a multi-leg card** REFUSES (it would
+model part of a card while reporting completeness), and **reach-gated on a single-leg card** does
+neither — there is no other leg to skip, so the empty-pool refusal says it precisely.
+_Avoid_: AND/OR (bare — the vocabulary is `choice` + `amount`, and "OR" hides the either-or/union
+split that decides whether a card is enumerable), multi-clause (describes the shape, not the meaning)
+
 **Gamble Line**:
 A Turn Line containing exactly ONE Chance Node, valued by the exact-probability EV over its Outcome
 Classes — each branch's best follow-up valued closed-form — and competing on the Goal Ladder against
@@ -1997,7 +2026,7 @@ element-level granularity is what separates two writes to distinct instances)
 **Hand Ledger**:
 `state_value.hand` reads ONE `needs.Resolution` and prices both sides of it: what my hand and deck
 COVER (`assignment_coverage` + `re_access` + `hand_worth`) MINUS what the position DEMANDS
-(`slot_demand`), crossed once at `POC_WORTH_PRIZE_RATE`. Ruled by **ADR-0127** (Issue #400). Before
+(`slot_demand`), crossed once at `POC_WORTH_PRIZE_RATE`. Ruled by **ADR-0130** (Issue #400). Before
 the demand leg it priced supply alone, which under differencing inverts every card play — spending a
 card moved supply down and demand not at all, so the human-ruled Energy attach priced **negative on
 31 of 31** corpus frames. One Energy retires two `fund_attack` slots (16 Worth of demand) for 8 of
@@ -2012,7 +2041,7 @@ family)
 **Board-Bound Needs Supplier**:
 `MySide.needs` is supplied as `(obs, my_index) -> Resolution`, bound by `StateModel.build` to the
 observation it is building; `_origin` keeps the UNBOUND supplier so `rebuilt` re-binds against its
-own board. Ruled by **ADR-0127** alongside the ledger, and the two had to be found in that order. The
+own board. Ruled by **ADR-0130** alongside the ledger, and the two had to be found in that order. The
 prior spelling was a closure over the ROOT observation, and `rebuilt` forwards `_origin`'s kwargs
 verbatim — so every hypothetical board the composer synthesized read the ROOT board's Needs, and the
 whole `hand` family contributed *exactly* 0 to every 1-ply delta. A fetch, whose entire effect is on

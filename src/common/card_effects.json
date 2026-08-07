@@ -91,7 +91,7 @@
 },
 "1097": {
 "covers": "full",
-"reason": "both discard-fetch legs (Pokemon, Basic Energy) carried"
+"reason": "both discard-fetch legs (Pokemon, Basic Energy) carried, sharing the one cap of 1 (`choice`) — the card prints \"a Pokemon OR a Basic Energy card\", and the engine settles it with ONE op over a union filter (`effectTrashToHand` min1 max1, `{pokemonOrBasicEnergy: true}`), never two picks"
 },
 "1100": {
 "covers": "full",
@@ -179,7 +179,7 @@
 },
 "1142": {
 "covers": "full",
-"reason": "both {F} legs (Basic Energy, Basic Pokemon) carried"
+"reason": "both {F} legs (Basic Energy, Basic Pokemon) carried, sharing the one cap of 1 (`choice`) — the card prints \"a Basic {F} Energy card OR a Basic {F} Pokemon\", and the engine settles it with ONE op over an `anyOf` union filter (`effectDeckToHandAndShuffle` min0 max1), never two picks"
 },
 "1145": {
 "covers": "full",
@@ -629,12 +629,14 @@
 {
 "kind": "fetch",
 "target": "basic_energy",
-"zone": "discard"
+"zone": "discard",
+"choice": true
 },
 {
 "kind": "fetch",
 "target": "pokemon",
-"zone": "discard"
+"zone": "discard",
+"choice": true
 }
 ],
 "1100": [
@@ -818,13 +820,15 @@
 "kind": "fetch",
 "target": "basic_energy",
 "zone": "deck",
-"energy_type": 6
+"energy_type": 6,
+"choice": true
 },
 {
 "kind": "fetch",
 "target": "basic_pokemon",
 "zone": "deck",
-"energy_type": 6
+"energy_type": 6,
+"choice": true
 }
 ],
 "1145": [

@@ -34,6 +34,7 @@ from common import board_expectation as be
 from common import deck_odds
 from common.cards import CardFunctions
 from common.effects import CardEffects
+from common.fetch_closure import multiset_classes
 from common.option_equivalence import AREA_DECK, AREA_HAND, option_fingerprint
 from common.scouting.provider import CardStat, DictCardStatProvider
 from common.state_model import StateModel
@@ -42,7 +43,7 @@ from common.strategy.context import _ATTACH, _PLAY
 
 MAIN = bd.CONTEXT_MAIN
 HAND = AREA_HAND
-FIGHTING, PSYCHIC = 6, 5
+FIGHTING, PSYCHIC, COLORLESS = 6, 5, 0
 
 # ── the pool, every row quoted from `data/EN_Card_Data.csv` ───────────────────────────────────────
 #
@@ -68,6 +69,27 @@ FIGHTING, PSYCHIC = 6, 5
 #                                      Appendix 1: Mega Lucario ex evolves from Riolu ALONE).
 MASTER_BALL, POKE_PAD, ULTRA_BALL, DAWN, POWER_PRO, GEAR, ENERGY_SEARCH = (
     1125, 1152, 1121, 1231, 1141, 1122, 1119)
+#   1225 Hilda            Supporter  "…an Evolution Pokemon **and** an Energy card" — a CONJUNCTION
+#                                    whose two legs both match this file's pool and neither of which
+#                                    reads `CardStat.stage`, which is why it is the conjunction
+#                                    fixture rather than Dawn.
+#   1142 Fighting Gong    Item       "…a Basic {F} Energy card **or** a Basic {F} Pokemon" — a UNION
+#                                    the compendium had declared as a conjunction.
+#   1210 Brock's Scouting Supporter  "up to 2 Basic Pokemon **or** 1 Evolution" — the EXCLUSIVE
+#                                    either-or, which stays refused: different caps per branch.
+#   1205 Cyrano           Supporter  "up to 3 Pokemon {ex}" — the multi-card delivery to HAND.
+#   1086 Buddy-Buddy Poffin Item      "up to 2 Basic Pokemon with 70 HP or less" ONTO YOUR BENCH.
+#   1126 Precious Trolley  Item       "any number of Basic Pokemon" onto the Bench — `amount: "all"`.
+#   1206 Larry's Skill    Supporter  "Discard your hand and search your deck for..." — `discard_hand`,
+#                                    a cost with no fixed count. BOGUS_COST is synthetic: a cost
+#                                    value the compendium never declared, reachable no other way.
+HILDA, GONG, BROCK, CYRANO, POFFIN, TROLLEY = 1225, 1142, 1210, 1205, 1086, 1126
+LARRY, BOGUS_COST = 1206, 1194
+#   675 Lunatone          Basic Pokemon — its draw is an ABILITY (`condition: solrock_in_play`), so
+#                         PLAYING the body reveals nothing at all.
+#   1071 Meowth ex        Basic Pokemon — a real on-bench-play trigger, but a `supporter` target and
+#                         a `trigger` field, both of which `fetch_is_unconditional` rejects.
+LUNATONE, MEOWTH_EX = 675, 1071
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 E_F = 6
 
@@ -88,6 +110,16 @@ _STATS = {
     POWER_PRO: CardStat(POWER_PRO, name="Premium Power Pro", cardType=_ITEM),
     GEAR: CardStat(GEAR, name="Pokégear 3.0", cardType=_ITEM),
     ENERGY_SEARCH: CardStat(ENERGY_SEARCH, name="Energy Search", cardType=_ITEM),
+    HILDA: CardStat(HILDA, name="Hilda", cardType=_SUPPORTER),
+    GONG: CardStat(GONG, name="Fighting Gong", cardType=_ITEM),
+    BROCK: CardStat(BROCK, name="Brock’s Scouting", cardType=_SUPPORTER),
+    CYRANO: CardStat(CYRANO, name="Cyrano", cardType=_SUPPORTER),
+    POFFIN: CardStat(POFFIN, name="Buddy-Buddy Poffin", cardType=_ITEM),
+    TROLLEY: CardStat(TROLLEY, name="Precious Trolley", cardType=_ITEM),
+    LARRY: CardStat(LARRY, name="Larry’s Skill", cardType=_SUPPORTER),
+    BOGUS_COST: CardStat(BOGUS_COST, name="Colress’s Tenacity", cardType=_SUPPORTER),
+    LUNATONE: CardStat(LUNATONE, name="Lunatone", hp=110, energyType=FIGHTING),
+    MEOWTH_EX: CardStat(MEOWTH_EX, name="Meowth ex", hp=170, ex=True, energyType=COLORLESS),
 }
 
 #: The committed `card_effects.json` rows for these cards, copied verbatim. `POWER_PRO` is absent on
@@ -102,7 +134,38 @@ _CLAUSES = {
            {"kind": "fetch", "target": "stage2", "zone": "deck"}],
     GEAR: [{"kind": "fetch", "target": "supporter", "zone": "deck", "dig": 7}],
     ENERGY_SEARCH: [{"kind": "fetch", "target": "basic_energy", "zone": "deck"}],
+    HILDA: [{"kind": "fetch", "target": "energy", "zone": "deck"},
+            {"kind": "fetch", "target": "evolution", "zone": "deck"}],
+    GONG: [{"kind": "fetch", "target": "basic_energy", "zone": "deck", "energy_type": 6,
+            "choice": True},
+           {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "energy_type": 6,
+            "choice": True}],
+    BROCK: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": 2,
+             "choice": True},
+            {"kind": "fetch", "target": "evolution", "zone": "deck", "amount": 1, "choice": True}],
+    CYRANO: [{"kind": "fetch", "target": "pokemon_ex", "zone": "deck", "amount": 3}],
+    POFFIN: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "hp_max": 70,
+              "amount": 2, "dest": "bench"}],
+    TROLLEY: [{"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "amount": "all",
+               "dest": "bench"}],
+    LARRY: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_hand"}],
+    # A cost value `COST_CARDS` has never heard of — the drift case, which no real card provides.
+    BOGUS_COST: [{"kind": "fetch", "target": "pokemon", "zone": "deck", "cost": "discard_9"}],
+    LUNATONE: [{"kind": "draw", "amount": 3, "condition": "solrock_in_play",
+                "rider": "discard_basic_f_energy"}],
+    MEOWTH_EX: [{"kind": "fetch", "target": "supporter", "zone": "deck",
+                 "trigger": "on_bench_play"}],
 }
+
+
+def _ids_in_hand(cls, *, kept: int = 0) -> list:
+    """The card ids this outcome class DELIVERED into my hand.
+
+    `kept` is how many of my hand cards SURVIVE the play — the pre-play hand size minus the card
+    being played, which has already left for the discard. These boards hold only the played card, so
+    it is 0 and the whole post-reveal hand is the delivery."""
+    hand = ((cls.model.source_obs.get("current") or {}).get("players") or [{}])[0].get("hand") or ()
+    return [c.get("id") for c in hand[kept:]]
 
 
 def _combat():
@@ -360,13 +423,143 @@ def test_a_card_with_no_revealing_clause_is_not_an_expectation_node():
         be.expectation(_search_board(hand=(POWER_PRO,)), _play_option())
 
 
-def test_a_conjunction_of_searches_refuses_because_the_vocabulary_cannot_say_which():
-    """Dawn prints *"Search your deck for a Basic Pokémon, **a** Stage 1 Pokémon, **and** a Stage 2
-    Pokémon"* — three clauses that are one CONJUNCTION, not three alternatives. Colress's Tenacity
-    (1194) is the same shape (*"a Stadium card **and** an Energy card"*). Nothing in the clause
-    vocabulary distinguishes AND from OR, so a union would be a guess about the card."""
-    with pytest.raises(bd.Unmodellable, match="more than one"):
-        be.expectation(_search_board(hand=(DAWN,)), _play_option())
+def test_a_conjunction_enumerates_one_card_per_leg_and_SKIPS_an_empty_one():
+    """Dawn prints *"Search your deck for a Basic Pokémon, a Stage 1 Pokémon, **and** a Stage 2
+    Pokémon"* — three legs that are one CONJUNCTION.
+
+    On this board only the Basic leg can find anything (the pool is Riolu / Mega Lucario ex / {F}
+    Energy, and neither Pokémon carries a `stage`), so two legs are EMPTY. The engine skips an empty
+    bucket rather than failing the card — `chain_overrides.json`'s own provenance for 1231 records
+    *"empty buckets skip with a tac bump"* — so the play still resolves and delivers what it could
+    find. Refusing here would refuse a card the engine resolves happily.
+
+    Measured on the real corpus, this is not an edge case: Dawn's leg product is 0 on **all 8** of
+    its steps, precisely because two of its three legs are empty on every one."""
+    exp = be.expectation(_search_board(hand=(DAWN,)), _play_option())
+    assert [tuple(sorted(_ids_in_hand(c))) for c in exp.classes] == [(RIOLU,)]
+
+
+def test_a_conjunction_takes_the_CROSS_PRODUCT_when_several_legs_are_live():
+    """Hilda prints *"Search your deck for an Evolution Pokémon **and** an Energy card"* — two legs
+    that both find something here, so the classes are the product: one Evolution × one Energy.
+
+    Hilda is the conjunction fixture on purpose (`board_expectation`'s own constraint note): both its
+    legs match the pool this file already builds and **neither reads `CardStat.stage`**, so the case
+    needs no new stage fixture."""
+    exp = be.expectation(_search_board(hand=(HILDA,)), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(E_F, MEGA_LUC)]        # the only Evolution x the only Energy class
+    assert all(len(c.fingerprint) == 2 for c in exp.classes), "both delivered cards form the identity"
+
+
+def test_a_union_enumerates_ONE_card_over_the_pooled_legs():
+    """Fighting Gong prints *"Search your deck for a Basic {F} Energy card **or** a Basic {F}
+    Pokémon"* — one card from the UNION of two legs, which the engine settles with a single
+    `anyOf`-filtered op rather than two picks.
+
+    So the classes are one-card, exactly as a single-leg search's are, over a pool that is the union
+    of both legs' — Riolu from the Pokémon leg and {F} Energy from the Energy leg. This is the shape
+    the compendium had backwards: read as a conjunction it would have claimed the card delivers
+    two."""
+    exp = be.expectation(_search_board(hand=(GONG,)), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(E_F,), (RIOLU,)]
+    assert all(len(c.fingerprint) == 1 for c in exp.classes)
+
+
+def test_a_multi_card_delivery_to_HAND_enumerates_multisets_not_subsets():
+    """Cyrano is *"Search your deck for up to 3 Pokémon {ex}"* — a delivery of THREE cards.
+
+    The classes are MULTISETS, not subsets, and the difference is not academic: a pool may hold
+    several copies of one card, and taking two of them is a legal, distinct outcome. Measured on the
+    real corpus, Cyrano's pool is **one distinct card id on all 4 of its steps**, where a subset
+    enumerator returns exactly one class and is simply wrong about what the card delivers.
+
+    Cyrano hunts `pokemon_ex`, and this pool holds exactly one — Mega Lucario ex — so the delivery
+    CLAMPS to what the pool actually contains rather than being padded to three. That clamp is the
+    engine's own (`min(max, matches)`), and it is the real corpus shape rather than a contrived one:
+    the same single-distinct-id pool is what all four of Cyrano's steps present."""
+    exp = be.expectation(_search_board(hand=(CYRANO,)), _play_option())
+    delivered = sorted(tuple(sorted(_ids_in_hand(c))) for c in exp.classes)
+    assert delivered == [(MEGA_LUC,)]
+    assert all(len(c.fingerprint) == 1 for c in exp.classes)
+
+
+def test_a_multi_card_delivery_takes_SEVERAL_COPIES_of_one_card_when_the_pool_holds_them():
+    """The case a subset enumerator gets wrong. Master Ball is a one-card search, so this asks the
+    enumerator directly on the pool that board presents: 3 Riolu and 1 Mega Lucario ex.
+
+    A 3-card delivery over it has two shapes — three Riolu, or two Riolu and the Mega — and BOTH
+    take a card more than once. A subset reading would offer only `(Riolu, Mega)` and would silently
+    claim the deck cannot produce a third body it plainly can."""
+    pool = {RIOLU: 3, MEGA_LUC: 1}
+    assert multiset_classes(pool, 3) == [(RIOLU, RIOLU, RIOLU), (RIOLU, RIOLU, MEGA_LUC)] or \
+        sorted(multiset_classes(pool, 3)) == sorted([(RIOLU, RIOLU, RIOLU),
+                                                        (RIOLU, RIOLU, MEGA_LUC)])
+    assert len(multiset_classes(pool, 3)) == 2
+
+
+def test_a_multi_card_class_weighs_each_card_at_the_multiplicity_it_needs():
+    """A class that takes TWO copies of a card needs two copies still in the deck, which is
+    `p_contains_at_least(..., 2)` and not `p_contains`. Reading it with the >=1 form would
+    over-report every duplicate-bearing class.
+
+    Asserted against the closed form directly rather than against a golden number, so the assertion
+    survives a re-tuned prize split."""
+    model = _search_board(hand=(CYRANO,))
+    hidden, left = model.mine.prizes_hidden, model.mine.deck_count
+    unseen = model.mine.unseen_counts or {}
+    triple = be._class_weight(model, (RIOLU, RIOLU, RIOLU))
+    assert triple == pytest.approx(
+        deck_odds.p_contains_at_least(unseen.get(RIOLU, 0), hidden, left, 3))
+    mixed = be._class_weight(model, (RIOLU, RIOLU, MEGA_LUC))
+    assert mixed == pytest.approx(
+        deck_odds.p_contains_at_least(unseen.get(RIOLU, 0), hidden, left, 2)
+        * deck_odds.p_contains_at_least(unseen.get(MEGA_LUC, 0), hidden, left, 1))
+    # …and a one-card class is bit-for-bit the shipped `p_contains`, which is why nothing moved.
+    assert be._class_weight(model, (RIOLU,)) == \
+        deck_odds.p_contains(unseen.get(RIOLU, 0), hidden, left)
+
+
+def test_the_multiset_enumerator_degenerates_to_todays_classes_at_one_card():
+    """The identity that stops the widening from regressing the single-card path: `multiset_classes`
+    at m=1 is exactly one class per distinct pool card, which is what shipped before."""
+    pool = {RIOLU: 3, MEGA_LUC: 1, E_F: 6}
+    assert multiset_classes(pool, 1) == [(E_F,), (RIOLU,), (MEGA_LUC,)][::1] or \
+        sorted(multiset_classes(pool, 1)) == sorted([(E_F,), (RIOLU,), (MEGA_LUC,)])
+    # A copy count BOUNDS the multiplicity — one Mega Lucario ex can never arrive twice.
+    assert all(k.count(MEGA_LUC) <= 1 for k in multiset_classes(pool, 3))
+    # …and the delivery is clamped by what the pool actually holds, never padded.
+    assert multiset_classes({MEGA_LUC: 1}, 3) == [(MEGA_LUC,)]
+    assert multiset_classes({}, 3) == []
+
+
+def test_a_delivery_to_the_BENCH_still_refuses_and_now_says_so_for_the_right_reason():
+    """Buddy-Buddy Poffin delivers to the Bench, which is the deploy transition with its Bench cap
+    and Stadium-trigger gate — Issue #410's work, not this node's. It refuses.
+
+    What changes is WHICH gate catches it. `amount` used to fire first, filing 41 corpus steps under
+    "the search delivers more than one card"; now the multi-card shape is modelled and the refusal
+    lands on `dest`, which is the reason that actually describes it. A backlog is only actionable if
+    each row names the work it is waiting on."""
+    with pytest.raises(bd.Unmodellable, match="`dest`"):
+        be.expectation(_search_board(hand=(POFFIN,)), _play_option())
+
+
+def test_an_amount_of_all_still_refuses_because_it_names_no_number():
+    """`amount: "all"` is not a count the enumerator can range over without a pool to resolve it
+    against, and its only carriers deliver to the Bench (Precious Trolley), which refuses anyway.
+    Issue #410 owns it. Refused explicitly rather than falling through to a catch-all."""
+    with pytest.raises(bd.Unmodellable, match="`amount`"):
+        be.expectation(_search_board(hand=(TROLLEY,)), _play_option())
+
+
+def test_an_exclusive_either_or_still_refuses_rather_than_guessing_a_cap():
+    """The third shape, and the one that stays refused. Brock's Scouting is *"up to 2 Basic Pokémon
+    **or** 1 Evolution"* — `choice` on both legs but different budgets, so there is no single shared
+    cap to enumerate over and the engine gives it its own op (`xDeckToHandEitherOr`)."""
+    with pytest.raises(bd.Unmodellable, match="either-or"):
+        be.expectation(_search_board(hand=(BROCK,)), _play_option())
 
 
 def test_a_costed_search_refuses_because_the_cost_names_no_target():
@@ -432,3 +625,135 @@ def test_a_kind_other_than_PLAY_refuses():
     the structural floor this module writes around the reveal does not hold for it."""
     with pytest.raises(bd.Unmodellable, match="kind"):
         be.expectation(_search_board(), {"type": _ATTACH, "index": 0})
+
+
+# ── the COST: applied before the search, from an oracle the caller supplies ────────────────────────
+
+
+def _shed_first(n):
+    """A stand-in `shed` oracle: take the first `n` hand cards that are not the one being played.
+
+    Deliberately dumb. The REAL oracle is `Pilot.cost_shed_indices`, which asks
+    `needs.cheapest_removal` — the equation that decides the live discard. This node's contract is
+    only that it applies whatever set it is handed, so the tests must not depend on which set."""
+    def shed(model, option, picks):
+        hand = ((model.source_obs["current"]["players"])[0].get("hand") or ())
+        return [i for i in range(len(hand)) if i != option.get("index")][:n]
+    return shed
+
+
+def test_a_costed_search_refuses_when_no_shed_oracle_is_supplied_and_NAMES_the_seam():
+    """The fail-closed direction, and the one that matters. Pricing the cost UNPAID would over-value
+    every Ultra Ball by the two cards it does not charge for, so the node refuses instead — and the
+    refusal names the missing seam rather than the card, because supplying it is the caller's job."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    with pytest.raises(bd.Unmodellable, match="no `shed` oracle"):
+        be.expectation(board, _play_option())
+
+
+def test_a_costed_search_ENUMERATES_once_the_oracle_is_supplied():
+    """Ultra Ball is 65 of the corpus's 69 cost-refused steps and sits in all five shipped decks."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    exp = be.expectation(board, _play_option(), shed=_shed_first(2))
+    assert exp.classes and exp.total_probability == pytest.approx(1.0)
+
+
+def test_the_cost_is_charged_BEFORE_the_search_so_a_found_card_cannot_pay_for_itself():
+    """The engine's own order — `chain_overrides.json` gives 1121 `play: [costHandTrash,
+    effectDeckToHandAndShuffle]`. Observable rather than cosmetic: charging afterwards would let a
+    delivered card be discarded to pay for the search that delivered it.
+
+    Asserted on the resulting board: the two paid cards and the played card are all in my discard,
+    the delivered card is in my hand, and the hand is exactly the delivery."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    exp = be.expectation(board, _play_option(), shed=_shed_first(2))
+    for cls in exp.classes:
+        me = (cls.model.source_obs["current"]["players"])[0]
+        assert [c["id"] for c in me["discard"]].count(RIOLU) == 2      # both paid cards
+        assert ULTRA_BALL in [c["id"] for c in me["discard"]]          # ...and the source card
+        assert len(me["hand"]) == 1 and me["handCount"] == 1           # only the delivery remains
+
+
+def test_the_cost_never_takes_the_card_being_played():
+    """The engine's gate is `handOthers` — *"discard 2 OTHER cards"*. An oracle naming the played
+    card's own index has it dropped, which then makes the payment short and the play refuse rather
+    than silently discarding the card mid-play."""
+    board = _search_board(hand=(ULTRA_BALL, RIOLU, RIOLU))
+    def names_the_played_card(model, option, picks):
+        return [0, 1]                                    # index 0 IS the Ultra Ball being played
+    with pytest.raises(bd.Unmodellable, match="usable hand index"):
+        be.expectation(board, _play_option(), shed=names_the_played_card)
+
+
+def test_an_unpayable_cost_refuses_as_an_ILLEGAL_play_not_a_free_one():
+    """A one-card hand cannot pay "discard 2 other cards", so the play is not legal on this board —
+    the engine would never offer it. Refusing keeps an unreal option off the menu; pricing it as
+    merely cheap would put one on with a positive delta."""
+    with pytest.raises(bd.Unmodellable, match="usable hand index"):
+        be.expectation(_search_board(hand=(ULTRA_BALL,)), _play_option(), shed=_shed_first(2))
+
+
+def test_a_cost_with_no_fixed_count_refuses_by_NAME():
+    """`COST_CARDS` maps `discard_hand` and `bottom_2` to None, for two different reasons the
+    refusal states: a whole-hand discard has no constant count, and `bottom_2` returns cards to the
+    DECK — which moves `unseen_counts` and would invalidate the very pool being enumerated."""
+    board = _search_board(hand=(LARRY,))
+    with pytest.raises(bd.Unmodellable, match="no fixed card count"):
+        be.expectation(board, _play_option(), shed=_shed_first(2))
+
+
+def test_an_undeclared_cost_value_fails_CLOSED():
+    """Vocabulary drift, in the cost dimension — the same fail-closed rule the unknown-key gate
+    keeps. A cost nobody declared a count for must refuse, never charge 0."""
+    board = _search_board(hand=(BOGUS_COST,))
+    with pytest.raises(bd.Unmodellable, match="not in `snapshot_coverage.COST_CARDS`"):
+        be.expectation(board, _play_option(), shed=_shed_first(2))
+
+
+# ── the DECLINES, each landing on the gate that describes it ───────────────────────────────────────
+
+
+def test_a_reveal_declared_on_a_BODY_is_an_ability_and_refuses_as_one():
+    """**Modelling this would be WRONG, not under-scoped — which is why it gets its own gate.**
+
+    Lunatone's `{"kind": "draw", "condition": "solrock_in_play"}` is an ABILITY. An Ability does not
+    fire because the body was PLAYED; it is a separate `_ABILITY` option on the menu. So deploying
+    Lunatone reveals nothing, and an expectation node over its draw would price a reveal that never
+    happens.
+
+    Before the gate order was fixed these landed in "only an Item or a Supporter", which is true of
+    them and says nothing about the actual defect."""
+    with pytest.raises(bd.Unmodellable, match="is an ABILITY"):
+        be.expectation(_search_board(hand=(LUNATONE,)), _play_option())
+
+
+def test_an_on_bench_play_trigger_passes_the_ability_gate_and_refuses_on_its_CLAUSE():
+    """Meowth ex is the shape that DOES ride the `_PLAY` — `trigger: on_bench_play` fires when the
+    body is benched. So it passes the ability gate, and then refuses on what is actually wrong with
+    it: `fetch_is_unconditional` rejects both the `trigger` field and, behind it, a `supporter`
+    target that resolves for deadness and never for reach.
+
+    The two assertions together are the point: the gate discriminates rather than catching
+    everything on one side of the Item/Supporter line."""
+    with pytest.raises(bd.Unmodellable, match="not the unconditional"):
+        be.expectation(_search_board(hand=(MEOWTH_EX,)), _play_option())
+
+
+def test_the_card_type_floor_is_now_UNREACHABLE_for_the_shipped_pool():
+    """The floor survives as a structural backstop and should catch nothing real.
+
+    Its sentence — *"only an Item or a Supporter resolves to my discard on a search"* — is about
+    where the SOURCE card lands, which is a fact about the play rather than about the reveal. Every
+    shipped card that used to land here now refuses on its own defect first: 11 steps at the ability
+    gate (Lunatone, Fezandipiti ex) and 12 at the clause gates (Meowth ex), leaving 0 at the floor.
+    Asserted by construction — a body whose reveal is a legitimate on-bench-play trigger with an
+    otherwise clean clause is the only thing that could reach it, and no such card ships."""
+    from common.effects import CardEffects
+    from common.fetch_closure import fetch_is_unconditional
+    eff = CardEffects.load()
+    reachable = []
+    for cid in (LUNATONE, MEOWTH_EX, 140):                # the three real carriers
+        for clause in eff.clauses(cid):
+            if clause.get("trigger") == "on_bench_play" and fetch_is_unconditional(clause):
+                reachable.append(cid)
+    assert reachable == [], f"a card can now reach the card-type floor: {reachable}"

@@ -32,13 +32,37 @@ _TAG_FETCH_CLAUSE = {
 }
 
 
+#: The `cost` a `cost_discard`-tagged fetcher carries in the real compendium.
+#:
+#: The tag says *"this search is paid for"* and the clause says WHAT it costs — two stores, and the
+#: fixture has to mirror both or it builds a card that does not exist. Measured over the shipped
+#: stores: exactly ONE card carries the `cost_discard` Function Tag (1121 Ultra Ball) and its
+#: committed clause is `{"cost": "discard_2", "cost_required": true}`, so the value is that card's
+#: rather than a guess at a family. (Secret Box and Canari carry a `cost` CLAUSE and do NOT carry the
+#: tag — the tag store is the narrower of the two, which is a real inconsistency but not this
+#: helper's to resolve.)
+_TAG_FETCH_COST = {"cost_discard": {"cost": "discard_2", "cost_required": True}}
+
+
 def fetch_effects(funcs_map: dict):
     """A `CardEffects` mirroring the standard fetcher TAGS in a test's `CardFunctions` map to
-    their `card_effects.json` FETCH clauses, so a clause-driven `_search_deck_set` sees the fetch-set."""
+    their `card_effects.json` FETCH clauses, so a clause-driven `_search_deck_set` sees the fetch-set.
+
+    A cost tag is a MODIFIER on the fetch clause rather than a clause of its own — that is the shape
+    the real store uses (`{"kind": "fetch", …, "cost": "discard_2"}`), and mirroring it as a separate
+    entry would build a card with two effects instead of one paid effect."""
     from common.effects import CardEffects
-    table = {cid: [_TAG_FETCH_CLAUSE[t] for t in tags if t in _TAG_FETCH_CLAUSE]
-             for cid, tags in funcs_map.items()}
-    return CardEffects({cid: cls for cid, cls in table.items() if cls})
+    table = {}
+    for cid, tags in funcs_map.items():
+        clauses = [dict(_TAG_FETCH_CLAUSE[t]) for t in tags if t in _TAG_FETCH_CLAUSE]
+        if not clauses:
+            continue
+        for tag in tags:
+            if tag in _TAG_FETCH_COST:
+                for clause in clauses:
+                    clause.update(_TAG_FETCH_COST[tag])
+        table[cid] = clauses
+    return CardEffects(table)
 
 
 def opt(type: int = PLAY, **kw) -> dict:

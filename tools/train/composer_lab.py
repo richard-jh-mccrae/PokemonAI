@@ -333,7 +333,12 @@ def compose_frame(pilot, correction, *, rulings=None, by_ep=None, k=None, epsilo
     try:
         t0 = time.perf_counter()
         model = pilot._leaf_state_model(obs, my_index)
-        result = cp.compose(model, options, **kwargs)
+        # The `shed` seam. This lab is the only caller of `compose` that holds a Pilot, which is
+        # exactly why the seam exists: a costed search has to charge its price before its pool is
+        # enumerated, and WHICH cards it takes is the live decider's answer
+        # (`needs.cheapest_removal`), not something the composer may invent. Without this an Ultra
+        # Ball refuses — 65 of the corpus's 69 cost-refused steps.
+        result = cp.compose(model, options, shed=pilot.cost_shed_indices, **kwargs)
         row["ms"] = (time.perf_counter() - t0) * 1000.0
     except Exception as exc:                     # noqa: BLE001 — the finding IS the exception
         row["error"] = f"{type(exc).__name__}: {exc}"

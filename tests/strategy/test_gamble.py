@@ -181,17 +181,35 @@ def test_fetch_predicates_live_in_the_card_representation_not_text():
     with an energy AND a Pokémon branch; the recyclers are discard-zone; Poké Pad is no-Rule-Box.
 
     Energy Retrieval's row carries ``amount: 2`` since Issue #301 — the card recovers UP TO 2 and the
-    clause used to read as one, which is a fix to the DATA, not to the predicate this test pins."""
+    clause used to read as one, which is a fix to the DATA, not to the predicate this test pins.
+
+    Fighting Gong and Night Stretcher gained ``choice: true`` on both legs at Issue #394 — also a fix
+    to the DATA. Both print *"a X **or** a Y"* and were declared as conjunctions, i.e. as delivering
+    both. The PREDICATE fields this test exists to pin are unchanged, so the assertions read the
+    fields rather than compare whole dicts; the relation itself is asserted below them, because a
+    test that pinned the wrong reading is what let the defect sit."""
     from common.effects import CardEffects
     eff = CardEffects.load()
+
+    def leg(clauses, **fields):
+        """The clause carrying exactly these predicate fields — subset, not dict equality, so a new
+        DECLARED field does not fail a test about PREDICATES."""
+        return next((c for c in clauses if all(c.get(k) == v for k, v in fields.items())), None)
+
     gong = eff.clauses(1142)
-    assert {"kind": "fetch", "target": "basic_energy", "zone": "deck", "energy_type": 6} in gong
-    assert {"kind": "fetch", "target": "basic_pokemon", "zone": "deck", "energy_type": 6} in gong
+    assert leg(gong, kind="fetch", target="basic_energy", zone="deck", energy_type=6)
+    assert leg(gong, kind="fetch", target="basic_pokemon", zone="deck", energy_type=6)
     # the plain any-Basic searchers, the discard recyclers, and the no-Rule-Box / mega Pokémon tutors
     assert {"kind": "fetch", "target": "basic_energy", "zone": "deck"} in eff.clauses(1119)
     assert ({"kind": "fetch", "target": "basic_energy", "zone": "discard", "amount": 2}
             in eff.clauses(1118))
-    assert {"kind": "fetch", "target": "basic_energy", "zone": "discard"} in eff.clauses(1097)
+    assert leg(eff.clauses(1097), kind="fetch", target="basic_energy", zone="discard")
+    # The RELATION, pinned where the predicates are, because the two are read from the same legs and
+    # getting it wrong is what made both cards claim to deliver two cards instead of one.
+    from common.fetch_closure import reveal_legs
+    for cid in (1142, 1097):
+        assert reveal_legs(eff.clauses(cid)).relation == "union", cid
+        assert reveal_legs(eff.clauses(cid)).cap == 1, cid
     assert eff.clauses(1152)[0].get("no_rule_box") is True           # Poké Pad
     assert eff.clauses(1145)[0].get("target") == "mega"              # Mega Signal
 

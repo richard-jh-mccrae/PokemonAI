@@ -1170,7 +1170,7 @@ class _Node:
 
 def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: float = EPSILON,
             depth: int = SEQUENCE_DEPTH, search_api=None, deterministic=None,
-            clauses_cover=None) -> ComposerResult:
+            clauses_cover=None, shed=None) -> ComposerResult:
     """Compose this decision's candidate sequences and return the best, with its telemetry.
 
     ``options`` is the engine's live menu. ``deterministic`` and ``clauses_cover`` are the seam's own
@@ -1178,6 +1178,16 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
     ``option -> value``; the callable form is the real one, because both are per-option facts and
     `fate`'s closing paragraph makes joining them the CALLER's job. Their default `None` takes the
     structural MODELLED path, which is what the pool mostly is.
+
+    ``shed`` is the THIRD such caller-supplied seam, and it exists for the same reason the other two
+    do: a costed search (Ultra Ball's *"discard 2 other cards"*) has to charge its price before its
+    pool is enumerated, and WHICH cards it takes is a live decision `needs.cheapest_removal` already
+    makes at the real select. This module cannot ask it — no `Pilot` is reachable from here, and
+    `StateModel.mine.needs` is either absent in production or the LEAF resolution, which is resolved
+    without general slots or pitch terms and is pinned to the ROOT observation (Issue #400 Phase 2).
+    So the caller, which does hold a Pilot, passes `Pilot.cost_shed_indices` in. Left `None`, a
+    costed search REFUSES and names the missing seam rather than being priced unpaid — which would
+    over-value every Ultra Ball by the two cards it does not charge for.
 
     **Pure and bit-identical across runs** (Issue #262's purity, inherited): no dict/set iteration
     decides an order anywhere, every tie resolves through :func:`selection_key`, and the model is
@@ -1205,7 +1215,7 @@ def compose(model, options: Sequence[Mapping], *, k: int = BEAM_WIDTH, epsilon: 
     stamped = [stamp_origin(model, o) for o in options]
 
     state = _Run(k=k, epsilon=epsilon, depth=depth, search_api=search_api,
-                 deterministic=deterministic, clauses_cover=clauses_cover,
+                 deterministic=deterministic, clauses_cover=clauses_cover, shed=shed,
                  canon=canon, reps=reps, stamped=stamped)
 
     root = _Node(model=model, leaf=float(state_value(model)))
@@ -1260,6 +1270,9 @@ class _Run:
     canon: list
     reps: list
     stamped: list
+    #: The cost oracle, optional because only a costed search needs one and most menus hold none.
+    #: `None` makes a costed search REFUSE and name the seam, never price its cost as free.
+    shed: object = None
     candidates: list = field(default_factory=list)
     gaps: list = field(default_factory=list)
     bounds: list = field(default_factory=list)    # both bounds of every expectation node (§S3.5)
@@ -1382,7 +1395,7 @@ def _one_ply(state: _Run, node: _Node, option: dict, index: int):
                 "DROPPING the reveal — an under-reported delta, which at ordering time is a pruned "
                 "option rather than an undervalued one")
         try:
-            result = bx.expectation(node.model, option)
+            result = bx.expectation(node.model, option, shed=state.shed)
         except Unmodellable as gap:
             return _refuse(str(gap))
         state.leaf_evals += len(result.classes)

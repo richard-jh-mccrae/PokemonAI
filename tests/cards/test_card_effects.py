@@ -818,3 +818,112 @@ def test_the_shipped_compendium_rules_every_clause_bearing_card(tmp_path):
     assert eff.covers(1120) == "partial" and eff.clauses_cover(1120) is False   # Crushing Hammer
     assert eff.covers(1121) == "full" and eff.clauses_cover(1121) is True       # Ultra Ball
     assert eff.covers(1203) == "full" and eff.clauses_cover(1203) is True       # Surfer, Issue #302
+
+
+# ── the RELATION, cross-checked against the engine's own ops ───────────────────────────────────────
+
+
+@pytest.mark.req("REQ-CARDS-0001")
+def test_every_multi_leg_relation_agrees_with_the_engine_chain_op():
+    """**The audit that would have caught 1097 and 1142, and did not exist when they were authored.**
+
+    A multi-leg reveal card's relation is declared by the per-leg `choice` flag, and the engine
+    settles the same three shapes with three STRUCTURALLY different ops. So the compendium's reading
+    is checkable against a second, independently-authored store:
+
+        one op over a UNION filter (`anyOf`, `pokemonOrBasicEnergy`)  -> union
+        `xDeckToHandBuckets` / `xDeckTakeSequenceAndShuffle`          -> conjunction
+        `xDeckToHandEitherOr`                                         -> exclusive either-or
+
+    Cards with no `chain_overrides.json` entry are skipped BY NAME rather than silently — a skip
+    that cannot be enumerated is indistinguishable from a pass.
+
+    This is a cross-STORE check, which is the only kind that can catch what happened here: 1097
+    Night Stretcher and 1142 Fighting Gong both print *"a X **or** a Y"*, both were declared as
+    conjunctions, and every audit that read only the compendium agreed with itself."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    from common.fetch_closure import reveal_legs
+    from common.snapshot_coverage import REVEALING_CLAUSES
+
+    root = Path(__file__).resolve().parents[2]
+    eff = CardEffects.load(root / "src" / "common" / "card_effects.json")
+    payload = json.loads((root / "src" / "common" / "card_effects.json").read_text(encoding="utf-8"))
+    chains = json.loads((root / "src" / "cgpy" / "defs" / "chain_overrides.json")
+                        .read_text(encoding="utf-8"))
+
+    #: The engine op that settles each relation. `xPickDiscard` carries its union in an `anyOf`
+    #: filter exactly as `effectDeckToHandAndShuffle` does, so both read off the FILTER not the op.
+    _CONJUNCTION_OPS = {"xDeckToHandBuckets", "xDeckTakeSequenceAndShuffle"}
+    _EITHER_OR_OPS = {"xDeckToHandEitherOr"}
+
+    def declared_relation(clauses):
+        """The relation the COMPENDIUM declares, read straight off the flags.
+
+        Deliberately not `reveal_legs`: that layers this node's SCOPE refusals (a reach-gated leg)
+        on top of the relation, and a scope limit is not a disagreement about what the card does."""
+        legs = [c for c in clauses if c.get("kind") in REVEALING_CLAUSES]
+        flags = [bool(c.get("choice")) for c in legs]
+        if not any(flags):
+            return "conjunction"
+        caps = {c.get("amount", 1) for c in legs}
+        return "union" if len(caps) == 1 else "either-or"
+
+    def engine_relation(entry):
+        """The relation the engine's own `play` chain implies, or None when it says nothing."""
+        for op in entry.get("play") or ():
+            name = op.get("op")
+            if name in _CONJUNCTION_OPS:
+                return "conjunction"
+            if name in _EITHER_OR_OPS:
+                return "either-or"
+            filt = op.get("filter") or {}
+            if "anyOf" in filt or filt.get("pokemonOrBasicEnergy"):
+                return "union"
+        return None
+
+    checked, skipped = [], []
+    for key, clauses in payload.items():
+        if not str(key).lstrip("-").isdigit() or not isinstance(clauses, list):
+            continue
+        cid = int(key)
+        if len([c for c in clauses if c.get("kind") in REVEALING_CLAUSES]) < 2:
+            continue
+        entry = chains.get(str(cid))
+        expected = engine_relation(entry) if entry else None
+        if expected is None:
+            skipped.append(cid)
+            continue
+        assert declared_relation(clauses) == expected, (
+            f"card {cid}: the compendium DECLARES {declared_relation(clauses)!r} and the engine "
+            f"chain implies {expected!r}")
+        # ...and where the seam can also read it, the two must not disagree either. A seam refusal
+        # for a DIFFERENT reason (a reach-gated leg, which is a scope limit rather than a relation)
+        # is not a disagreement, so it is skipped here rather than counted as one.
+        try:
+            assert reveal_legs(eff.clauses(cid)).relation == expected, cid
+        except ValueError as gap:
+            assert "either-or" in str(gap) or "reach-gated" in str(gap), (cid, str(gap))
+        checked.append(cid)
+
+    # The vacuity guard and the named skips — a green cross-store check means nothing if it compared
+    # nothing, and a silent skip list is how a card slips out of an audit it used to be in.
+    assert len(checked) >= 6, f"only {len(checked)} cards cross-checked: {sorted(checked)}"
+    assert 1097 in checked and 1142 in checked, "the two cards this audit exists for must be checked"
+    assert sorted(skipped) == [1094, 1110, 1215, 1238], (
+        f"the no-override skip list moved: {sorted(skipped)} — add the entry or rule the skip")
+
+
+@pytest.mark.req("REQ-CARDS-0001")
+def test_the_cross_store_relation_audit_BITES_when_the_compendium_is_reverted():
+    """The positive control the criterion names explicitly: reverting 1097's `choice` must turn the
+    check above red. Asserted on an in-memory revert rather than by editing the store."""
+    from pathlib import Path
+    from common.effects import CardEffects
+    from common.fetch_closure import reveal_legs
+
+    root = Path(__file__).resolve().parents[2]
+    shipped = CardEffects.load(root / "src" / "common" / "card_effects.json").clauses(1097)
+    assert reveal_legs(shipped).relation == "union"          # as shipped, agreeing with the engine
+    reverted = [{k: v for k, v in c.items() if k != "choice"} for c in shipped]
+    assert reveal_legs(reverted).relation == "conjunction"   # the pre-fix reading the engine refutes

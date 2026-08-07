@@ -63,9 +63,18 @@ FIGHTING, PSYCHIC, DARKNESS = 6, 5, 7
 #                         {ex}…"* — clause kind `heal`, a declared census member with no resolver
 RIOLU, MEGA_LUC, MUNKIDORI = 677, 678, 112
 BOSS, WALLY = 1182, 1229
+#   1097 Night Stretcher  Item, *"Put a Pokemon **or** a Basic Energy card from your discard pile
+#                         into your hand."* — a UNION of two `zone: discard` fetch legs, cap 1. The
+#                         VISIBLE-zone search: no chance to model, so a CHOICE node rather than an
+#                         expectation, which is exactly what `board_expectation` refuses it with.
+#   1118 Energy Retrieval Item, *"Put up to 2 Basic Energy cards from your discard pile into your
+#                         hand."* — one leg, cap 2: the multi-card delivery from a visible zone.
+#   1125 Master Ball      Item, *"Search your DECK for a Pokemon..."* — the positive control: a
+#                         hidden-zone search, which stays the chance node's.
+NIGHT_STRETCHER, ENERGY_RETRIEVAL, MASTER_BALL = 1097, 1118, 1125
 E_F, E_P, E_D = 6, 5, 7                 # Basic {F} / {P} / {D} Energy
 
-_BASIC_ENERGY, _SUPPORTER = 5, 3
+_BASIC_ENERGY, _SUPPORTER, _ITEM = 5, 3, 1
 
 _STATS = {
     RIOLU: CardStat(RIOLU, name="Riolu", hp=80, energyType=FIGHTING, retreatCost=2,
@@ -79,6 +88,9 @@ _STATS = {
     E_D: CardStat(E_D, name="Basic {D} Energy", cardType=_BASIC_ENERGY, energyType=DARKNESS),
     BOSS: CardStat(BOSS, name="Boss’s Orders", cardType=_SUPPORTER),   # U+2019 in the CSV
     WALLY: CardStat(WALLY, name="Wally's Compassion", cardType=_SUPPORTER),
+    NIGHT_STRETCHER: CardStat(NIGHT_STRETCHER, name="Night Stretcher", cardType=_ITEM),
+    ENERGY_RETRIEVAL: CardStat(ENERGY_RETRIEVAL, name="Energy Retrieval", cardType=_ITEM),
+    MASTER_BALL: CardStat(MASTER_BALL, name="Master Ball", cardType=_ITEM),
 }
 
 #: The committed `card_effects.json` rows for the two Trainers, copied verbatim.
@@ -86,6 +98,11 @@ _CLAUSES = {
     BOSS: [{"kind": "gust", "target": "any"}],
     WALLY: [{"kind": "heal", "amount": "all", "restriction": "mega_only",
              "rider": "bounce_energy_to_hand"}],
+    NIGHT_STRETCHER: [{"kind": "fetch", "target": "basic_energy", "zone": "discard",
+                       "choice": True},
+                      {"kind": "fetch", "target": "pokemon", "zone": "discard", "choice": True}],
+    ENERGY_RETRIEVAL: [{"kind": "fetch", "target": "basic_energy", "zone": "discard", "amount": 2}],
+    MASTER_BALL: [{"kind": "fetch", "target": "pokemon", "zone": "deck"}],
 }
 
 
@@ -564,16 +581,24 @@ def test_a_declared_census_member_with_no_resolver_says_so_rather_than_going_qui
 def test_the_declared_vocabulary_is_CLOSED_over_the_registries_that_consume_it():
     """The vacuity guard and its positive control, copied from `test_snapshot_coverage.py`'s pattern.
 
-    Every registry key must be a declared member of `CHOICE_KINDS` or `CHOICE_CLAUSES`, and every
-    declared clause kind must be one `snapshot_coverage` has heard of — a member misspelled into a
-    registry would otherwise be dead code that no refusal and no test could distinguish from an
-    absent one. The positive control is the second assertion: the same walk finds `gust`/`heal`/`accel`
-    present in `CLAUSE_WRITES`, so a silent empty comparison would not pass it."""
-    declared = set(bc.CHOICE_KINDS) | set(bc.CHOICE_CLAUSES)
+    Every registry key must be a declared member of `CHOICE_KEYS`, and every declared CLAUSE kind
+    must be one `snapshot_coverage` has heard of — a member misspelled into a registry would
+    otherwise be dead code that no refusal and no test could distinguish from an absent one. The
+    positive control is the `CLAUSE_WRITES` assertion: the same walk finds `gust`/`heal`/`accel`
+    there, so a silent empty comparison would not pass it."""
+    declared = set(bc.CHOICE_KEYS)
     assert declared, "vacuity guard: an empty vocabulary would pass every assertion below"
+    assert declared == set(bc.CHOICE_KINDS) | set(bc.CHOICE_CLAUSES) | {bc.FETCH_DISCARD}
     assert set(bc.CHOICE_REGISTRY) <= declared, sorted(set(bc.CHOICE_REGISTRY) - declared)
     assert set(bc.TARGET_RANKERS) <= set(bc.CHOICE_REGISTRY)
     assert set(bc.CHOICE_CLAUSES) <= set(sc.CLAUSE_WRITES)          # the positive control
+    # `FETCH_DISCARD` is deliberately NOT a `CLAUSE_WRITES` value and must never be added as one: it
+    # is a ZONE-QUALIFIED family name, not a clause kind. The clause kind is `fetch`, which is a
+    # `REVEALING_CLAUSES` member owned by the chance node; only the zone says which node resolves a
+    # given carrier. Asserted so the closure above cannot be "fixed" by minting a fake clause value.
+    assert bc.FETCH_DISCARD not in sc.CLAUSE_WRITES
+    assert bc.FETCH_DISCARD not in bc.CHOICE_CLAUSES
+    assert "fetch" in sc.REVEALING_CLAUSES and "fetch" not in bc.CHOICE_CLAUSES
     # ONE record per key is what makes the sync obligation structural rather than prose: every entry
     # carries a space and a canonical form, and `apply`/`fingerprint` are one capability in two halves
     # that `ChoiceKind.__post_init__` refuses to let drift apart. Asserted here as well as in the
@@ -671,3 +696,165 @@ def test_the_expansion_is_ranked_before_it_is_capped_so_truncation_keeps_the_bes
     capped = bc.deferred_target(model, RETREAT, cap=1)
     assert capped.truncated == len(bc.deferred_target(model, RETREAT).classes) - 1
     assert capped.classes[0].fingerprint == expected
+
+
+# ── the VISIBLE-zone search: a discard fetch is a choice node ─────────────────────────────────────
+#
+# `board_expectation` refuses one in terms that name this module — *"a `discard`-zone search carries
+# NO chance — that zone is visible — so it is a pure CHOICE node, not an expectation"* — and until
+# Issue #394 that sentence pointed at a registry entry nobody had built. 46 corpus steps sat there.
+
+
+def _discard_board(hand, discard, *, deck=()):
+    return _model(_obs(_player(active=_body(MEGA_LUC, serial=1), hand=hand, discard=discard)), deck)
+
+
+def _delivered(exp, *, kept=0):
+    """The card ids each outcome class put in my hand, as sorted tuples."""
+    out = []
+    for cls in exp.classes:
+        hand = ((cls.model.source_obs.get("current") or {}).get("players") or [{}])[0].get("hand")
+        out.append(tuple(sorted(c.get("id") for c in (hand or ())[kept:])))
+    return sorted(out)
+
+
+def test_a_discard_search_is_routed_to_the_CHOICE_node_not_the_chance_node():
+    """The routing, asserted from both sides so it cannot be half-true.
+
+    The zone is what decides — not the clause kind. `fetch` is deliberately NOT a `CHOICE_CLAUSES`
+    member, because a DECK fetch is the chance node's; only `zone: discard` comes here."""
+    model = _discard_board((NIGHT_STRETCHER,), (RIOLU, E_F))
+    play = {"type": _PLAY, "index": 0}
+    assert bc.choice_key(model, play, seat_index=0) == bc.FETCH_DISCARD
+    assert bc.has_deferred_target(model, play, seat_index=0) is True
+    # The positive control: a DECK search of the same clause kind is NOT this node's, and the
+    # refusal says so rather than going quiet.
+    deck_model = _discard_board((MASTER_BALL,), (RIOLU,))
+    with pytest.raises(bd.Unmodellable, match="no clause with a deferred target"):
+        bc.choice_key(deck_model, play, seat_index=0)
+    assert bc.has_deferred_target(deck_model, play, seat_index=0) is False
+
+
+def test_a_discard_UNION_enumerates_one_card_over_both_legs():
+    """Night Stretcher is *"a Pokémon **or** a Basic Energy card"* — one card from the union of two
+    legs, so a discard holding both offers both, and the source card lands in the discard as it
+    resolves (`docs/rulebook.txt` L78)."""
+    exp = bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (RIOLU, E_F)),
+                             {"type": _PLAY, "index": 0}, seat_index=0)
+    assert _delivered(exp) == [(E_F,), (RIOLU,)]
+    for cls in exp.classes:
+        me = (cls.model.source_obs["current"]["players"])[0]
+        assert NIGHT_STRETCHER in [c.get("id") for c in me["discard"]]     # spent, not vanished
+        assert len(me["hand"]) == 1 and me["handCount"] == 1
+
+
+def test_a_discard_search_takes_NO_deck_odds_because_the_zone_is_face_up():
+    """Every class is equally available — the cards are THERE. So the probabilities are the choice
+    node's uniform placeholder and no `deck_odds` call is made, which is the whole reason this is a
+    different node rather than a parameter on the other one."""
+    exp = bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (RIOLU, E_F)),
+                             {"type": _PLAY, "index": 0}, seat_index=0)
+    assert [c.probability for c in exp.classes] == [0.5, 0.5]
+    assert exp.total_probability == pytest.approx(1.0)
+
+
+def test_duplicate_copies_in_the_discard_are_ONE_class():
+    """Three copies of a card in the discard are one decision, not three — the same collapse the
+    chance node performs for three identical cards in the deck. Enumerated over card ids up front so
+    the class count is the number of real choices rather than the number of physical cards."""
+    exp = bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (RIOLU, RIOLU, RIOLU, E_F)),
+                             {"type": _PLAY, "index": 0}, seat_index=0)
+    assert _delivered(exp) == [(E_F,), (RIOLU,)]
+
+
+def test_the_classes_are_invariant_to_DISCARD_ORDER():
+    """The enumeration must be a function of the BOARD, not of the order the discard happens to be
+    listed in — the same reproducibility guarantee `class_representatives` keeps. Permute the pile
+    and get the same classes, which a resolver keyed on physical indices would fail."""
+    play = {"type": _PLAY, "index": 0}
+    a = bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (RIOLU, E_F, MUNKIDORI)), play,
+                           seat_index=0)
+    b = bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (MUNKIDORI, E_F, RIOLU)), play,
+                           seat_index=0)
+    assert _delivered(a) == _delivered(b)
+    assert len(a.classes) == len(b.classes) == 3
+
+
+def test_a_multi_card_discard_delivery_takes_the_cap_and_clamps_to_the_pile():
+    """Energy Retrieval is *"up to 2 Basic Energy cards"*: two cards from one leg, and the delivery
+    clamps to what the pile actually holds rather than being padded."""
+    play = {"type": _PLAY, "index": 0}
+    two = bc.deferred_target(_discard_board((ENERGY_RETRIEVAL,), (E_F, E_P, RIOLU)), play,
+                             seat_index=0)
+    assert _delivered(two) == [(E_P, E_F)]            # Riolu is not an Energy; the pair is the only class
+    assert all(len(c.fingerprint) == 2 for c in two.classes)
+    one = bc.deferred_target(_discard_board((ENERGY_RETRIEVAL,), (E_F, RIOLU)), play, seat_index=0)
+    assert _delivered(one) == [(E_F,)]                # clamped to the single Energy in the pile
+
+
+def test_an_empty_discard_refuses_rather_than_returning_a_zero_class_node():
+    """A search that can reach nothing is a fact to refuse on, exactly as the chance node's
+    empty-pool refusal is — a zero-class Expectation is one whose `expected()` raises inside the
+    ordering loop."""
+    # A pile holding only an Item: Night Stretcher reaches neither a Pokemon nor a Basic Energy.
+    with pytest.raises(bd.Unmodellable, match="no legal instance"):
+        bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (MASTER_BALL,)),
+                           {"type": _PLAY, "index": 0}, seat_index=0)
+    # The positive control: the SAME board with one reachable card enumerates, so the refusal above
+    # is the pool being empty rather than the resolver being broken.
+    ok = bc.deferred_target(_discard_board((NIGHT_STRETCHER,), (MASTER_BALL, MUNKIDORI)),
+                            {"type": _PLAY, "index": 0}, seat_index=0)
+    assert _delivered(ok) == [(MUNKIDORI,)]
+
+
+def test_the_discard_rank_is_ORDERING_ONLY_and_never_a_magnitude():
+    """`deferred_target` sorts by rank before capping, so a space with no ranker has its survivors
+    chosen by pile order. The rank is `MySide.role_worth` — the same declared quantity
+    `composer.selection_key` uses as an ordering leg — and it must stay a SORT KEY: it enters no
+    score and adds to no delta, so changing it can reorder classes but can never change what any
+    surviving class is worth."""
+    model = _discard_board((NIGHT_STRETCHER,), (RIOLU, E_F))
+    play = {"type": _PLAY, "index": 0}
+    space = bc.target_space(model, play, seat_index=0)
+    ranked = sorted(space, key=lambda c: (-bc._rank_discard(model, c), c))
+    exp = bc.deferred_target(model, play, seat_index=0)
+    # The classes appear in rank order...
+    assert _delivered(exp) == sorted(tuple(sorted(k)) for _i, k in ranked)
+    # ...and every class still carries the same uniform probability, i.e. the rank priced nothing.
+    assert len({c.probability for c in exp.classes}) == 1
+
+
+def test_a_discard_fetch_carrying_an_UNHANDLED_key_fails_closed():
+    """The visible-zone half of the fail-closed rule, and it is deliberately NARROWER than the deck
+    half's. This node's applier writes a plain hand delivery, so a discard fetch that grew a `cost`,
+    a `dest` or a `trigger` would be applied as though it had none — silently, and in the widening
+    direction.
+
+    No shipped card carries one, which is exactly when the gate is cheap to add and impossible to
+    notice missing. Asserted on synthetics, since that is the only way to reach it, with the shipped
+    keys asserted clean as the positive control."""
+    from common.effects import CardEffects
+    for extra in ({"cost": "discard_2"}, {"dest": "bench"}, {"trigger": "on_bench_play"}):
+        clauses = {NIGHT_STRETCHER: [{"kind": "fetch", "target": "pokemon", "zone": "discard",
+                                      **extra}]}
+        obs = _obs(_player(active=_body(MEGA_LUC, serial=1), hand=(NIGHT_STRETCHER,),
+                           discard=(RIOLU,)))
+        model = StateModel.build(
+            obs, deck=[],
+            combat=CombatMath(DictCardStatProvider(_STATS), functions=CardFunctions({}),
+                              transients=None, effects=CardEffects(clauses)))
+        with pytest.raises(bd.Unmodellable, match="not in this node's handled set"):
+            bc.choice_key(model, {"type": _PLAY, "index": 0}, seat_index=0)
+
+    # The positive control: every SHIPPED discard fetch's keys are already inside the handled set,
+    # so the gate refuses drift rather than refusing the pool.
+    shipped = CardEffects.load()
+    seen = 0
+    for cid in (1097, 1109, 1110, 1118, 1184, 1238):
+        legs = [c for c in shipped.clauses(cid)
+                if c.get("kind") == "fetch" and c.get("zone") == "discard"]
+        assert legs, cid
+        for leg in legs:
+            assert set(leg) <= bc._HANDLED_DISCARD_KEYS, (cid, sorted(set(leg) - bc._HANDLED_DISCARD_KEYS))
+            seen += 1
+    assert seen >= 9, f"the walk reached only {seen} shipped discard legs"

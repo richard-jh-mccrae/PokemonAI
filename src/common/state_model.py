@@ -1103,11 +1103,13 @@ class MySide(_SideBase):
         """The TYPES of that supply — what the Attach Budget's manual-attach leg takes."""
         return frozenset(self.hand_energy_counts)
 
-    # `needs` (a caller-supplied Needs resolution, held so several equations could share one
-    # assignment) was DELETED by POC-T1 (Issue #260) together with its `needs=` constructor chain.
-    # It was doubly dead: the ONE production builder never passed it, so the field was never written
-    # AND never read. A seat nobody sits in is not architecture — it is a promise the next reader
-    # will believe. T3's `readiness` term brings its own supplier when it needs one.
+    # `needs` (a caller-supplied Needs resolution, held so several equations share one assignment)
+    # was deleted by POC-T1 (Issue #260) as doubly dead — never written, never read — and **POC-T3
+    # (Issue #262) RE-ADDED it**, which is the state today: the constructor takes it (`:1041`,
+    # `:1063`), `build` threads it and captures it into `_origin` so `rebuilt` replays it, the
+    # accessor is `MySide.needs` below, and `planner._leaf_needs_resolution` is the one production
+    # supplier. Corrected here rather than left standing (Issue #394): a tombstone for a field that
+    # came back is worse than no note, because it tells the next reader not to look.
 
     def role_worth(self, card_id) -> float:
         """A card's **Worth**, in `card_worth` points — what job it does for THIS deck.

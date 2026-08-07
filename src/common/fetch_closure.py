@@ -20,6 +20,8 @@ Fail direction (grader safety, ADR-0064): every predicate is an ENDORSER — bad
 """
 from __future__ import annotations
 
+from typing import NamedTuple
+
 # The FETCH-clause target classes that name a POKÉMON (the scope the retired tag-keyed
 # ``_FETCH_FILTERS`` covered: bench_fill / tutor_mega / tutor_pokemon / rush_evolve). This is the
 # REACH scope — the classes the closure graph and the doctrine's endorser set range over.
@@ -220,6 +222,141 @@ def fetch_target_matches(clause: dict, stat, *, deadness: bool = False) -> bool:
         if not getattr(stat, "is_ex_body", False):
             return False
     return _pokemon_body_matches(clause, stat)
+
+
+#: What a card's revealing clauses mean TOGETHER — see :func:`reveal_legs`.
+#:
+#: ``relation`` is one of ``"single"`` / ``"union"`` / ``"conjunction"``; ``legs`` are the revealing
+#: clauses in store order; ``cap`` is how many cards the whole play delivers (a union's shared
+#: budget, or 1 per leg for a conjunction).
+RevealLegs = NamedTuple("RevealLegs", [("relation", str), ("legs", tuple), ("cap", int)])
+
+
+def reveal_legs(clauses) -> RevealLegs:
+    """How a card's revealing clauses COMBINE — the ONE reader of the multi-leg relation.
+
+    Both reveal nodes need this and neither may spell it twice: `board_expectation` owns the CHANCE
+    node (a deck search, hidden zone, probabilities) and `board_choice` owns the CHOICE node (a
+    visible zone, no probabilities). Before this, each refused a multi-leg card outright and each
+    *guessed* the relation in its own refusal message.
+
+    The relation is already in the data. ``CLAUSE_PARAMETERS["choice"]`` declares *"the clause is one
+    alternative of a choose-one card"*, and the discriminator is that flag plus ``amount``::
+
+        every leg `choice`  +  amounts EQUAL   -> UNION, shared cap = that amount (absent => 1)
+        every leg `choice`  +  amounts DIFFER  -> EXCLUSIVE either-or  -> refuse
+        no leg `choice`     +  >= 2 legs       -> CONJUNCTION, one card per leg
+        some legs `choice`, some not           -> half-declared        -> refuse
+
+    Cross-checked card-for-card against the engine, which draws the same three distinctions with
+    three structurally different ops (`src/cgpy/defs/chain_overrides.json`): ONE op over a union
+    filter (`anyOf`, `pokemonOrBasicEnergy`) for a union; `xDeckToHandBuckets` /
+    `xDeckTakeSequenceAndShuffle` for a conjunction; `xDeckToHandEitherOr` for the exclusive shape.
+
+    Raises ``ValueError`` — the caller owns the refusal sentence, because the two nodes format
+    theirs differently (`board_expectation` prefixes the card id and name; `board_choice` prefixes
+    the choice key) — in four cases:
+
+    * **no revealing clause at all** — this option is a point transition, not a reveal node;
+    * **an exclusive either-or** — the branches carry different budgets, so there is no single cap
+      to enumerate over (1210 Brock's Scouting, *"up to 2 Basic Pokémon or 1 Evolution"*);
+    * **a half-declared relation** — neither reading is available. No carrier ships;
+      `snapshot_coverage.choice_relation_problems` is the tripwire that keeps it that way;
+    * **a reach-gated leg of a MULTI-leg card** — a ``target`` in
+      :data:`FETCH_DEADNESS_ONLY_TARGETS`. Those resolve for DEADNESS and never for REACH, so
+      `fetch_target_matches` returns False for them at the default reading every pool walk uses: the
+      leg matches nothing *structurally*, not merely on this board. Skipping it would enumerate
+      three of Secret Box's four legs while reporting completeness — the three-quarters-of-a-card
+      modelling `board_delta._play`'s clause-union gate exists to refuse. 1092 Secret Box and 1206
+      Larry's Skill each carry one.
+
+    **A SINGLE reach-gated leg is deliberately NOT refused here**, and the asymmetry is the whole
+    point of the rule: with one leg there is no *other* leg to enumerate, so no partial answer can
+    be manufactured. The card simply reaches nothing, which its caller already reports precisely and
+    at the right altitude — `board_expectation`'s empty-pool refusal (*"no target it can reach is
+    still unseen in my deck"*). Refusing here instead would move eight cards (Pokégear 3.0, Meowth
+    ex, Roto-Stick, Miracle Headset, Larry's Skill's siblings…) off the refusal reasons that
+    correctly describe them and onto one that does not.
+
+    Note the further asymmetry with an EMPTY leg, which is not this function's business at all: a
+    leg whose target class is fine but which finds nothing *on this board* is a pool fact the caller
+    skips (the engine does the same — *"empty buckets skip with a tac bump"*). A reach-gated leg can
+    never find anything on any board, which is a card fact."""
+    from common.snapshot_coverage import REVEALING_CLAUSES
+    legs = tuple(c for c in (clauses or ()) if c.get("kind") in REVEALING_CLAUSES)
+    if not legs:
+        raise ValueError("no `draw`/`fetch` clause, so this option is a point transition rather "
+                         "than a reveal node")
+    if len(legs) == 1:
+        return RevealLegs("single", legs, _leg_cap(legs[0]))
+    gated = sorted({c.get("target") for c in legs
+                    if c.get("target") in FETCH_DEADNESS_ONLY_TARGETS})
+    if gated:
+        raise ValueError(
+            f"a leg targets {gated} — reach-gated classes that match nothing structurally, so "
+            f"enumerating the other legs would model part of a card while reporting completeness")
+    flagged = [bool(c.get("choice")) for c in legs]
+    if any(flagged) and not all(flagged):
+        raise ValueError(
+            f"`choice` is declared on {sum(flagged)} of {len(legs)} revealing legs — neither a "
+            f"union nor a conjunction can be read from a half-declared relation")
+    if not any(flagged):
+        return RevealLegs("conjunction", legs, 1)
+    caps = {_leg_cap(c) for c in legs}
+    if len(caps) > 1:
+        raise ValueError(
+            f"an exclusive either-or: the `choice` legs carry different caps {sorted(caps)}, so the "
+            f"branches have separate budgets and no single shared cap to enumerate over")
+    return RevealLegs("union", legs, caps.pop())
+
+
+def multiset_classes(pool: dict, m: int) -> list:
+    """The ``m``-card deliveries a ``{card id: copies}`` pool can produce, as sorted id tuples.
+
+    A **MULTISET** enumerator, not a subset one, and the difference is the whole point: a pool holds
+    *copies*, so taking two of the same card is a legal and distinct outcome. Measured on the corpus,
+    1205 Cyrano's pool is a single distinct card id on all four of its steps — where a subset
+    enumerator returns one class and is simply wrong about what a three-card search delivers.
+
+    Two clamps, both from the engine: a card can never arrive more times than the pool holds copies
+    of it, and the delivery is clamped to what the pool actually holds (`min(m, total)`) rather than
+    padded — the engine spells the same clamp as `min(max, matches)`.
+
+    **Deliveries of exactly `min(m, total)` cards, never fewer.** *"Up to 3"* also permits taking
+    two, but for a free search into HAND taking fewer is dominated: it costs nothing, forfeits a
+    card, and the composer takes the max over classes anyway. Enumerating the shorter deliveries
+    would multiply the class count for outcomes that can never win. (This does NOT hold for a Bench
+    delivery, where each arrival hands over Prize-Path exposure — which is one more reason that
+    destination is Issue #410's and refuses here.)"""
+    total = sum(pool.values())
+    take = min(int(m), total)
+    if take < 1 or not pool:
+        return []
+    ids = sorted(pool)
+    out: list = []
+
+    def walk(i: int, left: int, acc: tuple) -> None:
+        if left == 0:
+            out.append(acc)
+            return
+        if i >= len(ids):
+            return                                  # this branch cannot fill the delivery
+        cid = ids[i]
+        for count in range(min(int(pool[cid]), left), -1, -1):
+            walk(i + 1, left - count, acc + (cid,) * count)
+
+    walk(0, take, ())
+    return sorted(out)
+
+
+def _leg_cap(clause: dict) -> int:
+    """How many cards ONE leg delivers. Absent ``amount`` is 1 — the shape 1097/1142 print (*"a
+    Pokémon or a Basic Energy card"*). ``"all"`` is not a number here and is left to the caller to
+    resolve against a real pool, so it reads as 0 rather than being guessed at."""
+    amount = clause.get("amount")
+    if amount is None:
+        return 1
+    return amount if isinstance(amount, int) and not isinstance(amount, bool) else 0
 
 
 def _deck_fetch_clauses(clauses_of, cid):

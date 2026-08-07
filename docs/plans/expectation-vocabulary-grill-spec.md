@@ -1,9 +1,30 @@
 # Expectation-node vocabulary widening — grill + implementation spec (Issue #394, POC-T4/2b)
 
-**Status:** ready to implement. Every number below is MEASURED on the 377 committed native traces
-(`tests/fixtures/parity/`); every card fact is quoted from the engine's own `all_card_data()` dump
-(`tools/meta_tracker/cards.json`) or the engine chain definitions (`src/cgpy/defs/`). Nothing here is
-recalled.
+> ## ⚠️ SUPERSEDED — historical record only. Do NOT build from this document.
+>
+> **The ruling record is [ADR-0130](../adr/0130-a-reveal-is-resolved-by-the-zone-it-reads-and-a-cost-is-charged-from-a-supplied-seam.md);
+> the spec that was built is Issue #394's rewritten body.** This document is the FIRST grill (2026-08-05),
+> kept for its derivations and measurements. Its *design* was re-derived from the code before the build
+> and changed materially, so following it now would build something that does not match what shipped:
+>
+> | this doc says | what shipped | why |
+> |---|---|---|
+> | nothing about discard-zone searches | **`board_choice.FETCH_DISCARD`** — a second node, split by ZONE | the largest single item, 46 steps; `board_expectation`'s own refusal already named the module |
+> | `_reveal_legs` lives in `board_expectation` | **`fetch_closure.reveal_legs`** | both reveal nodes need it; two spellings is how they drift (ADR-0087) |
+> | `COST_CARDS: dict[str, tuple[int \| None, str]]` | **`dict[str, int \| None]`** | the zone half was never read; `CLAUSE_WRITES` already declares it |
+> | `bottom_2: (2, "deck_bottom")` — buildable | **`None` — REFUSES** | it returns cards to the DECK, which moves `unseen_counts` and invalidates the pool being enumerated |
+> | `cost_vocabulary_agrees()` | **`cost_card_problems()`** + `choice_relation_problems()` | matches the module's existing `*_problems()` audit convention |
+> | reach-gated leg refuses always | refuses on a **MULTI-leg card only** | measured: refusing single-leg cards moved eight real cards off refusal reasons that describe them |
+> | denominator **706**, target 28.0% | **663**, reached **36.8%** | Issue #410 retired 43 `_PLAY` refusals between the two |
+> | `BRANCH_CAP` never binds | it **BINDS** on one corpus board | reported via `truncated`, per the no-silent-caps contract |
+>
+> Its measurements were re-taken at every commit rather than trusted; several moved.
+
+**Status:** **SUPERSEDED** (see above). Every number below was MEASURED on the 377 committed native
+traces (`tests/fixtures/parity/`) **as of 2026-08-05**; every card fact is quoted from the engine's own
+`all_card_data()` dump (`tools/meta_tracker/cards.json`) or the engine chain definitions
+(`src/cgpy/defs/`). Nothing here was recalled — but the denominator has since moved, so treat every
+count as historical.
 
 ---
 

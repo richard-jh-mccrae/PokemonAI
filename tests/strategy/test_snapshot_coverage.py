@@ -392,6 +392,96 @@ def test_the_clause_KEY_audit_actually_bites_including_inside_a_nested_block():
 
 
 @pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_cost_vocabulary_declares_both_its_zones_and_its_count():
+    """**Issue #394's apply seam has to CHARGE a cost, not only know which zones it touches.**
+
+    `CLAUSE_WRITES` answers *"which zones does `discard_2` move?"* and deliberately not *"how many
+    cards?"* — its own comment records that *"the COUNT lives in the value's name today"*. That was
+    fine while nothing applied a cost. `COST_CARDS` makes the count data, and this grades the
+    biconditional in BOTH directions: a cost with zones but no count cannot be charged, and a count
+    for a value with no zones is a cost nobody declared."""
+    assert sc.cost_card_problems(_compendium()) == [], sc.cost_card_problems(_compendium())
+    # The counts themselves, read off the printed text quoted in `CLAUSE_WRITES`' own comment block.
+    assert sc.COST_CARDS["discard_1"] == 1        # 1233 Canari, "discard another card"
+    assert sc.COST_CARDS["discard_2"] == 2        # 1121 Ultra Ball, "discard 2 other cards"
+    assert sc.COST_CARDS["discard_3"] == 3        # 1092 Secret Box, "discard 3 other cards"
+    # The two the seam REFUSES, for two different reasons — see COST_CARDS' own docstring.
+    assert sc.COST_CARDS["discard_hand"] is None  # the count is the hand's size, not a constant
+    assert sc.COST_CARDS["bottom_2"] is None      # returns cards to the DECK, so the pool moves
+    # Every cost value the compendium actually uses is one this table covers. Read off the shipped
+    # store rather than restated, so a sixth value cannot be minted without landing here.
+    used = sc.cost_values(_compendium())
+    assert used, "vacuity guard: no card carries a cost, so the assertion below compares nothing"
+    assert used <= set(sc.COST_CARDS), sorted(used - set(sc.COST_CARDS))
+    assert used <= set(sc.CLAUSE_WRITES), sorted(used - set(sc.CLAUSE_WRITES))
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_cost_vocabulary_audit_actually_bites():
+    """The positive control. A green audit means nothing unless it can go red, and this one is graded
+    against the SHIPPED STORE rather than against a second list of the same keys — an audit that
+    compares a table with a hand-copy of its own keys passes by agreeing with itself."""
+    real = dict(sc.COST_CARDS)
+    payload = _compendium()
+    try:
+        sc.COST_CARDS.pop("discard_2")                  # Ultra Ball really carries it
+        assert any("discard_2" in p and "no count" in p for p in sc.cost_card_problems(payload))
+        sc.COST_CARDS.update(real)
+        sc.COST_CARDS["discard_2"] = 0
+        assert any("discard_2" in p and "positive int" in p
+                   for p in sc.cost_card_problems(payload))
+    finally:
+        sc.COST_CARDS.clear()
+        sc.COST_CARDS.update(real)
+    assert sc.cost_card_problems(payload) == []
+    # A cost value a card carries but `CLAUSE_WRITES` never declared is the OTHER direction, and it
+    # is reachable only on a synthetic — no shipped card has one, which is the point of the check.
+    fabricated = {"901": [{"kind": "fetch", "target": "pokemon", "zone": "deck",
+                           "cost": "pitch_energy"}]}
+    assert [p for p in sc.cost_card_problems(fabricated) if "pitch_energy" in p]
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_multi_leg_reveal_relation_is_coherently_declared():
+    """**Issue #394 item F1.** `choice` is a PER-LEG flag, so it can be declared in shapes that mean
+    nothing — on half a card's legs (neither a union nor a conjunction can be read) or on a card with
+    one leg (an alternative to nothing). Empty over the shipped compendium; a tripwire, not a
+    backlog.
+
+    NOT a problem, and asserted so rather than left implicit: `choice` legs whose `amount` DIFFERS.
+    That is the declared shape of a real exclusive either-or — 1210 Brock's Scouting, *"up to 2 Basic
+    Pokémon or 1 Evolution"*, which the engine spells `xDeckToHandEitherOr`. The seam refuses it for
+    being unenumerable, which is a different verdict from mis-declared."""
+    assert sc.choice_relation_problems(_compendium()) == [], \
+        sc.choice_relation_problems(_compendium())
+    # The vacuity guard: the walk must actually reach multi-leg reveal cards.
+    multi = [cid for cid, cs in sc.clause_lists(_compendium()).items()
+             if len([c for c in cs if c.get("kind") in sc.REVEALING_CLAUSES]) > 1]
+    assert len(multi) >= 10, f"the walk reached only {len(multi)} multi-leg reveal cards"
+    # 1210 Brock's Scouting really does carry differing amounts on `choice` legs, and really is clean.
+    brock = [c for c in sc.clause_lists(_compendium())[1210] if c.get("kind") == "fetch"]
+    assert {c.get("amount") for c in brock} == {1, 2} and all(c.get("choice") for c in brock)
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
+def test_the_reveal_relation_audit_actually_bites_on_both_incoherent_shapes():
+    """The positive control for the audit above, one synthetic card per shape."""
+    half = {"901": [{"kind": "fetch", "target": "pokemon", "zone": "deck", "choice": True},
+                    {"kind": "fetch", "target": "energy", "zone": "deck"}]}
+    assert [p for p in sc.choice_relation_problems(half) if "half-declared" in p]
+    solitary = {"902": [{"kind": "fetch", "target": "pokemon", "zone": "deck", "choice": True}]}
+    assert [p for p in sc.choice_relation_problems(solitary) if "ONE revealing clause" in p]
+    # …and the coherent shapes on the same instrument stay silent, so the two results above are a
+    # measurement rather than a walk that complains about everything.
+    union = {"903": [{"kind": "fetch", "target": "pokemon", "zone": "deck", "choice": True},
+                     {"kind": "fetch", "target": "energy", "zone": "deck", "choice": True}]}
+    conj = {"904": [{"kind": "fetch", "target": "pokemon", "zone": "deck"},
+                    {"kind": "fetch", "target": "energy", "zone": "deck"}]}
+    assert sc.choice_relation_problems(union) == []
+    assert sc.choice_relation_problems(conj) == []
+
+
+@pytest.mark.req("REQ-SNAPSHOT-0002")
 def test_every_clause_SELECTOR_value_in_the_compendium_is_declared():
     """**Issue #374 — the THIRD axis, and the widest.** `CLAUSE_WRITES` audits the values of the four
     VOCABULARY keys and `CLAUSE_PARAMETERS` audits the key NAMES; nothing walked a selector's VALUE.

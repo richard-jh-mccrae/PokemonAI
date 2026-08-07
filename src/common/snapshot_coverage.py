@@ -597,6 +597,48 @@ CLAUSE_WRITES: dict[str, frozenset[str]] = {
     "bottom_2": frozenset({"my_hand_ids", "my_deck_count", "deck_odds", "deck_order"}),
 }
 
+#: **How many cards each cost takes, as data** — ``None`` where the count is not a fixed number the
+#: seam can ask an oracle for.
+#:
+#: :data:`CLAUSE_WRITES` says which ZONES a cost moves; it deliberately does not say how many cards,
+#: and its own comment records why — *"The COUNT lives in the value's name today"*. That was fine
+#: while nothing applied a cost. Issue #394's apply seam has to hand a count to the shed oracle
+#: ("which 2 cards would the live decider actually discard?"), and reading it back out of the name
+#: is exactly the wrong move: `discard_1`/`_2`/`_3` parse, and `discard_hand` and `bottom_2` do not.
+#: A table keeps the two questions separate and makes a sixth cost value impossible to mint without
+#: answering both — :func:`cost_card_problems` grades the biconditional against `CLAUSE_WRITES`.
+#:
+#: ``None`` means the seam REFUSES, and the two entries mean it for different reasons:
+#:
+#: * ``discard_hand`` — the count is the hand's size, not a constant. Determinate (there is no
+#:   choice; the whole hand goes), so this is a scope decision rather than an impossibility: its two
+#:   carriers, 1192 Carmine and 1206 Larry's Skill, are in **no** shipped deck and contribute **no**
+#:   step to the seam's cost backlog, so building the second writer shape would be code nothing
+#:   measures. Recorded as a flagged decline rather than a silent gap.
+#: * ``bottom_2`` — 1200 Kofu puts two cards on the BOTTOM OF THE DECK. Unlike a discard, that moves
+#:   `my_deck_count`, `deck_odds` and `deck_order` (see its `CLAUSE_WRITES` entry), so the seam's
+#:   non-interaction argument — a hand→discard move leaves `unseen_counts` untouched because
+#:   `MySide.visible_counts` already counts both zones — does NOT hold for it. Refusing is the
+#:   correct answer here, not a deferral.
+COST_CARDS: dict[str, int | None] = {
+    "discard_1": 1,
+    "discard_2": 2,
+    "discard_3": 3,
+    "discard_hand": None,
+    "bottom_2": None,
+}
+
+#: The `cost` values :data:`COST_CARDS` must cover — DERIVED from the compendium rather than listed.
+#:
+#: An earlier draft spelled these out, which made two of :func:`cost_card_problems`' legs grade a
+#: table against a hand-copy of its own keys — an audit that passes by agreeing with itself. Reading
+#: the shipped store instead means a sixth cost value shows up here the moment a card carries it,
+#: and `cost_card_problems` then demands a count for it.
+def cost_values(payload: Mapping) -> frozenset[str]:
+    """Every `cost` value the shipped compendium actually uses."""
+    return frozenset(c["cost"] for cs in clause_lists(payload).values() for c in cs
+                     if c.get("cost") is not None)
+
 #: Clauses that consult RNG. **Never eligible for the ENGINE-RESOLVED route** — the gate there is
 #: *provably deterministic*, and the engine has no deal-seed, so simulating one of these returns a
 #: single Monte-Carlo sample rather than a distribution (Issue #178's defect) AND breaks the
@@ -1189,6 +1231,67 @@ def covers_problems(payload: Mapping) -> list[str]:
     return problems
 
 
+def cost_card_problems(payload: Mapping) -> list[str]:
+    """Every way the shipped compendium, :data:`COST_CARDS` and :data:`CLAUSE_WRITES` disagree about
+    the cost vocabulary. Empty is the contract.
+
+    Graded against the STORE rather than against a second list of the same keys: a cost a card really
+    carries but that has no count is one the apply seam cannot charge, and one with no write-set
+    prices at exactly 0. A stale entry in `COST_CARDS` for a value no card carries is deliberately
+    NOT a problem — it is a declared refusal waiting for its carrier, which is how `bottom_2` and
+    `discard_hand` are meant to sit."""
+    problems: list[str] = []
+    used = cost_values(payload)
+    for value in sorted(used - set(COST_CARDS)):
+        problems.append(f"cost {value!r}: carried by a shipped card but absent from COST_CARDS — "
+                        f"the apply seam has no count to charge for it")
+    for value in sorted(used - set(CLAUSE_WRITES)):
+        problems.append(f"cost {value!r}: carried by a shipped card but has no CLAUSE_WRITES entry "
+                        f"— a cost whose ZONES are undeclared prices at exactly 0")
+    for value, count in sorted(COST_CARDS.items()):
+        if count is not None and (not isinstance(count, int) or count < 1):
+            problems.append(f"cost {value!r}: count {count!r} is neither None nor a positive int")
+    return problems
+
+
+def choice_relation_problems(payload: Mapping) -> list[str]:
+    """Every way a card's multi-leg REVEAL relation is declared incoherently. Empty is the contract.
+
+    ``CLAUSE_PARAMETERS["choice"]`` declares *"the clause is one alternative of a choose-one card"*,
+    and `fetch_closure.reveal_legs` reads exactly that flag to tell a UNION (*"a Pokémon **or** a
+    Basic Energy card"*) from a CONJUNCTION (*"an Evolution Pokémon **and** an Energy card"*). The
+    flag is per-leg, so it can be declared in shapes that mean nothing:
+
+    * **half-declared** — some revealing legs carry ``choice`` and some do not. Neither reading is
+      available and the seam must refuse, so an author has to see it here rather than as a runtime
+      refusal on one board.
+    * **solitary** — ``choice`` on a card with a single revealing clause. An alternative to nothing
+      is not an alternative; it reads as an author having meant *"the player picks"*, which is
+      already every search's semantics.
+
+    Both are EMPTY over the shipped compendium and are tripwires rather than a backlog. Deliberately
+    NOT a problem: ``choice`` legs whose ``amount`` differs — that is the declared shape of a real
+    exclusive either-or (1210 Brock's Scouting, *"up to 2 Basic Pokémon **or** 1 Evolution"*, which
+    the engine spells `xDeckToHandEitherOr`). It is refused at the seam for being unenumerable, not
+    for being mis-declared."""
+    problems: list[str] = []
+    for cid, clauses in sorted(clause_lists(payload).items()):
+        reveal = [c for c in clauses if c.get("kind") in REVEALING_CLAUSES]
+        if not reveal:
+            continue
+        flagged = [bool(c.get("choice")) for c in reveal]
+        if len(reveal) == 1:
+            if flagged[0]:
+                problems.append(f"card {cid}: `choice` on a card with ONE revealing clause — an "
+                                f"alternative to nothing; every search already lets the player pick")
+            continue
+        if any(flagged) and not all(flagged):
+            problems.append(f"card {cid}: `choice` is declared on {sum(flagged)} of {len(reveal)} "
+                            f"revealing legs — neither a union nor a conjunction can be read from a "
+                            f"half-declared relation")
+    return problems
+
+
 def validate(zones: Sequence[Zone] = WRITABLE) -> list[str]:
     """Every way the registry fails its own discipline, as readable problems. Empty is the contract.
 
@@ -1263,12 +1366,14 @@ def clauses_writing_unhomed() -> dict:
 
 __all__: Sequence[str] = (
     "HOMED", "OWED", "HIDDEN", "STATUSES", "Zone", "WRITABLE", "BY_ID", "CLAUSE_WRITES",
+    "COST_CARDS", "cost_values",
     "NONDETERMINISTIC_CLAUSES", "REVEALING_CLAUSES", "VOCABULARY_KEYS", "CLAUSE_PARAMETERS",
     "CLAUSE_SELECTORS", "UNCONSUMED_SELECTORS",
     "COVERS_KEY", "COVERS_FULL", "COVERS_PARTIAL", "COVERS_VERDICTS", "PARTIAL_CLAUSE_BASELINE",
     "is_card_key", "clause_lists", "covers_table", "clause_values", "clause_vocabulary",
     "clause_keys", "clause_selectors",
     "clauses_cover", "partial_clause_cards",
+    "cost_card_problems", "choice_relation_problems",
     "covers_problems", "validate", "homes", "unhomed",
     "undeclared_clauses", "undeclared_clause_keys", "undeclared_selector_values", "unknown_zones",
     "clauses_writing_unhomed",

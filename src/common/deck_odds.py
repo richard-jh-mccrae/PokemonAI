@@ -7,9 +7,11 @@ Two families, two fail directions (grader safety — nothing here ever raises):
   form behind a Gamble Line's Outcome Classes, ADR-0039) and `draw_hit_with_engines` (the Stage-2
   draw-engine two-window closed form, WP4). ENDORSERS: bad input → **0.0** — a gamble must never
   fire on garbage.
-* **The prize-split content estimate** — `p_contains` / `contains_odds`, the probabilistic
-  COMPLEMENT to the sound deck tracker (ADR-0029), detailed below. SUPPRESSORS: bad input → **1.0**
-  ("assume present") — a probabilistic suppressor must never stand a search down on garbage.
+* **The prize-split content estimate** — `p_contains_at_least` / `p_contains` / `contains_odds`, the
+  probabilistic COMPLEMENT to the sound deck tracker (ADR-0029), detailed below. SUPPRESSORS: bad
+  input → **1.0** ("assume present") — a probabilistic suppressor must never stand a search down on
+  garbage. `p_contains_at_least` is the general form (P(≥k copies survive the split), the CDF);
+  `p_contains` is its ``k = 1`` case and delegates to it, so the two cannot drift.
 
 `deck_tracker.OwnCardModel` is **certain-or-silent**: it resolves the prize split EXACTLY (only after a
 search reveals the whole deck) and otherwise reports the sound pigeonhole bounds — it never guesses
@@ -113,28 +115,61 @@ def draw_hit_with_engines(outs, pool, draws, engines, windows) -> float:
     return max(0.0, min(1.0, total))
 
 
+def p_contains_at_least(unseen_copies, prizes_hidden, deck_count, k: int = 1) -> float:
+    """P(my deck still holds **at least ``k`` copies** of a card) under the same prize split
+    ``p_contains`` uses — the hypergeometric CDF rather than only its ≥1 tail:
+
+        P(≥k in deck) = Σ_{j=k}^{min(u, d)} C(d, j)·C(K, u−j) / C(d+K, u)
+
+    ``u`` = unseen copies, ``K`` = ``prizes_hidden``, ``d`` = ``deck_count``. The summand is the
+    per-split PMF `strategy.planner._prize_split_hit` already builds for its own mixture; this is
+    that PMF summed rather than folded through a draw window.
+
+    **Why ≥1 is not enough.** A multi-card delivery (Cyrano's *"up to 3"*, Buddy-Buddy Poffin's
+    *"up to 2"*) may legally take TWO copies of one card, so an outcome class naming a card twice
+    asks whether two copies are *available* — a question ``p_contains`` cannot answer and would
+    over-report by treating one surviving copy as enough.
+
+    Agrees with the sound oracle at every extreme, exactly as the ≥1 form does: ``k <= 0`` → 1.0
+    (asking for nothing); ``u < k`` or ``d < k`` → 0.0 (unreachable); ``K == 0`` → 1.0 (nothing is
+    prized); ``u − K >= k`` → 1.0 (pigeonhole — at most ``K`` copies can be prized, so at least
+    ``u − K`` are in the deck). Never raises: any bad input → **1.0**, the SUPPRESSOR direction
+    ``p_contains`` documents."""
+    try:
+        u, hidden, d, need = (int(unseen_copies), int(prizes_hidden),
+                              int(deck_count), int(k))
+    except Exception:
+        return 1.0
+    if need <= 0:
+        return 1.0                       # ">= 0 copies" is vacuously true
+    if u < need or d < need:
+        return 0.0                       # fewer unseen copies than asked, or a deck too small
+    if hidden <= 0:
+        return 1.0                       # no hidden prizes -> every unseen copy is in the deck
+    if u - hidden >= need:
+        return 1.0                       # pigeonhole: at most `hidden` copies can be prized
+    h = d + hidden
+    try:
+        # `comb` returns 0 whenever u-j exceeds the prize slots, so the range needs no second bound.
+        hit = sum(comb(d, j) * comb(hidden, u - j) for j in range(need, min(u, d) + 1))
+        splits = comb(h, u)              # u <= h here (u <= hidden + d), so this is > 0
+    except Exception:
+        return 1.0
+    if splits <= 0:
+        return 1.0
+    return max(0.0, min(1.0, hit / splits))
+
+
 def p_contains(unseen_copies, prizes_hidden, deck_count) -> float:
     """P(my deck still contains ≥1 copy of a card) from the hypergeometric split of its ``unseen_copies``
     over the ``deck_count + prizes_hidden`` hidden positions (of which ``prizes_hidden`` are face-down
-    prizes). Returns a float in ``[0, 1]``; never raises (any bad input → 1.0, "assume present")."""
-    try:
-        u, k, d = int(unseen_copies), int(prizes_hidden), int(deck_count)
-    except Exception:
-        return 1.0
-    if u <= 0:
-        return 0.0                       # every copy seen outside deck -> sound-EMPTY
-    if d <= 0:
-        return 0.0                       # deck empty -> holds nothing (all unseen are prized)
-    if k <= 0:
-        return 1.0                       # no hidden prizes -> every unseen copy is in deck
-    if u > k:
-        return 1.0                       # more unseen copies than prize slots -> pigeonhole: ≥1 in deck
-    h = d + k
-    try:
-        p_all_prized = comb(k, u) / comb(h, u)   # u ≤ k ≤ h -> comb(h, u) > 0, no division by zero
-    except Exception:
-        return 1.0
-    return max(0.0, min(1.0, 1.0 - p_all_prized))
+    prizes). Returns a float in ``[0, 1]``; never raises (any bad input → 1.0, "assume present").
+
+    The ``k = 1`` case of :func:`p_contains_at_least`, and DELEGATES to it rather than restating the
+    algebra — ``1 − C(K,u)/C(H,u)`` is that sum's complement, so keeping both spellings would be two
+    closed forms for one model. The identity is asserted over the whole small grid in
+    `tests/strategy/test_deck_odds.py`."""
+    return p_contains_at_least(unseen_copies, prizes_hidden, deck_count, 1)
 
 
 def contains_odds(decklist, visible, deck_count, prizes_hidden) -> dict:

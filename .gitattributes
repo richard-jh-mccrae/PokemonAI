@@ -45,6 +45,16 @@ src/cg/** -text !eol
 # stated design rather than fix a defect.
 src/common/card_functions.json text eol=lf
 
+# The same contract for the same reason, one store over. `build_card_effects.py` is the one writer
+# for `card_effects.json` and also writes LF unconditionally, so on a Windows checkout (`core.eol`
+# = `native`) every re-stamp rewrote all ~1300 lines and buried a two-entry edit in a whole-file
+# diff. The blob is already clean LF, so this rule changes ZERO committed bytes — it only stops the
+# checkout from disagreeing with the builder. Added by Issue #394, whose item F1 re-stamps this
+# store; PR #411 fixed the sibling and this file was simply not in its scope. Note the CI guard
+# cannot catch either case: `ci.yml` matches `attr/text eol=lf` on the checked-out attribute, which
+# is exactly what is missing when the rule is absent.
+src/common/card_effects.json text eol=lf
+
 # Common binary artifacts.
 *.dll binary
 *.so binary

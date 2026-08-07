@@ -11,7 +11,23 @@ module owns the ARITHMETIC, exactly as `board_delta` does for the point transiti
 
 **Still INERT at runtime.** Nothing in production calls this — `apply_option`'s dispatch is
 unchanged, so the parity lane and both ADR-0072 gates see the same seam they saw at Issue #382. The
-composer wires it at T4/4 (Issue #385).
+composer (Issue #385) consumes it and is itself dark, so `score_diff` and both gates are NULL
+CONTROLS for changes here and must be reported as such. The evidence that does bite is the
+apply-seam parity lane, the census below, and `tools/train/composer_lab.py`.
+
+## Two reveal nodes, split by ZONE — not one node with a flag
+
+A reveal is resolved by whichever node owns the zone its search reads:
+
+* **this module** for a DECK search — the zone is hidden, so the outcome is a distribution and the
+  weights come from `deck_odds`' prize split;
+* **`common.board_choice`** for a DISCARD search — the zone is face-up, so there is no chance to
+  model at all and the outcome is a pure CHOICE among cards the player can see.
+
+`fetch` is deliberately NOT a `board_choice.CHOICE_CLAUSES` member: the clause KIND is the same on
+both sides and only the zone tells them apart. The two share one relation reader
+(`fetch_closure.reveal_legs`) and one multiset enumerator (`fetch_closure.multiset_classes`), so a card
+cannot be read one way here and another way there.
 
 ## Never a sampled engine shuffle
 
@@ -105,65 +121,93 @@ bodies its clauses can actually reach and refuses the rest rather than half-appl
   distribution over which n cards arrived. Enumerating single-card classes for an n-card draw is a
   biased conditional (systematically the highest-count cards), which is a different and worse failure
   than the search case's honest lower bound. Refused, with the family named for a follow-on.
-* **more than one revealing clause** — a CONJUNCTION, and the vocabulary cannot say so. Verified at
-  source rather than inferred: Dawn (1231) prints *"Search your deck for a Basic Pokémon, a Stage 1
-  Pokémon, **and** a Stage 2 Pokémon"* and Colress's Tenacity (1194) *"a Stadium card **and** an
-  Energy card"* — both are three/two clauses that are one effect. A union would be a guess.
-* **a `cost`** — Ultra Ball's *"only if you discard 2 other cards from your hand"*. WHICH two is
-  chosen at a follow-up select, structurally the same case as `board_delta`'s 63 target-at-a-select
-  refusals, so the cost's `my_hand_ids` / `my_discard_contents` writes cannot be placed.
-* **`amount` other than 1** — the class would deliver m cards and a one-card class prices a fraction
-  of the play.
+* **an exclusive either-or** — 1210 Brock's Scouting prints *"up to 2 Basic Pokémon **or** 1
+  Evolution"*: `choice` on both legs but DIFFERENT caps, so the branches carry separate budgets and
+  there is no single shared cap to enumerate over. The engine gives it its own op
+  (`xDeckToHandEitherOr`), distinct from the union filter it gives 1097/1142, so this is a real third
+  shape rather than a mis-declaration.
+* **a reach-gated leg of a MULTI-leg card** — `supporter` / `any` resolve for DEADNESS and never for
+  REACH, so such a leg matches nothing structurally. 1092 Secret Box and 1206 Larry's Skill each
+  carry one; enumerating their other legs would model three quarters of a card while reporting
+  completeness. A SINGLE such leg is not refused here — there is no other leg to skip, so the card
+  simply reaches nothing and the empty-pool refusal says so precisely.
+* **a `cost` with no fixed card count** — `discard_hand` pays the whole hand, whose size is not a
+  constant; `bottom_2` returns cards to the DECK, which moves `unseen_counts` and would invalidate
+  the very pool being enumerated. Both are `None` in `snapshot_coverage.COST_CARDS`.
+* **a `cost` with no `shed` oracle supplied** — WHICH cards are paid is a live decision
+  `needs.cheapest_removal` already makes at the real select, and no `Pilot` is reachable from this
+  seam. The caller passes the answer in; with none, this refuses and NAMES the seam rather than
+  pricing the cost unpaid, which would over-value every Ultra Ball by the two cards it does not
+  charge for. An UNPAYABLE cost refuses as an ILLEGAL play (the engine's own `handOthers` gate),
+  never as a free one — an unreal option with a positive delta is worse than a silent zero.
+* **`amount` that names no number** — only `"all"` reaches here, and resolving it needs both a pool
+  to count against and the Bench cap its only carriers deliver into (Issue #410).
 * **a `dest` other than the hand** — the found body arrives in PLAY, which is `board_delta`'s deploy
   with its Bench cap and its Stadium-trigger gate, not a hand write.
 * **`zone` other than the deck** — a discard search carries no chance at all (the zone is visible),
-  so it is a pure CHOICE node rather than an expectation. Modelling it here would put a certainty
-  behind a probability-weighted shape.
+  so it is a pure CHOICE node rather than an expectation. That node is `common.board_choice`, and
+  since Issue #394 it has a `FETCH_DISCARD` registry entry: this refusal now hands the step to a
+  module that resolves it rather than ending it.
+* **a revealing clause that is an ABILITY** — Lunatone's `condition: solrock_in_play` draw and
+  Fezandipiti ex's `pokemon_ko_last_turn` one are Abilities, and an Ability does not fire because
+  the body was PLAYED (it is a separate `_ABILITY` option). Modelling a reveal there would be
+  flatly WRONG rather than under-scoped. Only an `on_bench_play` trigger rides the `_PLAY`.
 * **anything `fetch_closure.fetch_is_unconditional` rejects** — `trigger` / `dig` / `condition` /
   `name_family`. Asked through the shipped predicate rather than re-spelling its four fields, so
   there is one answer to *"is this the unconditional, decidable whole-deck search?"* (ADR-0087).
 * **an unhandled clause key** — fail closed against vocabulary drift, exactly as
   `board_delta._clause_writes` refuses a clause VALUE that `snapshot_coverage.CLAUSE_WRITES` has
-  never heard of.
+  never heard of. The cost dimension fails closed the same way, against `COST_CARDS`.
 * **an empty pool** — a search whose targets are all provably outside the deck is a fact worth
   refusing on, not a zero-class Expectation whose `expected()` would raise inside the ordering loop.
 
 ## What that costs, COUNTED rather than waved at
 
-Over the 377 committed native traces (`tests/fixtures/parity/`), of the **706** `_PLAY` steps the
-deterministic seam refuses, this module enumerates **81 (11.5%)**. That denominator is deliberately
-the SAME 706 `board_delta._play`'s docstring quotes — the parity lane skips the 6 incomparable steps
+Over the 377 committed native traces (`tests/fixtures/parity/`), of the **663** `_PLAY` steps the
+deterministic seam refuses, the two reveal nodes together enumerate **244 (36.8%)** — **198** here
+and **46** in `common.board_choice`, which owns the visible-zone half. The denominator is deliberately
+the same one `board_delta._play`'s docstring quotes: the parity lane skips the 6 incomparable steps
 (where the next frame is the opponent's perspective), so a measurement that counted them would report
-712 and no reader could tell the two populations apart. The remainder groups as:
+a different number and no reader could tell the two populations apart. It moved 706 -> 663 at Issue
+#410, which narrowed the Stadium gate and retired 43 `_PLAY` refusals outright.
 
-    223  no `draw`/`fetch` clause at all — not an expectation node, correctly refused
-     98  more than one revealing clause (a CONJUNCTION: Dawn, Colress's Tenacity)
-     85  a shuffling rider — `shuffle_own_hand_in` 66, `shuffle_both_hands` 19; RNG, never buildable
-     69  a `cost` whose targets are chosen at a follow-up select (Ultra Ball)
-     48  `amount` 2 / 3 / "all" — a multi-card delivery
-     45  `trigger` / `dig` / `condition` / `name_family`, per the shipped reach predicate
-     23  a revealing clause on a non-Trainer (Meowth ex's on-bench grab and siblings)
-     17  `dest: in_play`
-      8  a provably-whiffing search (every matching copy already outside the deck)
+Re-measured with `python tools/train/expectation_census.py`, which asks BOTH nodes — asking only this
+one under-reported the seam by every discard search. The remainder groups as:
+
+    180  no `draw`/`fetch` clause at all — not a reveal node, correctly refused
+     85  a shuffling rider or a coin — RNG, never buildable
+     61  `trigger` / `dig` / `condition` / `name_family`, per the shipped reach predicate
+     58  `dest` — a body arriving IN PLAY (Poffin's Bench delivery, Salvatore's evolve-in-place)
+     11  a revealing clause that is an ABILITY (Lunatone, Fezandipiti ex) — modelling it is WRONG
+     10  a provably-whiffing search (every matching copy already outside the deck)
       7  a `draw` window
-      2  a `discard`-zone search — visible, so a choice node rather than a chance one
+      5  an exclusive either-or (Brock's Scouting)
+      2  `amount: "all"` (Precious Trolley)
     ----
-    625  + 81 enumerated = 706. The table SUMS, on purpose: a backlog that does not account for its
+    419  + 244 enumerated = 663. The table SUMS, on purpose: a backlog that does not account for its
          own denominator is one nobody can size work against.
 
-Two refusals this module implements have **zero** corpus hits and so appear nowhere above — the
-non-revealing companion clause (:func:`_sole_clause`) and the unhandled-clause-key catch-all
-(:func:`_check_clause`). Absent from the counts is not absent from the code, and both are covered by
-`tests/strategy/test_board_expectation.py`.
+**Zero steps now land on the card-type floor**, and that is the gate order working rather than the
+gate being dead: every card that used to refuse there ("only an Item or a Supporter") now refuses on
+its own defect first — 11 at the ability gate, 12 (Meowth ex) at the reach predicate. A backlog row
+nobody can act on is a row that lies. The floor survives as a structural backstop.
 
-The 85 shuffle-riders and the 223 non-reveals are refusals no widening can retire. The rest is a
-scoped follow-on — **Issue #394**, filed rather than buried here.
+Refusals with zero corpus hits appear nowhere above and are covered by
+`tests/strategy/test_board_expectation.py` instead: the non-revealing companion clause, the
+half-declared relation, the unhandled clause KEY, and the undeclared cost VALUE. Absent from the
+counts is not absent from the code.
 
-**The measured branching, on the same corpus: 1 to 11 outcome classes, and ZERO steps truncated.**
-:data:`BRANCH_CAP` at 12 therefore never binds on any board the corpus contains — it is a bound for
-the boards it does not, which is exactly what a structural cap is for. Recorded so a later reader
-does not mistake an untriggered cap for an untested one: the truncation PATH is covered by
-`tests/strategy/test_board_expectation.py`, on synthetic pools wide enough to trip it.
+The 85 RNG steps and the 180 non-reveals are refusals no widening can retire. The largest remaining
+scoped families are the 58 `dest` (Issue #410 owns the Bench half; `fetch_closure.multiset_classes`
+is what unblocks it) and the 61 `dig`, which is a genuinely different probability model —
+*P(target in the top N)* rather than *P(target still in deck)* — and is filed rather than buried
+here. Pokégear 3.0 is live in a shipped deck, so that deferral is real work rather than a dead one.
+
+**The measured branching: 1 to 12 outcome classes, and ONE step truncated.** :data:`BRANCH_CAP` at 12
+now BINDS, on exactly one board the corpus contains. That is the "no silent caps" contract doing its
+job, not a regression: truncation is visible in two places at once (`Expectation.truncated`, and
+`total_probability` falling below 1.0 by the dropped mass), and the cap is a structural budget rather
+than a claim that no board exceeds it.
 
 ## Rules and card facts read at source, never from memory
 
@@ -185,9 +229,13 @@ from __future__ import annotations
 
 from typing import NoReturn
 
+from collections import Counter
+from itertools import product
+
 from common import board_delta, deck_odds, snapshot_coverage
 from common.board_delta import Unmodellable
-from common.fetch_closure import fetch_is_unconditional, fetch_target_matches
+from common.fetch_closure import (fetch_is_unconditional, fetch_target_matches,
+                                  multiset_classes, reveal_legs)
 from common.option_equivalence import AREA_HAND, option_fingerprint
 from common.strategy.context import _PLAY
 
@@ -208,8 +256,16 @@ _HANDLED_FETCH_KEYS = frozenset({
     "kind", "target", "zone", "amount", "dest",
     # target predicates, every one of them resolved by the shipped `fetch_target_matches`
     "energy_type", "hp_max", "no_rule_box", "no_ability",
-    # a flag that only says the player picks, which is already this node's whole semantics
+    # the RELATION between several revealing legs — a union's shared cap versus a conjunction's one
+    # card per leg. Read by `fetch_closure.reveal_legs`, which both reveal nodes share, since Issue
+    # #394; before that it was inert and this comment called it "a flag that only says the player
+    # picks", which is not what `CLAUSE_PARAMETERS` declares it to mean.
     "choice",
+    # the play's price, applied BEFORE the search from a caller-supplied `shed` oracle. `cost` names
+    # the count via `snapshot_coverage.COST_CARDS`; `cost_required` is the playability half of the
+    # same fact and needs no separate handling here, because an unpayable cost already refuses as an
+    # illegal play rather than a free one.
+    "cost", "cost_required",
 })
 
 
@@ -225,28 +281,33 @@ def revealing_clauses(combat, card_id) -> tuple:
                  if c.get("kind") in snapshot_coverage.REVEALING_CLAUSES)
 
 
-def _sole_clause(combat, card_id, stat):
-    """The ONE revealing clause this card carries, or :class:`Unmodellable`.
+def _legs_of(combat, card_id, stat):
+    """This card's revealing legs and how they COMBINE, or :class:`Unmodellable`.
 
-    Two refusals live here because they are the same question asked from either side: a card with no
-    revealing clause is not an expectation node at all, and a card with several is a CONJUNCTION the
-    vocabulary cannot distinguish from a disjunction (Dawn, Colress's Tenacity — see the header)."""
+    The relation itself is `fetch_closure.reveal_legs` — ONE reader, shared with `board_choice`'s
+    CHOICE node, because both nodes face the same question and a second spelling is how the two
+    would come to disagree about the same card. It raises `ValueError` with the reason; this wraps it
+    in the seam's own ``"<id> <name>: …"`` convention.
+
+    Before Issue #394 this function refused every multi-leg card and *guessed* the relation in the
+    refusal — *"printed as a CONJUNCTION … nothing in the clause vocabulary distinguishes AND from
+    OR"*. Both halves were wrong: `choice` distinguishes them, and 69 of the 98 refused corpus steps
+    were unions rather than conjunctions.
+
+    The companion-clause refusal stays HERE rather than moving into the shared reader: it is a fact
+    about what this node can price (a non-revealing leg would difference to exactly 0 in every class
+    it enumerates), not about what the card's reveal legs mean, and `board_choice` answers it
+    differently for its own node."""
     every = board_delta.card_clauses(combat, card_id)
-    reveal = revealing_clauses(combat, card_id)
     name = getattr(stat, "name", "?")
-    if not reveal:
-        _no(card_id, name, "no `draw`/`fetch` clause, so this option is a point transition "
-                                  "rather than an expectation node")
-    if len(reveal) > 1:
-        _no(card_id, name,
-            f"more than one revealing clause ({len(reveal)}) — printed as a CONJUNCTION "
-                   f"(*'a Basic Pokémon, a Stage 1 Pokémon, AND a Stage 2 Pokémon'*), and nothing "
-                   f"in the clause vocabulary distinguishes AND from OR, so a union would be a "
-                   f"guess about the card")
-    if len(every) > len(reveal):
+    try:
+        legs = reveal_legs(every)
+    except ValueError as gap:
+        _no(card_id, name, str(gap))
+    if len(every) > len(legs.legs):
         _no(card_id, name, "it carries a non-revealing clause as well, whose leg would "
                                   "difference to exactly 0 in every enumerated class")
-    return reveal[0]
+    return legs
 
 
 def _no(card_id, name, why) -> NoReturn:
@@ -283,14 +344,23 @@ def _check_clause(clause: dict, card_id, name) -> None:
     if clause.get("zone") != "deck":
         _no(card_id, name, f"a {clause.get('zone')!r}-zone search carries NO chance — that zone is "
                            f"visible — so it is a pure CHOICE node, not an expectation")
-    if clause.get("cost") is not None:
-        _no(card_id, name, "its `cost` names no target — WHICH cards are paid is chosen at a "
-                           "follow-up select, structurally the same case as the seam's 63 "
-                           "target-at-a-select refusals")
+    cost = clause.get("cost")
+    if cost is not None:
+        if cost not in snapshot_coverage.COST_CARDS:
+            _no(card_id, name, f"cost {cost!r} is not in `snapshot_coverage.COST_CARDS` — fail "
+                               f"closed against vocabulary drift, exactly as this module's "
+                               f"unknown-key gate does")
+        if snapshot_coverage.COST_CARDS[cost] is None:
+            _no(card_id, name, f"cost {cost!r} names no fixed card count. `discard_hand` pays the "
+                               f"whole hand, whose size is not a constant; `bottom_2` returns cards "
+                               f"to the DECK, which moves `unseen_counts` and would invalidate the "
+                               f"pool this node enumerates over")
     amount = clause.get("amount")
-    if amount not in (None, 1):
-        _no(card_id, name, f"`amount` {amount!r}: the search delivers more than one card, and a "
-                           f"one-card outcome class prices a fraction of the play")
+    if amount is not None and not (isinstance(amount, int) and not isinstance(amount, bool)
+                                   and amount >= 1):
+        _no(card_id, name, f"`amount` {amount!r} names no number the enumerator can range over — "
+                           f"only `\"all\"` reaches here, and resolving it needs a pool to count "
+                           f"against plus the Bench cap its carriers deliver into (Issue #410)")
     if clause.get("dest") is not None:
         _no(card_id, name, f"`dest` {clause.get('dest')!r}: the found body arrives IN PLAY, which is "
                            f"the deploy transition with its Bench cap and Stadium-trigger gate, not "
@@ -314,59 +384,159 @@ def outcome_pool(model, clause: dict) -> dict:
             if n > 0 and fetch_target_matches(clause, model.card_stat(cid))}
 
 
-def _weights(model, pool: dict) -> dict:
-    """``{card id: availability weight}`` from `deck_odds.p_contains` — ADR-0029's hypergeometric
-    prize split, the probabilistic complement to the sound deck tracker.
+def _class_weight(model, delivered: tuple) -> float:
+    """The availability weight of ONE outcome class — ADR-0029's hypergeometric prize split, asked
+    per distinct card at the MULTIPLICITY that class needs.
 
-    Not normalised here: the caller normalises over the FULL pool before capping, which is what makes
-    the truncated mass show up as a `total_probability` below 1.0 instead of vanishing."""
+    A class is a tuple of delivered card ids, so a conjunction whose legs both reach the same card,
+    or a multi-card delivery that takes two copies of one, needs *two copies still in the deck* —
+    which is `deck_odds.p_contains_at_least(..., k)`, not `p_contains`. For a single-card class this
+    is exactly the old `p_contains` call, bit for bit, which is why the shipped classes do not move.
+
+    The per-card factors are MULTIPLIED, and that is an availability weight rather than a joint draw
+    probability — the epistemics this module's header already states (*"a class's probability is an
+    availability weight, normalised over the enumerated set"*). Not normalised here: the caller
+    normalises over the FULL class set before capping, so truncated mass shows up as a
+    `total_probability` below 1.0 instead of vanishing."""
     hidden, left = model.mine.prizes_hidden, model.mine.deck_count
-    return {cid: deck_odds.p_contains(n, hidden, left) for cid, n in pool.items()}
+    unseen = model.mine.unseen_counts or {}
+    weight = 1.0
+    for cid, need in Counter(delivered).items():
+        weight *= deck_odds.p_contains_at_least(unseen.get(cid, 0), hidden, left, need)
+    return weight
 
 
-def _revealed(model, option, card_id, *, seat_index, stat):
-    """The observation after the search RESOLVES: the source card in my discard, the found card in my
-    hand, and the Supporter allowance spent if one was.
+def _cost_indices(model, option, legs, *, seat_index, card_id, name, shed) -> tuple:
+    """The HAND INDICES this play's cost takes, ``()`` when it is free, or a refusal.
+
+    **The seam, not a second formula.** WHICH cards a cost discards is a live decision the Pilot's
+    `needs.cheapest_removal` already makes at the real select; this node must assume the set that
+    decider would pick, so the answer is passed IN by whoever holds a Pilot. With no oracle supplied
+    it REFUSES and names the missing seam — it never prices the cost unpaid, which would over-value
+    every Ultra Ball by the two cards it does not charge for.
+
+    Indices are validated against the hand and de-duplicated, and the played card is excluded: the
+    engine's own gate is `handOthers`, *"discard 2 OTHER cards"*."""
+    costs = {leg.get("cost") for leg in legs.legs if leg.get("cost") is not None}
+    if not costs:
+        return ()
+    if len(costs) > 1:
+        _no(card_id, name, f"its legs declare DIFFERENT costs {sorted(costs)} — a play has one "
+                           f"price, so this is either a compendium defect or a shape with no single "
+                           f"payment to charge; refusing rather than picking one")
+    cost = costs.pop()
+    picks = snapshot_coverage.COST_CARDS[cost]          # `_check_clause` proved it is a real count
+    if shed is None:
+        _no(card_id, name, f"its cost {cost!r} takes {picks} card(s) from my hand and no `shed` "
+                           f"oracle was supplied — WHICH cards is the live decider's answer "
+                           f"(`needs.cheapest_removal`), so the caller must pass it in rather than "
+                           f"have this node invent a second one")
+    hand = ((model.source_obs.get("current") or {}).get("players") or [{}])[seat_index].get("hand")
+    played = option.get("index")
+    taken = tuple(dict.fromkeys(int(i) for i in (shed(model, option, picks) or ())))
+    legal = tuple(i for i in taken if 0 <= i < len(hand or ()) and i != played)
+    if len(legal) != picks:
+        _no(card_id, name, f"its cost takes {picks} card(s) and the `shed` oracle named {len(legal)} "
+                           f"usable hand index(es) — the play is not legal on this board (the "
+                           f"engine's own `handOthers` gate), so there is nothing to enumerate")
+    return legal
+
+
+def _revealed(model, option, delivered: tuple, *, seat_index, stat, paid: tuple = ()):
+    """The observation after the search RESOLVES: the source card in my discard, the found card(s) in
+    my hand, and the Supporter allowance spent if one was.
 
     Copy-on-write throughout — `board_delta`'s own scaffolding, reused rather than re-spelled, so a
     hypothetical board and its pre-state share every zone the reveal did not touch. Those three
     helpers were PROMOTED to public names for this consumer (Issue #383); reaching for the underscore
     versions would be the cross-module private reach `state_model.py` documents as *"how a refactor
     inside `MySide` breaks a caller nothing warned about"*. Their `PlayerState` is never reached
-    across, which is what lets the caller rebuild with ``reuse_their_side=True``."""
+    across, which is what lets the caller rebuild with ``reuse_their_side=True``.
+
+    The source card is spent ONCE per play, never once per delivered card — a conjunction is one
+    Supporter resolving into several picks, not several plays.
+
+    ``paid`` are the hand indices this play's cost takes, applied BEFORE the search — the engine's
+    own order (`chain_overrides.json` 1121: ``play: [costHandTrash, effectDeckToHandAndShuffle]``).
+    The order is observable rather than cosmetic: charging after would let a delivered card be
+    discarded to pay for its own search. Removed highest-index-first so the earlier indices stay
+    valid, and the played card's index is re-resolved afterwards for the same reason."""
     new_obs, current, players = board_delta.fork(model.source_obs)
     me = board_delta.fork_player(players, seat_index)
-    played = board_delta.take_from_hand(me, option.get("index"), "reveal")
+    index = option.get("index")
+    if paid:
+        hand = list(me.get("hand") or ())
+        spent = [hand[i] for i in sorted(paid, reverse=True)]
+        for i in sorted(paid, reverse=True):
+            hand.pop(i)
+        me["hand"] = hand
+        if me.get("handCount") is not None:
+            me["handCount"] = len(hand)
+        me["discard"] = list(me.get("discard") or ()) + list(reversed(spent))
+        index = index - sum(1 for i in paid if i < index)      # the play's own index shifts down
+    played = board_delta.take_from_hand(me, index, "reveal")
     # `docs/rulebook.txt` L78 — the card that performed the search is out of play once it resolves.
     me["discard"] = list(me.get("discard") or ()) + [played]
-    # The found card, synthesized: the deck is face-down, so it has no observed `serial`. That is the
-    # ONE field ADR-0091's fingerprint ignores, which is precisely why a synthesized instance is
+    # The found cards, synthesized: the deck is face-down, so they have no observed `serial`. That is
+    # the ONE field ADR-0091's fingerprint ignores, which is precisely why a synthesized instance is
     # sound to fingerprint — and it is negative so an eye on a dump can tell it from an engine one.
+    # The ORDINAL is what keeps it unique: `-card_id` alone collides the moment one class delivers
+    # two copies of the same card, which a conjunction over overlapping legs and every multi-card
+    # delivery can both do.
     hand = list(me.get("hand") or ())
-    hand.append({"id": card_id, "serial": -card_id, "playerIndex": seat_index})
+    at = []
+    for ordinal, card_id in enumerate(delivered):
+        hand.append({"id": card_id, "serial": -(card_id * 100 + ordinal),
+                     "playerIndex": seat_index})
+        at.append(len(hand) - 1)
     me["hand"] = hand
     if me.get("handCount") is not None:
         me["handCount"] = len(hand)
     if me.get("deckCount") is not None:
-        me["deckCount"] = max(0, int(me["deckCount"]) - 1)
+        me["deckCount"] = max(0, int(me["deckCount"]) - len(delivered))
     if getattr(stat, "is_supporter", False):
         current["supporterPlayed"] = True          # `docs/rules.md` §3 — one Supporter per turn
-    return new_obs, len(hand) - 1
+    return new_obs, tuple(at)
 
 
-def _fingerprint(obs, index, seat_index) -> tuple:
-    """The outcome class's identity — `option_equivalence.option_fingerprint` over the card in my
-    HAND, on the POST-reveal board.
+def _fingerprint(obs, indices: tuple, seat_index) -> tuple:
+    """The outcome class's identity — `option_equivalence.option_fingerprint` over the card(s) this
+    class put in my HAND, on the POST-reveal board.
 
-    A tuple of per-card fingerprints rather than a bare string, because `OutcomeClass.fingerprint` is
-    declared a tuple and because a multi-card delivery is the shape this generalises into. Never
-    taken on the pre-reveal deck reference: that option is unfingerprintable by design (Issue #263
-    § *duplicate-cards*), and giving it a partial identity is what that section forbids."""
-    return (option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": index,
-                                "playerIndex": seat_index}, obs),)
+    A tuple of per-card fingerprints, which is why `OutcomeClass.fingerprint` was declared a tuple:
+    a multi-card delivery is several cards arriving from one play, and its identity is all of them.
+    Never taken on the pre-reveal deck reference: that option is unfingerprintable by design (Issue
+    #263 § *duplicate-cards*), and giving it a partial identity is what that section forbids."""
+    return tuple(option_fingerprint({"type": _PLAY, "area": AREA_HAND, "index": index,
+                                     "playerIndex": seat_index}, obs)
+                 for index in indices)
 
 
-def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP):
+def _classes_for(legs, pools: tuple) -> list:
+    """The outcome classes a card's legs deliver, as sorted tuples of card ids. ``[]`` when the legs
+    can deliver nothing at all, which the caller turns into the empty-pool refusal.
+
+    * **single / union** — one pool. A union's is the UNION of its legs' pools, built with the same
+      walk `fetch_closure.class_reaccess_outs` already performs for a needs slot's re-supply: a card
+      reached by either leg is reachable once, not twice.
+    * **conjunction** — the cross product, one card per leg, and **an empty leg SKIPS**. That is the
+      engine's own behaviour, not a convenience: `chain_overrides.json`'s provenance for 1231 Dawn
+      records *"empty buckets skip with a tac bump"*. Measured, Dawn's product is 0 on all 8 of its
+      corpus steps precisely because two of its three legs are empty — enumerating nothing there
+      would refuse a card the engine resolves happily. Refuse only when EVERY leg is empty."""
+    if legs.relation == "conjunction":
+        live = [sorted(p) for p in pools if p]
+        if not live:
+            return []
+        return sorted({tuple(sorted(combo)) for combo in product(*live)})
+    union: dict = {}
+    for pool in pools:
+        union.update(pool)
+    return multiset_classes(union, legs.cap)
+
+
+def expectation(model, option, *, seat_index=None, context=None, cap: int = BRANCH_CAP,
+                shed=None):
     """The :class:`~common.apply_option.Expectation` over ``option``'s reveal, or
     :class:`~common.board_delta.Unmodellable`.
 
@@ -415,36 +585,62 @@ def expectation(model, option, *, seat_index=None, context=None, cap: int = BRAN
     if stat is None:
         raise Unmodellable(f"{card_id}: no `CardStat` for the played card")
     name = getattr(stat, "name", "?")
-    # *"Does this option reveal at all?"* is asked FIRST, ahead of the card-type floor, so the
-    # backlog groups by the actionable answer: a Basic deploy is not an under-scoped expectation
-    # node, it is not an expectation node. Measured — the order moved 79 corpus steps out of the
-    # card-type bucket and into "no `draw`/`fetch` clause", where they belong.
-    clause = _sole_clause(model.combat, card_id, stat)
+    # *"Does this option reveal at all?"* is asked FIRST, ahead of every other gate, so the backlog
+    # groups by the actionable answer: a Basic deploy is not an under-scoped expectation node, it is
+    # not an expectation node. Measured — the order moved 79 corpus steps out of the card-type
+    # bucket and into "no `draw`/`fetch` clause", where they belong.
+    legs = _legs_of(model.combat, card_id, stat)
+    # Then the ABILITY gate, and it runs ahead of the card-type floor because it answers a different
+    # question and a sharper one. A reveal declared on a body is usually an ABILITY — Lunatone's
+    # `{"kind": "draw", "condition": "solrock_in_play"}`, Fezandipiti ex's `pokemon_ko_last_turn` —
+    # and an Ability does not fire because the body was PLAYED; it is a separate `_ABILITY` option.
+    # So deploying the body reveals NOTHING, and modelling it would be flatly wrong rather than
+    # under-scoped. The one shape that does ride the `_PLAY` is an on-bench-play trigger.
+    #
+    # Behind it, the clause gates run BEFORE the card-type floor, so a card with a real defect in
+    # its clause (a `trigger`, a `dig`) refuses on THAT rather than on being a Pokemon. Measured:
+    # 11 steps land on the ability gate (Lunatone 7, Fezandipiti ex 4) and 12 on the reach predicate
+    # (Meowth ex, whose `supporter` target and `on_bench_play` trigger are both real), leaving 0 at
+    # the floor — which is the point. A backlog row nobody can act on is a row that lies.
+    if not (getattr(stat, "is_item", False) or getattr(stat, "is_supporter", False)):
+        triggers = {leg.get("trigger") for leg in legs.legs}
+        if triggers != {"on_bench_play"}:
+            named = sorted(t for t in triggers if t)
+            carried = f"trigger(s) {named}" if named else "no `trigger` at all"
+            _no(card_id, name, f"its revealing clause is an ABILITY, not this play — it carries "
+                               f"{carried}, and only `on_bench_play` fires because the body was "
+                               f"PLAYED (an Ability is a separate `_ABILITY` option). So deploying "
+                               f"it reveals nothing, and modelling a reveal here would be WRONG "
+                               f"rather than under-scoped")
+    for leg in legs.legs:
+        _check_clause(leg, card_id, name)
     if not (getattr(stat, "is_item", False) or getattr(stat, "is_supporter", False)):
         _no(card_id, name, "only an Item or a Supporter resolves to my discard on a search; this "
                            "card's structural floor is a different one")
-    _check_clause(clause, card_id, name)
 
-    pool = outcome_pool(model, clause)
-    if not pool:
+    paid = _cost_indices(model, option, legs, seat_index=seat_index, card_id=card_id, name=name, shed=shed)
+    pools = tuple(outcome_pool(model, leg) for leg in legs.legs)
+    candidates = _classes_for(legs, pools)
+    if not candidates:
         _no(card_id, name, "no target it can reach is still unseen in my deck — a provably-whiffing "
                            "search is a fact to refuse on, not a zero-class Expectation")
-    weights = _weights(model, pool)
+    weights = {klass: _class_weight(model, klass) for klass in candidates}
     mass = sum(weights.values())
     if mass <= 0.0:
         _no(card_id, name, "no target it can reach has any availability left (`deck_odds` puts every "
                            "matching copy outside the deck), so there is nothing to enumerate")
 
-    # Descending weight, then ascending card id: the ordering must be a pure function of the board or
+    # Descending weight, then ascending class: the ordering must be a pure function of the board or
     # two processes enumerate different sets, which is the reproducibility guarantee
     # `option_equivalence.class_representatives` keeps for exactly the same reason.
-    ranked = sorted(pool, key=lambda cid: (-weights[cid], cid))
+    ranked = sorted(candidates, key=lambda klass: (-weights[klass], klass))
     kept, dropped = ranked[:int(cap)], ranked[int(cap):]
     classes = []
-    for cid in kept:
-        after_obs, at = _revealed(model, option, cid, seat_index=seat_index, stat=stat)
+    for klass in kept:
+        after_obs, at = _revealed(model, option, klass, seat_index=seat_index, stat=stat,
+                                  paid=paid)
         classes.append(OutcomeClass(
-            probability=weights[cid] / mass,
+            probability=weights[klass] / mass,
             # The reveal never reaches across the table, so their already-built side is reusable —
             # `board_delta.Delta.shares_opponent`'s guarantee, held here by construction.
             model=model.rebuilt(after_obs, reuse_their_side=True),
