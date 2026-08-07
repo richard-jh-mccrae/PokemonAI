@@ -15,6 +15,10 @@ from collections import Counter
 from dataclasses import dataclass, field, replace
 from typing import NamedTuple
 
+from common import board_delta                # the Stadium clause home (Issue #410): its
+                                              # `stadium_hp_delta` + `applies_to` predicate are what
+                                              # `_stadium_hp_shift` reads, never re-derived
+                                              # (Issue #424)
 from common import deck_odds
 from common import retreat_cost                # ADR-0100 §8's grant-aware cost, shared with
                                               # `board_choice`'s Energy-discard target space
@@ -1404,8 +1408,9 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                                         # whether-to-retreat question and the forced
                                                         # promote. OFF is DEGRADED MODE, not a rollback —
                                                         # eleven of the twelve rungs it replaced are
-                                                        # deleted, so OFF silences promote/retreat and
-                                                        # leaves only `retreat-to-wall-the-line` speaking.
+                                                        # deleted, and POC-T4/5 took the twelfth
+                                                        # (`retreat-to-wall-the-line`), so OFF is now
+                                                        # SILENCE rather than a thinner voice.
         self.evolve_value = evolve_value                # the EVOLVE DECIDER's emergency lever (ADR-0070,
                                                         # shipped ON): the body-substituted deploy delta
                                                         # + odds-priced income. OFF is DEGRADED MODE, not
@@ -2046,12 +2051,31 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             cid = traces[i].card_id
             return bool(self.functions) and cid is not None and "gust" in self.functions.tags(cid)
 
-        def _gust_enables_ko(i: int) -> bool:                        # a gust that fired a KO-converting rule
-            return any(getattr(h, "id", None) in ("gust-for-the-ko", "gust-for-the-loaded-equal-ko")
-                       for h, _w in traces[i].fired)
-
-        def _retreat_walls_the_line(i: int) -> bool:                 # the sacrificial-wall maneuver step 1
-            return any(getattr(h, "id", None) == "retreat-to-wall-the-line" for h, _w in traces[i].fired)
+        # ── two tiers DELETED here, and the deletion is a LOSS being recorded, not a cleanup ────────
+        # `_gust_enables_ko` (`gust-for-the-ko` / `gust-for-the-loaded-equal-ko`) and
+        # `_retreat_walls_the_line` (`retreat-to-wall-the-line`) each triggered off a rung ID. POC-T4/5
+        # (Issue #386) deleted all three rungs, so from that merge both closures returned False on every
+        # board and their `_tier` branches were UNREACHABLE — while still reading as live, and while
+        # `baseline/__init__.py` asserted in prose that *"`_finish_turn_last`'s tiers SURVIVE and are
+        # still where the ordering claim lives."* For these two it was already false when written.
+        #
+        # **A retired id sitting in a live string literal reads as LIVE to every instrument.** Nothing
+        # went red, because nothing anywhere compares a matched id against the shipped roster — the same
+        # masking that hid the stale halves of `planner._CLASS_B_SPEND_IDS`. `tests/strategy/
+        # test_rung_id_literals_are_live.py` is the interlock that now makes this class impossible: any
+        # id a production module matches on must be one some Strategy actually ships.
+        #
+        # DELETED rather than re-expressed, because re-expressing needs a measurement this merge has no
+        # standing to make, and one of the two cannot be re-expressed yet at all:
+        #   * the GUST tier has no seam to move to. `CLAUSE_WRITES['gust']` is non-empty, so `_covers`
+        #     refuses the transition (Issue #300) and the composer cannot price a gust either. Rung,
+        #     tier and leaf are all silent on it — the hole is total, and it is already filed with its
+        #     two corpus frames in `tests/strategy/poc_t4_flips.py`.
+        #   * the RETREAT tier's claim (*"the wall retreat is STEP 1, ahead of a free evolve"*) IS what
+        #     the composer scores in-sequence, on the 63.4% of MAIN frames it decides (ADR-0131). On the
+        #     rest the retreat now falls to `_TIER_ENDER` with every other retreat. A narrowing, not a
+        #     break — and the maneuver's other half is untouched: `Board.can_wall_line_with_disruptor`
+        #     still feeds the live `feed-the-line-for-disruptor-lock`, the ATTACH that funds the retreat.
 
         def _is_supporter(i: int) -> bool:
             cid = traces[i].card_id
@@ -2070,18 +2094,8 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
                                            # don't dig first (REQ-GUST-0001). It shares the top band with the
                                            # digs and out-scores them by a KO_SCORE margin, so "strictly
                                            # first" needs no tier of its own.
-            if t == _PLAY and _gust_enables_ko(i):                   # a KO-enabling gust: `gust-for-the-ko`
-                return _TIER_INFORMATIVE                             # fires only when the gust-KO takes MORE
-                                                                     # prizes than any menu attack (its own gate),
-                                                                     # so take the gust-setup first, then KO the
-                                                                     # dragged-up body — not Supporter filler,
-                                                                     # nor behind the KO it out-values (f79/f81)
-            if t == _RETREAT and _retreat_walls_the_line(i):         # retreat-to-promote the sacrificial
-                return _TIER_INFORMATIVE                             # item-lock wall (dragapult f32/f20): the
-                                                                     # retreat is STEP 1 of the maneuver, ahead
-                                                                     # of a free evolve / Item strip; the
-                                                                     # promote + item-lock + develop follow on
-                                                                     # later frames via their own rungs
+            # (the KO-enabling-gust and wall-retreat tiers stood HERE until this merge — see the note
+            #  above the helpers for what they claimed and why re-expressing them is a separate build)
             if t == _ATTACK and _wins_now(i):                        # a game-winning KO: take the win now,
                 return _TIER_INFORMATIVE                             # don't dig/develop first (ep83037962 f78)
             if t in (_ATTACK, _END, _RETREAT):                       # turn-ender / swaps the Active
@@ -3962,34 +3976,70 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         the crossing is exact oracle arithmetic (context-priced, so boosts ALREADY played this turn
         are in the base; each further copy's play re-passes this check on the updated context).
         `_finish_turn_last` then sequences the lethal play tier-0, ahead of the attack it enables.
-        Skips a crossing whose forced recoil would be a simultaneous draw. 0 otherwise."""
+        Skips a crossing whose forced recoil would be a simultaneous draw. 0 otherwise.
+
+        ## Two cards, one question (Issue #424)
+
+        *"Does this play turn a knockout that was not there before?"* is asked by a damage-boost card
+        and by an HP-REDUCING Stadium alike, and only the crossing's SIDE differs::
+
+            boost:     dmg + damageBoost * copies  >=  opp_hp
+            hp_delta:  dmg                         >=  opp_hp + hp_shift
+
+        so this is ONE term with two legs rather than two terms — the band, the necessity guard, the
+        `_is_simultaneous_draw` refusal and the `_EFFICIENCY` discount are identical, and two
+        spellings of one decision is the drift `_order_key`'s docstring exists to warn about.
+        Gravity Mountain (1252) carries no ``damageBoost`` at all — its whole effect is the clause
+        ``{"kind": "stadium_static", "effect": "hp_delta", "amount": -30, "applies_to": "stage2"}``
+        (`card_effects.json`) — so it used to exit at the boost guard and fall to a flat rung that,
+        by its own rationale, could not tell a board where the −30 crosses a breakpoint from one
+        where it does not.
+
+        ``hp_shift`` is SIGNED and nothing branches on its sign, which is what makes an
+        HP-*increasing* Stadium priced as making a KO harder for free: it raises the bar the attack
+        has to clear, so the crossing simply does not fire."""
         t = option.get("type")
         if board.turn <= 1:            # turn 1 going first: can't attack, no boost is lethal
             return 0
         cid = self._option_card_id(obs, select, option)
         st = self.stats.get(cid) if (self.stats and cid is not None) else None
-        if st is None or not getattr(st, "damageBoost", 0):
-            return 0
-        if t == _PLAY and (st.is_item or st.is_supporter):  # Item stacks; a Supporter is one/turn
-            copies = 1 if st.is_supporter else self._hand_count_of(obs, cid)
-        elif (t == _ATTACH and st.is_tool
-              and option.get("inPlayArea") == _ACTIVE):     # a boost Tool onto my attacker
-            copies = 1
-        else:
+        if st is None:
             return 0
         opp = self._opp_active(obs)
         opp_hp = (opp or {}).get("hp", 0)
         active = self.stats.get(board.my_active_id) if (self.stats and board.my_active_id) else None
         if not (active and opp and opp_hp):
             return 0
-        if st.damageBoostType is not None and active.energyType != st.damageBoostType:
-            return 0                                        # "your {F} Pokémon" — attacker-type gate
-        if not st.applies_to_holder(active):
-            return 0                                        # "the Hop's Pokémon this card is attached
-                                                            # to" — the owner-family HOLDER gate
         opp_stat = self.stats.get(opp.get("id")) if self.stats else None
-        if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
-            return 0                                        # "{ex}" defender gate (incl. Mega ex)
+        boost, hp_shift = 0, 0
+        if getattr(st, "damageBoost", 0):
+            # ── the DAMAGE side: lift my attack over their HP ────────────────────────────────────
+            if t == _PLAY and (st.is_item or st.is_supporter):  # Item stacks; a Supporter is one/turn
+                copies = 1 if st.is_supporter else self._hand_count_of(obs, cid)
+            elif (t == _ATTACH and st.is_tool
+                  and option.get("inPlayArea") == _ACTIVE):     # a boost Tool onto my attacker
+                copies = 1
+            else:
+                return 0
+            if st.damageBoostType is not None and active.energyType != st.damageBoostType:
+                return 0                                        # "your {F} Pokémon" — attacker-type gate
+            if not st.applies_to_holder(active):
+                return 0                                        # "the Hop's Pokémon this card is attached
+                                                                # to" — the owner-family HOLDER gate
+            if st.damageBoostVsEx and not (opp_stat and opp_stat.is_ex_body):
+                return 0                                        # "{ex}" defender gate (incl. Mega ex)
+            boost = st.damageBoost * copies
+        elif t == _PLAY and st.is_stadium:
+            # ── the HP side: lower their HP under my attack (Issue #424) ─────────────────────────
+            shift = self._stadium_hp_shift(obs, cid, opp_stat)
+            if shift is None:
+                return 0                                        # a clause the seam cannot price
+            hp_shift = shift
+        else:
+            return 0
+        need = opp_hp + hp_shift                                # the defender's HP AFTER this play
+        if need <= 0:                                           # a body the play alone would floor:
+            return 0                                            # not a crossing this term can state
         ctx = self._my_damage_context(obs)
         for aid in (active.attacks or ()):
             cost = self._attack_cost(aid)
@@ -4006,10 +4056,62 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
             dmg = self.predicted_damage(board.my_active_id, aid, opp, context=ctx)
             if dmg <= 0:                                    # a boost never lifts a does-nothing attack
                 continue
-            if (dmg + st.damageBoost * copies >= opp_hp
+            if (dmg + boost >= need
                     and not self._is_simultaneous_draw(board, aid, self._prize_value(opp))):
                 best = max(best, KO_SCORE + self._prize_value(opp) - _EFFICIENCY * cost)
         return best
+
+    def _stadium_hp_shift(self, obs: dict, card_id, defender_stat) -> int | None:
+        """How playing this Stadium MOVES the defender's rendered HP — ``delta_after − delta_now``.
+
+        The COUNTERFACTUAL half of `board_delta.stadium_hp_delta`, which prices the Stadium already
+        in play. Both readings come from that one shipped function, so the `applies_to` class test
+        (`board_delta._admits`; ``stage2`` for Gravity Mountain) decides which bodies a Stadium
+        reaches by the shipped predicate rather than by a second branch here. A Stadium that does not
+        reach this defender therefore contributes 0 structurally.
+
+        **A DIFFERENCE of two readings, because playing a Stadium DISPLACES the one in play** —
+        *"Only one Stadium can be in play at a time—if a new one comes into play, discard the old one
+        and end its effects"* (`docs/rulebook.txt` L136), which `board_delta._play`'s Stadium branch
+        models. Without the subtraction, replacing an opponent's Gravity Mountain with our own would
+        read as a fresh −30 when the −30 was already on the board and the true gain is 0.
+
+        ``delta_now`` is SUBTRACTED rather than added because the engine's observation already
+        renders the in-play Stadium into the body it reports: `cgpy/render.py:pokemon_dict` returns
+        ``hp = p.hp + delta`` and ``maxHp = p.max_hp + delta``, never storing either (`ml_dx_2001`:
+        Dragapult ex 290/290 at f172 with Gravity Mountain out, 320/320 at f181 without it). So
+        ``opp_hp`` arrives with the current delta baked in and the shift is what CHANGES.
+
+        None — *unknown, refuse* — when either reading names a clause the seam cannot price, which
+        includes a defender with no `CardStat` (the `applies_to` test cannot be evaluated).
+
+        ⚠️ **The subtraction stopped being a forward contract at Issue #433, and the change of state
+        is the point.** It shipped INERT: only two cards in the pool carry an `hp_delta` clause at
+        all — 1252 and 1251 — and neither could put a non-zero ``delta_now`` under a legal play.
+        1252 over 1252 is not one (*"You can't play a Stadium card if a Stadium with the same name is
+        already in play"*, `docs/rulebook.txt` L137, enforced at `cgpy/options.py`), and **1251
+        refused**, for want of a ``basic`` resolver in `board_delta._APPLIES_TO`.
+
+        That resolver now exists, so ``delta_now`` is LIVE: with Lively Stadium out, a Basic defender
+        is rendered 30 HP above its printed maximum, and playing **any** other Stadium ends that lift.
+        Measured on the shipped term — a Basic rendered at 300 with Mega Brave's 270 on the board is
+        out of reach until Risky Ruins displaces the Lively, at which point the shift is −30, the bar
+        falls to 270 and the play is priced KO_SCORE-class. A one-sided add would have read that
+        board as 0 and missed the knockout, which is exactly the case the subtraction was written
+        for before one existed."""
+        current = obs.get("current") or {}
+        try:
+            now = board_delta.stadium_hp_delta(
+                board_delta.stadium_clauses_for(current, self.combat,
+                                                event=board_delta.STADIUM_STATIC,
+                                                stat=defender_stat), defender_stat)
+            after = board_delta.stadium_hp_delta(
+                board_delta.stadium_clauses_of(self.combat, card_id,
+                                               event=board_delta.STADIUM_STATIC,
+                                               stat=defender_stat), defender_stat)
+        except board_delta.Unmodellable:
+            return None
+        return after - now
 
     def _hand_count_of(self, obs: dict, card_id) -> int:
         """Copies of `card_id` in MY hand (the stacking read for a Power-Pro-class crossing)."""
@@ -9974,9 +10076,15 @@ class Pilot(PlannerMixin, ObjectivesMixin, GustMixin, FetchMixin, ShuffleRefresh
         opponent's Active can damage that fragile line NOW (`_opp_active_can_damage_us`) — so retreat it to
         safety, promote the wall, item-lock, and evolve the line on the Bench behind cover. Board-SOUND
         (visible zones); silent for decks with no benched item-lock opener (no-op on mega_starmie /
-        mega_lucario) and once the Active is the payoff (not a pre-evo). Backs `retreat-to-wall-the-line`
-        ; `_finish_turn_last` rides the retreat step tier-0. (`hold-position-in-setup` is
-        DELETED, ADR-0100 §11, so there is no longer a setup brake to stand down.)"""
+        mega_lucario) and once the Active is the payoff (not a pre-evo). (`hold-position-in-setup` is
+        DELETED, ADR-0100 §11, so there is no longer a setup brake to stand down.)
+
+        ⚠️ **The RETREAT half of the maneuver no longer has a consumer.** This used to back
+        `retreat-to-wall-the-line`, whose fire `_finish_turn_last` rode to sequence the retreat tier-0.
+        POC-T4/5 (Issue #386) deleted that rung and the tier died with it — silently, because the tier
+        matched the rung by ID. What survives is the ATTACH half: this signal still feeds the live
+        `feed-the-line-for-disruptor-lock` (`baseline_energy.py`), the rung that funds the retreat. So
+        the premise is still computed and still read; only the *"go first"* ordering claim is gone."""
         if not (self.functions and ma and ma.get("id") in self._line_preevo_set()):
             return False
         has_lock = any(b and "item_lock" in self.functions.tags(b.get("id"))
